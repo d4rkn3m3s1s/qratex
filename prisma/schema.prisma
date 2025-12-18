@@ -1,0 +1,428 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTH MODELS
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  DEALER
+  CUSTOMER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(CUSTOMER)
+  points        Int       @default(0)
+  level         Int       @default(1)
+  xp            Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  badges        UserBadge[]
+  quests        UserQuest[]
+  rewards       UserReward[]
+  feedbacks     Feedback[]
+  qrCodes       QRCode[]
+  notifications Notification[]
+  uploads       FileUpload[]
+  analytics     AnalyticsEvent[]
+  auditLogs     AuditLog[]
+
+  // Dealer specific
+  businessName  String?
+  businessLogo  String?
+  businessDesc  String?
+
+  @@index([email])
+  @@index([role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────────────────────
+// GAMIFICATION MODELS
+// ─────────────────────────────────────────────────────────────
+
+model Badge {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  category    String      @default("general")
+  rarity      String      @default("common") // common, rare, epic, legendary
+  requirement Json        // { type: "feedback_count", value: 10 }
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  users UserBadge[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+}
+
+model Quest {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  type        String   @default("daily") // daily, weekly, special
+  requirement Json     // { type: "give_feedback", count: 3 }
+  reward      Json     // { points: 100, xp: 50 }
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users UserQuest[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model UserQuest {
+  id          String    @id @default(cuid())
+  userId      String
+  questId     String
+  progress    Int       @default(0)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest Quest @relation(fields: [questId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questId])
+  @@index([userId])
+  @@index([questId])
+}
+
+model Reward {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  cost        Int      // Points required
+  type        String   @default("digital") // digital, physical, coupon
+  stock       Int      @default(-1) // -1 = unlimited
+  metadata    Json?    // Additional reward data
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users UserReward[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model UserReward {
+  id          String    @id @default(cuid())
+  userId      String
+  rewardId    String
+  redeemedAt  DateTime  @default(now())
+  claimedAt   DateTime?
+  code        String?   @unique // For coupon codes
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([rewardId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// QR CODE & FEEDBACK MODELS
+// ─────────────────────────────────────────────────────────────
+
+model QRCode {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  dealerId    String
+  isActive    Boolean  @default(true)
+  scanCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dealer    User       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  feedbacks Feedback[]
+
+  @@index([code])
+  @@index([dealerId])
+  @@index([isActive])
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  qrCodeId    String
+  userId      String?  // Can be anonymous
+  rating      Int      // 1-5
+  text        String?  @db.Text
+  media       Json?    // Array of media URLs
+  sentiment   String?  // positive, negative, neutral
+  emotions    Json?    // { happy: 0.8, sad: 0.1, ... }
+  topics      Json?    // ["service", "quality", ...]
+  isToxic     Boolean  @default(false)
+  aiAnalysis  Json?    // Full AI response
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([qrCodeId])
+  @@index([userId])
+  @@index([rating])
+  @@index([sentiment])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// SYSTEM MODELS
+// ─────────────────────────────────────────────────────────────
+
+model Settings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  isEnabled   Boolean  @default(false)
+  metadata    Json?
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([isEnabled])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String    @default("info") // info, success, warning, error
+  isRead    Boolean   @default(false)
+  data      Json?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model FileUpload {
+  id        String   @id @default(cuid())
+  userId    String
+  filename  String
+  mimetype  String
+  size      Int
+  url       String
+  thumbnail String?
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  event     String
+  category  String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([event])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CMS MODELS
+// ─────────────────────────────────────────────────────────────
+
+model Page {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  content     Json     // Block-based content
+  meta        Json?    // SEO metadata
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([isPublished])
+}
+
+model MenuItem {
+  id        String   @id @default(cuid())
+  location  String   // header, footer, sidebar
+  label     String
+  href      String
+  icon      String?
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  parentId  String?
+  roles     Json?    // ["ADMIN", "DEALER"] or null for all
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([location])
+  @@index([isActive])
+  @@index([order])
+}
+
+model Theme {
+  id          String   @id @default(cuid())
+  name        String
+  isActive    Boolean  @default(false)
+  colors      Json     // Color palette
+  fonts       Json?    // Font settings
+  customCss   String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model PricingPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  currency    String   @default("TRY")
+  interval    String   @default("monthly") // monthly, yearly, lifetime
+  features    Json     // Array of feature strings
+  isPopular   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([order])
+}
+
+model Coupon {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  type         String    @default("percentage") // percentage, fixed
+  value        Float
+  minPurchase  Float?
+  maxUses      Int       @default(-1) // -1 = unlimited
+  usedCount    Int       @default(0)
+  expiresAt    DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+}
+
