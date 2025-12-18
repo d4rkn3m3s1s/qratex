@@ -167,21 +167,27 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    unoptimized: true,
     domains: [
       'localhost',
       'lh3.googleusercontent.com',
       'avatars.githubusercontent.com',
+      'qratex.netlify.app',
     ],
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**.supabase.co',
       },
+      {
+        protocol: 'https',
+        hostname: '**.netlify.app',
+      },
     ],
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000', 'qratex.netlify.app'],
     },
   },
 };
