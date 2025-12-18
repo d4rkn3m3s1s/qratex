@@ -86,10 +86,10 @@ export async function POST(request: NextRequest) {
             where: { id: feedbackId },
             data: {
               sentiment: analysis.sentiment.label,
-              emotions: analysis.emotions,
+              emotions: analysis.emotions.map(e => e.label),
               topics: analysis.topics,
               isToxic: analysis.toxicity.isToxic,
-              aiAnalysis: analysis,
+              aiAnalysis: JSON.parse(JSON.stringify(analysis)),
             },
           });
         }

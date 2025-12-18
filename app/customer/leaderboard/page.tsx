@@ -105,7 +105,7 @@ export default function CustomerLeaderboardPage() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Seviye {session?.user?.level || 1}</Badge>
                   <Badge className="bg-gradient-to-r from-primary to-purple-500">
-                    {userLeague.name}
+                    {userLeague}
                   </Badge>
                 </div>
               </div>

@@ -96,8 +96,8 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'CREATE_BADGE',
-        resource: 'Badge',
-        resourceId: badge.id,
+        entity: 'Badge',
+        entityId: badge.id,
         newData: badge as object,
       },
     });

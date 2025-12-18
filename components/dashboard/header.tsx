@@ -22,10 +22,11 @@ import { signOut } from 'next-auth/react';
 
 interface DashboardHeaderProps {
   title?: string;
+  description?: string;
   showSearch?: boolean;
 }
 
-export function DashboardHeader({ title, showSearch = true }: DashboardHeaderProps) {
+export function DashboardHeader({ title, description, showSearch = true }: DashboardHeaderProps) {
   const { data: session } = useSession();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -59,7 +60,12 @@ export function DashboardHeader({ title, showSearch = true }: DashboardHeaderPro
         {/* Left - Title & Search */}
         <div className="flex items-center gap-4 flex-1">
           {title && (
-            <h1 className="text-lg font-semibold hidden sm:block">{title}</h1>
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-semibold">{title}</h1>
+              {description && (
+                <p className="text-sm text-muted-foreground">{description}</p>
+              )}
+            </div>
           )}
           {showSearch && (
             <div className="relative max-w-md flex-1">

@@ -50,3 +50,6 @@ public/workbox-*.js.map
 # Prisma
 prisma/migrations/migration_lock.toml
 
+
+# Local Netlify folder
+.netlify

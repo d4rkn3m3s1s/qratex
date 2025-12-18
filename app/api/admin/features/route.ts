@@ -76,17 +76,23 @@ export async function POST(request: NextRequest) {
     }
 
     const feature = await prisma.featureFlag.create({
-      data: validatedData.data,
+      data: {
+        key: validatedData.data.key,
+        name: validatedData.data.name,
+        description: validatedData.data.description,
+        isEnabled: validatedData.data.isEnabled,
+        metadata: validatedData.data.metadata as object | undefined,
+      },
     });
 
     // Audit log
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        action: 'create',
-        entity: 'feature_flag',
+        action: 'CREATE_FEATURE',
+        entity: 'FeatureFlag',
         entityId: feature.id,
-        newData: feature,
+        newData: feature as object,
       },
     });
 
@@ -141,20 +147,26 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const updateData: Record<string, unknown> = {};
+    if (validatedData.data.name !== undefined) updateData.name = validatedData.data.name;
+    if (validatedData.data.description !== undefined) updateData.description = validatedData.data.description;
+    if (validatedData.data.isEnabled !== undefined) updateData.isEnabled = validatedData.data.isEnabled;
+    if (validatedData.data.metadata !== undefined) updateData.metadata = validatedData.data.metadata as object;
+
     const feature = await prisma.featureFlag.update({
       where: { key },
-      data: validatedData.data,
+      data: updateData,
     });
 
     // Audit log
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        action: 'update',
-        entity: 'feature_flag',
+        action: 'UPDATE_FEATURE',
+        entity: 'FeatureFlag',
         entityId: feature.id,
-        oldData: existing,
-        newData: feature,
+        oldData: existing as object,
+        newData: feature as object,
       },
     });
 
@@ -207,10 +219,10 @@ export async function DELETE(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        action: 'delete',
-        entity: 'feature_flag',
+        action: 'DELETE_FEATURE',
+        entity: 'FeatureFlag',
         entityId: existing.id,
-        oldData: existing,
+        oldData: existing as object,
       },
     });
 

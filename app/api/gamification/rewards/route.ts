@@ -13,10 +13,10 @@ export async function GET(req: Request) {
       where: { isActive: true },
       include: {
         _count: {
-          select: { userRewards: true },
+          select: { users: true },
         },
         ...(userId && {
-          userRewards: {
+          users: {
             where: { userId },
             select: {
               claimedAt: true,
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
           },
         }),
       },
-      orderBy: { pointsCost: 'asc' },
+      orderBy: { cost: 'asc' },
     });
 
     return NextResponse.json({
@@ -58,8 +58,8 @@ export async function POST(req: Request) {
       data: {
         name: validatedData.name,
         description: validatedData.description,
-        image: validatedData.image,
-        pointsCost: validatedData.pointsCost,
+        icon: validatedData.icon,
+        cost: validatedData.cost,
         stock: validatedData.stock,
         type: validatedData.type,
         isActive: true,
@@ -71,8 +71,8 @@ export async function POST(req: Request) {
       data: {
         userId: session.user.id,
         action: 'CREATE_REWARD',
-        resource: 'Reward',
-        resourceId: reward.id,
+        entity: 'Reward',
+        entityId: reward.id,
         newData: reward as object,
       },
     });
@@ -117,7 +117,7 @@ export async function PATCH(req: Request) {
       );
     }
 
-    if (user.points < reward.pointsCost) {
+    if (user.points < reward.cost) {
       return NextResponse.json(
         { success: false, error: 'Yetersiz puan' },
         { status: 400 }
@@ -135,7 +135,7 @@ export async function PATCH(req: Request) {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: user.id },
-        data: { points: { decrement: reward.pointsCost } },
+        data: { points: { decrement: reward.cost } },
       }),
       prisma.reward.update({
         where: { id: reward.id },

@@ -13,14 +13,13 @@ export async function GET(req: Request) {
       where: { isActive: true },
       include: {
         _count: {
-          select: { userQuests: true },
+          select: { users: true },
         },
         ...(userId && {
-          userQuests: {
+          users: {
             where: { userId },
             select: {
               progress: true,
-              completed: true,
               completedAt: true,
             },
           },
@@ -60,9 +59,10 @@ export async function POST(req: Request) {
       data: {
         name: validatedData.name,
         description: validatedData.description,
+        icon: validatedData.icon,
         type: validatedData.type,
-        target: validatedData.target,
-        reward: validatedData.reward,
+        requirement: validatedData.requirement as object,
+        reward: validatedData.reward as object,
         expiresAt: validatedData.expiresAt,
         isActive: true,
       },
@@ -73,8 +73,8 @@ export async function POST(req: Request) {
       data: {
         userId: session.user.id,
         action: 'CREATE_QUEST',
-        resource: 'Quest',
-        resourceId: quest.id,
+        entity: 'Quest',
+        entityId: quest.id,
         newData: quest as object,
       },
     });

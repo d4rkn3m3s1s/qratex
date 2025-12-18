@@ -284,7 +284,7 @@ export default function CustomerRewardsPage() {
             </Button>
             <Button
               onClick={handleClaimReward}
-              disabled={claiming || (selectedReward && !canAfford(selectedReward))}
+              disabled={claiming || (selectedReward ? !canAfford(selectedReward) : false)}
               className="gap-2"
             >
               {claiming ? (

@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         userId: session?.user?.id || null,
         rating,
         text,
-        media: media || null,
+        media: media ? (media as string[]) : [],
         isPublic: isPublic ?? true,
       },
     });

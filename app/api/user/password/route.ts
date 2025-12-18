@@ -64,8 +64,8 @@ export async function PATCH(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'CHANGE_PASSWORD',
-        resource: 'User',
-        resourceId: session.user.id,
+        entity: 'User',
+        entityId: session.user.id,
       },
     });
 

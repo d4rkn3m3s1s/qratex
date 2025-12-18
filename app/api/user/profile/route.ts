@@ -33,8 +33,8 @@ export async function PATCH(request: NextRequest) {
       data: {
         userId: session.user.id,
         action: 'UPDATE_PROFILE',
-        resource: 'User',
-        resourceId: session.user.id,
+        entity: 'User',
+        entityId: session.user.id,
         newData: { name, image } as object,
       },
     });

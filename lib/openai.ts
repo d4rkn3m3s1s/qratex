@@ -1,10 +1,20 @@
 import OpenAI from 'openai';
 import type { AIAnalysisResult } from '@/types';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy initialize OpenAI client
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI | null {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openai;
+}
 
 // Retry configuration
 const MAX_RETRIES = 3;
@@ -36,7 +46,8 @@ async function withRetry<T>(
  * Analyze feedback text using OpenAI
  */
 export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | null> {
-  if (!process.env.OPENAI_API_KEY) {
+  const client = getOpenAIClient();
+  if (!client) {
     console.warn('OpenAI API key not configured');
     return null;
   }
@@ -47,7 +58,7 @@ export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | 
 
   try {
     const response = await withRetry(() =>
-      openai.chat.completions.create({
+      client.chat.completions.create({
         model: 'gpt-4-turbo-preview',
         messages: [
           {
@@ -119,14 +130,15 @@ export async function generateInsights(feedbackData: {
   topTopics: string[];
   recentFeedbacks: { text: string; rating: number; sentiment: string }[];
 }): Promise<string | null> {
-  if (!process.env.OPENAI_API_KEY) {
+  const client = getOpenAIClient();
+  if (!client) {
     console.warn('OpenAI API key not configured');
     return null;
   }
 
   try {
     const response = await withRetry(() =>
-      openai.chat.completions.create({
+      client.chat.completions.create({
         model: 'gpt-4-turbo-preview',
         messages: [
           {
@@ -167,13 +179,14 @@ export async function chatWithAI(
   message: string,
   context?: string
 ): Promise<string | null> {
-  if (!process.env.OPENAI_API_KEY) {
+  const client = getOpenAIClient();
+  if (!client) {
     return 'AI asistanı şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
   }
 
   try {
     const response = await withRetry(() =>
-      openai.chat.completions.create({
+      client.chat.completions.create({
         model: 'gpt-4-turbo-preview',
         messages: [
           {
