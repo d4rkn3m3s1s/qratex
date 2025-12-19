@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion, MotionProps } from "framer-motion"
+import { motion, MotionProps } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
@@ -128,19 +128,17 @@ export function HyperText({
       onMouseEnter={handleAnimationTrigger}
       {...props}
     >
-      <AnimatePresence mode="wait">
-        {displayText.map((letter, index) => (
-          <motion.span
-            key={index}
-            className={cn(
-              letter === " " ? "w-1" : "",
-              "font-inherit"
-            )}
-          >
-            {letter}
-          </motion.span>
-        ))}
-      </AnimatePresence>
+      {displayText.map((letter, index) => (
+        <span
+          key={index}
+          className={cn(
+            letter === " " ? "w-1" : "",
+            "font-inherit"
+          )}
+        >
+          {letter}
+        </span>
+      ))}
     </motion.span>
   )
 }

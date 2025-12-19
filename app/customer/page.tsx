@@ -377,9 +377,9 @@ export default function CustomerDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {leaderboard.map((entry) => (
+                {leaderboard.map((entry, idx) => (
                   <div
-                    key={entry.rank}
+                    key={`${entry.rank}-${entry.name}-${idx}`}
                     className={`flex items-center gap-3 p-2 rounded-lg ${
                       entry.isCurrentUser ? 'bg-primary/10 border border-primary/20' : ''
                     }`}
