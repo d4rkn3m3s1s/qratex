@@ -81,21 +81,18 @@ export function useThemeColors() {
 
   const fetchAndApplyTheme = async () => {
     try {
-      const res = await fetch('/api/admin/settings?category=theme');
+      const res = await fetch('/api/settings/theme');
+      if (!res.ok) return;
       const data = await res.json();
       
-      if (data.raw) {
-        let themeId: string | null = null;
-        let colors: ThemeColors | null = null;
+      if (data.raw && Array.isArray(data.raw)) {
+        const settings = data.raw as Array<{ key: string; value: unknown }>;
         
-        data.raw.forEach((setting: { key: string; value: unknown }) => {
-          if (setting.key === 'activeTheme') {
-            themeId = setting.value as string;
-          }
-          if (setting.key === 'customColors') {
-            colors = setting.value as ThemeColors;
-          }
-        });
+        // Find theme settings
+        const themeSetting = settings.find(s => s.key === 'activeTheme');
+        const colorsSetting = settings.find(s => s.key === 'customColors');
+        
+        const themeId = themeSetting?.value as string | undefined;
         
         if (themeId) {
           setActiveTheme(themeId);
@@ -115,7 +112,8 @@ export function useThemeColors() {
           }
         }
         
-        if (colors) {
+        if (colorsSetting?.value) {
+          const colors = colorsSetting.value as ThemeColors;
           setCustomColors(colors);
           // Custom colors override preset if exists
           if (colors.primary || colors.secondary || colors.accent) {
