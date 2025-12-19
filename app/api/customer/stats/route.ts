@@ -55,7 +55,9 @@ export async function GET() {
           qrCode: {
             select: {
               name: true,
-              businessName: true,
+              dealer: {
+                select: { businessName: true },
+              },
             },
           },
         },
@@ -106,7 +108,7 @@ export async function GET() {
     // Format recent feedbacks
     const formattedFeedbacks = recentFeedbacks.map(f => ({
       id: f.id,
-      business: f.qrCode.businessName || f.qrCode.name,
+      business: f.qrCode.dealer?.businessName || f.qrCode.name,
       rating: f.rating,
       points: f.rating >= 4 ? 75 : 50,
       createdAt: f.createdAt,
