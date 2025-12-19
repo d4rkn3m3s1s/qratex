@@ -132,3 +132,4 @@ export function useThemeColors() {
 
   return { activeTheme, customColors, applyTheme, refetch: fetchAndApplyTheme };
 }
+
