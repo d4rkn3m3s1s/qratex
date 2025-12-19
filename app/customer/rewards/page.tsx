@@ -30,24 +30,31 @@ interface Reward {
   id: string;
   name: string;
   description: string;
-  image: string | null;
-  pointsCost: number;
+  icon: string | null;
+  image?: string | null;
+  cost: number;
   stock: number;
-  type: 'PHYSICAL' | 'DIGITAL' | 'COUPON' | 'VIP';
+  type: 'PHYSICAL' | 'DIGITAL' | 'COUPON' | 'VIP' | 'physical' | 'digital' | 'coupon';
 }
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   PHYSICAL: 'Fiziksel',
   DIGITAL: 'Dijital',
   COUPON: 'Kupon',
   VIP: 'VIP',
+  physical: 'Fiziksel',
+  digital: 'Dijital',
+  coupon: 'Kupon',
 };
 
-const typeColors = {
+const typeColors: Record<string, string> = {
   PHYSICAL: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
   DIGITAL: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   COUPON: 'bg-green-500/10 text-green-500 border-green-500/20',
   VIP: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  physical: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+  digital: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
+  coupon: 'bg-green-500/10 text-green-500 border-green-500/20',
 };
 
 export default function CustomerRewardsPage() {
@@ -108,7 +115,7 @@ export default function CustomerRewardsPage() {
     }
   };
 
-  const canAfford = (reward: Reward) => userPoints >= reward.pointsCost;
+  const canAfford = (reward: Reward) => userPoints >= (reward.cost || 0);
 
   return (
     <div className="space-y-6">
@@ -180,12 +187,13 @@ export default function CustomerRewardsPage() {
                   <CardContent className="p-0">
                     {/* Image */}
                     <div className="relative h-32 bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
-                      {reward.image ? (
+                      {(reward.icon || reward.image) ? (
                         <Image
-                          src={reward.image}
+                          src={reward.icon || reward.image || ''}
                           alt={reward.name}
-                          fill
-                          className="object-cover"
+                          width={80}
+                          height={80}
+                          className="object-contain"
                         />
                       ) : (
                         <Gift className="h-12 w-12 text-primary/50" />
@@ -207,10 +215,14 @@ export default function CustomerRewardsPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1 text-yellow-500">
                           <Star className="h-4 w-4 fill-yellow-500" />
-                          <span className="font-bold">{reward.pointsCost.toLocaleString()}</span>
+                          <span className="font-bold">{(reward.cost || 0).toLocaleString()}</span>
                         </div>
-                        {reward.stock > 0 ? (
-                          <Badge variant="outline">Stok: {reward.stock}</Badge>
+                        {(reward.stock ?? -1) > 0 || reward.stock === -1 ? (
+                          reward.stock === -1 ? (
+                            <Badge variant="outline">Sınırsız</Badge>
+                          ) : (
+                            <Badge variant="outline">Stok: {reward.stock}</Badge>
+                          )
                         ) : (
                           <Badge variant="destructive">Tükendi</Badge>
                         )}
@@ -228,7 +240,7 @@ export default function CustomerRewardsPage() {
                           </>
                         ) : (
                           <>
-                            {reward.pointsCost - userPoints} puan eksik
+                            {(reward.cost || 0) - userPoints} puan eksik
                           </>
                         )}
                       </Button>
@@ -266,14 +278,14 @@ export default function CustomerRewardsPage() {
                 <span>Maliyet</span>
                 <div className="flex items-center gap-1 text-yellow-500">
                   <Star className="h-4 w-4 fill-yellow-500" />
-                  <span className="font-bold">{selectedReward.pointsCost.toLocaleString()}</span>
+                  <span className="font-bold">{(selectedReward.cost || 0).toLocaleString()}</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <span>Kalan Puan</span>
                 <span className="font-bold">
-                  {(userPoints - selectedReward.pointsCost).toLocaleString()}
+                  {(userPoints - (selectedReward.cost || 0)).toLocaleString()}
                 </span>
               </div>
             </div>
