@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Bell, Search, Sun, Moon, Settings, User, LogOut } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import { Bell, Search, Settings, User, LogOut } from 'lucide-react';
+import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -28,17 +28,11 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ title, description, showSearch = true }: DashboardHeaderProps) {
   const { data: session } = useSession();
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const [notifications] = useState([
     { id: 1, title: 'Yeni rozet kazandınız!', time: '5 dk önce', unread: true },
     { id: 2, title: 'Haftalık rapor hazır', time: '1 saat önce', unread: true },
     { id: 3, title: 'Yeni geri bildirim', time: '3 saat önce', unread: false },
   ]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
@@ -50,13 +44,9 @@ export function DashboardHeader({ title, description, showSearch = true }: Dashb
     }
   };
 
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
-  };
-
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-xl safe-top">
-      <div className="flex h-16 items-center justify-between px-4 lg:px-6">
+    <header className="sticky top-0 z-40 -mx-4 lg:-mx-6 px-4 lg:px-6 border-b bg-background/95 backdrop-blur-xl safe-top mb-2">
+      <div className="flex h-16 items-center justify-between">
         {/* Left - Title & Search */}
         <div className="flex items-center gap-4 flex-1">
           {title && (
@@ -81,19 +71,7 @@ export function DashboardHeader({ title, description, showSearch = true }: Dashb
         {/* Right - Actions */}
         <div className="flex items-center gap-2">
           {/* Theme Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className="rounded-full"
-          >
-            {mounted && resolvedTheme === 'dark' ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-            <span className="sr-only">Tema değiştir</span>
-          </Button>
+          <AnimatedThemeToggler />
 
           {/* Notifications */}
           <DropdownMenu>

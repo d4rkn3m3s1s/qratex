@@ -130,3 +130,4 @@ export function DynamicBackground({
       return <div className={className}>{children}</div>;
   }
 }
+

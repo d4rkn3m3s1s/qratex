@@ -92,3 +92,4 @@ export function BackgroundBeams({ children, className }: BackgroundBeamsProps) {
     </div>
   );
 }
+

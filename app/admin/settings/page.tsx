@@ -357,9 +357,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DashboardHeader title="Ayarlar" description="Platform ve profil ayarlarını yapılandırın" />
-      </div>
+      <DashboardHeader title="Ayarlar" description="Platform ve profil ayarlarını yapılandırın" />
 
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 lg:w-auto">

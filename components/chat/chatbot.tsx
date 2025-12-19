@@ -136,7 +136,7 @@ export function Chatbot() {
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            className="fixed bottom-6 right-6 z-50"
+            className="fixed bottom-6 right-6 z-[9999]"
           >
             <button
               onClick={() => setIsOpen(true)}
@@ -166,7 +166,7 @@ export function Chatbot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`fixed bottom-6 right-6 z-50 flex flex-col bg-background/95 backdrop-blur-lg border border-border/50 rounded-2xl shadow-2xl overflow-hidden ${
+            className={`fixed bottom-6 right-6 z-[9999] flex flex-col bg-background/95 backdrop-blur-lg border border-border/50 rounded-2xl shadow-2xl overflow-hidden ${
               isMinimized ? 'w-72 h-14' : 'w-96 h-[32rem]'
             }`}
           >

@@ -107,3 +107,4 @@ export function SparklesBackground({
     </div>
   );
 }
+
