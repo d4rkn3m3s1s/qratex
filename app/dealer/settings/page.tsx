@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
@@ -110,6 +111,7 @@ const avatarList = [
 
 export default function DealerSettingsPage() {
   const { data: session, update } = useSession();
+  const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Erkek');
@@ -170,6 +172,8 @@ export default function DealerSettingsPage() {
       if (res.ok) {
         await update({ name: profile.name, image: profile.avatar });
         toast.success('Profil güncellendi');
+        // Refresh to update session data
+        router.refresh();
       } else {
         toast.error('Profil güncellenemedi');
       }

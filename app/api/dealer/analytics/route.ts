@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const dealerId = session.user.id;
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     // Get dealer's QR codes
     const qrCodes = await prisma.qRCode.findMany({
-      where: { userId },
+      where: { dealerId },
       include: {
         feedbacks: {
           where: {

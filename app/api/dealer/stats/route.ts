@@ -11,11 +11,11 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.user.id;
+    const dealerId = session.user.id;
 
     // Get dealer's QR codes
     const qrCodes = await prisma.qRCode.findMany({
-      where: { userId },
+      where: { dealerId },
       include: {
         _count: {
           select: { feedbacks: true },
@@ -65,7 +65,7 @@ export async function GET() {
     const recentFeedbacks = await prisma.feedback.findMany({
       where: {
         qrCode: {
-          userId,
+          dealerId,
         },
       },
       include: {
