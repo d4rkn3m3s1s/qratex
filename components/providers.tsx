@@ -44,6 +44,13 @@ function hexToHSL(hex: string): string {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
+// Custom colors type
+interface CustomColors {
+  primary?: string;
+  secondary?: string;
+  accent?: string;
+}
+
 // Theme color presets
 const themePresets: Record<string, { primary: string; secondary: string; accent: string }> = {
   purple: { primary: '#8B5CF6', secondary: '#A855F7', accent: '#F472B6' },
@@ -64,7 +71,6 @@ function ThemeColorsProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         
         if (data.raw) {
-          type CustomColors = { primary?: string; secondary?: string; accent?: string };
           let activeThemeId: string | null = null;
           let customColors: CustomColors | null = null;
           
