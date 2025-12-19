@@ -98,8 +98,7 @@ export function Header() {
                 alt="QRATEX"
                 width={120}
                 height={32}
-                className="object-contain"
-                style={{ width: 'auto', height: 'auto' }}
+                className="object-contain h-8"
                 priority
               />
             )}
@@ -208,8 +207,7 @@ export function Header() {
                         alt="QRATEX"
                         width={120}
                         height={32}
-                        className="object-contain"
-                        style={{ width: 'auto', height: 'auto' }}
+                        className="object-contain h-8"
                       />
                     </>
                   )}

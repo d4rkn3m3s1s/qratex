@@ -137,8 +137,7 @@ export function Sidebar({ role }: SidebarProps) {
                   width={120}
                   height={32}
                   priority
-                  className="object-contain"
-                  style={{ width: 'auto', height: 'auto' }}
+                  className="object-contain h-8"
                 />
               )}
             </>
