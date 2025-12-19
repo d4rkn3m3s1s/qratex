@@ -64,15 +64,16 @@ function ThemeColorsProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         
         if (data.raw) {
+          type CustomColors = { primary?: string; secondary?: string; accent?: string };
           let activeThemeId: string | null = null;
-          let customColors: { primary?: string; secondary?: string; accent?: string } | null = null;
+          let customColors: CustomColors | null = null;
           
           data.raw.forEach((setting: { key: string; value: unknown }) => {
             if (setting.key === 'activeTheme') {
               activeThemeId = setting.value as string;
             }
             if (setting.key === 'customColors') {
-              customColors = setting.value as typeof customColors;
+              customColors = setting.value as CustomColors;
             }
           });
           
