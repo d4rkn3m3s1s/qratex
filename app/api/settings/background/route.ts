@@ -12,12 +12,12 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      backgroundEffect: setting?.value || 'aurora',
+      backgroundEffect: setting?.value || 'original',
     });
   } catch (error) {
     console.error('Error fetching background setting:', error);
     return NextResponse.json({
-      backgroundEffect: 'aurora',
+      backgroundEffect: 'original',
     });
   }
 }

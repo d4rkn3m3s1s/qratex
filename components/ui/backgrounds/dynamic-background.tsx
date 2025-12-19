@@ -9,6 +9,7 @@ import { MeteorsBackground } from './meteors';
 import { GridDotsBackground } from './grid-dots';
 
 export type BackgroundVariant = 
+  | 'original'
   | 'aurora' 
   | 'sparkles' 
   | 'beams' 
@@ -71,6 +72,10 @@ export function DynamicBackground({
   }
 
   switch (variant) {
+    case 'original':
+      // Original is handled by the parent component (landing page)
+      return <div className={className}>{children}</div>;
+
     case 'aurora':
       return (
         <AuroraBackground className={className}>

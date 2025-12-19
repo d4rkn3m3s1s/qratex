@@ -146,7 +146,7 @@ const staggerContainer = {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [backgroundEffect, setBackgroundEffect] = useState<BackgroundVariant>('none');
+  const [backgroundEffect, setBackgroundEffect] = useState<BackgroundVariant>('original');
 
   useEffect(() => {
     // Fetch background effect from API
@@ -191,8 +191,8 @@ export default function HomePage() {
     <div className="relative">
       {/* Hero Section */}
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden pt-16">
-        {/* Dynamic Background from Admin Settings */}
-        {backgroundEffect !== 'none' && (
+        {/* Dynamic Background from Admin Settings (not original or none) */}
+        {backgroundEffect !== 'none' && backgroundEffect !== 'original' && (
           <div className="absolute inset-0 z-0">
             <DynamicBackground variant={backgroundEffect} fetchFromApi={false} className="absolute inset-0">
               <div />
@@ -200,8 +200,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Fallback Background Effects when no dynamic background is set */}
-        {backgroundEffect === 'none' && (
+        {/* Original/Default Background Effects */}
+        {(backgroundEffect === 'original' || backgroundEffect === 'none') && (
           <>
             <div className="absolute inset-0 gradient-mesh opacity-50" />
             <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/50 to-background" />
@@ -211,8 +211,8 @@ export default function HomePage() {
         {/* Gradient overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/30 to-background z-[1]" />
         
-        {/* Floating Orbs - Only show when no dynamic background */}
-        {backgroundEffect === 'none' && [
+        {/* Floating Orbs - Only show with original background */}
+        {backgroundEffect === 'original' && [
           { size: 120, x: '10%', y: '20%', color: 'bg-purple-500/50', blur: 'blur-2xl', duration: 8 },
           { size: 100, x: '80%', y: '15%', color: 'bg-fuchsia-500/40', blur: 'blur-2xl', duration: 10 },
           { size: 150, x: '70%', y: '60%', color: 'bg-pink-500/50', blur: 'blur-3xl', duration: 12 },
@@ -246,8 +246,8 @@ export default function HomePage() {
           />
         ))}
 
-        {/* Snowfall Effect - Pink/Purple Particles - Only show when no dynamic background */}
-        {backgroundEffect === 'none' && [...Array(40)].map((_, i) => {
+        {/* Snowfall Effect - Pink/Purple Particles - Only show with original background */}
+        {backgroundEffect === 'original' && [...Array(40)].map((_, i) => {
           const startX = Math.random() * 100;
           const size = 3 + Math.random() * 6;
           const duration = 8 + Math.random() * 8;
@@ -294,8 +294,8 @@ export default function HomePage() {
           );
         })}
 
-        {/* Larger Snowflakes - Only show when no dynamic background */}
-        {backgroundEffect === 'none' && [...Array(15)].map((_, i) => {
+        {/* Larger Snowflakes - Only show with original background */}
+        {backgroundEffect === 'original' && [...Array(15)].map((_, i) => {
           const startX = 5 + Math.random() * 90;
           const size = 8 + Math.random() * 8;
           const duration = 12 + Math.random() * 8;
@@ -329,8 +329,8 @@ export default function HomePage() {
           );
         })}
 
-        {/* Sparkle Stars - Only show when no dynamic background */}
-        {backgroundEffect === 'none' && [...Array(12)].map((_, i) => (
+        {/* Sparkle Stars - Only show with original background */}
+        {backgroundEffect === 'original' && [...Array(12)].map((_, i) => (
           <motion.div
             key={`sparkle-${i}`}
             className="absolute"

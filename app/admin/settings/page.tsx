@@ -150,6 +150,7 @@ interface SiteSettings {
 }
 
 const backgroundOptions: { id: BackgroundVariant; name: string; description: string }[] = [
+  { id: 'original', name: 'Orijinal', description: 'Varsayılan kar ve küre animasyonları' },
   { id: 'aurora', name: 'Aurora', description: 'Kuzey ışıkları efekti' },
   { id: 'sparkles', name: 'Parıltı', description: 'Parlayan yıldızlar' },
   { id: 'beams', name: 'Işınlar', description: 'Animasyonlu ışın efekti' },
@@ -187,7 +188,7 @@ export default function AdminSettingsPage() {
     faviconUrl: '/favicon.ico',
     primaryColor: '#8B5CF6',
     defaultTheme: 'dark',
-    backgroundEffect: 'aurora',
+    backgroundEffect: 'original',
     enableRegistration: true,
     enableGoogleAuth: true,
     enableMagicLink: false,

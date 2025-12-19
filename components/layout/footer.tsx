@@ -19,8 +19,8 @@ const footerLinks = {
     { label: 'SSS', href: '/#faq' },
   ],
   legal: [
-    { label: 'Gizlilik', href: '/#' },
-    { label: 'Şartlar', href: '/#' },
+    { label: 'Gizlilik', href: '/#privacy' },
+    { label: 'Şartlar', href: '/#terms' },
   ],
 };
 
