@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
+import Image from 'next/image';
 
 interface Message {
   id: string;
@@ -137,13 +138,18 @@ export function Chatbot() {
             exit={{ scale: 0, opacity: 0 }}
             className="fixed bottom-6 right-6 z-50"
           >
-            <Button
+            <button
               onClick={() => setIsOpen(true)}
-              size="lg"
-              className="h-14 w-14 rounded-full shadow-lg bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
+              className="h-14 w-14 rounded-full shadow-lg bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 flex items-center justify-center overflow-hidden transition-transform hover:scale-105"
             >
-              <MessageCircle className="h-6 w-6" />
-            </Button>
+              <Image
+                src="/logo/chatbot.png"
+                alt="QRA Chatbot"
+                width={56}
+                height={56}
+                className="object-cover"
+              />
+            </button>
             <span className="absolute -top-1 -right-1 flex h-4 w-4">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-4 w-4 bg-primary"></span>
@@ -168,8 +174,14 @@ export function Chatbot() {
             <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/10 to-purple-600/10 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-r from-primary to-purple-600 flex items-center justify-center">
-                    <Bot className="h-5 w-5 text-white" />
+                  <div className="h-10 w-10 rounded-full overflow-hidden">
+                    <Image
+                      src="/logo/chatbot.png"
+                      alt="QRA"
+                      width={40}
+                      height={40}
+                      className="object-cover"
+                    />
                   </div>
                   <span className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 rounded-full border-2 border-background"></span>
                 </div>
@@ -219,11 +231,7 @@ export function Chatbot() {
                     >
                       <Avatar className="h-8 w-8 shrink-0">
                         {message.role === 'assistant' ? (
-                          <>
-                            <AvatarFallback className="bg-gradient-to-r from-primary to-purple-600">
-                              <Sparkles className="h-4 w-4 text-white" />
-                            </AvatarFallback>
-                          </>
+                          <AvatarImage src="/logo/chatbot.png" alt="QRA" />
                         ) : (
                           <>
                             <AvatarImage src={session?.user?.image || ''} />
@@ -257,9 +265,7 @@ export function Chatbot() {
                       className="flex gap-3"
                     >
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-gradient-to-r from-primary to-purple-600">
-                          <Sparkles className="h-4 w-4 text-white" />
-                        </AvatarFallback>
+                        <AvatarImage src="/logo/chatbot.png" alt="QRA" />
                       </Avatar>
                       <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
                         <div className="flex gap-1">
@@ -323,3 +329,4 @@ export function Chatbot() {
     </>
   );
 }
+
