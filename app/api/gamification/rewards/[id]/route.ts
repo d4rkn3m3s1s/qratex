@@ -59,12 +59,12 @@ export async function PATCH(
       data: {
         name: body.name,
         description: body.description,
+        icon: body.icon,
         type: body.type,
-        value: body.value,
-        pointsCost: body.pointsCost,
+        cost: body.cost || body.pointsCost,
         stock: body.stock,
+        metadata: body.metadata || body.value ? { value: body.value } : undefined,
         isActive: body.isActive,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       },
     });
 
