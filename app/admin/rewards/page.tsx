@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   Gift,
@@ -43,28 +42,27 @@ interface Reward {
   id: string;
   name: string;
   description: string;
-  image: string | null;
-  pointsCost: number;
+  icon: string;
+  cost: number;
   stock: number;
-  type: 'PHYSICAL' | 'DIGITAL' | 'COUPON' | 'VIP';
+  type: string;
+  metadata?: Record<string, unknown> | null;
   isActive: boolean;
   _count?: {
-    userRewards: number;
+    users: number;
   };
 }
 
-const typeLabels = {
-  PHYSICAL: 'Fiziksel',
-  DIGITAL: 'Dijital',
-  COUPON: 'Kupon',
-  VIP: 'VIP',
+const typeLabels: Record<string, string> = {
+  physical: 'Fiziksel',
+  digital: 'Dijital',
+  coupon: 'Kupon',
 };
 
-const typeColors = {
-  PHYSICAL: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  DIGITAL: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
-  COUPON: 'bg-green-500/10 text-green-500 border-green-500/20',
-  VIP: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+const typeColors: Record<string, string> = {
+  physical: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
+  digital: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
+  coupon: 'bg-green-500/10 text-green-500 border-green-500/20',
 };
 
 export default function AdminRewardsPage() {
@@ -78,10 +76,10 @@ export default function AdminRewardsPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    image: '',
-    pointsCost: 500,
+    icon: '🎁',
+    cost: 500,
     stock: 100,
-    type: 'DIGITAL' as Reward['type'],
+    type: 'digital',
     isActive: true,
   });
 
@@ -172,10 +170,10 @@ export default function AdminRewardsPage() {
     setFormData({
       name: '',
       description: '',
-      image: '',
-      pointsCost: 500,
+      icon: '🎁',
+      cost: 500,
       stock: 100,
-      type: 'DIGITAL',
+      type: 'digital',
       isActive: true,
     });
   };
@@ -185,10 +183,10 @@ export default function AdminRewardsPage() {
     setFormData({
       name: reward.name,
       description: reward.description,
-      image: reward.image || '',
-      pointsCost: reward.pointsCost,
+      icon: reward.icon || '🎁',
+      cost: reward.cost || 500,
       stock: reward.stock,
-      type: reward.type,
+      type: reward.type || 'digital',
       isActive: reward.isActive,
     });
     setEditDialogOpen(true);
@@ -201,7 +199,7 @@ export default function AdminRewardsPage() {
   const stats = {
     total: rewards.length,
     active: rewards.filter((r) => r.isActive).length,
-    totalClaimed: rewards.reduce((acc, r) => acc + (r._count?.userRewards || 0), 0),
+    totalClaimed: rewards.reduce((acc, r) => acc + (r._count?.users || 0), 0),
     lowStock: rewards.filter((r) => r.stock < 10 && r.stock > 0).length,
   };
 
@@ -224,11 +222,11 @@ export default function AdminRewardsPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label>Görsel URL (Opsiyonel)</Label>
+        <Label>İkon (Emoji)</Label>
         <Input
-          value={formData.image}
-          onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-          placeholder="https://..."
+          value={formData.icon}
+          onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
+          placeholder="🎁"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -242,10 +240,9 @@ export default function AdminRewardsPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PHYSICAL">Fiziksel</SelectItem>
-              <SelectItem value="DIGITAL">Dijital</SelectItem>
-              <SelectItem value="COUPON">Kupon</SelectItem>
-              <SelectItem value="VIP">VIP</SelectItem>
+              <SelectItem value="physical">Fiziksel</SelectItem>
+              <SelectItem value="digital">Dijital</SelectItem>
+              <SelectItem value="coupon">Kupon</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -253,8 +250,8 @@ export default function AdminRewardsPage() {
           <Label>Puan Maliyeti</Label>
           <Input
             type="number"
-            value={formData.pointsCost}
-            onChange={(e) => setFormData({ ...formData, pointsCost: parseInt(e.target.value) || 0 })}
+            value={formData.cost}
+            onChange={(e) => setFormData({ ...formData, cost: parseInt(e.target.value) || 0 })}
           />
         </div>
       </div>
@@ -412,20 +409,11 @@ export default function AdminRewardsPage() {
             >
               <Card glass hover className="group overflow-hidden">
                 <CardContent className="p-0">
-                  {/* Image */}
+                  {/* Icon */}
                   <div className="relative h-32 bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
-                    {reward.image ? (
-                      <Image
-                        src={reward.image}
-                        alt={reward.name}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <Gift className="h-12 w-12 text-primary/50" />
-                    )}
-                    <Badge className={`absolute top-2 right-2 ${typeColors[reward.type]}`}>
-                      {typeLabels[reward.type]}
+                    <span className="text-5xl">{reward.icon || '🎁'}</span>
+                    <Badge className={`absolute top-2 right-2 ${typeColors[reward.type] || 'bg-gray-500/10 text-gray-500'}`}>
+                      {typeLabels[reward.type] || reward.type}
                     </Badge>
                   </div>
 
@@ -439,7 +427,7 @@ export default function AdminRewardsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 text-yellow-500">
                         <Star className="h-4 w-4 fill-yellow-500" />
-                        <span className="font-bold">{reward.pointsCost.toLocaleString()}</span>
+                        <span className="font-bold">{(reward.cost || 0).toLocaleString()}</span>
                       </div>
                       <Badge variant={reward.stock > 10 ? 'outline' : reward.stock > 0 ? 'warning' : 'destructive'}>
                         Stok: {reward.stock}
@@ -447,7 +435,7 @@ export default function AdminRewardsPage() {
                     </div>
 
                     <p className="text-xs text-muted-foreground">
-                      {reward._count?.userRewards || 0} kez talep edildi
+                      {reward._count?.users || 0} kez talep edildi
                     </p>
 
                     {/* Actions */}

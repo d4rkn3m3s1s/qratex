@@ -61,10 +61,9 @@ export async function PATCH(
         description: body.description,
         icon: body.icon,
         type: body.type,
-        cost: body.cost || body.pointsCost,
+        cost: body.cost,
         stock: body.stock,
-        metadata: body.metadata || body.value ? { value: body.value } : undefined,
-        isActive: body.isActive,
+        isActive: body.isActive ?? true,
       },
     });
 
