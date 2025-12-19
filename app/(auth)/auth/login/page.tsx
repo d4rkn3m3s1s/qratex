@@ -272,12 +272,12 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Şifre</Label>
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-sm text-primary hover:underline"
+                <span
+                  className="text-sm text-muted-foreground cursor-not-allowed"
+                  title="Yakında"
                 >
                   Şifremi Unuttum
-                </Link>
+                </span>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />

@@ -11,26 +11,16 @@ const footerLinks = {
   product: [
     { label: 'Özellikler', href: '/#features' },
     { label: 'Fiyatlandırma', href: '/#pricing' },
-    { label: 'API', href: '/api-docs' },
-    { label: 'Entegrasyonlar', href: '/integrations' },
   ],
   company: [
-    { label: 'Hakkımızda', href: '/about' },
-    { label: 'Blog', href: '/blog' },
-    { label: 'Kariyer', href: '/careers' },
-    { label: 'Basın', href: '/press' },
+    { label: 'Hakkımızda', href: '/#features' },
   ],
   support: [
-    { label: 'Yardım Merkezi', href: '/help' },
-    { label: 'İletişim', href: '/contact' },
-    { label: 'SSS', href: '/faq' },
-    { label: 'Durum', href: '/status' },
+    { label: 'SSS', href: '/#faq' },
   ],
   legal: [
-    { label: 'Gizlilik', href: '/privacy' },
-    { label: 'Şartlar', href: '/terms' },
-    { label: 'Çerezler', href: '/cookies' },
-    { label: 'KVKK', href: '/kvkk' },
+    { label: 'Gizlilik', href: '/#' },
+    { label: 'Şartlar', href: '/#' },
   ],
 };
 

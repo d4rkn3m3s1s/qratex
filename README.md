@@ -264,3 +264,4 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için `LICENSE` dosy
 
 Made with ❤️ by QRATEX Team
 
+
