@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   Gift,
@@ -222,11 +223,11 @@ export default function AdminRewardsPage() {
         />
       </div>
       <div className="space-y-2">
-        <Label>İkon (Emoji)</Label>
+        <Label>İkon (Emoji veya /images/... path)</Label>
         <Input
           value={formData.icon}
           onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-          placeholder="🎁"
+          placeholder="🎁 veya /images/badges/icon.svg"
         />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -411,7 +412,17 @@ export default function AdminRewardsPage() {
                 <CardContent className="p-0">
                   {/* Icon */}
                   <div className="relative h-32 bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
-                    <span className="text-5xl">{reward.icon || '🎁'}</span>
+                    {reward.icon?.startsWith('/') ? (
+                      <Image
+                        src={reward.icon}
+                        alt={reward.name}
+                        width={80}
+                        height={80}
+                        className="object-contain"
+                      />
+                    ) : (
+                      <span className="text-5xl">{reward.icon || '🎁'}</span>
+                    )}
                     <Badge className={`absolute top-2 right-2 ${typeColors[reward.type] || 'bg-gray-500/10 text-gray-500'}`}>
                       {typeLabels[reward.type] || reward.type}
                     </Badge>
@@ -481,5 +492,6 @@ export default function AdminRewardsPage() {
     </div>
   );
 }
+
 
 

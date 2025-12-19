@@ -12,6 +12,7 @@ import {
   Calendar,
   Eye,
   Users,
+  Loader2,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,38 +25,66 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
+
+interface AnalyticsData {
+  totalFeedbacks: number;
+  avgRating: string;
+  totalScans: number;
+  conversionRate: string;
+  feedbackGrowth: number;
+  ratingChange: number;
+  sentimentBreakdown: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+  ratingDistribution: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
+  topQRCodes: Array<{
+    name: string;
+    scans: number;
+    feedbacks: number;
+    rating: string;
+  }>;
+  topTopics: Array<{
+    name: string;
+    count: number;
+    sentiment: string;
+  }>;
+}
 
 export default function DealerAnalyticsPage() {
   const [period, setPeriod] = useState('30d');
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    totalFeedbacks: 156,
-    avgRating: 4.3,
-    totalScans: 892,
-    conversionRate: 17.5,
-    feedbackGrowth: 12.5,
-    ratingChange: 0.2,
-    sentimentBreakdown: { positive: 68, neutral: 22, negative: 10 },
-    topQRCodes: [
-      { name: 'Ana Giriş', scans: 234, feedbacks: 45, rating: 4.5 },
-      { name: 'Bahçe Masası', scans: 189, feedbacks: 38, rating: 4.2 },
-      { name: 'Bar Alanı', scans: 156, feedbacks: 28, rating: 4.4 },
-    ],
-    topTopics: [
-      { name: 'Hizmet Kalitesi', count: 45, sentiment: 'positive' },
-      { name: 'Yemek Lezzeti', count: 38, sentiment: 'positive' },
-      { name: 'Bekleme Süresi', count: 22, sentiment: 'negative' },
-      { name: 'Fiyat', count: 18, sentiment: 'neutral' },
-      { name: 'Ambiyans', count: 15, sentiment: 'positive' },
-    ],
-    ratingDistribution: { 5: 45, 4: 35, 3: 12, 2: 5, 1: 3 },
-  });
+  const [data, setData] = useState<AnalyticsData | null>(null);
 
   useEffect(() => {
-    // Simulate loading
-    setLoading(true);
-    setTimeout(() => setLoading(false), 500);
+    fetchAnalytics();
   }, [period]);
+
+  const fetchAnalytics = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/dealer/analytics?period=${period}`);
+      const result = await res.json();
+      
+      if (result.success) {
+        setData(result.data);
+      } else {
+        toast.error('Analitik verileri yüklenemedi');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const StatCard = ({
     title,
@@ -76,7 +105,7 @@ export default function DealerAnalyticsPage() {
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">{title}</p>
             <p className="text-3xl font-bold">{value}</p>
-            {change !== undefined && (
+            {change !== undefined && change !== 0 && (
               <div className={`flex items-center gap-1 text-sm ${change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {change >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                 <span>{Math.abs(change)}%</span>
@@ -95,18 +124,23 @@ export default function DealerAnalyticsPage() {
     return (
       <div className="space-y-6">
         <DashboardHeader title="Analitik" description="İşletmenizin performans metrikleri" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} glass>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-2">
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                  <div className="h-8 bg-muted rounded w-3/4" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        <DashboardHeader title="Analitik" description="İşletmenizin performans metrikleri" />
+        <Card glass>
+          <CardContent className="p-8 text-center">
+            <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Analitik verileri yüklenemedi</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -142,7 +176,7 @@ export default function DealerAnalyticsPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <StatCard
             title="Ort. Puan"
-            value={data.avgRating.toFixed(1)}
+            value={data.avgRating}
             change={data.ratingChange}
             icon={Star}
             color="bg-yellow-500/10 text-yellow-500"
@@ -229,25 +263,32 @@ export default function DealerAnalyticsPage() {
             <CardTitle className="text-lg">En Aktif QR Kodlar</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {data.topQRCodes.map((qr, index) => (
-                <div key={qr.name} className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
-                    {index + 1}
+            {data.topQRCodes.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <QrCode className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Henüz QR kod verisi yok</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {data.topQRCodes.map((qr, index) => (
+                  <div key={qr.name} className="flex items-center gap-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{qr.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {qr.scans} tarama · {qr.feedbacks} geri bildirim
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                      <span className="font-medium">{qr.rating}</span>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{qr.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {qr.scans} tarama · {qr.feedbacks} geri bildirim
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    <span className="font-medium">{qr.rating}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -257,32 +298,37 @@ export default function DealerAnalyticsPage() {
             <CardTitle className="text-lg">Popüler Konular</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {data.topTopics.map((topic) => (
-                <div key={topic.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span>{topic.name}</span>
-                    <Badge 
-                      variant="outline" 
-                      className={
-                        topic.sentiment === 'positive' ? 'text-green-500 border-green-500/20' :
-                        topic.sentiment === 'negative' ? 'text-red-500 border-red-500/20' :
-                        'text-gray-500 border-gray-500/20'
-                      }
-                    >
-                      {topic.sentiment === 'positive' ? 'Olumlu' :
-                       topic.sentiment === 'negative' ? 'Olumsuz' : 'Nötr'}
-                    </Badge>
+            {data.topTopics.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Henüz konu verisi yok</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {data.topTopics.map((topic) => (
+                  <div key={topic.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span>{topic.name}</span>
+                      <Badge 
+                        variant="outline" 
+                        className={
+                          topic.sentiment === 'positive' ? 'text-green-500 border-green-500/20' :
+                          topic.sentiment === 'negative' ? 'text-red-500 border-red-500/20' :
+                          'text-gray-500 border-gray-500/20'
+                        }
+                      >
+                        {topic.sentiment === 'positive' ? 'Olumlu' :
+                         topic.sentiment === 'negative' ? 'Olumsuz' : 'Nötr'}
+                      </Badge>
+                    </div>
+                    <span className="text-muted-foreground">{topic.count}</span>
                   </div>
-                  <span className="text-muted-foreground">{topic.count}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
-
