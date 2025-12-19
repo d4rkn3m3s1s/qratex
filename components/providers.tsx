@@ -70,20 +70,13 @@ function ThemeColorsProvider({ children }: { children: ReactNode }) {
         if (!res.ok) return;
         const data = await res.json();
         
-        if (data.raw) {
-          let activeThemeId: string | null = null;
-          let customColors: CustomColors | null = null;
-          
-          data.raw.forEach((setting: { key: string; value: unknown }) => {
-            if (setting.key === 'activeTheme') {
-              activeThemeId = setting.value as string;
-            }
-            if (setting.key === 'customColors') {
-              customColors = setting.value as CustomColors;
-            }
-          });
-          
+        if (data.raw && Array.isArray(data.raw)) {
+          const settings = data.raw as Array<{ key: string; value: unknown }>;
           const root = document.documentElement;
+          
+          // Find active theme
+          const themeSettings = settings.find(s => s.key === 'activeTheme');
+          const activeThemeId = themeSettings?.value as string | undefined;
           
           // Apply preset theme first
           if (activeThemeId && themePresets[activeThemeId]) {
@@ -95,18 +88,20 @@ function ThemeColorsProvider({ children }: { children: ReactNode }) {
             root.style.setProperty('--accent', hexToHSL(preset.accent));
           }
           
-          // Custom colors override preset
-          if (customColors) {
-            if (customColors.primary) {
-              root.style.setProperty('--primary', hexToHSL(customColors.primary));
-              root.style.setProperty('--ring', hexToHSL(customColors.primary));
-              root.style.setProperty('--gradient-from', hexToHSL(customColors.primary));
+          // Find and apply custom colors
+          const customColorsSetting = settings.find(s => s.key === 'customColors');
+          if (customColorsSetting?.value) {
+            const colors = customColorsSetting.value as CustomColors;
+            if (colors.primary) {
+              root.style.setProperty('--primary', hexToHSL(colors.primary));
+              root.style.setProperty('--ring', hexToHSL(colors.primary));
+              root.style.setProperty('--gradient-from', hexToHSL(colors.primary));
             }
-            if (customColors.secondary) {
-              root.style.setProperty('--gradient-to', hexToHSL(customColors.secondary));
+            if (colors.secondary) {
+              root.style.setProperty('--gradient-to', hexToHSL(colors.secondary));
             }
-            if (customColors.accent) {
-              root.style.setProperty('--accent', hexToHSL(customColors.accent));
+            if (colors.accent) {
+              root.style.setProperty('--accent', hexToHSL(colors.accent));
             }
           }
         }

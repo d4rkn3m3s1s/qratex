@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { getInitials } from '@/lib/utils';
+import { type BackgroundVariant } from '@/components/ui/backgrounds';
 
 // Avatar listesi
 const avatarList = [
@@ -122,8 +123,6 @@ const avatarList = [
     '/images/avatar/EMOJİ8.svg',
   ]},
 ];
-
-type BackgroundVariant = 'aurora' | 'sparkles' | 'beams' | 'gradient' | 'meteors' | 'grid' | 'dots' | 'none';
 
 interface SiteSettings {
   siteName: string;
