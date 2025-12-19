@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
 import { HyperText } from '@/components/ui/hyper-text';
+import { AuroraText } from '@/components/ui/aurora-text';
 
 const features = [
   {
@@ -373,7 +374,12 @@ export default function HomePage() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
               Müşteri Deneyimini
               <br />
-              <span className="text-gradient">Dönüştürün</span>
+              <AuroraText 
+                colors={["#a855f7", "#ec4899", "#8b5cf6", "#d946ef"]}
+                speed={0.8}
+              >
+                Dönüştürün
+              </AuroraText>
             </h1>
 
             <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
@@ -632,7 +638,12 @@ export default function HomePage() {
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-6">
               Müşteri Deneyimini
               <br />
-              <span className="text-gradient">Yeniden Tanımlayın</span>
+              <AuroraText 
+                colors={["#a855f7", "#ec4899", "#8b5cf6", "#d946ef"]}
+                speed={0.8}
+              >
+                Yeniden Tanımlayın
+              </AuroraText>
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
               Bugün ücretsiz başlayın ve işletmenizin nasıl dönüştüğünü görün.
