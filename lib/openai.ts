@@ -1,19 +1,40 @@
 import OpenAI from 'openai';
 import type { AIAnalysisResult } from '@/types';
 
-// Lazy initialize OpenAI client
-let openai: OpenAI | null = null;
+// Lazy initialize AI client (Groq veya OpenAI)
+let aiClient: OpenAI | null = null;
 
-function getOpenAIClient(): OpenAI | null {
-  if (!process.env.OPENAI_API_KEY) {
-    return null;
+function getAIClient(): OpenAI | null {
+  // Önce Groq'u dene (daha hızlı ve ücretsiz)
+  if (process.env.GROQ_API_KEY) {
+    if (!aiClient || (aiClient as OpenAI & { baseURL?: string }).baseURL !== 'https://api.groq.com/openai/v1') {
+      aiClient = new OpenAI({
+        apiKey: process.env.GROQ_API_KEY,
+        baseURL: 'https://api.groq.com/openai/v1',
+      });
+    }
+    return aiClient;
   }
-  if (!openai) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+  
+  // Fallback: OpenAI
+  if (process.env.OPENAI_API_KEY) {
+    if (!aiClient) {
+      aiClient = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+    }
+    return aiClient;
   }
-  return openai;
+  
+  return null;
+}
+
+// Model seçimi
+function getModel(): string {
+  if (process.env.GROQ_API_KEY) {
+    return 'llama-3.3-70b-versatile'; // Groq modeli
+  }
+  return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview'; // OpenAI modeli
 }
 
 // Retry configuration
@@ -43,12 +64,12 @@ async function withRetry<T>(
 }
 
 /**
- * Analyze feedback text using OpenAI
+ * Analyze feedback text using AI (Groq or OpenAI)
  */
 export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | null> {
-  const client = getOpenAIClient();
+  const client = getAIClient();
   if (!client) {
-    console.warn('OpenAI API key not configured');
+    console.warn('AI API key not configured (GROQ_API_KEY or OPENAI_API_KEY)');
     return null;
   }
 
@@ -59,7 +80,7 @@ export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | 
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: getModel(),
         messages: [
           {
             role: 'system',
@@ -130,16 +151,16 @@ export async function generateInsights(feedbackData: {
   topTopics: string[];
   recentFeedbacks: { text: string; rating: number; sentiment: string }[];
 }): Promise<string | null> {
-  const client = getOpenAIClient();
+  const client = getAIClient();
   if (!client) {
-    console.warn('OpenAI API key not configured');
+    console.warn('AI API key not configured');
     return null;
   }
 
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: getModel(),
         messages: [
           {
             role: 'system',
@@ -179,7 +200,7 @@ export async function chatWithAI(
   message: string,
   context?: string
 ): Promise<string | null> {
-  const client = getOpenAIClient();
+  const client = getAIClient();
   if (!client) {
     return 'AI asistanı şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
   }
@@ -187,7 +208,7 @@ export async function chatWithAI(
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
+        model: getModel(),
         messages: [
           {
             role: 'system',
