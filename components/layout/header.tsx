@@ -16,7 +16,6 @@ const navigation = [
   { label: 'Ana Sayfa', href: '/' },
   { label: 'Özellikler', href: '/#features' },
   { label: 'Fiyatlandırma', href: '/#pricing' },
-  { label: 'İletişim', href: '/contact' },
 ];
 
 export function Header() {

@@ -600,7 +600,7 @@ export default function HomePage() {
                 </Link>
               </Button>
               <Button asChild size="xl" variant="outline">
-                <Link href="/contact">Satış ile Görüşün</Link>
+                <a href="mailto:info@qratex.com">Satış ile Görüşün</a>
               </Button>
             </div>
           </motion.div>

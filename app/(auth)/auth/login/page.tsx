@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -94,16 +94,19 @@ export default function LoginPage() {
           description: 'Yönlendiriliyorsunuz...',
         });
         
-        // Redirect to home and let middleware handle role-based routing
+        // Get session to determine role-based redirect
+        const session = await getSession();
+        const role = session?.user?.role;
+        
         if (callbackUrl && callbackUrl !== '/') {
           router.push(callbackUrl);
         } else {
-          // Refresh to get session then redirect
-          router.refresh();
-          // Small delay to ensure session is set
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 500);
+          // Role-based redirect
+          const redirectUrl = role === 'ADMIN' ? '/admin' 
+            : role === 'DEALER' ? '/dealer' 
+            : role === 'CUSTOMER' ? '/customer' 
+            : '/';
+          window.location.href = redirectUrl;
         }
       }
     } catch (error) {
@@ -141,8 +144,7 @@ export default function LoginPage() {
           CUSTOMER: '/customer',
         };
         
-        router.push(roleRoutes[account.role as keyof typeof roleRoutes]);
-        router.refresh();
+        window.location.href = roleRoutes[account.role as keyof typeof roleRoutes];
       }
     } catch (error) {
       toast.error('Bir hata oluştu');
