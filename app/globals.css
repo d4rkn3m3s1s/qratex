@@ -627,6 +627,15 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
+   VIEW TRANSITIONS (Magic UI Theme Toggler)
+───────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* ─────────────────────────────────────────────────────────────
    REDUCED MOTION
 ───────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
