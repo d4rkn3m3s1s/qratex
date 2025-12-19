@@ -45,28 +45,29 @@ interface Quest {
   id: string;
   name: string;
   description: string;
-  type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'SPECIAL';
-  target: number;
-  reward: number;
+  icon: string;
+  type: string;
+  requirement: { type?: string; count?: number } | null;
+  reward: { points?: number; xp?: number } | null;
   isActive: boolean;
   expiresAt: string | null;
   _count?: {
-    userQuests: number;
+    users: number;
   };
 }
 
-const typeLabels = {
-  DAILY: 'Günlük',
-  WEEKLY: 'Haftalık',
-  MONTHLY: 'Aylık',
-  SPECIAL: 'Özel',
+const typeLabels: Record<string, string> = {
+  daily: 'Günlük',
+  weekly: 'Haftalık',
+  monthly: 'Aylık',
+  special: 'Özel',
 };
 
-const typeColors = {
-  DAILY: 'bg-green-500/10 text-green-500 border-green-500/20',
-  WEEKLY: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  MONTHLY: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  SPECIAL: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+const typeColors: Record<string, string> = {
+  daily: 'bg-green-500/10 text-green-500 border-green-500/20',
+  weekly: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  monthly: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  special: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
 };
 
 export default function AdminQuestsPage() {
@@ -80,7 +81,8 @@ export default function AdminQuestsPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    type: 'DAILY' as Quest['type'],
+    icon: '🎯',
+    type: 'daily',
     target: 1,
     reward: 50,
     isActive: true,
@@ -109,13 +111,20 @@ export default function AdminQuestsPage() {
 
   const handleCreate = async () => {
     try {
+      const questData = {
+        name: formData.name,
+        description: formData.description,
+        icon: formData.icon,
+        type: formData.type,
+        requirement: { type: 'custom', count: formData.target },
+        reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
+        expiresAt: formData.expiresAt || null,
+      };
+      
       const res = await fetch('/api/gamification/quests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          expiresAt: formData.expiresAt || null,
-        }),
+        body: JSON.stringify(questData),
       });
       
       if (res.ok) {
@@ -136,13 +145,21 @@ export default function AdminQuestsPage() {
     if (!selectedQuest) return;
     
     try {
+      const questData = {
+        name: formData.name,
+        description: formData.description,
+        icon: formData.icon,
+        type: formData.type,
+        requirement: { type: 'custom', count: formData.target },
+        reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
+        expiresAt: formData.expiresAt || null,
+        isActive: formData.isActive,
+      };
+      
       const res = await fetch(`/api/gamification/quests/${selectedQuest.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          expiresAt: formData.expiresAt || null,
-        }),
+        body: JSON.stringify(questData),
       });
       
       if (res.ok) {
@@ -180,7 +197,7 @@ export default function AdminQuestsPage() {
     setFormData({
       name: '',
       description: '',
-      type: 'DAILY',
+      type: 'daily',
       target: 1,
       reward: 50,
       isActive: true,
@@ -193,9 +210,10 @@ export default function AdminQuestsPage() {
     setFormData({
       name: quest.name,
       description: quest.description,
-      type: quest.type,
-      target: quest.target,
-      reward: quest.reward,
+      icon: quest.icon || '🎯',
+      type: quest.type || 'daily',
+      target: quest.requirement?.count || 1,
+      reward: quest.reward?.points || 50,
       isActive: quest.isActive,
       expiresAt: quest.expiresAt ? new Date(quest.expiresAt).toISOString().split('T')[0] : '',
     });
@@ -389,7 +407,7 @@ export default function AdminQuestsPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Hedef</span>
-                      <span className="font-medium">{quest.target}</span>
+                      <span className="font-medium">{quest.requirement?.count || 1}</span>
                     </div>
                     <Progress value={0} className="h-2" />
                   </div>
@@ -398,10 +416,10 @@ export default function AdminQuestsPage() {
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-1 text-yellow-500">
                       <Star className="h-4 w-4" />
-                      <span>{quest.reward} puan</span>
+                      <span>{quest.reward?.points || 0} puan</span>
                     </div>
                     <span className="text-muted-foreground">
-                      {quest._count?.userQuests || 0} katılımcı
+                      {quest._count?.users || 0} katılımcı
                     </span>
                   </div>
 

@@ -57,14 +57,14 @@ export async function PATCH(
     const quest = await prisma.quest.update({
       where: { id },
       data: {
-        name: body.name || body.title,
+        name: body.name,
         description: body.description,
         icon: body.icon,
         type: body.type,
-        requirement: body.requirement || { type: 'custom', count: body.target || 1 },
-        reward: body.reward || { points: body.points || 100, xp: body.xpReward || 50 },
+        requirement: body.requirement,
+        reward: body.reward,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-        isActive: body.isActive,
+        isActive: body.isActive ?? true,
       },
     });
 
