@@ -197,6 +197,7 @@ export default function AdminQuestsPage() {
     setFormData({
       name: '',
       description: '',
+      icon: '🎯',
       type: 'daily',
       target: 1,
       reward: 50,
