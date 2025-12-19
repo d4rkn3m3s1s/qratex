@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -22,72 +23,143 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getInitials, calculateLevelProgress, getLeague, formatNumber, getRarityColor, getRarityBgColor } from '@/lib/utils';
 
-// Gerçek rozet verileri
-const userBadges = [
-  { id: 1, name: 'İlk Adım', icon: '/images/badges/YENİ SES.svg', rarity: 'common', earnedAt: new Date() },
-  { id: 2, name: 'Yardımsever', icon: '/images/badges/İLHAM KAYNAĞI.svg', rarity: 'rare', earnedAt: new Date() },
-  { id: 3, name: 'Erken Kuş', icon: '/images/badges/EFSANE.svg', rarity: 'legendary', earnedAt: new Date() },
-];
+interface Quest {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  progress: number;
+  target: number;
+  reward: { points: number; xp: number };
+  type: string;
+}
 
-const activeQuests = [
-  {
-    id: 1,
-    name: 'Günlük Geri Bildirim',
-    description: 'Bugün 1 geri bildirim gönderin',
-    icon: '/images/badges/YORUM MAKİNESİ.svg',
-    progress: 0,
-    target: 1,
-    reward: { points: 50, xp: 25 },
-    type: 'daily',
-  },
-  {
-    id: 2,
-    name: 'Fotoğraflı Geri Bildirim',
-    description: 'Fotoğraf içeren bir geri bildirim gönderin',
-    icon: '/images/badges/EMOJİ USTASI.svg',
-    progress: 0,
-    target: 1,
-    reward: { points: 75, xp: 40 },
-    type: 'daily',
-  },
-  {
-    id: 3,
-    name: 'Haftalık Kaşif',
-    description: 'Bu hafta 5 farklı işletmeyi ziyaret edin',
-    icon: '/images/badges/TUR REHBERİ.svg',
-    progress: 2,
-    target: 5,
-    reward: { points: 200, xp: 100 },
-    type: 'weekly',
-  },
-];
+interface BadgeData {
+  id: string;
+  name: string;
+  icon: string;
+  rarity: string;
+  earnedAt: string;
+}
 
-const recentFeedbacks = [
-  { id: 1, business: 'Demo Cafe', rating: 5, points: 50, createdAt: new Date() },
-  { id: 2, business: 'Lezzet Durağı', rating: 4, points: 50, createdAt: new Date(Date.now() - 86400000) },
-];
+interface FeedbackData {
+  id: string;
+  business: string;
+  rating: number;
+  points: number;
+  createdAt: string;
+}
 
-const leaderboard = [
-  { rank: 1, name: 'Ahmet Y.', points: 15420, level: 24, avatar: '/images/avatar/AVATAR ERKEK 1.svg' },
-  { rank: 2, name: 'Elif K.', points: 12350, level: 21, avatar: '/images/avatar/AVATAR KADIN 1.svg' },
-  { rank: 3, name: 'Mehmet D.', points: 11200, level: 19, avatar: '/images/avatar/AVATAR ERKEK 2.svg' },
-  { rank: 4, name: 'Siz', points: 350, level: 2, isCurrentUser: true },
-];
+interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  points: number;
+  level: number;
+  image?: string | null;
+  isCurrentUser?: boolean;
+}
 
-const rewards = [
-  { id: 1, name: 'Ücretsiz Kahve', icon: '/images/avatar/COFFFE.svg', cost: 500 },
-  { id: 2, name: '%10 İndirim', icon: '/images/badges/sürpriz kutusu.svg', cost: 300 },
-  { id: 3, name: 'VIP Rozet', icon: '/images/badges/TAHT SAHİBİ.svg', cost: 1000 },
-];
+interface Reward {
+  id: string;
+  name: string;
+  icon: string;
+  cost: number;
+}
 
 export default function CustomerDashboard() {
   const { data: session } = useSession();
   const user = session?.user;
   
-  const levelProgress = calculateLevelProgress(user?.points || 350);
-  const league = getLeague(user?.level || 2);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ feedbackCount: 0, badgeCount: 0, points: 0, level: 1, streak: 0 });
+  const [activeQuests, setActiveQuests] = useState<Quest[]>([]);
+  const [userBadges, setUserBadges] = useState<BadgeData[]>([]);
+  const [recentFeedbacks, setRecentFeedbacks] = useState<FeedbackData[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch customer stats
+        const statsRes = await fetch('/api/customer/stats');
+        const statsData = await statsRes.json();
+        
+        if (statsData.success) {
+          setStats(statsData.data.stats);
+          setActiveQuests(statsData.data.activeQuests || []);
+          setUserBadges(statsData.data.badges || []);
+          setRecentFeedbacks(statsData.data.recentFeedbacks || []);
+        }
+
+        // Fetch leaderboard
+        const leaderRes = await fetch('/api/leaderboard?limit=4');
+        const leaderData = await leaderRes.json();
+        if (leaderData.success) {
+          const lb = leaderData.data.leaderboard.slice(0, 3).map((u: LeaderboardEntry, i: number) => ({
+            rank: i + 1,
+            name: u.name,
+            points: u.points,
+            level: u.level,
+            avatar: u.image,
+          }));
+          // Add current user
+          lb.push({
+            rank: leaderData.data.userRank || 99,
+            name: 'Siz',
+            points: user?.points || 0,
+            level: user?.level || 1,
+            isCurrentUser: true,
+          });
+          setLeaderboard(lb);
+        }
+
+        // Fetch rewards
+        const rewardsRes = await fetch('/api/gamification/rewards');
+        const rewardsData = await rewardsRes.json();
+        if (rewardsData.success) {
+          setRewards(rewardsData.data.slice(0, 3).map((r: { id: string; name: string; icon: string; cost: number }) => ({
+            id: r.id,
+            name: r.name,
+            icon: r.icon || '/images/badges/sürpriz kutusu.svg',
+            cost: r.cost,
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (session?.user) {
+      fetchData();
+    }
+  }, [session, user?.points, user?.level]);
+  
+  const levelProgress = calculateLevelProgress(stats.points || user?.points || 0);
+  const league = getLeague(stats.level || user?.level || 1);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full" />
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-7">
+          <Skeleton className="lg:col-span-4 h-96" />
+          <div className="lg:col-span-3 space-y-6">
+            <Skeleton className="h-44" />
+            <Skeleton className="h-44" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -107,7 +179,7 @@ export default function CustomerDashboard() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg">
-                  {user?.level || 2}
+                  {stats.level || user?.level || 1}
                 </div>
               </div>
 
@@ -128,7 +200,7 @@ export default function CustomerDashboard() {
                   <div className="flex items-center justify-between text-sm">
                     <span>Seviye İlerlemesi</span>
                     <span className="text-primary font-medium">
-                      {formatNumber(user?.points || 350)} / {formatNumber(1000)} XP
+                      {formatNumber(stats.points || user?.points || 0)} / {formatNumber((stats.level || 1) * 1000)} XP
                     </span>
                   </div>
                   <Progress value={levelProgress} className="h-3" />
@@ -137,7 +209,7 @@ export default function CustomerDashboard() {
 
               <div className="flex flex-col items-center gap-2">
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-primary">{formatNumber(user?.points || 150)}</p>
+                  <p className="text-3xl font-bold text-primary">{formatNumber(stats.points || user?.points || 0)}</p>
                   <p className="text-sm text-muted-foreground">Puan</p>
                 </div>
                 <Button asChild variant="gradient" size="sm">
@@ -419,7 +491,7 @@ export default function CustomerDashboard() {
                       {reward.cost} puan
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" disabled={150 < reward.cost}>
+                  <Button size="sm" variant="outline" disabled={(stats.points || 0) < reward.cost}>
                     Al
                   </Button>
                 </div>

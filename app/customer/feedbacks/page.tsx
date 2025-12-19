@@ -43,8 +43,27 @@ export default function CustomerFeedbacksPage() {
       const res = await fetch('/api/feedbacks');
       const data = await res.json();
 
-      if (data.success) {
-        setFeedbacks(data.data);
+      if (data.items) {
+        // Format data for display
+        const formattedFeedbacks = data.items.map((f: {
+          id: string;
+          rating: number;
+          text: string | null;
+          sentiment: string | null;
+          createdAt: string;
+          qrCode: { name: string; code: string };
+        }) => ({
+          id: f.id,
+          rating: f.rating,
+          text: f.text,
+          sentiment: f.sentiment,
+          createdAt: f.createdAt,
+          qrCode: {
+            name: f.qrCode.name,
+            businessName: f.qrCode.name, // QR code name as business name
+          },
+        }));
+        setFeedbacks(formattedFeedbacks);
       }
     } catch (error) {
       toast.error('Geri bildirimler yüklenemedi');

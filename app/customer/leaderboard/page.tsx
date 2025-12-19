@@ -41,22 +41,18 @@ export default function CustomerLeaderboardPage() {
 
   const fetchLeaderboard = async () => {
     setLoading(true);
-    // Simulated data
-    setTimeout(() => {
-      setLeaderboard([
-        { id: '1', name: 'Ahmet Yılmaz', image: '/images/avatar/avatar1.svg', points: 15240, level: 25, rank: 1, change: 0 },
-        { id: '2', name: 'Elif Kaya', image: '/images/avatar/avatar2.svg', points: 14850, level: 24, rank: 2, change: 1 },
-        { id: '3', name: 'Mehmet Demir', image: '/images/avatar/avatar3.svg', points: 13920, level: 23, rank: 3, change: -1 },
-        { id: '4', name: 'Ayşe Çelik', image: '/images/avatar/avatar4.svg', points: 12100, level: 21, rank: 4, change: 2 },
-        { id: '5', name: 'Can Öztürk', image: '/images/avatar/avatar5.svg', points: 11500, level: 20, rank: 5, change: 0 },
-        { id: '6', name: 'Zeynep Aydın', image: null, points: 10800, level: 19, rank: 6, change: -2 },
-        { id: '7', name: 'Burak Şahin', image: null, points: 9500, level: 17, rank: 7, change: 1 },
-        { id: '8', name: 'Selin Yıldız', image: null, points: 8900, level: 16, rank: 8, change: 0 },
-        { id: '9', name: 'Emre Koç', image: null, points: 8200, level: 15, rank: 9, change: 3 },
-        { id: '10', name: 'Deniz Arslan', image: null, points: 7800, level: 14, rank: 10, change: -1 },
-      ]);
+    try {
+      const res = await fetch(`/api/leaderboard?period=${period}`);
+      const data = await res.json();
+      
+      if (data.success && data.data.leaderboard) {
+        setLeaderboard(data.data.leaderboard);
+      }
+    } catch (error) {
+      console.error('Leaderboard fetch error:', error);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   const getRankIcon = (rank: number) => {

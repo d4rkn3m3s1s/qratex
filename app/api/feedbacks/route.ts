@@ -40,15 +40,31 @@ export async function GET(request: NextRequest) {
             select: { id: true, name: true, image: true },
           },
           qrCode: {
-            select: { id: true, name: true, code: true },
+            select: { 
+              id: true, 
+              name: true, 
+              code: true,
+              dealer: {
+                select: { businessName: true },
+              },
+            },
           },
         },
       }),
       prisma.feedback.count({ where }),
     ]);
 
+    // Format response to include businessName
+    const formattedFeedbacks = feedbacks.map(f => ({
+      ...f,
+      qrCode: {
+        ...f.qrCode,
+        businessName: f.qrCode.dealer?.businessName || f.qrCode.name,
+      },
+    }));
+
     return NextResponse.json({
-      items: feedbacks,
+      items: formattedFeedbacks,
       total,
       page,
       pageSize,

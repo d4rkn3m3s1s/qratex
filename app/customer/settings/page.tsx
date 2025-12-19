@@ -162,6 +162,27 @@ export default function CustomerSettingsPage() {
     showLeaderboard: true,
   });
 
+  // Fetch settings on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch('/api/customer/settings');
+        const data = await res.json();
+        if (data.success) {
+          if (data.data.notifications) {
+            setNotifications(data.data.notifications);
+          }
+          if (data.data.preferences) {
+            setPreferences(data.data.preferences);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+      }
+    };
+    fetchSettings();
+  }, []);
+
   const handleSelectAvatar = (avatar: string) => {
     setProfile({ ...profile, avatar });
     setAvatarDialogOpen(false);
@@ -195,10 +216,23 @@ export default function CustomerSettingsPage() {
 
   const handleSaveNotifications = async () => {
     setSaving(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/customer/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifications }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Bildirim ayarları güncellendi');
+      } else {
+        toast.error(data.error || 'Bir hata oluştu');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
       setSaving(false);
-      toast.success('Bildirim ayarları güncellendi');
-    }, 1000);
+    }
   };
 
   const handleChangePassword = async () => {
@@ -237,10 +271,23 @@ export default function CustomerSettingsPage() {
 
   const handleSavePreferences = async () => {
     setSaving(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/customer/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Tercihler güncellendi');
+      } else {
+        toast.error(data.error || 'Bir hata oluştu');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
       setSaving(false);
-      toast.success('Tercihler güncellendi');
-    }, 1000);
+    }
   };
 
   const currentCategoryAvatars = avatarList.find(c => c.category === selectedCategory)?.items || [];
