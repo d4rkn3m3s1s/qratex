@@ -208,9 +208,9 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/settings');
       const data = await res.json();
       
-      if (data.success && data.data) {
+      if (data.raw && Array.isArray(data.raw)) {
         const merged = { ...settings };
-        data.data.forEach((setting: { key: string; value: unknown }) => {
+        data.raw.forEach((setting: { key: string; value: unknown }) => {
           if (setting.key in merged) {
             (merged as Record<string, unknown>)[setting.key] = setting.value;
           }
@@ -293,15 +293,24 @@ export default function AdminSettingsPage() {
     try {
       setSaving(true);
       
-      for (const [key, value] of Object.entries(settings)) {
-        await fetch('/api/admin/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key, value }),
-        });
-      }
+      // Batch update - tek istekle tüm ayarları kaydet
+      const settingsArray = Object.entries(settings).map(([key, value]) => ({
+        key,
+        value,
+        category: 'general',
+      }));
       
-      toast.success('Ayarlar kaydedildi');
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: settingsArray }),
+      });
+      
+      if (res.ok) {
+        toast.success('Ayarlar kaydedildi');
+      } else {
+        throw new Error('Save failed');
+      }
     } catch (error) {
       toast.error('Ayarlar kaydedilemedi');
     } finally {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Palette,
@@ -9,6 +9,8 @@ import {
   Moon,
   Monitor,
   Sparkles,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
@@ -120,17 +122,120 @@ export default function AdminThemesPage() {
     secondary: '#A855F7',
     accent: '#F472B6',
   });
+  const [defaultMode, setDefaultMode] = useState<'light' | 'dark' | 'system'>('dark');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const activateTheme = (id: string) => {
-    setThemes(themes.map(t => ({ ...t, isActive: t.id === id })));
-    toast.success('Tema aktifleştirildi');
+  // Fetch theme settings on mount
+  useEffect(() => {
+    fetchThemeSettings();
+  }, []);
+
+  const fetchThemeSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/settings?category=theme');
+      const data = await res.json();
+      
+      if (data.raw) {
+        data.raw.forEach((setting: { key: string; value: unknown }) => {
+          if (setting.key === 'activeTheme' && typeof setting.value === 'string') {
+            setThemes(themes.map(t => ({ ...t, isActive: t.id === setting.value })));
+          }
+          if (setting.key === 'customColors' && typeof setting.value === 'object') {
+            setCustomColors(setting.value as typeof customColors);
+          }
+          if (setting.key === 'defaultMode' && typeof setting.value === 'string') {
+            setDefaultMode(setting.value as 'light' | 'dark' | 'system');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch theme settings:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const saveCustomTheme = () => {
-    toast.success('Özel tema kaydedildi');
+  const activateTheme = async (id: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'activeTheme', value: id, category: 'theme' }),
+      });
+      
+      if (res.ok) {
+        setThemes(themes.map(t => ({ ...t, isActive: t.id === id })));
+        toast.success('Tema aktifleştirildi ve kaydedildi');
+      } else {
+        toast.error('Tema kaydedilemedi');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCustomTheme = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'customColors', value: customColors, category: 'theme' }),
+      });
+      
+      if (res.ok) {
+        toast.success('Özel tema kaydedildi');
+      } else {
+        toast.error('Tema kaydedilemedi');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveDefaultMode = async (mode: 'light' | 'dark' | 'system') => {
+    setDefaultMode(mode);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'defaultMode', value: mode, category: 'theme' }),
+      });
+      
+      if (res.ok) {
+        toast.success('Varsayılan mod kaydedildi');
+      } else {
+        toast.error('Mod kaydedilemedi');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const activeTheme = themes.find(t => t.isActive);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <DashboardHeader
+          title="Tema Yönetimi"
+          description="Platform görünümünü özelleştirin"
+        />
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -302,8 +407,9 @@ export default function AdminThemesPage() {
             </div>
           </div>
 
-          <Button onClick={saveCustomTheme} className="w-full md:w-auto">
-            Özel Temayı Kaydet
+          <Button onClick={saveCustomTheme} disabled={saving} className="w-full md:w-auto gap-2">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? 'Kaydediliyor...' : 'Özel Temayı Kaydet'}
           </Button>
         </CardContent>
       </Card>
@@ -315,15 +421,30 @@ export default function AdminThemesPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            <Button variant="outline" className="flex-1 h-24 flex-col gap-2">
+            <Button 
+              variant={defaultMode === 'light' ? 'default' : 'outline'} 
+              className="flex-1 h-24 flex-col gap-2"
+              onClick={() => saveDefaultMode('light')}
+              disabled={saving}
+            >
               <Sun className="h-6 w-6" />
               <span>Açık</span>
             </Button>
-            <Button variant="default" className="flex-1 h-24 flex-col gap-2">
+            <Button 
+              variant={defaultMode === 'dark' ? 'default' : 'outline'} 
+              className="flex-1 h-24 flex-col gap-2"
+              onClick={() => saveDefaultMode('dark')}
+              disabled={saving}
+            >
               <Moon className="h-6 w-6" />
               <span>Koyu</span>
             </Button>
-            <Button variant="outline" className="flex-1 h-24 flex-col gap-2">
+            <Button 
+              variant={defaultMode === 'system' ? 'default' : 'outline'} 
+              className="flex-1 h-24 flex-col gap-2"
+              onClick={() => saveDefaultMode('system')}
+              disabled={saving}
+            >
               <Monitor className="h-6 w-6" />
               <span>Sistem</span>
             </Button>
