@@ -23,11 +23,17 @@ interface Quest {
   description: string;
   type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'SPECIAL';
   target: number;
-  reward: number;
+  reward: { points: number; xp: number } | number;
   progress: number;
   completed: boolean;
   expiresAt: string | null;
 }
+
+// Helper to get reward points
+const getRewardPoints = (reward: Quest['reward']): number => {
+  if (typeof reward === 'number') return reward;
+  return reward?.points || 0;
+};
 
 const typeLabels = {
   DAILY: 'Günlük',
@@ -74,7 +80,8 @@ export default function CustomerQuestsPage() {
   };
 
   const handleClaimReward = (quest: Quest) => {
-    toast.success(`${quest.reward} puan kazandınız!`, {
+    const points = getRewardPoints(quest.reward);
+    toast.success(`${points} puan kazandınız!`, {
       description: `${quest.name} görevi tamamlandı`,
     });
   };
@@ -85,7 +92,7 @@ export default function CustomerQuestsPage() {
   const stats = {
     active: activeQuests.length,
     completed: completedQuests.length,
-    totalRewards: completedQuests.reduce((acc, q) => acc + q.reward, 0),
+    totalRewards: completedQuests.reduce((acc, q) => acc + getRewardPoints(q.reward), 0),
   };
 
   return (
@@ -207,7 +214,7 @@ export default function CustomerQuestsPage() {
                             <div className="text-center">
                               <div className="flex items-center gap-1 text-yellow-500">
                                 <Star className="h-5 w-5 fill-yellow-500" />
-                                <span className="text-xl font-bold">{quest.reward}</span>
+                                <span className="text-xl font-bold">{getRewardPoints(quest.reward)}</span>
                               </div>
                               <p className="text-xs text-muted-foreground">Ödül</p>
                             </div>
@@ -255,7 +262,7 @@ export default function CustomerQuestsPage() {
                           onClick={() => handleClaimReward(quest)}
                         >
                           <Star className="h-4 w-4 text-yellow-500" />
-                          {quest.reward} Puan Al
+                          {getRewardPoints(quest.reward)} Puan Al
                         </Button>
                       </div>
                     </CardContent>
