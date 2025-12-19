@@ -99,6 +99,7 @@ export function Header() {
                 width={120}
                 height={32}
                 className="object-contain"
+                style={{ height: 'auto' }}
                 priority
               />
             )}

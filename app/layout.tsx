@@ -96,6 +96,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'QRATEX',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export const viewport: Viewport = {

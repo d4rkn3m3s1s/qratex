@@ -58,7 +58,9 @@ function ThemeColorsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const applyThemeColors = async () => {
       try {
-        const res = await fetch('/api/admin/settings?category=theme');
+        // Use public theme endpoint instead of admin endpoint
+        const res = await fetch('/api/settings/theme');
+        if (!res.ok) return;
         const data = await res.json();
         
         if (data.raw) {

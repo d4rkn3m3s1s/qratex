@@ -69,7 +69,8 @@ export function Footer() {
                     alt="QRATEX"
                     width={140}
                     height={36}
-                    className="object-contain h-8 sm:h-9 w-auto"
+                    className="object-contain h-8 sm:h-9"
+                    style={{ width: 'auto' }}
                   />
                 </>
               )}
