@@ -129,7 +129,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="icon" type="image/png" href="/logo/logo.png" />
       </head>
-      <body className="min-h-dvh bg-background font-sans antialiased">
+      <body className="min-h-dvh bg-background font-sans antialiased" suppressHydrationWarning>
         <Providers>
           {children}
           <Toaster />
