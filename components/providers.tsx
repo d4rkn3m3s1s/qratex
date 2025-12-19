@@ -3,11 +3,113 @@
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
 
 interface ProvidersProps {
   children: ReactNode;
+}
+
+// HEX to HSL conversion
+function hexToHSL(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return '0 0% 0%';
+
+  let r = parseInt(result[1], 16) / 255;
+  let g = parseInt(result[2], 16) / 255;
+  let b = parseInt(result[3], 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
+// Theme color presets
+const themePresets: Record<string, { primary: string; secondary: string; accent: string }> = {
+  purple: { primary: '#8B5CF6', secondary: '#A855F7', accent: '#F472B6' },
+  blue: { primary: '#3B82F6', secondary: '#06B6D4', accent: '#22D3EE' },
+  green: { primary: '#22C55E', secondary: '#10B981', accent: '#34D399' },
+  orange: { primary: '#F97316', secondary: '#FB923C', accent: '#FBBF24' },
+  pink: { primary: '#EC4899', secondary: '#F472B6', accent: '#F9A8D4' },
+  light: { primary: '#7C3AED', secondary: '#8B5CF6', accent: '#A78BFA' },
+};
+
+function ThemeColorsProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const applyThemeColors = async () => {
+      try {
+        const res = await fetch('/api/admin/settings?category=theme');
+        const data = await res.json();
+        
+        if (data.raw) {
+          let activeThemeId: string | null = null;
+          let customColors: { primary?: string; secondary?: string; accent?: string } | null = null;
+          
+          data.raw.forEach((setting: { key: string; value: unknown }) => {
+            if (setting.key === 'activeTheme') {
+              activeThemeId = setting.value as string;
+            }
+            if (setting.key === 'customColors') {
+              customColors = setting.value as typeof customColors;
+            }
+          });
+          
+          const root = document.documentElement;
+          
+          // Apply preset theme first
+          if (activeThemeId && themePresets[activeThemeId]) {
+            const preset = themePresets[activeThemeId];
+            root.style.setProperty('--primary', hexToHSL(preset.primary));
+            root.style.setProperty('--ring', hexToHSL(preset.primary));
+            root.style.setProperty('--gradient-from', hexToHSL(preset.primary));
+            root.style.setProperty('--gradient-to', hexToHSL(preset.secondary));
+            root.style.setProperty('--accent', hexToHSL(preset.accent));
+          }
+          
+          // Custom colors override preset
+          if (customColors) {
+            if (customColors.primary) {
+              root.style.setProperty('--primary', hexToHSL(customColors.primary));
+              root.style.setProperty('--ring', hexToHSL(customColors.primary));
+              root.style.setProperty('--gradient-from', hexToHSL(customColors.primary));
+            }
+            if (customColors.secondary) {
+              root.style.setProperty('--gradient-to', hexToHSL(customColors.secondary));
+            }
+            if (customColors.accent) {
+              root.style.setProperty('--accent', hexToHSL(customColors.accent));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load theme:', error);
+      }
+    };
+    
+    applyThemeColors();
+  }, []);
+  
+  return <>{children}</>;
 }
 
 export function Providers({ children }: ProvidersProps) {
@@ -34,11 +136,12 @@ export function Providers({ children }: ProvidersProps) {
           enableSystem
           storageKey="qratex-theme"
         >
-          {children}
-          <InstallBanner />
+          <ThemeColorsProvider>
+            {children}
+            <InstallBanner />
+          </ThemeColorsProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </SessionProvider>
   );
 }
-
