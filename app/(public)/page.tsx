@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
+import { HyperText } from '@/components/ui/hyper-text';
 
 const features = [
   {
@@ -409,7 +410,15 @@ export default function HomePage() {
                 { value: '4.9', label: 'Ortalama Puan' },
               ].map((stat, i) => (
                 <div key={i} className="text-center">
-                  <div className="text-3xl sm:text-4xl font-bold text-gradient">{stat.value}</div>
+                  <HyperText 
+                    className="text-3xl sm:text-4xl font-bold text-gradient justify-center"
+                    startOnView
+                    animateOnHover
+                    delay={i * 150}
+                    duration={1000}
+                  >
+                    {stat.value}
+                  </HyperText>
                   <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
                 </div>
               ))}
