@@ -58,6 +58,7 @@ interface LeaderboardEntry {
   name: string;
   points: number;
   level: number;
+  avatar?: string | null;
   image?: string | null;
   isCurrentUser?: boolean;
 }
