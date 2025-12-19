@@ -123,6 +123,8 @@ const avatarList = [
   ]},
 ];
 
+type BackgroundVariant = 'aurora' | 'sparkles' | 'beams' | 'gradient' | 'meteors' | 'grid' | 'dots' | 'none';
+
 interface SiteSettings {
   siteName: string;
   siteDescription: string;
@@ -131,6 +133,7 @@ interface SiteSettings {
   faviconUrl: string;
   primaryColor: string;
   defaultTheme: 'light' | 'dark' | 'system';
+  backgroundEffect: BackgroundVariant;
   enableRegistration: boolean;
   enableGoogleAuth: boolean;
   enableMagicLink: boolean;
@@ -145,6 +148,17 @@ interface SiteSettings {
   pointsPerReferral: number;
   levelUpThreshold: number;
 }
+
+const backgroundOptions: { id: BackgroundVariant; name: string; description: string }[] = [
+  { id: 'aurora', name: 'Aurora', description: 'Kuzey ışıkları efekti' },
+  { id: 'sparkles', name: 'Parıltı', description: 'Parlayan yıldızlar' },
+  { id: 'beams', name: 'Işınlar', description: 'Animasyonlu ışın efekti' },
+  { id: 'gradient', name: 'Gradient', description: 'Hareketli renk geçişleri' },
+  { id: 'meteors', name: 'Meteorlar', description: 'Meteor yağmuru efekti' },
+  { id: 'grid', name: 'Izgara', description: 'Izgara deseni' },
+  { id: 'dots', name: 'Noktalar', description: 'Nokta deseni' },
+  { id: 'none', name: 'Yok', description: 'Arka plan efekti yok' },
+];
 
 export default function AdminSettingsPage() {
   const { data: session, update } = useSession();
@@ -173,6 +187,7 @@ export default function AdminSettingsPage() {
     faviconUrl: '/favicon.ico',
     primaryColor: '#8B5CF6',
     defaultTheme: 'dark',
+    backgroundEffect: 'aurora',
     enableRegistration: true,
     enableGoogleAuth: true,
     enableMagicLink: false,
@@ -599,6 +614,7 @@ export default function AdminSettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
           >
             <Card glass>
               <CardHeader>
@@ -659,6 +675,56 @@ export default function AdminSettingsPage() {
                 <Button onClick={handleSave} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Background Effect Selection */}
+            <Card glass>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Arka Plan Efekti
+                </CardTitle>
+                <CardDescription>Landing page için animasyonlu arka plan seçin</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {backgroundOptions.map((option) => (
+                    <motion.button
+                      key={option.id}
+                      type="button"
+                      onClick={() => updateSetting('backgroundEffect', option.id)}
+                      className={`relative p-4 rounded-xl border-2 transition-all text-left ${
+                        settings.backgroundEffect === option.id
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                          : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                      }`}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {settings.backgroundEffect === option.id && (
+                        <div className="absolute top-2 right-2 bg-primary rounded-full p-0.5">
+                          <Check className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm">{option.name}</p>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+
+                <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Seçili:</strong> {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.name} - {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.description}
+                  </p>
+                </div>
+
+                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                  <Save className="h-4 w-4" />
+                  {saving ? 'Kaydediliyor...' : 'Arka Planı Kaydet'}
                 </Button>
               </CardContent>
             </Card>

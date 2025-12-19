@@ -1,0 +1,127 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { AuroraBackground } from './aurora';
+import { SparklesBackground } from './sparkles';
+import { BackgroundBeams } from './beams';
+import { GradientAnimation } from './gradient-animation';
+import { MeteorsBackground } from './meteors';
+import { GridDotsBackground } from './grid-dots';
+
+export type BackgroundVariant = 
+  | 'aurora' 
+  | 'sparkles' 
+  | 'beams' 
+  | 'gradient' 
+  | 'meteors' 
+  | 'grid' 
+  | 'dots'
+  | 'none';
+
+interface DynamicBackgroundProps {
+  children: React.ReactNode;
+  variant?: BackgroundVariant;
+  className?: string;
+  fetchFromApi?: boolean;
+}
+
+export function DynamicBackground({
+  children,
+  variant: propVariant,
+  className,
+  fetchFromApi = true,
+}: DynamicBackgroundProps) {
+  const [variant, setVariant] = useState<BackgroundVariant>(propVariant || 'aurora');
+  const [isLoading, setIsLoading] = useState(fetchFromApi);
+
+  useEffect(() => {
+    if (propVariant) {
+      setVariant(propVariant);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!fetchFromApi) {
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchBackground = async () => {
+      try {
+        const res = await fetch('/api/settings/background');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.backgroundEffect) {
+            setVariant(data.backgroundEffect as BackgroundVariant);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch background setting:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBackground();
+  }, [propVariant, fetchFromApi]);
+
+  // Don't render background during loading to prevent flash
+  if (isLoading) {
+    return <div className={className}>{children}</div>;
+  }
+
+  switch (variant) {
+    case 'aurora':
+      return (
+        <AuroraBackground className={className}>
+          {children}
+        </AuroraBackground>
+      );
+
+    case 'sparkles':
+      return (
+        <SparklesBackground className={className}>
+          {children}
+        </SparklesBackground>
+      );
+
+    case 'beams':
+      return (
+        <BackgroundBeams className={className}>
+          {children}
+        </BackgroundBeams>
+      );
+
+    case 'gradient':
+      return (
+        <GradientAnimation className={className}>
+          {children}
+        </GradientAnimation>
+      );
+
+    case 'meteors':
+      return (
+        <MeteorsBackground className={className}>
+          {children}
+        </MeteorsBackground>
+      );
+
+    case 'grid':
+      return (
+        <GridDotsBackground variant="grid" className={className}>
+          {children}
+        </GridDotsBackground>
+      );
+
+    case 'dots':
+      return (
+        <GridDotsBackground variant="dots" className={className}>
+          {children}
+        </GridDotsBackground>
+      );
+
+    case 'none':
+    default:
+      return <div className={className}>{children}</div>;
+  }
+}

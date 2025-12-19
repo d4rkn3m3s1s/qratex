@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
 
 const features = [
   {
@@ -145,6 +146,25 @@ const staggerContainer = {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [backgroundEffect, setBackgroundEffect] = useState<BackgroundVariant>('none');
+
+  useEffect(() => {
+    // Fetch background effect from API
+    const fetchBackground = async () => {
+      try {
+        const res = await fetch('/api/settings/background');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.backgroundEffect) {
+            setBackgroundEffect(data.backgroundEffect);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch background:', error);
+      }
+    };
+    fetchBackground();
+  }, []);
 
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role) {
@@ -171,12 +191,28 @@ export default function HomePage() {
     <div className="relative">
       {/* Hero Section */}
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden pt-16">
-        {/* Background Effects */}
-        <div className="absolute inset-0 gradient-mesh opacity-50" />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/50 to-background" />
+        {/* Dynamic Background from Admin Settings */}
+        {backgroundEffect !== 'none' && (
+          <div className="absolute inset-0 z-0">
+            <DynamicBackground variant={backgroundEffect} fetchFromApi={false} className="absolute inset-0">
+              <div />
+            </DynamicBackground>
+          </div>
+        )}
+
+        {/* Fallback Background Effects when no dynamic background is set */}
+        {backgroundEffect === 'none' && (
+          <>
+            <div className="absolute inset-0 gradient-mesh opacity-50" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/50 to-background" />
+          </>
+        )}
         
-        {/* Floating Orbs - Separate Spheres */}
-        {[
+        {/* Gradient overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/30 to-background z-[1]" />
+        
+        {/* Floating Orbs - Only show when no dynamic background */}
+        {backgroundEffect === 'none' && [
           { size: 120, x: '10%', y: '20%', color: 'bg-purple-500/50', blur: 'blur-2xl', duration: 8 },
           { size: 100, x: '80%', y: '15%', color: 'bg-fuchsia-500/40', blur: 'blur-2xl', duration: 10 },
           { size: 150, x: '70%', y: '60%', color: 'bg-pink-500/50', blur: 'blur-3xl', duration: 12 },
@@ -210,8 +246,8 @@ export default function HomePage() {
           />
         ))}
 
-        {/* Snowfall Effect - Pink/Purple Particles */}
-        {[...Array(40)].map((_, i) => {
+        {/* Snowfall Effect - Pink/Purple Particles - Only show when no dynamic background */}
+        {backgroundEffect === 'none' && [...Array(40)].map((_, i) => {
           const startX = Math.random() * 100;
           const size = 3 + Math.random() * 6;
           const duration = 8 + Math.random() * 8;
@@ -258,8 +294,8 @@ export default function HomePage() {
           );
         })}
 
-        {/* Larger Snowflakes */}
-        {[...Array(15)].map((_, i) => {
+        {/* Larger Snowflakes - Only show when no dynamic background */}
+        {backgroundEffect === 'none' && [...Array(15)].map((_, i) => {
           const startX = 5 + Math.random() * 90;
           const size = 8 + Math.random() * 8;
           const duration = 12 + Math.random() * 8;
@@ -293,8 +329,8 @@ export default function HomePage() {
           );
         })}
 
-        {/* Sparkle Stars */}
-        {[...Array(12)].map((_, i) => (
+        {/* Sparkle Stars - Only show when no dynamic background */}
+        {backgroundEffect === 'none' && [...Array(12)].map((_, i) => (
           <motion.div
             key={`sparkle-${i}`}
             className="absolute"
