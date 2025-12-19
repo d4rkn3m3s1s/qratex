@@ -102,13 +102,15 @@ export async function GET(request: NextRequest) {
     // Extract topics from feedbacks
     const topicCounts: Record<string, { count: number; sentiments: string[] }> = {};
     allFeedbacks.forEach(f => {
-      (f.topics || []).forEach((topic: string) => {
-        if (!topicCounts[topic]) {
-          topicCounts[topic] = { count: 0, sentiments: [] };
+      const topics = Array.isArray(f.topics) ? f.topics : [];
+      topics.forEach((topic: unknown) => {
+        const topicStr = String(topic);
+        if (!topicCounts[topicStr]) {
+          topicCounts[topicStr] = { count: 0, sentiments: [] };
         }
-        topicCounts[topic].count++;
+        topicCounts[topicStr].count++;
         if (f.sentiment) {
-          topicCounts[topic].sentiments.push(f.sentiment);
+          topicCounts[topicStr].sentiments.push(f.sentiment);
         }
       });
     });
