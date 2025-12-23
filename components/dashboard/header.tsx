@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Bell, Search, Settings, User, LogOut } from 'lucide-react';
+import { Bell, Search, Settings, User, LogOut, Check, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,22 +19,170 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { getInitials } from '@/lib/utils';
 import { signOut } from 'next-auth/react';
+import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { tr } from 'date-fns/locale';
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  isRead: boolean;
+  createdAt: string;
+  data?: Record<string, unknown>;
+}
 
 interface DashboardHeaderProps {
   title?: string;
   description?: string;
   showSearch?: boolean;
+  actions?: React.ReactNode;
 }
 
-export function DashboardHeader({ title, description, showSearch = true }: DashboardHeaderProps) {
-  const { data: session } = useSession();
-  const [notifications] = useState([
-    { id: 1, title: 'Yeni rozet kazandınız!', time: '5 dk önce', unread: true },
-    { id: 2, title: 'Haftalık rapor hazır', time: '1 saat önce', unread: true },
-    { id: 3, title: 'Yeni geri bildirim', time: '3 saat önce', unread: false },
-  ]);
+const notificationIcons = {
+  info: Info,
+  success: CheckCircle,
+  warning: AlertTriangle,
+  error: XCircle,
+};
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+const notificationColors = {
+  info: 'text-blue-500',
+  success: 'text-green-500',
+  warning: 'text-yellow-500',
+  error: 'text-red-500',
+};
+
+export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
+  const lastNotificationIdRef = useRef<string | null>(null);
+  const isFirstLoadRef = useRef(true);
+
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    if (!session?.user?.id) return;
+
+    try {
+      const res = await fetch('/api/notifications?limit=10');
+      const data = await res.json();
+
+      if (data.success) {
+        const newNotifications = data.notifications as Notification[];
+        
+        // Check for new notifications and show toast (only after first load)
+        if (!isFirstLoadRef.current && newNotifications.length > 0) {
+          const latestNotification = newNotifications[0];
+          
+          if (lastNotificationIdRef.current && latestNotification.id !== lastNotificationIdRef.current) {
+            // Find all new notifications
+            const newOnes = newNotifications.filter(n => {
+              const existingIds = notifications.map(existing => existing.id);
+              return !existingIds.includes(n.id);
+            });
+
+            // Show toast for each new notification
+            newOnes.forEach((n) => {
+              const Icon = notificationIcons[n.type];
+              toast(n.title, {
+                description: n.message,
+                icon: <Icon className={`h-5 w-5 ${notificationColors[n.type]}`} />,
+                duration: 5000,
+              });
+            });
+          }
+        }
+
+        // Update last notification ID
+        if (newNotifications.length > 0) {
+          lastNotificationIdRef.current = newNotifications[0].id;
+        }
+
+        setNotifications(newNotifications);
+        setUnreadCount(data.unreadCount);
+        isFirstLoadRef.current = false;
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  }, [session?.user?.id, notifications]);
+
+  // Initial fetch and polling
+  useEffect(() => {
+    fetchNotifications();
+
+    // Poll for new notifications every 10 seconds
+    const interval = setInterval(fetchNotifications, 10000);
+
+    return () => clearInterval(interval);
+  }, [session?.user?.id]); // Only depend on session, not fetchNotifications
+
+  // Mark single notification as read
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId }),
+      });
+
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  // Mark all as read
+  const markAllAsRead = async () => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+      toast.success('Tüm bildirimler okundu olarak işaretlendi');
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
+
+  // Delete notification
+  const deleteNotification = async (notificationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    try {
+      await fetch(`/api/notifications?id=${notificationId}`, {
+        method: 'DELETE',
+      });
+
+      const notification = notifications.find(n => n.id === notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      if (notification && !notification.isRead) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
+
+  // Format time
+  const formatTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: tr });
+    } catch {
+      return '';
+    }
+  };
 
   const getSettingsLink = () => {
     switch (session?.user?.role) {
@@ -70,53 +218,98 @@ export function DashboardHeader({ title, description, showSearch = true }: Dashb
 
         {/* Right - Actions */}
         <div className="flex items-center gap-2">
+          {/* Page Actions */}
+          {actions}
+          
           {/* Theme Toggle */}
           <AnimatedThemeToggler />
 
           {/* Notifications */}
-          <DropdownMenu>
+          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative rounded-full">
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
-                    {unreadCount}
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuContent align="end" className="w-96">
               <DropdownMenuLabel className="flex items-center justify-between">
-                <span>Bildirimler</span>
-                {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {unreadCount} yeni
-                  </Badge>
-                )}
+                <span className="flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  Bildirimler
+                </span>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <>
+                      <Badge variant="secondary" className="text-xs">
+                        {unreadCount} yeni
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={markAllAsRead}
+                      >
+                        <CheckCheck className="h-3 w-3 mr-1" />
+                        Tümünü Oku
+                      </Button>
+                    </>
+                  )}
+                </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {notifications.map((notification) => (
-                <DropdownMenuItem
-                  key={notification.id}
-                  className="flex flex-col items-start gap-1 py-3"
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    {notification.unread && (
-                      <span className="w-2 h-2 bg-primary rounded-full" />
-                    )}
-                    <span className={notification.unread ? 'font-medium' : ''}>
-                      {notification.title}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {notification.time}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="justify-center text-primary">
-                Tümünü Gör
-              </DropdownMenuItem>
+              
+              {notifications.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Bildirim yok</p>
+                </div>
+              ) : (
+                <div className="max-h-[400px] overflow-y-auto">
+                  {notifications.map((notification) => {
+                    const Icon = notificationIcons[notification.type];
+                    return (
+                      <DropdownMenuItem
+                        key={notification.id}
+                        className="flex items-start gap-3 p-3 cursor-pointer group"
+                        onClick={() => !notification.isRead && markAsRead(notification.id)}
+                      >
+                        <div className={`p-2 rounded-full ${notification.type === 'success' ? 'bg-green-500/10' : notification.type === 'warning' ? 'bg-yellow-500/10' : notification.type === 'error' ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
+                          <Icon className={`h-4 w-4 ${notificationColors[notification.type]}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={`text-sm ${!notification.isRead ? 'font-semibold' : ''}`}>
+                              {notification.title}
+                            </p>
+                            {!notification.isRead && (
+                              <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1.5" />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatTime(notification.createdAt)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => deleteNotification(notification.id, e)}
+                        >
+                          <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -142,17 +335,19 @@ export function DashboardHeader({ title, description, showSearch = true }: Dashb
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href={getSettingsLink()} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profil
-                </Link>
+              <DropdownMenuItem 
+                className="cursor-pointer"
+                onClick={() => router.push(getSettingsLink())}
+              >
+                <User className="mr-2 h-4 w-4" />
+                Profil
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={getSettingsLink()} className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Ayarlar
-                </Link>
+              <DropdownMenuItem 
+                className="cursor-pointer"
+                onClick={() => router.push(getSettingsLink())}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Ayarlar
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

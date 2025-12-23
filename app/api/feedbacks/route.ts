@@ -13,20 +13,28 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const pageSize = parseInt(searchParams.get('pageSize') || '50');
     const qrCodeId = searchParams.get('qrCodeId');
+    const sentiment = searchParams.get('sentiment');
     const skip = (page - 1) * pageSize;
 
     let where: Record<string, unknown> = {};
 
+    // Admin sees all feedbacks, others see their own
     if (session.user.role === 'CUSTOMER') {
       where.userId = session.user.id;
     } else if (session.user.role === 'DEALER') {
       where.qrCode = { dealerId: session.user.id };
     }
+    // ADMIN sees all - no where filter
 
     if (qrCodeId) {
       where.qrCodeId = qrCodeId;
+    }
+
+    // Sentiment filter
+    if (sentiment && sentiment !== 'all') {
+      where.sentiment = sentiment;
     }
 
     const [feedbacks, total] = await Promise.all([
@@ -37,7 +45,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         include: {
           user: {
-            select: { id: true, name: true, image: true },
+            select: { id: true, name: true, email: true, image: true },
           },
           qrCode: {
             select: { 
@@ -54,16 +62,38 @@ export async function GET(request: NextRequest) {
       prisma.feedback.count({ where }),
     ]);
 
-    // Format response to include businessName
-    const formattedFeedbacks = feedbacks.map(f => ({
-      ...f,
-      qrCode: {
-        ...f.qrCode,
-        businessName: f.qrCode.dealer?.businessName || f.qrCode.name,
-      },
-    }));
+    // Format response to include businessName and properly format JSON fields
+    const formattedFeedbacks = feedbacks.map(f => {
+      // Parse topics - could be array or JSON string
+      let topics: string[] = [];
+      if (f.topics) {
+        if (Array.isArray(f.topics)) {
+          topics = f.topics as string[];
+        } else if (typeof f.topics === 'object') {
+          topics = Object.keys(f.topics);
+        }
+      }
+
+      // Parse emotions - object with emotion keys
+      let emotions: string[] = [];
+      if (f.emotions && typeof f.emotions === 'object') {
+        emotions = Object.keys(f.emotions as Record<string, unknown>);
+      }
+
+      return {
+        ...f,
+        topics,
+        emotions,
+        qrCode: {
+          ...f.qrCode,
+          businessName: f.qrCode.dealer?.businessName || f.qrCode.name,
+        },
+      };
+    });
 
     return NextResponse.json({
+      success: true,
+      data: formattedFeedbacks,
       items: formattedFeedbacks,
       total,
       page,

@@ -54,15 +54,6 @@ export function Header() {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
-  // Get the correct logo based on theme
-  const logoSrc = mounted && resolvedTheme === 'dark' 
-    ? '/logo/logo.png' 
-    : '/logo/logo-light.png';
-
-  const fontLogoSrc = mounted && resolvedTheme === 'dark'
-    ? '/logo/font.png'
-    : '/logo/font-light.png';
-
   return (
     <header
       className={cn(
@@ -81,27 +72,52 @@ export function Header() {
             whileTap={{ scale: 0.95 }}
           >
             {mounted && (
-              <Image
-                src={logoSrc}
-                alt="QRATEX Logo"
-                width={48}
-                height={48}
-                className="object-contain"
-                priority
-              />
+              <>
+                {/* Dark theme logo (light/white colored) */}
+                <Image
+                  src="/logo/logo.png"
+                  alt="QRATEX Logo"
+                  width={48}
+                  height={48}
+                  className="object-contain hidden dark:block"
+                  priority
+                />
+                {/* Light theme logo (dark colored) */}
+                <Image
+                  src="/logo/logo-light.png"
+                  alt="QRATEX Logo"
+                  width={48}
+                  height={48}
+                  className="object-contain block dark:hidden"
+                  priority
+                />
+              </>
             )}
           </motion.div>
           <div className="hidden sm:block">
             {mounted && (
-              <Image
-                src={fontLogoSrc}
-                alt="QRATEX"
-                width={120}
-                height={32}
-                className="object-contain"
-                style={{ height: 'auto' }}
-                priority
-              />
+              <>
+                {/* Dark theme font (light/white colored) */}
+                <Image
+                  src="/logo/font.png"
+                  alt="QRATEX"
+                  width={120}
+                  height={32}
+                  className="object-contain hidden dark:block"
+                  style={{ height: 'auto' }}
+                  priority
+                />
+                {/* Light theme font (dark colored) */}
+                <Image
+                  src="/logo/font-light.png"
+                  alt="QRATEX"
+                  width={120}
+                  height={32}
+                  className="object-contain block dark:hidden"
+                  style={{ height: 'auto' }}
+                  priority
+                />
+              </>
             )}
           </div>
         </Link>
@@ -196,19 +212,38 @@ export function Header() {
                 <div className="flex items-center gap-3 mb-8">
                   {mounted && (
                     <>
+                      {/* Dark theme logo */}
                       <Image
-                        src={logoSrc}
+                        src="/logo/logo.png"
                         alt="QRATEX Logo"
                         width={48}
                         height={48}
-                        className="object-contain"
+                        className="object-contain hidden dark:block"
                       />
+                      {/* Light theme logo */}
                       <Image
-                        src={fontLogoSrc}
+                        src="/logo/logo-light.png"
+                        alt="QRATEX Logo"
+                        width={48}
+                        height={48}
+                        className="object-contain block dark:hidden"
+                      />
+                      {/* Dark theme font */}
+                      <Image
+                        src="/logo/font.png"
                         alt="QRATEX"
                         width={120}
                         height={32}
-                        className="object-contain"
+                        className="object-contain hidden dark:block"
+                        style={{ height: 'auto' }}
+                      />
+                      {/* Light theme font */}
+                      <Image
+                        src="/logo/font-light.png"
+                        alt="QRATEX"
+                        width={120}
+                        height={32}
+                        className="object-contain block dark:hidden"
                         style={{ height: 'auto' }}
                       />
                     </>

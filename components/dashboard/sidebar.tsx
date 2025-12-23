@@ -103,15 +103,6 @@ export function Sidebar({ role }: SidebarProps) {
 
   const levelProgress = calculateLevelProgress(session?.user?.points || 0);
 
-  // Get the correct logo based on theme
-  const logoSrc = mounted && resolvedTheme === 'dark' 
-    ? '/logo/logo.png' 
-    : '/logo/logo-light.png';
-
-  const fontLogoSrc = mounted && resolvedTheme === 'dark'
-    ? '/logo/font.png'
-    : '/logo/font-light.png';
-
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={cn(
       'flex flex-col h-full',
@@ -122,24 +113,47 @@ export function Sidebar({ role }: SidebarProps) {
         <Link href="/" className="flex items-center gap-3">
           {mounted && (
             <>
+              {/* Dark theme logo (light/white colored) */}
               <Image
-                src={logoSrc}
+                src="/logo/logo.png"
                 alt="QRATEX Logo"
                 width={48}
                 height={48}
                 priority
-                className="object-contain flex-shrink-0"
+                className="object-contain flex-shrink-0 hidden dark:block"
+              />
+              {/* Light theme logo (dark colored) */}
+              <Image
+                src="/logo/logo-light.png"
+                alt="QRATEX Logo"
+                width={48}
+                height={48}
+                priority
+                className="object-contain flex-shrink-0 block dark:hidden"
               />
               {(!isCollapsed || mobile) && (
-                <Image
-                  src={fontLogoSrc}
-                  alt="QRATEX"
-                  width={120}
-                  height={32}
-                  priority
-                  className="object-contain"
-                  style={{ height: 'auto' }}
-                />
+                <>
+                  {/* Dark theme font (light/white colored) */}
+                  <Image
+                    src="/logo/font.png"
+                    alt="QRATEX"
+                    width={120}
+                    height={32}
+                    priority
+                    className="object-contain hidden dark:block"
+                    style={{ height: 'auto' }}
+                  />
+                  {/* Light theme font (dark colored) */}
+                  <Image
+                    src="/logo/font-light.png"
+                    alt="QRATEX"
+                    width={120}
+                    height={32}
+                    priority
+                    className="object-contain block dark:hidden"
+                    style={{ height: 'auto' }}
+                  />
+                </>
               )}
             </>
           )}

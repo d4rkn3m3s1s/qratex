@@ -147,20 +147,23 @@ export default function DealerAnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <DashboardHeader title="Analitik" description="İşletmenizin performans metrikleri" />
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[180px]">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7d">Son 7 Gün</SelectItem>
-            <SelectItem value="30d">Son 30 Gün</SelectItem>
-            <SelectItem value="90d">Son 90 Gün</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <DashboardHeader 
+        title="Analitik" 
+        description="İşletmenizin performans metrikleri"
+        actions={
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[180px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Son 7 Gün</SelectItem>
+              <SelectItem value="30d">Son 30 Gün</SelectItem>
+              <SelectItem value="90d">Son 90 Gün</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

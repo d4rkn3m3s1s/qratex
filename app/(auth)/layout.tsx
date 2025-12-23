@@ -19,15 +19,6 @@ export default function AuthLayout({
     setMounted(true);
   }, []);
 
-  // Get the correct logo based on theme
-  const logoSrc = mounted && resolvedTheme === 'dark' 
-    ? '/logo/logo.png' 
-    : '/logo/logo-light.png';
-
-  const fontLogoSrc = mounted && resolvedTheme === 'dark'
-    ? '/logo/font.png'
-    : '/logo/font-light.png';
-
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
@@ -39,20 +30,41 @@ export default function AuthLayout({
         <Link href="/" className="flex items-center gap-3 w-fit">
           {mounted && (
             <>
+              {/* Dark theme logo */}
               <Image
-                src={logoSrc}
+                src="/logo/logo.png"
                 alt="QRATEX Logo"
                 width={56}
                 height={56}
-                className="object-contain w-12 h-12 sm:w-14 sm:h-14"
+                className="object-contain w-12 h-12 sm:w-14 sm:h-14 hidden dark:block"
                 priority
               />
+              {/* Light theme logo */}
               <Image
-                src={fontLogoSrc}
+                src="/logo/logo-light.png"
+                alt="QRATEX Logo"
+                width={56}
+                height={56}
+                className="object-contain w-12 h-12 sm:w-14 sm:h-14 block dark:hidden"
+                priority
+              />
+              {/* Dark theme font */}
+              <Image
+                src="/logo/font.png"
                 alt="QRATEX"
                 width={140}
                 height={36}
-                className="object-contain h-8 sm:h-9"
+                className="object-contain h-8 sm:h-9 hidden dark:block"
+                style={{ width: 'auto' }}
+                priority
+              />
+              {/* Light theme font */}
+              <Image
+                src="/logo/font-light.png"
+                alt="QRATEX"
+                width={140}
+                height={36}
+                className="object-contain h-8 sm:h-9 block dark:hidden"
                 style={{ width: 'auto' }}
                 priority
               />

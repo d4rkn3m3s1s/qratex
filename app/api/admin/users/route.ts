@@ -9,11 +9,12 @@ const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   email: z.string().email().optional(),
   role: z.enum(['ADMIN', 'DEALER', 'CUSTOMER']).optional(),
-  points: z.number().nonnegative().optional(),
+  points: z.number().optional(),
   level: z.number().positive().optional(),
   xp: z.number().nonnegative().optional(),
   businessName: z.string().max(100).optional().nullable(),
   businessDesc: z.string().max(500).optional().nullable(),
+  image: z.string().optional().nullable(),
 });
 
 const createUserSchema = z.object({
@@ -22,6 +23,52 @@ const createUserSchema = z.object({
   password: z.string().min(8),
   role: z.enum(['ADMIN', 'DEALER', 'CUSTOMER']).default('CUSTOMER'),
   businessName: z.string().max(100).optional(),
+});
+
+// Action schemas
+const addPointsSchema = z.object({
+  action: z.literal('add_points'),
+  userId: z.string(),
+  amount: z.number(),
+  reason: z.string().optional(),
+});
+
+const addXpSchema = z.object({
+  action: z.literal('add_xp'),
+  userId: z.string(),
+  amount: z.number(),
+});
+
+const setLevelSchema = z.object({
+  action: z.literal('set_level'),
+  userId: z.string(),
+  level: z.number().min(1).max(100),
+});
+
+const grantBadgeSchema = z.object({
+  action: z.literal('grant_badge'),
+  userId: z.string(),
+  badgeId: z.string(),
+});
+
+const revokeBadgeSchema = z.object({
+  action: z.literal('revoke_badge'),
+  userId: z.string(),
+  badgeId: z.string(),
+});
+
+const grantRewardSchema = z.object({
+  action: z.literal('grant_reward'),
+  userId: z.string(),
+  rewardId: z.string(),
+});
+
+const sendNotificationSchema = z.object({
+  action: z.literal('send_notification'),
+  userId: z.string(),
+  title: z.string(),
+  message: z.string(),
+  type: z.enum(['info', 'success', 'warning', 'error']).default('info'),
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -270,6 +317,263 @@ export async function PUT(request: NextRequest) {
       { error: 'Kullanıcı güncellenemedi' },
       { status: 500 }
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/admin/users - Action-based operations
+// ─────────────────────────────────────────────────────────────
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { action } = body;
+
+    switch (action) {
+      case 'add_points': {
+        const data = addPointsSchema.parse(body);
+        const user = await prisma.user.update({
+          where: { id: data.userId },
+          data: { points: { increment: data.amount } },
+          select: { id: true, name: true, points: true },
+        });
+
+        // Create notification
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: data.amount >= 0 ? 'Puan Kazandınız! 🎉' : 'Puan Düşüşü',
+            message: data.amount >= 0 
+              ? `${data.amount} puan hesabınıza eklendi${data.reason ? `: ${data.reason}` : ''}`
+              : `${Math.abs(data.amount)} puan hesabınızdan düşüldü${data.reason ? `: ${data.reason}` : ''}`,
+            type: data.amount >= 0 ? 'success' : 'warning',
+          },
+        });
+
+        // Audit log
+        await prisma.auditLog.create({
+          data: {
+            userId: session.user.id,
+            action: 'add_points',
+            entity: 'user',
+            entityId: data.userId,
+            newData: { amount: data.amount, reason: data.reason },
+          },
+        });
+
+        return NextResponse.json({ success: true, user });
+      }
+
+      case 'add_xp': {
+        const data = addXpSchema.parse(body);
+        
+        // Get current user
+        const currentUser = await prisma.user.findUnique({
+          where: { id: data.userId },
+          select: { xp: true, level: true },
+        });
+
+        if (!currentUser) {
+          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+        }
+
+        // Calculate new level (1000 XP per level)
+        const newXp = currentUser.xp + data.amount;
+        const newLevel = Math.floor(newXp / 1000) + 1;
+        const leveledUp = newLevel > currentUser.level;
+
+        const user = await prisma.user.update({
+          where: { id: data.userId },
+          data: { 
+            xp: newXp,
+            level: newLevel,
+          },
+          select: { id: true, name: true, xp: true, level: true },
+        });
+
+        // Notification for XP
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: leveledUp ? `Seviye Atladınız! 🚀 Seviye ${newLevel}` : 'XP Kazandınız!',
+            message: `${data.amount} XP kazandınız!${leveledUp ? ` Artık Seviye ${newLevel} oldunuz!` : ''}`,
+            type: 'success',
+          },
+        });
+
+        return NextResponse.json({ success: true, user, leveledUp });
+      }
+
+      case 'set_level': {
+        const data = setLevelSchema.parse(body);
+        const user = await prisma.user.update({
+          where: { id: data.userId },
+          data: { 
+            level: data.level,
+            xp: (data.level - 1) * 1000, // Reset XP to level start
+          },
+          select: { id: true, name: true, level: true, xp: true },
+        });
+
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: 'Seviye Güncellendi',
+            message: `Seviyeniz ${data.level} olarak ayarlandı`,
+            type: 'info',
+          },
+        });
+
+        return NextResponse.json({ success: true, user });
+      }
+
+      case 'grant_badge': {
+        const data = grantBadgeSchema.parse(body);
+        
+        // Check if user already has badge
+        const existing = await prisma.userBadge.findUnique({
+          where: {
+            userId_badgeId: {
+              userId: data.userId,
+              badgeId: data.badgeId,
+            },
+          },
+        });
+
+        if (existing) {
+          return NextResponse.json({ error: 'Kullanıcı bu rozete zaten sahip' }, { status: 400 });
+        }
+
+        const userBadge = await prisma.userBadge.create({
+          data: {
+            userId: data.userId,
+            badgeId: data.badgeId,
+          },
+          include: {
+            badge: true,
+          },
+        });
+
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: 'Yeni Rozet Kazandınız! 🏆',
+            message: `"${userBadge.badge.name}" rozetini kazandınız!`,
+            type: 'success',
+            data: { badgeId: data.badgeId },
+          },
+        });
+
+        await prisma.auditLog.create({
+          data: {
+            userId: session.user.id,
+            action: 'grant_badge',
+            entity: 'user_badge',
+            entityId: userBadge.id,
+            newData: { userId: data.userId, badgeId: data.badgeId },
+          },
+        });
+
+        return NextResponse.json({ success: true, userBadge });
+      }
+
+      case 'revoke_badge': {
+        const data = revokeBadgeSchema.parse(body);
+        
+        const existing = await prisma.userBadge.findUnique({
+          where: {
+            userId_badgeId: {
+              userId: data.userId,
+              badgeId: data.badgeId,
+            },
+          },
+          include: { badge: true },
+        });
+
+        if (!existing) {
+          return NextResponse.json({ error: 'Kullanıcı bu rozete sahip değil' }, { status: 400 });
+        }
+
+        await prisma.userBadge.delete({
+          where: { id: existing.id },
+        });
+
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: 'Rozet Kaldırıldı',
+            message: `"${existing.badge.name}" rozeti hesabınızdan kaldırıldı`,
+            type: 'warning',
+          },
+        });
+
+        return NextResponse.json({ success: true });
+      }
+
+      case 'grant_reward': {
+        const data = grantRewardSchema.parse(body);
+        
+        const reward = await prisma.reward.findUnique({
+          where: { id: data.rewardId },
+        });
+
+        if (!reward) {
+          return NextResponse.json({ error: 'Ödül bulunamadı' }, { status: 404 });
+        }
+
+        // Generate unique code for coupon
+        const code = `GIFT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+        const userReward = await prisma.userReward.create({
+          data: {
+            userId: data.userId,
+            rewardId: data.rewardId,
+            code: reward.type === 'coupon' ? code : null,
+          },
+          include: { reward: true },
+        });
+
+        await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: 'Hediye Ödül! 🎁',
+            message: `"${reward.name}" ödülü hesabınıza eklendi!`,
+            type: 'success',
+            data: { rewardId: data.rewardId, code },
+          },
+        });
+
+        return NextResponse.json({ success: true, userReward });
+      }
+
+      case 'send_notification': {
+        const data = sendNotificationSchema.parse(body);
+        
+        const notification = await prisma.notification.create({
+          data: {
+            userId: data.userId,
+            title: data.title,
+            message: data.message,
+            type: data.type,
+          },
+        });
+
+        return NextResponse.json({ success: true, notification });
+      }
+
+      default:
+        return NextResponse.json({ error: 'Geçersiz işlem' }, { status: 400 });
+    }
+  } catch (error) {
+    console.error('Error in user action:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'İşlem başarısız' }, { status: 500 });
   }
 }
 

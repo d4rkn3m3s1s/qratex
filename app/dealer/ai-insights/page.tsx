@@ -92,16 +92,16 @@ export default function DealerAIInsightsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <DashboardHeader
-          title="AI İçgörüler"
-          description="Yapay zeka destekli işletme analizi ve öneriler"
-        />
-        <Button onClick={handleRefresh} disabled={loading} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Yenile
-        </Button>
-      </div>
+      <DashboardHeader
+        title="AI İçgörüler"
+        description="Yapay zeka destekli işletme analizi ve öneriler"
+        actions={
+          <Button onClick={handleRefresh} disabled={loading} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+        }
+      />
 
       {/* Overall Score */}
       <motion.div
