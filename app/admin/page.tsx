@@ -11,6 +11,7 @@ import {
   Activity,
   Clock,
   RefreshCw,
+  LucideIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +77,7 @@ interface DashboardData {
   };
 }
 
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+const iconMap: Record<string, LucideIcon> = {
   Users,
   MessageSquare,
   QrCode,
@@ -191,7 +192,7 @@ export default function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {data.stats.map((stat, index) => {
-          const IconComponent = iconMap[stat.icon] || Activity;
+          const IconComponent: LucideIcon = iconMap[stat.icon] || Activity;
           return (
             <StatsCard 
               key={stat.title} 
