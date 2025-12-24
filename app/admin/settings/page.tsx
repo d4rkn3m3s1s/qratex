@@ -148,7 +148,7 @@ interface SiteSettings {
   levelUpThreshold: number;
 }
 
-const backgroundOptions: { id: BackgroundVariant; name: string; description: string }[] = [
+const backgroundOptions: { id: BackgroundVariant; name: string; description: string; elite?: boolean }[] = [
   { id: 'original', name: 'Orijinal', description: 'Varsayılan kar ve küre animasyonları' },
   { id: 'aurora', name: 'Aurora', description: 'Kuzey ışıkları efekti' },
   { id: 'sparkles', name: 'Parıltı', description: 'Parlayan yıldızlar' },
@@ -157,6 +157,14 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
   { id: 'meteors', name: 'Meteorlar', description: 'Meteor yağmuru efekti' },
   { id: 'grid', name: 'Izgara', description: 'Izgara deseni' },
   { id: 'dots', name: 'Noktalar', description: 'Nokta deseni' },
+  // Elit Efektler
+  { id: 'matrix', name: '🔥 Matrix', description: 'Klasik matrix yağmuru', elite: true },
+  { id: 'particles', name: '✨ Parçacıklar', description: 'İnteraktif parçacık ağı', elite: true },
+  { id: 'waves', name: '🌊 Dalgalar', description: 'Akıcı dalga animasyonu', elite: true },
+  { id: 'starfield', name: '🚀 Uzay Yolculuğu', description: 'Yıldızlar arası seyahat', elite: true },
+  { id: 'cyberpunk', name: '💜 Cyberpunk', description: 'Neon ızgara ve çizgiler', elite: true },
+  { id: 'geometric', name: '🔷 Geometrik', description: 'Dönen şekiller', elite: true },
+  { id: 'fireflies', name: '🌟 Ateş Böcekleri', description: 'Sihirli ateş böcekleri', elite: true },
   { id: 'none', name: 'Yok', description: 'Arka plan efekti yok' },
 ];
 
@@ -335,6 +343,29 @@ export default function AdminSettingsPage() {
 
   const updateSetting = <K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Arka plan efektini anında kaydet
+  const handleBackgroundChange = async (variant: BackgroundVariant) => {
+    setSettings((prev) => ({ ...prev, backgroundEffect: variant }));
+    
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          settings: [{ key: 'backgroundEffect', value: variant, category: 'appearance' }] 
+        }),
+      });
+      
+      if (res.ok) {
+        toast.success('Arka plan efekti güncellendi');
+      } else {
+        toast.error('Arka plan efekti kaydedilemedi');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    }
   };
 
   const currentCategoryAvatars = avatarList.find(c => c.category === selectedCategory)?.items || [];
@@ -686,44 +717,82 @@ export default function AdminSettingsPage() {
                 </CardTitle>
                 <CardDescription>Landing page için animasyonlu arka plan seçin</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {backgroundOptions.map((option) => (
-                    <motion.button
-                      key={option.id}
-                      type="button"
-                      onClick={() => updateSetting('backgroundEffect', option.id)}
-                      className={`relative p-4 rounded-xl border-2 transition-all text-left ${
-                        settings.backgroundEffect === option.id
-                          ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
-                          : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                      }`}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {settings.backgroundEffect === option.id && (
-                        <div className="absolute top-2 right-2 bg-primary rounded-full p-0.5">
-                          <Check className="h-3 w-3 text-white" />
+              <CardContent className="space-y-6">
+                {/* Standart Efektler */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3 text-muted-foreground">Standart Efektler</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {backgroundOptions.filter(o => !o.elite).map((option) => (
+                      <motion.button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleBackgroundChange(option.id)}
+                        className={`relative p-4 rounded-xl border-2 transition-all text-left ${
+                          settings.backgroundEffect === option.id
+                            ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                            : 'border-border hover:border-primary/50 hover:bg-accent/50'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {settings.backgroundEffect === option.id && (
+                          <div className="absolute top-2 right-2 bg-primary rounded-full p-0.5">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm">{option.name}</p>
+                          <p className="text-xs text-muted-foreground">{option.description}</p>
                         </div>
-                      )}
-                      <div className="space-y-1">
-                        <p className="font-medium text-sm">{option.name}</p>
-                        <p className="text-xs text-muted-foreground">{option.description}</p>
-                      </div>
-                    </motion.button>
-                  ))}
+                      </motion.button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Seçili:</strong> {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.name} - {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.description}
+                {/* Elit Efektler */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h4 className="text-sm font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+                      ⭐ Elit Efektler
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 font-medium">
+                      PREMIUM
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {backgroundOptions.filter(o => o.elite).map((option) => (
+                      <motion.button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleBackgroundChange(option.id)}
+                        className={`relative p-4 rounded-xl border-2 transition-all text-left overflow-hidden ${
+                          settings.backgroundEffect === option.id
+                            ? 'border-purple-500 bg-gradient-to-br from-purple-500/20 to-pink-500/20 ring-2 ring-purple-500/30'
+                            : 'border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 bg-gradient-to-br from-purple-500/5 to-pink-500/5'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {settings.backgroundEffect === option.id && (
+                          <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full p-0.5">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm">{option.name}</p>
+                          <p className="text-xs text-muted-foreground">{option.description}</p>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    <strong>✓ Seçili:</strong> {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.name} - {backgroundOptions.find(o => o.id === settings.backgroundEffect)?.description}
                   </p>
+                  <p className="text-xs text-muted-foreground mt-1">Seçiminiz anında kaydedilir</p>
                 </div>
-
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
-                  <Save className="h-4 w-4" />
-                  {saving ? 'Kaydediliyor...' : 'Arka Planı Kaydet'}
-                </Button>
               </CardContent>
             </Card>
           </motion.div>

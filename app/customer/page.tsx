@@ -25,6 +25,7 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getInitials, calculateLevelProgress, getLeague, formatNumber, getRarityColor, getRarityBgColor } from '@/lib/utils';
+import { SpinWheel } from '@/components/gamification/spin-wheel';
 
 interface Quest {
   id: string;
@@ -81,6 +82,7 @@ export default function CustomerDashboard() {
   const [recentFeedbacks, setRecentFeedbacks] = useState<FeedbackData[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [spinStatus, setSpinStatus] = useState<{ canSpin: boolean; lastSpin: string | null }>({ canSpin: true, lastSpin: null });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -128,6 +130,13 @@ export default function CustomerDashboard() {
             icon: r.icon || '/images/badges/sürpriz kutusu.svg',
             cost: r.cost,
           })));
+        }
+
+        // Fetch spin status
+        const spinRes = await fetch('/api/gamification/spin');
+        const spinData = await spinRes.json();
+        if (!spinData.error) {
+          setSpinStatus({ canSpin: spinData.canSpin, lastSpin: spinData.lastSpin });
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -226,7 +235,24 @@ export default function CustomerDashboard() {
       </motion.div>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
+        {/* Spin Wheel - First Item */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <SpinWheel 
+            compact 
+            lastSpinDate={spinStatus.lastSpin}
+            onPrizeWon={(prize) => {
+              if (prize.type === 'points') {
+                setStats(prev => ({ ...prev, points: prev.points + prize.value }));
+              }
+            }}
+          />
+        </motion.div>
+
+        {/* Action Buttons */}
         {[
           { href: '/customer/scan', icon: QrCode, label: 'QR Tara', color: 'from-violet-500 to-purple-600' },
           { href: '/customer/quests', icon: Target, label: 'Görevler', color: 'from-orange-500 to-amber-600' },
@@ -240,7 +266,7 @@ export default function CustomerDashboard() {
             transition={{ delay: index * 0.1 }}
           >
             <Link href={action.href}>
-              <Card hover className="text-center p-4 group">
+              <Card hover className="text-center p-4 group h-full flex flex-col justify-center">
                 <div className={`w-12 h-12 mx-auto rounded-xl bg-gradient-to-br ${action.color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-lg`}>
                   <action.icon className="w-6 h-6 text-white" />
                 </div>

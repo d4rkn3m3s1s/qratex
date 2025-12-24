@@ -7,6 +7,13 @@ import { BackgroundBeams } from './beams';
 import { GradientAnimation } from './gradient-animation';
 import { MeteorsBackground } from './meteors';
 import { GridDotsBackground } from './grid-dots';
+import { MatrixBackground } from './matrix';
+import { ParticlesBackground } from './particles';
+import { WavesBackground } from './waves';
+import { StarfieldBackground } from './starfield';
+import { CyberpunkBackground } from './cyberpunk';
+import { GeometricBackground } from './geometric';
+import { FirefliesBackground } from './fireflies';
 
 export type BackgroundVariant = 
   | 'original'
@@ -17,6 +24,13 @@ export type BackgroundVariant =
   | 'meteors' 
   | 'grid' 
   | 'dots'
+  | 'matrix'
+  | 'particles'
+  | 'waves'
+  | 'starfield'
+  | 'cyberpunk'
+  | 'geometric'
+  | 'fireflies'
   | 'none';
 
 interface DynamicBackgroundProps {
@@ -123,6 +137,55 @@ export function DynamicBackground({
         <GridDotsBackground variant="dots" className={className}>
           {children}
         </GridDotsBackground>
+      );
+
+    case 'matrix':
+      return (
+        <MatrixBackground className={className}>
+          {children}
+        </MatrixBackground>
+      );
+
+    case 'particles':
+      return (
+        <ParticlesBackground className={className}>
+          {children}
+        </ParticlesBackground>
+      );
+
+    case 'waves':
+      return (
+        <WavesBackground className={className}>
+          {children}
+        </WavesBackground>
+      );
+
+    case 'starfield':
+      return (
+        <StarfieldBackground className={className}>
+          {children}
+        </StarfieldBackground>
+      );
+
+    case 'cyberpunk':
+      return (
+        <CyberpunkBackground className={className}>
+          {children}
+        </CyberpunkBackground>
+      );
+
+    case 'geometric':
+      return (
+        <GeometricBackground className={className}>
+          {children}
+        </GeometricBackground>
+      );
+
+    case 'fireflies':
+      return (
+        <FirefliesBackground className={className}>
+          {children}
+        </FirefliesBackground>
       );
 
     case 'none':

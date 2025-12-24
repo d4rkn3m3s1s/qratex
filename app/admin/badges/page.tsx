@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy,
   Plus,
@@ -11,6 +11,14 @@ import {
   Trash2,
   Star,
   Sparkles,
+  Crown,
+  Gem,
+  Shield,
+  Zap,
+  Users,
+  Filter,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
@@ -37,7 +45,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { getRarityColor, getRarityBgColor } from '@/lib/utils';
 
 interface BadgeType {
   id: string;
@@ -53,11 +60,47 @@ interface BadgeType {
   };
 }
 
-const rarityLabels = {
-  COMMON: 'Yaygın',
-  RARE: 'Nadir',
-  EPIC: 'Epik',
-  LEGENDARY: 'Efsanevi',
+const rarityConfig = {
+  COMMON: {
+    label: 'Yaygın',
+    icon: Shield,
+    gradient: 'from-slate-400 to-slate-600',
+    bgGradient: 'from-slate-500/20 to-slate-700/20',
+    borderColor: 'border-slate-500/50',
+    glowColor: 'shadow-slate-500/20',
+    textColor: 'text-slate-300',
+    badgeBg: 'bg-slate-500/30',
+  },
+  RARE: {
+    label: 'Nadir',
+    icon: Gem,
+    gradient: 'from-blue-400 to-cyan-500',
+    bgGradient: 'from-blue-500/20 to-cyan-500/20',
+    borderColor: 'border-blue-500/50',
+    glowColor: 'shadow-blue-500/30',
+    textColor: 'text-blue-300',
+    badgeBg: 'bg-blue-500/30',
+  },
+  EPIC: {
+    label: 'Epik',
+    icon: Zap,
+    gradient: 'from-purple-400 to-pink-500',
+    bgGradient: 'from-purple-500/20 to-pink-500/20',
+    borderColor: 'border-purple-500/50',
+    glowColor: 'shadow-purple-500/30',
+    textColor: 'text-purple-300',
+    badgeBg: 'bg-purple-500/30',
+  },
+  LEGENDARY: {
+    label: 'Efsanevi',
+    icon: Crown,
+    gradient: 'from-amber-400 via-orange-500 to-red-500',
+    bgGradient: 'from-amber-500/20 via-orange-500/20 to-red-500/20',
+    borderColor: 'border-amber-500/50',
+    glowColor: 'shadow-amber-500/40',
+    textColor: 'text-amber-300',
+    badgeBg: 'bg-gradient-to-r from-amber-500/30 to-red-500/30',
+  },
 };
 
 const badgeIcons = [
@@ -77,6 +120,8 @@ export default function AdminBadgesPage() {
   const [badges, setBadges] = useState<BadgeType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterRarity, setFilterRarity] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
@@ -200,9 +245,20 @@ export default function AdminBadgesPage() {
     setEditDialogOpen(true);
   };
 
-  const filteredBadges = badges.filter((badge) =>
-    badge.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredBadges = badges.filter((badge) => {
+    const matchesSearch = badge.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRarity = filterRarity === 'all' || badge.rarity === filterRarity;
+    return matchesSearch && matchesRarity;
+  });
+
+  // Stats
+  const stats = {
+    total: badges.length,
+    legendary: badges.filter(b => b.rarity === 'LEGENDARY').length,
+    epic: badges.filter(b => b.rarity === 'EPIC').length,
+    rare: badges.filter(b => b.rarity === 'RARE').length,
+    common: badges.filter(b => b.rarity === 'COMMON').length,
+  };
 
   const BadgeForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
@@ -224,19 +280,19 @@ export default function AdminBadgesPage() {
       </div>
       <div className="space-y-2">
         <Label>İkon</Label>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-black/20 border border-white/10">
           {badgeIcons.map((icon) => (
             <button
               key={icon}
               type="button"
               onClick={() => setFormData({ ...formData, icon })}
-              className={`p-2 rounded-lg border-2 transition-colors ${
+              className={`p-2 rounded-lg border-2 transition-all ${
                 formData.icon === icon
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border hover:border-primary/50'
+                  ? 'border-primary bg-primary/20 scale-110'
+                  : 'border-transparent hover:border-white/20 hover:bg-white/5'
               }`}
             >
-              <Image src={icon} alt="Badge" width={40} height={40} />
+              <Image src={icon} alt="Badge" width={40} height={40} className="drop-shadow-lg" />
             </button>
           ))}
         </div>
@@ -248,14 +304,18 @@ export default function AdminBadgesPage() {
             value={formData.rarity}
             onValueChange={(value) => setFormData({ ...formData, rarity: value as BadgeType['rarity'] })}
           >
-            <SelectTrigger>
+            <SelectTrigger className="bg-black/20 border-white/10">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="COMMON">Yaygın</SelectItem>
-              <SelectItem value="RARE">Nadir</SelectItem>
-              <SelectItem value="EPIC">Epik</SelectItem>
-              <SelectItem value="LEGENDARY">Efsanevi</SelectItem>
+              {Object.entries(rarityConfig).map(([key, config]) => (
+                <SelectItem key={key} value={key}>
+                  <span className="flex items-center gap-2">
+                    <config.icon className={`h-4 w-4 ${config.textColor}`} />
+                    {config.label}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -265,6 +325,7 @@ export default function AdminBadgesPage() {
             type="number"
             value={formData.points}
             onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 0 })}
+            className="bg-black/20 border-white/10"
           />
         </div>
       </div>
@@ -274,9 +335,10 @@ export default function AdminBadgesPage() {
           value={formData.requirement}
           onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
           placeholder="Örn: 10 geri bildirim gönder"
+          className="bg-black/20 border-white/10"
         />
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between p-3 rounded-lg bg-black/20 border border-white/10">
         <Label>Aktif</Label>
         <Switch
           checked={formData.isActive}
@@ -291,7 +353,9 @@ export default function AdminBadgesPage() {
         }}>
           İptal
         </Button>
-        <Button onClick={onSubmit}>{submitLabel}</Button>
+        <Button onClick={onSubmit} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+          {submitLabel}
+        </Button>
       </DialogFooter>
     </div>
   );
@@ -303,27 +367,107 @@ export default function AdminBadgesPage() {
         description="Gamification rozetlerini oluşturun ve yönetin"
       />
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-slate-500/20">
+              <Trophy className="h-5 w-5 text-slate-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
+              <p className="text-xs text-slate-400">Toplam</p>
+            </div>
+          </div>
+        </motion.div>
+        
+        {Object.entries(rarityConfig).map(([key, config], index) => {
+          const count = stats[key.toLowerCase() as keyof typeof stats] || 0;
+          return (
+            <motion.div
+              key={key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (index + 1) * 0.1 }}
+              className={`p-4 rounded-xl bg-gradient-to-br ${config.bgGradient} border ${config.borderColor}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${config.badgeBg}`}>
+                  <config.icon className={`h-5 w-5 ${config.textColor}`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-white">{count}</p>
+                  <p className={`text-xs ${config.textColor}`}>{config.label}</p>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Rozet ara..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+      <div className="flex flex-col lg:flex-row gap-4 justify-between">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rozet ara..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-black/20 border-white/10"
+            />
+          </div>
+          <Select value={filterRarity} onValueChange={setFilterRarity}>
+            <SelectTrigger className="w-[180px] bg-black/20 border-white/10">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Filtrele" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tümü</SelectItem>
+              {Object.entries(rarityConfig).map(([key, config]) => (
+                <SelectItem key={key} value={key}>
+                  <span className="flex items-center gap-2">
+                    <config.icon className={`h-4 w-4 ${config.textColor}`} />
+                    {config.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-1 p-1 rounded-lg bg-black/20 border border-white/10">
+            <Button
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
               <Plus className="h-4 w-4" />
               Yeni Rozet
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] overflow-y-auto bg-gradient-to-br from-slate-900 to-slate-950 border-white/10">
             <DialogHeader>
-              <DialogTitle>Yeni Rozet Oluştur</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-amber-400" />
+                Yeni Rozet Oluştur
+              </DialogTitle>
               <DialogDescription>
                 Kullanıcıların kazanabileceği yeni bir rozet oluşturun
               </DialogDescription>
@@ -337,107 +481,206 @@ export default function AdminBadgesPage() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
-            <Card key={i} glass>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="w-16 h-16 bg-muted rounded-full mx-auto" />
-                  <div className="h-4 bg-muted rounded w-3/4 mx-auto" />
-                  <div className="h-3 bg-muted rounded w-1/2 mx-auto" />
-                </div>
-              </CardContent>
-            </Card>
+            <div key={i} className="p-6 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50">
+              <div className="animate-pulse space-y-4">
+                <div className="w-20 h-20 bg-slate-700/50 rounded-full mx-auto" />
+                <div className="h-4 bg-slate-700/50 rounded w-3/4 mx-auto" />
+                <div className="h-3 bg-slate-700/50 rounded w-1/2 mx-auto" />
+              </div>
+            </div>
           ))}
         </div>
       ) : filteredBadges.length === 0 ? (
-        <Card glass>
-          <CardContent className="p-8 text-center">
-            <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Rozet bulunamadı</p>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="p-12 rounded-xl bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-700/50 text-center"
+        >
+          <Trophy className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+          <p className="text-slate-400 text-lg">Rozet bulunamadı</p>
+          <p className="text-slate-500 text-sm mt-1">Yeni bir rozet oluşturmaya başlayın</p>
+        </motion.div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredBadges.map((badge, index) => (
-            <motion.div
-              key={badge.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card glass hover className="relative overflow-hidden group">
-                {badge.rarity === 'LEGENDARY' && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-red-500/20 animate-gradient-x" />
-                )}
-                <CardContent className="p-6 relative">
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    {/* Badge Icon */}
-                    <div className={`relative p-4 rounded-full border-2 border-white/20 shadow-lg ${getRarityBgColor(badge.rarity)}`}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={viewMode}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={viewMode === 'grid' 
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" 
+              : "space-y-3"
+            }
+          >
+            {filteredBadges.map((badge, index) => {
+              const config = rarityConfig[badge.rarity];
+              const RarityIcon = config.icon;
+              
+              if (viewMode === 'list') {
+                return (
+                  <motion.div
+                    key={badge.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className={`flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r ${config.bgGradient} border ${config.borderColor} hover:scale-[1.01] transition-transform group`}
+                  >
+                    <div className={`relative p-3 rounded-xl bg-gradient-to-br ${config.gradient} shadow-lg ${config.glowColor}`}>
                       <Image
                         src={badge.icon}
                         alt={badge.name}
-                        width={48}
-                        height={48}
-                        className="relative z-10 drop-shadow-lg"
-                        style={{ filter: 'brightness(1.1) contrast(1.1)' }}
+                        width={40}
+                        height={40}
+                        className="drop-shadow-lg"
                       />
                       {badge.rarity === 'LEGENDARY' && (
-                        <Sparkles className="absolute top-0 right-0 h-4 w-4 text-yellow-500 animate-pulse" />
+                        <Sparkles className="absolute -top-1 -right-1 h-4 w-4 text-amber-300 animate-pulse" />
                       )}
                     </div>
-
-                    {/* Badge Info */}
-                    <div>
-                      <h3 className="font-semibold">{badge.name}</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{badge.description}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-white truncate">{badge.name}</h3>
+                      <p className="text-sm text-slate-400 truncate">{badge.description}</p>
                     </div>
-
-                    {/* Rarity & Points */}
                     <div className="flex items-center gap-2">
-                      <Badge className={getRarityColor(badge.rarity)}>
-                        {rarityLabels[badge.rarity]}
+                      <Badge className={`${config.badgeBg} ${config.textColor} border-0`}>
+                        <RarityIcon className="h-3 w-3 mr-1" />
+                        {config.label}
                       </Badge>
-                      <Badge variant="outline" className="gap-1">
+                      <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-300">
                         <Star className="h-3 w-3" />
                         {badge.points}
                       </Badge>
                     </div>
-
-                    {/* Stats */}
-                    <p className="text-xs text-muted-foreground">
-                      {badge._count?.userBadges || 0} kullanıcı kazandı
-                    </p>
-
-                    {/* Actions */}
+                    <div className="flex items-center gap-2 text-sm text-slate-400">
+                      <Users className="h-4 w-4" />
+                      {badge._count?.userBadges || 0}
+                    </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(badge)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(badge)} className="hover:bg-white/10">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(badge.id)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(badge.id)} className="hover:bg-red-500/20 text-red-400">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+                  </motion.div>
+                );
+              }
+
+              return (
+                <motion.div
+                  key={badge.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="group"
+                >
+                  <div className={`relative p-6 rounded-2xl bg-gradient-to-br ${config.bgGradient} border-2 ${config.borderColor} overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${config.glowColor}`}>
+                    {/* Animated background for legendary */}
+                    {badge.rarity === 'LEGENDARY' && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-red-500/10 animate-pulse" />
+                    )}
+                    
+                    {/* Glow effect */}
+                    <div className={`absolute -top-20 -right-20 w-40 h-40 rounded-full bg-gradient-to-br ${config.gradient} opacity-20 blur-3xl`} />
+                    
+                    <div className="relative flex flex-col items-center text-center space-y-4">
+                      {/* Badge Icon Container */}
+                      <div className="relative">
+                        <div className={`absolute inset-0 rounded-full bg-gradient-to-br ${config.gradient} blur-xl opacity-50`} />
+                        <div className={`relative p-4 rounded-full bg-gradient-to-br ${config.gradient} shadow-2xl ${config.glowColor}`}>
+                          <Image
+                            src={badge.icon}
+                            alt={badge.name}
+                            width={56}
+                            height={56}
+                            className="relative z-10 drop-shadow-2xl"
+                          />
+                        </div>
+                        {badge.rarity === 'LEGENDARY' && (
+                          <motion.div
+                            className="absolute -top-1 -right-1"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                          >
+                            <Sparkles className="h-5 w-5 text-amber-300 drop-shadow-lg" />
+                          </motion.div>
+                        )}
+                        {badge.rarity === 'EPIC' && (
+                          <Zap className="absolute -top-1 -right-1 h-5 w-5 text-purple-300 animate-pulse" />
+                        )}
+                      </div>
+
+                      {/* Badge Info */}
+                      <div className="space-y-1">
+                        <h3 className="font-bold text-lg text-white">{badge.name}</h3>
+                        <p className="text-sm text-slate-300 line-clamp-2">{badge.description}</p>
+                      </div>
+
+                      {/* Rarity & Points */}
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${config.badgeBg} ${config.textColor} border-0 font-medium`}>
+                          <RarityIcon className="h-3 w-3 mr-1" />
+                          {config.label}
+                        </Badge>
+                        <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-300 font-medium">
+                          <Star className="h-3 w-3 fill-amber-300" />
+                          {badge.points}
+                        </Badge>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-1 text-sm text-slate-400">
+                        <Users className="h-4 w-4" />
+                        <span>{badge._count?.userBadges || 0} kullanıcı kazandı</span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openEditDialog(badge)}
+                          className="bg-white/10 hover:bg-white/20 backdrop-blur-sm"
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Düzenle
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="bg-red-500/20 hover:bg-red-500/30 text-red-300 backdrop-blur-sm"
+                          onClick={() => handleDelete(badge.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Status indicator */}
+                    {!badge.isActive && (
+                      <div className="absolute top-3 right-3">
+                        <Badge variant="outline" className="bg-black/50 text-slate-400 border-slate-600">
+                          Pasif
+                        </Badge>
+                      </div>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
       )}
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-gradient-to-br from-slate-900 to-slate-950 border-white/10">
           <DialogHeader>
-            <DialogTitle>Rozet Düzenle</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-purple-400" />
+              Rozet Düzenle
+            </DialogTitle>
             <DialogDescription>
               {selectedBadge?.name} rozetini düzenleyin
             </DialogDescription>
@@ -448,4 +691,3 @@ export default function AdminBadgesPage() {
     </div>
   );
 }
-
