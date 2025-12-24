@@ -41,13 +41,15 @@ export async function GET(request: NextRequest) {
 
     // If userId provided, get user's earned badges
     if (userId && userId !== 'me') {
-      const userBadges = await prisma.userBadge.findMany({
+      const userBadgesData = await prisma.userBadge.findMany({
         where: { userId },
-        select: { badgeId: true, earnedAt: true },
+        include: {
+          badge: true,
+        },
       });
 
       const userBadgeMap = new Map(
-        userBadges.map((ub) => [ub.badgeId, ub.earnedAt])
+        userBadgesData.map((ub) => [ub.badgeId, ub.earnedAt])
       );
 
       const badgesWithStatus = transformedBadges.map((badge) => ({
@@ -56,7 +58,26 @@ export async function GET(request: NextRequest) {
         earnedAt: userBadgeMap.get(badge.id) || null,
       }));
 
-      return NextResponse.json({ success: true, data: badgesWithStatus });
+      // Return both all badges with status AND user's earned badges separately
+      const userBadges = userBadgesData.map((ub) => ({
+        id: ub.id,
+        badgeId: ub.badgeId,
+        earnedAt: ub.earnedAt,
+        badge: {
+          id: ub.badge.id,
+          name: ub.badge.name,
+          description: ub.badge.description,
+          icon: ub.badge.icon,
+          rarity: ub.badge.rarity,
+          category: ub.badge.category,
+        },
+      }));
+
+      return NextResponse.json({ 
+        success: true, 
+        data: badgesWithStatus,
+        userBadges: userBadges,
+      });
     }
 
     return NextResponse.json({ success: true, data: transformedBadges });

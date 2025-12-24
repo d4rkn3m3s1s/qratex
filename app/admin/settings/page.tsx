@@ -148,7 +148,7 @@ interface SiteSettings {
   levelUpThreshold: number;
 }
 
-const backgroundOptions: { id: BackgroundVariant; name: string; description: string; elite?: boolean }[] = [
+const backgroundOptions: { id: BackgroundVariant; name: string; description: string; elite?: boolean; special?: boolean }[] = [
   { id: 'original', name: 'Orijinal', description: 'Varsayılan kar ve küre animasyonları' },
   { id: 'aurora', name: 'Aurora', description: 'Kuzey ışıkları efekti' },
   { id: 'sparkles', name: 'Parıltı', description: 'Parlayan yıldızlar' },
@@ -165,6 +165,10 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
   { id: 'cyberpunk', name: '💜 Cyberpunk', description: 'Neon ızgara ve çizgiler', elite: true },
   { id: 'geometric', name: '🔷 Geometrik', description: 'Dönen şekiller', elite: true },
   { id: 'fireflies', name: '🌟 Ateş Böcekleri', description: 'Sihirli ateş böcekleri', elite: true },
+  // Özel Gün Efektleri
+  { id: 'christmas', name: '🎄 Yılbaşı', description: 'Kar, ışıklar ve Noel ruhu', special: true },
+  { id: 'valentine', name: '💕 Sevgililer Günü', description: 'Romantik kalpler ve parıltılar', special: true },
+  { id: 'birthday', name: '🎂 Doğum Günü', description: 'Balonlar ve konfetiler', special: true },
   { id: 'none', name: 'Yok', description: 'Arka plan efekti yok' },
 ];
 
@@ -775,6 +779,44 @@ export default function AdminSettingsPage() {
                       >
                         {settings.backgroundEffect === option.id && (
                           <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full p-0.5">
+                            <Check className="h-3 w-3 text-white" />
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm">{option.name}</p>
+                          <p className="text-xs text-muted-foreground">{option.description}</p>
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Özel Gün Efektleri */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h4 className="text-sm font-medium bg-gradient-to-r from-red-500 via-pink-500 to-amber-500 bg-clip-text text-transparent">
+                      🎉 Özel Gün Efektleri
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-red-500/20 to-amber-500/20 text-red-400 font-medium">
+                      ÖZEL
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {backgroundOptions.filter(o => o.special).map((option) => (
+                      <motion.button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleBackgroundChange(option.id)}
+                        className={`relative p-4 rounded-xl border-2 transition-all text-left overflow-hidden ${
+                          settings.backgroundEffect === option.id
+                            ? 'border-red-500 bg-gradient-to-br from-red-500/20 via-pink-500/20 to-amber-500/20 ring-2 ring-red-500/30'
+                            : 'border-red-500/30 hover:border-red-500/60 hover:bg-red-500/10 bg-gradient-to-br from-red-500/5 via-pink-500/5 to-amber-500/5'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {settings.backgroundEffect === option.id && (
+                          <div className="absolute top-2 right-2 bg-gradient-to-r from-red-500 to-amber-500 rounded-full p-0.5">
                             <Check className="h-3 w-3 text-white" />
                           </div>
                         )}

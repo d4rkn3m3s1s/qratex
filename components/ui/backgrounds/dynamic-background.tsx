@@ -14,6 +14,9 @@ import { StarfieldBackground } from './starfield';
 import { CyberpunkBackground } from './cyberpunk';
 import { GeometricBackground } from './geometric';
 import { FirefliesBackground } from './fireflies';
+import { ChristmasBackground } from './christmas';
+import { ValentineBackground } from './valentine';
+import { BirthdayBackground } from './birthday';
 
 export type BackgroundVariant = 
   | 'original'
@@ -31,6 +34,9 @@ export type BackgroundVariant =
   | 'cyberpunk'
   | 'geometric'
   | 'fireflies'
+  | 'christmas'
+  | 'valentine'
+  | 'birthday'
   | 'none';
 
 interface DynamicBackgroundProps {
@@ -186,6 +192,27 @@ export function DynamicBackground({
         <FirefliesBackground className={className}>
           {children}
         </FirefliesBackground>
+      );
+
+    case 'christmas':
+      return (
+        <ChristmasBackground className={className}>
+          {children}
+        </ChristmasBackground>
+      );
+
+    case 'valentine':
+      return (
+        <ValentineBackground className={className}>
+          {children}
+        </ValentineBackground>
+      );
+
+    case 'birthday':
+      return (
+        <BirthdayBackground className={className}>
+          {children}
+        </BirthdayBackground>
       );
 
     case 'none':

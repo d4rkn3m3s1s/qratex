@@ -382,9 +382,11 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Calculate new level (1000 XP per level)
-        const newXp = currentUser.xp + data.amount;
+        const currentXp = currentUser.xp || 0;
+        const currentLevel = currentUser.level || 1;
+        const newXp = currentXp + data.amount;
         const newLevel = Math.floor(newXp / 1000) + 1;
-        const leveledUp = newLevel > currentUser.level;
+        const leveledUp = newLevel > currentLevel;
 
         const user = await prisma.user.update({
           where: { id: data.userId },
@@ -399,13 +401,13 @@ export async function PATCH(request: NextRequest) {
         await prisma.notification.create({
           data: {
             userId: data.userId,
-            title: leveledUp ? `Seviye Atladınız! 🚀 Seviye ${newLevel}` : 'XP Kazandınız!',
-            message: `${data.amount} XP kazandınız!${leveledUp ? ` Artık Seviye ${newLevel} oldunuz!` : ''}`,
+            title: leveledUp ? `Seviye Atladınız! 🚀 Seviye ${newLevel}` : 'XP Kazandınız! ⚡',
+            message: `${data.amount} XP kazandınız!${leveledUp ? ` Artık Seviye ${newLevel} oldunuz!` : ` Toplam: ${newXp} XP`}`,
             type: 'success',
           },
         });
 
-        return NextResponse.json({ success: true, user, leveledUp });
+        return NextResponse.json({ success: true, user, leveledUp, newXp, newLevel });
       }
 
       case 'set_level': {

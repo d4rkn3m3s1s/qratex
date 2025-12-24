@@ -3,14 +3,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/gamification/spin - Record a spin and give prize
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized', canSpin: false }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { prizeType, prizeValue, prizeLabel } = await request.json();
 
     // Check if user already spun today
@@ -19,8 +22,8 @@ export async function POST(request: NextRequest) {
 
     const existingSpin = await prisma.notification.findFirst({
       where: {
-        userId: session.user.id,
-        type: 'SPIN_WHEEL',
+        userId: userId,
+        title: '🎡 Günlük Çark',
         createdAt: {
           gte: today,
         },
@@ -40,14 +43,14 @@ export async function POST(request: NextRequest) {
     switch (prizeType) {
       case 'points':
         await prisma.user.update({
-          where: { id: session.user.id },
+          where: { id: userId },
           data: { points: { increment: prizeValue } },
         });
         message = `Çarktan ${prizeValue} puan kazandınız!`;
         break;
       case 'xp':
         await prisma.user.update({
-          where: { id: session.user.id },
+          where: { id: userId },
           data: { xp: { increment: prizeValue } },
         });
         message = `Çarktan ${prizeValue} XP kazandınız!`;
@@ -61,17 +64,18 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    // Record the spin as a notification
+    // Record the spin as a notification (type: success for prizes, info for nothing)
     await prisma.notification.create({
       data: {
-        userId: session.user.id,
-        type: 'SPIN_WHEEL',
+        userId: userId,
+        type: prizeType === 'nothing' ? 'info' : 'success',
         title: '🎡 Günlük Çark',
         message: message,
         data: {
           prizeType,
           prizeValue,
           prizeLabel,
+          spinDate: new Date().toISOString(),
         },
       },
     });
@@ -94,17 +98,18 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ canSpin: false, error: 'Not authenticated' }, { status: 200 });
     }
 
+    const userId = session.user.id;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const existingSpin = await prisma.notification.findFirst({
       where: {
-        userId: session.user.id,
-        type: 'SPIN_WHEEL',
+        userId: userId,
+        title: '🎡 Günlük Çark',
         createdAt: {
           gte: today,
         },
@@ -119,10 +124,10 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Spin check error:', error);
-    return NextResponse.json(
-      { error: 'Durum kontrol edilemedi' },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      canSpin: false,
+      error: 'Durum kontrol edilemedi',
+    });
   }
 }
 

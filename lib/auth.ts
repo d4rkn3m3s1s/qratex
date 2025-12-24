@@ -74,12 +74,33 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger, session, account }) {
+      // On initial sign in, fetch user data from database
       if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.points = user.points;
-        token.level = user.level;
+        // For OAuth providers, we need to fetch the full user data from DB
+        // because the user object only contains basic OAuth info
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: {
+            id: true,
+            role: true,
+            points: true,
+            level: true,
+          },
+        });
+
+        if (dbUser) {
+          token.id = dbUser.id;
+          token.role = dbUser.role;
+          token.points = dbUser.points;
+          token.level = dbUser.level;
+        } else {
+          // Fallback to user object (for credentials)
+          token.id = user.id;
+          token.role = user.role || 'CUSTOMER';
+          token.points = user.points || 0;
+          token.level = user.level || 1;
+        }
       }
 
       // Handle session update

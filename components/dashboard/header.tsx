@@ -3,12 +3,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Bell, Search, Settings, User, LogOut, Check, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
+import { motion } from 'framer-motion';
+import { Bell, Search, Settings, User, LogOut, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, XCircle, ExternalLink, Moon, Sun } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +25,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Separator } from '@/components/ui/separator';
 import { getInitials } from '@/lib/utils';
 import { signOut } from 'next-auth/react';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 interface Notification {
@@ -40,11 +49,16 @@ interface DashboardHeaderProps {
   actions?: React.ReactNode;
 }
 
-const notificationIcons = {
+const notificationIcons: Record<string, typeof Info> = {
   info: Info,
   success: CheckCircle,
   warning: AlertTriangle,
   error: XCircle,
+};
+
+// Default icon for unknown notification types
+const getNotificationIcon = (type: string | undefined) => {
+  return notificationIcons[type || 'info'] || Info;
 };
 
 const notificationColors = {
@@ -57,11 +71,19 @@ const notificationColors = {
 export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const lastNotificationIdRef = useRef<string | null>(null);
   const isFirstLoadRef = useRef(true);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
@@ -87,10 +109,11 @@ export function DashboardHeader({ title, description, showSearch = true, actions
 
             // Show toast for each new notification
             newOnes.forEach((n) => {
-              const Icon = notificationIcons[n.type];
+              const Icon = getNotificationIcon(n.type);
+              const colorClass = notificationColors[n.type] || notificationColors.info;
               toast(n.title, {
                 description: n.message,
-                icon: <Icon className={`h-5 w-5 ${notificationColors[n.type]}`} />,
+                icon: <Icon className={`h-5 w-5 ${colorClass}`} />,
                 duration: 5000,
               });
             });
@@ -184,6 +207,26 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     }
   };
 
+  // Format full date
+  const formatFullDate = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'd MMMM yyyy, HH:mm', { locale: tr });
+    } catch {
+      return '';
+    }
+  };
+
+  // Open notification modal
+  const openNotification = (notification: Notification) => {
+    setSelectedNotification(notification);
+    setIsModalOpen(true);
+    setIsOpen(false);
+    
+    if (!notification.isRead) {
+      markAsRead(notification.id);
+    }
+  };
+
   const getSettingsLink = () => {
     switch (session?.user?.role) {
       case 'ADMIN': return '/admin/settings';
@@ -222,7 +265,21 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           {actions}
           
           {/* Theme Toggle */}
-          <AnimatedThemeToggler />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          >
+            {mounted && resolvedTheme === 'dark' ? (
+              <Sun className="h-5 w-5 text-yellow-500" />
+            ) : mounted && resolvedTheme === 'light' ? (
+              <Moon className="h-5 w-5 text-slate-700" />
+            ) : (
+              <Moon className="h-5 w-5 text-slate-400" />
+            )}
+            <span className="sr-only">Tema değiştir</span>
+          </Button>
 
           {/* Notifications */}
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -271,15 +328,16 @@ export function DashboardHeader({ title, description, showSearch = true, actions
               ) : (
                 <div className="max-h-[400px] overflow-y-auto">
                   {notifications.map((notification) => {
-                    const Icon = notificationIcons[notification.type];
+                    const Icon = getNotificationIcon(notification.type);
+                    const colorClass = notificationColors[notification.type] || notificationColors.info;
                     return (
                       <DropdownMenuItem
                         key={notification.id}
                         className="flex items-start gap-3 p-3 cursor-pointer group"
-                        onClick={() => !notification.isRead && markAsRead(notification.id)}
+                        onClick={() => openNotification(notification)}
                       >
                         <div className={`p-2 rounded-full ${notification.type === 'success' ? 'bg-green-500/10' : notification.type === 'warning' ? 'bg-yellow-500/10' : notification.type === 'error' ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
-                          <Icon className={`h-4 w-4 ${notificationColors[notification.type]}`} />
+                          <Icon className={`h-4 w-4 ${colorClass}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
@@ -293,9 +351,14 @@ export function DashboardHeader({ title, description, showSearch = true, actions
                           <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                             {notification.message}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {formatTime(notification.createdAt)}
-                          </p>
+                          <div className="flex items-center justify-between mt-1">
+                            <p className="text-xs text-muted-foreground">
+                              {formatTime(notification.createdAt)}
+                            </p>
+                            <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              Detay <ExternalLink className="h-3 w-3" />
+                            </span>
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
@@ -361,6 +424,116 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Notification Detail Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          {selectedNotification && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-4">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                    className={`p-3 rounded-full flex-shrink-0 ${
+                      selectedNotification.type === 'success' ? 'bg-green-500/10' : 
+                      selectedNotification.type === 'warning' ? 'bg-yellow-500/10' : 
+                      selectedNotification.type === 'error' ? 'bg-red-500/10' : 'bg-blue-500/10'
+                    }`}
+                  >
+                    {(() => {
+                      const Icon = getNotificationIcon(selectedNotification.type);
+                      const colorClass = notificationColors[selectedNotification.type] || notificationColors.info;
+                      return <Icon className={`h-6 w-6 ${colorClass}`} />;
+                    })()}
+                  </motion.div>
+                  <div className="flex-1">
+                    <DialogTitle className="text-lg">
+                      {selectedNotification.title}
+                    </DialogTitle>
+                    <DialogDescription className="mt-1">
+                      {formatFullDate(selectedNotification.createdAt)}
+                    </DialogDescription>
+                  </div>
+                  <Badge 
+                    variant={
+                      selectedNotification.type === 'success' ? 'default' :
+                      selectedNotification.type === 'warning' ? 'secondary' :
+                      selectedNotification.type === 'error' ? 'destructive' : 'outline'
+                    }
+                    className="flex-shrink-0"
+                  >
+                    {selectedNotification.type === 'success' && 'Başarılı'}
+                    {selectedNotification.type === 'warning' && 'Uyarı'}
+                    {selectedNotification.type === 'error' && 'Hata'}
+                    {selectedNotification.type === 'info' && 'Bilgi'}
+                  </Badge>
+                </div>
+              </DialogHeader>
+              
+              <Separator className="my-4" />
+              
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="space-y-4"
+              >
+                {/* Message Content */}
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {selectedNotification.message}
+                  </p>
+                </div>
+
+                {/* Additional Data */}
+                {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">Ek Bilgiler</p>
+                    <div className="p-4 rounded-lg bg-muted/30 border">
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(selectedNotification.data).map(([key, value]) => (
+                          <div key={key} className="space-y-1">
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {key.replace(/_/g, ' ')}
+                            </p>
+                            <p className="text-sm font-medium">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => {
+                      deleteNotification(selectedNotification.id, { stopPropagation: () => {} } as React.MouseEvent);
+                      setIsModalOpen(false);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Bildirimi Sil
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsModalOpen(false)}
+                  >
+                    Tamam
+                  </Button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
