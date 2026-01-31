@@ -260,7 +260,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
         </div>
 
         {/* Right - Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2">
           {/* Page Actions */}
           {actions}
           
@@ -268,15 +268,15 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-full"
+            className="h-9 w-9 rounded-full hover:bg-muted"
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
           >
             {mounted && resolvedTheme === 'dark' ? (
-              <Sun className="h-5 w-5 text-yellow-500" />
+              <Sun className="h-[18px] w-[18px] text-yellow-500" />
             ) : mounted && resolvedTheme === 'light' ? (
-              <Moon className="h-5 w-5 text-slate-700" />
+              <Moon className="h-[18px] w-[18px] text-slate-700" />
             ) : (
-              <Moon className="h-5 w-5 text-slate-400" />
+              <Moon className="h-[18px] w-[18px] text-slate-400" />
             )}
             <span className="sr-only">Tema değiştir</span>
           </Button>
@@ -284,10 +284,10 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           {/* Notifications */}
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative rounded-full">
-                <Bell className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full hover:bg-muted">
+                <Bell className="h-[18px] w-[18px]" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center animate-pulse">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-sm">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -379,7 +379,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 hover:ring-2 hover:ring-primary/20 transition-all">
                 <Avatar className="h-9 w-9">
                   <AvatarImage src={session?.user?.image || ''} />
                   <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-sm">

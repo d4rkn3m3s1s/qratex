@@ -30,6 +30,7 @@ import {
   Palette,
   ToggleLeft,
   TrendingUp,
+  Heart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -81,6 +82,7 @@ const customerNavItems: NavItem[] = [
   { href: '/customer/badges', label: 'Rozetlerim', icon: Trophy },
   { href: '/customer/quests', label: 'Görevler', icon: Target },
   { href: '/customer/rewards', label: 'Ödüller', icon: Gift },
+  { href: '/customer/donations', label: 'Sosyal Sorumluluk', icon: Heart },
   { href: '/customer/leaderboard', label: 'Liderlik', icon: BarChart3 },
   { href: '/customer/settings', label: 'Ayarlar', icon: Settings },
 ];

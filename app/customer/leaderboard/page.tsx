@@ -9,12 +9,11 @@ import {
   Medal,
   Crown,
   Star,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   Sparkles,
   Flame,
   Zap,
+  MessageSquare,
+  Award,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Badge } from '@/components/ui/badge';
@@ -29,9 +28,11 @@ interface LeaderboardUser {
   name: string | null;
   image: string | null;
   points: number;
+  totalPoints?: number;
   level: number;
   rank: number;
-  change: number;
+  feedbackCount?: number;
+  badgeCount?: number;
   isCurrentUser?: boolean;
 }
 
@@ -53,6 +54,8 @@ export default function CustomerLeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [periodLabel, setPeriodLabel] = useState('Bu Hafta');
 
   useEffect(() => {
     fetchLeaderboard();
@@ -61,7 +64,10 @@ export default function CustomerLeaderboardPage() {
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard?period=${period}&limit=50`);
+      const res = await fetch(`/api/leaderboard?period=${period}&limit=50`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const data = await res.json();
       
       if (data.success && data.data.leaderboard) {
@@ -72,6 +78,8 @@ export default function CustomerLeaderboardPage() {
         }));
         setLeaderboard(withAvatars);
         setUserRank(data.data.userRank);
+        setTotalUsers(data.data.totalUsers || 0);
+        setPeriodLabel(data.data.periodLabel || 'Bu Hafta');
       }
     } catch (error) {
       console.error('Leaderboard fetch error:', error);
@@ -80,41 +88,7 @@ export default function CustomerLeaderboardPage() {
     }
   };
 
-  const getChangeIcon = (change: number) => {
-    if (change > 0) return <TrendingUp className="h-4 w-4 text-green-500" />;
-    if (change < 0) return <TrendingDown className="h-4 w-4 text-red-500" />;
-    return <Minus className="h-4 w-4 text-muted-foreground" />;
-  };
-
   const userLeague = getLeague(session?.user?.level || 1);
-
-  // Top 3 için özel renkler
-  const podiumColors = {
-    1: {
-      bg: 'from-yellow-400/30 via-amber-300/20 to-yellow-500/30',
-      border: 'border-yellow-500/50',
-      ring: 'ring-yellow-400/50',
-      text: 'text-yellow-500',
-      icon: Crown,
-      glow: 'shadow-[0_0_30px_rgba(234,179,8,0.3)]',
-    },
-    2: {
-      bg: 'from-slate-300/30 via-gray-200/20 to-slate-400/30',
-      border: 'border-slate-400/50',
-      ring: 'ring-slate-300/50',
-      text: 'text-slate-400',
-      icon: Medal,
-      glow: 'shadow-[0_0_20px_rgba(148,163,184,0.3)]',
-    },
-    3: {
-      bg: 'from-amber-600/30 via-orange-500/20 to-amber-700/30',
-      border: 'border-amber-600/50',
-      ring: 'ring-amber-500/50',
-      text: 'text-amber-600',
-      icon: Medal,
-      glow: 'shadow-[0_0_20px_rgba(217,119,6,0.3)]',
-    },
-  };
 
   return (
     <div className="space-y-6">
@@ -131,28 +105,30 @@ export default function CustomerLeaderboardPage() {
         <Card className="relative overflow-hidden border-primary/20">
           <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-purple-600/10 to-fuchsia-600/20" />
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary/20 to-transparent rounded-full blur-3xl" />
-          <CardContent className="p-6 relative">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <Avatar className="h-20 w-20 ring-4 ring-primary/30">
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-fuchsia-500/10 to-transparent rounded-full blur-2xl" />
+          <CardContent className="p-4 md:p-6 relative">
+            <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6">
+              {/* User Info */}
+              <div className="flex items-center gap-3 md:gap-4">
+                <div className="relative flex-shrink-0">
+                  <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-4 ring-primary/30">
                     <AvatarImage src={session?.user?.image || ''} />
-                    <AvatarFallback className="text-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+                    <AvatarFallback className="text-xl md:text-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
                       {getInitials(session?.user?.name || '')}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-1.5 shadow-lg">
-                    <Zap className="h-4 w-4 text-white" />
+                  <div className="absolute -bottom-1 -right-1 bg-primary rounded-full p-1 md:p-1.5 shadow-lg">
+                    <Zap className="h-3 w-3 md:h-4 md:w-4 text-white" />
                   </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold">{session?.user?.name}</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="gap-1">
+                <div className="min-w-0">
+                  <h2 className="text-lg md:text-xl font-bold truncate">{session?.user?.name}</h2>
+                  <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1">
+                    <Badge variant="outline" className="gap-1 text-xs h-6">
                       <Star className="h-3 w-3" />
                       Seviye {session?.user?.level || 1}
                     </Badge>
-                    <Badge className="bg-gradient-to-r from-violet-600 to-fuchsia-600 gap-1">
+                    <Badge className="bg-gradient-to-r from-violet-600 to-fuchsia-600 gap-1 text-xs h-6 border-0">
                       <Sparkles className="h-3 w-3" />
                       {userLeague}
                     </Badge>
@@ -160,27 +136,44 @@ export default function CustomerLeaderboardPage() {
                 </div>
               </div>
               
-              <div className="flex items-center gap-8">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Sıralamanız</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-4xl font-bold text-primary">#{userRank || '?'}</span>
+              {/* Stats */}
+              <div className="flex items-center justify-center sm:justify-end flex-1 gap-4 md:gap-6">
+                {/* Rank */}
+                <div className="text-center px-2">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">Sıralamanız</p>
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-2xl md:text-3xl font-bold text-primary">#{userRank || '?'}</span>
                     {userRank && userRank <= 10 && (
                       <motion.div
                         animate={{ scale: [1, 1.2, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                       >
-                        <Flame className="h-6 w-6 text-orange-500" />
+                        <Flame className="h-4 w-4 text-orange-500" />
                       </motion.div>
                     )}
                   </div>
+                  <p className="text-[10px] text-muted-foreground">/ {totalUsers} kişi</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Toplam Puan</p>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                    <span className="text-2xl font-bold">{formatNumber(session?.user?.points || 0)}</span>
+                
+                <div className="w-px h-10 bg-border/50" />
+                
+                {/* Points */}
+                <div className="text-center px-2">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">Toplam Puan</p>
+                  <div className="flex items-center justify-center gap-1">
+                    <Star className="h-4 w-4 md:h-5 md:w-5 text-yellow-500 fill-yellow-500" />
+                    <span className="text-xl md:text-2xl font-bold">{formatNumber(session?.user?.points || 0)}</span>
                   </div>
+                </div>
+                
+                <div className="hidden sm:block w-px h-10 bg-border/50" />
+                
+                {/* Period */}
+                <div className="text-center px-2 hidden sm:block">
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-1">Dönem</p>
+                  <Badge variant="secondary" className="text-xs">
+                    {periodLabel}
+                  </Badge>
                 </div>
               </div>
             </div>
@@ -219,202 +212,305 @@ export default function CustomerLeaderboardPage() {
             </div>
           ) : (
             <>
-              {/* Podium - Top 3 */}
+              {/* Podium - Top 3 - Modern Design */}
               {leaderboard.length >= 3 && (
-                <div className="flex items-end justify-center gap-3 md:gap-6 mb-8 px-4">
-                  {/* 2nd Place */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="order-1"
-                  >
-                    <Card className={`relative overflow-hidden w-32 md:w-40 bg-gradient-to-b ${podiumColors[2].bg} ${podiumColors[2].border} ${podiumColors[2].glow}`}>
-                      <div className="absolute top-2 right-2">
-                        <Medal className={`h-6 w-6 ${podiumColors[2].text}`} />
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="relative mb-12"
+                >
+                  {/* Background glow */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent rounded-3xl" />
+                  
+                  {/* Podium Container */}
+                  <div className="relative grid grid-cols-3 gap-2 md:gap-4 items-end pt-8 pb-4 px-2 md:px-8">
+                    
+                    {/* 2nd Place */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="flex flex-col items-center"
+                    >
+                      {/* Avatar & Info Card */}
+                      <div className="relative mb-2">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                          <div className="bg-gradient-to-r from-slate-400 to-slate-500 rounded-full p-1.5 shadow-lg">
+                            <Medal className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                          </div>
+                        </div>
+                        <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-4 ring-slate-400/50 shadow-xl">
+                          <AvatarImage src={leaderboard[1]?.image || ''} />
+                          <AvatarFallback className="bg-gradient-to-br from-slate-400 to-slate-600 text-white text-lg md:text-xl">
+                            {getInitials(leaderboard[1]?.name || '')}
+                          </AvatarFallback>
+                        </Avatar>
                       </div>
-                      <CardContent className="pt-8 pb-4 px-3 text-center">
-                        <div className={`relative mx-auto mb-3 ring-4 ${podiumColors[2].ring} rounded-full`}>
-                          <Avatar className="h-16 w-16 md:h-20 md:w-20">
-                            <AvatarImage src={leaderboard[1]?.image || ''} />
-                            <AvatarFallback className="bg-slate-500 text-white">
-                              {getInitials(leaderboard[1]?.name || '')}
-                            </AvatarFallback>
-                          </Avatar>
-                        </div>
-                        <p className="font-bold truncate text-sm">{leaderboard[1]?.name}</p>
-                        <div className="flex items-center justify-center gap-1 mt-1">
-                          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold text-lg">{formatNumber(leaderboard[1]?.points || 0)}</span>
-                        </div>
-                        <Badge variant="outline" className="mt-2 text-xs">
-                          Lv. {leaderboard[1]?.level}
-                        </Badge>
-                        <div className={`mt-3 py-2 px-4 rounded-lg bg-slate-500/20 ${podiumColors[2].text} font-bold text-2xl`}>
-                          2
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                      
+                      <p className="font-bold text-sm md:text-base truncate max-w-[100px] md:max-w-[120px] text-center">
+                        {leaderboard[1]?.name}
+                      </p>
+                      
+                      <div className="flex items-center gap-1 mt-1">
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        <span className="font-bold text-base md:text-lg">{formatNumber(leaderboard[1]?.points || 0)}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-0.5">
+                          <MessageSquare className="h-3 w-3" />
+                          {leaderboard[1]?.feedbackCount || 0}
+                        </span>
+                        <span className="flex items-center gap-0.5">
+                          <Award className="h-3 w-3" />
+                          {leaderboard[1]?.badgeCount || 0}
+                        </span>
+                      </div>
+                      
+                      {/* Podium Stand */}
+                      <div className="w-full mt-3 bg-gradient-to-t from-slate-600 to-slate-500 rounded-t-xl pt-6 pb-3 text-center shadow-lg">
+                        <span className="text-2xl md:text-3xl font-bold text-white">2</span>
+                      </div>
+                    </motion.div>
 
-                  {/* 1st Place */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ delay: 0.1, type: 'spring' }}
-                    className="order-0 md:order-1"
-                  >
-                    <Card className={`relative overflow-hidden w-36 md:w-44 bg-gradient-to-b ${podiumColors[1].bg} ${podiumColors[1].border} ${podiumColors[1].glow}`}>
-                      <div className="absolute inset-0 bg-gradient-to-t from-yellow-400/10 to-transparent" />
-                      <motion.div 
-                        className="absolute top-3 left-1/2 -translate-x-1/2"
-                        animate={{ rotate: [0, 5, -5, 0], scale: [1, 1.1, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
+                    {/* 1st Place */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+                      className="flex flex-col items-center -mt-8"
+                    >
+                      {/* Crown */}
+                      <motion.div
+                        animate={{ y: [0, -5, 0], rotate: [0, 3, -3, 0] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        className="mb-2"
                       >
-                        <Crown className={`h-8 w-8 ${podiumColors[1].text} drop-shadow-lg`} />
+                        <Crown className="h-8 w-8 md:h-10 md:w-10 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
                       </motion.div>
-                      <CardContent className="pt-14 pb-4 px-3 text-center relative">
-                        <div className={`relative mx-auto mb-3 ring-4 ${podiumColors[1].ring} rounded-full`}>
-                          <Avatar className="h-20 w-20 md:h-24 md:w-24">
-                            <AvatarImage src={leaderboard[0]?.image || ''} />
-                            <AvatarFallback className="bg-yellow-500 text-white text-xl">
-                              {getInitials(leaderboard[0]?.name || '')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <motion.div
-                            className="absolute -top-1 -right-1"
-                            animate={{ scale: [1, 1.3, 1] }}
-                            transition={{ duration: 1.5, repeat: Infinity }}
-                          >
-                            <Sparkles className="h-5 w-5 text-yellow-400" />
-                          </motion.div>
-                        </div>
-                        <p className="font-bold truncate">{leaderboard[0]?.name}</p>
-                        <div className="flex items-center justify-center gap-1 mt-1">
-                          <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold text-xl">{formatNumber(leaderboard[0]?.points || 0)}</span>
-                        </div>
-                        <Badge className="mt-2 bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
-                          Lv. {leaderboard[0]?.level}
-                        </Badge>
-                        <div className={`mt-3 py-3 px-4 rounded-lg bg-yellow-500/20 ${podiumColors[1].text} font-bold text-3xl`}>
-                          1
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-
-                  {/* 3rd Place */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 50 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="order-2"
-                  >
-                    <Card className={`relative overflow-hidden w-32 md:w-40 bg-gradient-to-b ${podiumColors[3].bg} ${podiumColors[3].border} ${podiumColors[3].glow}`}>
-                      <div className="absolute top-2 right-2">
-                        <Medal className={`h-6 w-6 ${podiumColors[3].text}`} />
+                      
+                      {/* Avatar */}
+                      <div className="relative mb-2">
+                        <motion.div
+                          animate={{ scale: [1, 1.05, 1] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="absolute inset-0 bg-yellow-400/30 rounded-full blur-xl"
+                        />
+                        <Avatar className="relative h-20 w-20 md:h-28 md:w-28 ring-4 ring-yellow-400 shadow-2xl shadow-yellow-500/30">
+                          <AvatarImage src={leaderboard[0]?.image || ''} />
+                          <AvatarFallback className="bg-gradient-to-br from-yellow-400 to-amber-600 text-white text-xl md:text-2xl">
+                            {getInitials(leaderboard[0]?.name || '')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <motion.div
+                          animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="absolute -top-1 -right-1"
+                        >
+                          <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-yellow-400" />
+                        </motion.div>
                       </div>
-                      <CardContent className="pt-8 pb-4 px-3 text-center">
-                        <div className={`relative mx-auto mb-3 ring-4 ${podiumColors[3].ring} rounded-full`}>
-                          <Avatar className="h-16 w-16 md:h-20 md:w-20">
-                            <AvatarImage src={leaderboard[2]?.image || ''} />
-                            <AvatarFallback className="bg-amber-600 text-white">
-                              {getInitials(leaderboard[2]?.name || '')}
-                            </AvatarFallback>
-                          </Avatar>
+                      
+                      <p className="font-bold text-base md:text-lg truncate max-w-[110px] md:max-w-[140px] text-center">
+                        {leaderboard[0]?.name}
+                      </p>
+                      
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Star className="h-5 w-5 md:h-6 md:w-6 text-yellow-500 fill-yellow-500" />
+                        <span className="font-bold text-xl md:text-2xl text-yellow-500">{formatNumber(leaderboard[0]?.points || 0)}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          {leaderboard[0]?.feedbackCount || 0}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Award className="h-3.5 w-3.5" />
+                          {leaderboard[0]?.badgeCount || 0}
+                        </span>
+                      </div>
+                      
+                      <Badge className="mt-2 bg-yellow-500/20 text-yellow-500 border-yellow-500/30">
+                        Lv. {leaderboard[0]?.level} · {getLeague(leaderboard[0]?.level || 1)}
+                      </Badge>
+                      
+                      {/* Podium Stand */}
+                      <div className="w-full mt-3 bg-gradient-to-t from-yellow-600 to-yellow-500 rounded-t-xl pt-8 pb-4 text-center shadow-xl shadow-yellow-500/20">
+                        <span className="text-3xl md:text-4xl font-bold text-white">1</span>
+                      </div>
+                    </motion.div>
+
+                    {/* 3rd Place */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="flex flex-col items-center"
+                    >
+                      {/* Avatar & Info Card */}
+                      <div className="relative mb-2">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                          <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-full p-1.5 shadow-lg">
+                            <Medal className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                          </div>
                         </div>
-                        <p className="font-bold truncate text-sm">{leaderboard[2]?.name}</p>
-                        <div className="flex items-center justify-center gap-1 mt-1">
-                          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold text-lg">{formatNumber(leaderboard[2]?.points || 0)}</span>
-                        </div>
-                        <Badge variant="outline" className="mt-2 text-xs">
-                          Lv. {leaderboard[2]?.level}
-                        </Badge>
-                        <div className={`mt-3 py-2 px-4 rounded-lg bg-amber-600/20 ${podiumColors[3].text} font-bold text-2xl`}>
-                          3
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </div>
+                        <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-4 ring-amber-600/50 shadow-xl">
+                          <AvatarImage src={leaderboard[2]?.image || ''} />
+                          <AvatarFallback className="bg-gradient-to-br from-amber-500 to-orange-600 text-white text-lg md:text-xl">
+                            {getInitials(leaderboard[2]?.name || '')}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                      
+                      <p className="font-bold text-sm md:text-base truncate max-w-[100px] md:max-w-[120px] text-center">
+                        {leaderboard[2]?.name}
+                      </p>
+                      
+                      <div className="flex items-center gap-1 mt-1">
+                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                        <span className="font-bold text-base md:text-lg">{formatNumber(leaderboard[2]?.points || 0)}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-0.5">
+                          <MessageSquare className="h-3 w-3" />
+                          {leaderboard[2]?.feedbackCount || 0}
+                        </span>
+                        <span className="flex items-center gap-0.5">
+                          <Award className="h-3 w-3" />
+                          {leaderboard[2]?.badgeCount || 0}
+                        </span>
+                      </div>
+                      
+                      {/* Podium Stand */}
+                      <div className="w-full mt-3 bg-gradient-to-t from-amber-700 to-amber-600 rounded-t-xl pt-4 pb-3 text-center shadow-lg">
+                        <span className="text-2xl md:text-3xl font-bold text-white">3</span>
+                      </div>
+                    </motion.div>
+                  </div>
+                </motion.div>
               )}
 
               {/* Rest of Leaderboard */}
-              <Card className="border-border/50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-primary" />
-                    Sıralama
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y divide-border/50">
-                    <AnimatePresence>
-                      {leaderboard.slice(3).map((user, index) => (
-                        <motion.div
-                          key={user.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.03 }}
-                          className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${
-                            user.isCurrentUser ? 'bg-primary/5 border-l-4 border-l-primary' : ''
-                          }`}
-                        >
-                          {/* Rank */}
-                          <div className="w-10 text-center">
-                            <span className={`text-lg font-bold ${
-                              user.rank <= 10 ? 'text-primary' : 'text-muted-foreground'
-                            }`}>
-                              #{user.rank}
-                            </span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <Trophy className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-bold">Sıralama</h3>
+                  <Badge variant="secondary" className="ml-auto">
+                    {leaderboard.length} Oyuncu
+                  </Badge>
+                </div>
+                
+                <AnimatePresence>
+                  {leaderboard.slice(3).map((user, index) => {
+                    const isTop10 = user.rank <= 10;
+                    const rankColors = {
+                      4: 'from-violet-500/20 to-purple-500/10 border-violet-500/30',
+                      5: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30',
+                      6: 'from-emerald-500/20 to-green-500/10 border-emerald-500/30',
+                      7: 'from-teal-500/20 to-cyan-500/10 border-teal-500/30',
+                      8: 'from-indigo-500/20 to-blue-500/10 border-indigo-500/30',
+                      9: 'from-pink-500/20 to-rose-500/10 border-pink-500/30',
+                      10: 'from-orange-500/20 to-amber-500/10 border-orange-500/30',
+                    };
+                    const bgClass = isTop10 
+                      ? rankColors[user.rank as keyof typeof rankColors] || 'from-slate-500/10 to-slate-500/5 border-slate-500/20'
+                      : 'from-slate-500/5 to-transparent border-border/50';
+                    
+                    return (
+                      <motion.div
+                        key={user.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.03 }}
+                        whileHover={{ scale: 1.01, y: -2 }}
+                        className={`relative overflow-hidden rounded-xl border bg-gradient-to-r ${bgClass} ${
+                          user.isCurrentUser ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+                        }`}
+                      >
+                        {/* Glow effect for top 10 */}
+                        {isTop10 && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 opacity-50" />
+                        )}
+                        
+                        <div className="relative flex items-center gap-4 p-4">
+                          {/* Rank Badge */}
+                          <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${
+                            isTop10 
+                              ? 'bg-gradient-to-br from-primary/20 to-primary/10 text-primary border border-primary/30' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            #{user.rank}
                           </div>
 
                           {/* Avatar */}
-                          <Avatar className="h-12 w-12 ring-2 ring-border">
-                            <AvatarImage src={user.image || ''} />
-                            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white">
-                              {getInitials(user.name || '')}
-                            </AvatarFallback>
-                          </Avatar>
-
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <p className={`font-medium truncate ${user.isCurrentUser ? 'text-primary' : ''}`}>
-                              {user.isCurrentUser ? `${user.name} (Siz)` : user.name}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Badge variant="outline" className="text-xs h-5">
-                                Lv. {user.level}
-                              </Badge>
-                              <span>{getLeague(user.level)}</span>
-                            </div>
-                          </div>
-
-                          {/* Change */}
-                          <div className="flex items-center gap-1">
-                            {getChangeIcon(user.change)}
-                            {user.change !== 0 && (
-                              <span className={`text-xs ${user.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                {Math.abs(user.change)}
-                              </span>
+                          <div className="relative">
+                            <Avatar className={`h-14 w-14 ${isTop10 ? 'ring-2 ring-primary/50' : 'ring-2 ring-border'}`}>
+                              <AvatarImage src={user.image || ''} />
+                              <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-lg">
+                                {getInitials(user.name || '')}
+                              </AvatarFallback>
+                            </Avatar>
+                            {user.isCurrentUser && (
+                              <div className="absolute -top-1 -right-1 bg-primary rounded-full p-1">
+                                <Sparkles className="h-3 w-3 text-white" />
+                              </div>
                             )}
                           </div>
 
-                          {/* Points */}
-                          <div className="text-right">
-                            <div className="flex items-center gap-1">
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                              <span className="font-bold">{formatNumber(user.points)}</span>
+                          {/* User Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className={`font-semibold truncate ${user.isCurrentUser ? 'text-primary' : ''}`}>
+                                {user.name}
+                              </p>
+                              {user.isCurrentUser && (
+                                <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">
+                                  Siz
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <Badge variant="outline" className="text-xs h-5 gap-1">
+                                <Zap className="h-3 w-3" />
+                                Lv. {user.level}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground hidden sm:inline">
+                                {getLeague(user.level)} Lig
+                              </span>
                             </div>
                           </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
-                </CardContent>
-              </Card>
+
+                          {/* Stats */}
+                          <div className="hidden md:flex flex-col items-center gap-1 px-4 border-l border-border/50">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1 text-sm">
+                                <MessageSquare className="h-4 w-4 text-blue-500" />
+                                <span className="font-medium">{user.feedbackCount || 0}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-sm">
+                                <Award className="h-4 w-4 text-amber-500" />
+                                <span className="font-medium">{user.badgeCount || 0}</span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground">Feedback / Rozet</span>
+                          </div>
+
+                          {/* Points */}
+                          <div className="flex flex-col items-end gap-1 pl-4 border-l border-border/50">
+                            <div className="flex items-center gap-1.5">
+                              <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                              <span className="text-xl font-bold">{formatNumber(user.points)}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">puan</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
 
               {/* Empty State */}
               {leaderboard.length === 0 && (

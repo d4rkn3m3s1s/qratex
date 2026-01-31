@@ -811,6 +811,124 @@ async function main() {
 
   console.log('✅ User badges assigned');
 
+  // ─────────────────────────────────────────────────────────────
+  // CREATE DONATION PROJECTS
+  // ─────────────────────────────────────────────────────────────
+  const donationProjects = await Promise.all([
+    prisma.donationProject.upsert({
+      where: { id: 'project-clean-water' },
+      update: {},
+      create: {
+        id: 'project-clean-water',
+        name: 'Temiz Su Projesi',
+        description: 'Afrika köylerinde temiz su kuyuları açarak binlerce insanın hayatını değiştiriyoruz. Her 100 puan = 10 litre temiz su.',
+        icon: '💧',
+        category: 'water',
+        goal: 10000,
+        current: 3250,
+        impact: { unit: 'litre', perPoint: 0.1, label: 'Temiz Su' },
+        tags: ['Temel İhtiyaç', 'Afrika', 'Sürdürülebilir'],
+        isFeatured: true,
+      },
+    }),
+    prisma.donationProject.upsert({
+      where: { id: 'project-education' },
+      update: {},
+      create: {
+        id: 'project-education',
+        name: 'Eğitim Bursu',
+        description: 'Dezavantajlı öğrencilere eğitim bursu sağlayarak geleceğe yatırım yapıyoruz. Her 500 puan = 1 öğrenci için 1 aylık eğitim desteği.',
+        icon: '📚',
+        category: 'education',
+        goal: 25000,
+        current: 8750,
+        impact: { unit: 'öğrenci', perPoint: 0.002, label: 'Eğitim Desteği' },
+        tags: ['Eğitim', 'Gençlik', 'Fırsat Eşitliği'],
+        isFeatured: true,
+      },
+    }),
+    prisma.donationProject.upsert({
+      where: { id: 'project-tree-planting' },
+      update: {},
+      create: {
+        id: 'project-tree-planting',
+        name: 'Fidan Dikimi',
+        description: 'Ormanlarımızı yeniden yeşertiyoruz. Her 200 puan = 1 fidan dikimi. Geleceğe nefes olun!',
+        icon: '🌳',
+        category: 'environment',
+        goal: 15000,
+        current: 6420,
+        impact: { unit: 'fidan', perPoint: 0.005, label: 'Dikilen Fidan' },
+        tags: ['Çevre', 'İklim', 'Yeşil Gelecek'],
+        isFeatured: false,
+      },
+    }),
+    prisma.donationProject.upsert({
+      where: { id: 'project-animal-shelter' },
+      update: {},
+      create: {
+        id: 'project-animal-shelter',
+        name: 'Hayvan Barınağı Desteği',
+        description: 'Sokak hayvanlarına yiyecek ve barınak sağlıyoruz. Her 50 puan = 1 kg mama.',
+        icon: '🐾',
+        category: 'animals',
+        goal: 8000,
+        current: 2150,
+        impact: { unit: 'kg mama', perPoint: 0.02, label: 'Hayvan Maması' },
+        tags: ['Hayvan Hakları', 'Sokak Hayvanları', 'Barınak'],
+        isFeatured: false,
+      },
+    }),
+    prisma.donationProject.upsert({
+      where: { id: 'project-health-support' },
+      update: {},
+      create: {
+        id: 'project-health-support',
+        name: 'Sağlık Yardımı',
+        description: 'İhtiyaç sahibi ailelere sağlık desteği sağlıyoruz. Her 1000 puan = 1 sağlık paketi.',
+        icon: '🏥',
+        category: 'health',
+        goal: 20000,
+        current: 4500,
+        impact: { unit: 'paket', perPoint: 0.001, label: 'Sağlık Paketi' },
+        tags: ['Sağlık', 'Destek', 'Acil Yardım'],
+        isFeatured: false,
+      },
+    }),
+  ]);
+
+  console.log('✅ Donation projects created:', donationProjects.length);
+
+  // Create some sample donations
+  await prisma.donation.createMany({
+    data: [
+      {
+        userId: admin.id,
+        projectId: 'project-clean-water',
+        points: 500,
+        message: 'Temiz su herkesin hakkı!',
+        isPublic: true,
+      },
+      {
+        userId: admin.id,
+        projectId: 'project-education',
+        points: 750,
+        message: 'Eğitim en büyük yatırım.',
+        isPublic: true,
+      },
+      {
+        userId: customer.id,
+        projectId: 'project-tree-planting',
+        points: 100,
+        message: 'Yeşil bir gelecek için!',
+        isPublic: true,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Sample donations created');
+
   console.log('');
   console.log('🎉 Database seeded successfully!');
   console.log('');

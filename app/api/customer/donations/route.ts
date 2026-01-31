@@ -1,0 +1,228 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/lib/auth';
+
+// Force dynamic rendering - disable caching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+// GET - Fetch projects and user donation stats
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get('category');
+
+    // Fetch user's current points from database (not session - for real-time data)
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { points: true },
+    });
+
+    // Fetch active projects
+    const projects = await prisma.donationProject.findMany({
+      where: {
+        isActive: true,
+        ...(category && category !== 'all' ? { category } : {}),
+      },
+      orderBy: [
+        { isFeatured: 'desc' },
+        { createdAt: 'desc' },
+      ],
+    });
+
+    // Fetch user's total donations
+    const userDonations = await prisma.donation.aggregate({
+      where: { userId: session.user.id },
+      _sum: { points: true },
+      _count: true,
+    });
+
+    // Fetch user's donations by project
+    const userDonationsByProject = await prisma.donation.groupBy({
+      by: ['projectId'],
+      where: { userId: session.user.id },
+      _sum: { points: true },
+    });
+
+    // Fetch top donors (leaderboard)
+    const topDonors = await prisma.donation.groupBy({
+      by: ['userId'],
+      where: { isPublic: true },
+      _sum: { points: true },
+      orderBy: { _sum: { points: 'desc' } },
+      take: 10,
+    });
+
+    // Get user details for top donors
+    const donorIds = topDonors.map(d => d.userId);
+    const donorUsers = await prisma.user.findMany({
+      where: { id: { in: donorIds } },
+      select: { id: true, name: true, image: true, level: true },
+    });
+
+    const leaderboard = topDonors.map((donor, index) => {
+      const user = donorUsers.find(u => u.id === donor.userId);
+      return {
+        rank: index + 1,
+        userId: donor.userId,
+        name: user?.name || 'Anonim',
+        image: user?.image,
+        level: user?.level || 1,
+        totalPoints: donor._sum.points || 0,
+      };
+    });
+
+    // Calculate user's rank
+    const userRank = leaderboard.findIndex(d => d.userId === session.user.id) + 1;
+
+    // Total platform impact
+    const totalDonations = await prisma.donation.aggregate({
+      _sum: { points: true },
+    });
+
+    // Recent donations (activity feed)
+    const recentDonations = await prisma.donation.findMany({
+      where: { isPublic: true },
+      include: {
+        user: { select: { name: true, image: true } },
+        project: { select: { name: true, icon: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        projects: projects.map(p => ({
+          ...p,
+          userDonation: userDonationsByProject.find(d => d.projectId === p.id)?._sum.points || 0,
+        })),
+        userStats: {
+          totalDonated: userDonations._sum.points || 0,
+          donationCount: userDonations._count || 0,
+          rank: userRank || null,
+          availablePoints: currentUser?.points || 0,
+        },
+        leaderboard,
+        platformStats: {
+          totalDonated: totalDonations._sum.points || 0,
+          totalProjects: projects.length,
+        },
+        recentDonations: recentDonations.map(d => ({
+          id: d.id,
+          userName: d.user.name,
+          userImage: d.user.image,
+          projectName: d.project.name,
+          projectIcon: d.project.icon,
+          points: d.points,
+          createdAt: d.createdAt,
+        })),
+      },
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
+  } catch (error) {
+    console.error('Donations GET error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { 
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    });
+  }
+}
+
+// POST - Make a donation
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { projectId, points, message, isPublic = true } = body;
+
+    if (!projectId || !points || points < 1) {
+      return NextResponse.json({ error: 'Geçersiz bağış bilgisi' }, { status: 400 });
+    }
+
+    // Check user has enough points
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { points: true },
+    });
+
+    if (!user || user.points < points) {
+      return NextResponse.json({ error: 'Yetersiz puan' }, { status: 400 });
+    }
+
+    // Check project exists and is active
+    const project = await prisma.donationProject.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project || !project.isActive) {
+      return NextResponse.json({ error: 'Proje bulunamadı' }, { status: 404 });
+    }
+
+    // Create donation and update points in a transaction
+    const [donation] = await prisma.$transaction([
+      prisma.donation.create({
+        data: {
+          userId: session.user.id,
+          projectId,
+          points,
+          message,
+          isPublic,
+        },
+      }),
+      prisma.user.update({
+        where: { id: session.user.id },
+        data: { points: { decrement: points } },
+      }),
+      prisma.donationProject.update({
+        where: { id: projectId },
+        data: { current: { increment: points } },
+      }),
+      // Create notification
+      prisma.notification.create({
+        data: {
+          userId: session.user.id,
+          title: 'Bağış Başarılı! 🎉',
+          message: `${project.name} projesine ${points} puan bağışladınız. Teşekkürler!`,
+          type: 'success',
+        },
+      }),
+    ]);
+
+    // Calculate impact
+    const impact = project.impact as { unit: string; perPoint: number; label: string };
+    const impactValue = Math.floor(points * (impact?.perPoint || 1));
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        donation,
+        impact: {
+          value: impactValue,
+          unit: impact?.unit || 'birim',
+          label: impact?.label || 'Etki',
+        },
+        newBalance: user.points - points,
+      },
+    });
+  } catch (error) {
+    console.error('Donations POST error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

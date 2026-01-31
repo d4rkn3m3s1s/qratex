@@ -254,10 +254,10 @@ export default function CustomerDashboard() {
 
         {/* Action Buttons */}
         {[
-          { href: '/customer/scan', icon: QrCode, label: 'QR Tara', color: 'from-violet-500 to-purple-600' },
-          { href: '/customer/quests', icon: Target, label: 'Görevler', color: 'from-orange-500 to-amber-600' },
-          { href: '/customer/badges', icon: Trophy, label: 'Rozetler', color: 'from-yellow-500 to-orange-600' },
-          { href: '/customer/rewards', icon: Gift, label: 'Ödüller', color: 'from-pink-500 to-rose-600' },
+          { href: '/customer/scan', icon: QrCode, label: 'QR Tara', desc: 'Puan kazan', color: 'from-violet-500 to-purple-600' },
+          { href: '/customer/quests', icon: Target, label: 'Görevler', desc: 'Günlük hedefler', color: 'from-orange-500 to-amber-600' },
+          { href: '/customer/badges', icon: Trophy, label: 'Rozetler', desc: 'Koleksiyonun', color: 'from-yellow-500 to-orange-600' },
+          { href: '/customer/rewards', icon: Gift, label: 'Ödüller', desc: 'Puanını harca', color: 'from-pink-500 to-rose-600' },
         ].map((action, index) => (
           <motion.div
             key={action.href}
@@ -271,6 +271,7 @@ export default function CustomerDashboard() {
                   <action.icon className="w-6 h-6 text-white" />
                 </div>
                 <span className="text-sm font-medium">{action.label}</span>
+                <span className="text-xs text-muted-foreground mt-0.5">{action.desc}</span>
               </Card>
             </Link>
           </motion.div>

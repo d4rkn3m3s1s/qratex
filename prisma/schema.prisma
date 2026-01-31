@@ -44,6 +44,7 @@ model User {
   uploads       FileUpload[]
   analytics     AnalyticsEvent[]
   auditLogs     AuditLog[]
+  donations     Donation[]
 
   // Dealer specific
   businessName  String?
@@ -427,3 +428,47 @@ model Coupon {
   @@index([isActive])
 }
 
+// ─────────────────────────────────────────────────────────────
+// SOCIAL RESPONSIBILITY / DONATION MODELS
+// ─────────────────────────────────────────────────────────────
+
+model DonationProject {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @db.Text
+  icon        String   // Emoji or icon path
+  category    String   // water, education, environment, animals, health
+  goal        Int      // Target points
+  current     Int      @default(0) // Current collected points
+  impact      Json     // { unit: "litre", perPoint: 10, label: "Temiz Su" }
+  tags        Json?    // ["Temel İhtiyaç", "Afrika"]
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  startDate   DateTime @default(now())
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  donations Donation[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([isFeatured])
+}
+
+model Donation {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  points    Int      // Points donated
+  message   String?  // Optional message
+  isPublic  Boolean  @default(true) // Show in leaderboard
+  createdAt DateTime @default(now())
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+}

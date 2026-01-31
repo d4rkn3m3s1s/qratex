@@ -154,7 +154,12 @@ export default function HomePage() {
     // Fetch background effect from API
     const fetchBackground = async () => {
       try {
-        const res = await fetch('/api/settings/background');
+        const res = await fetch('/api/settings/background', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        });
         if (res.ok) {
           const data = await res.json();
           if (data.backgroundEffect) {

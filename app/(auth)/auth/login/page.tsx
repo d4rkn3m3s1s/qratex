@@ -135,7 +135,8 @@ function LoginPageContent() {
           description: 'Veritabanı seed edilmemiş olabilir',
         });
       } else {
-        toast.success(`${account.label} olarak giriş yapıldı!`);
+        const label = account.label;
+        toast.success(label + ' olarak giriş yapıldı!');
         
         // Route based on role
         const roleRoutes = {

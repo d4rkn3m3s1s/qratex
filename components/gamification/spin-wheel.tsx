@@ -75,6 +75,20 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
   const spinWheel = async () => {
     if (isSpinning || disabled || !canSpin) return;
 
+    // Önce sunucudan kontrol et
+    try {
+      const checkRes = await fetch('/api/gamification/spin');
+      const checkData = await checkRes.json();
+      
+      if (!checkData.canSpin) {
+        setCanSpin(false);
+        toast.error('Bugün zaten çevirdiniz! Yarın tekrar gelin.');
+        return;
+      }
+    } catch (error) {
+      console.error('Spin check failed:', error);
+    }
+
     setIsSpinning(true);
     setSelectedPrize(null);
     setShowResult(false);
@@ -130,7 +144,7 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
 
   const saveSpin = async (prize: Prize) => {
     try {
-      await fetch('/api/gamification/spin', {
+      const res = await fetch('/api/gamification/spin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,8 +153,27 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
           prizeLabel: prize.label,
         }),
       });
+
+      const data = await res.json();
+
+      if (data.success) {
+        if (prize.type === 'points') {
+          toast.success(`🎉 ${prize.value} puan hesabına eklendi!`);
+        } else if (prize.type === 'xp') {
+          toast.success(`⚡ ${prize.value} XP kazandın!`);
+        } else if (prize.type === 'multiplier') {
+          toast.success(`🚀 ${prize.value}x bonus aktif!`);
+        }
+      } else {
+        toast.error(data.error || 'Ödül kaydedilemedi');
+        // Eğer zaten bugün çevirmişse canSpin'i güncelle
+        if (data.canSpin === false) {
+          setCanSpin(false);
+        }
+      }
     } catch (error) {
       console.error('Failed to save spin:', error);
+      toast.error('Bağlantı hatası - ödül kaydedilemedi');
     }
   };
 
