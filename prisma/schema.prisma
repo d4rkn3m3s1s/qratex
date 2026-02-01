@@ -565,7 +565,9 @@ model ConsumptionReview {
   updatedAt     DateTime @updatedAt
 
   consumption Consumption @relation(fields: [consumptionId], references: [id], onDelete: Cascade)
-  customer    User        @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)  @@index([consumptionId])
+  customer    User        @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([consumptionId])
   @@index([customerId])
   @@index([rating])
   @@index([createdAt])
