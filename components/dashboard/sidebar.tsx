@@ -88,6 +88,7 @@ const customerNavItems: NavItem[] = [
   { href: '/customer/scan', label: 'QR Tara', icon: QrCode },
   { href: '/customer/feedbacks', label: 'Geri Bildirimlerim', icon: MessageSquare },
   { href: '/customer/trends', label: 'Trend Analizi', icon: TrendingUp },
+  { href: '/customer/analytics', label: 'Kişisel Analitik', icon: BarChart3 },
   { href: '/customer/badges', label: 'Rozetlerim', icon: Trophy },
   { href: '/customer/quests', label: 'Görevler', icon: Target },
   { href: '/customer/rewards', label: 'Ödüller', icon: Gift },
