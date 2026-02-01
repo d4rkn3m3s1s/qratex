@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import {
   MessageSquare,
   Star,
@@ -10,14 +11,22 @@ import {
   ThumbsUp,
   ThumbsDown,
   Meh,
+  Coffee,
+  Gift,
+  TrendingUp,
+  Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { formatRelativeTime, getSentimentColor } from '@/lib/utils';
+import { formatRelativeTime, getSentimentColor, formatCurrency } from '@/lib/utils';
 
-interface Feedback {
+// QR Based Feedback
+interface QRFeedback {
   id: string;
   rating: number;
   text: string | null;
@@ -29,41 +38,74 @@ interface Feedback {
   };
 }
 
+// Consumption Review
+interface ConsumptionReview {
+  id: string;
+  rating: number;
+  text: string | null;
+  dimensions: any | null;
+  createdAt: string;
+  consumption: {
+    id: string;
+    amount: number | null;
+    createdAt: string;
+    dealer: {
+      id: string;
+      name: string;
+      businessName: string | null;
+      businessLogo: string | null;
+    };
+    product: {
+      id: string;
+      name: string;
+      category: {
+        name: string;
+        icon: string;
+      } | null;
+    } | null;
+  };
+}
+
 export default function CustomerFeedbacksPage() {
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [qrFeedbacks, setQRFeedbacks] = useState<QRFeedback[]>([]);
+  const [consumptionReviews, setConsumptionReviews] = useState<ConsumptionReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('consumption');
 
   useEffect(() => {
-    fetchFeedbacks();
+    fetchAllFeedbacks();
   }, []);
 
-  const fetchFeedbacks = async () => {
+  const fetchAllFeedbacks = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/feedbacks');
-      const data = await res.json();
+      
+      // Fetch both types in parallel
+      const [qrRes, reviewRes] = await Promise.all([
+        fetch('/api/feedbacks'),
+        fetch('/api/customer/reviews'),
+      ]);
+      
+      const qrData = await qrRes.json();
+      const reviewData = await reviewRes.json();
 
-      if (data.items) {
-        // Format data for display
-        const formattedFeedbacks = data.items.map((f: {
-          id: string;
-          rating: number;
-          text: string | null;
-          sentiment: string | null;
-          createdAt: string;
-          qrCode: { name: string; code: string };
-        }) => ({
+      if (qrData.items) {
+        const formattedFeedbacks = qrData.items.map((f: any) => ({
           id: f.id,
           rating: f.rating,
           text: f.text,
           sentiment: f.sentiment,
           createdAt: f.createdAt,
           qrCode: {
-            name: f.qrCode.name,
-            businessName: f.qrCode.name, // QR code name as business name
+            name: f.qrCode?.name || 'QR',
+            businessName: f.qrCode?.name || 'İşletme',
           },
         }));
-        setFeedbacks(formattedFeedbacks);
+        setQRFeedbacks(formattedFeedbacks);
+      }
+
+      if (reviewData.success && reviewData.reviews) {
+        setConsumptionReviews(reviewData.reviews);
       }
     } catch (error) {
       toast.error('Geri bildirimler yüklenemedi');
@@ -96,23 +138,32 @@ export default function CustomerFeedbacksPage() {
     }
   };
 
-  const stats = {
-    total: feedbacks.length,
-    avgRating:
-      feedbacks.length > 0
-        ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1)
-        : '0',
-  };
+  const totalFeedbacks = qrFeedbacks.length + consumptionReviews.length;
+  const allRatings = [
+    ...qrFeedbacks.map(f => f.rating),
+    ...consumptionReviews.map(r => r.rating),
+  ];
+  const avgRating = allRatings.length > 0
+    ? (allRatings.reduce((acc, r) => acc + r, 0) / allRatings.length).toFixed(1)
+    : '0';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <DashboardHeader
         title="Geri Bildirimlerim"
-        description="Gönderdiğiniz tüm geri bildirimleri görüntüleyin"
+        description="Gönderdiğiniz tüm geri bildirimleri ve yorumları görüntüleyin"
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card glass>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -120,7 +171,7 @@ export default function CustomerFeedbacksPage() {
                 <MessageSquare className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-2xl font-bold">{totalFeedbacks}</p>
                 <p className="text-xs text-muted-foreground">Toplam</p>
               </div>
             </div>
@@ -133,96 +184,191 @@ export default function CustomerFeedbacksPage() {
                 <Star className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{stats.avgRating}</p>
+                <p className="text-2xl font-bold">{avgRating}</p>
                 <p className="text-xs text-muted-foreground">Ort. Puan</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card glass>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-green-500/10">
+                <Gift className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{consumptionReviews.length * 50}+</p>
+                <p className="text-xs text-muted-foreground">Kazanılan Puan</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Feedbacks List */}
-      <div className="space-y-4">
-        {loading ? (
-          [...Array(5)].map((_, i) => (
-            <Card key={i} glass>
-              <CardContent className="p-4">
-                <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-muted rounded w-1/3" />
-                  <div className="h-3 bg-muted rounded w-2/3" />
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="consumption" className="gap-2">
+            <Coffee className="h-4 w-4" />
+            Tüketim Yorumları ({consumptionReviews.length})
+          </TabsTrigger>
+          <TabsTrigger value="qr" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            QR Geri Bildirimleri ({qrFeedbacks.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Consumption Reviews Tab */}
+        <TabsContent value="consumption" className="space-y-4 mt-4">
+          {consumptionReviews.length === 0 ? (
+            <Card glass>
+              <CardContent className="p-8 text-center">
+                <Coffee className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Henüz tüketim yorumu yapmadınız</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Tüketimlerinize yorum yaparak puan kazanın!
+                </p>
+                <Button asChild className="mt-4">
+                  <Link href="/customer/consumptions?hasReview=false">
+                    Yorum Yap
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
-          ))
-        ) : feedbacks.length === 0 ? (
-          <Card glass>
-            <CardContent className="p-8 text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Henüz geri bildirim göndermediniz</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                QR kod tarayarak ilk geri bildiriminizi gönderin!
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          feedbacks.map((feedback, index) => (
-            <motion.div
-              key={feedback.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card glass hover>
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Building className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{feedback.qrCode.businessName}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {feedback.qrCode.name}
-                        </Badge>
+          ) : (
+            consumptionReviews.map((review, index) => (
+              <motion.div
+                key={review.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card glass hover>
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {review.consumption.dealer.businessName || review.consumption.dealer.name}
+                          </span>
+                          {review.consumption.product && (
+                            <Badge variant="outline" className="text-xs">
+                              {review.consumption.product.category?.icon} {review.consumption.product.name}
+                            </Badge>
+                          )}
+                        </div>
+                        {renderStars(review.rating)}
                       </div>
-                      <div className="flex items-center gap-2">
-                        {renderStars(feedback.rating)}
-                        {getSentimentIcon(feedback.sentiment)}
-                      </div>
-                    </div>
 
-                    {/* Content */}
-                    <p className="text-sm text-muted-foreground">
-                      {feedback.text || 'Yorum yapılmadı'}
-                    </p>
+                      {/* Content */}
+                      <p className="text-sm text-muted-foreground">
+                        {review.text || 'Yorum metni yok'}
+                      </p>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatRelativeTime(feedback.createdAt)}
-                      </div>
-                      {feedback.sentiment && (
-                        <Badge className={getSentimentColor(feedback.sentiment)}>
-                          {feedback.sentiment === 'positive'
-                            ? 'Olumlu'
-                            : feedback.sentiment === 'negative'
-                            ? 'Olumsuz'
-                            : 'Nötr'}
-                        </Badge>
+                      {/* Dimensions */}
+                      {review.dimensions && (
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(review.dimensions).map(([key, value]) => (
+                            <Badge key={key} variant="secondary" className="text-xs">
+                              {key === 'taste' ? 'Lezzet' : 
+                               key === 'service' ? 'Servis' : 
+                               key === 'ambiance' ? 'Ambiyans' : 
+                               key === 'value' ? 'Fiyat/Değer' : key}: {value as number}/5
+                            </Badge>
+                          ))}
+                        </div>
                       )}
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatRelativeTime(review.createdAt)}
+                        </div>
+                        {review.consumption.amount && (
+                          <Badge variant="outline">
+                            {formatCurrency(review.consumption.amount)}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))
-        )}
-      </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))
+          )}
+        </TabsContent>
+
+        {/* QR Feedbacks Tab */}
+        <TabsContent value="qr" className="space-y-4 mt-4">
+          {qrFeedbacks.length === 0 ? (
+            <Card glass>
+              <CardContent className="p-8 text-center">
+                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">Henüz QR geri bildirimi göndermediniz</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  QR kod tarayarak ilk geri bildiriminizi gönderin!
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            qrFeedbacks.map((feedback, index) => (
+              <motion.div
+                key={feedback.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card glass hover>
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{feedback.qrCode.businessName}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {feedback.qrCode.name}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {renderStars(feedback.rating)}
+                          {getSentimentIcon(feedback.sentiment)}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <p className="text-sm text-muted-foreground">
+                        {feedback.text || 'Yorum yapılmadı'}
+                      </p>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatRelativeTime(feedback.createdAt)}
+                        </div>
+                        {feedback.sentiment && (
+                          <Badge className={getSentimentColor(feedback.sentiment)}>
+                            {feedback.sentiment === 'positive'
+                              ? 'Olumlu'
+                              : feedback.sentiment === 'negative'
+                              ? 'Olumsuz'
+                              : 'Nötr'}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
-
-
-
-

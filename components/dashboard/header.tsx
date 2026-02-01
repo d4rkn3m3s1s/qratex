@@ -179,6 +179,19 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     }
   };
 
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      await signOut({ redirect: false });
+      router.push('/auth/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Fallback: force redirect
+      window.location.href = '/auth/login';
+    }
+  };
+
   // Delete notification
   const deleteNotification = async (notificationId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -415,7 +428,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="cursor-pointer text-destructive focus:text-destructive"
-                onClick={() => signOut({ callbackUrl: '/' })}
+                onClick={handleSignOut}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Çıkış Yap

@@ -193,6 +193,93 @@ export const createCouponSchema = z.object({
 });
 
 // ─────────────────────────────────────────────────────────────
+// PHYSICAL CARD SYSTEM VALIDATIONS
+// ─────────────────────────────────────────────────────────────
+
+export const generateCardsSchema = z.object({
+  quantity: z
+    .number()
+    .min(1, 'En az 1 kart üretilmeli')
+    .max(10000, 'Tek seferde en fazla 10.000 kart üretilebilir'),
+  batchName: z
+    .string()
+    .min(1, 'Batch adı gerekli')
+    .max(100, 'Batch adı en fazla 100 karakter olabilir'),
+  prefix: z
+    .string()
+    .max(10, 'Prefix en fazla 10 karakter olabilir')
+    .regex(/^[A-Z0-9]*$/, 'Prefix sadece büyük harf ve rakam içerebilir')
+    .optional(),
+});
+
+export const activateCardSchema = z.object({
+  token: z.string().min(1, 'Token gerekli'),
+});
+
+export const updateCardStatusSchema = z.object({
+  status: z.enum(['UNUSED', 'ACTIVATED', 'BLOCKED']),
+  blockReason: z.string().max(500).optional(),
+});
+
+export const createConsumptionSchema = z.object({
+  cardToken: z.string().min(1, 'Kart token gerekli'),
+  productId: z.string().optional(),
+  categoryId: z.string().optional(),
+  productName: z.string().max(200).optional(), // Manuel ürün adı
+  amount: z.number().nonnegative('Tutar negatif olamaz').optional(),
+  note: z.string().max(500, 'Not en fazla 500 karakter olabilir').optional(),
+});
+
+export const createConsumptionReviewSchema = z.object({
+  rating: z
+    .number()
+    .min(1, 'Puan 1-5 arasında olmalı')
+    .max(5, 'Puan 1-5 arasında olmalı'),
+  text: z
+    .string()
+    .max(2000, 'Yorum en fazla 2000 karakter olabilir')
+    .optional(),
+  dimensions: z
+    .object({
+      taste: z.number().min(1).max(5).optional(),
+      service: z.number().min(1).max(5).optional(),
+      ambiance: z.number().min(1).max(5).optional(),
+      value: z.number().min(1).max(5).optional(),
+      cleanliness: z.number().min(1).max(5).optional(),
+    })
+    .optional(),
+});
+
+export const createProductCategorySchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Kategori adı gerekli')
+    .max(50, 'Kategori adı en fazla 50 karakter olabilir'),
+  icon: z.string().default('🍽️'),
+  order: z.number().nonnegative().default(0),
+});
+
+export const createProductSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Ürün adı gerekli')
+    .max(100, 'Ürün adı en fazla 100 karakter olabilir'),
+  description: z.string().max(500).optional(),
+  price: z.number().nonnegative('Fiyat negatif olamaz').optional(),
+  categoryId: z.string().min(1, 'Kategori gerekli'),
+  image: z.string().url('Geçerli bir URL girin').optional(),
+});
+
+export const updateProductSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional().nullable(),
+  price: z.number().nonnegative().optional().nullable(),
+  categoryId: z.string().optional(),
+  image: z.string().url().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+// ─────────────────────────────────────────────────────────────
 // TYPE EXPORTS
 // ─────────────────────────────────────────────────────────────
 
@@ -211,3 +298,12 @@ export type CreateMenuItemInput = z.infer<typeof createMenuItemSchema>;
 export type CreatePricingPlanInput = z.infer<typeof createPricingPlanSchema>;
 export type CreateCouponInput = z.infer<typeof createCouponSchema>;
 
+// Physical Card System Types
+export type GenerateCardsInput = z.infer<typeof generateCardsSchema>;
+export type ActivateCardInput = z.infer<typeof activateCardSchema>;
+export type UpdateCardStatusInput = z.infer<typeof updateCardStatusSchema>;
+export type CreateConsumptionInput = z.infer<typeof createConsumptionSchema>;
+export type CreateConsumptionReviewInput = z.infer<typeof createConsumptionReviewSchema>;
+export type CreateProductCategoryInput = z.infer<typeof createProductCategorySchema>;
+export type CreateProductInput = z.infer<typeof createProductSchema>;
+export type UpdateProductInput = z.infer<typeof updateProductSchema>;

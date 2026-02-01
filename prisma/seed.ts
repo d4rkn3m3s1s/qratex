@@ -1,7 +1,18 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, CardStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Güvenli token üretici
+function generateCardToken(prefix?: string): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const tokenLength = 21;
+  let token = '';
+  for (let i = 0; i < tokenLength; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return prefix ? `${prefix}_${token}` : token;
+}
 
 async function main() {
   console.log('🌱 Seeding database...');
@@ -929,6 +940,468 @@ async function main() {
 
   console.log('✅ Sample donations created');
 
+  // ─────────────────────────────────────────────────────────────
+  // PHYSICAL CARD SYSTEM - PRODUCT CATEGORIES
+  // ─────────────────────────────────────────────────────────────
+  const categories = await Promise.all([
+    prisma.productCategory.upsert({
+      where: { id: 'cat-food' },
+      update: {},
+      create: {
+        id: 'cat-food',
+        name: 'Yemekler',
+        icon: '🍽️',
+        order: 1,
+        dealerId: null, // Global kategori
+      },
+    }),
+    prisma.productCategory.upsert({
+      where: { id: 'cat-drinks' },
+      update: {},
+      create: {
+        id: 'cat-drinks',
+        name: 'İçecekler',
+        icon: '🥤',
+        order: 2,
+        dealerId: null,
+      },
+    }),
+    prisma.productCategory.upsert({
+      where: { id: 'cat-desserts' },
+      update: {},
+      create: {
+        id: 'cat-desserts',
+        name: 'Tatlılar',
+        icon: '🍰',
+        order: 3,
+        dealerId: null,
+      },
+    }),
+    prisma.productCategory.upsert({
+      where: { id: 'cat-coffee' },
+      update: {},
+      create: {
+        id: 'cat-coffee',
+        name: 'Kahveler',
+        icon: '☕',
+        order: 4,
+        dealerId: null,
+      },
+    }),
+    prisma.productCategory.upsert({
+      where: { id: 'cat-snacks' },
+      update: {},
+      create: {
+        id: 'cat-snacks',
+        name: 'Atıştırmalıklar',
+        icon: '🍿',
+        order: 5,
+        dealerId: null,
+      },
+    }),
+  ]);
+
+  console.log('✅ Product categories created:', categories.length);
+
+  // ─────────────────────────────────────────────────────────────
+  // PHYSICAL CARD SYSTEM - PRODUCTS
+  // ─────────────────────────────────────────────────────────────
+  const products = await Promise.all([
+    // Yemekler
+    prisma.product.upsert({
+      where: { id: 'prod-burger' },
+      update: {},
+      create: {
+        id: 'prod-burger',
+        name: 'Klasik Burger',
+        description: 'Dana köfte, marul, domates, turşu',
+        price: 180,
+        categoryId: 'cat-food',
+        dealerId: dealer.id,
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: 'prod-pizza' },
+      update: {},
+      create: {
+        id: 'prod-pizza',
+        name: 'Karışık Pizza',
+        description: 'Sucuk, sosis, mantar, biber, mozzarella',
+        price: 220,
+        categoryId: 'cat-food',
+        dealerId: dealer.id,
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: 'prod-pasta' },
+      update: {},
+      create: {
+        id: 'prod-pasta',
+        name: 'Fettuccine Alfredo',
+        description: 'Kremalı makarna, parmesan',
+        price: 160,
+        categoryId: 'cat-food',
+        dealerId: dealer.id,
+      },
+    }),
+    // İçecekler
+    prisma.product.upsert({
+      where: { id: 'prod-cola' },
+      update: {},
+      create: {
+        id: 'prod-cola',
+        name: 'Kola',
+        description: '330ml',
+        price: 35,
+        categoryId: 'cat-drinks',
+        dealerId: dealer.id,
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: 'prod-lemonade' },
+      update: {},
+      create: {
+        id: 'prod-lemonade',
+        name: 'Ev Yapımı Limonata',
+        description: 'Taze sıkılmış',
+        price: 45,
+        categoryId: 'cat-drinks',
+        dealerId: dealer.id,
+      },
+    }),
+    // Kahveler
+    prisma.product.upsert({
+      where: { id: 'prod-latte' },
+      update: {},
+      create: {
+        id: 'prod-latte',
+        name: 'Caffè Latte',
+        description: 'Espresso + süt köpüğü',
+        price: 55,
+        categoryId: 'cat-coffee',
+        dealerId: dealer.id,
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: 'prod-americano' },
+      update: {},
+      create: {
+        id: 'prod-americano',
+        name: 'Americano',
+        description: 'Double shot espresso + su',
+        price: 45,
+        categoryId: 'cat-coffee',
+        dealerId: dealer.id,
+      },
+    }),
+    // Tatlılar
+    prisma.product.upsert({
+      where: { id: 'prod-cheesecake' },
+      update: {},
+      create: {
+        id: 'prod-cheesecake',
+        name: 'San Sebastian Cheesecake',
+        description: 'Yanık cheesecake',
+        price: 85,
+        categoryId: 'cat-desserts',
+        dealerId: dealer.id,
+      },
+    }),
+    prisma.product.upsert({
+      where: { id: 'prod-brownie' },
+      update: {},
+      create: {
+        id: 'prod-brownie',
+        name: 'Brownie',
+        description: 'Dondurma ile servis',
+        price: 75,
+        categoryId: 'cat-desserts',
+        dealerId: dealer.id,
+      },
+    }),
+  ]);
+
+  console.log('✅ Products created:', products.length);
+
+  // ─────────────────────────────────────────────────────────────
+  // PHYSICAL CARD SYSTEM - DEMO CARDS
+  // ─────────────────────────────────────────────────────────────
+  const demoCardBatch = await prisma.cardBatch.upsert({
+    where: { id: 'batch-demo' },
+    update: {},
+    create: {
+      id: 'batch-demo',
+      name: 'Demo Kartlar - Ocak 2024',
+      quantity: 5,
+      prefix: 'DEMO',
+      createdById: admin.id,
+    },
+  });
+
+  console.log('✅ Card batch created:', demoCardBatch.name);
+
+  // Demo kartlar - 1 aktive edilmiş (müşteriye bağlı), 2 boş, 1 bloklu
+  const demoCards = await Promise.all([
+    // Müşteriye bağlı aktif kart
+    prisma.physicalCard.upsert({
+      where: { id: 'card-demo-1' },
+      update: {},
+      create: {
+        id: 'card-demo-1',
+        token: 'DEMO_AktifKartToken12345',
+        batchId: demoCardBatch.id,
+        status: CardStatus.ACTIVATED,
+        customerId: customer.id,
+        activatedAt: new Date(),
+      },
+    }),
+    // Boş kartlar (aktivasyon bekliyor)
+    prisma.physicalCard.upsert({
+      where: { id: 'card-demo-2' },
+      update: {},
+      create: {
+        id: 'card-demo-2',
+        token: 'DEMO_BosKartToken123456',
+        batchId: demoCardBatch.id,
+        status: CardStatus.UNUSED,
+      },
+    }),
+    prisma.physicalCard.upsert({
+      where: { id: 'card-demo-3' },
+      update: {},
+      create: {
+        id: 'card-demo-3',
+        token: 'DEMO_BosKartToken789012',
+        batchId: demoCardBatch.id,
+        status: CardStatus.UNUSED,
+      },
+    }),
+    // Bloklanmış kart
+    prisma.physicalCard.upsert({
+      where: { id: 'card-demo-4' },
+      update: {},
+      create: {
+        id: 'card-demo-4',
+        token: 'DEMO_BlokluKartToken345',
+        batchId: demoCardBatch.id,
+        status: CardStatus.BLOCKED,
+        blockedAt: new Date(),
+        blockReason: 'Demo bloklu kart - test amaçlı',
+      },
+    }),
+    // Test için sabit token'lı kart
+    prisma.physicalCard.upsert({
+      where: { id: 'card-demo-5' },
+      update: {},
+      create: {
+        id: 'card-demo-5',
+        token: 'TEST123',
+        batchId: demoCardBatch.id,
+        status: CardStatus.UNUSED,
+      },
+    }),
+  ]);
+
+  console.log('✅ Physical cards created:', demoCards.length);
+
+  // ─────────────────────────────────────────────────────────────
+  // PHYSICAL CARD SYSTEM - DEMO CONSUMPTION
+  // ─────────────────────────────────────────────────────────────
+  const demoConsumption = await prisma.consumption.upsert({
+    where: { id: 'consumption-demo-1' },
+    update: {},
+    create: {
+      id: 'consumption-demo-1',
+      cardId: 'card-demo-1',
+      customerId: customer.id,
+      dealerId: dealer.id,
+      productId: 'prod-latte',
+      amount: 55,
+      note: 'Demo tüketim kaydı',
+    },
+  });
+
+  console.log('✅ Demo consumption created:', demoConsumption.id);
+
+  // Demo consumption review
+  await prisma.consumptionReview.upsert({
+    where: { id: 'review-demo-1' },
+    update: {},
+    create: {
+      id: 'review-demo-1',
+      consumptionId: demoConsumption.id,
+      customerId: customer.id,
+      rating: 5,
+      text: 'Harika bir latte! Kahve çekirdekleri çok kaliteli.',
+      dimensions: {
+        taste: 5,
+        service: 5,
+        ambiance: 4,
+        value: 4,
+      },
+    },
+  });
+
+  console.log('✅ Demo consumption review created');
+
+  // Card audit log örneği
+  await prisma.cardAuditLog.createMany({
+    data: [
+      {
+        cardId: 'card-demo-1',
+        userId: customer.id,
+        action: 'ACTIVATED',
+        metadata: { source: 'seed' },
+      },
+      {
+        cardId: 'card-demo-1',
+        userId: dealer.id,
+        action: 'CONSUMPTION_ADDED',
+        metadata: { consumptionId: demoConsumption.id },
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Card audit logs created');
+
+  // ─────────────────────────────────────────────────────────────
+  // CREATE VIP TIERS
+  // ─────────────────────────────────────────────────────────────
+  const vipTiers = [
+    {
+      name: 'Bronze',
+      minPoints: 0,
+      multiplier: 1.0,
+      benefits: [
+        { type: 'points', label: '1x puan kazanımı' },
+        { type: 'access', label: 'Temel ödüllere erişim' },
+      ],
+      color: '#CD7F32',
+      icon: '🥉',
+      order: 1,
+    },
+    {
+      name: 'Silver',
+      minPoints: 1000,
+      multiplier: 1.25,
+      benefits: [
+        { type: 'points', label: '1.25x puan kazanımı' },
+        { type: 'access', label: 'Özel ödüllere erişim' },
+        { type: 'support', label: 'Öncelikli destek' },
+      ],
+      color: '#C0C0C0',
+      icon: '🥈',
+      order: 2,
+    },
+    {
+      name: 'Gold',
+      minPoints: 5000,
+      multiplier: 1.5,
+      benefits: [
+        { type: 'points', label: '1.5x puan kazanımı' },
+        { type: 'access', label: 'Premium ödüllere erişim' },
+        { type: 'support', label: 'VIP destek' },
+        { type: 'exclusive', label: 'Özel kampanyalar' },
+      ],
+      color: '#FFD700',
+      icon: '🥇',
+      order: 3,
+    },
+    {
+      name: 'Platinum',
+      minPoints: 15000,
+      multiplier: 2.0,
+      benefits: [
+        { type: 'points', label: '2x puan kazanımı' },
+        { type: 'access', label: 'Tüm ödüllere erişim' },
+        { type: 'support', label: 'Kişisel hesap yöneticisi' },
+        { type: 'exclusive', label: 'Özel etkinlikler' },
+        { type: 'gift', label: 'Yıllık hediye' },
+      ],
+      color: '#E5E4E2',
+      icon: '💎',
+      order: 4,
+    },
+  ];
+
+  for (const tier of vipTiers) {
+    await (prisma as any).vIPTier.upsert({
+      where: { name: tier.name },
+      update: tier,
+      create: tier,
+    });
+  }
+  console.log('✅ VIP tiers created:', vipTiers.length);
+
+  // ─────────────────────────────────────────────────────────────
+  // CREATE HAPPY HOURS
+  // ─────────────────────────────────────────────────────────────
+  await (prisma as any).happyHour.upsert({
+    where: { id: 'hh-lunch-special' },
+    update: {},
+    create: {
+      id: 'hh-lunch-special',
+      dealerId: dealer.id,
+      name: 'Öğle Yemeği Bonusu',
+      description: 'Öğle saatlerinde ekstra puan kazan!',
+      multiplier: 1.5,
+      startTime: '12:00',
+      endTime: '14:00',
+      daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
+      isActive: true,
+    },
+  });
+
+  await (prisma as any).happyHour.upsert({
+    where: { id: 'hh-weekend-special' },
+    update: {},
+    create: {
+      id: 'hh-weekend-special',
+      dealerId: null, // Global
+      name: 'Hafta Sonu Çılgınlığı',
+      description: 'Hafta sonu tüm gün 2x puan!',
+      multiplier: 2.0,
+      startTime: '10:00',
+      endTime: '22:00',
+      daysOfWeek: [0, 6], // Sat-Sun
+      isActive: true,
+    },
+  });
+
+  console.log('✅ Happy hours created');
+
+  // ─────────────────────────────────────────────────────────────
+  // CREATE CUSTOMER STREAK
+  // ─────────────────────────────────────────────────────────────
+  await (prisma as any).userStreak.upsert({
+    where: { userId: customer.id },
+    update: {},
+    create: {
+      userId: customer.id,
+      currentStreak: 5,
+      longestStreak: 12,
+      lastActivityAt: new Date(),
+      totalActiveDays: 45,
+      streakFreezes: 2,
+    },
+  });
+  console.log('✅ User streak created');
+
+  // ─────────────────────────────────────────────────────────────
+  // CREATE REFERRAL CODE
+  // ─────────────────────────────────────────────────────────────
+  await (prisma as any).referralCode.upsert({
+    where: { userId: customer.id },
+    update: {},
+    create: {
+      userId: customer.id,
+      code: 'DEMO2024',
+      usageCount: 3,
+    },
+  });
+  console.log('✅ Referral code created: DEMO2024');
+
   console.log('');
   console.log('🎉 Database seeded successfully!');
   console.log('');
@@ -938,6 +1411,15 @@ async function main() {
   console.log('   │ Dealer:   dealer@qratex.com / Dealer123!│');
   console.log('   │ Customer: customer@qratex.com / Customer123!│');
   console.log('   └─────────────────────────────────────────┘');
+  console.log('');
+  console.log('🎴 Demo Cards:');
+  console.log('   ┌─────────────────────────────────────────────────────┐');
+  console.log('   │ Aktif Kart:  /c/DEMO_AktifKartToken12345 (müşteriye bağlı) │');
+  console.log('   │ Boş Kart 1:  /c/DEMO_BosKartToken123456 (aktivasyon bekliyor) │');
+  console.log('   │ Boş Kart 2:  /c/DEMO_BosKartToken789012 (aktivasyon bekliyor) │');
+  console.log('   │ Test Kart:   /c/TEST123 (kısa test token)  │');
+  console.log('   │ Bloklu Kart: /c/DEMO_BlokluKartToken345 (bloklanmış) │');
+  console.log('   └─────────────────────────────────────────────────────┘');
   console.log('');
 }
 

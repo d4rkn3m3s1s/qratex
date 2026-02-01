@@ -31,6 +31,10 @@ import {
   ToggleLeft,
   TrendingUp,
   Heart,
+  ScanLine,
+  History,
+  Package,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -52,13 +56,14 @@ interface SidebarProps {
 
 const adminNavItems: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/admin/cards', label: 'Kartlar', icon: CreditCard },
   { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
   { href: '/admin/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare },
   { href: '/admin/badges', label: 'Rozetler', icon: Trophy },
   { href: '/admin/quests', label: 'Görevler', icon: Target },
   { href: '/admin/rewards', label: 'Ödüller', icon: Gift },
   { href: '/admin/analytics', label: 'Analitik', icon: BarChart3 },
-  { href: '/admin/pricing', label: 'Fiyatlandırma', icon: CreditCard },
+  { href: '/admin/pricing', label: 'Fiyatlandırma', icon: Layers },
   { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
   { href: '/admin/themes', label: 'Temalar', icon: Palette },
   { href: '/admin/features', label: 'Özellikler', icon: ToggleLeft },
@@ -67,6 +72,8 @@ const adminNavItems: NavItem[] = [
 
 const dealerNavItems: NavItem[] = [
   { href: '/dealer', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dealer/scan', label: 'Kart Tara', icon: ScanLine },
+  { href: '/dealer/products', label: 'Ürünlerim', icon: Package },
   { href: '/dealer/qr-codes', label: 'QR Kodlar', icon: QrCode },
   { href: '/dealer/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare, badge: 5 },
   { href: '/dealer/analytics', label: 'Analitik', icon: BarChart3 },
@@ -76,6 +83,8 @@ const dealerNavItems: NavItem[] = [
 
 const customerNavItems: NavItem[] = [
   { href: '/customer', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/customer/my-card', label: 'Kartım', icon: CreditCard },
+  { href: '/customer/consumptions', label: 'Tüketimlerim', icon: History },
   { href: '/customer/scan', label: 'QR Tara', icon: QrCode },
   { href: '/customer/feedbacks', label: 'Geri Bildirimlerim', icon: MessageSquare },
   { href: '/customer/trends', label: 'Trend Analizi', icon: TrendingUp },
@@ -257,7 +266,7 @@ export function Sidebar({ role }: SidebarProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={() => signOut({ callbackUrl: '/auth/login', redirect: true })}
               className="text-muted-foreground hover:text-destructive h-8 w-8"
             >
               <LogOut className="w-4 h-4" />

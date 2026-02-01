@@ -57,13 +57,48 @@ export async function GET() {
       },
       orderBy: { createdAt: 'asc' }
     });
+    
+    // Tüketim yorumlarını da al
+    let consumptionReviews: any[] = [];
+    let consumptionCount = 0;
+    
+    try {
+      const [reviews, consCount] = await Promise.all([
+        (prisma as any).consumptionReview.findMany({
+          where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
+          select: { createdAt: true, rating: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        (prisma as any).consumption.count({ where: { customerId: userId } }),
+      ]);
+      consumptionReviews = reviews;
+      consumptionCount = consCount;
+    } catch (e) {
+      // Card system not available
+    }
+    
+    // Tüm yorumları birleştir (QR + Consumption)
+    const allFeedbacks = [
+      ...feedbacks.map(f => ({
+        createdAt: f.createdAt,
+        rating: f.rating,
+        sentiment: f.sentiment,
+        type: 'qr',
+      })),
+      ...consumptionReviews.map((r: any) => ({
+        createdAt: new Date(r.createdAt),
+        rating: r.rating,
+        sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+        type: 'consumption',
+      })),
+    ];
 
-    // Günlük feedback sayıları
+    // Günlük feedback sayıları (QR + Consumption birleşik)
     const feedbackByDay: Record<string, number> = {};
     const ratingByDay: Record<string, { sum: number; count: number }> = {};
     const sentimentByDay: Record<string, { positive: number; negative: number; neutral: number }> = {};
 
-    feedbacks.forEach(fb => {
+    allFeedbacks.forEach(fb => {
       const day = fb.createdAt.toISOString().split('T')[0];
       
       // Feedback sayısı
@@ -136,11 +171,11 @@ export async function GET() {
       }
     });
 
-    // Haftalık karşılaştırma
-    const thisWeekFeedbacks = feedbacks.filter(f => f.createdAt >= sevenDaysAgo).length;
+    // Haftalık karşılaştırma (QR + Consumption birleşik)
+    const thisWeekFeedbacks = allFeedbacks.filter(f => f.createdAt >= sevenDaysAgo).length;
     const lastWeekStart = new Date(sevenDaysAgo);
     lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-    const lastWeekFeedbacks = feedbacks.filter(f => 
+    const lastWeekFeedbacks = allFeedbacks.filter(f => 
       f.createdAt >= lastWeekStart && f.createdAt < sevenDaysAgo
     ).length;
 
@@ -149,20 +184,20 @@ export async function GET() {
       : thisWeekFeedbacks > 0 ? '+100' : '0';
 
     // Duygu analizi özeti
-    const totalSentiments = feedbacks.reduce((acc, fb) => {
+    const totalSentiments = allFeedbacks.reduce((acc, fb) => {
       if (fb.sentiment === 'positive') acc.positive += 1;
       else if (fb.sentiment === 'negative') acc.negative += 1;
       else acc.neutral += 1;
       return acc;
     }, { positive: 0, negative: 0, neutral: 0 });
 
-    const sentimentScore = feedbacks.length > 0
-      ? ((totalSentiments.positive - totalSentiments.negative) / feedbacks.length * 100).toFixed(0)
+    const sentimentScore = allFeedbacks.length > 0
+      ? ((totalSentiments.positive - totalSentiments.negative) / allFeedbacks.length * 100).toFixed(0)
       : '0';
 
     // En aktif günler
     const dayOfWeekCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-    feedbacks.forEach(fb => {
+    allFeedbacks.forEach(fb => {
       const dayOfWeek = fb.createdAt.getDay();
       dayOfWeekCounts[dayOfWeek] += 1;
     });
@@ -175,7 +210,7 @@ export async function GET() {
 
     // En yüksek aktivite saati
     const hourCounts: Record<number, number> = {};
-    feedbacks.forEach(fb => {
+    allFeedbacks.forEach(fb => {
       const hour = fb.createdAt.getHours();
       hourCounts[hour] = (hourCounts[hour] || 0) + 1;
     });
@@ -185,9 +220,9 @@ export async function GET() {
 
     // Seviye ilerleme tahmini
     const currentXP = Number(user.xp) || 0;
-    const xpPerLevel = 100;
+    const xpPerLevel = 1000;
     const xpToNextLevel = xpPerLevel - (currentXP % xpPerLevel);
-    const avgDailyXP = feedbacks.length > 0 ? (currentXP / 30) : 0;
+    const avgDailyXP = allFeedbacks.length > 0 ? (currentXP / 30) : 0;
     const daysToNextLevel = avgDailyXP > 0 ? Math.ceil(xpToNextLevel / avgDailyXP) : null;
 
     // Streak hesaplama (ardışık gün sayısı)
@@ -212,13 +247,16 @@ export async function GET() {
 
     return NextResponse.json({
       summary: {
-        totalFeedbacks: user._count.feedbacks,
+        totalFeedbacks: user._count.feedbacks + consumptionReviews.length,
         totalBadges: user._count.badges,
         totalRewards: user._count.rewards,
         currentPoints: Number(user.points) || 0,
         currentXP: currentXP,
         currentLevel: user.level,
         memberSince: user.createdAt,
+        // Additional consumption stats
+        totalConsumptions: consumptionCount,
+        totalConsumptionReviews: consumptionReviews.length,
       },
       trends: {
         feedbackTrend,
@@ -233,7 +271,7 @@ export async function GET() {
       sentiment: {
         ...totalSentiments,
         score: sentimentScore,
-        total: feedbacks.length,
+        total: allFeedbacks.length,
       },
       insights: {
         peakHour: peakHourFormatted,
@@ -241,7 +279,7 @@ export async function GET() {
         maxStreak,
         daysToNextLevel,
         xpToNextLevel,
-        avgDailyFeedbacks: (feedbacks.length / 30).toFixed(1),
+        avgDailyFeedbacks: (allFeedbacks.length / 30).toFixed(1),
       },
       badges: badges.slice(0, 5),
     });

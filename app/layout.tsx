@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import { Toaster } from '@/components/ui/toaster';
@@ -135,6 +136,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <Chatbot />
+          <Analytics />
         </Providers>
       </body>
     </html>

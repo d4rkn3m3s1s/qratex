@@ -6,32 +6,28 @@ import Image from 'next/image';
 import {
   MessageSquare,
   Search,
-  Filter,
   Star,
   ThumbsUp,
   ThumbsDown,
   Meh,
   Calendar,
-  TrendingUp,
-  TrendingDown,
   X,
   QrCode,
   Clock,
   Sparkles,
-  Heart,
   Frown,
   Smile,
   Tag,
-  ChevronDown,
-  SlidersHorizontal,
-  Eye,
-  BarChart3,
+  Coffee,
+  CreditCard,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -39,11 +35,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { formatRelativeTime, getInitials } from '@/lib/utils';
+import { formatRelativeTime, getInitials, formatCurrency } from '@/lib/utils';
 
-interface Feedback {
+// QR Based Feedback
+interface QRFeedback {
   id: string;
   rating: number;
   text: string | null;
@@ -61,6 +57,38 @@ interface Feedback {
     id: string;
     name: string;
     businessName: string;
+  };
+}
+
+// Consumption Review
+interface ConsumptionReview {
+  id: string;
+  rating: number;
+  text: string | null;
+  dimensions: any | null;
+  createdAt: string;
+  customer: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  };
+  consumption: {
+    id: string;
+    amount: number | null;
+    createdAt: string;
+    product: {
+      id: string;
+      name: string;
+      category: {
+        name: string;
+        icon: string;
+      } | null;
+    } | null;
+    card: {
+      id: string;
+      token: string;
+    };
   };
 }
 
@@ -91,29 +119,45 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 };
 
 export default function DealerFeedbacksPage() {
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [qrFeedbacks, setQRFeedbacks] = useState<QRFeedback[]>([]);
+  const [consumptionReviews, setConsumptionReviews] = useState<ConsumptionReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [ratingFilter, setRatingFilter] = useState<string>('all');
-  const [sentimentFilter, setSentimentFilter] = useState<string>('all');
-  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [activeTab, setActiveTab] = useState('consumption');
+  const [reviewStats, setReviewStats] = useState({
+    totalReviews: 0,
+    avgRating: '0',
+    ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+  });
 
   useEffect(() => {
-    fetchFeedbacks();
+    fetchAllFeedbacks();
   }, [ratingFilter]);
 
-  const fetchFeedbacks = async () => {
+  const fetchAllFeedbacks = async () => {
     try {
       setLoading(true);
+      
       const params = new URLSearchParams();
       if (ratingFilter !== 'all') params.append('rating', ratingFilter);
       
-      const res = await fetch(`/api/feedbacks?${params}`);
-      const data = await res.json();
+      // Fetch both types in parallel
+      const [qrRes, reviewRes] = await Promise.all([
+        fetch(`/api/feedbacks?${params}`),
+        fetch(`/api/dealer/reviews?${params}`),
+      ]);
       
-      if (data.success) {
-        setFeedbacks(data.data);
+      const qrData = await qrRes.json();
+      const reviewData = await reviewRes.json();
+      
+      if (qrData.success) {
+        setQRFeedbacks(qrData.data || []);
+      }
+      
+      if (reviewData.success) {
+        setConsumptionReviews(reviewData.reviews || []);
+        setReviewStats(reviewData.stats);
       }
     } catch (error) {
       toast.error('Geri bildirimler yüklenemedi');
@@ -122,58 +166,37 @@ export default function DealerFeedbacksPage() {
     }
   };
 
-  const filteredFeedbacks = feedbacks.filter((feedback) => {
+  const filteredQRFeedbacks = qrFeedbacks.filter((feedback) => {
     const matchesSearch = 
       feedback.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       feedback.qrCode.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       feedback.user?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesSentiment = sentimentFilter === 'all' || feedback.sentiment === sentimentFilter;
-    
-    return matchesSearch && matchesSentiment;
+    return matchesSearch;
   });
 
-  const stats = {
-    total: feedbacks.length,
-    avgRating: feedbacks.length > 0 
-      ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1)
-      : '0',
-    positive: feedbacks.filter((f) => f.sentiment === 'positive').length,
-    negative: feedbacks.filter((f) => f.sentiment === 'negative').length,
-    neutral: feedbacks.filter((f) => f.sentiment === 'neutral' || !f.sentiment).length,
-  };
+  const filteredReviews = consumptionReviews.filter((review) => {
+    const matchesSearch = 
+      review.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      review.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      review.consumption.product?.name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    return matchesSearch;
+  });
 
-  const getSentimentConfig = (sentiment: string | null) => {
-    switch (sentiment) {
-      case 'positive':
-        return {
-          icon: Smile,
-          color: 'text-emerald-500',
-          bg: 'bg-emerald-500/10',
-          border: 'border-emerald-500/30',
-          label: 'Olumlu',
-          gradient: 'from-emerald-500 to-teal-500',
-        };
-      case 'negative':
-        return {
-          icon: Frown,
-          color: 'text-red-500',
-          bg: 'bg-red-500/10',
-          border: 'border-red-500/30',
-          label: 'Olumsuz',
-          gradient: 'from-red-500 to-rose-500',
-        };
-      default:
-        return {
-          icon: Meh,
-          color: 'text-gray-500',
-          bg: 'bg-gray-500/10',
-          border: 'border-gray-500/30',
-          label: 'Nötr',
-          gradient: 'from-gray-500 to-slate-500',
-        };
-    }
-  };
+  const totalFeedbacks = qrFeedbacks.length + consumptionReviews.length;
+  const allRatings = [
+    ...qrFeedbacks.map(f => f.rating),
+    ...consumptionReviews.map(r => r.rating),
+  ];
+  const avgRating = allRatings.length > 0
+    ? (allRatings.reduce((acc, r) => acc + r, 0) / allRatings.length).toFixed(1)
+    : '0';
+
+  const positiveCount = qrFeedbacks.filter(f => f.sentiment === 'positive').length + 
+    consumptionReviews.filter(r => r.rating >= 4).length;
+  const negativeCount = qrFeedbacks.filter(f => f.sentiment === 'negative').length + 
+    consumptionReviews.filter(r => r.rating <= 2).length;
 
   const renderStars = (rating: number, size: 'sm' | 'lg' = 'sm') => {
     const sizeClass = size === 'lg' ? 'h-6 w-6' : 'h-4 w-4';
@@ -191,6 +214,17 @@ export default function DealerFeedbacksPage() {
     );
   };
 
+  const getSentimentIcon = (sentiment: string | null) => {
+    switch (sentiment) {
+      case 'positive':
+        return <Smile className="h-4 w-4 text-emerald-500" />;
+      case 'negative':
+        return <Frown className="h-4 w-4 text-red-500" />;
+      default:
+        return <Meh className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
   return (
     <div className="space-y-6 pb-8">
       {/* Hero Header */}
@@ -201,15 +235,6 @@ export default function DealerFeedbacksPage() {
       >
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          {[...Array(15)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-2 h-2 bg-white/20 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
         </div>
         
         <div className="relative z-10">
@@ -219,11 +244,11 @@ export default function DealerFeedbacksPage() {
                 <MessageSquare className="w-8 h-8" />
                 Geri Bildirimler
               </h1>
-              <p className="text-white/70 mt-1">Müşterilerinizden gelen tüm yorumlar</p>
+              <p className="text-white/70 mt-1">Müşterilerinizden gelen tüm yorumlar ve değerlendirmeler</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white">
-                <span className="text-2xl font-bold">{stats.total}</span>
+                <span className="text-2xl font-bold">{totalFeedbacks}</span>
                 <span className="text-white/70 text-sm ml-2">Toplam</span>
               </div>
             </div>
@@ -234,10 +259,10 @@ export default function DealerFeedbacksPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Toplam', value: stats.total, icon: MessageSquare, color: 'violet', gradient: 'from-violet-500 to-purple-600' },
-          { label: 'Ort. Puan', value: stats.avgRating, icon: Star, color: 'yellow', gradient: 'from-yellow-500 to-orange-500', suffix: '/5' },
-          { label: 'Olumlu', value: stats.positive, icon: ThumbsUp, color: 'emerald', gradient: 'from-emerald-500 to-teal-600' },
-          { label: 'Olumsuz', value: stats.negative, icon: ThumbsDown, color: 'red', gradient: 'from-red-500 to-rose-600' },
+          { label: 'Toplam', value: totalFeedbacks, icon: MessageSquare, color: 'violet', gradient: 'from-violet-500 to-purple-600' },
+          { label: 'Ort. Puan', value: avgRating, icon: Star, color: 'yellow', gradient: 'from-yellow-500 to-orange-500', suffix: '/5' },
+          { label: 'Olumlu', value: positiveCount, icon: ThumbsUp, color: 'emerald', gradient: 'from-emerald-500 to-teal-600' },
+          { label: 'Olumsuz', value: negativeCount, icon: ThumbsDown, color: 'red', gradient: 'from-red-500 to-rose-600' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -245,8 +270,7 @@ export default function DealerFeedbacksPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="relative overflow-hidden border-0 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
-              <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-5 transition-opacity`} />
+            <Card className="relative overflow-hidden border-0 bg-card/50 backdrop-blur-sm">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10`}>
@@ -269,140 +293,195 @@ export default function DealerFeedbacksPage() {
       {/* Filters */}
       <Card className="border-0 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Yorum, QR kod veya kullanıcı ara..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-background/50"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Select value={ratingFilter} onValueChange={setRatingFilter}>
-                  <SelectTrigger className="w-[140px] bg-background/50">
-                    <Star className="h-4 w-4 mr-2 text-yellow-500" />
-                    <SelectValue placeholder="Puan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Puanlar</SelectItem>
-                    <SelectItem value="5">⭐ 5 Yıldız</SelectItem>
-                    <SelectItem value="4">⭐ 4 Yıldız</SelectItem>
-                    <SelectItem value="3">⭐ 3 Yıldız</SelectItem>
-                    <SelectItem value="2">⭐ 2 Yıldız</SelectItem>
-                    <SelectItem value="1">⭐ 1 Yıldız</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-                  <SelectTrigger className="w-[140px] bg-background/50">
-                    <Sparkles className="h-4 w-4 mr-2 text-purple-500" />
-                    <SelectValue placeholder="Duygu" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Duygular</SelectItem>
-                    <SelectItem value="positive">😊 Olumlu</SelectItem>
-                    <SelectItem value="neutral">😐 Nötr</SelectItem>
-                    <SelectItem value="negative">😔 Olumsuz</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Yorum, ürün veya müşteri ara..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-background/50"
+              />
             </div>
-            
-            {/* Active Filters */}
-            {(ratingFilter !== 'all' || sentimentFilter !== 'all' || searchQuery) && (
-              <div className="flex flex-wrap gap-2">
-                {ratingFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1">
-                    {ratingFilter} Yıldız
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => setRatingFilter('all')} />
-                  </Badge>
-                )}
-                {sentimentFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1">
-                    {sentimentFilter === 'positive' ? 'Olumlu' : sentimentFilter === 'negative' ? 'Olumsuz' : 'Nötr'}
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => setSentimentFilter('all')} />
-                  </Badge>
-                )}
-                {searchQuery && (
-                  <Badge variant="secondary" className="gap-1">
-                    "{searchQuery}"
-                    <X className="h-3 w-3 cursor-pointer" onClick={() => setSearchQuery('')} />
-                  </Badge>
-                )}
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 text-xs"
-                  onClick={() => { setRatingFilter('all'); setSentimentFilter('all'); setSearchQuery(''); }}
-                >
-                  Tümünü Temizle
-                </Button>
-              </div>
-            )}
+            <Select value={ratingFilter} onValueChange={setRatingFilter}>
+              <SelectTrigger className="w-[140px] bg-background/50">
+                <Star className="h-4 w-4 mr-2 text-yellow-500" />
+                <SelectValue placeholder="Puan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Puanlar</SelectItem>
+                <SelectItem value="5">⭐ 5 Yıldız</SelectItem>
+                <SelectItem value="4">⭐ 4 Yıldız</SelectItem>
+                <SelectItem value="3">⭐ 3 Yıldız</SelectItem>
+                <SelectItem value="2">⭐ 2 Yıldız</SelectItem>
+                <SelectItem value="1">⭐ 1 Yıldız</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Feedbacks List */}
-      <div className="space-y-3">
-        {loading ? (
-          [...Array(5)].map((_, i) => (
-            <Card key={i} className="border-0 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-5">
-                <div className="animate-pulse flex gap-4">
-                  <div className="h-12 w-12 bg-muted rounded-full" />
-                  <div className="flex-1 space-y-3">
-                    <div className="h-4 bg-muted rounded w-1/4" />
-                    <div className="h-3 bg-muted rounded w-3/4" />
-                    <div className="h-3 bg-muted rounded w-1/2" />
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="consumption" className="gap-2">
+            <Coffee className="h-4 w-4" />
+            Tüketim Yorumları ({consumptionReviews.length})
+          </TabsTrigger>
+          <TabsTrigger value="qr" className="gap-2">
+            <QrCode className="h-4 w-4" />
+            QR Geri Bildirimleri ({qrFeedbacks.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Consumption Reviews Tab */}
+        <TabsContent value="consumption" className="space-y-3 mt-4">
+          {loading ? (
+            [...Array(5)].map((_, i) => (
+              <Card key={i} className="border-0 bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-5">
+                  <div className="animate-pulse flex gap-4">
+                    <div className="h-12 w-12 bg-muted rounded-full" />
+                    <div className="flex-1 space-y-3">
+                      <div className="h-4 bg-muted rounded w-1/4" />
+                      <div className="h-3 bg-muted rounded w-3/4" />
+                    </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : filteredReviews.length === 0 ? (
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-12 text-center">
+                <Coffee className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
+                <h3 className="text-lg font-semibold mb-2">Tüketim yorumu bulunamadı</h3>
+                <p className="text-muted-foreground">Müşterilerinizden henüz tüketim yorumu almadınız</p>
               </CardContent>
             </Card>
-          ))
-        ) : filteredFeedbacks.length === 0 ? (
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
-            <CardContent className="p-12 text-center">
-              <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
-              <h3 className="text-lg font-semibold mb-2">Geri bildirim bulunamadı</h3>
-              <p className="text-muted-foreground">Arama kriterlerinize uygun geri bildirim yok</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <AnimatePresence>
-            {filteredFeedbacks.map((feedback, index) => {
-              const sentimentConfig = getSentimentConfig(feedback.sentiment);
-              const SentimentIcon = sentimentConfig.icon;
-              
-              return (
+          ) : (
+            <AnimatePresence>
+              {filteredReviews.map((review, index) => (
+                <motion.div
+                  key={review.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.03 }}
+                >
+                  <Card className="border-0 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all">
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-4">
+                        {/* Avatar */}
+                        <Avatar className="h-12 w-12 border-2 border-background">
+                          <AvatarImage src={review.customer?.image || ''} />
+                          <AvatarFallback className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white">
+                            {getInitials(review.customer?.name || 'Müşteri')}
+                          </AvatarFallback>
+                        </Avatar>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{review.customer?.name || 'Müşteri'}</span>
+                              {review.consumption.product && (
+                                <Badge variant="outline" className="text-xs gap-1">
+                                  {review.consumption.product.category?.icon} {review.consumption.product.name}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {renderStars(review.rating)}
+                            </div>
+                          </div>
+                          
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {review.text || 'Yorum metni yok'}
+                          </p>
+
+                          {/* Dimensions */}
+                          {review.dimensions && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {Object.entries(review.dimensions).map(([key, value]) => (
+                                <Badge key={key} variant="secondary" className="text-xs">
+                                  {key === 'taste' ? 'Lezzet' : 
+                                   key === 'service' ? 'Servis' : 
+                                   key === 'ambiance' ? 'Ambiyans' : 
+                                   key === 'value' ? 'Fiyat/Değer' : key}: {value as number}/5
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs gap-1">
+                                <CreditCard className="h-3 w-3" />
+                                •••{review.consumption.card.token.slice(-4)}
+                              </Badge>
+                              {review.consumption.amount && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {formatCurrency(review.consumption.amount)}
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatRelativeTime(review.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+        </TabsContent>
+
+        {/* QR Feedbacks Tab */}
+        <TabsContent value="qr" className="space-y-3 mt-4">
+          {loading ? (
+            [...Array(5)].map((_, i) => (
+              <Card key={i} className="border-0 bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-5">
+                  <div className="animate-pulse flex gap-4">
+                    <div className="h-12 w-12 bg-muted rounded-full" />
+                    <div className="flex-1 space-y-3">
+                      <div className="h-4 bg-muted rounded w-1/4" />
+                      <div className="h-3 bg-muted rounded w-3/4" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : filteredQRFeedbacks.length === 0 ? (
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-12 text-center">
+                <QrCode className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
+                <h3 className="text-lg font-semibold mb-2">QR geri bildirimi bulunamadı</h3>
+                <p className="text-muted-foreground">Arama kriterlerinize uygun geri bildirim yok</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <AnimatePresence>
+              {filteredQRFeedbacks.map((feedback, index) => (
                 <motion.div
                   key={feedback.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
                   transition={{ delay: index * 0.03 }}
-                  layout
                 >
-                  <Card 
-                    className="border-0 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all cursor-pointer group"
-                    onClick={() => setSelectedFeedback(feedback)}
-                  >
+                  <Card className="border-0 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all">
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
                         {/* Avatar */}
-                        <div className="relative">
-                          <Avatar className="h-12 w-12 border-2 border-background">
-                            <AvatarImage src={feedback.user?.image || ''} />
-                            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                              {getInitials(feedback.user?.name || 'Anonim')}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className={`absolute -bottom-1 -right-1 p-1 rounded-full ${sentimentConfig.bg} border-2 border-background`}>
-                            <SentimentIcon className={`h-3 w-3 ${sentimentConfig.color}`} />
-                          </div>
-                        </div>
+                        <Avatar className="h-12 w-12 border-2 border-background">
+                          <AvatarImage src={feedback.user?.image || ''} />
+                          <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                            {getInitials(feedback.user?.name || 'Anonim')}
+                          </AvatarFallback>
+                        </Avatar>
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
@@ -414,15 +493,13 @@ export default function DealerFeedbacksPage() {
                                 {feedback.qrCode.name}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               {renderStars(feedback.rating)}
-                              <Badge className={`${sentimentConfig.bg} ${sentimentConfig.color} ${sentimentConfig.border} border`}>
-                                {sentimentConfig.label}
-                              </Badge>
+                              {getSentimentIcon(feedback.sentiment)}
                             </div>
                           </div>
                           
-                          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                          <p className="text-sm text-muted-foreground mb-3">
                             {feedback.text || 'Yorum yapılmadı'}
                           </p>
                           
@@ -446,155 +523,15 @@ export default function DealerFeedbacksPage() {
                             </span>
                           </div>
                         </div>
-
-                        {/* Arrow */}
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Eye className="h-5 w-5 text-muted-foreground" />
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
                 </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        )}
-      </div>
-
-      {/* Detail Modal */}
-      <AnimatePresence>
-        {selectedFeedback && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-            onClick={() => setSelectedFeedback(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-lg"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Card className="border-0 shadow-2xl overflow-hidden">
-                {/* Header with gradient */}
-                <div className={`relative p-6 bg-gradient-to-br ${getSentimentConfig(selectedFeedback.sentiment).gradient}`}>
-                  <div className="absolute inset-0 overflow-hidden">
-                    {[...Array(10)].map((_, i) => (
-                      <motion.div
-                        key={i}
-                        className="absolute w-2 h-2 bg-white/20 rounded-full"
-                        style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-                        animate={{ opacity: [0.2, 0.8, 0.2] }}
-                        transition={{ duration: 2, repeat: Infinity, delay: Math.random() * 2 }}
-                      />
-                    ))}
-                  </div>
-                  
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute top-4 right-4 text-white/80 hover:text-white hover:bg-white/20"
-                    onClick={() => setSelectedFeedback(null)}
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                  
-                  <div className="relative flex items-center gap-4">
-                    <Avatar className="h-16 w-16 border-4 border-white/20">
-                      <AvatarImage src={selectedFeedback.user?.image || ''} />
-                      <AvatarFallback className="bg-white/20 text-white text-xl">
-                        {getInitials(selectedFeedback.user?.name || 'Anonim')}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="text-white">
-                      <h3 className="text-xl font-bold">{selectedFeedback.user?.name || 'Anonim'}</h3>
-                      <p className="text-white/70 text-sm">{selectedFeedback.user?.email || ''}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <CardContent className="p-6 space-y-5">
-                  {/* Rating & Sentiment */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {renderStars(selectedFeedback.rating, 'lg')}
-                      <span className="text-2xl font-bold">{selectedFeedback.rating}/5</span>
-                    </div>
-                    <Badge className={`${getSentimentConfig(selectedFeedback.sentiment).bg} ${getSentimentConfig(selectedFeedback.sentiment).color} ${getSentimentConfig(selectedFeedback.sentiment).border} border text-sm px-3 py-1`}>
-                      {getSentimentConfig(selectedFeedback.sentiment).label}
-                    </Badge>
-                  </div>
-
-                  {/* QR Info */}
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
-                    <QrCode className="h-5 w-5 text-violet-500" />
-                    <div>
-                      <p className="font-medium">{selectedFeedback.qrCode.name}</p>
-                      <p className="text-xs text-muted-foreground">{selectedFeedback.qrCode.businessName}</p>
-                    </div>
-                  </div>
-
-                  {/* Comment */}
-                  <div className="p-4 rounded-xl bg-muted/30 border">
-                    <p className="text-sm leading-relaxed">
-                      {selectedFeedback.text || 'Yorum yapılmadı'}
-                    </p>
-                  </div>
-
-                  {/* Emotions */}
-                  {selectedFeedback.emotions.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                        <Heart className="h-4 w-4 text-pink-500" />
-                        Duygular
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedFeedback.emotions.map((e) => (
-                          <Badge key={e} variant="outline" className="bg-pink-500/10 text-pink-500 border-pink-500/30">
-                            {e}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Topics */}
-                  {selectedFeedback.topics.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-blue-500" />
-                        Konular
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedFeedback.topics.map((t) => (
-                          <Badge key={t} variant="secondary">
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Time */}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t">
-                    <Clock className="h-4 w-4" />
-                    {new Date(selectedFeedback.createdAt).toLocaleDateString('tr-TR', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              ))}
+            </AnimatePresence>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

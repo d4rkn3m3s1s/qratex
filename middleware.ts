@@ -37,6 +37,8 @@ export default withAuth(
 );
 
 export const config = {
+  // /c/[token] route'u public - kart aktivasyonu için
+  // /api/cards/[token] route'u public - kart bilgisi için
   matcher: ['/admin/:path*', '/dealer/:path*', '/customer/:path*'],
 };
 

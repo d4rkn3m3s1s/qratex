@@ -678,3 +678,53 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   QR SCANNER STYLES (html5-qrcode)
+───────────────────────────────────────────────────────────── */
+#qr-reader {
+  width: 100% !important;
+  border: none !important;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0.75rem;
+}
+
+#qr-reader__scan_region {
+  min-height: 250px !important;
+}
+
+#qr-reader__dashboard {
+  display: none !important;
+}
+
+#qr-reader__dashboard_section {
+  display: none !important;
+}
+
+#qr-reader__camera_selection {
+  display: none !important;
+}
+
+#qr-reader__status_span {
+  display: none !important;
+}
+
+#qr-reader__header_message {
+  display: none !important;
+}
+
+/* QR Shaded region */
+#qr-shaded-region {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Hide file upload section */
+#qr-reader__dashboard_section_csr,
+#qr-reader__dashboard_section_fsr {
+  display: none !important;
+}

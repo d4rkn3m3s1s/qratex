@@ -59,8 +59,43 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Separate current and previous period feedbacks
-    const allFeedbacks = qrCodes.flatMap(q => q.feedbacks);
+    // Get consumption reviews
+    let consumptionReviews: any[] = [];
+    let consumptionStats = { total: 0, reviewed: 0, customers: 0 };
+    
+    try {
+      const [consumptions, reviews, uniqueCustomers] = await Promise.all([
+        (prisma as any).consumption.findMany({
+          where: { dealerId, createdAt: { gte: prevStartDate } },
+          include: { review: { select: { rating: true, createdAt: true } } },
+        }),
+        (prisma as any).consumptionReview.findMany({
+          where: { consumption: { dealerId }, createdAt: { gte: prevStartDate } },
+          select: { rating: true, createdAt: true },
+        }),
+        (prisma as any).consumption.groupBy({ by: ['customerId'], where: { dealerId } }),
+      ]);
+      
+      consumptionReviews = reviews;
+      consumptionStats = {
+        total: consumptions.length,
+        reviewed: consumptions.filter((c: any) => c.review).length,
+        customers: uniqueCustomers.length,
+      };
+    } catch (e) {
+      console.log('Consumption data not available');
+    }
+
+    // Separate current and previous period feedbacks (QR + Consumption)
+    const allQRFeedbacks = qrCodes.flatMap(q => q.feedbacks);
+    const allConsumptionFeedbacks = consumptionReviews.map((r: any) => ({
+      rating: r.rating,
+      sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+      topics: [],
+      createdAt: r.createdAt,
+    }));
+    
+    const allFeedbacks = [...allQRFeedbacks, ...allConsumptionFeedbacks];
     const currentFeedbacks = allFeedbacks.filter(f => new Date(f.createdAt) >= startDate);
     const prevFeedbacks = allFeedbacks.filter(
       f => new Date(f.createdAt) >= prevStartDate && new Date(f.createdAt) < startDate
@@ -279,6 +314,8 @@ export async function GET(request: NextRequest) {
           bestQR: topQRCodes[0]?.name || null,
           worstTopic: topTopics.find(t => t.sentiment === 'negative')?.name || null,
         },
+        // Consumption stats
+        consumptionStats,
       },
     });
   } catch (error) {

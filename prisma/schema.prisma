@@ -51,6 +51,34 @@ model User {
   businessLogo  String?
   businessDesc  String?
 
+  // Physical Card System Relations
+  physicalCards        PhysicalCard[]      @relation("CustomerCards")
+  customerConsumptions Consumption[]       @relation("CustomerConsumptions")
+  dealerConsumptions   Consumption[]       @relation("DealerConsumptions")
+  customerReviews      ConsumptionReview[] @relation("CustomerReviews")
+  dealerCategories     ProductCategory[]   @relation("DealerCategories")
+  dealerProducts       Product[]           @relation("DealerProducts")
+  cardAuditLogs        CardAuditLog[]      @relation("CardAuditLogs")
+  createdBatches       CardBatch[]         @relation("CreatedBatches")
+  
+  // New Feature Relations
+  referralsMade        Referral[]            @relation("Referrals")
+  referredBy           Referral?             @relation("ReferredBy")
+  referralCode         ReferralCode?         @relation("UserReferralCode")
+  streak               UserStreak?           @relation("UserStreak")
+  vipStatus            UserVIPStatus?        @relation("UserVIP")
+  birthday             UserBirthday?         @relation("UserBirthday")
+  happyHours           HappyHour[]           @relation("DealerHappyHours")
+  suspiciousActivities SuspiciousActivity[]  @relation("UserSuspiciousActivities")
+  dealerAlerts         SuspiciousActivity[]  @relation("DealerSuspiciousActivities")
+  pushSubscriptions    PushSubscription[]    @relation("PushSubscriptions")
+  pushNotifications    PushNotificationLog[] @relation("PushNotificationLogs")
+  offlineQueue         OfflineQueue[]        @relation("DealerOfflineQueue")
+  favoriteProducts     DealerFavoriteProduct[] @relation("DealerFavorites")
+  quickPresets         QuickScanPreset[]     @relation("DealerQuickPresets")
+  customerCLV          CustomerLifetimeValue? @relation("CustomerCLV")
+  heatmapData          HeatmapData[]         @relation("DealerHeatmap")
+
   @@index([email])
   @@index([role])
 }
@@ -429,6 +457,156 @@ model Coupon {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PHYSICAL CARD SYSTEM (QR Kartlı Tüketim Sistemi)
+// ─────────────────────────────────────────────────────────────
+
+enum CardStatus {
+  UNUSED      // Henüz aktive edilmemiş
+  ACTIVATED   // Müşteriye bağlanmış
+  BLOCKED     // Bloklanmış
+}
+
+model PhysicalCard {
+  id          String     @id @default(cuid())
+  token       String     @unique // Benzersiz QR token (nanoid)
+  batchId     String?    // Toplu üretim batch ID
+  status      CardStatus @default(UNUSED)
+  customerId  String?    // Aktive edildiğinde müşteri ID
+  activatedAt DateTime?
+  blockedAt   DateTime?
+  blockReason String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  customer     User?           @relation("CustomerCards", fields: [customerId], references: [id], onDelete: SetNull)
+  consumptions Consumption[]
+  auditLogs    CardAuditLog[]
+
+  @@index([token])
+  @@index([status])
+  @@index([customerId])
+  @@index([batchId])
+  @@index([createdAt])
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String   @default("🍽️")
+  dealerId  String?  // null = global kategori
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer   User?     @relation("DealerCategories", fields: [dealerId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([dealerId])
+  @@index([isActive])
+  @@index([order])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float?
+  categoryId  String
+  dealerId    String?  // null = global ürün
+  image       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category     ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  dealer       User?           @relation("DealerProducts", fields: [dealerId], references: [id], onDelete: Cascade)
+  consumptions Consumption[]
+  favoritedBy  DealerFavoriteProduct[] @relation("FavoritedBy")
+  quickPresets QuickScanPreset[]       @relation("QuickPresetProducts")
+
+  @@index([categoryId])
+  @@index([dealerId])
+  @@index([isActive])
+}
+
+model Consumption {
+  id         String   @id @default(cuid())
+  cardId     String
+  customerId String
+  dealerId   String
+  productId  String?
+  amount     Float?   // Tutar (opsiyonel)
+  note       String?  // Bayi notu
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  card     PhysicalCard        @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customer User                @relation("CustomerConsumptions", fields: [customerId], references: [id], onDelete: Cascade)
+  dealer   User                @relation("DealerConsumptions", fields: [dealerId], references: [id], onDelete: Cascade)
+  product  Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  review   ConsumptionReview?
+
+  @@index([cardId])
+  @@index([customerId])
+  @@index([dealerId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model ConsumptionReview {
+  id            String   @id @default(cuid())
+  consumptionId String   @unique
+  customerId    String
+  rating        Int      // 1-5 genel puan
+  text          String?  @db.Text
+  dimensions    Json?    // { taste: 5, service: 4, ambiance: 5, value: 4 }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  consumption Consumption @relation(fields: [consumptionId], references: [id], onDelete: Cascade)
+  customer    User        @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([consumptionId])
+  @@index([customerId])
+  @@index([rating])
+  @@index([createdAt])
+}
+
+model CardAuditLog {
+  id        String   @id @default(cuid())
+  cardId    String
+  userId    String?
+  action    String   // CREATED, ACTIVATED, BLOCKED, UNBLOCKED, SCANNED, CONSUMPTION_ADDED
+  metadata  Json?    // Ek bilgiler
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  card PhysicalCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User?        @relation("CardAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([cardId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model CardBatch {
+  id          String   @id @default(cuid())
+  name        String   // Batch adı (ör: "Ocak 2024 - 1000 Kart")
+  quantity    Int      // Üretilen kart sayısı
+  prefix      String?  // Token prefix (opsiyonel)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User @relation("CreatedBatches", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
 // SOCIAL RESPONSIBILITY / DONATION MODELS
 // ─────────────────────────────────────────────────────────────
 
@@ -463,8 +641,363 @@ model Donation {
   points    Int      // Points donated
   message   String?  // Optional message
   isPublic  Boolean  @default(true) // Show in leaderboard
-  createdAt DateTime @default(now())  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)  @@index([userId])
+  createdAt DateTime @default(now())
+  
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
   @@index([projectId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// REFERRAL SYSTEM
+// ─────────────────────────────────────────────────────────────
+
+model Referral {
+  id             String    @id @default(cuid())
+  referrerId     String    // User who referred
+  referredId     String    @unique // User who was referred
+  referralCode   String    // Code used
+  status         String    @default("PENDING") // PENDING, COMPLETED, EXPIRED
+  pointsEarned   Int       @default(0) // Points earned by referrer
+  bonusGiven     Int       @default(0) // Bonus given to referred
+  completedAt    DateTime? // When referral was completed (first purchase)
+  expiresAt      DateTime? // Referral expiration
+  createdAt      DateTime  @default(now())
+  
+  referrer User @relation("Referrals", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred User @relation("ReferredBy", fields: [referredId], references: [id], onDelete: Cascade)
+  
+  @@index([referrerId])
+  @@index([referralCode])
+  @@index([status])
+}
+
+model ReferralCode {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  code        String   @unique
+  usageCount  Int      @default(0)
+  maxUsage    Int?     // null = unlimited
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  user User @relation("UserReferralCode", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([code])
+}
+
+// ─────────────────────────────────────────────────────────────
+// STREAK & LOYALTY SYSTEM
+// ─────────────────────────────────────────────────────────────
+
+model UserStreak {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  currentStreak   Int       @default(0)
+  longestStreak   Int       @default(0)
+  lastActivityAt  DateTime?
+  totalActiveDays Int       @default(0)
+  streakFreezes   Int       @default(0) // Freeze tickets
+  frozenUntil     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user User @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VIPTier {
+  id              String   @id @default(cuid())
+  name            String   @unique // Bronze, Silver, Gold, Platinum
+  minPoints       Int      // Minimum points required
+  multiplier      Float    @default(1.0) // Points multiplier
+  benefits        Json     // Array of benefit objects
+  color           String   // Hex color for UI
+  icon            String   // Emoji or icon
+  order           Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  
+  users UserVIPStatus[]
+  
+  @@index([minPoints])
+  @@index([order])
+}
+
+model UserVIPStatus {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  tierId        String
+  totalSpent    Float     @default(0)
+  lifetimePoints Int      @default(0)
+  tierExpiry    DateTime? // When tier expires (if applicable)
+  upgradedAt    DateTime  @default(now())
+  
+  user User    @relation("UserVIP", fields: [userId], references: [id], onDelete: Cascade)
+  tier VIPTier @relation(fields: [tierId], references: [id])
+  
+  @@index([tierId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// HAPPY HOUR & PROMOTIONS
+// ─────────────────────────────────────────────────────────────
+
+model HappyHour {
+  id           String   @id @default(cuid())
+  dealerId     String?  // null = global
+  name         String
+  description  String?
+  multiplier   Float    @default(2.0) // Points multiplier
+  startTime    String   // HH:mm format
+  endTime      String   // HH:mm format
+  daysOfWeek   Json     // [0,1,2,3,4,5,6] - 0=Sunday
+  isActive     Boolean  @default(true)
+  validFrom    DateTime?
+  validUntil   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  dealer User? @relation("DealerHappyHours", fields: [dealerId], references: [id], onDelete: Cascade)
+  
+  @@index([dealerId])
+  @@index([isActive])
+}
+
+model SeasonalCampaign {
+  id           String    @id @default(cuid())
+  name         String
+  description  String    @db.Text
+  type         String    // BIRTHDAY, ANNIVERSARY, SEASONAL, SPECIAL
+  multiplier   Float     @default(1.5)
+  bonusPoints  Int       @default(0)
+  discount     Float?    // Percentage discount
+  imageUrl     String?
+  conditions   Json?     // Eligibility conditions
+  isActive     Boolean   @default(true)
+  startDate    DateTime
+  endDate      DateTime
+  createdAt    DateTime  @default(now())
+  
+  @@index([type])
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model UserBirthday {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  birthDate    DateTime
+  bonusGiven   Boolean   @default(false)
+  lastBonusAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  user User @relation("UserBirthday", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────
+// SUSPICIOUS ACTIVITY & SECURITY
+// ─────────────────────────────────────────────────────────────
+
+model SuspiciousActivity {
+  id          String   @id @default(cuid())
+  userId      String?
+  dealerId    String?
+  cardId      String?
+  type        String   // RAPID_SCAN, DUPLICATE_ENTRY, UNUSUAL_AMOUNT, IP_MISMATCH, etc.
+  severity    String   @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  description String   @db.Text
+  metadata    Json?    // Additional context
+  ipAddress   String?
+  userAgent   String?
+  isResolved  Boolean  @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime @default(now())
+  
+  user    User? @relation("UserSuspiciousActivities", fields: [userId], references: [id], onDelete: SetNull)
+  dealer  User? @relation("DealerSuspiciousActivities", fields: [dealerId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([dealerId])
+  @@index([type])
+  @@index([severity])
+  @@index([isResolved])
+  @@index([createdAt])
+}
+
+model SecurityAlert {
+  id          String   @id @default(cuid())
+  type        String   // BRUTE_FORCE, UNUSUAL_LOGIN, MULTIPLE_FAILED_SCANS, etc.
+  message     String
+  severity    String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+  targetId    String?  // User/Dealer ID if applicable
+  targetType  String?  // USER, DEALER, CARD
+  metadata    Json?
+  isRead      Boolean  @default(false)
+  isResolved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  @@index([type])
+  @@index([severity])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PUSH NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String
+  endpoint     String   @unique
+  p256dh       String   // Public key
+  auth         String   // Auth secret
+  userAgent    String?
+  isActive     Boolean  @default(true)
+  lastUsedAt   DateTime?
+  createdAt    DateTime @default(now())
+  
+  user User @relation("PushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([isActive])
+}
+
+model PushNotificationLog {
+  id             String   @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  title          String
+  body           String
+  data           Json?
+  status         String   @default("SENT") // SENT, DELIVERED, FAILED, CLICKED
+  error          String?
+  sentAt         DateTime @default(now())
+  deliveredAt    DateTime?
+  clickedAt      DateTime?
+  
+  user User @relation("PushNotificationLogs", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([sentAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// OFFLINE MODE & SYNC
+// ─────────────────────────────────────────────────────────────
+
+model OfflineQueue {
+  id          String   @id @default(cuid())
+  dealerId    String
+  action      String   // CREATE_CONSUMPTION, SCAN_CARD, etc.
+  payload     Json     // Action data
+  status      String   @default("PENDING") // PENDING, SYNCED, FAILED
+  retries     Int      @default(0)
+  error       String?
+  queuedAt    DateTime @default(now())
+  syncedAt    DateTime?
+  
+  dealer User @relation("DealerOfflineQueue", fields: [dealerId], references: [id], onDelete: Cascade)
+  
+  @@index([dealerId])
+  @@index([status])
+  @@index([queuedAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// QUICK ACCESS & FAVORITES
+// ─────────────────────────────────────────────────────────────
+
+model DealerFavoriteProduct {
+  id        String   @id @default(cuid())
+  dealerId  String
+  productId String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  
+  dealer  User    @relation("DealerFavorites", fields: [dealerId], references: [id], onDelete: Cascade)
+  product Product @relation("FavoritedBy", fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@unique([dealerId, productId])
+  @@index([dealerId])
+  @@index([order])
+}
+
+model QuickScanPreset {
+  id          String   @id @default(cuid())
+  dealerId    String
+  name        String
+  productId   String?
+  amount      Float?
+  note        String?
+  isDefault   Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  dealer  User     @relation("DealerQuickPresets", fields: [dealerId], references: [id], onDelete: Cascade)
+  product Product? @relation("QuickPresetProducts", fields: [productId], references: [id], onDelete: SetNull)
+  
+  @@index([dealerId])
+  @@index([isDefault])
+}
+
+// ─────────────────────────────────────────────────────────────
+// ANALYTICS ENHANCEMENTS
+// ─────────────────────────────────────────────────────────────
+
+model CustomerLifetimeValue {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  totalSpent         Float    @default(0)
+  totalVisits        Int      @default(0)
+  avgOrderValue      Float    @default(0)
+  firstPurchaseAt    DateTime?
+  lastPurchaseAt     DateTime?
+  predictedChurn     Float?   // 0-1 probability
+  churnRisk          String?  // LOW, MEDIUM, HIGH
+  segmentId          String?
+  calculatedAt       DateTime @default(now())
+  
+  user    User             @relation("CustomerCLV", fields: [userId], references: [id], onDelete: Cascade)
+  segment CustomerSegment? @relation(fields: [segmentId], references: [id])
+  
+  @@index([predictedChurn])
+  @@index([churnRisk])
+}
+
+model CustomerSegment {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  criteria    Json     // Segmentation rules
+  color       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  customers CustomerLifetimeValue[]
+}
+
+model HeatmapData {
+  id        String   @id @default(cuid())
+  dealerId  String
+  date      DateTime @db.Date
+  hour      Int      // 0-23
+  dayOfWeek Int      // 0-6 (Sunday = 0)
+  count     Int      @default(0)
+  revenue   Float    @default(0)
+  createdAt DateTime @default(now())
+  
+  dealer User @relation("DealerHeatmap", fields: [dealerId], references: [id], onDelete: Cascade)
+  
+  @@unique([dealerId, date, hour])
+  @@index([dealerId])
+  @@index([date])
 }

@@ -13,52 +13,30 @@ export async function GET(request: NextRequest) {
     // Get date ranges
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Parallel queries for better performance
+    // Core queries (always work)
     const [
-      // Total counts
       totalUsers,
       totalFeedbacks,
       totalQRCodes,
       activeQRCodes,
-      
-      // Users this month vs last month
       usersThisMonth,
       usersLastMonth,
-      
-      // Feedbacks this month vs last month
       feedbacksThisMonth,
       feedbacksLastMonth,
-      
-      // Recent users
       recentUsers,
-      
-      // Recent feedbacks
       recentFeedbacks,
-      
-      // Top dealers by feedback count
       topDealers,
-      
-      // Sentiment distribution
       positiveFeedbacks,
       neutralFeedbacks,
       negativeFeedbacks,
-      
-      // Total scans
       totalScans,
     ] = await Promise.all([
-      // Total counts
       prisma.user.count(),
       prisma.feedback.count(),
       prisma.qRCode.count(),
       prisma.qRCode.count({ where: { isActive: true } }),
-      
-      // Users this month
-      prisma.user.count({
-        where: { createdAt: { gte: thirtyDaysAgo } }
-      }),
-      // Users last month
+      prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
       prisma.user.count({
         where: {
           createdAt: {
@@ -67,12 +45,7 @@ export async function GET(request: NextRequest) {
           }
         }
       }),
-      
-      // Feedbacks this month
-      prisma.feedback.count({
-        where: { createdAt: { gte: thirtyDaysAgo } }
-      }),
-      // Feedbacks last month
+      prisma.feedback.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
       prisma.feedback.count({
         where: {
           createdAt: {
@@ -81,76 +54,79 @@ export async function GET(request: NextRequest) {
           }
         }
       }),
-      
-      // Recent users (last 10)
       prisma.user.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-          role: true,
-          createdAt: true,
-        }
+        select: { id: true, name: true, email: true, image: true, role: true, createdAt: true }
       }),
-      
-      // Recent feedbacks (last 5)
       prisma.feedback.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true,
-          text: true,
-          rating: true,
-          sentiment: true,
-          createdAt: true,
-          user: {
-            select: { name: true }
-          },
-          qrCode: {
-            select: { 
-              name: true,
-              dealer: {
-                select: { businessName: true }
-              }
-            }
-          }
+          id: true, text: true, rating: true, sentiment: true, createdAt: true,
+          user: { select: { name: true } },
+          qrCode: { select: { name: true, dealer: { select: { businessName: true } } } }
         }
       }),
-      
-      // Top dealers
       prisma.user.findMany({
         where: { role: 'DEALER' },
         take: 5,
         select: {
-          id: true,
-          businessName: true,
-          name: true,
+          id: true, businessName: true, name: true,
           qrCodes: {
             select: {
-              _count: {
-                select: { feedbacks: true }
-              },
-              feedbacks: {
-                select: { rating: true }
-              }
+              _count: { select: { feedbacks: true } },
+              feedbacks: { select: { rating: true } }
             }
           }
         }
       }),
-      
-      // Sentiment counts
       prisma.feedback.count({ where: { sentiment: 'positive' } }),
       prisma.feedback.count({ where: { sentiment: 'neutral' } }),
       prisma.feedback.count({ where: { sentiment: 'negative' } }),
-      
-      // Total scans
-      prisma.qRCode.aggregate({
-        _sum: { scanCount: true }
-      }),
+      prisma.qRCode.aggregate({ _sum: { scanCount: true } }),
     ]);
+
+    // Card system queries (with fallback)
+    let cardStats = { total: 0, activated: 0, unused: 0, blocked: 0, consumptions: 0, reviews: 0 };
+    let recentConsumptionReviews: any[] = [];
+    
+    try {
+      const [totalCards, activatedCards, unusedCards, blockedCards, totalConsumptions, totalConsumptionReviews, consumptionReviews] = await Promise.all([
+        (prisma as any).physicalCard.count(),
+        (prisma as any).physicalCard.count({ where: { status: 'ACTIVATED' } }),
+        (prisma as any).physicalCard.count({ where: { status: 'UNUSED' } }),
+        (prisma as any).physicalCard.count({ where: { status: 'BLOCKED' } }),
+        (prisma as any).consumption.count(),
+        (prisma as any).consumptionReview.count(),
+        (prisma as any).consumptionReview.findMany({
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true, text: true, rating: true, createdAt: true,
+            customer: { select: { name: true, image: true } },
+            consumption: {
+              select: {
+                dealer: { select: { businessName: true, name: true } },
+                product: { select: { name: true } }
+              }
+            }
+          }
+        }),
+      ]);
+      
+      cardStats = {
+        total: totalCards,
+        activated: activatedCards,
+        unused: unusedCards,
+        blocked: blockedCards,
+        consumptions: totalConsumptions,
+        reviews: totalConsumptionReviews,
+      };
+      recentConsumptionReviews = consumptionReviews;
+    } catch (e) {
+      console.log('Card system not available:', e);
+    }
 
     // Calculate percentage changes
     const userChange = usersLastMonth > 0 
@@ -161,18 +137,14 @@ export async function GET(request: NextRequest) {
       ? Math.round(((feedbacksThisMonth - feedbacksLastMonth) / feedbacksLastMonth) * 100)
       : feedbacksThisMonth > 0 ? 100 : 0;
 
-    // Calculate conversion rate (feedbacks / scans)
     const scans = totalScans._sum.scanCount || 0;
-    const conversionRate = scans > 0 
-      ? Math.round((totalFeedbacks / scans) * 100) 
-      : 0;
 
     // Format top dealers
-    const formattedTopDealers = topDealers.map(dealer => {
-      const allFeedbacks = dealer.qrCodes.flatMap(qr => qr.feedbacks);
+    const formattedTopDealers = topDealers.map((dealer: any) => {
+      const allFeedbacks = dealer.qrCodes.flatMap((qr: any) => qr.feedbacks);
       const totalFeedbackCount = allFeedbacks.length;
       const avgRating = totalFeedbackCount > 0
-        ? (allFeedbacks.reduce((sum, f) => sum + f.rating, 0) / totalFeedbackCount).toFixed(1)
+        ? (allFeedbacks.reduce((sum: number, f: any) => sum + f.rating, 0) / totalFeedbackCount).toFixed(1)
         : '0.0';
       
       return {
@@ -181,10 +153,10 @@ export async function GET(request: NextRequest) {
         feedbacks: totalFeedbackCount,
         rating: parseFloat(avgRating),
       };
-    }).sort((a, b) => b.feedbacks - a.feedbacks);
+    }).sort((a: any, b: any) => b.feedbacks - a.feedbacks);
 
     // Format recent feedbacks
-    const formattedRecentFeedbacks = recentFeedbacks.map(f => ({
+    const formattedRecentFeedbacks = recentFeedbacks.map((f: any) => ({
       id: f.id,
       text: f.text || 'Yorum yapılmadı',
       rating: f.rating,
@@ -192,7 +164,29 @@ export async function GET(request: NextRequest) {
       createdAt: f.createdAt,
       userName: f.user?.name || 'Anonim',
       businessName: f.qrCode.dealer?.businessName || f.qrCode.name,
+      type: 'qr',
     }));
+    
+    // Format recent consumption reviews
+    const formattedConsumptionReviews = recentConsumptionReviews.map((r: any) => ({
+      id: r.id,
+      text: r.text || 'Yorum yapılmadı',
+      rating: r.rating,
+      sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+      createdAt: r.createdAt,
+      userName: r.customer?.name || 'Anonim',
+      businessName: r.consumption?.dealer?.businessName || r.consumption?.dealer?.name || 'İşletme',
+      productName: r.consumption?.product?.name,
+      type: 'consumption',
+    }));
+    
+    // Combine and sort all recent reviews
+    const allRecentReviews = [...formattedRecentFeedbacks, ...formattedConsumptionReviews]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+
+    // Total all reviews
+    const totalAllReviews = totalFeedbacks + cardStats.reviews;
 
     // Stats for cards
     const stats = [
@@ -205,24 +199,24 @@ export async function GET(request: NextRequest) {
         iconBgColor: 'bg-blue-500/10',
       },
       {
-        title: 'Geri Bildirim',
-        value: totalFeedbacks,
+        title: 'Toplam Yorum',
+        value: totalAllReviews,
         change: feedbackChange,
         icon: 'MessageSquare',
         iconColor: 'text-green-500',
         iconBgColor: 'bg-green-500/10',
       },
       {
-        title: 'Aktif QR Kod',
-        value: activeQRCodes,
-        change: Math.round((activeQRCodes / Math.max(totalQRCodes, 1)) * 100),
-        icon: 'QrCode',
-        iconColor: 'text-purple-500',
-        iconBgColor: 'bg-purple-500/10',
+        title: 'Aktif Kartlar',
+        value: cardStats.activated,
+        change: cardStats.total > 0 ? Math.round((cardStats.activated / cardStats.total) * 100) : 0,
+        icon: 'CreditCard',
+        iconColor: 'text-cyan-500',
+        iconBgColor: 'bg-cyan-500/10',
       },
       {
-        title: 'Dönüşüm Oranı',
-        value: `${conversionRate}%`,
+        title: 'Tüketimler',
+        value: cardStats.consumptions,
         change: 0,
         icon: 'TrendingUp',
         iconColor: 'text-orange-500',
@@ -234,7 +228,7 @@ export async function GET(request: NextRequest) {
       success: true,
       stats,
       recentUsers,
-      recentFeedbacks: formattedRecentFeedbacks,
+      recentFeedbacks: allRecentReviews,
       topDealers: formattedTopDealers,
       sentiment: {
         positive: positiveFeedbacks,
@@ -243,11 +237,13 @@ export async function GET(request: NextRequest) {
       },
       totals: {
         users: totalUsers,
-        feedbacks: totalFeedbacks,
+        feedbacks: totalAllReviews,
         qrCodes: totalQRCodes,
         activeQRCodes,
         scans,
-      }
+        ...cardStats,
+      },
+      cardStats,
     });
   } catch (error) {
     console.error('Error fetching admin dashboard:', error);
@@ -257,7 +253,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
-
-
-

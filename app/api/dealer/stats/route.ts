@@ -23,31 +23,80 @@ export async function GET() {
     const qrCodes = await prisma.qRCode.findMany({
       where: { dealerId },
       include: {
-        _count: {
-          select: { feedbacks: true },
-        },
+        _count: { select: { feedbacks: true } },
         feedbacks: {
-          select: {
-            rating: true,
-            sentiment: true,
-            createdAt: true,
-            text: true,
-          },
+          select: { rating: true, sentiment: true, createdAt: true, text: true },
           orderBy: { createdAt: 'desc' },
         },
       },
     });
 
-    // Calculate stats
+    // Get consumption data (with fallback)
+    let consumptionData = {
+      consumptions: [] as any[],
+      totalConsumptions: 0,
+      totalCustomers: 0,
+      consumptionReviewCount: 0,
+      recentConsumptionReviews: [] as any[],
+    };
+    
+    try {
+      const [consumptions, consumptionReviews, uniqueCustomers] = await Promise.all([
+        (prisma as any).consumption.findMany({
+          where: { dealerId },
+          include: {
+            customer: { select: { id: true, name: true, image: true } },
+            product: { select: { name: true, category: { select: { name: true, icon: true } } } },
+            review: { select: { id: true, rating: true, text: true, createdAt: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        (prisma as any).consumptionReview.findMany({
+          where: { consumption: { dealerId } },
+          include: {
+            customer: { select: { name: true, image: true } },
+            consumption: { select: { product: { select: { name: true } } } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+        (prisma as any).consumption.groupBy({
+          by: ['customerId'],
+          where: { dealerId },
+        }),
+      ]);
+      
+      consumptionData = {
+        consumptions,
+        totalConsumptions: consumptions.length,
+        totalCustomers: uniqueCustomers.length,
+        consumptionReviewCount: consumptions.filter((c: any) => c.review).length,
+        recentConsumptionReviews: consumptionReviews,
+      };
+    } catch (e) {
+      console.log('Consumption data not available:', e);
+    }
+
+    // Calculate QR stats
     const totalQRCodes = qrCodes.length;
     const activeQRCodes = qrCodes.filter(q => q.isActive).length;
     const totalScans = qrCodes.reduce((acc, q) => acc + q.scanCount, 0);
     
-    // Get all feedbacks for this dealer
-    const allFeedbacks = qrCodes.flatMap(q => q.feedbacks);
+    // Get all feedbacks (QR + Consumption)
+    const allQRFeedbacks = qrCodes.flatMap(q => q.feedbacks);
+    const allConsumptionReviews = consumptionData.consumptions
+      .filter((c: any) => c.review)
+      .map((c: any) => ({
+        rating: c.review.rating,
+        sentiment: c.review.rating >= 4 ? 'positive' : c.review.rating >= 3 ? 'neutral' : 'negative',
+        createdAt: c.review.createdAt,
+        text: c.review.text,
+      }));
+    
+    const allFeedbacks = [...allQRFeedbacks, ...allConsumptionReviews];
     const totalFeedbacks = allFeedbacks.length;
     
-    // Calculate feedbacks in current and previous periods
+    // Calculate feedbacks in periods
     const currentPeriodFeedbacks = allFeedbacks.filter(f => new Date(f.createdAt) >= last30Days);
     const previousPeriodFeedbacks = allFeedbacks.filter(
       f => new Date(f.createdAt) >= prev30Days && new Date(f.createdAt) < last30Days
@@ -64,13 +113,10 @@ export async function GET() {
       ? allFeedbacks.reduce((acc, f) => acc + f.rating, 0) / totalFeedbacks
       : 0;
       
-    // Previous period rating
     const prevAvgRating = previousPeriodFeedbacks.length > 0
       ? previousPeriodFeedbacks.reduce((acc, f) => acc + f.rating, 0) / previousPeriodFeedbacks.length
       : 0;
-    const ratingChange = prevAvgRating > 0 
-      ? Number((avgRating - prevAvgRating).toFixed(1))
-      : 0;
+    const ratingChange = prevAvgRating > 0 ? Number((avgRating - prevAvgRating).toFixed(1)) : 0;
 
     // Sentiment breakdown
     const sentimentData = {
@@ -86,7 +132,7 @@ export async function GET() {
       negative: Math.round((sentimentData.negative / totalSentiment) * 100),
     };
     
-    // Weekly chart data (last 7 days)
+    // Weekly chart data
     const weeklyData = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
@@ -107,26 +153,18 @@ export async function GET() {
       });
     }
 
-    // Recent feedbacks with QR info
+    // Recent QR feedbacks
     const recentFeedbacksData = await prisma.feedback.findMany({
-      where: {
-        qrCode: {
-          dealerId,
-        },
-      },
+      where: { qrCode: { dealerId } },
       include: {
-        qrCode: {
-          select: { name: true },
-        },
-        user: {
-          select: { name: true, image: true },
-        },
+        qrCode: { select: { name: true } },
+        user: { select: { name: true, image: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
     });
 
-    // Top QR codes by scans
+    // Top QR codes
     const topQRCodes = qrCodes
       .sort((a, b) => b.scanCount - a.scanCount)
       .slice(0, 6)
@@ -146,19 +184,50 @@ export async function GET() {
         };
       });
       
-    // Performance score (0-100)
-    const ratingScore = (avgRating / 5) * 40; // Max 40 points
-    const engagementScore = totalScans > 0 ? Math.min((totalFeedbacks / totalScans) * 100, 30) : 0; // Max 30 points
-    const sentimentScore = sentimentPercentage.positive * 0.3; // Max 30 points
+    // Performance score
+    const ratingScore = (avgRating / 5) * 40;
+    const engagementScore = totalScans > 0 ? Math.min((totalFeedbacks / totalScans) * 100, 30) : 0;
+    const sentimentScore = sentimentPercentage.positive * 0.3;
     const performanceScore = Math.round(ratingScore + engagementScore + sentimentScore);
     
-    // Performance level
     let performanceLevel = 'Başlangıç';
     let performanceColor = 'gray';
     if (performanceScore >= 80) { performanceLevel = 'Mükemmel'; performanceColor = 'emerald'; }
     else if (performanceScore >= 60) { performanceLevel = 'Çok İyi'; performanceColor = 'green'; }
     else if (performanceScore >= 40) { performanceLevel = 'İyi'; performanceColor = 'yellow'; }
     else if (performanceScore >= 20) { performanceLevel = 'Gelişiyor'; performanceColor = 'orange'; }
+
+    // Format recent consumption reviews
+    const recentConsumptionReviewsFormatted = consumptionData.recentConsumptionReviews.slice(0, 5).map((r: any) => ({
+      id: r.id,
+      rating: r.rating,
+      text: r.text,
+      sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+      createdAt: r.createdAt,
+      productName: r.consumption?.product?.name || 'Ürün',
+      userName: r.customer?.name || 'Müşteri',
+      userImage: r.customer?.image,
+      type: 'consumption',
+    }));
+    
+    // Combine recent feedbacks
+    const combinedRecentFeedbacks = [
+      ...recentFeedbacksData.map(f => ({
+        id: f.id,
+        rating: f.rating,
+        text: f.text,
+        sentiment: f.sentiment,
+        createdAt: f.createdAt,
+        qrName: f.qrCode.name,
+        userName: f.user?.name || 'Anonim',
+        userImage: f.user?.image,
+        type: 'qr' as const,
+      })),
+      ...recentConsumptionReviewsFormatted,
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+
+    const pendingReviews = consumptionData.totalConsumptions - consumptionData.consumptionReviewCount;
 
     return NextResponse.json({
       success: true,
@@ -172,36 +241,35 @@ export async function GET() {
           feedbackGrowth,
           ratingChange,
           weeklyFeedbacks: recentFeedbacks7d.length,
-          conversionRate: totalScans > 0 
-            ? ((totalFeedbacks / totalScans) * 100).toFixed(1)
-            : '0',
+          conversionRate: totalScans > 0 ? ((totalFeedbacks / totalScans) * 100).toFixed(1) : '0',
+          totalConsumptions: consumptionData.totalConsumptions,
+          totalCustomers: consumptionData.totalCustomers,
+          consumptionReviewCount: consumptionData.consumptionReviewCount,
+          pendingReviews,
         },
-        performance: {
-          score: performanceScore,
-          level: performanceLevel,
-          color: performanceColor,
-        },
+        performance: { score: performanceScore, level: performanceLevel, color: performanceColor },
         sentimentData: sentimentPercentage,
         weeklyData,
-        recentFeedbacks: recentFeedbacksData.map(f => ({
-          id: f.id,
-          rating: f.rating,
-          text: f.text,
-          sentiment: f.sentiment,
-          createdAt: f.createdAt,
-          qrName: f.qrCode.name,
-          userName: f.user?.name || 'Anonim',
-          userImage: f.user?.image,
-        })),
+        recentFeedbacks: combinedRecentFeedbacks,
         qrCodes: topQRCodes,
+        consumptionStats: {
+          total: consumptionData.totalConsumptions,
+          customers: consumptionData.totalCustomers,
+          reviewed: consumptionData.consumptionReviewCount,
+          pending: pendingReviews,
+        },
+        recentConsumptions: consumptionData.consumptions.slice(0, 5).map((c: any) => ({
+          id: c.id,
+          customer: c.customer,
+          product: c.product,
+          hasReview: !!c.review,
+          review: c.review,
+          createdAt: c.createdAt,
+        })),
       },
     });
   } catch (error) {
     console.error('Dealer stats error:', error);
-    return NextResponse.json(
-      { success: false, error: 'İstatistikler yüklenemedi' },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: 'İstatistikler yüklenemedi' }, { status: 500 });
   }
 }
-

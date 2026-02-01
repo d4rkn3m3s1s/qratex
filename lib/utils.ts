@@ -118,6 +118,67 @@ export function generateQRCode(): string {
   return result;
 }
 
+/**
+ * Fiziksel kart için güvenli, benzersiz token üretir
+ * 21 karakter uzunluğunda, ~126 bit entropi
+ * URL-safe karakterler kullanır
+ */
+export function generateCardToken(prefix?: string): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const tokenLength = 21;
+  let token = '';
+  
+  // Crypto API varsa kullan (daha güvenli)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint8Array(tokenLength);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < tokenLength; i++) {
+      token += chars[array[i] % chars.length];
+    }
+  } else {
+    // Fallback to Math.random
+    for (let i = 0; i < tokenLength; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+  }
+  
+  return prefix ? `${prefix}_${token}` : token;
+}
+
+/**
+ * Batch için benzersiz ID üretir
+ */
+export function generateBatchId(): string {
+  const date = new Date();
+  const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+  const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `BATCH_${dateStr}_${randomPart}`;
+}
+
+/**
+ * Kart durumunu Türkçe'ye çevirir
+ */
+export function getCardStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    UNUSED: 'Aktive Edilmemiş',
+    ACTIVATED: 'Aktif',
+    BLOCKED: 'Bloklanmış',
+  };
+  return labels[status] || status;
+}
+
+/**
+ * Kart durumu için renk döndürür
+ */
+export function getCardStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    UNUSED: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    ACTIVATED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    BLOCKED: 'bg-red-500/20 text-red-400 border-red-500/30',
+  };
+  return colors[status] || colors.UNUSED;
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()
