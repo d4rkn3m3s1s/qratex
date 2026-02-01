@@ -133,7 +133,7 @@ export async function POST(
         title: 'QRateX Kartınız Aktive Edildi!',
         message: `Admin tarafından size bir QRateX kartı atandı. Artık tüketim kaydı oluşturabilirsiniz.`,
         type: 'SYSTEM',
-        actionUrl: '/customer/my-card',
+        data: { actionUrl: '/customer/my-card' },
       },
     });
 

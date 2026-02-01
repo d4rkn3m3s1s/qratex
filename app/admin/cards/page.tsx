@@ -954,7 +954,7 @@ export default function AdminCardsPage() {
             <AlertDialogTitle>Kartı Sil</AlertDialogTitle>
             <AlertDialogDescription>
               Bu kart kalıcı olarak silinecek. Bu işlem geri alınamaz.
-              {deletingCard?._count.consumptions > 0 && (
+              {deletingCard?._count?.consumptions && deletingCard._count.consumptions > 0 && (
                 <span className="block mt-2 text-red-500">
                   ⚠️ Bu kartın {deletingCard._count.consumptions} tüketim kaydı var!
                 </span>

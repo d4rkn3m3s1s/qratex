@@ -85,8 +85,8 @@ export async function POST(
         consumptionId: consumption.id,
         customerId: session.user.id,
         rating,
-        text: text || null,
-        dimensions: dimensions || null,
+        text: text || undefined,
+        dimensions: dimensions || undefined,
       },
     });
 
@@ -201,8 +201,8 @@ export async function PUT(
       where: { id: existingReview.id },
       data: {
         rating,
-        text: text || null,
-        dimensions: dimensions || null,
+        text: text || undefined,
+        dimensions: dimensions || undefined,
       },
     });
 

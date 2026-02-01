@@ -250,7 +250,7 @@ export async function DELETE(request: NextRequest) {
         action: 'DELETE_FEEDBACKS',
         entity: 'Feedback',
         entityId: feedbackIds.join(','),
-        metadata: { count: feedbackIds.length, type },
+        newData: { count: feedbackIds.length, type },
       },
     });
 

@@ -54,13 +54,13 @@ export async function GET(request: NextRequest) {
     const [weeklyFeedbacks, monthlyFeedbacks] = await Promise.all([
       prisma.feedback.count({
         where: {
-          customerId: userId,
+          userId: userId,
           createdAt: { gte: thisWeekStart },
         },
       }),
       prisma.feedback.count({
         where: {
-          customerId: userId,
+          userId: userId,
           createdAt: { gte: thisMonthStart },
         },
       }),
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate streak from recent feedbacks
     const recentFeedbacks = await prisma.feedback.findMany({
-      where: { customerId: userId },
+      where: { userId: userId },
       orderBy: { createdAt: 'desc' },
       take: 30,
       select: { createdAt: true },

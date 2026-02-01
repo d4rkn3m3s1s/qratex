@@ -258,6 +258,11 @@ export async function GET(request: NextRequest) {
       : '0';
 
     // Comparison metrics
+    const positiveCurrent = Math.round((positiveCount / totalSentiment) * 100);
+    const positivePrevious = prevFeedbacks.length > 0 
+      ? Math.round((prevFeedbacks.filter(f => f.sentiment === 'positive').length / prevFeedbacks.length) * 100)
+      : 0;
+    
     const comparison = {
       feedbacks: {
         current: totalFeedbacks,
@@ -270,13 +275,11 @@ export async function GET(request: NextRequest) {
         change: ratingChange,
       },
       positive: {
-        current: Math.round((positiveCount / totalSentiment) * 100),
-        previous: prevFeedbacks.length > 0 
-          ? Math.round((prevFeedbacks.filter(f => f.sentiment === 'positive').length / prevFeedbacks.length) * 100)
-          : 0,
+        current: positiveCurrent,
+        previous: positivePrevious,
+        change: positiveCurrent - positivePrevious,
       },
     };
-    comparison.positive.change = comparison.positive.current - comparison.positive.previous;
 
     // Peak time
     const peakHour = hourlyData.indexOf(Math.max(...hourlyData));
