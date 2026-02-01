@@ -196,17 +196,15 @@ export default function HomePage() {
 
   return (
     <div className="relative">
+      {/* Global Dynamic Background - Covers entire page */}
+      {backgroundEffect !== 'none' && backgroundEffect !== 'original' && (
+        <DynamicBackground variant={backgroundEffect} fetchFromApi={false}>
+          <div />
+        </DynamicBackground>
+      )}
+
       {/* Hero Section */}
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden pt-16">
-        {/* Dynamic Background from Admin Settings (not original or none) */}
-        {backgroundEffect !== 'none' && backgroundEffect !== 'original' && (
-          <div className="absolute inset-0 z-0">
-            <DynamicBackground variant={backgroundEffect} fetchFromApi={false} className="absolute inset-0">
-              <div />
-            </DynamicBackground>
-          </div>
-        )}
-
         {/* Original/Default Background Effects */}
         {(backgroundEffect === 'original' || backgroundEffect === 'none') && (
           <>

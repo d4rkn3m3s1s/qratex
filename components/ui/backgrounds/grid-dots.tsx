@@ -1,34 +1,25 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 interface GridDotsBackgroundProps {
   children?: React.ReactNode;
   className?: string;
   variant?: 'grid' | 'dots' | 'grid-small';
-  showGradient?: boolean;
 }
 
 export function GridDotsBackground({
   children,
   className,
   variant = 'grid',
-  showGradient = true,
 }: GridDotsBackgroundProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setMousePosition({
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        });
-      }
+      setMousePosition({ x: e.clientX, y: e.clientY });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -39,14 +30,14 @@ export function GridDotsBackground({
     switch (variant) {
       case 'dots':
         return {
-          backgroundImage: `radial-gradient(circle, hsl(var(--primary) / 0.15) 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(circle, hsl(var(--primary) / 0.3) 1px, transparent 1px)`,
           backgroundSize: '24px 24px',
         };
       case 'grid-small':
         return {
           backgroundImage: `
-            linear-gradient(hsl(var(--primary) / 0.1) 1px, transparent 1px),
-            linear-gradient(90deg, hsl(var(--primary) / 0.1) 1px, transparent 1px)
+            linear-gradient(hsl(var(--primary) / 0.15) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(var(--primary) / 0.15) 1px, transparent 1px)
           `,
           backgroundSize: '16px 16px',
         };
@@ -54,8 +45,8 @@ export function GridDotsBackground({
       default:
         return {
           backgroundImage: `
-            linear-gradient(hsl(var(--primary) / 0.1) 1px, transparent 1px),
-            linear-gradient(90deg, hsl(var(--primary) / 0.1) 1px, transparent 1px)
+            linear-gradient(hsl(var(--primary) / 0.15) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(var(--primary) / 0.15) 1px, transparent 1px)
           `,
           backgroundSize: '40px 40px',
         };
@@ -63,37 +54,30 @@ export function GridDotsBackground({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={cn(
-        'relative min-h-full w-full overflow-hidden bg-background',
-        className
-      )}
-    >
-      {/* Grid/Dots pattern */}
-      <div
-        className="absolute inset-0"
-        style={getPatternStyle()}
-      />
+    <>
+      {/* Fixed grid/dots background */}
+      <div className={cn('fixed inset-0 pointer-events-none z-0', className)}>
+        {/* Pattern layer */}
+        <div className="absolute inset-0" style={getPatternStyle()} />
 
-      {/* Gradient spotlight following mouse */}
-      {showGradient && (
+        {/* Mouse follow glow */}
         <motion.div
-          className="pointer-events-none absolute inset-0"
+          className="absolute w-[600px] h-[600px] rounded-full"
           animate={{
-            background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, hsl(var(--primary) / 0.1), transparent 40%)`,
+            x: mousePosition.x - 300,
+            y: mousePosition.y - 300,
           }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+          style={{
+            background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
+          }}
         />
-      )}
 
-      {/* Fade edges */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-background via-transparent to-background" />
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-background via-transparent to-background opacity-50" />
-
-      {/* Content */}
-      <div className="relative z-10">{children}</div>
-    </div>
+        {/* Corner glows */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-radial from-primary/10 to-transparent rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-radial from-accent/10 to-transparent rounded-full blur-3xl" />
+      </div>
+      {children}
+    </>
   );
 }
-

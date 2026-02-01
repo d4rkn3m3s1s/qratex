@@ -44,7 +44,7 @@ export function SparklesCore({
 
   return (
     <div
-      className={cn('h-full w-full absolute inset-0 overflow-hidden', className)}
+      className={cn('h-full w-full fixed inset-0 overflow-hidden pointer-events-none', className)}
       style={{ background }}
     >
       <svg className="absolute inset-0 w-full h-full">

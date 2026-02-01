@@ -119,10 +119,10 @@ export function StarfieldBackground({
   }, [starCount, speed, isDark]);
 
   return (
-    <div className={cn('relative flex flex-col h-full w-full items-center justify-center bg-background', className)}>
+    <div className={cn('relative flex flex-col h-full w-full items-center justify-center', className)}>
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 z-0"
+        className="fixed inset-0 z-0 pointer-events-none"
       />
       <div className="relative z-10">{children}</div>
     </div>

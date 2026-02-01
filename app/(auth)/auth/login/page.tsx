@@ -89,17 +89,21 @@ function LoginPageContent() {
         toast.error('Giriş başarısız', {
           description: 'Email veya şifre hatalı',
         });
-      } else {
+        setIsLoading(false);
+      } else if (result?.ok) {
         toast.success('Giriş başarılı!', {
           description: 'Yönlendiriliyorsunuz...',
         });
+        
+        // Wait for session to be established
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Get session to determine role-based redirect
         const session = await getSession();
         const role = session?.user?.role;
         
         if (callbackUrl && callbackUrl !== '/') {
-          router.push(callbackUrl);
+          window.location.href = callbackUrl;
         } else {
           // Role-based redirect
           const redirectUrl = role === 'ADMIN' ? '/admin' 
@@ -113,7 +117,6 @@ function LoginPageContent() {
       toast.error('Bir hata oluştu', {
         description: 'Lütfen tekrar deneyin',
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -134,9 +137,13 @@ function LoginPageContent() {
         toast.error('Demo giriş başarısız', {
           description: 'Veritabanı seed edilmemiş olabilir',
         });
-      } else {
+        setIsLoading(false);
+      } else if (result?.ok) {
         const label = account.label;
         toast.success(label + ' olarak giriş yapıldı!');
+        
+        // Wait for session to be established
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Route based on role
         const roleRoutes = {
@@ -149,7 +156,6 @@ function LoginPageContent() {
       }
     } catch (error) {
       toast.error('Bir hata oluştu');
-    } finally {
       setIsLoading(false);
     }
   };

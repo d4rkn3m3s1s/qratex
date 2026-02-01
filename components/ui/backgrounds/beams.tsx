@@ -32,12 +32,12 @@ export function BackgroundBeams({ children, className }: BackgroundBeamsProps) {
     <div
       ref={containerRef}
       className={cn(
-        'relative min-h-full w-full overflow-hidden bg-background',
+        'relative min-h-full w-full overflow-hidden',
         className
       )}
     >
       {/* Animated beams */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <svg
           className="absolute inset-0 h-full w-full"
           xmlns="http://www.w3.org/2000/svg"

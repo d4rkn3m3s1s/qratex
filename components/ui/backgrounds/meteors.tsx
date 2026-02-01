@@ -59,9 +59,9 @@ export function MeteorsBackground({
   }, [number]);
 
   return (
-    <div className={cn('relative min-h-full w-full overflow-hidden bg-background', className)}>
+    <div className={cn('relative min-h-full w-full overflow-hidden', className)}>
       {/* Stars */}
-      <div className="absolute inset-0">
+      <div className="fixed inset-0 pointer-events-none">
         {[...Array(100)].map((_, i) => (
           <div
             key={i}
@@ -77,7 +77,7 @@ export function MeteorsBackground({
       </div>
 
       {/* Meteors */}
-      <div className="absolute inset-0 overflow-hidden">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {meteors.map((_, i) => (
           <Meteor key={i} delay={i * 0.3} />
         ))}

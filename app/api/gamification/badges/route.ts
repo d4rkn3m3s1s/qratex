@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createBadgeSchema } from '@/lib/validations';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const userIdParam = searchParams.get('userId');
     const category = searchParams.get('category');
+
+    // If userId is 'me', use session user
+    const userId = userIdParam === 'me' && session?.user?.id 
+      ? session.user.id 
+      : userIdParam;
 
     let where: Record<string, unknown> = { isActive: true };
     
@@ -23,64 +28,130 @@ export async function GET(request: NextRequest) {
           select: { users: true },
         },
       },
-      orderBy: [{ createdAt: 'desc' }],
+      orderBy: [
+        { rarity: 'desc' }, // legendary first
+        { createdAt: 'desc' },
+      ],
     });
 
-    // Transform to match frontend expected format
-    const transformedBadges = badges.map((badge) => ({
-      id: badge.id,
-      name: badge.name,
-      description: badge.description,
-      icon: badge.icon,
-      rarity: (badge.rarity || 'common').toUpperCase() as 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
-      points: (badge.requirement as { value?: number })?.value || 100,
-      requirement: badge.description,
-      isActive: badge.isActive,
-      _count: badge._count,
-    }));
+    // Get user's progress data for calculating badge progress
+    let userProgress = {
+      feedbackCount: 0,
+      totalPoints: 0,
+      currentStreak: 0,
+      longestStreak: 0,
+      level: 1,
+      referralCount: 0,
+      questsCompleted: 0,
+    };
 
-    // If userId provided, get user's earned badges
-    if (userId && userId !== 'me') {
+    let userBadgeMap = new Map<string, Date>();
+
+    if (userId) {
+      // Get user's earned badges
       const userBadgesData = await prisma.userBadge.findMany({
         where: { userId },
-        include: {
-          badge: true,
+      });
+      userBadgeMap = new Map(userBadgesData.map((ub) => [ub.badgeId, ub.earnedAt]));
+
+      // Get user's progress
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          points: true,
+          level: true,
+          xp: true,
+          _count: {
+            select: {
+              feedbacks: true,
+              quests: true,
+              badges: true,
+            },
+          },
         },
       });
 
-      const userBadgeMap = new Map(
-        userBadgesData.map((ub) => [ub.badgeId, ub.earnedAt])
-      );
-
-      const badgesWithStatus = transformedBadges.map((badge) => ({
-        ...badge,
-        earned: userBadgeMap.has(badge.id),
-        earnedAt: userBadgeMap.get(badge.id) || null,
-      }));
-
-      // Return both all badges with status AND user's earned badges separately
-      const userBadges = userBadgesData.map((ub) => ({
-        id: ub.id,
-        badgeId: ub.badgeId,
-        earnedAt: ub.earnedAt,
-        badge: {
-          id: ub.badge.id,
-          name: ub.badge.name,
-          description: ub.badge.description,
-          icon: ub.badge.icon,
-          rarity: ub.badge.rarity,
-          category: ub.badge.category,
-        },
-      }));
-
-      return NextResponse.json({ 
-        success: true, 
-        data: badgesWithStatus,
-        userBadges: userBadges,
-      });
+      if (user) {
+        userProgress = {
+          feedbackCount: user._count.feedbacks,
+          totalPoints: user.points || 0,
+          currentStreak: 0, // Would need to calculate from feedbacks
+          longestStreak: 0,
+          level: user.level || 1,
+          referralCount: 0,
+          questsCompleted: user._count.quests,
+        };
+      }
     }
 
-    return NextResponse.json({ success: true, data: transformedBadges });
+    // Transform badges with progress calculation
+    const transformedBadges = badges.map((badge) => {
+      const requirement = badge.requirement as { type?: string; value?: number } | null;
+      const targetValue = requirement?.value || 10;
+      let currentValue = 0;
+      let progress = 0;
+
+      // Calculate progress based on requirement type
+      switch (requirement?.type) {
+        case 'feedback_count':
+          currentValue = userProgress.feedbackCount;
+          break;
+        case 'points':
+          currentValue = userProgress.totalPoints;
+          break;
+        case 'streak':
+          currentValue = userProgress.currentStreak;
+          break;
+        case 'longest_streak':
+          currentValue = userProgress.longestStreak;
+          break;
+        case 'level':
+          currentValue = userProgress.level;
+          break;
+        case 'referral':
+          currentValue = userProgress.referralCount;
+          break;
+        case 'quests':
+          currentValue = userProgress.questsCompleted;
+          break;
+        default:
+          currentValue = 0;
+      }
+
+      progress = Math.min(100, Math.floor((currentValue / targetValue) * 100));
+      const isEarned = userBadgeMap.has(badge.id);
+
+      return {
+        id: badge.id,
+        name: badge.name,
+        description: badge.description,
+        icon: badge.icon,
+        category: badge.category,
+        rarity: (badge.rarity || 'common').toUpperCase() as 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
+        points: targetValue,
+        requirement: badge.description,
+        requirementType: requirement?.type,
+        targetValue,
+        currentValue: isEarned ? targetValue : currentValue,
+        progress: isEarned ? 100 : progress,
+        earned: isEarned,
+        earnedAt: userBadgeMap.get(badge.id) || null,
+        earnedCount: badge._count.users,
+      };
+    });
+
+    // Sort: earned first, then by progress
+    transformedBadges.sort((a, b) => {
+      if (a.earned && !b.earned) return -1;
+      if (!a.earned && b.earned) return 1;
+      return b.progress - a.progress;
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      data: transformedBadges,
+      userProgress,
+    });
   } catch (error) {
     console.error('Error fetching badges:', error);
     return NextResponse.json(

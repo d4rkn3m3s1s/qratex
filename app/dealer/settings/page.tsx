@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
   Save,
@@ -15,8 +15,18 @@ import {
   Mail,
   Camera,
   Check,
+  Phone,
+  MapPin,
+  FileText,
+  Loader2,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  Sparkles,
+  X,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,14 +35,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { getInitials } from '@/lib/utils';
 
@@ -115,6 +118,9 @@ export default function DealerSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Erkek');
+  const [activeTab, setActiveTab] = useState('profile');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   
   const [profile, setProfile] = useState({
     name: '',
@@ -171,8 +177,7 @@ export default function DealerSettingsPage() {
 
       if (res.ok) {
         await update({ name: profile.name, image: profile.avatar });
-        toast.success('Profil güncellendi');
-        // Refresh to update session data
+        toast.success('Profil başarıyla güncellendi!');
         router.refresh();
       } else {
         toast.error('Profil güncellenemedi');
@@ -188,7 +193,7 @@ export default function DealerSettingsPage() {
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
-      toast.success('Bildirim ayarları güncellendi');
+      toast.success('Bildirim ayarları güncellendi!');
     }, 1000);
   };
 
@@ -214,7 +219,7 @@ export default function DealerSettingsPage() {
 
       if (res.ok) {
         setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        toast.success('Şifre güncellendi');
+        toast.success('Şifre başarıyla güncellendi!');
       } else {
         const data = await res.json();
         toast.error(data.error || 'Şifre güncellenemedi');
@@ -228,24 +233,57 @@ export default function DealerSettingsPage() {
 
   const currentCategoryAvatars = avatarList.find(c => c.category === selectedCategory)?.items || [];
 
-  return (
-    <div className="space-y-6">
-      <DashboardHeader
-        title="Ayarlar"
-        description="Hesap ve işletme ayarlarınızı yönetin"
-      />
+  const passwordStrength = (password: string) => {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    return strength;
+  };
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-          <TabsTrigger value="profile" className="gap-2">
+  const getStrengthLabel = (strength: number) => {
+    if (strength <= 1) return { label: 'Zayıf', color: 'bg-red-500' };
+    if (strength <= 2) return { label: 'Orta', color: 'bg-yellow-500' };
+    if (strength <= 3) return { label: 'İyi', color: 'bg-blue-500' };
+    return { label: 'Güçlü', color: 'bg-emerald-500' };
+  };
+
+  return (
+    <div className="space-y-6 pb-8">
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 p-6 md:p-8"
+      >
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-violet-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-blue-500/10 rounded-full blur-3xl" />
+        </div>
+        
+        <div className="relative z-10">
+          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
+            <Settings className="w-8 h-8" />
+            Ayarlar
+          </h1>
+          <p className="text-white/70 mt-1">Hesap ve işletme ayarlarınızı yönetin</p>
+        </div>
+      </motion.div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid bg-muted/50 p-1">
+          <TabsTrigger value="profile" className="gap-2 data-[state=active]:bg-background">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Profil</span>
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
+          <TabsTrigger value="notifications" className="gap-2 data-[state=active]:bg-background">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Bildirimler</span>
           </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2">
+          <TabsTrigger value="security" className="gap-2 data-[state=active]:bg-background">
             <Shield className="h-4 w-4" />
             <span className="hidden sm:inline">Güvenlik</span>
           </TabsTrigger>
@@ -259,83 +297,27 @@ export default function DealerSettingsPage() {
             className="space-y-6"
           >
             {/* Avatar Section */}
-            <Card glass>
-              <CardHeader>
-                <CardTitle>Profil Fotoğrafı</CardTitle>
-                <CardDescription>Avatarınızı seçin veya değiştirin</CardDescription>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
+            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <div className="h-24 bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500" />
+              <CardContent className="relative pt-0 pb-6 px-6">
+                <div className="flex flex-col sm:flex-row items-center gap-6 -mt-12">
                   <div className="relative group">
-                    <Avatar className="h-28 w-28 border-4 border-primary/20">
+                    <Avatar className="h-28 w-28 border-4 border-background shadow-xl">
                       <AvatarImage src={profile.avatar} />
-                      <AvatarFallback className="text-2xl bg-primary/10 text-primary">
+                      <AvatarFallback className="text-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white">
                         {getInitials(profile.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <Dialog open={avatarDialogOpen} onOpenChange={setAvatarDialogOpen}>
-                      <DialogTrigger asChild>
-                        <button className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Camera className="h-8 w-8 text-white" />
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-                        <DialogHeader>
-                          <DialogTitle>Avatar Seç</DialogTitle>
-                          <DialogDescription>
-                            Profiliniz için bir avatar seçin
-                          </DialogDescription>
-                        </DialogHeader>
-                        
-                        {/* Category Tabs */}
-                        <div className="flex flex-wrap gap-2 py-2 border-b">
-                          {avatarList.map((category) => (
-                            <Button
-                              key={category.category}
-                              variant={selectedCategory === category.category ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => setSelectedCategory(category.category)}
-                            >
-                              {category.category}
-                            </Button>
-                          ))}
-                        </div>
-
-                        {/* Avatar Grid */}
-                        <div className="flex-1 overflow-y-auto py-4">
-                          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
-                            {currentCategoryAvatars.map((avatar) => (
-                              <button
-                                key={avatar}
-                                onClick={() => handleSelectAvatar(avatar)}
-                                className={`relative p-2 rounded-xl border-2 transition-all hover:scale-105 ${
-                                  profile.avatar === avatar
-                                    ? 'border-primary bg-primary/10 ring-2 ring-primary/50'
-                                    : 'border-border hover:border-primary/50'
-                                }`}
-                              >
-                                <Image
-                                  src={avatar}
-                                  alt="Avatar"
-                                  width={64}
-                                  height={64}
-                                  className="w-full h-auto"
-                                />
-                                {profile.avatar === avatar && (
-                                  <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-                                    <Check className="h-3 w-3 text-white" />
-                                  </div>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                    <button 
+                      onClick={() => setAvatarDialogOpen(true)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Camera className="h-8 w-8 text-white" />
+                    </button>
                   </div>
                   <div className="text-center sm:text-left">
-                    <h3 className="font-semibold text-lg">{profile.name}</h3>
-                    <p className="text-sm text-muted-foreground">{profile.email}</p>
+                    <h3 className="font-bold text-xl">{profile.name}</h3>
+                    <p className="text-muted-foreground">{profile.email}</p>
                     <Button
                       variant="outline"
                       size="sm"
@@ -351,75 +333,102 @@ export default function DealerSettingsPage() {
             </Card>
 
             {/* Personal Info */}
-            <Card glass>
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
+                  <div className="p-2 rounded-lg bg-blue-500/10">
+                    <User className="h-5 w-5 text-blue-500" />
+                  </div>
                   Kişisel Bilgiler
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Ad Soyad</Label>
+                    <Label className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      Ad Soyad
+                    </Label>
                     <Input
                       value={profile.name}
                       onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                      className="bg-background/50"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Email</Label>
+                    <Label className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      Email
+                    </Label>
                     <Input
                       value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                       disabled
+                      className="bg-muted/50"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Telefon</Label>
+                  <Label className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    Telefon
+                  </Label>
                   <Input
                     value={profile.phone}
                     onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    className="bg-background/50"
                   />
                 </div>
               </CardContent>
             </Card>
 
             {/* Business Info */}
-            <Card glass>
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Building className="h-5 w-5" />
+                  <div className="p-2 rounded-lg bg-violet-500/10">
+                    <Building className="h-5 w-5 text-violet-500" />
+                  </div>
                   İşletme Bilgileri
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>İşletme Adı</Label>
+                  <Label className="flex items-center gap-2">
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                    İşletme Adı
+                  </Label>
                   <Input
                     value={profile.businessName}
                     onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
+                    className="bg-background/50"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Adres</Label>
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    Adres
+                  </Label>
                   <Input
                     value={profile.address}
                     onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+                    className="bg-background/50"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Açıklama</Label>
+                  <Label className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    Açıklama
+                  </Label>
                   <Textarea
                     value={profile.description}
                     onChange={(e) => setProfile({ ...profile, description: e.target.value })}
                     rows={3}
+                    className="bg-background/50"
                   />
                 </div>
-                <Button onClick={handleSaveProfile} disabled={saving} className="gap-2">
-                  <Save className="h-4 w-4" />
-                  {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                <Button onClick={handleSaveProfile} disabled={saving} className="gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
                 </Button>
               </CardContent>
             </Card>
@@ -432,83 +441,71 @@ export default function DealerSettingsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card glass>
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle>Bildirim Tercihleri</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <Bell className="h-5 w-5 text-amber-500" />
+                  </div>
+                  Bildirim Tercihleri
+                </CardTitle>
                 <CardDescription>Hangi bildirimleri almak istediğinizi seçin</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-8">
+                {/* Email Notifications */}
                 <div className="space-y-4">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
+                  <h4 className="font-semibold flex items-center gap-2 text-lg">
+                    <Mail className="h-5 w-5 text-blue-500" />
                     Email Bildirimleri
                   </h4>
-                  <div className="space-y-4 pl-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Yeni Geri Bildirim</p>
-                        <p className="text-sm text-muted-foreground">Her yeni geri bildirimde email al</p>
+                  <div className="space-y-4 pl-7">
+                    {[
+                      { key: 'emailFeedback', title: 'Yeni Geri Bildirim', desc: 'Her yeni geri bildirimde email al' },
+                      { key: 'emailWeekly', title: 'Haftalık Rapor', desc: 'Her hafta özet rapor al' },
+                      { key: 'emailAlerts', title: 'Uyarılar', desc: 'Olumsuz geri bildirimlerde uyarı al' },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div>
+                          <p className="font-medium">{item.title}</p>
+                          <p className="text-sm text-muted-foreground">{item.desc}</p>
+                        </div>
+                        <Switch
+                          checked={notifications[item.key as keyof typeof notifications]}
+                          onCheckedChange={(checked) => setNotifications({ ...notifications, [item.key]: checked })}
+                        />
                       </div>
-                      <Switch
-                        checked={notifications.emailFeedback}
-                        onCheckedChange={(checked) => setNotifications({ ...notifications, emailFeedback: checked })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Haftalık Rapor</p>
-                        <p className="text-sm text-muted-foreground">Her hafta özet rapor al</p>
-                      </div>
-                      <Switch
-                        checked={notifications.emailWeekly}
-                        onCheckedChange={(checked) => setNotifications({ ...notifications, emailWeekly: checked })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Uyarılar</p>
-                        <p className="text-sm text-muted-foreground">Olumsuz geri bildirimlerde uyarı al</p>
-                      </div>
-                      <Switch
-                        checked={notifications.emailAlerts}
-                        onCheckedChange={(checked) => setNotifications({ ...notifications, emailAlerts: checked })}
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
 
+                {/* Push Notifications */}
                 <div className="space-y-4">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <Bell className="h-4 w-4" />
+                  <h4 className="font-semibold flex items-center gap-2 text-lg">
+                    <Sparkles className="h-5 w-5 text-violet-500" />
                     Push Bildirimleri
                   </h4>
-                  <div className="space-y-4 pl-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Anlık Bildirimler</p>
-                        <p className="text-sm text-muted-foreground">Yeni geri bildirimlerde anlık bildirim</p>
+                  <div className="space-y-4 pl-7">
+                    {[
+                      { key: 'pushFeedback', title: 'Anlık Bildirimler', desc: 'Yeni geri bildirimlerde anlık bildirim' },
+                      { key: 'pushAlerts', title: 'Önemli Uyarılar', desc: 'Kritik durumlarda bildirim' },
+                    ].map((item) => (
+                      <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div>
+                          <p className="font-medium">{item.title}</p>
+                          <p className="text-sm text-muted-foreground">{item.desc}</p>
+                        </div>
+                        <Switch
+                          checked={notifications[item.key as keyof typeof notifications]}
+                          onCheckedChange={(checked) => setNotifications({ ...notifications, [item.key]: checked })}
+                        />
                       </div>
-                      <Switch
-                        checked={notifications.pushFeedback}
-                        onCheckedChange={(checked) => setNotifications({ ...notifications, pushFeedback: checked })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Önemli Uyarılar</p>
-                        <p className="text-sm text-muted-foreground">Kritik durumlarda bildirim</p>
-                      </div>
-                      <Switch
-                        checked={notifications.pushAlerts}
-                        onCheckedChange={(checked) => setNotifications({ ...notifications, pushAlerts: checked })}
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
 
-                <Button onClick={handleSaveNotifications} disabled={saving} className="gap-2">
-                  <Save className="h-4 w-4" />
-                  {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                <Button onClick={handleSaveNotifications} disabled={saving} className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
                 </Button>
               </CardContent>
             </Card>
@@ -521,27 +518,71 @@ export default function DealerSettingsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <Card glass>
+            <Card className="border-0 bg-card/50 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle>Şifre Değiştir</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-red-500/10">
+                    <Lock className="h-5 w-5 text-red-500" />
+                  </div>
+                  Şifre Değiştir
+                </CardTitle>
                 <CardDescription>Hesabınızın güvenliği için güçlü bir şifre kullanın</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Mevcut Şifre</Label>
-                  <Input
-                    type="password"
-                    value={security.currentPassword}
-                    onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={security.currentPassword}
+                      onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
+                      className="bg-background/50 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Yeni Şifre</Label>
-                  <Input
-                    type="password"
-                    value={security.newPassword}
-                    onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={security.newPassword}
+                      onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
+                      className="bg-background/50 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {security.newPassword && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((level) => (
+                          <div
+                            key={level}
+                            className={`h-1.5 flex-1 rounded-full ${
+                              level <= passwordStrength(security.newPassword)
+                                ? getStrengthLabel(passwordStrength(security.newPassword)).color
+                                : 'bg-muted'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Şifre gücü: {getStrengthLabel(passwordStrength(security.newPassword)).label}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Yeni Şifre (Tekrar)</Label>
@@ -549,10 +590,27 @@ export default function DealerSettingsPage() {
                     type="password"
                     value={security.confirmPassword}
                     onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
+                    className="bg-background/50"
                   />
+                  {security.confirmPassword && security.newPassword !== security.confirmPassword && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Şifreler eşleşmiyor
+                    </p>
+                  )}
+                  {security.confirmPassword && security.newPassword === security.confirmPassword && (
+                    <p className="text-xs text-emerald-500 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Şifreler eşleşiyor
+                    </p>
+                  )}
                 </div>
-                <Button onClick={handleChangePassword} disabled={saving} className="gap-2">
-                  <Shield className="h-4 w-4" />
+                <Button 
+                  onClick={handleChangePassword} 
+                  disabled={saving || !security.currentPassword || !security.newPassword || security.newPassword !== security.confirmPassword} 
+                  className="gap-2 bg-gradient-to-r from-red-500 to-rose-500"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
                   {saving ? 'Güncelleniyor...' : 'Şifreyi Güncelle'}
                 </Button>
               </CardContent>
@@ -560,6 +618,93 @@ export default function DealerSettingsPage() {
           </motion.div>
         </TabsContent>
       </Tabs>
+
+      {/* Avatar Selection Modal */}
+      <AnimatePresence>
+        {avatarDialogOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => setAvatarDialogOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-2xl max-h-[85vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Card className="border-0 shadow-2xl">
+                <CardHeader className="border-b">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-violet-500" />
+                        Avatar Seç
+                      </CardTitle>
+                      <CardDescription>Profiliniz için bir avatar seçin</CardDescription>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setAvatarDialogOpen(false)}>
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="p-0">
+                  {/* Category Tabs */}
+                  <div className="flex flex-wrap gap-2 p-4 border-b bg-muted/30">
+                    {avatarList.map((category) => (
+                      <Button
+                        key={category.category}
+                        variant={selectedCategory === category.category ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSelectedCategory(category.category)}
+                        className={selectedCategory === category.category ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600' : ''}
+                      >
+                        {category.category}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {/* Avatar Grid */}
+                  <div className="p-4 max-h-[50vh] overflow-y-auto">
+                    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                      {currentCategoryAvatars.map((avatar) => (
+                        <motion.button
+                          key={avatar}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleSelectAvatar(avatar)}
+                          className={`relative p-2 rounded-xl border-2 transition-all ${
+                            profile.avatar === avatar
+                              ? 'border-violet-500 bg-violet-500/10 ring-2 ring-violet-500/50'
+                              : 'border-border hover:border-violet-500/50 hover:bg-muted/50'
+                          }`}
+                        >
+                          <Image
+                            src={avatar}
+                            alt="Avatar"
+                            width={64}
+                            height={64}
+                            className="w-full h-auto"
+                          />
+                          {profile.avatar === avatar && (
+                            <div className="absolute top-1 right-1 bg-violet-500 rounded-full p-0.5">
+                              <Check className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -463,12 +463,8 @@ model Donation {
   points    Int      // Points donated
   message   String?  // Optional message
   isPublic  Boolean  @default(true) // Show in leaderboard
-  createdAt DateTime @default(now())
-
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  createdAt DateTime @default(now())  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)  @@index([userId])
   @@index([projectId])
   @@index([createdAt])
 }

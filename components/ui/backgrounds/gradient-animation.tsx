@@ -6,178 +6,66 @@ import { motion } from 'framer-motion';
 interface GradientAnimationProps {
   children?: React.ReactNode;
   className?: string;
-  gradientBackgroundStart?: string;
-  gradientBackgroundEnd?: string;
-  firstColor?: string;
-  secondColor?: string;
-  thirdColor?: string;
-  fourthColor?: string;
-  fifthColor?: string;
-  pointerColor?: string;
-  size?: string;
-  blendingValue?: string;
-  interactive?: boolean;
 }
 
 export function GradientAnimation({
   children,
   className,
-  gradientBackgroundStart = 'rgb(10, 10, 11)',
-  gradientBackgroundEnd = 'rgb(10, 10, 11)',
-  firstColor = '139, 92, 246',
-  secondColor = '168, 85, 247',
-  thirdColor = '236, 72, 153',
-  fourthColor = '34, 197, 94',
-  fifthColor = '59, 130, 246',
-  pointerColor = '140, 100, 255',
-  size = '80%',
-  blendingValue = 'hard-light',
-  interactive = true,
 }: GradientAnimationProps) {
+  const colors = [
+    '139, 92, 246',   // violet
+    '168, 85, 247',   // purple
+    '236, 72, 153',   // pink
+    '59, 130, 246',   // blue
+    '16, 185, 129',   // emerald
+  ];
+
   return (
-    <div
-      className={cn(
-        'relative min-h-full w-full overflow-hidden bg-background',
-        className
-      )}
-    >
-      <svg className="hidden">
-        <defs>
-          <filter id="blurMe">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
-            <feColorMatrix
-              in="blur"
-              mode="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -8"
-              result="goo"
+    <>
+      {/* Fixed gradient background */}
+      <div className={cn('fixed inset-0 pointer-events-none z-0', className)}>
+        {/* Base dark gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-background" />
+        
+        {/* Animated gradient orbs */}
+        <div className="absolute inset-0 overflow-hidden">
+          {colors.map((color, i) => (
+            <motion.div
+              key={i}
+              className="absolute rounded-full blur-3xl"
+              style={{
+                background: `radial-gradient(circle, rgba(${color}, 0.4) 0%, rgba(${color}, 0) 70%)`,
+                width: '60vw',
+                height: '60vw',
+              }}
+              animate={{
+                x: [
+                  `${-20 + i * 10}vw`,
+                  `${20 + i * 5}vw`,
+                  `${-10 + i * 8}vw`,
+                  `${-20 + i * 10}vw`,
+                ],
+                y: [
+                  `${-10 + i * 15}vh`,
+                  `${30 - i * 10}vh`,
+                  `${-20 + i * 12}vh`,
+                  `${-10 + i * 15}vh`,
+                ],
+                scale: [1, 1.2, 0.9, 1],
+              }}
+              transition={{
+                duration: 15 + i * 3,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
             />
-            <feBlend in="SourceGraphic" in2="goo" />
-          </filter>
-        </defs>
-      </svg>
+          ))}
+        </div>
 
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(40deg, ${gradientBackgroundStart}, ${gradientBackgroundEnd})`,
-        }}
-      />
-
-      <div className="absolute inset-0 [filter:url(#blurMe)_blur(40px)]">
-        {/* First gradient */}
-        <motion.div
-          className="absolute opacity-100"
-          style={{
-            background: `radial-gradient(circle at center, rgba(${firstColor}, 0.8) 0, rgba(${firstColor}, 0) 50%)`,
-            width: size,
-            height: size,
-            top: 'calc(50% - 40%)',
-            left: 'calc(50% - 40%)',
-            mixBlendMode: blendingValue as any,
-          }}
-          animate={{
-            x: [0, 100, 0],
-            y: [0, 50, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-
-        {/* Second gradient */}
-        <motion.div
-          className="absolute opacity-100"
-          style={{
-            background: `radial-gradient(circle at center, rgba(${secondColor}, 0.8) 0, rgba(${secondColor}, 0) 50%)`,
-            width: size,
-            height: size,
-            top: 'calc(50% - 40%)',
-            left: 'calc(50% - 40%)',
-            mixBlendMode: blendingValue as any,
-          }}
-          animate={{
-            x: [0, -100, 0],
-            y: [0, 100, 0],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-
-        {/* Third gradient */}
-        <motion.div
-          className="absolute opacity-100"
-          style={{
-            background: `radial-gradient(circle at center, rgba(${thirdColor}, 0.8) 0, rgba(${thirdColor}, 0) 50%)`,
-            width: size,
-            height: size,
-            top: 'calc(50% - 40%)',
-            left: 'calc(50% - 40%)',
-            mixBlendMode: blendingValue as any,
-          }}
-          animate={{
-            x: [0, 50, 0],
-            y: [0, -100, 0],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-
-        {/* Fourth gradient */}
-        <motion.div
-          className="absolute opacity-70"
-          style={{
-            background: `radial-gradient(circle at center, rgba(${fourthColor}, 0.8) 0, rgba(${fourthColor}, 0) 50%)`,
-            width: size,
-            height: size,
-            top: 'calc(50% - 40%)',
-            left: 'calc(50% - 40%)',
-            mixBlendMode: blendingValue as any,
-          }}
-          animate={{
-            x: [0, -50, 0],
-            y: [0, -50, 0],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-
-        {/* Fifth gradient */}
-        <motion.div
-          className="absolute opacity-70"
-          style={{
-            background: `radial-gradient(circle at center, rgba(${fifthColor}, 0.8) 0, rgba(${fifthColor}, 0) 50%)`,
-            width: size,
-            height: size,
-            top: 'calc(50% - 40%)',
-            left: 'calc(50% - 40%)',
-            mixBlendMode: blendingValue as any,
-          }}
-          animate={{
-            x: [0, 75, 0],
-            y: [0, 75, 0],
-          }}
-          transition={{
-            duration: 22,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
+        {/* Noise overlay for texture */}
+        <div className="absolute inset-0 opacity-20 mix-blend-overlay bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iMC4xIi8+PC9zdmc+')]" />
       </div>
-
-      {/* Content */}
-      <div className="relative z-10">{children}</div>
-    </div>
+      {children}
+    </>
   );
 }
-

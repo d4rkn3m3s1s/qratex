@@ -17,6 +17,10 @@ import { FirefliesBackground } from './fireflies';
 import { ChristmasBackground } from './christmas';
 import { ValentineBackground } from './valentine';
 import { BirthdayBackground } from './birthday';
+import { NebulaBackground } from './nebula';
+import { NorthernLightsBackground } from './northern-lights';
+import { HolographicBackground } from './holographic';
+import { GalaxyBackground } from './galaxy';
 
 export type BackgroundVariant = 
   | 'original'
@@ -37,6 +41,10 @@ export type BackgroundVariant =
   | 'christmas'
   | 'valentine'
   | 'birthday'
+  | 'nebula'
+  | 'northern-lights'
+  | 'holographic'
+  | 'galaxy'
   | 'none';
 
 interface DynamicBackgroundProps {
@@ -98,7 +106,6 @@ export function DynamicBackground({
 
   switch (variant) {
     case 'original':
-      // Original is handled by the parent component (landing page)
       return <div className={className}>{children}</div>;
 
     case 'aurora':
@@ -220,9 +227,36 @@ export function DynamicBackground({
         </BirthdayBackground>
       );
 
+    case 'nebula':
+      return (
+        <NebulaBackground className={className}>
+          {children}
+        </NebulaBackground>
+      );
+
+    case 'northern-lights':
+      return (
+        <NorthernLightsBackground className={className}>
+          {children}
+        </NorthernLightsBackground>
+      );
+
+    case 'holographic':
+      return (
+        <HolographicBackground className={className}>
+          {children}
+        </HolographicBackground>
+      );
+
+    case 'galaxy':
+      return (
+        <GalaxyBackground className={className}>
+          {children}
+        </GalaxyBackground>
+      );
+
     case 'none':
     default:
       return <div className={className}>{children}</div>;
   }
 }
-

@@ -4,5 +4,9 @@ export { BackgroundBeams } from './beams';
 export { GradientAnimation } from './gradient-animation';
 export { MeteorsBackground } from './meteors';
 export { GridDotsBackground } from './grid-dots';
+export { NebulaBackground } from './nebula';
+export { NorthernLightsBackground } from './northern-lights';
+export { HolographicBackground } from './holographic';
+export { GalaxyBackground } from './galaxy';
 export { DynamicBackground, type BackgroundVariant } from './dynamic-background';
 
