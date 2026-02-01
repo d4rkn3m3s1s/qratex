@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-// Suspicious activity detection thresholds
-const THRESHOLDS = {
-  RAPID_SCAN: 5, // Max scans per minute
-  RAPID_CONSUMPTION: 10, // Max consumptions per hour
-  UNUSUAL_AMOUNT: 10000, // Max single transaction amount
-  DUPLICATE_WINDOW: 60, // Seconds to check for duplicates
-};
+import { reportSuspiciousActivity } from '@/lib/security';
 
 // GET - Get suspicious activities (admin only)
 export async function GET(req: NextRequest) {
@@ -72,51 +65,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { userId, dealerId, cardId, type, severity, description, metadata, ipAddress, userAgent } = body;
 
-    // Create suspicious activity record
-    const activity = await (prisma as any).suspiciousActivity.create({
-      data: {
-        userId,
-        dealerId,
-        cardId,
-        type,
-        severity: severity || 'MEDIUM',
-        description,
-        metadata,
-        ipAddress,
-        userAgent,
-      },
+    const activity = await reportSuspiciousActivity({
+      userId,
+      dealerId,
+      cardId,
+      type,
+      severity: severity || 'MEDIUM',
+      description,
+      metadata,
+      ipAddress,
+      userAgent,
     });
-
-    // Create security alert for high severity
-    if (severity === 'HIGH' || severity === 'CRITICAL') {
-      await (prisma as any).securityAlert.create({
-        data: {
-          type: type,
-          message: description,
-          severity,
-          targetId: userId || dealerId,
-          targetType: userId ? 'USER' : dealerId ? 'DEALER' : 'CARD',
-          metadata,
-        },
-      });
-
-      // Notify admins
-      const admins = await prisma.user.findMany({
-        where: { role: 'ADMIN' },
-        select: { id: true },
-      });
-
-      if (admins.length > 0) {
-        await prisma.notification.createMany({
-          data: admins.map(admin => ({
-            userId: admin.id,
-            type: 'SECURITY_ALERT',
-            title: `🚨 ${severity} Güvenlik Uyarısı`,
-            message: description,
-          })),
-        });
-      }
-    }
 
     return NextResponse.json({ success: true, activity });
   } catch (error) {
@@ -151,63 +110,4 @@ export async function PATCH(req: NextRequest) {
     console.error('Error resolving suspicious activity:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// Helper function to check for suspicious patterns
-export async function checkSuspiciousActivity(
-  dealerId: string,
-  cardId: string,
-  amount?: number,
-  ipAddress?: string
-): Promise<{ isSuspicious: boolean; type?: string; severity?: string; description?: string }> {
-  const now = new Date();
-  const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-  // Check for rapid scanning
-  const recentScans = await prisma.cardAuditLog.count({
-    where: {
-      cardId,
-      action: 'SCANNED',
-      createdAt: { gte: oneMinuteAgo },
-    },
-  });
-
-  if (recentScans >= THRESHOLDS.RAPID_SCAN) {
-    return {
-      isSuspicious: true,
-      type: 'RAPID_SCAN',
-      severity: 'HIGH',
-      description: `Kart ${cardId} son 1 dakikada ${recentScans} kez tarandı`,
-    };
-  }
-
-  // Check for rapid consumptions
-  const recentConsumptions = await prisma.consumption.count({
-    where: {
-      cardId,
-      createdAt: { gte: oneHourAgo },
-    },
-  });
-
-  if (recentConsumptions >= THRESHOLDS.RAPID_CONSUMPTION) {
-    return {
-      isSuspicious: true,
-      type: 'RAPID_CONSUMPTION',
-      severity: 'MEDIUM',
-      description: `Kart ${cardId} son 1 saatte ${recentConsumptions} tüketim kaydı`,
-    };
-  }
-
-  // Check for unusual amount
-  if (amount && amount > THRESHOLDS.UNUSUAL_AMOUNT) {
-    return {
-      isSuspicious: true,
-      type: 'UNUSUAL_AMOUNT',
-      severity: 'MEDIUM',
-      description: `Olağandışı tutar: ${amount} TL`,
-    };
-  }
-
-  return { isSuspicious: false };
 }
