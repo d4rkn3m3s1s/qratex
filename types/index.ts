@@ -136,12 +136,28 @@ export interface Feedback {
   topics: string[] | null;
   isToxic: boolean;
   aiAnalysis: AIAnalysisResult | null;
+  // Experience Signals
+  intent?: string | null;
+  intentScore?: number | null;
+  urgency?: number | null;
+  effortScore?: number | null;
+  churnRisk?: number | null;
+  // Advanced NLP
+  entities?: AIEntity[] | null;
+  themes?: AITheme[] | null;
+  statementSentiments?: AIStatementSentiment[] | null;
+  actionSuggestions?: AIActionSuggestion[] | null;
+  // AI Meta
+  aiProcessedAt?: Date | null;
+  aiModelUsed?: string | null;
+  aiVersion?: string | null;
   isPublic: boolean;
   createdAt: Date;
   user?: PublicUser | null;
 }
 
 export interface AIAnalysisResult {
+  // Core Sentiment
   sentiment: {
     label: 'positive' | 'negative' | 'neutral';
     score: number;
@@ -157,6 +173,145 @@ export interface AIAnalysisResult {
     categories: string[];
   };
   summary?: string;
+
+  // Experience Signals
+  intent?: {
+    label: 'complaint' | 'suggestion' | 'praise' | 'question' | 'general';
+    score: number;
+  };
+  urgency?: number; // 0-1
+  effortScore?: number; // 0-1 customer effort
+  churnRisk?: number; // 0-1
+
+  // Advanced NLP
+  entities?: AIEntity[];
+  themes?: AITheme[];
+  statementSentiments?: AIStatementSentiment[];
+  actionSuggestions?: AIActionSuggestion[];
+
+  // Meta
+  modelUsed?: string;
+  version?: string;
+}
+
+export interface AIEntity {
+  type: 'product' | 'person' | 'location' | 'service' | 'facility' | 'brand' | 'other';
+  name: string;
+  sentiment?: 'positive' | 'negative' | 'neutral';
+}
+
+export interface AITheme {
+  theme: string;
+  subTheme?: string;
+  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed';
+  score: number;
+}
+
+export interface AIStatementSentiment {
+  statement: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  score: number;
+}
+
+export interface AIActionSuggestion {
+  action: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  impact?: string;
+  category?: string;
+}
+
+// AI Insight Report Types
+export interface AIInsightReportData {
+  overallScore: number;
+  trend: 'up' | 'down' | 'stable';
+  trendValue: number;
+  totalFeedbacks: number;
+  summary: string;
+  strengths: AIInsightItem[];
+  weaknesses: AIInsightItem[];
+  recommendations: AIRecommendation[];
+  alerts: AIAlert[];
+  keyDrivers: AIKeyDriver[];
+  predictedRating?: number;
+  keyMetrics: AIKeyMetrics;
+}
+
+export interface AIInsightItem {
+  title: string;
+  score: number;
+  description: string;
+  icon?: string;
+}
+
+export interface AIRecommendation {
+  text: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  impact: string;
+  category: string;
+}
+
+export interface AIAlert {
+  type: 'toxic' | 'urgent' | 'churn' | 'trend' | 'anomaly';
+  message: string;
+  severity: 'info' | 'warning' | 'error' | 'critical';
+  feedbackId?: string;
+}
+
+export interface AIKeyDriver {
+  factor: string;
+  impact: number; // -1 to 1
+  correlation: number;
+  direction: 'positive' | 'negative';
+}
+
+export interface AIKeyMetrics {
+  responseRate: number;
+  avgRating: number;
+  nps: number;
+  csat: number;
+  ces: number; // Customer Effort Score
+}
+
+// AI Theme Cluster
+export interface AIThemeClusterData {
+  theme: string;
+  subTheme?: string;
+  sentiment: string;
+  count: number;
+  avgScore: number;
+  trend?: 'up' | 'down' | 'stable';
+  trendValue?: number;
+  keywords?: string[];
+  sampleTexts?: string[];
+}
+
+// AI Settings
+export interface AISettingsData {
+  isEnabled: boolean;
+  autoAnalyze: boolean;
+  analysisLanguage: string;
+  sentimentEnabled: boolean;
+  emotionEnabled: boolean;
+  topicEnabled: boolean;
+  intentEnabled: boolean;
+  urgencyEnabled: boolean;
+  entityEnabled: boolean;
+  toxicityEnabled: boolean;
+  churnEnabled: boolean;
+  themeClusterEnabled: boolean;
+  weeklyReportEnabled: boolean;
+  monthlyReportEnabled: boolean;
+  alertOnToxic: boolean;
+  alertOnUrgent: boolean;
+  alertOnChurnRisk: boolean;
+  customPrompt?: string;
+}
+
+// AI Conversation
+export interface AIConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
 }
 
 export interface FeedbackStats {
@@ -226,6 +381,12 @@ export interface AIConfig {
   emotionDetection: boolean;
   topicExtraction: boolean;
   toxicityCheck: boolean;
+  intentAnalysis: boolean;
+  urgencyDetection: boolean;
+  entityRecognition: boolean;
+  churnPrediction: boolean;
+  themeDiscovery: boolean;
+  autoAnalyze: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────

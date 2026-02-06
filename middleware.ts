@@ -6,24 +6,26 @@ export default withAuth(
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
 
-    // Admin routes - only ADMIN role
-    if (pathname.startsWith('/admin')) {
-      if (token?.role !== 'ADMIN') {
-        return NextResponse.redirect(new URL('/auth/login?error=unauthorized', req.url));
-      }
-    }
+    // Role-based route protection
+    const roleRouteMap: Record<string, string> = {
+      '/admin': 'ADMIN',
+      '/dealer': 'DEALER',
+      '/customer': 'CUSTOMER',
+    };
 
-    // Dealer routes - only DEALER role
-    if (pathname.startsWith('/dealer')) {
-      if (token?.role !== 'DEALER') {
-        return NextResponse.redirect(new URL('/auth/login?error=unauthorized', req.url));
-      }
-    }
-
-    // Customer routes - only CUSTOMER role
-    if (pathname.startsWith('/customer')) {
-      if (token?.role !== 'CUSTOMER') {
-        return NextResponse.redirect(new URL('/auth/login?error=unauthorized', req.url));
+    for (const [routePrefix, requiredRole] of Object.entries(roleRouteMap)) {
+      if (pathname.startsWith(routePrefix) && token?.role !== requiredRole) {
+        // Kullanıcı giriş yapmış ama yetkisi yok → kendi rolüne yönlendir
+        if (token?.role) {
+          const roleRedirects: Record<string, string> = {
+            ADMIN: '/admin',
+            DEALER: '/dealer',
+            CUSTOMER: '/customer',
+          };
+          return NextResponse.redirect(new URL(roleRedirects[token.role as string] || '/', req.url));
+        }
+        // Giriş yapmamış → login sayfasına yönlendir (error parametresi olmadan)
+        return NextResponse.redirect(new URL('/auth/login', req.url));
       }
     }
 

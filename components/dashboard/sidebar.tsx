@@ -35,6 +35,7 @@ import {
   History,
   Package,
   Layers,
+  Brain,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -63,6 +64,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/quests', label: 'Görevler', icon: Target },
   { href: '/admin/rewards', label: 'Ödüller', icon: Gift },
   { href: '/admin/analytics', label: 'Analitik', icon: BarChart3 },
+  { href: '/admin/ai-dashboard', label: 'AI Kontrol Merkezi', icon: Brain },
   { href: '/admin/pricing', label: 'Fiyatlandırma', icon: Layers },
   { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
   { href: '/admin/themes', label: 'Temalar', icon: Palette },
@@ -78,6 +80,7 @@ const dealerNavItems: NavItem[] = [
   { href: '/dealer/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare, badge: 5 },
   { href: '/dealer/analytics', label: 'Analitik', icon: BarChart3 },
   { href: '/dealer/ai-insights', label: 'AI İçgörüler', icon: Sparkles },
+  { href: '/dealer/ai-settings', label: 'AI Ayarları', icon: Brain },
   { href: '/dealer/settings', label: 'Ayarlar', icon: Settings },
 ];
 
@@ -87,6 +90,7 @@ const customerNavItems: NavItem[] = [
   { href: '/customer/consumptions', label: 'Tüketimlerim', icon: History },
   { href: '/customer/scan', label: 'QR Tara', icon: QrCode },
   { href: '/customer/feedbacks', label: 'Geri Bildirimlerim', icon: MessageSquare },
+  { href: '/customer/ai-insights', label: 'AI Analizlerim', icon: Sparkles },
   { href: '/customer/trends', label: 'Trend Analizi', icon: TrendingUp },
   { href: '/customer/analytics', label: 'Kişisel Analitik', icon: BarChart3 },
   { href: '/customer/badges', label: 'Rozetlerim', icon: Trophy },

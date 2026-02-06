@@ -78,6 +78,11 @@ model User {
   quickPresets         QuickScanPreset[]     @relation("DealerQuickPresets")
   customerCLV          CustomerLifetimeValue? @relation("CustomerCLV")
   heatmapData          HeatmapData[]         @relation("DealerHeatmap")
+  aiSettings           AISettings?
+  aiConversations      AIConversation[]
+  aiEmbeddings         AIEmbedding[]
+  aiCorrections        AIFeedbackCorrection[]
+  aiLearningProfile    AIDealerLearningProfile?
 
   @@index([email])
   @@index([role])
@@ -256,11 +261,36 @@ model Feedback {
   rating      Int      // 1-5
   text        String?  @db.Text
   media       Json?    // Array of media URLs
+
+  // -- AI Analysis: Core Sentiment --
   sentiment   String?  // positive, negative, neutral
-  emotions    Json?    // { happy: 0.8, sad: 0.1, ... }
+  emotions    Json?    // [{ label: "happy", score: 0.8 }, ...]
   topics      Json?    // ["service", "quality", ...]
   isToxic     Boolean  @default(false)
-  aiAnalysis  Json?    // Full AI response
+  aiAnalysis  Json?    // Full AI response (legacy compat)
+
+  // -- AI Analysis: Experience Signals --
+  intent          String?  // complaint, suggestion, praise, question, general
+  intentScore     Float?   // 0-1 confidence score
+  urgency         Float?   // 0-1 urgency score
+  effortScore     Float?   // 0-1 customer effort
+  churnRisk       Float?   // 0-1 churn probability
+
+  // -- AI Analysis: Advanced NLP --
+  entities            Json?    // [{ type: "product"|"person"|"location", name: "...", sentiment: "positive" }]
+  themes              Json?    // [{ theme: "Hizmet Kalitesi", subTheme: "Personel", sentiment: "positive", score: 0.9 }]
+  statementSentiments Json?    // [{ statement: "Yemekler harika", sentiment: "positive", score: 0.95 }]
+  actionSuggestions   Json?    // [{ action: "Garson egitimi verin", priority: "high", impact: "..." }]
+
+  // -- AI Learning Relations --
+  aiEmbedding   AIEmbedding?
+  aiCorrections AIFeedbackCorrection[]
+
+  // -- AI Processing Meta --
+  aiProcessedAt   DateTime? // AI analiz zamani
+  aiModelUsed     String?   // groq/openai + model adi
+  aiVersion       String?   // AI analiz prompt versiyonu
+
   isPublic    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -272,7 +302,9 @@ model Feedback {
   @@index([userId])
   @@index([rating])
   @@index([sentiment])
+  @@index([intent])
   @@index([createdAt])
+  @@index([aiProcessedAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1000,4 +1032,168 @@ model HeatmapData {
   @@unique([dealerId, date, hour])
   @@index([dealerId])
   @@index([date])
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI ANALYTICS MODELS
+// ─────────────────────────────────────────────────────────────
+
+model AIThemeCluster {
+  id          String   @id @default(cuid())
+  dealerId    String
+  period      String   // "2026-02", "2026-W06", "2026-02-06"
+  theme       String   // Ana tema: "Hizmet Kalitesi"
+  subTheme    String?  // Alt tema: "Personel Ilgisi"
+  sentiment   String   // positive, negative, neutral, mixed
+  count       Int      @default(1)
+  avgScore    Float    @default(0)
+  trend       String?  // up, down, stable
+  trendValue  Float?   // Degisim yuzdesi
+  sampleTexts Json?    // Ornek geri bildirim metinleri (max 5)
+  keywords    Json?    // Iliskili anahtar kelimeler
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([dealerId, period, theme, subTheme])
+  @@index([dealerId])
+  @@index([period])
+  @@index([theme])
+  @@index([sentiment])
+}
+
+model AIInsightReport {
+  id              String   @id @default(cuid())
+  dealerId        String
+  period          String   // "2026-02", "2026-W06"
+  type            String   // daily, weekly, monthly
+  overallScore    Float    // 0-100
+  trend           String   // up, down, stable
+  trendValue      Float    // Degisim yuzdesi
+  totalFeedbacks  Int      @default(0)
+  summary         String   @db.Text
+  strengths       Json     // [{ title, score, description, icon }]
+  weaknesses      Json     // [{ title, score, description, icon }]
+  recommendations Json     // [{ text, priority, impact, category }]
+  alerts          Json?    // [{ type, message, severity }]
+  keyDrivers      Json?    // [{ factor, impact, correlation }]
+  predictedRating Float?   // Tahmini gelecek donem puani
+  keyMetrics      Json?    // { responseRate, avgRating, nps, csat, ces }
+  generatedAt     DateTime @default(now())
+
+  @@unique([dealerId, period, type])
+  @@index([dealerId])
+  @@index([period])
+  @@index([type])
+  @@index([generatedAt])
+}
+
+model AIConversation {
+  id          String   @id @default(cuid())
+  dealerId    String
+  dealer      User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  title       String?
+  messages    Json     // [{ role: "user"|"assistant", content: "...", timestamp }]
+  context     Json?    // Sohbet baglami (filtreler, secili donem vs.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([dealerId])
+  @@index([createdAt])
+}
+
+model AISettings {
+  id                  String   @id @default(cuid())
+  dealerId            String   @unique
+  dealer              User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  isEnabled           Boolean  @default(true)
+  autoAnalyze         Boolean  @default(true)  // Otomatik analiz
+  analysisLanguage    String   @default("tr")
+  sentimentEnabled    Boolean  @default(true)
+  emotionEnabled      Boolean  @default(true)
+  topicEnabled        Boolean  @default(true)
+  intentEnabled       Boolean  @default(true)
+  urgencyEnabled      Boolean  @default(true)
+  entityEnabled       Boolean  @default(true)
+  toxicityEnabled     Boolean  @default(true)
+  churnEnabled        Boolean  @default(true)
+  themeClusterEnabled Boolean  @default(true)
+  weeklyReportEnabled Boolean  @default(true)
+  monthlyReportEnabled Boolean @default(true)
+  alertOnToxic        Boolean  @default(true)
+  alertOnUrgent       Boolean  @default(true)  // urgency > 0.7
+  alertOnChurnRisk    Boolean  @default(true)  // churnRisk > 0.7
+  customPrompt        String?  @db.Text  // Dealer ozel prompt eklentisi
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model AIUsageLog {
+  id          String   @id @default(cuid())
+  dealerId    String?
+  action      String   // analyze, insights, chat, bulk_analyze, theme_cluster
+  model       String   // Kullanilan model
+  inputTokens  Int     @default(0)
+  outputTokens Int     @default(0)
+  latencyMs   Int      @default(0)
+  success     Boolean  @default(true)
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([dealerId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([success])
+}
+
+model AIEmbedding {
+  id         String   @id @default(cuid())
+  feedbackId String   @unique
+  dealerId   String
+  vector     Json
+  model      String
+  dimension  Int
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  dealer   User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([createdAt])
+}
+
+model AIFeedbackCorrection {
+  id         String   @id @default(cuid())
+  feedbackId String
+  dealerId   String
+  field      String   // sentiment, intent, topics, themes, entities, urgency, churn, action
+  oldValue   Json?
+  newValue   Json
+  note       String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  dealer   User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([feedbackId])
+  @@index([field])
+  @@index([createdAt])
+}
+
+model AIDealerLearningProfile {
+  id                    String   @id @default(cuid())
+  dealerId              String   @unique
+  version               Int      @default(1)
+  status                String   @default("idle") // idle, training, ready
+  profile               Json?
+  lastTrainedAt         DateTime?
+  trainingFeedbackCount Int      @default(0)
+  correctionsUsed       Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  dealer User @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([updatedAt])
 }

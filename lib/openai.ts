@@ -1,11 +1,27 @@
-import OpenAI from 'openai';
+/**
+ * QRATEX AI - OpenAI/Groq Integration (Legacy compat wrapper)
+ * 
+ * Bu dosya geriye uyumluluk için korunmuştur.
+ * Tüm yeni AI işlemleri lib/ai-engine.ts üzerinden yapılmalıdır.
+ */
+
+import {
+  analyzeComprehensive,
+  analyzeWithFallback as _analyzeWithFallback,
+  analyzeSentimentLocal,
+  checkToxicityLocal,
+  type AnalyzeOptions,
+} from './ai-engine';
 import type { AIAnalysisResult } from '@/types';
+import OpenAI from 'openai';
+
+// Re-export from ai-engine for backward compatibility
+export { analyzeSentimentLocal, checkToxicityLocal };
 
 // Lazy initialize AI client (Groq veya OpenAI)
 let aiClient: OpenAI | null = null;
 
 function getAIClient(): OpenAI | null {
-  // Önce Groq'u dene (daha hızlı ve ücretsiz)
   if (process.env.GROQ_API_KEY) {
     if (!aiClient || (aiClient as OpenAI & { baseURL?: string }).baseURL !== 'https://api.groq.com/openai/v1') {
       aiClient = new OpenAI({
@@ -15,26 +31,18 @@ function getAIClient(): OpenAI | null {
     }
     return aiClient;
   }
-  
-  // Fallback: OpenAI
   if (process.env.OPENAI_API_KEY) {
     if (!aiClient) {
-      aiClient = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
+      aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     }
     return aiClient;
   }
-  
   return null;
 }
 
-// Model seçimi
 function getModel(): string {
-  if (process.env.GROQ_API_KEY) {
-    return 'llama-3.3-70b-versatile'; // Groq modeli
-  }
-  return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview'; // OpenAI modeli
+  if (process.env.GROQ_API_KEY) return 'llama-3.3-70b-versatile';
+  return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
 }
 
 // Retry configuration
@@ -45,15 +53,11 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  retries: number = MAX_RETRIES
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries: number = MAX_RETRIES): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     if (retries > 0 && error instanceof Error) {
-      // Check if it's a rate limit error
       if (error.message.includes('rate_limit') || error.message.includes('429')) {
         await sleep(RETRY_DELAY * (MAX_RETRIES - retries + 1));
         return withRetry(fn, retries - 1);
@@ -64,81 +68,10 @@ async function withRetry<T>(
 }
 
 /**
- * Analyze feedback text using AI (Groq or OpenAI)
+ * Analyze feedback text using AI - now delegates to ai-engine
  */
 export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | null> {
-  const client = getAIClient();
-  if (!client) {
-    console.warn('AI API key not configured (GROQ_API_KEY or OPENAI_API_KEY)');
-    return null;
-  }
-
-  if (!text || text.trim().length < 5) {
-    return null;
-  }
-
-  try {
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: getModel(),
-        messages: [
-          {
-            role: 'system',
-            content: `Sen bir müşteri geri bildirimi analiz asistanısın. Türkçe metinleri analiz et ve JSON formatında yanıt ver.
-
-Analiz etmen gereken özellikler:
-1. sentiment: Genel duygu (positive, negative, neutral)
-2. sentiment_score: Duygu skoru (0-1 arası)
-3. emotions: Tespit edilen duygular ve skorları
-4. topics: Metinde geçen konular (service, quality, price, atmosphere, staff, food, cleanliness, speed, etc.)
-5. toxicity: Toksik içerik kontrolü
-6. summary: Kısa özet (max 50 kelime)
-
-JSON formatı:
-{
-  "sentiment": { "label": "positive|negative|neutral", "score": 0.85 },
-  "emotions": [{ "label": "happy", "score": 0.8 }, { "label": "satisfied", "score": 0.7 }],
-  "topics": ["service", "quality"],
-  "toxicity": { "isToxic": false, "score": 0.1, "categories": [] },
-  "summary": "Kısa özet"
-}`,
-          },
-          {
-            role: 'user',
-            content: `Analiz et: "${text}"`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
-      })
-    );
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      return null;
-    }
-
-    const analysis = JSON.parse(content);
-
-    return {
-      sentiment: {
-        label: analysis.sentiment?.label || 'neutral',
-        score: analysis.sentiment?.score || 0.5,
-      },
-      emotions: analysis.emotions || [],
-      topics: analysis.topics || [],
-      toxicity: {
-        isToxic: analysis.toxicity?.isToxic || false,
-        score: analysis.toxicity?.score || 0,
-        categories: analysis.toxicity?.categories || [],
-      },
-      summary: analysis.summary,
-    };
-  } catch (error) {
-    console.error('Error analyzing feedback:', error);
-    return null;
-  }
+  return analyzeComprehensive(text);
 }
 
 /**
@@ -196,10 +129,7 @@ Analiz et ve öneriler sun:`,
 /**
  * AI Chat assistant for dealers
  */
-export async function chatWithAI(
-  message: string,
-  context?: string
-): Promise<string | null> {
+export async function chatWithAI(message: string, context?: string): Promise<string | null> {
   const client = getAIClient();
   if (!client) {
     return 'AI asistanı şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
@@ -232,101 +162,13 @@ export async function chatWithAI(
 }
 
 /**
- * Check text for toxicity (fallback without AI)
+ * Full analysis with fallback - delegates to ai-engine
  */
-export function checkToxicityLocal(text: string): { isToxic: boolean; score: number } {
-  const toxicWords = [
-    'aptal', 'salak', 'gerizekalı', 'mal', 'ahmak', 'pislik',
-    'lanet', 'kahretsin', 'berbat', 'rezil', 'kepaze',
-  ];
-
-  const lowerText = text.toLowerCase();
-  let toxicCount = 0;
-
-  for (const word of toxicWords) {
-    if (lowerText.includes(word)) {
-      toxicCount++;
-    }
-  }
-
-  const score = Math.min(toxicCount * 0.25, 1);
-  return {
-    isToxic: score > 0.5,
-    score,
-  };
-}
-
-/**
- * Simple sentiment analysis fallback
- */
-export function analyzeSentimentLocal(text: string): {
-  label: 'positive' | 'negative' | 'neutral';
-  score: number;
-} {
-  const positiveWords = [
-    'harika', 'mükemmel', 'güzel', 'muhteşem', 'süper', 'iyi', 'teşekkür',
-    'memnun', 'beğendim', 'tavsiye', 'harikulade', 'enfes', 'lezzetli',
-    'temiz', 'hızlı', 'ilgili', 'kibar', 'profesyonel',
-  ];
-
-  const negativeWords = [
-    'kötü', 'berbat', 'rezil', 'yetersiz', 'hayal kırıklığı', 'memnun değil',
-    'pişman', 'sorun', 'problem', 'yavaş', 'pahalı', 'kirli', 'ilgisiz',
-    'beklentim', 'olumsuz', 'şikayet',
-  ];
-
-  const lowerText = text.toLowerCase();
-  let positiveCount = 0;
-  let negativeCount = 0;
-
-  for (const word of positiveWords) {
-    if (lowerText.includes(word)) positiveCount++;
-  }
-
-  for (const word of negativeWords) {
-    if (lowerText.includes(word)) negativeCount++;
-  }
-
-  const total = positiveCount + negativeCount;
-  if (total === 0) {
-    return { label: 'neutral', score: 0.5 };
-  }
-
-  const positiveRatio = positiveCount / total;
-
-  if (positiveRatio >= 0.6) {
-    return { label: 'positive', score: 0.5 + positiveRatio * 0.5 };
-  } else if (positiveRatio <= 0.4) {
-    return { label: 'negative', score: 0.5 - (1 - positiveRatio) * 0.5 };
-  }
-
-  return { label: 'neutral', score: 0.5 };
-}
-
-/**
- * Full analysis with fallback
- */
-export async function analyzeWithFallback(text: string): Promise<AIAnalysisResult> {
-  // Try AI analysis first
-  const aiResult = await analyzeFeedback(text);
-
-  if (aiResult) {
-    return aiResult;
-  }
-
-  // Fallback to local analysis
-  const sentiment = analyzeSentimentLocal(text);
-  const toxicity = checkToxicityLocal(text);
-
-  return {
-    sentiment,
-    emotions: [],
-    topics: [],
-    toxicity: {
-      ...toxicity,
-      categories: [],
-    },
-  };
+export async function analyzeWithFallback(
+  text: string,
+  options: AnalyzeOptions = {}
+): Promise<AIAnalysisResult> {
+  return _analyzeWithFallback(text, options);
 }
 
 export default {
@@ -337,4 +179,3 @@ export default {
   analyzeSentimentLocal,
   analyzeWithFallback,
 };
-
