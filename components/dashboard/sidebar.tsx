@@ -36,6 +36,9 @@ import {
   Package,
   Layers,
   Brain,
+  Database,
+  Cpu,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -65,6 +68,9 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/rewards', label: 'Ödüller', icon: Gift },
   { href: '/admin/analytics', label: 'Analitik', icon: BarChart3 },
   { href: '/admin/ai-dashboard', label: 'AI Kontrol Merkezi', icon: Brain },
+  { href: '/admin/ai-detailed', label: 'AI Detaylı Analiz', icon: Eye },
+  { href: '/admin/ai-learning', label: 'AI Öğrenme', icon: Database },
+  { href: '/admin/ai-settings', label: 'AI Ayarları', icon: Cpu },
   { href: '/admin/pricing', label: 'Fiyatlandırma', icon: Layers },
   { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
   { href: '/admin/themes', label: 'Temalar', icon: Palette },
@@ -295,8 +301,8 @@ export function Sidebar({ role }: SidebarProps) {
       {/* Mobile Sidebar */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
         <SheetTrigger asChild className="lg:hidden fixed bottom-4 left-4 z-50">
-          <Button variant="gradient" size="icon" className="rounded-full shadow-lg">
-            <Menu className="w-5 h-5" />
+          <Button variant="gradient" size="icon" className="h-14 w-14 rounded-full shadow-xl">
+            <Menu className="w-6 h-6" />
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0 w-80">

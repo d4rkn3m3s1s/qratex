@@ -286,7 +286,7 @@ export default function AdminFeedbacksPage() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
           {[
             { title: 'Toplam', value: stats.total, icon: MessageSquare, color: 'bg-primary/10 text-primary' },
             { title: 'QR Yorum', value: stats.qrFeedbacks, icon: QrCode, color: 'bg-purple-500/10 text-purple-500' },

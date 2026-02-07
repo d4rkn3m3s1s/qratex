@@ -391,7 +391,7 @@ const ComparisonCard = ({
     </div>
     <div>
       <p className="text-xs text-muted-foreground">{title}</p>
-      <p className="text-2xl font-bold">{current}{suffix}</p>
+      <p className="text-lg sm:text-2xl font-bold">{current}{suffix}</p>
     </div>
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span>Önceki dönem:</span>
@@ -492,7 +492,7 @@ export default function DealerAnalyticsPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
@@ -536,7 +536,7 @@ export default function DealerAnalyticsPage() {
       </motion.div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {[
           { title: 'Toplam Geri Bildirim', value: data.totalFeedbacks, change: data.feedbackGrowth, icon: MessageSquare, color: 'emerald' },
           { title: 'Ortalama Puan', value: data.avgRating, change: data.ratingChange, suffix: '/5', icon: Star, color: 'yellow' },
@@ -563,7 +563,7 @@ export default function DealerAnalyticsPage() {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                <p className="text-2xl font-bold">
+                <p className="text-lg sm:text-2xl font-bold">
                   {typeof stat.value === 'number' ? <AnimatedNumber value={stat.value} /> : stat.value}
                   {stat.suffix && <span className="text-sm text-muted-foreground ml-1">{stat.suffix}</span>}
                 </p>
@@ -883,7 +883,7 @@ export default function DealerAnalyticsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold">{topic.count}</p>
+                        <p className="text-lg sm:text-2xl font-bold">{topic.count}</p>
                         <p className="text-xs text-muted-foreground">bahsetme</p>
                       </div>
                     </motion.div>

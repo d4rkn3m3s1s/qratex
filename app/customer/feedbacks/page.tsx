@@ -163,7 +163,7 @@ export default function CustomerFeedbacksPage() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card glass>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -171,7 +171,7 @@ export default function CustomerFeedbacksPage() {
                 <MessageSquare className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalFeedbacks}</p>
+                <p className="text-lg sm:text-2xl font-bold">{totalFeedbacks}</p>
                 <p className="text-xs text-muted-foreground">Toplam</p>
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function CustomerFeedbacksPage() {
                 <Star className="h-5 w-5 text-yellow-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{avgRating}</p>
+                <p className="text-lg sm:text-2xl font-bold">{avgRating}</p>
                 <p className="text-xs text-muted-foreground">Ort. Puan</p>
               </div>
             </div>
@@ -197,7 +197,7 @@ export default function CustomerFeedbacksPage() {
                 <Gift className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{consumptionReviews.length * 50}+</p>
+                <p className="text-lg sm:text-2xl font-bold">{consumptionReviews.length * 50}+</p>
                 <p className="text-xs text-muted-foreground">Kazanılan Puan</p>
               </div>
             </div>

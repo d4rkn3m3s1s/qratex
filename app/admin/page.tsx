@@ -178,7 +178,7 @@ export default function AdminDashboard() {
         className="flex items-center justify-between"
       >
         <div>
-          <h2 className="text-2xl font-bold">Hoş Geldiniz, Admin 👋</h2>
+          <h2 className="text-lg sm:text-2xl font-bold">Hoş Geldiniz, Admin 👋</h2>
           <p className="text-muted-foreground">
             İşte platformunuzun genel durumu
           </p>
@@ -223,17 +223,17 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
                 <div className="p-4 rounded-lg bg-green-500/10">
-                  <p className="text-3xl font-bold text-green-500">{data.sentiment.positive}</p>
+                  <p className="text-xl sm:text-3xl font-bold text-green-500">{data.sentiment.positive}</p>
                   <p className="text-sm text-muted-foreground">Olumlu</p>
                 </div>
                 <div className="p-4 rounded-lg bg-gray-500/10">
-                  <p className="text-3xl font-bold text-gray-500">{data.sentiment.neutral}</p>
+                  <p className="text-xl sm:text-3xl font-bold text-gray-500">{data.sentiment.neutral}</p>
                   <p className="text-sm text-muted-foreground">Nötr</p>
                 </div>
                 <div className="p-4 rounded-lg bg-red-500/10">
-                  <p className="text-3xl font-bold text-red-500">{data.sentiment.negative}</p>
+                  <p className="text-xl sm:text-3xl font-bold text-red-500">{data.sentiment.negative}</p>
                   <p className="text-sm text-muted-foreground">Olumsuz</p>
                 </div>
               </div>
@@ -327,48 +327,48 @@ export default function AdminDashboard() {
       </div>
 
       {/* Recent Data */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         {/* Recent Users */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-500" />
-              Son Kayıt Olan Kullanıcılar
+        <Card className="overflow-hidden">
+          <CardHeader className="px-3 sm:px-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 shrink-0" />
+              Son Kullanıcılar
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             {data.recentUsers.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>Henüz kullanıcı yok</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2 sm:space-y-3">
                 {data.recentUsers.map((user, index) => (
                   <motion.div 
                     key={user.id} 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-center gap-4"
+                    className="flex items-center gap-2 overflow-hidden"
                   >
-                    <Avatar>
+                    <Avatar className="shrink-0 h-7 w-7 sm:h-9 sm:w-9">
                       <AvatarImage src={user.image || ''} />
-                      <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+                      <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-[10px] sm:text-xs">
                         {getInitials(user.name || user.email)}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{user.name || 'İsimsiz'}</p>
-                      <p className="text-sm text-muted-foreground truncate">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p className="font-medium truncate text-xs sm:text-sm">{user.name || 'İsimsiz'}</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                         {user.email}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <Badge variant={getRoleColor(user.role) as "default" | "secondary" | "destructive"}>
+                    <div className="text-right shrink-0 ml-1">
+                      <Badge variant={getRoleColor(user.role) as "default" | "secondary" | "destructive"} className="text-[9px] sm:text-[10px] px-1.5 py-0">
                         {getRoleLabel(user.role)}
                       </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">
                         {formatRelativeTime(user.createdAt)}
                       </p>
                     </div>
@@ -380,47 +380,45 @@ export default function AdminDashboard() {
         </Card>
 
         {/* Recent Feedbacks */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-green-500" />
-              Son Geri Bildirimler
+        <Card className="overflow-hidden">
+          <CardHeader className="px-3 sm:px-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 shrink-0" />
+              Son Bildirimler
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             {data.recentFeedbacks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>Henüz geri bildirim yok</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2 sm:space-y-3">
                 {data.recentFeedbacks.map((feedback, index) => (
                   <motion.div 
                     key={feedback.id} 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-start gap-4"
+                    className="flex items-start gap-2 overflow-hidden"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {feedback.userName} • {feedback.businessName}
-                        </span>
-                      </div>
-                      <p className="text-sm truncate">{feedback.text}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-yellow-500 text-sm">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <p className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
+                        {feedback.userName} • {feedback.businessName}
+                      </p>
+                      <p className="text-xs sm:text-sm truncate mt-0.5">{feedback.text}</p>
+                      <div className="flex items-center gap-1 sm:gap-2 mt-1 flex-wrap">
+                        <span className="text-yellow-500 text-[10px] sm:text-xs">
                           {'⭐'.repeat(feedback.rating)}
                         </span>
-                        <Badge variant={getSentimentColor(feedback.sentiment) as "success" | "destructive" | "secondary"}>
+                        <Badge variant={getSentimentColor(feedback.sentiment) as "success" | "destructive" | "secondary"} className="text-[9px] sm:text-[10px] px-1.5 py-0">
                           {feedback.sentiment === 'positive' ? 'Olumlu' : 
                            feedback.sentiment === 'negative' ? 'Olumsuz' : 'Nötr'}
                         </Badge>
                       </div>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    <span className="text-[9px] sm:text-[10px] text-muted-foreground whitespace-nowrap shrink-0 ml-1">
                       {formatRelativeTime(feedback.createdAt)}
                     </span>
                   </motion.div>
@@ -440,30 +438,30 @@ export default function AdminDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
             <div className="p-4 rounded-lg bg-blue-500/10 text-center">
               <Users className="h-6 w-6 mx-auto mb-2 text-blue-500" />
-              <p className="text-2xl font-bold">{data.totals.users}</p>
+              <p className="text-lg sm:text-2xl font-bold">{data.totals.users}</p>
               <p className="text-xs text-muted-foreground">Toplam Kullanıcı</p>
             </div>
             <div className="p-4 rounded-lg bg-green-500/10 text-center">
               <MessageSquare className="h-6 w-6 mx-auto mb-2 text-green-500" />
-              <p className="text-2xl font-bold">{data.totals.feedbacks}</p>
+              <p className="text-lg sm:text-2xl font-bold">{data.totals.feedbacks}</p>
               <p className="text-xs text-muted-foreground">Toplam Geri Bildirim</p>
             </div>
             <div className="p-4 rounded-lg bg-purple-500/10 text-center">
               <QrCode className="h-6 w-6 mx-auto mb-2 text-purple-500" />
-              <p className="text-2xl font-bold">{data.totals.qrCodes}</p>
+              <p className="text-lg sm:text-2xl font-bold">{data.totals.qrCodes}</p>
               <p className="text-xs text-muted-foreground">Toplam QR Kod</p>
             </div>
             <div className="p-4 rounded-lg bg-orange-500/10 text-center">
               <QrCode className="h-6 w-6 mx-auto mb-2 text-orange-500" />
-              <p className="text-2xl font-bold">{data.totals.activeQRCodes}</p>
+              <p className="text-lg sm:text-2xl font-bold">{data.totals.activeQRCodes}</p>
               <p className="text-xs text-muted-foreground">Aktif QR Kod</p>
             </div>
             <div className="p-4 rounded-lg bg-cyan-500/10 text-center">
               <TrendingUp className="h-6 w-6 mx-auto mb-2 text-cyan-500" />
-              <p className="text-2xl font-bold">{data.totals.scans}</p>
+              <p className="text-lg sm:text-2xl font-bold">{data.totals.scans}</p>
               <p className="text-xs text-muted-foreground">Toplam Tarama</p>
             </div>
           </div>

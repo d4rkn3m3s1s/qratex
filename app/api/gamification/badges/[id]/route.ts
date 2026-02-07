@@ -67,6 +67,7 @@ export async function PATCH(
         name: body.name,
         description: body.description,
         icon: body.icon,
+        category: body.category || undefined,
         rarity: (body.rarity || 'common').toLowerCase(),
         requirement: { type: 'custom', value: body.points || 100 },
         isActive: body.isActive,

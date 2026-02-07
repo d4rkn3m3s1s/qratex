@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import type { AIAnalysisResult } from '@/types';
 
 // Groq API Client (OpenAI uyumlu)
 let groqClient: OpenAI | null = null;
@@ -19,9 +18,9 @@ function getGroqClient(): OpenAI | null {
 
 // Model seçenekleri
 const MODELS = {
-  fast: 'llama-3.3-70b-versatile', // Hızlı ve güçlü
+  fast: 'llama-3.3-70b-versatile', // Hızlı ve güçlü (70B)
   reasoning: 'deepseek-r1-distill-llama-70b', // Akıl yürütme
-  large: 'llama-3.1-8b-instant', // Çok hızlı
+  instant: 'llama-3.1-8b-instant', // Çok hızlı, küçük model (8B)
 } as const;
 
 // Retry yapılandırması
@@ -64,14 +63,15 @@ QRATEX, işletmelerin müşteri deneyimini dönüştüren yenilikçi bir QR kod 
 ## Platform Özellikleri
 1. **QR Kod Yönetimi**: İşletmeler özel QR kodlar oluşturarak müşteri geri bildirimi toplayabilir
 2. **Gamification**: Müşteriler puan kazanır, rozetler açar, görevler tamamlar
-3. **AI Analiz**: Geri bildirimler yapay zeka ile analiz edilir
+3. **AI Analiz**: Geri bildirimler yapay zeka ile analiz edilir (duygu, niyet, aciliyet, churn riski, tema, varlık tanıma)
 4. **Sadakat Sistemi**: Müşteriler ödüller kazanabilir
 5. **Dashboard**: Detaylı analitik ve raporlar
+6. **Derin Öğrenme**: AI motoru sürekli öğrenerek işletmeye özel analiz profilleri oluşturur
 
 ## Kullanıcı Rolleri
-- **Müşteri (Customer)**: QR kod tarar, geri bildirim verir, puan/rozet kazanır
-- **Bayi (Dealer)**: QR kod oluşturur, geri bildirimleri görür, analiz yapar
-- **Admin**: Tüm sistemi yönetir
+- **Müşteri (Customer)**: QR kod tarar, geri bildirim verir, puan/rozet kazanır, kendi AI analizlerini görür
+- **Bayi (Dealer)**: QR kod oluşturur, geri bildirimleri görür, AI analiz ve içgörüler alır, AI ayarlarını yönetir
+- **Admin**: Tüm sistemi yönetir, sistem geneli AI kontrolü, derin öğrenme profilleri, detaylı analiz
 
 ## Yanıt Kuralların
 1. Her zaman Türkçe yanıt ver
@@ -116,7 +116,6 @@ export async function chatWithQRA(
 
     // Önceki konuşma geçmişini ekle
     if (conversationHistory && conversationHistory.length > 0) {
-      // Son 10 mesajı al
       const recentHistory = conversationHistory.slice(-10);
       messages.push(...recentHistory.map(msg => ({
         role: msg.role as 'user' | 'assistant',
@@ -148,138 +147,6 @@ export async function chatWithQRA(
 }
 
 /**
- * Geri bildirim analizi
- */
-export async function analyzeFeedbackWithGroq(text: string): Promise<AIAnalysisResult | null> {
-  const client = getGroqClient();
-  if (!client) {
-    console.warn('Groq API key not configured');
-    return null;
-  }
-
-  if (!text || text.trim().length < 5) {
-    return null;
-  }
-
-  try {
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: MODELS.fast,
-        messages: [
-          {
-            role: 'system',
-            content: `Sen bir müşteri geri bildirimi analiz asistanısın. Türkçe metinleri analiz et ve SADECE JSON formatında yanıt ver, başka hiçbir şey yazma.
-
-Analiz özellikleri:
-1. sentiment: Genel duygu (positive, negative, neutral)
-2. sentiment_score: Duygu skoru (0-1 arası)
-3. emotions: Tespit edilen duygular ve skorları
-4. topics: Metinde geçen konular (service, quality, price, atmosphere, staff, food, cleanliness, speed, etc.)
-5. toxicity: Toksik içerik kontrolü
-6. summary: Kısa özet (max 30 kelime)
-
-JSON formatı:
-{
-  "sentiment": { "label": "positive", "score": 0.85 },
-  "emotions": [{ "label": "happy", "score": 0.8 }],
-  "topics": ["service", "quality"],
-  "toxicity": { "isToxic": false, "score": 0.1, "categories": [] },
-  "summary": "Kısa özet"
-}`,
-          },
-          {
-            role: 'user',
-            content: `Analiz et: "${text}"`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
-      })
-    );
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      return null;
-    }
-
-    const analysis = JSON.parse(content);
-
-    return {
-      sentiment: {
-        label: analysis.sentiment?.label || 'neutral',
-        score: analysis.sentiment?.score || 0.5,
-      },
-      emotions: analysis.emotions || [],
-      topics: analysis.topics || [],
-      toxicity: {
-        isToxic: analysis.toxicity?.isToxic || false,
-        score: analysis.toxicity?.score || 0,
-        categories: analysis.toxicity?.categories || [],
-      },
-      summary: analysis.summary,
-    };
-  } catch (error) {
-    console.error('Error analyzing feedback with Groq:', error);
-    return null;
-  }
-}
-
-/**
- * İşletme içgörüleri oluştur
- */
-export async function generateInsightsWithGroq(feedbackData: {
-  totalCount: number;
-  averageRating: number;
-  sentimentDistribution: { positive: number; negative: number; neutral: number };
-  topTopics: string[];
-  recentFeedbacks: { text: string; rating: number; sentiment: string }[];
-}): Promise<string | null> {
-  const client = getGroqClient();
-  if (!client) {
-    console.warn('Groq API key not configured');
-    return null;
-  }
-
-  try {
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: MODELS.fast,
-        messages: [
-          {
-            role: 'system',
-            content: `Sen QRATEX platformunun iş analisti asistanısın. Müşteri geri bildirim verilerini analiz edip işletme sahiplerine actionable insights sağla. Türkçe, kısa ve öz yanıt ver. Emoji kullan.`,
-          },
-          {
-            role: 'user',
-            content: `Aşağıdaki geri bildirim verilerini analiz et ve işletme sahibine 3-5 maddelik öneriler sun:
-
-📊 Toplam Geri Bildirim: ${feedbackData.totalCount}
-⭐ Ortalama Puan: ${feedbackData.averageRating.toFixed(1)}/5
-😊 Olumlu: %${feedbackData.sentimentDistribution.positive}
-😐 Nötr: %${feedbackData.sentimentDistribution.neutral}
-😞 Olumsuz: %${feedbackData.sentimentDistribution.negative}
-🏷️ En Çok Bahsedilen Konular: ${feedbackData.topTopics.join(', ') || 'Yok'}
-
-Son Geri Bildirimler:
-${feedbackData.recentFeedbacks.slice(0, 5).map((f) => `- "${f.text}" (⭐${f.rating})`).join('\n')}
-
-Analiz et ve öneriler sun:`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 800,
-      })
-    );
-
-    return response.choices[0]?.message?.content || null;
-  } catch (error) {
-    console.error('Error generating insights with Groq:', error);
-    return null;
-  }
-}
-
-/**
  * Hızlı yanıt önerileri
  */
 export async function suggestResponseWithGroq(
@@ -294,7 +161,7 @@ export async function suggestResponseWithGroq(
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: MODELS.large, // Hızlı model
+        model: MODELS.instant,
         messages: [
           {
             role: 'system',
@@ -326,8 +193,5 @@ export async function suggestResponseWithGroq(
 
 export default {
   chatWithQRA,
-  analyzeFeedbackWithGroq,
-  generateInsightsWithGroq,
   suggestResponseWithGroq,
 };
-

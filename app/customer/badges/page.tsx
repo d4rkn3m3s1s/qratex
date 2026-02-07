@@ -45,37 +45,37 @@ const rarityConfig = {
   COMMON: {
     label: 'Yaygın',
     color: 'from-gray-400 to-gray-600',
-    bgColor: 'bg-gray-500/20',
-    borderColor: 'border-gray-500/50',
-    textColor: 'text-gray-400',
-    glowColor: 'shadow-gray-500/30',
+    cardBg: 'bg-gradient-to-br from-slate-100 via-gray-50 to-slate-100 dark:from-slate-800/80 dark:via-slate-700/60 dark:to-slate-800/80',
+    borderColor: 'border-gray-300 dark:border-gray-600/60',
+    textColor: 'text-gray-600 dark:text-gray-400',
+    glowColor: 'shadow-gray-400/20 dark:shadow-gray-500/30',
     icon: Medal,
   },
   RARE: {
     label: 'Nadir',
     color: 'from-blue-400 to-blue-600',
-    bgColor: 'bg-blue-500/20',
-    borderColor: 'border-blue-500/50',
-    textColor: 'text-blue-400',
-    glowColor: 'shadow-blue-500/30',
+    cardBg: 'bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 dark:from-blue-900/40 dark:via-cyan-900/30 dark:to-blue-800/40',
+    borderColor: 'border-blue-300 dark:border-blue-500/50',
+    textColor: 'text-blue-600 dark:text-blue-400',
+    glowColor: 'shadow-blue-400/20 dark:shadow-blue-500/30',
     icon: Shield,
   },
   EPIC: {
     label: 'Epik',
     color: 'from-purple-400 to-purple-600',
-    bgColor: 'bg-purple-500/20',
-    borderColor: 'border-purple-500/50',
-    textColor: 'text-purple-400',
-    glowColor: 'shadow-purple-500/30',
+    cardBg: 'bg-gradient-to-br from-purple-50 via-pink-50 to-fuchsia-100 dark:from-purple-900/40 dark:via-pink-900/30 dark:to-fuchsia-900/40',
+    borderColor: 'border-purple-300 dark:border-purple-500/50',
+    textColor: 'text-purple-600 dark:text-purple-400',
+    glowColor: 'shadow-purple-400/20 dark:shadow-purple-500/30',
     icon: Zap,
   },
   LEGENDARY: {
     label: 'Efsanevi',
     color: 'from-yellow-400 via-orange-500 to-red-500',
-    bgColor: 'bg-gradient-to-br from-yellow-500/20 via-orange-500/20 to-red-500/20',
-    borderColor: 'border-yellow-500/50',
-    textColor: 'text-yellow-400',
-    glowColor: 'shadow-yellow-500/50',
+    cardBg: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-red-900/40',
+    borderColor: 'border-amber-300 dark:border-yellow-500/50',
+    textColor: 'text-amber-600 dark:text-yellow-400',
+    glowColor: 'shadow-yellow-400/30 dark:shadow-yellow-500/50',
     icon: Crown,
   },
 };
@@ -85,6 +85,7 @@ const categoryConfig: Record<string, { label: string; icon: typeof Trophy }> = {
   engagement: { label: 'Etkileşim', icon: Heart },
   streak: { label: 'Seri', icon: Flame },
   special: { label: 'Özel', icon: Gift },
+  custom: { label: 'Özel', icon: Gift },
   general: { label: 'Genel', icon: Medal },
 };
 
@@ -192,34 +193,34 @@ export default function CustomerBadgesPage() {
       />
 
       {/* Hero Stats Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-purple-500/10 to-pink-500/20 p-6 border border-primary/20">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-purple-500/10 to-pink-500/20 p-6 md:p-8 border border-primary/20">
         <div className="absolute inset-0 bg-grid-white/5" />
         <div className="relative">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             {/* Left - Main Stats */}
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
-                  <Trophy className="w-12 h-12 text-white" />
+                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-xl shadow-primary/30">
+                  <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center text-xs font-bold text-black shadow-lg">
+                <div className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-sm font-bold text-black shadow-lg">
                   {stats.earned}
                 </div>
               </div>
               <div>
-                <h3 className="text-3xl font-bold">
+                <h3 className="text-2xl sm:text-4xl font-bold">
                   {stats.earned} / {stats.total}
                 </h3>
-                <p className="text-muted-foreground">Rozet Kazanıldı</p>
+                <p className="text-muted-foreground text-sm sm:text-lg">Rozet Kazanıldı</p>
                 <div className="flex items-center gap-4 mt-2">
                   {stats.legendary > 0 && (
-                    <span className="flex items-center gap-1 text-yellow-500 text-sm">
-                      <Crown className="w-4 h-4" /> {stats.legendary} Efsanevi
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-yellow-500 text-sm font-medium">
+                      <Crown className="w-5 h-5" /> {stats.legendary} Efsanevi
                     </span>
                   )}
                   {stats.epic > 0 && (
-                    <span className="flex items-center gap-1 text-purple-500 text-sm">
-                      <Zap className="w-4 h-4" /> {stats.epic} Epik
+                    <span className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 text-sm font-medium">
+                      <Zap className="w-5 h-5" /> {stats.epic} Epik
                     </span>
                   )}
                 </div>
@@ -227,19 +228,19 @@ export default function CustomerBadgesPage() {
             </div>
 
             {/* Right - Quick Stats */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-3 rounded-xl bg-background/50 backdrop-blur">
-                <Star className="w-6 h-6 text-yellow-500 mx-auto mb-1" />
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
+                <Star className="w-7 h-7 text-yellow-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{stats.totalPoints}</p>
                 <p className="text-xs text-muted-foreground">Toplam Puan</p>
               </div>
-              <div className="text-center p-3 rounded-xl bg-background/50 backdrop-blur">
-                <Target className="w-6 h-6 text-green-500 mx-auto mb-1" />
+              <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
+                <Target className="w-7 h-7 text-green-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{Math.round((stats.earned / Math.max(stats.total, 1)) * 100)}%</p>
                 <p className="text-xs text-muted-foreground">Tamamlanan</p>
               </div>
-              <div className="text-center p-3 rounded-xl bg-background/50 backdrop-blur">
-                <Flame className="w-6 h-6 text-orange-500 mx-auto mb-1" />
+              <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
+                <Flame className="w-7 h-7 text-orange-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{progressToNext?.progress || 0}%</p>
                 <p className="text-xs text-muted-foreground">Sıradaki</p>
               </div>
@@ -248,26 +249,26 @@ export default function CustomerBadgesPage() {
 
           {/* Progress to Next Badge */}
           {progressToNext && (
-            <div className="mt-6 p-4 rounded-xl bg-background/50 backdrop-blur">
+            <div className="mt-6 p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">Sıradaki Rozet:</span>
-                  <span className={`font-semibold ${rarityConfig[progressToNext.rarity].textColor}`}>
+                  <span className={`font-bold ${rarityConfig[progressToNext.rarity].textColor}`}>
                     {progressToNext.name}
                   </span>
                 </div>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground font-medium">
                   {progressToNext.currentValue} / {progressToNext.targetValue}
                 </span>
               </div>
-              <Progress value={progressToNext.progress} className="h-2" />
+              <Progress value={progressToNext.progress} className="h-3" />
             </div>
           )}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <div className="flex gap-2">
           {(['all', 'earned', 'locked'] as const).map((f) => (
             <Button
@@ -301,9 +302,9 @@ export default function CustomerBadgesPage() {
                 variant={categoryFilter === cat ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setCategoryFilter(cat)}
-                className="gap-1"
+                className="gap-1.5"
               >
-                <Icon className="w-3 h-3" />
+                <Icon className="w-4 h-4" />
                 {config.label}
               </Button>
             );
@@ -311,23 +312,23 @@ export default function CustomerBadgesPage() {
         </div>
       </div>
 
-      {/* Badges Grid */}
+      {/* Badges Grid - BIGGER */}
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {[...Array(10)].map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
             <Card key={i} className="overflow-hidden">
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="w-20 h-20 bg-muted rounded-full mx-auto" />
-                  <div className="h-4 bg-muted rounded w-3/4 mx-auto" />
-                  <div className="h-3 bg-muted rounded w-1/2 mx-auto" />
+              <CardContent className="p-8">
+                <div className="animate-pulse space-y-5">
+                  <div className="w-28 h-28 bg-muted rounded-full mx-auto" />
+                  <div className="h-5 bg-muted rounded w-3/4 mx-auto" />
+                  <div className="h-4 bg-muted rounded w-1/2 mx-auto" />
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence mode="popLayout">
             {filteredBadges.map((badge, index) => {
               const config = rarityConfig[badge.rarity];
@@ -340,84 +341,94 @@ export default function CustomerBadgesPage() {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ delay: index * 0.03 }}
+                  transition={{ delay: index * 0.04 }}
                 >
-                  <Card
-                    className={`group relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 ${
+                  <div
+                    className={`group relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 rounded-2xl ${config.cardBg} ${
                       isEarned
-                        ? `border-2 ${config.borderColor} shadow-lg ${config.glowColor}`
-                        : 'opacity-70 hover:opacity-100'
+                        ? `border-2 ${config.borderColor} shadow-xl ${config.glowColor}`
+                        : 'border border-border/50 opacity-80 hover:opacity-100'
                     }`}
                     onClick={() => setSelectedBadge(badge)}
                   >
                     {/* Legendary Glow Effect */}
                     {badge.rarity === 'LEGENDARY' && isEarned && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-red-500/20 animate-pulse" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 animate-pulse rounded-2xl" />
                     )}
 
                     {/* Epic Shimmer Effect */}
                     {badge.rarity === 'EPIC' && isEarned && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/10 to-transparent animate-shimmer" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/8 to-transparent animate-shimmer rounded-2xl" />
                     )}
 
-                    <CardContent className="p-4 relative">
-                      <div className="flex flex-col items-center text-center space-y-3">
-                        {/* Badge Icon */}
-                        <div className={`relative p-4 rounded-full ${isEarned ? config.bgColor : 'bg-muted'} transition-transform group-hover:scale-110`}>
+                    {/* Decorative glow orb */}
+                    <div className={`absolute -top-16 -right-16 w-32 h-32 rounded-full bg-gradient-to-br ${config.color} opacity-[0.08] dark:opacity-20 blur-2xl`} />
+
+                    <div className="p-6 relative">
+                      <div className="flex flex-col items-center text-center space-y-4">
+                        {/* Badge Icon - DIRECT, NO CIRCLE */}
+                        <div className="relative transition-transform group-hover:scale-110">
                           <Image
                             src={badge.icon}
                             alt={badge.name}
-                            width={56}
-                            height={56}
-                            className={`relative z-10 ${!isEarned && 'grayscale opacity-50'}`}
+                            width={112}
+                            height={112}
+                            className={`relative z-10 drop-shadow-2xl ${isEarned ? 'brightness-110 saturate-125 dark:brightness-125' : 'grayscale-[50%] opacity-70 dark:brightness-150 dark:contrast-125'}`}
                           />
                           
                           {/* Earned Sparkle */}
                           {isEarned && badge.rarity === 'LEGENDARY' && (
                             <motion.div
-                              className="absolute -top-1 -right-1"
+                              className="absolute -top-2 -right-2"
                               animate={{ rotate: 360 }}
                               transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
                             >
-                              <Sparkles className="w-5 h-5 text-yellow-500" />
+                              <Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-lg" />
                             </motion.div>
+                          )}
+
+                          {isEarned && badge.rarity === 'EPIC' && (
+                            <Zap className="absolute -top-1 -right-1 w-6 h-6 text-purple-500 dark:text-purple-400 animate-pulse drop-shadow-lg" />
                           )}
 
                           {/* Lock Icon */}
                           {!isEarned && (
-                            <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-background flex items-center justify-center">
-                              <Lock className="w-3 h-3 text-muted-foreground" />
+                            <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-background/90 border-2 border-border flex items-center justify-center shadow-lg">
+                              <Lock className="w-4 h-4 text-muted-foreground" />
                             </div>
                           )}
                         </div>
 
                         {/* Badge Info */}
-                        <div className="space-y-1">
-                          <h3 className={`font-semibold text-sm ${isEarned ? '' : 'text-muted-foreground'}`}>
+                        <div className="space-y-2">
+                          <h3 className={`font-bold text-base ${isEarned ? 'text-foreground' : 'text-muted-foreground'}`}>
                             {badge.name}
                           </h3>
-                          <Badge className={`text-[10px] ${isEarned ? `bg-gradient-to-r ${config.color} text-white` : 'bg-muted text-muted-foreground'}`}>
+                          <p className="text-xs text-muted-foreground line-clamp-2 max-w-[220px] mx-auto">
+                            {badge.description}
+                          </p>
+                          <Badge className={`text-xs px-3 py-0.5 ${isEarned ? `bg-gradient-to-r ${config.color} text-white border-0` : 'bg-muted text-muted-foreground'}`}>
                             {config.label}
                           </Badge>
                         </div>
 
                         {/* Progress or Points */}
                         {isEarned ? (
-                          <div className="flex items-center gap-1 text-yellow-500">
-                            <Star className="w-3 h-3 fill-current" />
-                            <span className="text-xs font-medium">+{badge.points}</span>
+                          <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-500">
+                            <Star className="w-4 h-4 fill-current" />
+                            <span className="text-sm font-bold">+{badge.points} Puan</span>
                           </div>
                         ) : (
-                          <div className="w-full space-y-1">
-                            <Progress value={badge.progress} className="h-1.5" />
-                            <p className="text-[10px] text-muted-foreground">
-                              {badge.progress}%
+                          <div className="w-full space-y-1.5">
+                            <Progress value={badge.progress} className="h-2.5" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              %{badge.progress} tamamlandı
                             </p>
                           </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </motion.div>
               );
             })}
@@ -440,7 +451,7 @@ export default function CustomerBadgesPage() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.8, y: 50, opacity: 0 }}
               transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className={`relative w-full max-w-md my-8 rounded-3xl overflow-hidden shadow-2xl ${
+              className={`relative w-full max-w-lg my-4 sm:my-8 rounded-3xl overflow-hidden shadow-2xl ${
                 selectedBadge.rarity === 'LEGENDARY' 
                   ? 'shadow-yellow-500/50' 
                   : selectedBadge.rarity === 'EPIC'
@@ -469,8 +480,8 @@ export default function CustomerBadgesPage() {
                             : 'bg-white'
                     }`}
                     style={{
-                      width: Math.random() * 4 + 2,
-                      height: Math.random() * 4 + 2,
+                      width: Math.random() * 5 + 2,
+                      height: Math.random() * 5 + 2,
                       left: `${Math.random() * 100}%`,
                       top: `${Math.random() * 100}%`,
                     }}
@@ -516,9 +527,9 @@ export default function CustomerBadgesPage() {
               </Button>
 
               {/* Content Container */}
-              <div className="relative z-10 p-6">
-                {/* Badge Icon - Centered */}
-                <div className="flex justify-center mb-4">
+              <div className="relative z-10 p-4 sm:p-8">
+                {/* Badge Icon - Centered & BIGGER */}
+                <div className="flex justify-center mb-6">
                   <motion.div
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{ scale: 1, rotate: 0 }}
@@ -526,7 +537,7 @@ export default function CustomerBadgesPage() {
                     className="relative"
                   >
                     {/* Glow behind icon */}
-                    <div className={`absolute inset-0 blur-xl opacity-60 ${
+                    <div className={`absolute inset-4 blur-3xl opacity-50 rounded-full ${
                       selectedBadge.rarity === 'LEGENDARY' 
                         ? 'bg-yellow-400' 
                         : selectedBadge.rarity === 'EPIC'
@@ -536,35 +547,25 @@ export default function CustomerBadgesPage() {
                             : 'bg-gray-400'
                     }`} />
                     
-                    {/* Icon container */}
-                    <div className={`relative p-5 rounded-full bg-black/30 backdrop-blur-sm border-3 ${
-                      selectedBadge.rarity === 'LEGENDARY' 
-                        ? 'border-yellow-400/80' 
-                        : selectedBadge.rarity === 'EPIC'
-                          ? 'border-purple-400/80'
-                          : selectedBadge.rarity === 'RARE'
-                            ? 'border-blue-400/80'
-                            : 'border-gray-400/80'
-                    }`}>
-                      <Image
-                        src={selectedBadge.icon}
-                        alt={selectedBadge.name}
-                        width={80}
-                        height={80}
-                        className={`relative z-10 drop-shadow-2xl ${!selectedBadge.earned ? 'grayscale opacity-60' : ''}`}
-                      />
-                      
-                      {/* Sparkle for earned legendary */}
-                      {selectedBadge.earned && selectedBadge.rarity === 'LEGENDARY' && (
-                        <motion.div
-                          className="absolute -top-1 -right-1"
-                          animate={{ rotate: 360, scale: [1, 1.2, 1] }}
-                          transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1, repeat: Infinity } }}
-                        >
-                          <Sparkles className="w-6 h-6 text-yellow-300 drop-shadow-lg" />
-                        </motion.div>
-                      )}
-                    </div>
+                    {/* Icon - DIRECT, no circle */}
+                    <Image
+                      src={selectedBadge.icon}
+                      alt={selectedBadge.name}
+                      width={150}
+                      height={150}
+                      className={`relative z-10 drop-shadow-2xl ${selectedBadge.earned ? 'brightness-110 saturate-125 dark:brightness-125' : 'grayscale-[50%] opacity-70 dark:brightness-150 dark:contrast-125'}`}
+                    />
+                    
+                    {/* Sparkle for earned legendary */}
+                    {selectedBadge.earned && selectedBadge.rarity === 'LEGENDARY' && (
+                      <motion.div
+                        className="absolute -top-2 -right-2"
+                        animate={{ rotate: 360, scale: [1, 1.2, 1] }}
+                        transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1, repeat: Infinity } }}
+                      >
+                        <Sparkles className="w-8 h-8 text-yellow-300 drop-shadow-lg" />
+                      </motion.div>
+                    )}
                   </motion.div>
                 </div>
 
@@ -573,12 +574,12 @@ export default function CustomerBadgesPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
-                  className="text-center mb-4"
+                  className="text-center mb-5"
                 >
-                  <h2 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 drop-shadow-lg">
                     {selectedBadge.name}
                   </h2>
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm ${
                     selectedBadge.rarity === 'LEGENDARY' 
                       ? 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500' 
                       : selectedBadge.rarity === 'EPIC'
@@ -587,10 +588,10 @@ export default function CustomerBadgesPage() {
                           ? 'bg-gradient-to-r from-blue-500 to-cyan-500'
                           : 'bg-gradient-to-r from-gray-500 to-gray-600'
                   } text-white font-semibold shadow-lg`}>
-                    {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-4 h-4" />}
-                    {selectedBadge.rarity === 'EPIC' && <Zap className="w-4 h-4" />}
-                    {selectedBadge.rarity === 'RARE' && <Shield className="w-4 h-4" />}
-                    {selectedBadge.rarity === 'COMMON' && <Medal className="w-4 h-4" />}
+                    {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-5 h-5" />}
+                    {selectedBadge.rarity === 'EPIC' && <Zap className="w-5 h-5" />}
+                    {selectedBadge.rarity === 'RARE' && <Shield className="w-5 h-5" />}
+                    {selectedBadge.rarity === 'COMMON' && <Medal className="w-5 h-5" />}
                     {rarityConfig[selectedBadge.rarity].label}
                   </div>
                 </motion.div>
@@ -600,7 +601,7 @@ export default function CustomerBadgesPage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-center text-white/80 text-sm mb-4"
+                  className="text-center text-white/85 text-sm sm:text-base mb-5 leading-relaxed"
                 >
                   {selectedBadge.description}
                 </motion.p>
@@ -610,18 +611,18 @@ export default function CustomerBadgesPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="bg-black/40 backdrop-blur-sm rounded-xl p-4 border border-white/10"
+                  className="bg-black/40 backdrop-blur-sm rounded-2xl p-5 border border-white/10"
                 >
                   {selectedBadge.earned ? (
-                    <div className="text-center space-y-3">
+                    <div className="text-center space-y-4">
                       {/* Earned Badge */}
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ type: 'spring', delay: 0.5 }}
-                        className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30"
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30"
                       >
-                        <Trophy className="w-5 h-5" />
+                        <Trophy className="w-6 h-6" />
                         <span className="text-lg font-bold">Kazanıldı!</span>
                       </motion.div>
 
@@ -636,22 +637,22 @@ export default function CustomerBadgesPage() {
                             })}
                           </span>
                         )}
-                        <div className="flex items-center gap-1">
-                          <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                          <span className="text-xl font-bold text-yellow-400">+{selectedBadge.points}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
+                          <span className="text-2xl font-bold text-yellow-400">+{selectedBadge.points}</span>
                           <span className="text-white/60 text-sm">Puan</span>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {/* Progress */}
                       <div>
-                        <div className="flex justify-between mb-1.5 text-sm">
+                        <div className="flex justify-between mb-2 text-sm">
                           <span className="text-white/80 font-medium">İlerleme</span>
-                          <span className="text-white font-bold">{selectedBadge.progress}%</span>
+                          <span className="text-white font-bold text-base">%{selectedBadge.progress}</span>
                         </div>
-                        <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
+                        <div className="relative h-4 bg-white/10 rounded-full overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${selectedBadge.progress}%` }}
@@ -667,22 +668,22 @@ export default function CustomerBadgesPage() {
                             }`}
                           />
                         </div>
-                        <div className="flex justify-between mt-1 text-xs text-white/60">
+                        <div className="flex justify-between mt-1.5 text-sm text-white/60">
                           <span>{selectedBadge.currentValue || 0}</span>
                           <span>{selectedBadge.targetValue || '?'}</span>
                         </div>
                       </div>
 
                       {/* How to Earn & Reward */}
-                      <div className="pt-3 border-t border-white/10 space-y-2">
+                      <div className="pt-4 border-t border-white/10 space-y-3">
                         <p className="text-white/70 text-sm">
-                          <span className="text-white font-medium">Nasıl Kazanılır: </span>
+                          <span className="text-white font-semibold">Nasıl Kazanılır: </span>
                           {selectedBadge.requirement}
                         </p>
                         <div className="flex items-center justify-center gap-2 text-sm">
                           <span className="text-white/60">Ödül:</span>
-                          <Star className="w-4 h-4 text-yellow-400" />
-                          <span className="text-yellow-400 font-semibold">+{selectedBadge.points} Puan</span>
+                          <Star className="w-5 h-5 text-yellow-400" />
+                          <span className="text-yellow-400 font-bold text-base">+{selectedBadge.points} Puan</span>
                         </div>
                       </div>
                     </div>

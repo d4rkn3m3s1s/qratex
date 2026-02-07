@@ -400,30 +400,30 @@ export default function AdminSettingsPage() {
       <DashboardHeader title="Ayarlar" description="Platform ve profil ayarlarını yapılandırın" />
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 lg:w-auto">
-          <TabsTrigger value="profile" className="gap-2">
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">Profil</span>
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1">
+          <TabsTrigger value="profile" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <User className="h-4 w-4 shrink-0" />
+            Profil
           </TabsTrigger>
-          <TabsTrigger value="general" className="gap-2">
-            <Globe className="h-4 w-4" />
-            <span className="hidden sm:inline">Genel</span>
+          <TabsTrigger value="general" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Globe className="h-4 w-4 shrink-0" />
+            Genel
           </TabsTrigger>
-          <TabsTrigger value="appearance" className="gap-2">
-            <Palette className="h-4 w-4" />
-            <span className="hidden sm:inline">Görünüm</span>
+          <TabsTrigger value="appearance" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Palette className="h-4 w-4 shrink-0" />
+            Görünüm
           </TabsTrigger>
-          <TabsTrigger value="auth" className="gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Kimlik</span>
+          <TabsTrigger value="auth" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Shield className="h-4 w-4 shrink-0" />
+            Kimlik
           </TabsTrigger>
-          <TabsTrigger value="ai" className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            <span className="hidden sm:inline">AI</span>
+          <TabsTrigger value="ai" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Sparkles className="h-4 w-4 shrink-0" />
+            AI
           </TabsTrigger>
-          <TabsTrigger value="gamification" className="gap-2">
-            <Database className="h-4 w-4" />
-            <span className="hidden sm:inline">Oyunlaştırma</span>
+          <TabsTrigger value="gamification" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Database className="h-4 w-4 shrink-0" />
+            Oyun
           </TabsTrigger>
         </TabsList>
 
@@ -440,8 +440,8 @@ export default function AdminSettingsPage() {
                 <CardTitle>Profil Fotoğrafı</CardTitle>
                 <CardDescription>Avatarınızı seçin veya değiştirin</CardDescription>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
                   <div className="relative group">
                     <Avatar className="h-28 w-28 border-4 border-primary/20">
                       <AvatarImage src={profile.avatar} />

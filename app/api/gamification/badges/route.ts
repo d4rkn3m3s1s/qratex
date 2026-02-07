@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
         name: body.name,
         description: body.description,
         icon: body.icon,
-        category: 'custom',
+        category: body.category || 'general',
         rarity: (body.rarity || 'common').toLowerCase(),
         requirement: { type: 'custom', value: body.points || 100 },
         isActive: body.isActive ?? true,

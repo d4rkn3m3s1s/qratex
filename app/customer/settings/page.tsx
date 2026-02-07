@@ -300,7 +300,7 @@ export default function CustomerSettingsPage() {
       />
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:w-auto">
+        <TabsList className="flex flex-wrap gap-1 w-full lg:w-auto">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">Profil</span>
@@ -332,8 +332,8 @@ export default function CustomerSettingsPage() {
                 <CardTitle>Profil Fotoğrafı</CardTitle>
                 <CardDescription>Avatarınızı seçin veya değiştirin</CardDescription>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
                   <div className="relative group">
                     <Avatar className="h-28 w-28 border-4 border-primary/20">
                       <AvatarImage src={profile.avatar} />

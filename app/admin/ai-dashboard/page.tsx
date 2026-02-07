@@ -224,7 +224,7 @@ export default function AdminAIDashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 overflow-hidden">
           {[...Array(15)].map((_, i) => (
@@ -251,7 +251,7 @@ export default function AdminAIDashboardPage() {
           <div className="flex items-center gap-3">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
               <span className="text-white/60 text-xs">Toplam Analiz</span>
-              <p className="text-2xl font-bold">{stats?.analyzedFeedbacks || 0}</p>
+              <p className="text-lg sm:text-2xl font-bold">{stats?.analyzedFeedbacks || 0}</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
               <span className="text-white/60 text-xs">AI Başarı</span>
@@ -382,7 +382,7 @@ export default function AdminAIDashboardPage() {
       )}
 
       {/* System Overview Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {[
           { label: 'Toplam Feedback', value: stats?.totalFeedbacks || 0, icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'AI Analiz Edilmiş', value: stats?.analyzedFeedbacks || 0, icon: Brain, color: 'text-violet-500', bg: 'bg-violet-500/10' },
@@ -450,20 +450,20 @@ export default function AdminAIDashboardPage() {
               <CardDescription>Tüm geri bildirimlerin duygu analizi</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
                 <div className="text-center p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                   <ThumbsUp className="h-6 w-6 mx-auto text-emerald-500 mb-2" />
-                  <p className="text-3xl font-bold text-emerald-500">{stats?.sentimentDistribution.positive || 0}%</p>
+                  <p className="text-xl sm:text-3xl font-bold text-emerald-500">{stats?.sentimentDistribution.positive || 0}%</p>
                   <p className="text-sm text-muted-foreground">Olumlu</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
                   <Minus className="h-6 w-6 mx-auto text-blue-500 mb-2" />
-                  <p className="text-3xl font-bold text-blue-500">{stats?.sentimentDistribution.neutral || 0}%</p>
+                  <p className="text-xl sm:text-3xl font-bold text-blue-500">{stats?.sentimentDistribution.neutral || 0}%</p>
                   <p className="text-sm text-muted-foreground">Nötr</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-red-500/5 border border-red-500/20">
                   <ThumbsDown className="h-6 w-6 mx-auto text-red-500 mb-2" />
-                  <p className="text-3xl font-bold text-red-500">{stats?.sentimentDistribution.negative || 0}%</p>
+                  <p className="text-xl sm:text-3xl font-bold text-red-500">{stats?.sentimentDistribution.negative || 0}%</p>
                   <p className="text-sm text-muted-foreground">Olumsuz</p>
                 </div>
               </div>

@@ -10,65 +10,19 @@ import {
   analyzeWithFallback as _analyzeWithFallback,
   analyzeSentimentLocal,
   checkToxicityLocal,
+  askAI,
   type AnalyzeOptions,
 } from './ai-engine';
 import type { AIAnalysisResult } from '@/types';
-import OpenAI from 'openai';
 
 // Re-export from ai-engine for backward compatibility
 export { analyzeSentimentLocal, checkToxicityLocal };
 
-// Lazy initialize AI client (Groq veya OpenAI)
-let aiClient: OpenAI | null = null;
-
-function getAIClient(): OpenAI | null {
-  if (process.env.GROQ_API_KEY) {
-    if (!aiClient || (aiClient as OpenAI & { baseURL?: string }).baseURL !== 'https://api.groq.com/openai/v1') {
-      aiClient = new OpenAI({
-        apiKey: process.env.GROQ_API_KEY,
-        baseURL: 'https://api.groq.com/openai/v1',
-      });
-    }
-    return aiClient;
-  }
-  if (process.env.OPENAI_API_KEY) {
-    if (!aiClient) {
-      aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    }
-    return aiClient;
-  }
-  return null;
-}
-
-function getModel(): string {
-  if (process.env.GROQ_API_KEY) return 'llama-3.3-70b-versatile';
-  return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
-}
-
-// Retry configuration
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, retries: number = MAX_RETRIES): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (retries > 0 && error instanceof Error) {
-      if (error.message.includes('rate_limit') || error.message.includes('429')) {
-        await sleep(RETRY_DELAY * (MAX_RETRIES - retries + 1));
-        return withRetry(fn, retries - 1);
-      }
-    }
-    throw error;
-  }
-}
+// AI client - ai-engine.ts'deki merkezi client kullanılır
+// Bu dosyada ayrı client oluşturmaya gerek yok.
 
 /**
- * Analyze feedback text using AI - now delegates to ai-engine
+ * Analyze feedback text using AI - delegates to ai-engine
  */
 export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | null> {
   return analyzeComprehensive(text);
@@ -76,6 +30,7 @@ export async function analyzeFeedback(text: string): Promise<AIAnalysisResult | 
 
 /**
  * Generate AI-powered insights from feedback data
+ * Delegated to askAI with structured context
  */
 export async function generateInsights(feedbackData: {
   totalCount: number;
@@ -84,81 +39,38 @@ export async function generateInsights(feedbackData: {
   topTopics: string[];
   recentFeedbacks: { text: string; rating: number; sentiment: string }[];
 }): Promise<string | null> {
-  const client = getAIClient();
-  if (!client) {
-    console.warn('AI API key not configured');
-    return null;
-  }
+  // askAI kullanarak insights oluştur
+  const question = `Aşağıdaki geri bildirim verilerini analiz et ve işletme sahibine 3-5 maddelik öneriler sun:
+Toplam: ${feedbackData.totalCount}, Ort. Puan: ${feedbackData.averageRating}/5
+Duygu: Olumlu %${feedbackData.sentimentDistribution.positive}, Olumsuz %${feedbackData.sentimentDistribution.negative}
+Konular: ${feedbackData.topTopics.join(', ')}`;
 
-  try {
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: getModel(),
-        messages: [
-          {
-            role: 'system',
-            content: `Sen bir iş analisti asistanısın. Müşteri geri bildirim verilerini analiz edip işletme sahiplerine actionable insights sağla. Türkçe yanıt ver.`,
-          },
-          {
-            role: 'user',
-            content: `Aşağıdaki geri bildirim verilerini analiz et ve işletme sahibine 3-5 maddelik öneriler sun:
-
-Toplam Geri Bildirim: ${feedbackData.totalCount}
-Ortalama Puan: ${feedbackData.averageRating}/5
-Duygu Dağılımı: Olumlu %${feedbackData.sentimentDistribution.positive}, Olumsuz %${feedbackData.sentimentDistribution.negative}, Nötr %${feedbackData.sentimentDistribution.neutral}
-En Çok Bahsedilen Konular: ${feedbackData.topTopics.join(', ')}
-
-Son Geri Bildirimler:
-${feedbackData.recentFeedbacks.map((f) => `- ${f.text} (Puan: ${f.rating}, Duygu: ${f.sentiment})`).join('\n')}
-
-Analiz et ve öneriler sun:`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 800,
-      })
-    );
-
-    return response.choices[0]?.message?.content || null;
-  } catch (error) {
-    console.error('Error generating insights:', error);
-    return null;
-  }
+  return askAI(question, {
+    totalFeedbacks: feedbackData.totalCount,
+    avgRating: feedbackData.averageRating,
+    sentimentDist: feedbackData.sentimentDistribution,
+    topTopics: feedbackData.topTopics.map(t => ({ topic: t, count: 1 })),
+    recentFeedbacks: feedbackData.recentFeedbacks.map(f => ({
+      text: f.text,
+      rating: f.rating,
+      sentiment: f.sentiment,
+      createdAt: new Date().toISOString(),
+    })),
+  });
 }
 
 /**
- * AI Chat assistant for dealers
+ * AI Chat assistant - delegates to askAI
  */
 export async function chatWithAI(message: string, context?: string): Promise<string | null> {
-  const client = getAIClient();
-  if (!client) {
-    return 'AI asistanı şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
-  }
-
-  try {
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: getModel(),
-        messages: [
-          {
-            role: 'system',
-            content: `Sen QRATEX platformunun AI asistanısın. İşletme sahiplerine müşteri deneyimi, geri bildirim yönetimi ve gamification konularında yardım ediyorsun. Türkçe yanıt ver, samimi ve yardımsever ol.${context ? `\n\nKullanıcı bağlamı: ${context}` : ''}`,
-          },
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-      })
-    );
-
-    return response.choices[0]?.message?.content || null;
-  } catch (error) {
-    console.error('Error in AI chat:', error);
-    return 'Bir hata oluştu. Lütfen tekrar deneyin.';
-  }
+  return askAI(message, {
+    totalFeedbacks: 0,
+    avgRating: 0,
+    sentimentDist: { positive: 0, negative: 0, neutral: 0 },
+    topTopics: [],
+    recentFeedbacks: [],
+    previousMessages: context ? [{ role: 'user', content: context }] : undefined,
+  });
 }
 
 /**

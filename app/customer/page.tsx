@@ -182,7 +182,7 @@ export default function CustomerDashboard() {
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <div className="relative">
-                <Avatar className="w-24 h-24 ring-4 ring-primary/30">
+                <Avatar className="w-20 h-20 sm:w-24 sm:h-24 ring-4 ring-primary/30">
                   <AvatarImage src={user?.image || ''} />
                   <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-2xl">
                     {getInitials(user?.name)}
@@ -194,7 +194,7 @@ export default function CustomerDashboard() {
               </div>
 
               <div className="flex-1 text-center sm:text-left">
-                <h2 className="text-2xl font-bold">{user?.name || 'Kullanıcı'}</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">{user?.name || 'Kullanıcı'}</h2>
                 <div className="flex items-center justify-center sm:justify-start gap-2 mt-1">
                   <Badge variant="secondary" className="gap-1">
                     <Medal className="w-3 h-3" />
@@ -235,7 +235,7 @@ export default function CustomerDashboard() {
       </motion.div>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {/* Spin Wheel - First Item */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}

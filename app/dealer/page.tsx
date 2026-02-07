@@ -205,7 +205,7 @@ const CircularProgress = ({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold">{value}</span>
+        <span className="text-xl sm:text-3xl font-bold">{value}</span>
         <span className="text-xs text-muted-foreground">Puan</span>
       </div>
     </div>
@@ -287,7 +287,7 @@ export default function DealerDashboard() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-4 sm:p-6 md:p-8"
       >
         {/* Background Effects */}
         <div className="absolute inset-0 overflow-hidden">
@@ -329,7 +329,7 @@ export default function DealerDashboard() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="text-3xl md:text-4xl font-bold text-white"
+              className="text-2xl sm:text-3xl md:text-4xl font-bold text-white"
             >
               {greeting}, {session?.user?.name?.split(' ')[0] || 'İşletmeci'}! 👋
             </motion.h1>
@@ -347,23 +347,23 @@ export default function DealerDashboard() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.4 }}
-            className="flex items-center gap-4"
+            className="flex items-center gap-2 sm:gap-4"
           >
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4">
               <CircularProgress 
                 value={performance.score} 
-                size={80} 
-                strokeWidth={8}
+                size={56} 
+                strokeWidth={6}
                 color={performance.color}
               />
               <div>
-                <p className="text-white/60 text-sm">Performans</p>
-                <p className="text-white text-xl font-bold">{performance.level}</p>
+                <p className="text-white/60 text-[10px] sm:text-sm">Performans</p>
+                <p className="text-white text-sm sm:text-xl font-bold">{performance.level}</p>
               </div>
             </div>
-            <Button asChild size="lg" className="bg-white text-purple-600 hover:bg-white/90">
+            <Button asChild size="sm" className="bg-white text-purple-600 hover:bg-white/90 text-xs sm:text-sm h-8 sm:h-9 px-2.5 sm:px-4">
               <Link href="/dealer/qr-codes">
-                <Plus className="w-5 h-5 mr-2" />
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                 Yeni QR Kod
               </Link>
             </Button>
@@ -439,7 +439,7 @@ export default function DealerDashboard() {
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">{stat.title}</p>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold">
+                    <span className="text-lg sm:text-2xl font-bold">
                       {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
                     </span>
                     {stat.suffix && <span className="text-muted-foreground text-sm">{stat.suffix}</span>}
@@ -475,7 +475,7 @@ export default function DealerDashboard() {
                     <CardDescription>Son 7 günlük geri bildirimler</CardDescription>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold">{stats.weeklyFeedbacks}</p>
+                    <p className="text-lg sm:text-2xl font-bold">{stats.weeklyFeedbacks}</p>
                     <p className="text-xs text-muted-foreground">Bu hafta</p>
                   </div>
                 </div>
@@ -707,7 +707,7 @@ export default function DealerDashboard() {
                                 <p className="text-xs text-muted-foreground font-mono">{qr.code}</p>
                               </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="grid grid-cols-3 gap-1 sm:gap-2 text-center">
                               <div className="p-2 rounded-lg bg-muted/50">
                                 <p className="text-lg font-bold">{qr.scans}</p>
                                 <p className="text-[10px] text-muted-foreground">Tarama</p>

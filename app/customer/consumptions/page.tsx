@@ -106,7 +106,7 @@ export default function CustomerConsumptionsPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 p-6 md:p-8"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 p-4 sm:p-6 md:p-8"
       >
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
@@ -122,7 +122,7 @@ export default function CustomerConsumptionsPage() {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
           { label: 'Toplam', value: stats.total, icon: History, color: 'violet' },
           { label: 'Yorum Bekliyor', value: stats.reviewPending, icon: Clock, color: 'amber' },
@@ -134,15 +134,15 @@ export default function CustomerConsumptionsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10`}>
-                    <stat.icon className={`h-5 w-5 text-${stat.color}-500`} />
+            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <CardContent className="p-2.5 sm:p-4">
+                <div className="flex flex-col items-center text-center gap-1 sm:flex-row sm:text-left sm:gap-3">
+                  <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-${stat.color}-500/10`}>
+                    <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 text-${stat.color}-500`} />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    <p className="text-base sm:text-2xl font-bold">{stat.value}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{stat.label}</p>
                   </div>
                 </div>
               </CardContent>
@@ -180,7 +180,7 @@ export default function CustomerConsumptionsPage() {
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
             <Card key={i} className="border-0 bg-card/50">
-              <CardContent className="p-6">
+              <CardContent className="p-3 sm:p-6">
                 <div className="animate-pulse space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-muted rounded-xl" />
@@ -223,10 +223,10 @@ export default function CustomerConsumptionsPage() {
               >
                 <Link href={`/customer/consumptions/${consumption.id}`}>
                   <Card className="border-0 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-all cursor-pointer group">
-                    <CardContent className="p-4 sm:p-6">
-                      <div className="flex items-start gap-4">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex items-start gap-2 sm:gap-3 overflow-hidden">
                         {/* Dealer logo */}
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center shrink-0">
                           {consumption.dealer.businessLogo ? (
                             <img 
                               src={consumption.dealer.businessLogo} 
@@ -234,55 +234,53 @@ export default function CustomerConsumptionsPage() {
                               className="w-full h-full rounded-xl object-cover"
                             />
                           ) : (
-                            <Store className="w-6 h-6 text-violet-500" />
+                            <Store className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
                           )}
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h3 className="font-semibold truncate">
-                                {consumption.dealer.businessName || consumption.dealer.name}
-                              </h3>
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                {consumption.product && (
-                                  <>
-                                    <span>{consumption.product.category.icon}</span>
-                                    <span>{consumption.product.name}</span>
-                                    <span>•</span>
-                                  </>
-                                )}
-                                <Calendar className="w-3 h-3" />
-                                <span>{formatRelativeTime(consumption.createdAt)}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-center justify-between gap-1">
+                            <h3 className="font-semibold text-sm sm:text-base truncate">
+                              {consumption.dealer.businessName || consumption.dealer.name}
+                            </h3>
+                            <div className="flex items-center gap-1 shrink-0">
                               {consumption.review ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30">
-                                  <Star className="w-3 h-3 mr-1 fill-current" />
+                                <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-[10px] sm:text-xs px-1.5 py-0">
+                                  <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 fill-current" />
                                   {consumption.review.rating}
                                 </Badge>
                               ) : (
-                                <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30">
-                                  <MessageSquare className="w-3 h-3 mr-1" />
+                                <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-[10px] sm:text-xs px-1.5 py-0">
+                                  <MessageSquare className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5" />
                                   Yorum Yap
                                 </Badge>
                               )}
-                              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
                             </div>
+                          </div>
+                          <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                            {consumption.product && (
+                              <>
+                                <span>{consumption.product.category.icon}</span>
+                                <span className="truncate">{consumption.product.name}</span>
+                                <span>•</span>
+                              </>
+                            )}
+                            <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+                            <span className="whitespace-nowrap">{formatRelativeTime(consumption.createdAt)}</span>
                           </div>
 
                           {/* Amount & Review preview */}
-                          <div className="flex items-center gap-4 mt-2">
+                          <div className="flex items-center gap-2 mt-1">
                             {consumption.amount && (
-                              <span className="text-sm font-medium">
+                              <span className="text-xs sm:text-sm font-medium">
                                 {formatCurrency(consumption.amount)}
                               </span>
                             )}
                             {consumption.review?.text && (
-                              <p className="text-sm text-muted-foreground truncate flex-1">
-                                "{consumption.review.text}"
+                              <p className="text-[10px] sm:text-xs text-muted-foreground truncate flex-1">
+                                &quot;{consumption.review.text}&quot;
                               </p>
                             )}
                           </div>

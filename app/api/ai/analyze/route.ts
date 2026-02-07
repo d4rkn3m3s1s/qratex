@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
             where: { id: feedbackId },
             data: {
               sentiment: analysis.sentiment.label,
-              emotions: analysis.emotions.map((e: { label: string }) => e.label),
+              emotions: analysis.emotions.map(e => e.label),
               topics: analysis.topics,
               isToxic: analysis.toxicity.isToxic,
               aiAnalysis: JSON.parse(JSON.stringify(analysis)),
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
               where: { id: fbId },
               data: {
                 sentiment: analysis.sentiment.label,
-                emotions: analysis.emotions.map(e => e.label),
+                emotions: analysis.emotions.map((e: { label: string }) => e.label),
                 topics: analysis.topics,
                 isToxic: analysis.toxicity.isToxic,
                 aiAnalysis: JSON.parse(JSON.stringify(analysis)),
@@ -550,12 +550,8 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // ── Ask AI (Doğal Dil Sorgulama) ──
+      // ── Ask AI (Doğal Dil Sorgulama) ── Tüm roller erişebilir
       case 'ask': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
         const validatedData = askAISchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
@@ -566,11 +562,14 @@ export async function POST(request: NextRequest) {
 
         const { question, conversationId } = validatedData.data;
 
-        // Get dealer's feedback data for context
+        // Role-based data scoping
         const where: Record<string, unknown> = {};
         if (session.user.role === 'DEALER') {
           where.qrCode = { dealerId: session.user.id };
+        } else if (session.user.role === 'CUSTOMER') {
+          where.userId = session.user.id;
         }
+        // ADMIN: tüm verilere erişir (filtre yok)
 
         const [feedbackStats, recentFeedbacks, themeClusters] = await Promise.all([
           prisma.feedback.aggregate({
@@ -659,8 +658,8 @@ export async function POST(request: NextRequest) {
           previousMessages,
         });
 
-        // Save conversation
-        const dealerId = session.user.id;
+        // Save conversation (dealerId alanı tüm roller için userId olarak kullanılır)
+        const conversationUserId = session.user.id;
         let savedConversationId = conversationId;
         try {
           if (conversationId) {
@@ -680,7 +679,7 @@ export async function POST(request: NextRequest) {
           } else {
             const conv = await prisma.aIConversation.create({
               data: {
-                dealerId,
+                dealerId: conversationUserId,
                 title: question.slice(0, 100),
                 messages: [
                   { role: 'user', content: question, timestamp: new Date().toISOString() },
@@ -746,6 +745,24 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
+        // ADMIN: belirli dealer ayarlarını veya tüm ayarları getirebilir
+        if (session.user.role === 'ADMIN' && body?.dealerId) {
+          const settings = await prisma.aISettings.findUnique({
+            where: { dealerId: body.dealerId },
+          });
+          return NextResponse.json({
+            success: true,
+            settings: settings || getDefaultAISettings(),
+          });
+        }
+
+        if (session.user.role === 'ADMIN' && body?.all) {
+          const allSettings = await prisma.aISettings.findMany({
+            include: { dealer: { select: { id: true, name: true, businessName: true } } },
+          });
+          return NextResponse.json({ success: true, allSettings });
+        }
+
         const settings = await prisma.aISettings.findUnique({
           where: { dealerId: session.user.id },
         });
@@ -762,8 +779,12 @@ export async function POST(request: NextRequest) {
         }
 
         const settingsData = body;
+        // ADMIN belirli dealer ayarlarını güncelleyebilir
+        const targetDealerId = (session.user.role === 'ADMIN' && settingsData.dealerId)
+          ? settingsData.dealerId
+          : session.user.id;
         const updated = await prisma.aISettings.upsert({
-          where: { dealerId: session.user.id },
+          where: { dealerId: targetDealerId },
           update: {
             isEnabled: settingsData.isEnabled,
             autoAnalyze: settingsData.autoAnalyze,
@@ -785,7 +806,7 @@ export async function POST(request: NextRequest) {
             customPrompt: settingsData.customPrompt,
           },
           create: {
-            dealerId: session.user.id,
+            dealerId: targetDealerId,
             isEnabled: settingsData.isEnabled ?? true,
             autoAnalyze: settingsData.autoAnalyze ?? true,
             analysisLanguage: settingsData.analysisLanguage ?? 'tr',
