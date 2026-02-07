@@ -48,6 +48,8 @@ interface ConsumptionReview {
   rating: number;
   text: string | null;
   dimensions: any | null;
+  dealerReply?: string | null;
+  dealerRepliedAt?: string | null;
   createdAt: string;
   consumption: {
     id: string;
@@ -288,17 +290,34 @@ export default function CustomerFeedbacksPage() {
                         </div>
                       )}
 
+                      {/* Dealer Reply */}
+                      {review.dealerReply && (
+                        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 mb-2">
+                          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1">
+                            <Store className="h-3 w-3" /> İşletme Yanıtı
+                          </p>
+                          <p className="text-sm">{review.dealerReply}</p>
+                        </div>
+                      )}
+
                       {/* Footer */}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {formatRelativeTime(review.createdAt)}
                         </div>
-                        {review.consumption.amount && (
-                          <Badge variant="outline">
-                            {formatCurrency(review.consumption.amount)}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {review.dealerReply && (
+                            <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] mr-1">
+                              <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> Yanıtlandı
+                            </Badge>
+                          )}
+                          {review.consumption.amount && (
+                            <Badge variant="outline">
+                              {formatCurrency(review.consumption.amount)}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>

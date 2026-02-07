@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
+  CheckCircle2,
   Search,
   Filter,
   Star,
@@ -542,8 +543,19 @@ export default function AdminFeedbacksPage() {
                             <Badge variant="outline" className="text-xs">
                               {feedback.type === 'consumption' ? 'Tüketim' : 'QR'}
                             </Badge>
+                            {(feedback as any).dealerReply && (
+                              <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> İşletme Yanıtladı
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm line-clamp-2">{feedback.text || 'Yorum yapılmadı'}</p>
+                          {(feedback as any).dealerReply && (
+                            <div className="p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-0.5">İşletme Yanıtı:</p>
+                              <p className="text-xs line-clamp-2">{(feedback as any).dealerReply}</p>
+                            </div>
+                          )}
                           {feedback.topics && feedback.topics.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {feedback.topics.slice(0, 3).map((topic) => (
