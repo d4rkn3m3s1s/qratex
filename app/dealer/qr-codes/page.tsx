@@ -11,6 +11,7 @@ import {
   Edit,
   Trash2,
   Download,
+  Palette,
   Copy,
   ExternalLink,
   Eye,
@@ -107,6 +108,30 @@ export default function DealerQRCodesPage() {
   const [selectedQR, setSelectedQR] = useState<QRCode | null>(null);
   const [qrPreview, setQrPreview] = useState<string>('');
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [qrFgColor, setQrFgColor] = useState('#000000');
+
+  const downloadQR = async (code: string, format: 'png' | 'svg' = 'png') => {
+    const url = `${window.location.origin}/feedback/${code}`;
+    if (format === 'svg') {
+      const svgStr = await QRCodeLib.toString(url, { type: 'svg', width: 400, margin: 2, color: { dark: qrFgColor, light: qrBgColor } });
+      const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `qr-${code}.svg`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+    } else {
+      const dataUrl = await QRCodeLib.toDataURL(url, { width: 800, margin: 2, color: { dark: qrFgColor, light: qrBgColor } });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `qr-${code}.png`;
+      a.click();
+    }
+    toast.success(`QR kod ${format.toUpperCase()} olarak indirildi!`);
+  };
+  const [qrBgColor, setQrBgColor] = useState('#FFFFFF');
+  const [qrFrame, setQrFrame] = useState<'none' | 'rounded' | 'circle' | 'badge'>('none');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -143,8 +168,8 @@ export default function DealerQRCodesPage() {
         width: 400,
         margin: 2,
         color: {
-          dark: '#000000',
-          light: '#FFFFFF',
+          dark: qrFgColor,
+          light: qrBgColor,
         },
       });
       return qrDataUrl;
@@ -254,7 +279,7 @@ export default function DealerQRCodesPage() {
       >
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-black/20 rounded-full blur-3xl" />
+          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-primary/10 dark:bg-black/20 rounded-full blur-3xl" />
           {[...Array(20)].map((_, i) => (
             <motion.div
               key={i}
@@ -581,16 +606,94 @@ export default function DealerQRCodesPage() {
                 </div>
 
                 {/* QR Code */}
-                <div className="p-8 flex justify-center bg-white">
+                <div className="p-8 flex justify-center" style={{ backgroundColor: qrBgColor }}>
                   {qrPreview && (
                     <motion.img 
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       src={qrPreview} 
                       alt="QR Code" 
-                      className="rounded-xl shadow-lg max-w-[250px]" 
+                      className={`shadow-lg max-w-[250px] ${qrFrame === "rounded" ? "border-4 border-primary rounded-2xl" : qrFrame === "circle" ? "border-4 border-amber-500 rounded-full" : qrFrame === "badge" ? "border-[6px] border-double border-emerald-500 rounded-xl" : "rounded-xl"}`} 
                     />
                   )}
+                </div>
+
+                {/* Color Customization */}
+                <div className="px-6 pt-4 pb-2 bg-card">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                    <Palette className="h-3 w-3" /> QR Renk Özelleştirme
+                  </p>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground">Ön Plan</label>
+                      <input type="color" value={qrFgColor} onChange={async (e) => {
+                        setQrFgColor(e.target.value);
+                        if (selectedQR) {
+                          const url = `${window.location.origin}/feedback/${selectedQR.code}`;
+                          const preview = await QRCodeLib.toDataURL(url, { width: 400, margin: 2, color: { dark: e.target.value, light: qrBgColor } });
+                          setQrPreview(preview);
+                        }
+                      }} className="w-8 h-8 rounded cursor-pointer border-0" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground">Arka Plan</label>
+                      <input type="color" value={qrBgColor} onChange={async (e) => {
+                        setQrBgColor(e.target.value);
+                        if (selectedQR) {
+                          const url = `${window.location.origin}/feedback/${selectedQR.code}`;
+                          const preview = await QRCodeLib.toDataURL(url, { width: 400, margin: 2, color: { dark: qrFgColor, light: e.target.value } });
+                          setQrPreview(preview);
+                        }
+                      }} className="w-8 h-8 rounded cursor-pointer border-0" />
+                    </div>
+                  </div>
+                  {/* Quick Color Presets */}
+                  <div className="flex items-center gap-2 mt-3">
+                    <span className="text-xs text-muted-foreground">Hazır:</span>
+                    {[
+                      { fg: '#000000', bg: '#FFFFFF', label: 'Klasik' },
+                      { fg: '#6d28d9', bg: '#f5f3ff', label: 'Mor' },
+                      { fg: '#0369a1', bg: '#f0f9ff', label: 'Mavi' },
+                      { fg: '#b91c1c', bg: '#fef2f2', label: 'Kırmızı' },
+                      { fg: '#FFFFFF', bg: '#000000', label: 'Ters' },
+                    ].map((preset) => (
+                      <button key={preset.label} onClick={async () => {
+                        setQrFgColor(preset.fg);
+                        setQrBgColor(preset.bg);
+                        if (selectedQR) {
+                          const url = `${window.location.origin}/feedback/${selectedQR.code}`;
+                          const preview = await QRCodeLib.toDataURL(url, { width: 400, margin: 2, color: { dark: preset.fg, light: preset.bg } });
+                          setQrPreview(preview);
+                        }
+                      }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-medium hover:bg-muted transition-colors"
+                        title={preset.label}
+                      >
+                        <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: preset.fg }} />
+                        <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: preset.bg }} />
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Frame Templates */}
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Çerçeve Şablonu</p>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'none', label: 'Yok', style: 'border-0' },
+                        { id: 'rounded', label: 'Yumuşak', style: 'border-4 border-primary rounded-2xl' },
+                        { id: 'circle', label: 'Daire', style: 'border-4 border-amber-500 rounded-full' },
+                        { id: 'badge', label: 'Rozet', style: 'border-[6px] border-double border-emerald-500 rounded-xl' },
+                      ].map((frame) => (
+                        <button key={frame.id} onClick={() => setQrFrame(frame.id as any)}
+                          className={`flex-1 p-2 rounded-lg border-2 text-center text-[10px] font-medium transition-all ${qrFrame === frame.id ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
+                        >
+                          <div className={`w-10 h-10 mx-auto mb-1 bg-muted/50 ${frame.style}`} />
+                          {frame.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Info & Actions */}
@@ -607,21 +710,29 @@ export default function DealerQRCodesPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <Button 
                       variant="outline" 
                       className="flex-1"
                       onClick={() => handleCopyLink(selectedQR.code)}
                     >
                       <Copy className="h-4 w-4 mr-2" />
-                      Link Kopyala
+                      Link
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => downloadQR(selectedQR.code, 'png')}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      PNG
                     </Button>
                     <Button 
                       className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                      onClick={() => handleDownloadQR(selectedQR)}
+                      onClick={() => downloadQR(selectedQR.code, 'svg')}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      İndir
+                      SVG
                     </Button>
                   </div>
 

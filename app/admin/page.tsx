@@ -133,6 +133,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchDashboard();
+    // Realtime polling - 30 saniyede bir güncelle
+    const interval = setInterval(() => {
+      fetchDashboard();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

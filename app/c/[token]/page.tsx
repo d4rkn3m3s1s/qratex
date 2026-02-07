@@ -147,7 +147,7 @@ export default function CardActivationPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <Card className="border-0 bg-slate-900/50 backdrop-blur-xl">
+          <Card className="border-0 bg-card/80 backdrop-blur-xl">
             <CardHeader className="text-center px-4 sm:px-6">
               <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
                 {errorCode === 'CARD_BLOCKED' ? (
@@ -187,7 +187,7 @@ export default function CardActivationPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <Card className="border-0 bg-slate-900/50 backdrop-blur-xl overflow-hidden">
+          <Card className="border-0 bg-card/80 backdrop-blur-xl overflow-hidden">
             {/* Animated background */}
             <div className="absolute inset-0 overflow-hidden">
               <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-violet-500/10 rounded-full blur-3xl" />
@@ -306,7 +306,7 @@ export default function CardActivationPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <Card className="border-0 bg-slate-900/50 backdrop-blur-xl overflow-hidden">
+        <Card className="border-0 bg-card/80 backdrop-blur-xl overflow-hidden">
           {/* Animated background */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-violet-500/10 rounded-full blur-3xl animate-pulse" />

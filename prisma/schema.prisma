@@ -291,6 +291,10 @@ model Feedback {
   aiModelUsed     String?   // groq/openai + model adi
   aiVersion       String?   // AI analiz prompt versiyonu
 
+  // -- Dealer Reply --
+  dealerReply     String?   @db.Text
+  dealerRepliedAt DateTime?
+
   isPublic    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -593,6 +597,8 @@ model ConsumptionReview {
   rating        Int      // 1-5 genel puan
   text          String?  @db.Text
   dimensions    Json?    // { taste: 5, service: 4, ambiance: 5, value: 4 }
+  dealerReply     String?   @db.Text
+  dealerRepliedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

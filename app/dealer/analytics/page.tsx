@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { exportToCSV, exportToPDF, buildAnalyticsPDFContent } from '@/lib/export-utils';
 import Link from 'next/link';
 
 interface AnalyticsData {

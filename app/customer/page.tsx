@@ -148,6 +148,11 @@ export default function CustomerDashboard() {
     if (session?.user) {
       fetchData();
     }
+    // Realtime polling - 60 saniyede bir güncelle
+    const pollInterval = setInterval(() => {
+      if (session?.user) fetchData();
+    }, 60000);
+    return () => clearInterval(pollInterval);
   }, [session, user?.points, user?.level]);
   
   const levelProgress = calculateLevelProgress(stats.points || user?.points || 0);

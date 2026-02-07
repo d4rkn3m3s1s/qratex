@@ -13,6 +13,12 @@ import {
   Calendar,
   X,
   QrCode,
+  Reply,
+  Send,
+  Bot,
+  Loader2,
+  CheckCircle2,
+  Download,
   Clock,
   Sparkles,
   Frown,
@@ -35,7 +41,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { exportToCSV, feedbackCSVColumns } from '@/lib/export-utils';
 import { formatRelativeTime, getInitials, formatCurrency } from '@/lib/utils';
 
 // QR Based Feedback
@@ -58,6 +67,8 @@ interface QRFeedback {
     name: string;
     businessName: string;
   };
+  dealerReply?: string | null;
+  dealerRepliedAt?: string | null;
 }
 
 // Consumption Review
@@ -73,6 +84,8 @@ interface ConsumptionReview {
     email: string;
     image: string | null;
   };
+  dealerReply?: string | null;
+  dealerRepliedAt?: string | null;
   consumption: {
     id: string;
     amount: number | null;
@@ -130,6 +143,67 @@ export default function DealerFeedbacksPage() {
     avgRating: '0',
     ratingDistribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
   });
+
+  // Reply state
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [replyFeedbackId, setReplyFeedbackId] = useState<string | null>(null);
+  const [replyType, setReplyType] = useState<'feedback' | 'review'>('feedback');
+  const [replyText, setReplyText] = useState('');
+  const [replySending, setReplySending] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiSugLoading, setAiSugLoading] = useState(false);
+
+  const openReplyDialog = (feedbackId: string, type: 'feedback' | 'review' = 'feedback') => {
+    setReplyFeedbackId(feedbackId);
+    setReplyType(type);
+    setReplyText('');
+    setAiSuggestions([]);
+    setReplyDialogOpen(true);
+  };
+
+  const sendReply = async () => {
+    if (!replyFeedbackId || !replyText.trim()) return;
+    setReplySending(true);
+    try {
+      const res = await fetch(`/api/dealer/feedbacks/${replyFeedbackId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: replyText.trim(), type: replyType }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Yanıt gönderildi!');
+        setReplyDialogOpen(false);
+        fetchAllFeedbacks();
+      } else {
+        toast.error(data.error || 'Yanıt gönderilemedi');
+      }
+    } catch {
+      toast.error('Bağlantı hatası');
+    } finally {
+      setReplySending(false);
+    }
+  };
+
+  const getAISuggestions = async () => {
+    if (!replyFeedbackId) return;
+    setAiSugLoading(true);
+    try {
+      const res = await fetch(`/api/dealer/feedbacks/${replyFeedbackId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'suggest', type: replyType }),
+      });
+      const data = await res.json();
+      if (data.success && data.suggestions) {
+        setAiSuggestions(data.suggestions);
+      }
+    } catch {
+      toast.error('AI önerileri alınamadı');
+    } finally {
+      setAiSugLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchAllFeedbacks();
@@ -251,6 +325,24 @@ export default function DealerFeedbacksPage() {
                 <span className="text-2xl font-bold">{totalFeedbacks}</span>
                 <span className="text-white/70 text-sm ml-2">Toplam</span>
               </div>
+              <Button variant="secondary" size="sm" className="bg-white/10 text-white hover:bg-white/20" onClick={() => {
+                const allData = [
+                  ...qrFeedbacks.map(f => ({
+                    createdAt: new Date(f.createdAt).toLocaleDateString('tr-TR'),
+                    userName: f.user?.name || 'Anonim',
+                    rating: f.rating,
+                    text: f.text || '',
+                    sentiment: f.sentiment || '',
+                    qrName: f.qrCode.name,
+                    dealerReply: (f as any).dealerReply || '',
+                  })),
+                ];
+                exportToCSV(allData, 'geri_bildirimler', feedbackCSVColumns);
+                toast.success('CSV indirildi!');
+              }}>
+                <Download className="w-4 h-4 mr-2" />
+                CSV İndir
+              </Button>
             </div>
           </div>
         </div>
@@ -412,6 +504,16 @@ export default function DealerFeedbacksPage() {
                             </div>
                           )}
                           
+                          {/* Dealer Reply */}
+                          {review.dealerReply && (
+                            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 mb-3">
+                              <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> İşletme Yanıtı
+                              </p>
+                              <p className="text-sm">{review.dealerReply}</p>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-xs gap-1">
@@ -424,10 +526,21 @@ export default function DealerFeedbacksPage() {
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatRelativeTime(review.createdAt)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatRelativeTime(review.createdAt)}
+                              </span>
+                              {review.dealerReply ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Yanıtlandı
+                                </Badge>
+                              ) : (
+                                <Button size="sm" variant="outline" className="text-xs h-7" onClick={(e) => { e.stopPropagation(); openReplyDialog(review.id, 'review'); }}>
+                                  <Reply className="h-3 w-3 mr-1" /> Yanıt Ver
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -503,6 +616,16 @@ export default function DealerFeedbacksPage() {
                             {feedback.text || 'Yorum yapılmadı'}
                           </p>
                           
+                          {/* Dealer Reply */}
+                          {feedback.dealerReply && (
+                            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 mb-3">
+                              <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> İşletme Yanıtı
+                              </p>
+                              <p className="text-sm">{feedback.dealerReply}</p>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                               {feedback.topics.slice(0, 3).map((topic) => (
@@ -517,10 +640,21 @@ export default function DealerFeedbacksPage() {
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatRelativeTime(feedback.createdAt)}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatRelativeTime(feedback.createdAt)}
+                              </span>
+                              {feedback.dealerReply ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Yanıtlandı
+                                </Badge>
+                              ) : (
+                                <Button size="sm" variant="outline" className="text-xs h-7" onClick={(e) => { e.stopPropagation(); openReplyDialog(feedback.id); }}>
+                                  <Reply className="h-3 w-3 mr-1" /> Yanıt Ver
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -532,6 +666,80 @@ export default function DealerFeedbacksPage() {
           )}
         </TabsContent>
       </Tabs>
+      {/* Reply Dialog */}
+      <Dialog open={replyDialogOpen} onOpenChange={setReplyDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Reply className="h-5 w-5 text-primary" />
+              </div>
+              {replyType === 'review' ? 'Tüketim Yorumuna Yanıt' : 'Geri Bildirime Yanıt'}
+            </DialogTitle>
+            <DialogDescription>
+              Müşterinize profesyonel ve samimi bir yanıt yazın. AI ile otomatik öneri alabilirsiniz.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* AI Quick Suggestions */}
+            <div className="p-4 rounded-xl bg-gradient-to-br from-violet-500/5 via-purple-500/5 to-fuchsia-500/5 border border-violet-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-violet-500" />
+                  AI Yanıt Önerisi
+                </p>
+                <Button variant="outline" size="sm" onClick={getAISuggestions} disabled={aiSugLoading} className="h-7 text-xs">
+                  {aiSugLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  {aiSuggestions.length > 0 ? 'Yenile' : 'Öneri Al'}
+                </Button>
+              </div>
+              {aiSugLoading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                  AI düşünüyor...
+                </div>
+              )}
+              {aiSuggestions.length > 0 && (
+                <div className="space-y-2">
+                  {aiSuggestions.map((sug, i) => (
+                    <button key={i} onClick={() => setReplyText(sug)}
+                      className="w-full text-left p-3 rounded-lg border border-violet-500/20 bg-card hover:bg-violet-500/5 hover:border-violet-500/40 text-sm transition-all group"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="w-5 h-5 rounded-full bg-violet-500/10 flex items-center justify-center text-[10px] font-bold text-violet-500 shrink-0 mt-0.5">{i + 1}</span>
+                        <span className="flex-1">{sug}</span>
+                      </div>
+                      <span className="text-[10px] text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1 block">Tıkla kullan</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Reply Text */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Yanıtınız</label>
+              <Textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Değerli müşterimiz, geri bildiriminiz için teşekkür ederiz..."
+                rows={5}
+                className="resize-none"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1 text-right">{replyText.length}/2000</p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setReplyDialogOpen(false)}>İptal</Button>
+            <Button onClick={sendReply} disabled={replySending || !replyText.trim()} className="bg-gradient-to-r from-violet-500 to-purple-600 text-white">
+              {replySending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+              Yanıt Gönder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

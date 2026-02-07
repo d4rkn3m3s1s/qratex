@@ -384,7 +384,7 @@ export default function DealerScanPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Camera Preview */}
-            <div className="relative aspect-square bg-slate-900 rounded-xl overflow-hidden">
+            <div className="relative aspect-square bg-muted dark:bg-slate-900 rounded-xl overflow-hidden">
               <div 
                 id="qr-reader" 
                 ref={scannerContainerRef}

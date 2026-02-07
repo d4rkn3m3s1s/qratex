@@ -158,22 +158,34 @@ export async function suggestResponseWithGroq(
     return [];
   }
 
+  const sentiment = rating >= 4 ? 'olumlu' : rating <= 2 ? 'olumsuz' : 'nötr';
+  
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({
-        model: MODELS.instant,
+        model: MODELS.fast,
         messages: [
           {
             role: 'system',
-            content: `Müşteri geri bildirimine 3 farklı profesyonel yanıt önerisi oluştur. Her yanıt kısa ve samimi olsun. SADECE JSON array döndür: ["yanıt1", "yanıt2", "yanıt3"]`,
+            content: `Sen bir işletme sahibinin müşteri yorumlarına profesyonel yanıt yazan AI asistanısın.
+
+Kurallar:
+- Türkçe yaz, samimi ama profesyonel ol
+- Müşteriye ismiyle değil "Değerli müşterimiz" diye hitap et
+- ${sentiment === 'olumlu' ? 'Teşekkür et, tekrar bekle, memnuniyetini vurgula' : sentiment === 'olumsuz' ? 'Özür dile, sorunu anladığını göster, çözüm öner, telafi teklif et' : 'Teşekkür et, gelişim için not aldığını belirt'}
+- Her yanıt 2-4 cümle olsun
+- Emoji kullanabilirsin ama abartma
+- 3 farklı ton/yaklaşımla yanıt üret: 1) Profesyonel 2) Samimi/sıcak 3) Çözüm odaklı
+
+SADECE JSON array döndür: ["yanıt1", "yanıt2", "yanıt3"]`,
           },
           {
             role: 'user',
-            content: `Geri bildirim: "${feedbackText}" (Puan: ${rating}/5)`,
+            content: `Müşteri yorumu: "${feedbackText}"\nPuan: ${rating}/5 (${sentiment})`,
           },
         ],
-        temperature: 0.8,
-        max_tokens: 300,
+        temperature: 0.7,
+        max_tokens: 600,
       })
     );
 

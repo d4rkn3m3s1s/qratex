@@ -16,6 +16,8 @@ import {
   TrendingUp,
   Loader2,
   ArrowRight,
+  CheckCircle2,
+  Store,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +38,8 @@ interface QRFeedback {
     name: string;
     businessName: string;
   };
+  dealerReply?: string | null;
+  dealerRepliedAt?: string | null;
 }
 
 // Consumption Review
@@ -100,6 +104,8 @@ export default function CustomerFeedbacksPage() {
             name: f.qrCode?.name || 'QR',
             businessName: f.qrCode?.name || 'İşletme',
           },
+          dealerReply: f.dealerReply || null,
+          dealerRepliedAt: f.dealerRepliedAt || null,
         }));
         setQRFeedbacks(formattedFeedbacks);
       }
@@ -345,21 +351,38 @@ export default function CustomerFeedbacksPage() {
                         {feedback.text || 'Yorum yapılmadı'}
                       </p>
 
+                      {/* Dealer Reply */}
+                      {feedback.dealerReply && (
+                        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1">
+                            <Store className="h-3 w-3" /> İşletme Yanıtı
+                          </p>
+                          <p className="text-sm">{feedback.dealerReply}</p>
+                        </div>
+                      )}
+
                       {/* Footer */}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {formatRelativeTime(feedback.createdAt)}
                         </div>
-                        {feedback.sentiment && (
-                          <Badge className={getSentimentColor(feedback.sentiment)}>
-                            {feedback.sentiment === 'positive'
-                              ? 'Olumlu'
-                              : feedback.sentiment === 'negative'
-                              ? 'Olumsuz'
-                              : 'Nötr'}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {feedback.dealerReply && (
+                            <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px]">
+                              <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> Yanıtlandı
+                            </Badge>
+                          )}
+                          {feedback.sentiment && (
+                            <Badge className={getSentimentColor(feedback.sentiment)}>
+                              {feedback.sentiment === 'positive'
+                                ? 'Olumlu'
+                                : feedback.sentiment === 'negative'
+                                ? 'Olumsuz'
+                                : 'Nötr'}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </CardContent>

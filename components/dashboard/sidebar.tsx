@@ -39,6 +39,9 @@ import {
   Database,
   Cpu,
   Eye,
+  Share2,
+  Megaphone,
+  PieChart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -67,6 +70,7 @@ const adminNavItems: NavItem[] = [
   { href: '/admin/quests', label: 'Görevler', icon: Target },
   { href: '/admin/rewards', label: 'Ödüller', icon: Gift },
   { href: '/admin/analytics', label: 'Analitik', icon: BarChart3 },
+  { href: '/admin/segments', label: 'Segmentler', icon: PieChart },
   { href: '/admin/ai-dashboard', label: 'AI Kontrol Merkezi', icon: Brain },
   { href: '/admin/ai-detailed', label: 'AI Detaylı Analiz', icon: Eye },
   { href: '/admin/ai-learning', label: 'AI Öğrenme', icon: Database },
@@ -85,6 +89,7 @@ const dealerNavItems: NavItem[] = [
   { href: '/dealer/qr-codes', label: 'QR Kodlar', icon: QrCode },
   { href: '/dealer/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare, badge: 5 },
   { href: '/dealer/analytics', label: 'Analitik', icon: BarChart3 },
+  { href: '/dealer/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { href: '/dealer/ai-insights', label: 'AI İçgörüler', icon: Sparkles },
   { href: '/dealer/ai-settings', label: 'AI Ayarları', icon: Brain },
   { href: '/dealer/settings', label: 'Ayarlar', icon: Settings },
@@ -102,6 +107,8 @@ const customerNavItems: NavItem[] = [
   { href: '/customer/badges', label: 'Rozetlerim', icon: Trophy },
   { href: '/customer/quests', label: 'Görevler', icon: Target },
   { href: '/customer/rewards', label: 'Ödüller', icon: Gift },
+  { href: '/customer/referral', label: 'Davet Et', icon: Share2 },
+  { href: '/customer/campaigns', label: 'Kampanyalar', icon: Megaphone },
   { href: '/customer/donations', label: 'Sosyal Sorumluluk', icon: Heart },
   { href: '/customer/leaderboard', label: 'Liderlik', icon: BarChart3 },
   { href: '/customer/settings', label: 'Ayarlar', icon: Settings },
