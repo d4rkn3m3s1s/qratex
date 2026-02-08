@@ -90,140 +90,117 @@ async function main() {
   console.log('✅ Customer user created:', customer.email);
 
   // ─────────────────────────────────────────────────────────────
-  // CREATE BADGES WITH REAL SVG ICONS
+  // CREATE ALL BADGES WITH SVG ICONS
   // ─────────────────────────────────────────────────────────────
-  const badges = await Promise.all([
-    prisma.badge.upsert({
-      where: { id: 'badge-first-feedback' },
-      update: {},
-      create: {
-        id: 'badge-first-feedback',
-        name: 'İlk Adım',
-        description: 'İlk geri bildiriminizi gönderdiniz!',
-        icon: '/images/badges/YENİ SES.svg',
-        category: 'feedback',
-        rarity: 'common',
-        requirement: { type: 'feedback_count', value: 1 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-feedback-master' },
-      update: {},
-      create: {
-        id: 'badge-feedback-master',
-        name: 'Yorum Ustası',
-        description: '50 geri bildirim gönderdiniz!',
-        icon: '/images/badges/USTA YORUMCU.svg',
-        category: 'feedback',
-        rarity: 'epic',
-        requirement: { type: 'feedback_count', value: 50 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-early-bird' },
-      update: {},
-      create: {
-        id: 'badge-early-bird',
-        name: 'Erken Kuş',
-        description: 'Platformun ilk kullanıcılarından biri oldunuz!',
-        icon: '/images/badges/EFSANE.svg',
-        category: 'special',
-        rarity: 'legendary',
-        requirement: { type: 'early_adopter', value: true },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-helpful' },
-      update: {},
-      create: {
-        id: 'badge-helpful',
-        name: 'Yardımsever',
-        description: '10 detaylı geri bildirim yazdınız!',
-        icon: '/images/badges/İLHAM KAYNAĞI.svg',
-        category: 'feedback',
-        rarity: 'rare',
-        requirement: { type: 'detailed_feedback_count', value: 10 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-loyal' },
-      update: {},
-      create: {
-        id: 'badge-loyal',
-        name: 'Sadık Müşteri',
-        description: '30 gün boyunca aktif kaldınız!',
-        icon: '/images/badges/MÜCEVHER.svg',
-        category: 'engagement',
-        rarity: 'epic',
-        requirement: { type: 'active_days', value: 30 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-word-wizard' },
-      update: {},
-      create: {
-        id: 'badge-word-wizard',
-        name: 'Kelime Büyücüsü',
-        description: 'Uzun ve detaylı yorumlar yazdınız!',
-        icon: '/images/badges/KELİME BÜYÜCÜSÜ.svg',
-        category: 'feedback',
-        rarity: 'rare',
-        requirement: { type: 'long_feedback_count', value: 5 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-perfectionist' },
-      update: {},
-      create: {
-        id: 'badge-perfectionist',
-        name: 'Mükemmeliyetçi',
-        description: 'Her zaman 5 yıldız verdiniz!',
-        icon: '/images/badges/MÜKEMMELLİYETÇİ.svg',
-        category: 'rating',
-        rarity: 'rare',
-        requirement: { type: 'five_star_count', value: 10 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-explorer' },
-      update: {},
-      create: {
-        id: 'badge-explorer',
-        name: 'Kaşif',
-        description: '10 farklı işletmeyi ziyaret ettiniz!',
-        icon: '/images/badges/TUR REHBERİ.svg',
-        category: 'exploration',
-        rarity: 'rare',
-        requirement: { type: 'unique_businesses', value: 10 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-gourmet' },
-      update: {},
-      create: {
-        id: 'badge-gourmet',
-        name: 'Gurme',
-        description: 'Yemek kategorisinde uzman oldunuz!',
-        icon: '/images/badges/gurme.svg',
-        category: 'expertise',
-        rarity: 'epic',
-        requirement: { type: 'food_category_count', value: 20 },
-      },
-    }),
-    prisma.badge.upsert({
-      where: { id: 'badge-flash' },
-      update: {},
-      create: {
-        id: 'badge-flash',
-        name: 'Hızlı',
-        description: 'Çok hızlı geri bildirim gönderdiniz!',
-        icon: '/images/badges/FLASH.svg',
-        category: 'speed',
-        rarity: 'common',
-        requirement: { type: 'quick_feedback', value: 5 },
-      },
-    }),
-  ]);
+  const B = '/images/badges';
+  const allBadgesData = [
+    // ── GENEL / GERİ BİLDİRİM ROZETLERİ ──
+    { id: 'badge-yeni-ses', name: 'Yeni Ses', desc: 'İlk geri bildiriminizi gönderdiniz!', icon: `${B}/YENİ SES.svg`, cat: 'feedback', rarity: 'common', req: { type: 'feedback_count', value: 1 } },
+    { id: 'badge-usta-yorumcu', name: 'Usta Yorumcu', desc: '50 geri bildirim gönderdiniz!', icon: `${B}/USTA YORUMCU.svg`, cat: 'feedback', rarity: 'epic', req: { type: 'feedback_count', value: 50 } },
+    { id: 'badge-yorum-makinesi', name: 'Yorum Makinesi', desc: 'Durmaksızın yorum yapıyorsunuz!', icon: `${B}/YORUM MAKİNESİ.svg`, cat: 'feedback', rarity: 'rare', req: { type: 'feedback_count', value: 25 } },
+    { id: 'badge-kelime-buyucusu', name: 'Kelime Büyücüsü', desc: 'Uzun ve detaylı yorumlar yazdınız!', icon: `${B}/KELİME BÜYÜCÜSÜ.svg`, cat: 'feedback', rarity: 'rare', req: { type: 'long_feedback_count', value: 5 } },
+    { id: 'badge-hayalet-yorumcu', name: 'Hayalet Yorumcu', desc: 'Gizlice yorum bırakıyorsunuz!', icon: `${B}/HAYALET YORUMCU.svg`, cat: 'feedback', rarity: 'common', req: { type: 'anonymous_feedback', value: 5 } },
+    { id: 'badge-begeni-perisi', name: 'Beğeni Perisi', desc: 'Hep olumlu geri bildirimler verdiniz!', icon: `${B}/BEĞENİ PERİSİ.svg`, cat: 'engagement', rarity: 'rare', req: { type: 'positive_feedback', value: 15 } },
+    { id: 'badge-emoji-ustasi', name: 'Emoji Ustası', desc: 'Yorumlarınızda emoji kullanma konusunda ustasınız!', icon: `${B}/EMOJİ USTASI.svg`, cat: 'feedback', rarity: 'common', req: { type: 'emoji_feedback', value: 10 } },
+    { id: 'badge-flash', name: 'Flash', desc: 'Çok hızlı geri bildirim gönderdiniz!', icon: `${B}/FLASH.svg`, cat: 'speed', rarity: 'common', req: { type: 'quick_feedback', value: 5 } },
+    { id: 'badge-keskin-nisanci', name: 'Keskin Nişancı', desc: 'Her yorumunuz isabetli ve yapıcı!', icon: `${B}/KESKİN NİŞANCI.svg`, cat: 'feedback', rarity: 'epic', req: { type: 'helpful_feedback', value: 20 } },
+    { id: 'badge-hizli-ofkeli', name: 'Hızlı ve Öfkeli', desc: 'Çok hızlı ve tutkulu geri bildirimler!', icon: `${B}/HIZLI VE ÖFKELİ.svg`, cat: 'speed', rarity: 'rare', req: { type: 'rapid_feedback', value: 10 } },
+    { id: 'badge-sessiz-sinema', name: 'Sessiz Sinema', desc: 'Fotoğraflarla geri bildirim verdiniz!', icon: `${B}/SESSİZ SİNEMA.svg`, cat: 'engagement', rarity: 'common', req: { type: 'photo_feedback', value: 5 } },
+    { id: 'badge-konuk-oyuncu', name: 'Konuk Oyuncu', desc: 'Yeni bir işletmeye ilk kez geri bildirim verdiniz!', icon: `${B}/KONUK OYUNCU.svg`, cat: 'exploration', rarity: 'common', req: { type: 'first_visit_feedback', value: 1 } },
+    { id: 'badge-tur-rehberi', name: 'Tur Rehberi', desc: '10 farklı işletmeyi ziyaret ettiniz!', icon: `${B}/TUR REHBERİ.svg`, cat: 'exploration', rarity: 'rare', req: { type: 'unique_businesses', value: 10 } },
+    { id: 'badge-mucevher', name: 'Mücevher', desc: '30 gün boyunca aktif kaldınız!', icon: `${B}/MÜCEVHER.svg`, cat: 'engagement', rarity: 'epic', req: { type: 'active_days', value: 30 } },
+    { id: 'badge-mukemmeliyetci', name: 'Mükemmeliyetçi', desc: 'Her zaman 5 yıldız verdiniz!', icon: `${B}/MÜKEMMELLİYETÇİ.svg`, cat: 'rating', rarity: 'rare', req: { type: 'five_star_count', value: 10 } },
+    { id: 'badge-efsane', name: 'Efsane', desc: 'Platformun efsanevi kullanıcısı oldunuz!', icon: `${B}/EFSANE.svg`, cat: 'special', rarity: 'legendary', req: { type: 'total_points', value: 5000 } },
+    { id: 'badge-taht-sahibi', name: 'Taht Sahibi', desc: 'Liderlik tablosunda zirveye çıktınız!', icon: `${B}/TAHT SAHİBİ.svg`, cat: 'engagement', rarity: 'legendary', req: { type: 'leaderboard_top', value: 1 } },
+    { id: 'badge-saatli-bomba', name: 'Saatli Bomba', desc: 'Son dakikada yetişen geri bildirimler!', icon: `${B}/SAATLİ BOMBA.svg`, cat: 'speed', rarity: 'epic', req: { type: 'last_minute_feedback', value: 5 } },
+    { id: 'badge-firtina', name: 'Fırtına', desc: '7 gün üst üste geri bildirim gönderdiniz!', icon: `${B}/FIRTINA.svg`, cat: 'streak', rarity: 'epic', req: { type: 'streak', value: 7 } },
+    { id: 'badge-filozof', name: 'Filozof', desc: 'Derin ve düşündürücü yorumlar yazdınız!', icon: `${B}/FİLOZOF.svg`, cat: 'feedback', rarity: 'rare', req: { type: 'detailed_feedback_count', value: 10 } },
+    { id: 'badge-nostalji', name: 'Nostalji Rüzgarı', desc: 'Eski bir işletmeyi tekrar ziyaret ettiniz!', icon: `${B}/NOSTALJİ RÜZGARI.svg`, cat: 'engagement', rarity: 'common', req: { type: 'revisit_business', value: 3 } },
+    { id: 'badge-ilham-kaynagi', name: 'İlham Kaynağı', desc: 'Detaylı ve ilham verici geri bildirimler yazdınız!', icon: `${B}/İLHAM KAYNAĞI.svg`, cat: 'feedback', rarity: 'rare', req: { type: 'inspiring_feedback', value: 10 } },
+    { id: 'badge-hayal-muhendisi', name: 'Hayal Mühendisi', desc: 'Yaratıcı önerileriniz gerçeğe dönüştü!', icon: `${B}/FİLOZOF.svg`, cat: 'special', rarity: 'rare', req: { type: 'creative_suggestion', value: 5 } },
+    { id: 'badge-katalizor', name: 'Katalizör', desc: 'Toplulukta değişime öncülük ettiniz!', icon: `${B}/KATALİZÇR.svg`, cat: 'engagement', rarity: 'epic', req: { type: 'community_impact', value: 15 } },
+    { id: 'badge-ters-kose', name: 'Ters Köşe', desc: 'Beklenmedik bir açıdan yorum yaptınız!', icon: `${B}/TERS KÖŞE.svg`, cat: 'special', rarity: 'rare', req: { type: 'unique_perspective', value: 5 } },
+    { id: 'badge-yanki', name: 'Yankı', desc: 'Yorumlarınız başkaları tarafından beğenildi!', icon: `${B}/YANKI.svg`, cat: 'feedback', rarity: 'common', req: { type: 'liked_feedback', value: 10 } },
+    { id: 'badge-xray', name: 'X-Ray', desc: 'Gizli detayları keşfettiniz!', icon: `${B}/XRAY.svg`, cat: 'special', rarity: 'epic', req: { type: 'hidden_detail', value: 5 } },
+    { id: 'badge-tetikci', name: 'Tetikçi', desc: 'Hızlı ve etkili geri bildirimler!', icon: `${B}/TETİKÇİ.svg`, cat: 'speed', rarity: 'rare', req: { type: 'efficient_feedback', value: 10 } },
+    { id: 'badge-surpriz-kutusu', name: 'Sürpriz Kutusu', desc: 'Beklenmedik ödüller kazandınız!', icon: `${B}/sürpriz kutusu.svg`, cat: 'special', rarity: 'rare', req: { type: 'surprise_reward', value: 3 } },
+    { id: 'badge-depresif', name: 'Depresif', desc: 'Düşük puanlı geri bildirimler verdiniz!', icon: `${B}/DEPRESİF.svg`, cat: 'general', rarity: 'common', req: { type: 'low_rating_feedback', value: 5 } },
+    { id: 'badge-drama-queen', name: 'Drama Queen', desc: 'En dramatik yorumların sahibi!', icon: `${B}/drama queen.svg`, cat: 'general', rarity: 'common', req: { type: 'dramatic_feedback', value: 5 } },
+    { id: 'badge-copy-cv', name: 'Copy CV', desc: 'Profilinizi mükemmelleştirdiniz!', icon: `${B}/copy cv.svg`, cat: 'general', rarity: 'common', req: { type: 'profile_complete', value: 1 } },
+    { id: 'badge-havai-fisek', name: 'Havai Fişek', desc: 'Kutlama zamanı! Büyük başarı!', icon: `${B}/havai fişek.svg`, cat: 'special', rarity: 'rare', req: { type: 'milestone_reached', value: 1 } },
+    { id: 'badge-filiz', name: 'Filiz', desc: 'Yeni başlayan ama büyüyen bir kullanıcı!', icon: `${B}/filiz.svg`, cat: 'general', rarity: 'common', req: { type: 'account_age_days', value: 7 } },
+    { id: 'badge-huysuz', name: 'Huysuz', desc: 'Eleştirel ama yapıcı geri bildirimler!', icon: `${B}/huysuz.svg`, cat: 'general', rarity: 'common', req: { type: 'critical_feedback', value: 5 } },
+    { id: 'badge-jet', name: 'Jet', desc: 'İnanılmaz hızda geri bildirim!', icon: `${B}/jet.svg`, cat: 'speed', rarity: 'rare', req: { type: 'ultra_fast_feedback', value: 3 } },
+    { id: 'badge-kafein-bagimlisi', name: 'Kafein Bağımlısı', desc: 'Kafe kategorisinde uzman oldunuz!', icon: `${B}/kafein bağımlısı.svg`, cat: 'expertise', rarity: 'common', req: { type: 'cafe_feedback', value: 10 } },
+    { id: 'badge-leyla', name: 'Leyla', desc: 'Gece saatlerinde aktif kullanıcı!', icon: `${B}/leyla.svg`, cat: 'general', rarity: 'common', req: { type: 'night_feedback', value: 5 } },
+    { id: 'badge-gurme', name: 'Gurme', desc: 'Yemek kategorisinde uzman oldunuz!', icon: `${B}/gurme.svg`, cat: 'expertise', rarity: 'epic', req: { type: 'food_category_count', value: 20 } },
+    { id: 'badge-muhabbet-kusu', name: 'Muhabbet Kuşu', desc: 'Çok konuşkan bir kullanıcısınız!', icon: `${B}/muhabbet kuşu.svg`, cat: 'engagement', rarity: 'common', req: { type: 'chat_messages', value: 20 } },
+    { id: 'badge-behzat-c', name: 'Behzat Ç', desc: 'Adaletli ve dürüst geri bildirimler!', icon: `${B}/behzat ç.svg`, cat: 'general', rarity: 'rare', req: { type: 'honest_feedback', value: 15 } },
+    { id: 'badge-joker', name: 'Joker', desc: 'Beklenmedik ve eğlenceli yorumlar!', icon: `${B}/JOKER.svg`, cat: 'special', rarity: 'legendary', req: { type: 'funny_feedback', value: 10 } },
+    // ── DİZİ / FİLM KARAKTERİ ROZETLERİ ──
+    { id: 'badge-barney-stinson', name: 'Barney Stinson', desc: 'Efsanevi olmak senin işin!', icon: `${B}/BARNEY STİNSON.svg`, cat: 'special', rarity: 'legendary', req: { type: 'legendary_status', value: 1 } },
+    { id: 'badge-chandler', name: 'Chandler Bing', desc: 'Espri ustası! Her yorumun gülümsetiyor.', icon: `${B}/CHANDLER BİİG.svg`, cat: 'special', rarity: 'legendary', req: { type: 'witty_feedback', value: 10 } },
+    { id: 'badge-sheldon', name: 'Sheldon Cooper', desc: 'Bilimsel hassasiyetle geri bildirim!', icon: `${B}/SHELDON COOPER.svg`, cat: 'special', rarity: 'legendary', req: { type: 'precise_feedback', value: 15 } },
+    { id: 'badge-walter-white', name: 'Walter White', desc: 'Kimya gibi mükemmel formüller!', icon: `${B}/WALTER WHİTE.svg`, cat: 'special', rarity: 'legendary', req: { type: 'perfect_formula', value: 20 } },
+    { id: 'badge-jon-snow', name: 'Jon Snow', desc: 'Kış geliyor... ama sen hazırsın!', icon: `${B}/JON SNOW.svg`, cat: 'special', rarity: 'legendary', req: { type: 'winter_warrior', value: 1 } },
+    { id: 'badge-sherlock', name: 'Sherlock Holmes', desc: 'Dedektif gibi detaycı geri bildirimler!', icon: `${B}/SHERLOCK.svg`, cat: 'special', rarity: 'legendary', req: { type: 'detective_feedback', value: 10 } },
+    { id: 'badge-mr-robot', name: 'Mr. Robot', desc: 'Sistemi çözdünüz!', icon: `${B}/MR ROBOT.svg`, cat: 'special', rarity: 'legendary', req: { type: 'system_master', value: 1 } },
+    { id: 'badge-professor', name: 'Profesör', desc: 'Planınız mükemmel işledi!', icon: `${B}/PROFESSOR.svg`, cat: 'special', rarity: 'legendary', req: { type: 'master_plan', value: 1 } },
+    { id: 'badge-the-doctor', name: 'The Doctor', desc: 'Zaman ve mekanın ötesinde!', icon: `${B}/THE DOCTOR.svg`, cat: 'special', rarity: 'legendary', req: { type: 'time_traveler', value: 1 } },
+    { id: 'badge-tokyo', name: 'Tokyo', desc: 'Cesur ve kararlı bir kullanıcı!', icon: `${B}/TOKYO.svg`, cat: 'special', rarity: 'epic', req: { type: 'bold_action', value: 10 } },
+    { id: 'badge-tommy-shelby', name: 'Tommy Shelby', desc: 'Peaky Blinders tarzı liderlik!', icon: `${B}/TOMMY SHELBY.svg`, cat: 'special', rarity: 'legendary', req: { type: 'leadership', value: 1 } },
+    { id: 'badge-ragnar', name: 'Ragnar Lothbrok', desc: 'Viking cesareti ile keşfe çıktınız!', icon: `${B}/RAGNAR LOTHBROK.svg`, cat: 'special', rarity: 'legendary', req: { type: 'explorer_spirit', value: 20 } },
+    { id: 'badge-spartacus', name: 'Spartacus', desc: 'Özgürlük savaşçısı!', icon: `${B}/SPARTACUS.svg`, cat: 'special', rarity: 'legendary', req: { type: 'freedom_fighter', value: 1 } },
+    { id: 'badge-dexter', name: 'Dexter', desc: 'Analitik zekayı geri bildirime döktünüz!', icon: `${B}/DEXTER.svg`, cat: 'special', rarity: 'epic', req: { type: 'analytical_feedback', value: 15 } },
+    { id: 'badge-eleven', name: 'Eleven', desc: 'Süper güçler aktif!', icon: `${B}/ELEVEN.svg`, cat: 'special', rarity: 'epic', req: { type: 'super_power', value: 1 } },
+    { id: 'badge-wednesday', name: 'Wednesday', desc: 'Karanlık ama zarif bir tarz!', icon: `${B}/WEDNESDAY.svg`, cat: 'special', rarity: 'epic', req: { type: 'dark_elegance', value: 1 } },
+    { id: 'badge-pablo-escobar', name: 'Pablo Escobar', desc: 'Puan imparatorluğu kurdunuz!', icon: `${B}/PABLO ESCOBAR.svg`, cat: 'special', rarity: 'legendary', req: { type: 'point_empire', value: 10000 } },
+    { id: 'badge-jesse-pinkman', name: 'Jesse Pinkman', desc: 'Yeah Science! Bilimsel yaklaşım!', icon: `${B}/JESSE PİNKMAN.svg`, cat: 'special', rarity: 'epic', req: { type: 'scientific_approach', value: 10 } },
+    { id: 'badge-dark-jonas', name: 'Dark Jonas', desc: 'Zamanın döngüsünü kırdınız!', icon: `${B}/DARK JONAS.svg`, cat: 'special', rarity: 'epic', req: { type: 'time_loop', value: 1 } },
+    { id: 'badge-dean-winchester', name: 'Dean Winchester', desc: 'Doğaüstü güçlerle savaşan kahraman!', icon: `${B}/DEAN WİNCHESTER.svg`, cat: 'special', rarity: 'epic', req: { type: 'supernatural', value: 1 } },
+    { id: 'badge-castiel', name: 'Castiel', desc: 'Koruyucu melek gibi destekçi!', icon: `${B}/CASTİEL.svg`, cat: 'special', rarity: 'epic', req: { type: 'guardian_angel', value: 1 } },
+    { id: 'badge-carrie', name: 'Carrie Mathison', desc: 'Sezgileri güçlü bir analist!', icon: `${B}/CARRİE MATHİNSON.svg`, cat: 'special', rarity: 'epic', req: { type: 'strong_intuition', value: 10 } },
+    { id: 'badge-elizabeth', name: 'Elizabeth', desc: 'Kraliçe gibi zarafet!', icon: `${B}/ELİZABETH.svg`, cat: 'special', rarity: 'epic', req: { type: 'royal_elegance', value: 1 } },
+    { id: 'badge-frank-underwood', name: 'Frank Underwood', desc: 'Stratejik deha!', icon: `${B}/FRANK UNDERWOOD.svg`, cat: 'special', rarity: 'legendary', req: { type: 'strategic_genius', value: 1 } },
+    { id: 'badge-good-omens', name: 'Good Omens', desc: 'İyilik ve kötülüğün dengesi!', icon: `${B}/GOOD OMENS.svg`, cat: 'special', rarity: 'epic', req: { type: 'balance', value: 1 } },
+    { id: 'badge-hannibal', name: 'Hannibal', desc: 'Sofistike zevkler ve keskin zeka!', icon: `${B}/HANNİBAL.svg`, cat: 'special', rarity: 'legendary', req: { type: 'sophisticated', value: 1 } },
+    { id: 'badge-house-md', name: 'House MD', desc: 'Herkes yalan söyler... ama siz gerçeği bulursunuz!', icon: `${B}/HOUSE MD.svg`, cat: 'special', rarity: 'legendary', req: { type: 'truth_seeker', value: 1 } },
+    { id: 'badge-joe', name: 'Joe', desc: 'Takıntılı bir meraklı!', icon: `${B}/JOE.svg`, cat: 'special', rarity: 'epic', req: { type: 'obsessive_curiosity', value: 1 } },
+    { id: 'badge-john-locke', name: 'John Locke', desc: 'Adaya inanç, sisteme güven!', icon: `${B}/JOHN LOCKE.svg`, cat: 'special', rarity: 'epic', req: { type: 'faith_in_system', value: 1 } },
+    { id: 'badge-kelly-yorkie', name: 'Kelly & Yorkie', desc: 'Birlikte daha güçlü!', icon: `${B}/KELLY AND YORKİE.svg`, cat: 'special', rarity: 'epic', req: { type: 'partnership', value: 1 } },
+    { id: 'badge-khalesi', name: 'Khaleesi', desc: 'Ejderhaların anası! Güç sizinle!', icon: `${B}/KHALESİ.svg`, cat: 'special', rarity: 'legendary', req: { type: 'dragon_mother', value: 1 } },
+    { id: 'badge-martha', name: 'Martha', desc: 'Her dünyada bir bağlantı!', icon: `${B}/MARTHA.svg`, cat: 'special', rarity: 'epic', req: { type: 'multiverse', value: 1 } },
+    { id: 'badge-michael-scofield', name: 'Michael Scofield', desc: 'Her detayı planlayan deha!', icon: `${B}/MİCHAEL SCOLFİELD.svg`, cat: 'special', rarity: 'legendary', req: { type: 'master_planner', value: 1 } },
+    { id: 'badge-rick-morty', name: 'Rick & Morty', desc: 'Wubba lubba dub dub! Bilimsel macera!', icon: `${B}/RİCK AND MORTY.svg`, cat: 'special', rarity: 'legendary', req: { type: 'science_adventure', value: 1 } },
+    { id: 'badge-rome-julius', name: 'Julius Caesar', desc: 'Veni, Vidi, Vici! Geldim, gördüm, yorum yaptım!', icon: `${B}/ROME JULİUS.svg`, cat: 'special', rarity: 'legendary', req: { type: 'conqueror', value: 1 } },
+    { id: 'badge-tyrion', name: 'Tyrion Lannister', desc: 'İçerim ve bilir olurum!', icon: `${B}/TYRİON LANNİSTER.svg`, cat: 'special', rarity: 'legendary', req: { type: 'wise_drinker', value: 1 } },
+    { id: 'badge-villanelle', name: 'Villanelle', desc: 'Tarz sahibi ve ölümcül çekici!', icon: `${B}/VİLLANEVİLLE.svg`, cat: 'special', rarity: 'epic', req: { type: 'killer_style', value: 1 } },
+    { id: 'badge-the-office', name: 'The Office', desc: 'Ofis hayatının en eğlenceli hali!', icon: `${B}/THE OFFİCE.svg`, cat: 'special', rarity: 'epic', req: { type: 'office_fun', value: 1 } },
+    { id: 'badge-this-is-us', name: 'This is Us', desc: 'Duygusal ve gerçek bağlantılar!', icon: `${B}/THİS İS US.svg`, cat: 'special', rarity: 'epic', req: { type: 'emotional_bond', value: 1 } },
+    { id: 'badge-sam-winchester', name: 'Sam Winchester', desc: 'Kardeşlik ve cesaret!', icon: `${B}/SAM WİNCHESTR.svg`, cat: 'special', rarity: 'epic', req: { type: 'brotherhood', value: 1 } },
+    { id: 'badge-witcher', name: 'Witcher Geralt', desc: 'Hmm... Canavarlarla savaşan kahraman!', icon: `${B}/WİTCHER GERALT.svg`, cat: 'special', rarity: 'legendary', req: { type: 'monster_slayer', value: 1 } },
+  ];
+
+  // Delete existing badges and create all new ones
+  await prisma.badge.deleteMany({});
+  
+  const badges = await Promise.all(
+    allBadgesData.map((b) =>
+      prisma.badge.create({
+        data: {
+          id: b.id,
+          name: b.name,
+          description: b.desc,
+          icon: b.icon,
+          
+          category: b.cat,
+          rarity: b.rarity,
+          requirement: b.req,
+          isActive: true,
+        },
+      })
+    )
+  );
 
   console.log('✅ Badges created:', badges.length);
 
@@ -796,13 +773,13 @@ async function main() {
     where: {
       userId_badgeId: {
         userId: customer.id,
-        badgeId: 'badge-first-feedback',
+        badgeId: 'badge-yeni-ses',
       },
     },
     update: {},
     create: {
       userId: customer.id,
-      badgeId: 'badge-first-feedback',
+      badgeId: 'badge-yeni-ses',
     },
   });
 
@@ -810,13 +787,13 @@ async function main() {
     where: {
       userId_badgeId: {
         userId: admin.id,
-        badgeId: 'badge-early-bird',
+        badgeId: 'badge-efsane',
       },
     },
     update: {},
     create: {
       userId: admin.id,
-      badgeId: 'badge-early-bird',
+      badgeId: 'badge-efsane',
     },
   });
 

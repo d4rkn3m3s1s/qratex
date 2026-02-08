@@ -17,6 +17,9 @@ import {
   Shield,
   Heart,
   X,
+  Clock,
+  MapPin,
+  Coffee,
 } from 'lucide-react';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { Badge } from '@/components/ui/badge';
@@ -45,37 +48,45 @@ const rarityConfig = {
   COMMON: {
     label: 'Yaygın',
     color: 'from-gray-400 to-gray-600',
-    cardBg: 'bg-gradient-to-br from-slate-100 via-gray-50 to-slate-100 dark:from-slate-800/80 dark:via-slate-700/60 dark:to-slate-800/80',
-    borderColor: 'border-gray-300 dark:border-gray-600/60',
+    cardBg: 'bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 dark:from-[#0a0e1a] dark:via-[#111827] dark:to-[#0a0e1a]',
+    borderColor: 'border-gray-300 dark:border-slate-500/40',
     textColor: 'text-gray-600 dark:text-gray-400',
-    glowColor: 'shadow-gray-400/20 dark:shadow-gray-500/30',
+    glowColor: 'shadow-gray-400/20 dark:shadow-slate-400/20',
+    neonGlow: 'dark:shadow-[0_0_15px_rgba(148,163,184,0.15),0_0_30px_rgba(148,163,184,0.08)]',
+    badgeBg: 'bg-gray-200 dark:bg-gray-700/50',
     icon: Medal,
   },
   RARE: {
     label: 'Nadir',
-    color: 'from-blue-400 to-blue-600',
-    cardBg: 'bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 dark:from-blue-900/40 dark:via-cyan-900/30 dark:to-blue-800/40',
-    borderColor: 'border-blue-300 dark:border-blue-500/50',
-    textColor: 'text-blue-600 dark:text-blue-400',
-    glowColor: 'shadow-blue-400/20 dark:shadow-blue-500/30',
+    color: 'from-blue-400 to-cyan-500',
+    cardBg: 'bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 dark:from-[#040d1f] dark:via-[#0a1628] dark:to-[#061225]',
+    borderColor: 'border-blue-300 dark:border-cyan-500/40',
+    textColor: 'text-blue-600 dark:text-cyan-400',
+    glowColor: 'shadow-blue-400/20 dark:shadow-cyan-500/30',
+    neonGlow: 'dark:shadow-[0_0_15px_rgba(34,211,238,0.2),0_0_40px_rgba(34,211,238,0.1)]',
+    badgeBg: 'bg-blue-100 dark:bg-cyan-900/40',
     icon: Shield,
   },
   EPIC: {
     label: 'Epik',
-    color: 'from-purple-400 to-purple-600',
-    cardBg: 'bg-gradient-to-br from-purple-50 via-pink-50 to-fuchsia-100 dark:from-purple-900/40 dark:via-pink-900/30 dark:to-fuchsia-900/40',
+    color: 'from-purple-400 to-pink-500',
+    cardBg: 'bg-gradient-to-br from-purple-50 via-pink-50 to-fuchsia-100 dark:from-[#0d0520] dark:via-[#150a25] dark:to-[#10061f]',
     borderColor: 'border-purple-300 dark:border-purple-500/50',
     textColor: 'text-purple-600 dark:text-purple-400',
     glowColor: 'shadow-purple-400/20 dark:shadow-purple-500/30',
+    neonGlow: 'dark:shadow-[0_0_15px_rgba(168,85,247,0.2),0_0_40px_rgba(168,85,247,0.1)]',
+    badgeBg: 'bg-purple-100 dark:bg-purple-900/40',
     icon: Zap,
   },
   LEGENDARY: {
     label: 'Efsanevi',
     color: 'from-yellow-400 via-orange-500 to-red-500',
-    cardBg: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 dark:from-amber-900/40 dark:via-orange-900/30 dark:to-red-900/40',
+    cardBg: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 dark:from-[#1a0f05] dark:via-[#1f1008] dark:to-[#1a0805]',
     borderColor: 'border-amber-300 dark:border-yellow-500/50',
     textColor: 'text-amber-600 dark:text-yellow-400',
     glowColor: 'shadow-yellow-400/30 dark:shadow-yellow-500/50',
+    neonGlow: 'dark:shadow-[0_0_20px_rgba(250,204,21,0.2),0_0_50px_rgba(250,204,21,0.1)]',
+    badgeBg: 'bg-amber-100 dark:bg-amber-900/40',
     icon: Crown,
   },
 };
@@ -84,6 +95,10 @@ const categoryConfig: Record<string, { label: string; icon: typeof Trophy }> = {
   feedback: { label: 'Geri Bildirim', icon: Target },
   engagement: { label: 'Etkileşim', icon: Heart },
   streak: { label: 'Seri', icon: Flame },
+  speed: { label: 'Hız', icon: Clock },
+  exploration: { label: 'Keşif', icon: MapPin },
+  expertise: { label: 'Uzmanlık', icon: Coffee },
+  rating: { label: 'Puanlama', icon: Star },
   special: { label: 'Özel', icon: Gift },
   custom: { label: 'Özel', icon: Gift },
   general: { label: 'Genel', icon: Medal },
@@ -344,56 +359,80 @@ export default function CustomerBadgesPage() {
                   transition={{ delay: index * 0.04 }}
                 >
                   <div
-                    className={`group relative overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 rounded-2xl ${config.cardBg} ${
+                    className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${config.cardBg} ${config.neonGlow} ${
                       isEarned
-                        ? `border-2 ${config.borderColor} shadow-xl ${config.glowColor}`
-                        : 'border border-border/50 opacity-80 hover:opacity-100'
+                        ? `border-2 ${config.borderColor} ${config.glowColor}`
+                        : 'border border-border/50 dark:border-white/10 opacity-85 hover:opacity-100'
                     }`}
                     onClick={() => setSelectedBadge(badge)}
                   >
+                    {/* Starfield (dark mode) */}
+                    <div className="absolute inset-0 hidden dark:block overflow-hidden rounded-2xl">
+                      {[...Array(10)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute w-[2px] h-[2px] bg-white rounded-full animate-pulse"
+                          style={{
+                            left: `${10 + (i * 8.5) % 85}%`,
+                            top: `${8 + (i * 12) % 80}%`,
+                            animationDelay: `${i * 0.35}s`,
+                            animationDuration: `${2 + (i % 3)}s`,
+                            opacity: 0.25 + (i % 4) * 0.12,
+                          }}
+                        />
+                      ))}
+                    </div>
+
                     {/* Legendary Glow Effect */}
                     {badge.rarity === 'LEGENDARY' && isEarned && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-orange-500/10 to-red-500/10 animate-pulse rounded-2xl" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 via-orange-500/8 to-red-500/5 dark:from-yellow-500/10 dark:via-orange-500/15 dark:to-red-500/10 animate-pulse rounded-2xl" />
                     )}
 
                     {/* Epic Shimmer Effect */}
                     {badge.rarity === 'EPIC' && isEarned && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/8 to-transparent animate-shimmer rounded-2xl" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent dark:via-purple-500/8 animate-shimmer rounded-2xl" />
                     )}
 
-                    {/* Decorative glow orb */}
-                    <div className={`absolute -top-16 -right-16 w-32 h-32 rounded-full bg-gradient-to-br ${config.color} opacity-[0.08] dark:opacity-20 blur-2xl`} />
+                    {/* Glow orbs */}
+                    <div className={`absolute -top-16 -right-16 w-32 h-32 rounded-full bg-gradient-to-br ${config.color} opacity-[0.06] dark:opacity-[0.12] blur-3xl`} />
+                    <div className={`absolute -bottom-10 -left-10 w-24 h-24 rounded-full bg-gradient-to-br ${config.color} opacity-[0.04] dark:opacity-[0.08] blur-3xl`} />
 
                     <div className="p-6 relative">
                       <div className="flex flex-col items-center text-center space-y-4">
-                        {/* Badge Icon - DIRECT, NO CIRCLE */}
+                        {/* Badge Icon - WHITE CIRCLE */}
                         <div className="relative transition-transform group-hover:scale-110">
-                          <Image
-                            src={badge.icon}
-                            alt={badge.name}
-                            width={112}
-                            height={112}
-                            className={`relative z-10 drop-shadow-2xl ${isEarned ? 'brightness-110 saturate-125 dark:brightness-125' : 'grayscale-[50%] opacity-70 dark:brightness-150 dark:contrast-125'}`}
-                          />
+                          {/* Subtle glow */}
+                          <div className={`absolute -inset-3 rounded-full bg-gradient-to-br ${config.color} opacity-0 dark:opacity-15 blur-2xl`} />
+                          
+                          {/* Single white circle */}
+                          <div className={`relative w-32 h-32 rounded-full bg-white overflow-hidden flex items-center justify-center ${!isEarned ? 'opacity-75' : ''}`}>
+                            <Image
+                              src={badge.icon}
+                              alt={badge.name}
+                              width={140}
+                              height={140}
+                              className={`relative z-10 scale-110 ${isEarned ? '' : 'grayscale-[40%] opacity-80'}`}
+                            />
+                          </div>
                           
                           {/* Earned Sparkle */}
                           {isEarned && badge.rarity === 'LEGENDARY' && (
                             <motion.div
-                              className="absolute -top-2 -right-2"
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+                              className="absolute -top-1 -right-1 z-20"
+                              animate={{ rotate: 360, scale: [1, 1.2, 1] }}
+                              transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
                             >
-                              <Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-lg" />
+                              <Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.6)]" />
                             </motion.div>
                           )}
 
                           {isEarned && badge.rarity === 'EPIC' && (
-                            <Zap className="absolute -top-1 -right-1 w-6 h-6 text-purple-500 dark:text-purple-400 animate-pulse drop-shadow-lg" />
+                            <Zap className="absolute -top-0.5 -right-0.5 w-6 h-6 z-20 text-purple-500 dark:text-purple-300 animate-pulse drop-shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
                           )}
 
                           {/* Lock Icon */}
                           {!isEarned && (
-                            <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-background/90 border-2 border-border flex items-center justify-center shadow-lg">
+                            <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-background/90 dark:bg-black/60 border-2 border-border dark:border-white/20 flex items-center justify-center shadow-lg z-20">
                               <Lock className="w-4 h-4 text-muted-foreground" />
                             </div>
                           )}
@@ -436,99 +475,75 @@ export default function CustomerBadgesPage() {
         </div>
       )}
 
-      {/* Badge Detail Modal - EPIC VERSION */}
+      {/* Badge Detail Modal - NEW DARK THEME */}
       <AnimatePresence>
-        {selectedBadge && (
+        {selectedBadge && (() => {
+          const modalConfig = rarityConfig[selectedBadge.rarity];
+          return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg overflow-y-auto"
             onClick={() => setSelectedBadge(null)}
           >
             <motion.div
-              initial={{ scale: 0.8, y: 50 }}
+              initial={{ scale: 0.85, y: 40 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.8, y: 50, opacity: 0 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className={`relative w-full max-w-lg my-4 sm:my-8 rounded-3xl overflow-hidden shadow-2xl ${
-                selectedBadge.rarity === 'LEGENDARY' 
-                  ? 'shadow-yellow-500/50' 
-                  : selectedBadge.rarity === 'EPIC'
-                    ? 'shadow-purple-500/50'
-                    : selectedBadge.rarity === 'RARE'
-                      ? 'shadow-blue-500/50'
-                      : 'shadow-gray-500/30'
-              }`}
+              exit={{ scale: 0.85, y: 40, opacity: 0 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 300 }}
+              className={`relative w-full max-w-md my-4 sm:my-8 rounded-3xl overflow-hidden border-2 ${modalConfig.borderColor} ${modalConfig.neonGlow}`}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Animated Background */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${rarityConfig[selectedBadge.rarity].color}`} />
+              {/* Dark space background */}
+              <div className={`absolute inset-0 ${modalConfig.cardBg}`} />
               
-              {/* Particle Effects for all rarities */}
+              {/* Starfield */}
               <div className="absolute inset-0 overflow-hidden">
-                {[...Array(selectedBadge.rarity === 'LEGENDARY' ? 40 : selectedBadge.rarity === 'EPIC' ? 25 : 15)].map((_, i) => (
+                {[...Array(20)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className={`absolute rounded-full ${
-                      selectedBadge.rarity === 'LEGENDARY' 
-                        ? 'bg-yellow-300' 
-                        : selectedBadge.rarity === 'EPIC'
-                          ? 'bg-purple-300'
-                          : selectedBadge.rarity === 'RARE'
-                            ? 'bg-blue-300'
-                            : 'bg-white'
-                    }`}
+                    className="absolute w-[2px] h-[2px] bg-white rounded-full"
                     style={{
-                      width: Math.random() * 5 + 2,
-                      height: Math.random() * 5 + 2,
-                      left: `${Math.random() * 100}%`,
-                      top: `${Math.random() * 100}%`,
+                      left: `${(i * 5.3) % 95}%`,
+                      top: `${(i * 7.7) % 92}%`,
                     }}
-                    animate={{
-                      opacity: [0, 1, 0],
-                      scale: [0, 1.5, 0],
-                      y: [0, -30],
-                    }}
+                    animate={{ opacity: [0.1, 0.6, 0.1] }}
                     transition={{
-                      duration: 2 + Math.random() * 2,
+                      duration: 2 + (i % 3),
                       repeat: Infinity,
-                      delay: Math.random() * 3,
-                      ease: 'easeOut',
+                      delay: i * 0.2,
                     }}
                   />
                 ))}
               </div>
 
-              {/* Glow rings for Legendary */}
+              {/* Glow orbs */}
+              <div className={`absolute -top-20 -right-20 w-44 h-44 rounded-full bg-gradient-to-br ${modalConfig.color} opacity-[0.12] blur-3xl`} />
+              <div className={`absolute -bottom-16 -left-16 w-36 h-36 rounded-full bg-gradient-to-br ${modalConfig.color} opacity-[0.08] blur-3xl`} />
+
+              {/* Neon glow border for Legendary */}
               {selectedBadge.rarity === 'LEGENDARY' && (
-                <>
-                  <motion.div
-                    className="absolute inset-0 border-4 border-yellow-400/30 rounded-3xl"
-                    animate={{ scale: [1, 1.02, 1], opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  />
-                  <motion.div
-                    className="absolute -inset-1 border-2 border-orange-400/20 rounded-3xl"
-                    animate={{ scale: [1.02, 1, 1.02], opacity: [0.3, 0.6, 0.3] }}
-                    transition={{ duration: 2.5, repeat: Infinity }}
-                  />
-                </>
+                <motion.div
+                  className="absolute inset-0 rounded-3xl border-2 border-yellow-400/20"
+                  animate={{ opacity: [0.3, 0.7, 0.3] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
               )}
 
               {/* Close Button */}
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-4 right-4 z-20 text-white/80 hover:text-white hover:bg-white/20 rounded-full"
+                className="absolute top-4 right-4 z-20 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
                 onClick={() => setSelectedBadge(null)}
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </Button>
 
-              {/* Content Container */}
-              <div className="relative z-10 p-4 sm:p-8">
-                {/* Badge Icon - Centered & BIGGER */}
+              {/* Content */}
+              <div className="relative z-10 p-6 sm:p-8">
+                {/* Badge Icon */}
                 <div className="flex justify-center mb-6">
                   <motion.div
                     initial={{ scale: 0, rotate: -180 }}
@@ -536,152 +551,99 @@ export default function CustomerBadgesPage() {
                     transition={{ type: 'spring', delay: 0.1, damping: 15 }}
                     className="relative"
                   >
-                    {/* Glow behind icon */}
-                    <div className={`absolute inset-4 blur-3xl opacity-50 rounded-full ${
-                      selectedBadge.rarity === 'LEGENDARY' 
-                        ? 'bg-yellow-400' 
-                        : selectedBadge.rarity === 'EPIC'
-                          ? 'bg-purple-400'
-                          : selectedBadge.rarity === 'RARE'
-                            ? 'bg-blue-400'
-                            : 'bg-gray-400'
-                    }`} />
+                    {/* Glow behind */}
+                    <div className={`absolute -inset-4 rounded-full bg-gradient-to-br ${modalConfig.color} opacity-20 blur-2xl`} />
                     
-                    {/* Icon - DIRECT, no circle */}
-                    <Image
-                      src={selectedBadge.icon}
-                      alt={selectedBadge.name}
-                      width={150}
-                      height={150}
-                      className={`relative z-10 drop-shadow-2xl ${selectedBadge.earned ? 'brightness-110 saturate-125 dark:brightness-125' : 'grayscale-[50%] opacity-70 dark:brightness-150 dark:contrast-125'}`}
-                    />
+                    {/* White circle icon */}
+                    <div className={`relative w-44 h-44 rounded-full bg-white overflow-hidden flex items-center justify-center ${!selectedBadge.earned ? 'opacity-75' : ''}`}>
+                      <Image
+                        src={selectedBadge.icon}
+                        alt={selectedBadge.name}
+                        width={200}
+                        height={200}
+                        className={`relative z-10 scale-110 ${!selectedBadge.earned ? 'grayscale-[40%] opacity-80' : ''}`}
+                      />
+                    </div>
                     
-                    {/* Sparkle for earned legendary */}
                     {selectedBadge.earned && selectedBadge.rarity === 'LEGENDARY' && (
                       <motion.div
-                        className="absolute -top-2 -right-2"
+                        className="absolute -top-2 -right-2 z-20"
                         animate={{ rotate: 360, scale: [1, 1.2, 1] }}
-                        transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1, repeat: Infinity } }}
+                        transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
                       >
-                        <Sparkles className="w-8 h-8 text-yellow-300 drop-shadow-lg" />
+                        <Sparkles className="w-8 h-8 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.6)]" />
+                      </motion.div>
+                    )}
+                    {selectedBadge.earned && selectedBadge.rarity === 'EPIC' && (
+                      <motion.div className="absolute -top-1 -right-1 z-20" animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                        <Zap className="w-7 h-7 text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
                       </motion.div>
                     )}
                   </motion.div>
                 </div>
 
-                {/* Badge Name & Rarity */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-center mb-5"
-                >
-                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 drop-shadow-lg">
-                    {selectedBadge.name}
-                  </h2>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm ${
-                    selectedBadge.rarity === 'LEGENDARY' 
-                      ? 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500' 
-                      : selectedBadge.rarity === 'EPIC'
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                        : selectedBadge.rarity === 'RARE'
-                          ? 'bg-gradient-to-r from-blue-500 to-cyan-500'
-                          : 'bg-gradient-to-r from-gray-500 to-gray-600'
-                  } text-white font-semibold shadow-lg`}>
-                    {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-5 h-5" />}
-                    {selectedBadge.rarity === 'EPIC' && <Zap className="w-5 h-5" />}
-                    {selectedBadge.rarity === 'RARE' && <Shield className="w-5 h-5" />}
-                    {selectedBadge.rarity === 'COMMON' && <Medal className="w-5 h-5" />}
-                    {rarityConfig[selectedBadge.rarity].label}
+                {/* Name & Rarity */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center mb-5">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{selectedBadge.name}</h2>
+                  <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm ${modalConfig.badgeBg} ${modalConfig.textColor} font-semibold`}>
+                    {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-4 h-4" />}
+                    {selectedBadge.rarity === 'EPIC' && <Zap className="w-4 h-4" />}
+                    {selectedBadge.rarity === 'RARE' && <Shield className="w-4 h-4" />}
+                    {selectedBadge.rarity === 'COMMON' && <Medal className="w-4 h-4" />}
+                    {modalConfig.label}
                   </div>
                 </motion.div>
 
                 {/* Description */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-center text-white/85 text-sm sm:text-base mb-5 leading-relaxed"
-                >
+                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="text-center text-muted-foreground text-sm sm:text-base mb-6 leading-relaxed">
                   {selectedBadge.description}
                 </motion.p>
 
-                {/* Status Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="bg-black/40 backdrop-blur-sm rounded-2xl p-5 border border-white/10"
-                >
+                {/* Status */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-black/30 backdrop-blur-sm rounded-2xl p-5 border border-white/10">
                   {selectedBadge.earned ? (
                     <div className="text-center space-y-4">
-                      {/* Earned Badge */}
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', delay: 0.5 }}
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30"
-                      >
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.5 }}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30">
                         <Trophy className="w-6 h-6" />
                         <span className="text-lg font-bold">Kazanıldı!</span>
                       </motion.div>
-
-                      {/* Date & Points in row */}
                       <div className="flex items-center justify-center gap-4 flex-wrap">
                         {selectedBadge.earnedAt && (
-                          <span className="text-white/60 text-sm">
-                            {new Date(selectedBadge.earnedAt).toLocaleDateString('tr-TR', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric',
-                            })}
+                          <span className="text-muted-foreground text-sm">
+                            {new Date(selectedBadge.earnedAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
                           </span>
                         )}
                         <div className="flex items-center gap-1.5">
                           <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
                           <span className="text-2xl font-bold text-yellow-400">+{selectedBadge.points}</span>
-                          <span className="text-white/60 text-sm">Puan</span>
+                          <span className="text-muted-foreground text-sm">Puan</span>
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* Progress */}
                       <div>
                         <div className="flex justify-between mb-2 text-sm">
-                          <span className="text-white/80 font-medium">İlerleme</span>
+                          <span className="text-muted-foreground font-medium">İlerleme</span>
                           <span className="text-white font-bold text-base">%{selectedBadge.progress}</span>
                         </div>
-                        <div className="relative h-4 bg-white/10 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${selectedBadge.progress}%` }}
-                            transition={{ duration: 0.8, delay: 0.5 }}
-                            className={`absolute inset-y-0 left-0 rounded-full ${
-                              selectedBadge.rarity === 'LEGENDARY' 
-                                ? 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500' 
-                                : selectedBadge.rarity === 'EPIC'
-                                  ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                                  : selectedBadge.rarity === 'RARE'
-                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500'
-                                    : 'bg-gradient-to-r from-gray-400 to-gray-500'
-                            }`}
-                          />
+                        <div className="relative h-3.5 bg-white/10 rounded-full overflow-hidden">
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${selectedBadge.progress}%` }} transition={{ duration: 0.8, delay: 0.5 }}
+                            className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${modalConfig.color}`} />
                         </div>
-                        <div className="flex justify-between mt-1.5 text-sm text-white/60">
+                        <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
                           <span>{selectedBadge.currentValue || 0}</span>
                           <span>{selectedBadge.targetValue || '?'}</span>
                         </div>
                       </div>
-
-                      {/* How to Earn & Reward */}
                       <div className="pt-4 border-t border-white/10 space-y-3">
-                        <p className="text-white/70 text-sm">
+                        <p className="text-muted-foreground text-sm">
                           <span className="text-white font-semibold">Nasıl Kazanılır: </span>
                           {selectedBadge.requirement}
                         </p>
                         <div className="flex items-center justify-center gap-2 text-sm">
-                          <span className="text-white/60">Ödül:</span>
+                          <span className="text-muted-foreground">Ödül:</span>
                           <Star className="w-5 h-5 text-yellow-400" />
                           <span className="text-yellow-400 font-bold text-base">+{selectedBadge.points} Puan</span>
                         </div>
@@ -692,7 +654,8 @@ export default function CustomerBadgesPage() {
               </div>
             </motion.div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* CSS for shimmer animation */}
