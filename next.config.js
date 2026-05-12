@@ -168,6 +168,8 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Ağır native modüllerin server bundle’a yanlışlıkla tam çekilmesini azaltır (Vercel lambda boyutu).
+  serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],
   // Görsel optimizasyonu: Vercel/Netlify ile uyumlu; custom server kullanıyorsanız unoptimized: true gerekebilir.
   images: {
     unoptimized: false,
