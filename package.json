@@ -23,7 +23,7 @@
     "audit:admin-responsive": "node scripts/admin-responsive-scan.mjs",
     "audit:customer-responsive": "node scripts/customer-responsive-scan.mjs",
     "api:ensure-dynamic": "node scripts/ensure-api-force-dynamic.mjs",
-    "analyze": "ANALYZE=true next build"
+    "analyze": "cross-env ANALYZE=true next build --webpack"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

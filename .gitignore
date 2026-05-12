@@ -6,6 +6,8 @@ generated-prisma-client
 
 # Testing
 /coverage
+playwright-report/
+test-results/
 
 # Next.js
 /.next/

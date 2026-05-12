@@ -168,6 +168,15 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Vercel: `public/` içeriği statik olarak servis edilir; output file tracing bunu her lambda’ya
+  // kopyalayınca 250MB+ uyarısı oluşuyordu. public’a sadece URL üzerinden erişilir (fs okuma yok).
+  outputFileTracingExcludes: {
+    '*': [
+      './public/**/*',
+      './playwright-report/**/*',
+      './test-results/**/*',
+    ],
+  },
   // Ağır native modüllerin server bundle’a yanlışlıkla tam çekilmesini azaltır (Vercel lambda boyutu).
   serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],
   // Görsel optimizasyonu: Vercel/Netlify ile uyumlu; custom server kullanıyorsanız unoptimized: true gerekebilir.
