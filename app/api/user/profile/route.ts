@@ -1,30 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { z } from 'zod';
+
+
+export const dynamic = 'force-dynamic';
+
+const updateProfileSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  image: z.string().optional(),
+  phone: z.string().max(30).optional().nullable(),
+  businessName: z.string().max(100).optional().nullable(),
+  businessDesc: z.string().max(500).optional().nullable(),
+  address: z.string().max(200).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  businessHours: z.string().max(2000).optional().nullable(),
+  defaultReplyTemplate: z.string().max(2000).optional().nullable(),
+  preferredLanguage: z.string().max(10).optional().nullable(),
+  holidayMode: z.boolean().optional(),
+});
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth();
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
-    const { name, image } = body;
+    const parsed = updateProfileSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+    }
+    const { name, image, phone, businessName, businessDesc, address, latitude, longitude, businessHours, defaultReplyTemplate, preferredLanguage, holidayMode } = parsed.data;
 
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         ...(name && { name }),
         ...(image && { image }),
+        ...(typeof phone !== 'undefined' ? { phone } : {}),
+        ...(typeof businessName !== 'undefined' ? { businessName } : {}),
+        ...(typeof businessDesc !== 'undefined' ? { businessDesc } : {}),
+        ...(typeof address !== 'undefined' ? { address } : {}),
+        ...(typeof latitude !== 'undefined' ? { latitude } : {}),
+        ...(typeof longitude !== 'undefined' ? { longitude } : {}),
+        ...(typeof businessHours !== 'undefined' ? { businessHours } : {}),
+        ...(typeof defaultReplyTemplate !== 'undefined' ? { defaultReplyTemplate } : {}),
+        ...(typeof preferredLanguage !== 'undefined' ? { preferredLanguage } : {}),
+        ...(typeof holidayMode !== 'undefined' ? { holidayMode } : {}),
       },
       select: {
         id: true,
         name: true,
         email: true,
         image: true,
+        phone: true,
         role: true,
+        businessName: true,
+        businessDesc: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        businessHours: true,
+        defaultReplyTemplate: true,
+        preferredLanguage: true,
+        holidayMode: true,
       },
     });
 
@@ -35,7 +78,8 @@ export async function PATCH(request: NextRequest) {
         action: 'UPDATE_PROFILE',
         entity: 'User',
         entityId: session.user.id,
-        newData: { name, image } as object,
+        newData: { name, image, phone, businessName, businessDesc, address, latitude, longitude, holidayMode } as object,
+        ...auditMeta,
       },
     });
 
@@ -51,10 +95,9 @@ export async function PATCH(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth();
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -63,7 +106,17 @@ export async function GET(request: NextRequest) {
         name: true,
         email: true,
         image: true,
+        phone: true,
         role: true,
+        businessName: true,
+        businessDesc: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+        businessHours: true,
+        defaultReplyTemplate: true,
+        preferredLanguage: true,
+        holidayMode: true,
         points: true,
         level: true,
         createdAt: true,

@@ -27,9 +27,18 @@ import {
   Coffee,
   MapPin,
   Clock,
+  Upload,
+  Loader2,
+  SlidersHorizontal,
+  Gauge,
+  Save,
+  FlaskConical,
+  History,
+  BarChart3,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
+import { TW_BRAND_CTA_BUTTON, TW_BRAND_GRADIENT_STOPS_SOFT } from '@/lib/tw-brand-classes';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -52,7 +61,10 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { BADGE_ALGORITHM_PRESETS, DEFAULT_BADGE_ALGORITHM_CONFIG, type BadgeAlgorithmConfig } from '@/lib/badge-algorithm';
+import { BADGE_RARITY_DARK } from '@/lib/badge-rarity-surfaces';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 interface BadgeType {
   id: string;
@@ -62,6 +74,7 @@ interface BadgeType {
   category?: string;
   rarity: 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
   points: number;
+  pointCost?: number | null;
   requirement: string;
   isActive: boolean;
   _count?: {
@@ -69,12 +82,24 @@ interface BadgeType {
   };
 }
 
+interface BadgeSimulationInput {
+  feedbackCount: number;
+  totalPoints: number;
+  streak: number;
+  level: number;
+  referrals: number;
+  quests: number;
+  weekend: boolean;
+  campaign: boolean;
+  retentionRisk: boolean;
+}
+
 const rarityConfig = {
   COMMON: {
     label: 'Yaygın',
     icon: Shield,
     gradient: 'from-slate-400 to-slate-600',
-    bgGradient: 'bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 dark:from-[#0a0e1a] dark:via-[#111827] dark:to-[#0a0e1a]',
+    bgGradient: `bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 ${BADGE_RARITY_DARK.slate}`,
     borderColor: 'border-gray-300 dark:border-slate-500/40',
     glowColor: 'shadow-gray-400/20 dark:shadow-slate-400/20',
     neonGlow: 'dark:shadow-[0_0_15px_rgba(148,163,184,0.15),0_0_30px_rgba(148,163,184,0.08)]',
@@ -86,7 +111,7 @@ const rarityConfig = {
     label: 'Nadir',
     icon: Gem,
     gradient: 'from-blue-400 to-cyan-500',
-    bgGradient: 'bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 dark:from-[#040d1f] dark:via-[#0a1628] dark:to-[#061225]',
+    bgGradient: `bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 ${BADGE_RARITY_DARK.blue}`,
     borderColor: 'border-blue-300 dark:border-cyan-500/40',
     glowColor: 'shadow-blue-400/20 dark:shadow-cyan-500/30',
     neonGlow: 'dark:shadow-[0_0_15px_rgba(34,211,238,0.2),0_0_40px_rgba(34,211,238,0.1),inset_0_0_20px_rgba(34,211,238,0.05)]',
@@ -97,20 +122,20 @@ const rarityConfig = {
   EPIC: {
     label: 'Epik',
     icon: Zap,
-    gradient: 'from-purple-400 to-pink-500',
-    bgGradient: 'bg-gradient-to-br from-purple-50 via-pink-50 to-fuchsia-100 dark:from-[#0d0520] dark:via-[#150a25] dark:to-[#10061f]',
-    borderColor: 'border-purple-300 dark:border-purple-500/50',
-    glowColor: 'shadow-purple-400/20 dark:shadow-purple-500/30',
-    neonGlow: 'dark:shadow-[0_0_15px_rgba(168,85,247,0.2),0_0_40px_rgba(168,85,247,0.1),inset_0_0_20px_rgba(168,85,247,0.05)]',
-    textColor: 'text-purple-600 dark:text-purple-400',
-    badgeBg: 'bg-purple-100 dark:bg-purple-900/40',
-    iconRing: 'ring-purple-200 dark:ring-purple-400/30',
+    gradient: TW_BRAND_GRADIENT_STOPS_SOFT,
+    bgGradient: `bg-gradient-to-br from-primary/[0.08] via-violet-50/80 to-violet-100/90 ${BADGE_RARITY_DARK.epic}`,
+    borderColor: 'border-primary/40 dark:border-primary/50',
+    glowColor: 'shadow-primary/20 dark:shadow-primary/30',
+    neonGlow: 'dark:shadow-[0_0_15px_hsl(var(--primary)_/_0.25),0_0_40px_hsl(var(--primary)_/_0.12),inset_0_0_20px_hsl(var(--primary)_/_0.06)]',
+    textColor: 'text-primary dark:text-primary',
+    badgeBg: 'bg-primary/15 dark:bg-primary/25',
+    iconRing: 'ring-primary/30 dark:ring-primary/40',
   },
   LEGENDARY: {
     label: 'Efsanevi',
     icon: Crown,
     gradient: 'from-amber-400 via-orange-500 to-red-500',
-    bgGradient: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 dark:from-[#1a0f05] dark:via-[#1f1008] dark:to-[#1a0805]',
+    bgGradient: `bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 ${BADGE_RARITY_DARK.ember}`,
     borderColor: 'border-amber-300 dark:border-yellow-500/50',
     glowColor: 'shadow-yellow-400/30 dark:shadow-yellow-500/50',
     neonGlow: 'dark:shadow-[0_0_20px_rgba(250,204,21,0.2),0_0_50px_rgba(250,204,21,0.1),inset_0_0_25px_rgba(250,204,21,0.05)]',
@@ -233,6 +258,30 @@ export default function AdminBadgesPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
   const [iconSearch, setIconSearch] = useState('');
+  const [iconUploading, setIconUploading] = useState(false);
+  const [algorithmConfig, setAlgorithmConfig] = useState<BadgeAlgorithmConfig>(DEFAULT_BADGE_ALGORITHM_CONFIG);
+  const [savingAlgorithm, setSavingAlgorithm] = useState(false);
+  const [loadingAlgorithm, setLoadingAlgorithm] = useState(true);
+  const [simulationInput, setSimulationInput] = useState<BadgeSimulationInput>({
+    feedbackCount: 40,
+    totalPoints: 1500,
+    streak: 6,
+    level: 4,
+    referrals: 2,
+    quests: 8,
+    weekend: false,
+    campaign: true,
+    retentionRisk: false,
+  });
+  const [simulating, setSimulating] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<{
+    score: number;
+    predictedRarity: string;
+    recommendedPointCost: number;
+    multiplier: number;
+  } | null>(null);
+  const [impact, setImpact] = useState<{ sampleSize: number; averageScore: number; distribution: Record<string, number> } | null>(null);
+  const [history, setHistory] = useState<Array<{ id: string; createdAt: string; user?: { name?: string | null; email: string } }>>([]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -241,12 +290,16 @@ export default function AdminBadgesPage() {
     category: 'general',
     rarity: 'COMMON' as BadgeType['rarity'],
     points: 100,
+    pointCost: null as number | null,
     requirement: '',
     isActive: true,
   });
 
   useEffect(() => {
     fetchBadges();
+    fetchAlgorithmConfig();
+    fetchAlgorithmHistory();
+    fetchImpactAnalysis();
   }, []);
 
   const fetchBadges = async () => {
@@ -262,6 +315,93 @@ export default function AdminBadgesPage() {
       toast.error('Rozetler yüklenemedi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAlgorithmConfig = async () => {
+    try {
+      setLoadingAlgorithm(true);
+      const res = await fetch('/api/admin/badges/algorithm');
+      const data = await res.json();
+      if (res.ok && data.success && data.config) {
+        setAlgorithmConfig(data.config as BadgeAlgorithmConfig);
+      }
+    } catch {
+      toast.error('Algoritma ayarları yüklenemedi');
+    } finally {
+      setLoadingAlgorithm(false);
+    }
+  };
+
+  const saveAlgorithmConfig = async () => {
+    try {
+      setSavingAlgorithm(true);
+      const res = await fetch('/api/admin/badges/algorithm', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(algorithmConfig),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Kaydetme başarısız');
+      }
+      toast.success('Rozet algoritma ayarları kaydedildi');
+      fetchAlgorithmHistory();
+      fetchImpactAnalysis();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Kaydetme başarısız');
+    } finally {
+      setSavingAlgorithm(false);
+    }
+  };
+
+  const applyPreset = (presetKey: keyof typeof BADGE_ALGORITHM_PRESETS) => {
+    setAlgorithmConfig(BADGE_ALGORITHM_PRESETS[presetKey]);
+    toast.success(`Preset uygulandı: ${presetKey}`);
+  };
+
+  const fetchAlgorithmHistory = async () => {
+    try {
+      const res = await fetch('/api/admin/badges/algorithm/history');
+      const data = await res.json();
+      if (res.ok && data.success) setHistory(data.history ?? []);
+    } catch {
+      // ignore
+    }
+  };
+
+  const fetchImpactAnalysis = async () => {
+    try {
+      const res = await fetch('/api/admin/badges/algorithm/impact');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setImpact({
+          sampleSize: data.sampleSize,
+          averageScore: data.averageScore,
+          distribution: data.distribution,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const runSimulation = async () => {
+    try {
+      setSimulating(true);
+      const res = await fetch('/api/admin/badges/algorithm/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(simulationInput),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Simülasyon başarısız');
+      setSimulationResult(data.result);
+      toast.success('Simülasyon tamamlandı');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Simülasyon başarısız');
+    } finally {
+      setSimulating(false);
     }
   };
 
@@ -328,6 +468,31 @@ export default function AdminBadgesPage() {
     }
   };
 
+  const uploadIconFile = async (file: File) => {
+    try {
+      setIconUploading(true);
+      const payload = new FormData();
+      payload.append('folder', 'badges');
+      payload.append('file', file);
+
+      const res = await fetch('/api/admin/assets/upload', {
+        method: 'POST',
+        body: payload,
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success || !data?.path) {
+        throw new Error(data?.error || 'Dosya yüklenemedi');
+      }
+
+      setFormData((prev) => ({ ...prev, icon: data.path as string }));
+      toast.success('Rozet görseli yüklendi');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Dosya yüklenemedi');
+    } finally {
+      setIconUploading(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -336,6 +501,7 @@ export default function AdminBadgesPage() {
       category: 'general',
       rarity: 'COMMON',
       points: 100,
+      pointCost: null,
       requirement: '',
       isActive: true,
     });
@@ -351,6 +517,7 @@ export default function AdminBadgesPage() {
       category: badge.category || 'general',
       rarity: badge.rarity,
       points: badge.points,
+      pointCost: badge.pointCost ?? null,
       requirement: badge.requirement,
       isActive: badge.isActive,
     });
@@ -393,6 +560,29 @@ export default function AdminBadgesPage() {
       </div>
       <div className="space-y-2">
         <Label>İkon ({badgeIconList.length} rozet mevcut)</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="file"
+            accept=".svg,.png,image/svg+xml,image/png"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadIconFile(file);
+              e.currentTarget.value = '';
+            }}
+            className="cursor-pointer"
+          />
+          <div className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground">
+            {iconUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {iconUploading ? 'Yükleniyor...' : 'Dosya Seç'}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">SVG veya PNG (maksimum 2MB) yükleyebilirsiniz.</p>
+        {formData.icon?.startsWith('/') && (
+          <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1">
+            <Image src={formData.icon} alt="Yüklenen rozet" width={28} height={28} className="rounded-sm" />
+            <span className="text-xs text-muted-foreground truncate max-w-[220px]">{formData.icon}</span>
+          </div>
+        )}
         <Input
           placeholder="İkon ara..."
           value={iconSearch}
@@ -426,7 +616,7 @@ export default function AdminBadgesPage() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Kategori</Label>
           <Select
@@ -470,7 +660,7 @@ export default function AdminBadgesPage() {
           </Select>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Puan Ödülü</Label>
           <Input
@@ -480,6 +670,21 @@ export default function AdminBadgesPage() {
           />
         </div>
         <div className="space-y-2">
+          <Label>Puanla Açma Maliyeti</Label>
+          <Input
+            type="number"
+            placeholder="Boş = sadece kazanım"
+            value={formData.pointCost ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              setFormData({ ...formData, pointCost: v === '' ? null : parseInt(v, 10) || null });
+            }}
+          />
+          <p className="text-xs text-muted-foreground">Müşteri bu kadar puanla rozeti açabilir (opsiyonel)</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2 col-span-2">
           <Label>Gereksinim</Label>
           <Input
             value={formData.requirement}
@@ -503,7 +708,7 @@ export default function AdminBadgesPage() {
         }}>
           İptal
         </Button>
-        <Button onClick={onSubmit} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+        <Button onClick={onSubmit} className={TW_BRAND_CTA_BUTTON}>
           {submitLabel}
         </Button>
       </DialogFooter>
@@ -512,10 +717,160 @@ export default function AdminBadgesPage() {
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
-        title="Rozet Yönetimi"
-        description="Gamification rozetlerini oluşturun ve yönetin"
+      <AdminPremiumHero
+        eyebrow="Gamification"
+        title="Rozet yönetimi"
+        description="Rozet kataloğu, algoritma motoru ve simülasyon — tek panelden yönetin."
+        icon={<Medal className="text-white" />}
       />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card className="xl:col-span-2 border border-border">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" /> Algoritma Motoru</p>
+                <p className="text-xs text-muted-foreground">Rarity eşikleri, ağırlıklar ve çarpanlar</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => applyPreset('balanced')}>Balanced</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('growthHeavy')}>Growth</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('retentionHeavy')}>Retention</Button>
+                <Button size="sm" onClick={saveAlgorithmConfig} disabled={savingAlgorithm || loadingAlgorithm}>
+                {savingAlgorithm ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Kaydet
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {(['common', 'rare', 'epic', 'legendary'] as const).map((k) => (
+                <div key={k}>
+                  <Label className="text-xs uppercase">{k} eşik</Label>
+                  <Input
+                    type="number"
+                    value={algorithmConfig.thresholds[k]}
+                    onChange={(e) =>
+                      setAlgorithmConfig((prev) => ({
+                        ...prev,
+                        thresholds: { ...prev.thresholds, [k]: Number(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {Object.entries(algorithmConfig.weights).map(([k, v]) => (
+                <div key={k}>
+                  <Label className="text-xs">{k}</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={v}
+                    onChange={(e) =>
+                      setAlgorithmConfig((prev) => ({
+                        ...prev,
+                        weights: { ...prev.weights, [k]: Number(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {Object.entries(algorithmConfig.multipliers).map(([k, v]) => (
+                <div key={k}>
+                  <Label className="text-xs">{k} çarpanı</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={v}
+                    onChange={(e) =>
+                      setAlgorithmConfig((prev) => ({
+                        ...prev,
+                        multipliers: { ...prev.multipliers, [k]: Number(e.target.value) || 1 },
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-medium mb-2 flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Toplu Etki Analizi</p>
+              {impact ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                  <div className="rounded border p-2"><p className="text-muted-foreground">Sample</p><p className="font-semibold">{impact.sampleSize}</p></div>
+                  <div className="rounded border p-2"><p className="text-muted-foreground">Avg Skor</p><p className="font-semibold">{impact.averageScore}</p></div>
+                  <div className="rounded border p-2"><p className="text-muted-foreground">Common</p><p className="font-semibold">{impact.distribution.COMMON ?? 0}</p></div>
+                  <div className="rounded border p-2"><p className="text-muted-foreground">Rare</p><p className="font-semibold">{impact.distribution.RARE ?? 0}</p></div>
+                  <div className="rounded border p-2"><p className="text-muted-foreground">Epic+</p><p className="font-semibold">{(impact.distribution.EPIC ?? 0) + (impact.distribution.LEGENDARY ?? 0)}</p></div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Analiz yükleniyor...</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border">
+          <CardContent className="p-5 space-y-4">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2"><FlaskConical className="h-4 w-4" /> Algoritma Simülatörü</p>
+              <p className="text-xs text-muted-foreground">Kural skorunu test edin</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(['feedbackCount', 'totalPoints', 'streak', 'level', 'referrals', 'quests'] as const).map((k) => (
+                <div key={k}>
+                  <Label className="text-[11px]">{k}</Label>
+                  <Input
+                    type="number"
+                    value={simulationInput[k]}
+                    onChange={(e) => setSimulationInput((prev) => ({ ...prev, [k]: Number(e.target.value) || 0 }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="flex items-center justify-between rounded-md border p-2">
+                <span className="text-xs">Weekend</span>
+                <Switch checked={simulationInput.weekend} onCheckedChange={(checked) => setSimulationInput((p) => ({ ...p, weekend: checked }))} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-2">
+                <span className="text-xs">Campaign</span>
+                <Switch checked={simulationInput.campaign} onCheckedChange={(checked) => setSimulationInput((p) => ({ ...p, campaign: checked }))} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-2">
+                <span className="text-xs">Risk</span>
+                <Switch checked={simulationInput.retentionRisk} onCheckedChange={(checked) => setSimulationInput((p) => ({ ...p, retentionRisk: checked }))} />
+              </div>
+            </div>
+            <Button onClick={runSimulation} disabled={simulating} className="w-full">
+              {simulating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Gauge className="h-4 w-4 mr-2" />}
+              Simülasyonu Çalıştır
+            </Button>
+            {simulationResult && (
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+                <p className="text-sm"><strong>Skor:</strong> {simulationResult.score}</p>
+                <p className="text-sm"><strong>Rarity:</strong> {simulationResult.predictedRarity}</p>
+                <p className="text-sm"><strong>Önerilen Maliyet:</strong> {simulationResult.recommendedPointCost}</p>
+                <p className="text-xs text-muted-foreground">Çarpan: {simulationResult.multiplier}</p>
+              </div>
+            )}
+            <div className="pt-2 border-t">
+              <p className="text-xs font-semibold mb-2 flex items-center gap-2"><History className="h-4 w-4" /> Son Konfigürasyon Değişiklikleri</p>
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {history.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Henüz kayıt yok.</p>
+                ) : history.map((h) => (
+                  <div key={h.id} className="rounded border p-2">
+                    <p className="text-xs font-medium">{h.user?.name || h.user?.email || 'Admin'}</p>
+                    <p className="text-[11px] text-muted-foreground">{new Date(h.createdAt).toLocaleString('tr-TR')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
@@ -562,7 +917,7 @@ export default function AdminBadgesPage() {
       {/* Actions */}
       <div className="flex flex-col lg:flex-row gap-4 justify-between">
         <div className="flex flex-col sm:flex-row gap-3 flex-1">
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1 min-w-0 max-w-full sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Rozet ara..."
@@ -572,7 +927,7 @@ export default function AdminBadgesPage() {
             />
           </div>
           <Select value={filterRarity} onValueChange={setFilterRarity}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Filtrele" />
             </SelectTrigger>
@@ -607,7 +962,7 @@ export default function AdminBadgesPage() {
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white">
+            <Button className={cn(TW_BRAND_CTA_BUTTON, 'gap-2')}>
               <Plus className="h-4 w-4" />
               Yeni Rozet Oluştur
             </Button>
@@ -751,7 +1106,7 @@ export default function AdminBadgesPage() {
                       <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-orange-500/8 to-red-500/5 dark:from-amber-500/10 dark:via-orange-500/15 dark:to-red-500/10 animate-pulse rounded-2xl" />
                     )}
                     {badge.rarity === 'EPIC' && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent dark:via-purple-500/8 animate-pulse rounded-2xl" />
+                      <div className="absolute inset-0 animate-pulse rounded-2xl bg-gradient-to-r from-transparent via-primary/5 to-transparent dark:via-primary/[0.08]" />
                     )}
                     
                     {/* Top-right glow orb */}
@@ -788,7 +1143,7 @@ export default function AdminBadgesPage() {
                             animate={{ scale: [1, 1.3, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
                           >
-                            <Zap className="h-6 w-6 text-purple-500 dark:text-purple-300 drop-shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
+                            <Zap className="h-6 w-6 text-primary drop-shadow-[0_0_6px_hsl(var(--primary)_/_0.45)] dark:text-primary" />
                           </motion.div>
                         )}
                         {badge.rarity === 'RARE' && (
@@ -865,7 +1220,7 @@ export default function AdminBadgesPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5 text-purple-500" />
+              <Edit className="h-5 w-5 text-primary" />
               Rozet Düzenle
             </DialogTitle>
             <DialogDescription>

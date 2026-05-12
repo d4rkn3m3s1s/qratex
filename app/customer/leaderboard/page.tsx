@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy,
@@ -14,14 +13,21 @@ import {
   Zap,
   MessageSquare,
   Award,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import Image from 'next/image';
 import { getInitials, getLeague, formatNumber } from '@/lib/utils';
+import { defaultAvatars } from '@/lib/avatar-options';
+import { getLeagueAvatarUrl } from '@/lib/league-avatars';
+import { useAppT } from '@/lib/app-locale';
 
 interface LeaderboardUser {
   id: string;
@@ -33,38 +39,39 @@ interface LeaderboardUser {
   rank: number;
   feedbackCount?: number;
   badgeCount?: number;
+  referralCount?: number;
+  score?: number;
   isCurrentUser?: boolean;
+  league?: string;
+  leagueKey?: string;
+  leagueProgress?: number;
+  nextLeague?: string | null;
+  pointsToNextLeague?: number;
 }
 
-// Avatar listesi
-const defaultAvatars = [
-  '/images/avatar/AVATAR ERKEK 1.svg',
-  '/images/avatar/AVATAR KADIN 1.svg',
-  '/images/avatar/AVATAR ERKEK 2.svg',
-  '/images/avatar/AVATAR KADIN 2.svg',
-  '/images/avatar/LİON.svg',
-  '/images/avatar/TİGER.svg',
-  '/images/avatar/PANDA.svg',
-  '/images/avatar/KOALA.svg',
-];
 
 export default function CustomerLeaderboardPage() {
+  const t = useAppT();
   const { data: session } = useSession();
+  type CategoryKey = 'points' | 'feedbacks' | 'badges' | 'referrals';
   const [period, setPeriod] = useState('weekly');
+  const [category, setCategory] = useState<CategoryKey>('points');
+  const [showCategoryPanel, setShowCategoryPanel] = useState(true);
   const [loading, setLoading] = useState(true);
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
   const [totalUsers, setTotalUsers] = useState(0);
-  const [periodLabel, setPeriodLabel] = useState('Bu Hafta');
+  const [periodLabel, setPeriodLabel] = useState('');
+  const [categoryLabel, setCategoryLabel] = useState('');
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [period]);
+  }, [period, category]);
 
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard?period=${period}&limit=50`, {
+      const res = await fetch(`/api/leaderboard?period=${period}&category=${category}&limit=50`, {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
@@ -79,7 +86,8 @@ export default function CustomerLeaderboardPage() {
         setLeaderboard(withAvatars);
         setUserRank(data.data.userRank);
         setTotalUsers(data.data.totalUsers || 0);
-        setPeriodLabel(data.data.periodLabel || 'Bu Hafta');
+        setPeriodLabel(data.data.periodLabel || t('customerLeaderboard.periodWeekly'));
+        setCategoryLabel(data.data.categoryLabel || t('customerLeaderboard.categoryPoints'));
       }
     } catch (error) {
       console.error('Leaderboard fetch error:', error);
@@ -88,32 +96,76 @@ export default function CustomerLeaderboardPage() {
     }
   };
 
-  const userLeague = getLeague(session?.user?.level || 1);
+  const userLeague = getLeague((session?.user as { points?: number })?.points ?? 0);
+
+  const scoreMeta =
+    category === 'feedbacks'
+      ? { icon: MessageSquare, suffix: t('customerLeaderboard.feedbacks') }
+      : category === 'badges'
+        ? { icon: Award, suffix: t('customerLeaderboard.badges') }
+        : category === 'referrals'
+          ? { icon: Sparkles, suffix: t('customerLeaderboard.referrals') }
+          : { icon: Star, suffix: t('customerLeaderboard.points') };
+  const ScoreIcon = scoreMeta.icon;
+  const categoryOptions: Array<{
+    key: CategoryKey;
+    label: string;
+    description: string;
+    icon: typeof Star;
+  }> = [
+    {
+      key: 'points',
+      label: t('customerLeaderboard.categoryPoints'),
+      description: t('customerLeaderboard.categoryPointsDesc'),
+      icon: Star,
+    },
+    {
+      key: 'feedbacks',
+      label: t('customerLeaderboard.categoryFeedbacks'),
+      description: t('customerLeaderboard.categoryFeedbacksDesc'),
+      icon: MessageSquare,
+    },
+    {
+      key: 'badges',
+      label: t('customerLeaderboard.categoryBadges'),
+      description: t('customerLeaderboard.categoryBadgesDesc'),
+      icon: Award,
+    },
+    {
+      key: 'referrals',
+      label: t('customerLeaderboard.categoryReferrals'),
+      description: t('customerLeaderboard.categoryReferralsDesc'),
+      icon: Sparkles,
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
-        title="Liderlik Tablosu"
-        description="Rekabet et, yüksel, zirveye ulaş!"
+      <DashboardPageHeading
+        title={t('customerLeaderboard.title')}
+        description={t('customerLeaderboard.description')}
       />
+
+      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
+        <h1 className="text-xl font-bold tracking-tight text-balance">{t('customerLeaderboard.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">{t('customerLeaderboard.description')}</p>
+      </div>
 
       {/* User Stats Banner */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <Card className="relative overflow-hidden border-primary/20">
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-purple-600/10 to-fuchsia-600/20" />
-          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary/20 to-transparent rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-fuchsia-500/10 to-transparent rounded-full blur-2xl" />
-          <CardContent className="p-4 md:p-6 relative">
+        <Card className="relative overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-transparent to-primary/[0.04]" aria-hidden />
+          <CardContent className="relative p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6">
               {/* User Info */}
               <div className="flex items-center gap-3 md:gap-4">
                 <div className="relative flex-shrink-0">
                   <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-4 ring-primary/30">
                     <AvatarImage src={session?.user?.image || ''} />
-                    <AvatarFallback className="text-xl md:text-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+                    <AvatarFallback className="bg-primary text-xl text-primary-foreground md:text-2xl">
                       {getInitials(session?.user?.name || '')}
                     </AvatarFallback>
                   </Avatar>
@@ -126,9 +178,9 @@ export default function CustomerLeaderboardPage() {
                   <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1">
                     <Badge variant="outline" className="gap-1 text-xs h-6">
                       <Star className="h-3 w-3" />
-                      Seviye {session?.user?.level || 1}
+                      {t('customerLeaderboard.level')} {session?.user?.level || 1}
                     </Badge>
-                    <Badge className="bg-gradient-to-r from-violet-600 to-fuchsia-600 gap-1 text-xs h-6 border-0">
+                    <Badge className="h-6 gap-1 border-0 bg-primary text-xs text-primary-foreground hover:bg-primary/90">
                       <Sparkles className="h-3 w-3" />
                       {userLeague}
                     </Badge>
@@ -140,7 +192,7 @@ export default function CustomerLeaderboardPage() {
               <div className="flex items-center justify-center sm:justify-end flex-1 gap-4 md:gap-6">
                 {/* Rank */}
                 <div className="text-center px-2">
-                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">Sıralamanız</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">{t('customerLeaderboard.yourRank')}</p>
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-2xl md:text-3xl font-bold text-primary">#{userRank || '?'}</span>
                     {userRank && userRank <= 10 && (
@@ -159,7 +211,7 @@ export default function CustomerLeaderboardPage() {
                 
                 {/* Points */}
                 <div className="text-center px-2">
-                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">Toplam Puan</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-0.5">{t('customerLeaderboard.totalPoints')}</p>
                   <div className="flex items-center justify-center gap-1">
                     <Star className="h-4 w-4 md:h-5 md:w-5 text-yellow-500 fill-yellow-500" />
                     <span className="text-xl md:text-2xl font-bold">{formatNumber(session?.user?.points || 0)}</span>
@@ -170,9 +222,9 @@ export default function CustomerLeaderboardPage() {
                 
                 {/* Period */}
                 <div className="text-center px-2 hidden sm:block">
-                  <p className="text-[10px] md:text-xs text-muted-foreground mb-1">Dönem</p>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-1">{t('customerLeaderboard.period')}</p>
                   <Badge variant="secondary" className="text-xs">
-                    {periodLabel}
+                    {periodLabel} · {categoryLabel}
                   </Badge>
                 </div>
               </div>
@@ -181,20 +233,65 @@ export default function CustomerLeaderboardPage() {
         </Card>
       </motion.div>
 
+      <Card className="border-primary/20">
+        <CardContent className="p-4 space-y-3">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between text-left"
+            onClick={() => setShowCategoryPanel((prev) => !prev)}
+          >
+            <div>
+              <p className="text-sm font-semibold">{t('customerLeaderboard.categoriesTitle')}</p>
+              <p className="text-xs text-muted-foreground">
+                {t('customerLeaderboard.categoriesDescription')}
+              </p>
+            </div>
+            {showCategoryPanel ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {showCategoryPanel && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {categoryOptions.map((item) => {
+                const Icon = item.icon;
+                const active = category === item.key;
+                return (
+                  <button
+                    type="button"
+                    key={item.key}
+                    onClick={() => setCategory(item.key)}
+                    className={`rounded-lg border p-3 text-left transition ${
+                      active
+                        ? 'border-primary bg-primary/10 shadow-sm'
+                        : 'border-border bg-background hover:border-primary/40 hover:bg-primary/5'
+                    }`}
+                  >
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Period Tabs */}
       <Tabs value={period} onValueChange={setPeriod}>
         <TabsList className="grid w-full grid-cols-3 h-12">
           <TabsTrigger value="weekly" className="gap-2 text-sm">
             <Flame className="h-4 w-4" />
-            Haftalık
+            {t('customerLeaderboard.periodWeekly')}
           </TabsTrigger>
           <TabsTrigger value="monthly" className="gap-2 text-sm">
             <Trophy className="h-4 w-4" />
-            Aylık
+            {t('customerLeaderboard.periodMonthly')}
           </TabsTrigger>
           <TabsTrigger value="alltime" className="gap-2 text-sm">
             <Crown className="h-4 w-4" />
-            Tüm Zamanlar
+            {t('customerLeaderboard.periodAllTime')}
           </TabsTrigger>
         </TabsList>
 
@@ -252,8 +349,10 @@ export default function CustomerLeaderboardPage() {
                       </p>
                       
                       <div className="flex items-center gap-1 mt-1">
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                        <span className="font-bold text-base md:text-lg">{formatNumber(leaderboard[1]?.points || 0)}</span>
+                        <ScoreIcon className="h-4 w-4 text-yellow-500" />
+                        <span className="font-bold text-base md:text-lg">
+                          {formatNumber((leaderboard[1]?.score ?? leaderboard[1]?.points) || 0)}
+                        </span>
                       </div>
                       
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -316,8 +415,10 @@ export default function CustomerLeaderboardPage() {
                       </p>
                       
                       <div className="flex items-center gap-1.5 mt-1">
-                        <Star className="h-5 w-5 md:h-6 md:w-6 text-yellow-500 fill-yellow-500" />
-                        <span className="font-bold text-xl md:text-2xl text-yellow-500">{formatNumber(leaderboard[0]?.points || 0)}</span>
+                        <ScoreIcon className="h-5 w-5 md:h-6 md:w-6 text-yellow-500" />
+                        <span className="font-bold text-xl md:text-2xl text-yellow-500">
+                          {formatNumber((leaderboard[0]?.score ?? leaderboard[0]?.points) || 0)}
+                        </span>
                       </div>
                       
                       <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
@@ -331,8 +432,9 @@ export default function CustomerLeaderboardPage() {
                         </span>
                       </div>
                       
-                      <Badge className="mt-2 bg-yellow-500/20 text-yellow-500 border-yellow-500/30">
-                        Lv. {leaderboard[0]?.level} · {getLeague(leaderboard[0]?.level || 1)}
+                      <Badge className="mt-2 bg-yellow-500/20 text-yellow-500 border-yellow-500/30 gap-1.5">
+                        <Image src={getLeagueAvatarUrl(leaderboard[0]?.leagueKey ?? 'BASLANGIC')} alt="" width={18} height={18} className="rounded-full" />
+                        Lv. {leaderboard[0]?.level} · {leaderboard[0]?.league ?? getLeague(leaderboard[0]?.points ?? 0)}
                       </Badge>
                       
                       {/* Podium Stand */}
@@ -368,8 +470,10 @@ export default function CustomerLeaderboardPage() {
                       </p>
                       
                       <div className="flex items-center gap-1 mt-1">
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                        <span className="font-bold text-base md:text-lg">{formatNumber(leaderboard[2]?.points || 0)}</span>
+                        <ScoreIcon className="h-4 w-4 text-yellow-500" />
+                        <span className="font-bold text-base md:text-lg">
+                          {formatNumber((leaderboard[2]?.score ?? leaderboard[2]?.points) || 0)}
+                        </span>
                       </div>
                       
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -396,9 +500,9 @@ export default function CustomerLeaderboardPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-4">
                   <Trophy className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-bold">Sıralama</h3>
+                  <h3 className="text-lg font-bold">{t('customerLeaderboard.ranking')}</h3>
                   <Badge variant="secondary" className="ml-auto">
-                    {leaderboard.length} Oyuncu
+                    {leaderboard.length} {t('customerLeaderboard.players')}
                   </Badge>
                 </div>
                 
@@ -406,12 +510,12 @@ export default function CustomerLeaderboardPage() {
                   {leaderboard.slice(3).map((user, index) => {
                     const isTop10 = user.rank <= 10;
                     const rankColors = {
-                      4: 'from-violet-500/20 to-purple-500/10 border-violet-500/30',
+                      4: 'from-primary/20 to-primary/5 border-primary/30',
                       5: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30',
                       6: 'from-emerald-500/20 to-green-500/10 border-emerald-500/30',
                       7: 'from-teal-500/20 to-cyan-500/10 border-teal-500/30',
-                      8: 'from-indigo-500/20 to-blue-500/10 border-indigo-500/30',
-                      9: 'from-pink-500/20 to-rose-500/10 border-pink-500/30',
+                      8: 'from-primary/20 to-blue-500/10 border-primary/30',
+                      9: 'from-violet-500/20 to-indigo-500/10 border-violet-500/30',
                       10: 'from-orange-500/20 to-amber-500/10 border-orange-500/30',
                     };
                     const bgClass = isTop10 
@@ -448,7 +552,7 @@ export default function CustomerLeaderboardPage() {
                           <div className="relative">
                             <Avatar className={`h-14 w-14 ${isTop10 ? 'ring-2 ring-primary/50' : 'ring-2 ring-border'}`}>
                               <AvatarImage src={user.image || ''} />
-                              <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-lg">
+                              <AvatarFallback className="bg-primary text-lg text-primary-foreground">
                                 {getInitials(user.name || '')}
                               </AvatarFallback>
                             </Avatar>
@@ -467,18 +571,27 @@ export default function CustomerLeaderboardPage() {
                               </p>
                               {user.isCurrentUser && (
                                 <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">
-                                  Siz
+                                  {t('customerLeaderboard.you')}
                                 </Badge>
                               )}
                             </div>
                             <div className="flex items-center gap-3 mt-1">
                               <Badge variant="outline" className="text-xs h-5 gap-1">
                                 <Zap className="h-3 w-3" />
-                                Lv. {user.level}
+                                {t('customerLeaderboard.lvlShort')} {user.level}
                               </Badge>
-                              <span className="text-xs text-muted-foreground hidden sm:inline">
-                                {getLeague(user.level)} Lig
+                            <span className="text-xs text-muted-foreground hidden sm:inline flex items-center gap-1">
+                                <Image src={getLeagueAvatarUrl(user.leagueKey ?? 'BASLANGIC')} alt="" width={14} height={14} className="rounded-full flex-shrink-0" />
+                                {(user.league || getLeague(user.points ?? 0))} {t('customerLeaderboard.league')}
                               </span>
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              <Progress value={user.leagueProgress || 0} className="h-1.5" />
+                              <p className="text-[10px] text-muted-foreground">
+                                {user.nextLeague
+                                  ? `${user.nextLeague} ${t('customerLeaderboard.forNextLeague')} ${formatNumber(user.pointsToNextLeague ?? 0)} ${t('customerLeaderboard.points')}`
+                                  : t('customerLeaderboard.upperLeague')}
+                              </p>
                             </div>
                           </div>
 
@@ -493,17 +606,21 @@ export default function CustomerLeaderboardPage() {
                                 <Award className="h-4 w-4 text-amber-500" />
                                 <span className="font-medium">{user.badgeCount || 0}</span>
                               </div>
+                              <div className="flex items-center gap-1 text-sm">
+                                <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+                                <span className="font-medium">{user.referralCount || 0}</span>
+                              </div>
                             </div>
-                            <span className="text-[10px] text-muted-foreground">Feedback / Rozet</span>
+                            <span className="text-[10px] text-muted-foreground">{t('customerLeaderboard.fbBadgeInvite')}</span>
                           </div>
 
                           {/* Points */}
                           <div className="flex flex-col items-end gap-1 pl-4 border-l border-border/50">
                             <div className="flex items-center gap-1.5">
-                              <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-                              <span className="text-xl font-bold">{formatNumber(user.points)}</span>
+                              <ScoreIcon className="h-5 w-5 text-yellow-500" />
+                              <span className="text-xl font-bold">{formatNumber(user.score ?? user.points)}</span>
                             </div>
-                            <span className="text-xs text-muted-foreground">puan</span>
+                            <span className="text-xs text-muted-foreground">{scoreMeta.suffix}</span>
                           </div>
                         </div>
                       </motion.div>
@@ -517,9 +634,9 @@ export default function CustomerLeaderboardPage() {
                 <Card className="border-dashed">
                   <CardContent className="p-12 text-center">
                     <Trophy className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-                    <p className="text-lg font-medium text-muted-foreground">Henüz sıralama verisi yok</p>
+                    <p className="text-lg font-medium text-muted-foreground">{t('customerLeaderboard.emptyTitle')}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Geri bildirim göndererek puan kazanın ve sıralamaya girin!
+                      {t('customerLeaderboard.emptyDescription')}
                     </p>
                   </CardContent>
                 </Card>

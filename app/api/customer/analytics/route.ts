@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -42,11 +44,26 @@ export async function GET(req: NextRequest) {
           include: { category: true },
         },
         dealer: {
-          select: { businessName: true },
+          select: { id: true, businessName: true, name: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    const consumptionIds = consumptions.map((c) => c.id);
+    const reviews = consumptionIds.length
+      ? await prisma.consumptionReview.findMany({
+          where: {
+            customerId: session.user.id,
+            consumptionId: { in: consumptionIds },
+          },
+          select: {
+            consumptionId: true,
+            rating: true,
+          },
+        })
+      : [];
+    const reviewByConsumptionId = new Map(reviews.map((r) => [r.consumptionId, r.rating]));
 
     // Get previous period for comparison
     const prevStartDate = new Date(startDate);
@@ -140,24 +157,71 @@ export async function GET(req: NextRequest) {
       .slice(0, 5);
 
     // Favorite dealers
-    const dealerMap = new Map<string, { visits: number; ratings: number[] }>();
+    const dealerMap = new Map<
+      string,
+      { dealerId: string; name: string; visits: number; ratings: number[]; hourlyVisits: Map<number, number> }
+    >();
     consumptions.forEach((c) => {
-      const dealerName = c.dealer?.businessName || 'Bilinmeyen';
-      const existing = dealerMap.get(dealerName) || { visits: 0, ratings: [] };
-      dealerMap.set(dealerName, {
+      const dealerId = c.dealer?.id || 'unknown';
+      const dealerName = c.dealer?.businessName || c.dealer?.name || 'Bilinmeyen';
+      const existing = dealerMap.get(dealerId) || {
+        dealerId,
+        name: dealerName,
+        visits: 0,
+        ratings: [],
+        hourlyVisits: new Map<number, number>(),
+      };
+      const hour = new Date(c.createdAt).getHours();
+      const currentHourCount = existing.hourlyVisits.get(hour) || 0;
+      const rating = reviewByConsumptionId.get(c.id);
+      if (typeof rating === 'number') {
+        existing.ratings.push(rating);
+      }
+      existing.hourlyVisits.set(hour, currentHourCount + 1);
+      dealerMap.set(dealerId, {
         visits: existing.visits + 1,
         ratings: existing.ratings,
+        hourlyVisits: existing.hourlyVisits,
+        dealerId,
+        name: dealerName,
       });
     });
 
     const favoriteDealers = Array.from(dealerMap.entries())
-      .map(([name, data]) => ({
-        name,
+      .map(([, data]) => ({
+        name: data.name,
         visits: data.visits,
-        avgRating: 4.5, // Would need review data
+        avgRating:
+          data.ratings.length > 0
+            ? Number((data.ratings.reduce((a, b) => a + b, 0) / data.ratings.length).toFixed(1))
+            : 0,
       }))
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 3);
+
+    const maxVisitsAmongDealers = Math.max(
+      1,
+      ...Array.from(dealerMap.values()).map((d) => d.visits)
+    );
+    const branchComparison = Array.from(dealerMap.values())
+      .map((dealer) => {
+        const peakHourVisits = Math.max(0, ...Array.from(dealer.hourlyVisits.values()));
+        const loadFactor = dealer.visits / maxVisitsAmongDealers;
+        const estimatedWaitMinutes = Math.round(6 + loadFactor * 8 + peakHourVisits * 1.5);
+        const avgRating =
+          dealer.ratings.length > 0
+            ? Number((dealer.ratings.reduce((a, b) => a + b, 0) / dealer.ratings.length).toFixed(1))
+            : 0;
+        return {
+          dealerId: dealer.dealerId,
+          dealerName: dealer.name,
+          visits: dealer.visits,
+          avgRating,
+          estimatedWaitMinutes,
+        };
+      })
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 5);
 
     // Monthly data
     const monthlyMap = new Map<string, { consumptions: number; spent: number; points: number }>();
@@ -178,7 +242,7 @@ export async function GET(req: NextRequest) {
     // Get streak
     let currentStreak = 0;
     try {
-      const streak = await (prisma as any).userStreak.findUnique({
+      const streak = await prisma.userStreak.findUnique({
         where: { userId: session.user.id },
       });
       currentStreak = streak?.currentStreak || 0;
@@ -189,7 +253,7 @@ export async function GET(req: NextRequest) {
     // Get VIP tier
     let vipTier = 'Bronze';
     try {
-      const vipStatus = await (prisma as any).userVIPStatus.findUnique({
+      const vipStatus = await prisma.userVIPStatus.findUnique({
         where: { userId: session.user.id },
         include: { tier: true },
       });
@@ -227,6 +291,7 @@ export async function GET(req: NextRequest) {
       hourlyPattern,
       topProducts,
       favoriteDealers,
+      branchComparison,
       monthlyData,
       achievements: {
         totalBadges: badgesCount,

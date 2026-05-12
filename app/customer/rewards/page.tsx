@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,7 +10,6 @@ import {
   Gift,
   Star,
   ShoppingBag,
-  Package,
   Sparkles,
   Check,
   Copy,
@@ -17,7 +18,8 @@ import {
   CheckCircle,
   Store,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,9 +32,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import { formatDistanceToNow } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { enUS, tr } from 'date-fns/locale';
+import { getLeagueMeta, type LeagueKey } from '@/lib/utils';
+import { useCustomerLocale, useCustomerT } from '@/lib/use-customer-locale';
+
+const SurpriseEggThreeModal = dynamic(
+  () => import('@/components/rewards/surprise-egg-three-modal').then((m) => m.SurpriseEggThreeModal),
+  { ssr: false, loading: () => null }
+);
 
 interface Reward {
   id: string;
@@ -75,13 +84,16 @@ const typeColors: Record<string, string> = {
   PHYSICAL: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
   DIGITAL: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   COUPON: 'bg-green-500/10 text-green-500 border-green-500/20',
-  VIP: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  VIP: 'border-primary/20 bg-primary/10 text-primary',
   physical: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
   digital: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20',
   coupon: 'bg-green-500/10 text-green-500 border-green-500/20',
 };
 
 export default function CustomerRewardsPage() {
+  const locale = useCustomerLocale();
+  const tc = useCustomerT();
+  const dateLocale = locale === 'en' ? enUS : tr;
   const { data: session, update: updateSession } = useSession();
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [myRewards, setMyRewards] = useState<MyReward[]>([]);
@@ -92,6 +104,10 @@ export default function CustomerRewardsPage() {
   const [claiming, setClaiming] = useState(false);
   const [userPoints, setUserPoints] = useState(0);
   const [activeTab, setActiveTab] = useState('store');
+  const [surpriseOpen, setSurpriseOpen] = useState(false);
+  const [surpriseTitle, setSurpriseTitle] = useState('Sürpriz Ödül Açıldı!');
+  const [surpriseCouponCode, setSurpriseCouponCode] = useState<string | null>(null);
+  const [surpriseLeagueKey, setSurpriseLeagueKey] = useState<LeagueKey>('BASLANGIC');
 
   // Fetch user's current points from API
   const fetchUserPoints = useCallback(async () => {
@@ -128,8 +144,8 @@ export default function CustomerRewardsPage() {
       if (data.success) {
         setRewards(data.data);
       }
-    } catch (error) {
-      toast.error('Ödüller yüklenemedi');
+    } catch {
+      toast.error(tc('customerRewards.loadError'));
     } finally {
       setLoading(false);
     }
@@ -156,7 +172,7 @@ export default function CustomerRewardsPage() {
 
   const copyToClipboard = (code: string) => {
     navigator.clipboard.writeText(code);
-    toast.success('Kupon kodu kopyalandı!', {
+    toast.success(tc('customerRewards.codeCopied'), {
       description: code,
     });
   };
@@ -175,8 +191,8 @@ export default function CustomerRewardsPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success('🎁 Ödül talep edildi!', {
-          description: `Kupon kodunuz: ${data.data?.couponCode}`,
+        toast.success(tc('customerRewards.claimSuccess'), {
+          description: `${tc('customerRewards.couponCode')}: ${data.data?.couponCode}`,
           duration: 10000,
         });
         
@@ -194,11 +210,18 @@ export default function CustomerRewardsPage() {
         
         // Switch to my rewards tab
         setActiveTab('myRewards');
+
+        // Reward claim akisini bozmadan, animasyonu son adim olarak ac
+        const leagueMeta = getLeagueMeta((session?.user as { points?: number })?.points ?? 0);
+        setSurpriseLeagueKey(leagueMeta.key);
+        setSurpriseTitle(`${selectedReward.name} ödülünü kazandınız!`);
+        setSurpriseCouponCode(data.data?.couponCode || null);
+        setSurpriseOpen(true);
       } else {
-        toast.error(data.error || 'Ödül talep edilemedi');
+        toast.error(data.error || tc('customerRewards.claimError'));
       }
-    } catch (error) {
-      toast.error('Bir hata oluştu');
+    } catch {
+      toast.error(tc('common.error'));
     } finally {
       setClaiming(false);
     }
@@ -208,49 +231,56 @@ export default function CustomerRewardsPage() {
 
   return (
     <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
-      <DashboardHeader
-        title="Ödül Mağazası"
-        description="Puanlarınızı harika ödüllerle değiştirin"
+      <DashboardPageHeading
+        title={tc('customerRewards.title')}
+        description={tc('customerRewards.description')}
       />
 
-      {/* User Points & Stats */}
-      <Card className="relative overflow-hidden border-primary/20">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-purple-500/20" />
-        <CardContent className="p-3 sm:p-4 md:p-6 relative">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
+        <h1 className="text-xl font-bold tracking-tight text-balance">{tc('customerRewards.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">
+          {tc('customerRewards.description')}
+        </p>
+      </div>
+
+      <DashboardPageHeroChrome tone="auto" padded={false}>
+        <div className="relative p-3 sm:p-4 md:p-6">
+          <div className="flex flex-col items-center justify-between gap-3 sm:flex-row sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="p-2.5 sm:p-3 rounded-full bg-yellow-500/20">
-                <Star className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500 fill-yellow-500" />
+              <div className="shrink-0 rounded-full bg-yellow-500/15 p-2.5 sm:p-3">
+                <Star className="h-6 w-6 fill-yellow-500 text-yellow-500 sm:h-8 sm:w-8" />
               </div>
               <div>
-                <p className="text-xs sm:text-sm text-muted-foreground">Mevcut Puanınız</p>
-                <p className="text-2xl sm:text-3xl font-bold">{userPoints.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground sm:text-sm">{tc('customerRewards.currentPoints')}</p>
+                <p className="text-2xl font-bold tabular-nums sm:text-3xl">{userPoints.toLocaleString()}</p>
               </div>
             </div>
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-center">
-                <p className="text-xl sm:text-2xl font-bold text-primary">{myRewards.length}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Toplam Ödül</p>
+                <p className="text-xl font-bold text-primary sm:text-2xl">{myRewards.length}</p>
+                <p className="text-[10px] text-muted-foreground sm:text-xs">{tc('customerRewards.totalRewards')}</p>
               </div>
               <div className="text-center">
-                <p className="text-xl sm:text-2xl font-bold text-green-500">{myRewards.filter(r => !r.isUsed).length}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground">Kullanılabilir</p>
+                <p className="text-xl font-bold text-green-600 dark:text-green-500 sm:text-2xl">
+                  {myRewards.filter((r) => !r.isUsed).length}
+                </p>
+                <p className="text-[10px] text-muted-foreground sm:text-xs">{tc('customerRewards.available')}</p>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </DashboardPageHeroChrome>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
         <TabsList className="grid w-full grid-cols-2 h-11 sm:h-12">
           <TabsTrigger value="store" className="gap-1.5 sm:gap-2 text-xs sm:text-sm">
             <Store className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            Mağaza
+            {tc('customerRewards.store')}
           </TabsTrigger>
           <TabsTrigger value="myRewards" className="gap-1.5 sm:gap-2 text-xs sm:text-sm">
             <Ticket className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            Ödüllerim
+            {tc('customerRewards.myRewards')}
             {myRewards.filter(r => !r.isUsed).length > 0 && (
               <Badge className="ml-1 h-5 px-1.5 bg-green-500 text-[10px]">{myRewards.filter(r => !r.isUsed).length}</Badge>
             )}
@@ -279,7 +309,18 @@ export default function CustomerRewardsPage() {
         <Card>
           <CardContent className="p-6 sm:p-8 text-center">
             <Gift className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mx-auto mb-3 sm:mb-4" />
-            <p className="text-muted-foreground text-sm sm:text-base">Henüz ödül yok</p>
+            <h3 className="font-semibold text-sm sm:text-base mb-1">Henüz ödül yok</h3>
+            <p className="text-muted-foreground text-xs sm:text-sm mb-4">
+              Mağazaya yeni ödüller eklendiğinde burada listelenecek. Puan biriktirmek için tüketim yapıp geri bildirim verebilirsiniz.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <Link href="/customer/consumptions">Tüketimlerim</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <Link href="/customer/feedbacks">Geri Bildirimlerim</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -287,12 +328,12 @@ export default function CustomerRewardsPage() {
           {rewards.map((reward, index) => {
             const affordable = canAfford(reward);
             const gradients = [
-              'from-violet-500/20 via-purple-500/10 to-fuchsia-500/20',
+              'from-primary/20 via-primary/10 to-primary/15',
               'from-blue-500/20 via-cyan-500/10 to-teal-500/20',
               'from-orange-500/20 via-amber-500/10 to-yellow-500/20',
-              'from-pink-500/20 via-rose-500/10 to-red-500/20',
+              'from-violet-500/20 via-primary/10 to-red-500/20',
               'from-emerald-500/20 via-green-500/10 to-lime-500/20',
-              'from-indigo-500/20 via-blue-500/10 to-sky-500/20',
+              'from-primary/20 via-blue-500/10 to-sky-500/20',
             ];
             const gradient = gradients[index % gradients.length];
             
@@ -376,7 +417,7 @@ export default function CustomerRewardsPage() {
 
                     {/* Action Button */}
                     <Button
-                      className={`w-full gap-1.5 sm:gap-2 h-9 sm:h-10 text-xs sm:text-sm ${affordable ? 'bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90' : ''}`}
+                      className={`h-9 w-full gap-1.5 text-xs sm:h-10 sm:gap-2 sm:text-sm ${affordable ? 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70' : ''}`}
                       variant={affordable ? 'default' : 'outline'}
                       disabled={!affordable || reward.stock === 0}
                     >
@@ -497,7 +538,7 @@ export default function CustomerRewardsPage() {
                         <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-muted/30 flex items-center justify-between text-[10px] sm:text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                            {formatDistanceToNow(new Date(myReward.redeemedAt), { addSuffix: true, locale: tr })}
+                            {formatDistanceToNow(new Date(myReward.redeemedAt), { addSuffix: true, locale: dateLocale })}
                           </span>
                           <span className="flex items-center gap-1">
                             <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-yellow-500" />
@@ -535,6 +576,9 @@ export default function CustomerRewardsPage() {
                 </div>
               </div>
 
+              <p className="text-sm text-muted-foreground">
+                Bu ödülü almak için <strong className="text-foreground">{(selectedReward.cost || 0).toLocaleString()} puan</strong> gerekir. Mevcut puanınız: <strong className="text-foreground">{userPoints.toLocaleString()}</strong>.
+              </p>
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <span>Maliyet</span>
                 <div className="flex items-center gap-1 text-yellow-500">
@@ -542,13 +586,17 @@ export default function CustomerRewardsPage() {
                   <span className="font-bold">{(selectedReward.cost || 0).toLocaleString()}</span>
                 </div>
               </div>
-
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <span>Kalan Puan</span>
                 <span className="font-bold">
                   {(userPoints - (selectedReward.cost || 0)).toLocaleString()}
                 </span>
               </div>
+              {selectedReward.stock >= 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Stok: {selectedReward.stock === -1 ? 'Sınırsız' : selectedReward.stock}
+                </p>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -585,7 +633,7 @@ export default function CustomerRewardsPage() {
           {selectedMyReward && (
             <div className="space-y-4">
               {/* Reward Info */}
-              <div className="p-4 rounded-lg bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/20">
+              <div className="rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 to-primary/15 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <Badge className={typeColors[selectedMyReward.reward.type]}>
                     {typeLabels[selectedMyReward.reward.type]}
@@ -660,6 +708,16 @@ export default function CustomerRewardsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {surpriseOpen ? (
+        <SurpriseEggThreeModal
+          open
+          title={surpriseTitle}
+          couponCode={surpriseCouponCode}
+          leagueKey={surpriseLeagueKey}
+          onClose={() => setSurpriseOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

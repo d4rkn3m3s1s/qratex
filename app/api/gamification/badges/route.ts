@@ -2,6 +2,74 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+
+
+export const dynamic = 'force-dynamic';
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  dizi: 'dizi',
+  series: 'dizi',
+  diger: 'diger',
+  other: 'diger',
+  etkinlik: 'etkinlik',
+  event: 'etkinlik',
+  sadakat: 'sadakat',
+  loyalty: 'sadakat',
+  feedback: 'feedback',
+  engagement: 'engagement',
+  streak: 'streak',
+  speed: 'speed',
+  exploration: 'exploration',
+  expertise: 'expertise',
+  rating: 'rating',
+  special: 'special',
+  custom: 'custom',
+  general: 'general',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  dizi: 'Dizi',
+  diger: 'Diğer',
+  etkinlik: 'Etkinlik',
+  sadakat: 'Sadakat',
+  feedback: 'Geri Bildirim',
+  engagement: 'Etkileşim',
+  streak: 'Seri',
+  speed: 'Hız',
+  exploration: 'Keşif',
+  expertise: 'Uzmanlık',
+  rating: 'Puanlama',
+  special: 'Özel',
+  custom: 'Özel',
+  general: 'Genel',
+};
+
+function normalizeBadgeCategory(category?: string): string {
+  if (!category) return 'general';
+  return CATEGORY_ALIASES[category.trim().toLowerCase()] || 'general';
+}
+
+function normalizeRequirement(input: unknown): Prisma.InputJsonObject {
+  if (typeof input === 'object' && input && !Array.isArray(input)) {
+    const requirement = input as Record<string, unknown>;
+    const value = typeof requirement.value === 'number' ? requirement.value : 100;
+    const type = typeof requirement.type === 'string' ? requirement.type : 'custom';
+    const period = typeof requirement.period === 'string' ? requirement.period : null;
+    const metadataRaw = typeof requirement.metadata === 'object' && requirement.metadata && !Array.isArray(requirement.metadata)
+      ? (requirement.metadata as Record<string, unknown>)
+      : {};
+    const metadata = Object.fromEntries(
+      Object.entries(metadataRaw).filter(([, val]) =>
+        val === null || ['string', 'number', 'boolean'].includes(typeof val)
+      )
+    ) as Prisma.InputJsonObject;
+    return { type, value, period, metadata };
+  }
+
+  return { type: 'custom', value: 100, period: null, metadata: {} };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,10 +83,10 @@ export async function GET(request: NextRequest) {
       ? session.user.id 
       : userIdParam;
 
-    let where: Record<string, unknown> = { isActive: true };
+    const where: Record<string, unknown> = { isActive: true };
     
     if (category) {
-      where.category = category;
+      where.category = normalizeBadgeCategory(category);
     }
 
     const badges = await prisma.badge.findMany({
@@ -86,13 +154,19 @@ export async function GET(request: NextRequest) {
 
     // Transform badges with progress calculation
     const transformedBadges = badges.map((badge) => {
-      const requirement = badge.requirement as { type?: string; value?: number } | null;
-      const targetValue = requirement?.value || 10;
+      const requirement = normalizeRequirement(badge.requirement);
+      const requirementType = typeof requirement.type === 'string' ? requirement.type : 'custom';
+      const targetValue = typeof requirement.value === 'number' ? requirement.value : 10;
+      const requirementPeriod = typeof requirement.period === 'string' ? requirement.period : null;
+      const requirementMetadata =
+        typeof requirement.metadata === 'object' && requirement.metadata && !Array.isArray(requirement.metadata)
+          ? (requirement.metadata as Prisma.JsonObject)
+          : {};
       let currentValue = 0;
       let progress = 0;
 
       // Calculate progress based on requirement type
-      switch (requirement?.type) {
+      switch (requirementType) {
         case 'feedback_count':
           currentValue = userProgress.feedbackCount;
           break;
@@ -121,16 +195,21 @@ export async function GET(request: NextRequest) {
       progress = Math.min(100, Math.floor((currentValue / targetValue) * 100));
       const isEarned = userBadgeMap.has(badge.id);
 
+      const normalizedCategory = normalizeBadgeCategory(badge.category);
       return {
         id: badge.id,
         name: badge.name,
         description: badge.description,
         icon: badge.icon,
-        category: badge.category,
+        category: normalizedCategory,
+        categoryLabel: CATEGORY_LABELS[normalizedCategory] || CATEGORY_LABELS.general,
         rarity: (badge.rarity || 'common').toUpperCase() as 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
         points: targetValue,
+        pointCost: badge.pointCost ?? null,
         requirement: badge.description,
-        requirementType: requirement?.type,
+        requirementType,
+        requirementPeriod,
+        requirementMetadata,
         targetValue,
         currentValue: isEarned ? targetValue : currentValue,
         progress: isEarned ? 100 : progress,
@@ -147,10 +226,12 @@ export async function GET(request: NextRequest) {
       return b.progress - a.progress;
     });
 
+    const userPoints = userId ? userProgress.totalPoints : 0;
     return NextResponse.json({ 
       success: true, 
       data: transformedBadges,
       userProgress,
+      userPoints,
     });
   } catch (error) {
     console.error('Error fetching badges:', error);
@@ -163,22 +244,25 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
+    const normalizedCategory = normalizeBadgeCategory(body.category);
+    const normalizedRequirement = normalizeRequirement(body.requirement || { type: 'custom', value: body.points || 100 });
     
-    // Create badge with proper schema mapping
     const badge = await prisma.badge.create({
       data: {
         name: body.name,
         description: body.description,
         icon: body.icon,
-        category: body.category || 'general',
+        category: normalizedCategory,
         rarity: (body.rarity || 'common').toLowerCase(),
-        requirement: { type: 'custom', value: body.points || 100 },
+        requirement: normalizedRequirement,
+        pointCost: typeof body.pointCost === 'number' ? body.pointCost : null,
         isActive: body.isActive ?? true,
       },
     });
@@ -191,6 +275,7 @@ export async function POST(request: NextRequest) {
         entity: 'Badge',
         entityId: badge.id,
         newData: badge as object,
+        ...auditMeta,
       },
     });
 

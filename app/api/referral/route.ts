@@ -3,22 +3,31 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
+import { creditPointsAndXp } from '@/lib/points-wallet';
+import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
+import { assertModuleEnabled } from '@/lib/module-gate';
+import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 
 // GET - Get user's referral info
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
+    const gate = await assertModuleEnabled('referrals');
+    if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get or create referral code
-    let referralCode = await (prisma as any).referralCode.findUnique({
+    let referralCode = await prisma.referralCode.findUnique({
       where: { userId: session.user.id },
     });
 
     if (!referralCode) {
-      referralCode = await (prisma as any).referralCode.create({
+      referralCode = await prisma.referralCode.create({
         data: {
           userId: session.user.id,
           code: nanoid(8).toUpperCase(),
@@ -27,7 +36,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get referrals made by user
-    const referrals = await (prisma as any).referral.findMany({
+    const referrals = await prisma.referral.findMany({
       where: { referrerId: session.user.id },
       include: {
         referred: {
@@ -39,7 +48,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Get who referred this user
-    const referredBy = await (prisma as any).referral.findUnique({
+    const referredBy = await prisma.referral.findUnique({
       where: { referredId: session.user.id },
       include: {
         referrer: {
@@ -71,6 +80,8 @@ export async function GET(req: NextRequest) {
 // POST - Apply referral code
 export async function POST(req: NextRequest) {
   try {
+    const gate = await assertModuleEnabled('referrals');
+    if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -83,7 +94,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user already has a referral
-    const existingReferral = await (prisma as any).referral.findUnique({
+    const existingReferral = await prisma.referral.findUnique({
       where: { referredId: session.user.id },
     });
 
@@ -92,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Find the referral code
-    const referralCode = await (prisma as any).referralCode.findUnique({
+    const referralCode = await prisma.referralCode.findUnique({
       where: { code: code.toUpperCase() },
       include: { user: true },
     });
@@ -109,13 +120,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 });
     }
 
+    const innov = await getInnovationPlatformConfig();
+    const lifetimeAsReferrer = await prisma.referral.count({
+      where: { referrerId: referralCode.userId },
+    });
+    if (lifetimeAsReferrer >= innov.referral.maxInvitesPerReferrerLifetime) {
+      return NextResponse.json(
+        { error: 'Bu davet zinciri platform davet limitine ulaştı' },
+        { status: 400 }
+      );
+    }
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthlyWithCode = await prisma.referral.count({
+      where: {
+        referralCode: referralCode.code,
+        createdAt: { gte: monthStart },
+      },
+    });
+    if (monthlyWithCode >= innov.referral.maxRedemptionsPerReferralCodePerMonth) {
+      return NextResponse.json(
+        { error: 'Bu referans kodu için aylık kullanım limiti doldu' },
+        { status: 400 }
+      );
+    }
+
     // Check max usage
     if (referralCode.maxUsage && referralCode.usageCount >= referralCode.maxUsage) {
       return NextResponse.json({ error: 'This referral code has reached its usage limit' }, { status: 400 });
     }
 
-    const REFERRAL_BONUS = 500; // Points for referred user
-    const REFERRER_BONUS = 1000; // Points for referrer
+    const pointsMatrix = await getPointsMatrix();
+    const { referredPoints: REFERRAL_BONUS, referrerPoints: REFERRER_BONUS } =
+      getReferralRewards(pointsMatrix);
 
     // Create referral and update points in transaction
     const result = await prisma.$transaction(async (tx: any) => {
@@ -133,15 +172,15 @@ export async function POST(req: NextRequest) {
       });
 
       // Update referred user's points
-      await tx.user.update({
-        where: { id: session.user.id },
-        data: { points: { increment: REFERRAL_BONUS } },
+      await creditPointsAndXp(tx, {
+        userId: session.user.id,
+        points: REFERRAL_BONUS,
       });
 
       // Update referrer's points
-      await tx.user.update({
-        where: { id: referralCode.userId },
-        data: { points: { increment: REFERRER_BONUS } },
+      await creditPointsAndXp(tx, {
+        userId: referralCode.userId,
+        points: REFERRER_BONUS,
       });
 
       // Update usage count

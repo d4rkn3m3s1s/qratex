@@ -11,9 +11,12 @@ import {
   askAI,
   getRecentUsageLogs,
 } from '@/lib/ai-engine';
+import { AiCostLimitExceededError } from '@/lib/ai-cost-guard';
 import { generateInsights, chatWithAI } from '@/lib/openai';
 import { z } from 'zod';
 import type { AITheme } from '@/types';
+
+export const dynamic = 'force-dynamic';
 
 // Rate limiting (simple in-memory)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -35,6 +38,37 @@ function checkRateLimit(userId: string): boolean {
 
   userLimit.count++;
   return true;
+}
+
+function normalizeSentimentPercentages(counts: { positive: number; negative: number; neutral: number }) {
+  const total = counts.positive + counts.negative + counts.neutral;
+  if (total <= 0) return { positive: 0, negative: 0, neutral: 0 };
+
+  const raw = {
+    positive: (counts.positive / total) * 100,
+    negative: (counts.negative / total) * 100,
+    neutral: (counts.neutral / total) * 100,
+  };
+
+  let rounded = {
+    positive: Math.round(raw.positive),
+    negative: Math.round(raw.negative),
+    neutral: Math.round(raw.neutral),
+  };
+
+  let diff = 100 - (rounded.positive + rounded.negative + rounded.neutral);
+  if (diff !== 0) {
+    const priorities = (['positive', 'negative', 'neutral'] as const)
+      .map((k) => ({ key: k, frac: raw[k] - Math.floor(raw[k]) }))
+      .sort((a, b) => (diff > 0 ? b.frac - a.frac : a.frac - b.frac));
+    for (const p of priorities) {
+      if (diff === 0) break;
+      rounded[p.key] += diff > 0 ? 1 : -1;
+      diff += diff > 0 ? -1 : 1;
+    }
+  }
+
+  return rounded;
 }
 
 // ── Validation Schemas ──
@@ -104,7 +138,16 @@ export async function POST(request: NextRequest) {
         }
 
         const { text, feedbackId } = validatedData.data;
-        const analysis = await analyzeWithFallback(text);
+        const dealerId = session.user.role === 'DEALER' ? session.user.id : undefined;
+        let analysis;
+        try {
+          analysis = await analyzeWithFallback(text, { dealerId });
+        } catch (e) {
+          if (e instanceof AiCostLimitExceededError) {
+            return NextResponse.json({ error: e.message }, { status: 429 });
+          }
+          throw e;
+        }
 
         // Update feedback if feedbackId provided
         if (feedbackId) {
@@ -352,34 +395,67 @@ export async function POST(request: NextRequest) {
         const { qrCodeId, startDate, endDate, period, type } = validatedData.data;
 
         const where: Record<string, unknown> = {};
+        const consumptionWhere: Record<string, unknown> = {};
         if (session.user.role === 'DEALER') {
           where.qrCode = { dealerId: session.user.id };
+          consumptionWhere.consumption = { dealerId: session.user.id };
         }
         if (qrCodeId) where.qrCodeId = qrCodeId;
         if (startDate || endDate) {
           where.createdAt = {};
+          consumptionWhere.createdAt = {};
           if (startDate) (where.createdAt as Record<string, unknown>).gte = new Date(startDate);
           if (endDate) (where.createdAt as Record<string, unknown>).lte = new Date(endDate);
+          if (startDate) (consumptionWhere.createdAt as Record<string, unknown>).gte = new Date(startDate);
+          if (endDate) (consumptionWhere.createdAt as Record<string, unknown>).lte = new Date(endDate);
         }
 
-        const feedbacks = await prisma.feedback.findMany({
-          where,
-          select: {
-            rating: true,
-            sentiment: true,
-            topics: true,
-            text: true,
-            intent: true,
-            urgency: true,
-            churnRisk: true,
-            themes: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-        });
+        const [feedbacks, consumptionReviews] = await Promise.all([
+          prisma.feedback.findMany({
+            where,
+            select: {
+              rating: true,
+              sentiment: true,
+              topics: true,
+              text: true,
+              intent: true,
+              urgency: true,
+              churnRisk: true,
+              themes: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+          }),
+          prisma.consumptionReview.findMany({
+            where: consumptionWhere,
+            select: {
+              rating: true,
+              text: true,
+              dimensions: true,
+              createdAt: true,
+              consumption: { select: { dealerId: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 300,
+          }),
+        ]);
 
-        if (feedbacks.length < 3) {
+        const normalizedConsumption = consumptionReviews.map((r) => ({
+          rating: r.rating,
+          sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+          topics: [] as string[],
+          text: r.text,
+          intent: null as string | null,
+          urgency: null as number | null,
+          churnRisk: null as number | null,
+          themes: null as unknown,
+          createdAt: r.createdAt,
+        }));
+
+        const allReviews = [...feedbacks, ...normalizedConsumption];
+
+        if (allReviews.length < 3) {
           return NextResponse.json({
             success: true,
             insights: null,
@@ -388,10 +464,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate stats
-        const totalCount = feedbacks.length;
-        const avgRating = feedbacks.reduce((acc, f) => acc + f.rating, 0) / totalCount;
+        const totalCount = allReviews.length;
+        const avgRating = allReviews.reduce((acc, f) => acc + f.rating, 0) / totalCount;
 
-        const sentimentCounts = feedbacks.reduce(
+        const sentimentCounts = allReviews.reduce(
           (acc, f) => {
             if (f.sentiment) acc[f.sentiment as keyof typeof acc]++;
             return acc;
@@ -399,15 +475,11 @@ export async function POST(request: NextRequest) {
           { positive: 0, negative: 0, neutral: 0 }
         );
 
-        const sentimentDist = {
-          positive: Math.round((sentimentCounts.positive / totalCount) * 100),
-          negative: Math.round((sentimentCounts.negative / totalCount) * 100),
-          neutral: Math.round((sentimentCounts.neutral / totalCount) * 100),
-        };
+        const sentimentDist = normalizeSentimentPercentages(sentimentCounts);
 
         // Top topics
         const topicCounts: Record<string, number> = {};
-        feedbacks.forEach(f => {
+        allReviews.forEach(f => {
           const topics = f.topics as string[] | null;
           topics?.forEach(topic => {
             topicCounts[topic] = (topicCounts[topic] || 0) + 1;
@@ -420,7 +492,7 @@ export async function POST(request: NextRequest) {
 
         // Theme clusters
         const themeClusters = await clusterThemes(
-          feedbacks.filter(f => f.text).map(f => ({
+          allReviews.filter(f => f.text).map(f => ({
             text: f.text!,
             sentiment: f.sentiment || undefined,
             rating: f.rating,
@@ -430,9 +502,9 @@ export async function POST(request: NextRequest) {
         );
 
         // Recent feedbacks
-        const recentFeedbacks = feedbacks
+        const recentFeedbacks = allReviews
           .filter(f => f.text)
-          .slice(0, 20)
+          .slice(0, 25)
           .map(f => ({
             text: f.text!,
             rating: f.rating,
@@ -441,6 +513,17 @@ export async function POST(request: NextRequest) {
             urgency: f.urgency || undefined,
             churnRisk: f.churnRisk || undefined,
           }));
+
+        // Intent & signals summary for deeper AI context
+        const intentSummary: Record<string, number> = {};
+        let highUrgencyCount = 0;
+        let highChurnCount = 0;
+        allReviews.forEach(f => {
+          const intent = (f.intent || 'general').toLowerCase();
+          intentSummary[intent] = (intentSummary[intent] ?? 0) + 1;
+          if (f.urgency != null && f.urgency >= 0.7) highUrgencyCount++;
+          if (f.churnRisk != null && f.churnRisk >= 0.5) highChurnCount++;
+        });
 
         // Check for previous period report
         const dealerId = session.user.role === 'DEALER' ? session.user.id : 'system';
@@ -456,7 +539,7 @@ export async function POST(request: NextRequest) {
           // ignore
         }
 
-        // Generate comprehensive report
+        // Generate comprehensive report (with extra context for ML-style analysis)
         const report = await generateInsightReport({
           dealerId,
           period: period || new Date().toISOString().slice(0, 7),
@@ -467,6 +550,8 @@ export async function POST(request: NextRequest) {
           themeClusters,
           recentFeedbacks,
           previousPeriodScore,
+          intentSummary,
+          signalsSummary: { highUrgencyCount, highChurnCount },
         });
 
         // Save report to DB
@@ -544,6 +629,7 @@ export async function POST(request: NextRequest) {
             totalCount,
             averageRating: avgRating,
             sentimentDistribution: sentimentDist,
+            sentimentCounts,
             topTopics,
           },
           themeClusters,
@@ -598,12 +684,11 @@ export async function POST(request: NextRequest) {
           where,
           _count: true,
         });
-        const total = sentimentResults.reduce((acc, s) => acc + s._count, 0);
-        const sentimentDist2 = {
-          positive: Math.round(((sentimentResults.find(s => s.sentiment === 'positive')?._count || 0) / Math.max(total, 1)) * 100),
-          negative: Math.round(((sentimentResults.find(s => s.sentiment === 'negative')?._count || 0) / Math.max(total, 1)) * 100),
-          neutral: Math.round(((sentimentResults.find(s => s.sentiment === 'neutral')?._count || 0) / Math.max(total, 1)) * 100),
-        };
+        const sentimentDist2 = normalizeSentimentPercentages({
+          positive: sentimentResults.find(s => s.sentiment === 'positive')?._count || 0,
+          negative: sentimentResults.find(s => s.sentiment === 'negative')?._count || 0,
+          neutral: sentimentResults.find(s => s.sentiment === 'neutral')?._count || 0,
+        });
 
         // Top topics
         const allFeedbacks = await prisma.feedback.findMany({
@@ -621,7 +706,40 @@ export async function POST(request: NextRequest) {
           .slice(0, 10)
           .map(([topic, count]) => ({ topic, count }));
 
-        // Previous messages from conversation
+        // Intent distribution, urgency/churn summary, last 7 days trend
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const where7d = { ...where, createdAt: { gte: sevenDaysAgo } };
+        const [intentDist, urgencyChurn, recentByDate] = await Promise.all([
+          prisma.feedback.groupBy({
+            by: ['intent'],
+            where,
+            _count: true,
+          }).then(g => {
+            const m: Record<string, number> = {};
+            g.forEach(r => { m[String(r.intent || 'general')] = r._count; });
+            return m;
+          }),
+          Promise.all([
+            prisma.feedback.count({ where: { ...where, urgency: { gte: 0.7 } } }),
+            prisma.feedback.count({ where: { ...where, churnRisk: { gte: 0.7 } } }),
+          ]).then(([highUrgency, highChurn]) => ({ highUrgencyCount: highUrgency, highChurnCount: highChurn })),
+          prisma.feedback.findMany({
+            where: where7d,
+            select: { createdAt: true },
+          }),
+        ]);
+
+        const dateCounts: Record<string, number> = {};
+        recentByDate.forEach(f => {
+          const d = f.createdAt.toISOString().slice(0, 10);
+          dateCounts[d] = (dateCounts[d] || 0) + 1;
+        });
+        const last7DaysTrend = Object.entries(dateCounts)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([date, count]) => ({ date, count }));
+
+        // Previous messages from conversation (son 12 mesaj - çok turlu sohbet)
         let previousMessages: { role: 'user' | 'assistant'; content: string }[] = [];
         if (conversationId) {
           try {
@@ -630,7 +748,7 @@ export async function POST(request: NextRequest) {
               select: { messages: true },
             });
             if (conv?.messages) {
-              previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-8);
+              previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-12);
             }
           } catch {
             // ignore
@@ -655,6 +773,9 @@ export async function POST(request: NextRequest) {
             count: tc.count,
             avgScore: tc.avgScore,
           })),
+          intentDist: Object.keys(intentDist).length > 0 ? intentDist : undefined,
+          urgencyChurnSummary: urgencyChurn,
+          last7DaysTrend: last7DaysTrend.length > 0 ? last7DaysTrend : undefined,
           previousMessages,
         });
 

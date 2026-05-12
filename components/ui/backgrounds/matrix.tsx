@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { BRAND_INK_HEX, BRAND_PRIMARY_HEX, HEX_WHITE } from '@/lib/brand-colors';
 
 interface MatrixBackgroundProps {
   children?: React.ReactNode;
@@ -13,7 +14,7 @@ interface MatrixBackgroundProps {
 export function MatrixBackground({
   children,
   className,
-  color = '#8b5cf6',
+  color = BRAND_PRIMARY_HEX,
 }: MatrixBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { resolvedTheme } = useTheme();
@@ -41,7 +42,7 @@ export function MatrixBackground({
     const drops: number[] = Array(columns).fill(1);
 
     const bgColor = isDark ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.08)';
-    const headColor = isDark ? '#fff' : '#1a1a1a';
+    const headColor = isDark ? HEX_WHITE : BRAND_INK_HEX;
 
     const draw = () => {
       ctx.fillStyle = bgColor;

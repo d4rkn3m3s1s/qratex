@@ -1,0 +1,292 @@
+openapi: 3.0.3
+info:
+  title: QRATEX API
+  description: |
+    QRATEX müşteri deneyimi ve geri bildirim API'si.
+    Çoğu endpoint oturum (session cookie) gerektirir; Bearer token bazı entegrasyonlarda kullanılabilir.
+  version: 1.0.0
+
+servers:
+  - url: /
+    description: Uygulama kökü (relative path)
+
+paths:
+  /api/health:
+    get:
+      summary: Sağlık / readiness kontrolü
+      description: |
+        Uygulama ve veritabanı durumu. Load balancer veya kube probe için kullanılabilir.
+        - `?light=1` → Sadece DB ping, minimal yanıt (readiness).
+        - Parametresiz → Tam health (timestamp, checks, version).
+      parameters:
+        - name: light
+          in: query
+          required: false
+          schema: { type: string, enum: ['1'] }
+          description: "1 ise sadece DB ping; yanıt { status, latencyMs } veya { status, error }"
+      responses:
+        '200':
+          description: OK (DB erişilebilir)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [status, latencyMs]
+                    properties: { status: { type: string, example: ok }, latencyMs: { type: number } }
+                  - type: object
+                    required: [status, timestamp, checks, version]
+                    properties:
+                      status: { type: string, example: healthy }
+                      timestamp: { type: string, format: date-time }
+                      checks: { type: object }
+                      version: { type: string }
+        '503':
+          description: Service Unavailable (DB veya uygulama hatası)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string }, error: { type: string } }
+
+  /api/qr-codes/public/{code}:
+    get:
+      summary: QR kod public bilgisi
+      description: QR kod ile ilişkili işletme ve kod bilgisi (public, rate limit uygulanabilir).
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, code, name, isActive]
+                properties:
+                  id: { type: string }
+                  code: { type: string }
+                  name: { type: string }
+                  isActive: { type: boolean }
+                  dealer: { type: object }
+        '400': { description: Bad Request }
+        '404': { description: Not Found }
+        '429': { description: Too Many Requests }
+
+  /api/feedbacks:
+    get:
+      summary: Geri bildirimler listesi
+      description: Oturum açmış kullanıcı (CUSTOMER/DEALER/ADMIN) için filtreli liste. Sayfalama Zod ile (page, pageSize max 100).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: qrCodeId
+          in: query
+          schema: { type: string }
+        - name: sentiment
+          in: query
+          schema: { type: string }
+        - name: needsReview
+          in: query
+          schema: { type: string, enum: ['true', 'false'] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  feedbacks: { type: array, items: { type: object } }
+                  total: { type: integer }
+        '401': { description: Unauthorized }
+
+    post:
+      summary: Geri bildirim gönder
+      description: QR kod ile ilişkili geri bildirim oluşturur. Oturum opsiyonel (anonim feedback desteklenebilir); qrCodeId ve rating zorunlu.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrCodeId, rating]
+              properties:
+                qrCodeId: { type: string }
+                rating: { type: number, minimum: 1, maximum: 5 }
+                text: { type: string }
+                media: { type: array, items: { type: string } }
+                isPublic: { type: boolean, default: true }
+                npsScore: { type: number, minimum: 0, maximum: 10, nullable: true }
+                utmSource: { type: string }
+                utmCampaign: { type: string }
+                utmMedium: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  feedback: { type: object }
+        '400': { description: Bad Request }
+        '404': { description: QR kod bulunamadı }
+        '429': { description: Too Many Requests }
+
+  /api/gamification/rewards:
+    get:
+      summary: Ödül kataloğu
+      description: |
+        Aktif ödüller listesi. Oturum olmadan çağrılabilir (public katalog).
+        Detay için docs/API-REWARDS-GET.md.
+      parameters:
+        - name: myRewards
+          in: query
+          schema: { type: string, enum: ['true', 'false'] }
+          description: "true ise sadece oturum açan kullanıcının kazandığı ödüller (session gerekli)"
+        - name: status
+          in: query
+          schema: { type: string, enum: ['active', 'inactive'] }
+          description: "ADMIN filtre"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: array, items: { type: object } }
+        '401': { description: Unauthorized (myRewards=true için gerekli) }
+
+  /api/customer/stats:
+    get:
+      summary: Müşteri istatistikleri
+      description: Oturum açmış müşteri için özet (puan, rozet, tüketim, trend vb.). Cache-Control önerilir.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object }
+        '401': { description: Unauthorized }
+
+  /api/customer/trends:
+    get:
+      summary: Müşteri trend verisi
+      description: Müşteri tüketim/aktivite trendleri. Cache-Control önerilir.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object }
+        '401': { description: Unauthorized }
+
+  /api/leaderboard:
+    get:
+      summary: Liderlik tablosu
+      description: Puan veya lig bazlı sıralama. Oturum açmış kullanıcı için kendi sırası da döner.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: leagueId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  entries: { type: array, items: { type: object } }
+                  myRank: { type: object, nullable: true }
+        '401': { description: Unauthorized }
+
+  /api/user/profile:
+    get:
+      summary: Kullanıcı profili
+      description: Oturum açmış kullanıcının profil bilgisi (ad, e-posta, adres, işletme alanları vb.).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  user: { type: object }
+        '401': { description: Unauthorized }
+    patch:
+      summary: Profil güncelle
+      description: Ad, avatar, işletme adı, adres, dil tercihi vb. güncelleme.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                image: { type: string }
+                businessName: { type: string }
+                address: { type: string }
+                latitude: { type: number }
+                longitude: { type: number }
+                preferredLanguage: { type: string }
+      responses:
+        '200': { description: OK }
+        '401': { description: Unauthorized }
+
+  /api/dealer/stats:
+    get:
+      summary: Bayi dashboard istatistikleri
+      description: Bayi için özet (geri bildirim sayısı, ortalama puan, QR, tarama, sentiment, haftalık veri vb.).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object }
+        '401': { description: Unauthorized }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: NextAuth session cookie veya Bearer token (entegrasyon)

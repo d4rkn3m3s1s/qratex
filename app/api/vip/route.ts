@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GET - Get VIP info for current user
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,13 +15,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Get all VIP tiers
-    const tiers = await (prisma as any).vIPTier.findMany({
+    const tiers = await prisma.vIPTier.findMany({
       where: { isActive: true },
       orderBy: { order: 'asc' },
     });
 
     // Get user's current VIP status
-    let vipStatus = await (prisma as any).userVIPStatus.findUnique({
+    let vipStatus = await prisma.userVIPStatus.findUnique({
       where: { userId: session.user.id },
       include: { tier: true },
     });
@@ -37,7 +40,7 @@ export async function GET(req: NextRequest) {
 
       if (eligibleTier) {
         if (!vipStatus || vipStatus.tierId !== eligibleTier.id) {
-          vipStatus = await (prisma as any).userVIPStatus.upsert({
+          vipStatus = await prisma.userVIPStatus.upsert({
             where: { userId: session.user.id },
             update: {
               tierId: eligibleTier.id,

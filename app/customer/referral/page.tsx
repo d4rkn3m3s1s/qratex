@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import {
   Users,
   Copy,
@@ -21,8 +22,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { toast } from 'sonner';
-import { getInitials } from '@/lib/utils';
+import { toast } from '@/lib/admin-toast';
+import { cn, getInitials } from '@/lib/utils';
+import { TW_BRAND_CTA_BUTTON, TW_BRAND_ORB_FILL } from '@/lib/tw-brand-classes';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
 
 interface ReferralData {
   referralCode: string;
@@ -51,11 +54,13 @@ interface ReferralData {
 }
 
 export default function CustomerReferralPage() {
+  const t = useAppT();
+  const { locale } = useAppLocale();
+  const dateLocale = locale === 'tr' ? 'tr-TR' : 'en-US';
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ReferralData | null>(null);
   const [applyCode, setApplyCode] = useState('');
   const [applying, setApplying] = useState(false);
-
   useEffect(() => {
     fetchReferralData();
   }, []);
@@ -68,7 +73,7 @@ export default function CustomerReferralPage() {
         setData(result);
       }
     } catch (error) {
-      toast.error('Davet bilgileri yüklenemedi');
+      toast.error(t('customerReferral.loadError'));
     } finally {
       setLoading(false);
     }
@@ -77,14 +82,14 @@ export default function CustomerReferralPage() {
   const copyCode = () => {
     if (!data?.referralCode) return;
     navigator.clipboard.writeText(data.referralCode);
-    toast.success('Davet kodu kopyalandı!');
+    toast.success(t('customerReferral.codeCopied'));
   };
 
   const shareCode = async () => {
     if (!data?.referralCode) return;
     const shareData = {
-      title: 'QRATEX\'e Katıl!',
-      text: `QRATEX'e katıl ve bonus puan kazan! Davet kodum: ${data.referralCode}`,
+      title: t('customerReferral.shareTitle'),
+      text: `${t('customerReferral.shareText')} ${data.referralCode}`,
       url: `${window.location.origin}/auth/register?ref=${data.referralCode}`,
     };
 
@@ -110,14 +115,14 @@ export default function CustomerReferralPage() {
       });
       const result = await res.json();
       if (result.success) {
-        toast.success(result.message || 'Davet kodu uygulandı!');
+        toast.success(result.message || t('customerReferral.codeApplied'));
         setApplyCode('');
         fetchReferralData();
       } else {
-        toast.error(result.error || 'Kod uygulanamadı');
+        toast.error(result.error || t('customerReferral.codeApplyError'));
       }
     } catch {
-      toast.error('Bağlantı hatası');
+      toast.error(t('customerReferral.connectionError'));
     } finally {
       setApplying(false);
     }
@@ -125,44 +130,31 @@ export default function CustomerReferralPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
-        <p className="text-muted-foreground">Davet bilgileri yükleniyor...</p>
+      <div className="flex flex-col items-center justify-center min-h-[420px] gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground">{t('customerReferral.loading')}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-pink-500 via-rose-500 to-red-500 p-4 sm:p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(12)].map((_, i) => (
-            <motion.div key={i} className="absolute w-1 h-1 bg-white/30 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ y: [0, -15, 0], opacity: [0.2, 0.8, 0.2] }}
-              transition={{ duration: 3 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-            <Heart className="w-8 h-8" /> Arkadaşını Davet Et
-          </h1>
-          <p className="text-white/70 mt-1">Arkadaşlarını davet et, birlikte puan kazanın!</p>
-        </div>
-      </motion.div>
+      <DashboardPageHero
+        eyebrow={t('customerReferral.eyebrow')}
+        title={<>{t('customerReferral.title')}</>}
+        description={t('customerReferral.description')}
+        icon={<Heart className="h-7 w-7" aria-hidden />}
+        tone="auto"
+      />
 
       {/* Referral Code */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-500" /> Davet Kodun
+              <Sparkles className="h-5 w-5 text-primary" /> {t('customerReferral.yourCode')}
             </CardTitle>
-            <CardDescription>Bu kodu arkadaşlarınla paylaş, ikisi de puan kazanır!</CardDescription>
+            <CardDescription>{t('customerReferral.yourCodeDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -177,25 +169,25 @@ export default function CustomerReferralPage() {
               </div>
               <div className="flex gap-2">
                 <Button onClick={copyCode} variant="outline" size="lg">
-                  <Copy className="h-4 w-4 mr-2" /> Kopyala
+                  <Copy className="h-4 w-4 mr-2" /> {t('customerReferral.copy')}
                 </Button>
-                <Button onClick={shareCode} size="lg" className="bg-gradient-to-r from-pink-500 to-rose-500 text-white">
-                  <Share2 className="h-4 w-4 mr-2" /> Paylaş
+                <Button onClick={shareCode} size="lg" className={TW_BRAND_CTA_BUTTON}>
+                  <Share2 className="h-4 w-4 mr-2" /> {t('customerReferral.share')}
                 </Button>
               </div>
             </div>
 
             {/* Bonus Info */}
             <div className="grid grid-cols-2 gap-4 mt-6">
-              <div className="p-4 rounded-xl bg-violet-500/10 text-center">
-                <Gift className="h-6 w-6 text-violet-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-violet-500">1000</p>
-                <p className="text-xs text-muted-foreground">Sana puan</p>
+              <div className="p-4 rounded-xl bg-primary/10 text-center">
+                <Gift className="h-6 w-6 text-primary mx-auto mb-2" />
+                <p className="text-2xl font-bold text-primary">1000</p>
+                <p className="text-xs text-muted-foreground">{t('customerReferral.pointsToYou')}</p>
               </div>
-              <div className="p-4 rounded-xl bg-pink-500/10 text-center">
-                <Star className="h-6 w-6 text-pink-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-pink-500">500</p>
-                <p className="text-xs text-muted-foreground">Arkadaşına puan</p>
+              <div className="p-4 rounded-xl bg-violet-500/10 text-center">
+                <Star className="h-6 w-6 text-violet-600 dark:text-violet-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">500</p>
+                <p className="text-xs text-muted-foreground">{t('customerReferral.pointsToFriend')}</p>
               </div>
             </div>
           </CardContent>
@@ -205,10 +197,10 @@ export default function CustomerReferralPage() {
       {/* Apply Referral Code */}
       {!data?.referredBy && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Zap className="h-5 w-5 text-yellow-500" /> Davet Kodu Kullan
+                <Zap className="h-5 w-5 text-yellow-500" /> {t('customerReferral.applyCodeTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -216,11 +208,11 @@ export default function CustomerReferralPage() {
                 <Input
                   value={applyCode}
                   onChange={(e) => setApplyCode(e.target.value.toUpperCase())}
-                  placeholder="Davet kodunu gir..."
+                  placeholder={t('customerReferral.applyCodePlaceholder')}
                   className="flex-1"
                 />
                 <Button onClick={applyReferralCode} disabled={applying || !applyCode.trim()}>
-                  {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Uygula'}
+                  {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : t('customerReferral.apply')}
                 </Button>
               </div>
             </CardContent>
@@ -235,7 +227,7 @@ export default function CustomerReferralPage() {
             <CardContent className="p-4 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
               <p className="text-sm">
-                <span className="font-medium">{data.referredBy.referrer.name || 'Bir kullanıcı'}</span> tarafından davet edildiniz
+                <span className="font-medium">{data.referredBy.referrer.name || t('customerReferral.aUser')}</span> {t('customerReferral.referredBy')}
               </p>
             </CardContent>
           </Card>
@@ -245,14 +237,14 @@ export default function CustomerReferralPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Davet Edilen', value: data?.stats.totalReferrals || 0, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-          { label: 'Tamamlanan', value: data?.stats.completedReferrals || 0, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          { label: 'Kazanılan Puan', value: data?.stats.totalPointsEarned || 0, icon: Trophy, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+          { label: t('customerReferral.statsInvited'), value: data?.stats.totalReferrals || 0, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+          { label: t('customerReferral.statsCompleted'), value: data?.stats.completedReferrals || 0, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+          { label: t('customerReferral.statsPoints'), value: data?.stats.totalPointsEarned || 0, icon: Trophy, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
         ].map((stat, i) => {
           const Icon = stat.icon;
           return (
             <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05 }}>
-              <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${stat.bg} w-fit mx-auto mb-2`}>
                     <Icon className={`h-5 w-5 ${stat.color}`} />
@@ -266,30 +258,33 @@ export default function CustomerReferralPage() {
         })}
       </div>
 
-      {/* Referral List */}
-      {data?.referrals && data.referrals.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-violet-500" /> Davet Ettiklerim
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.referrals.map((ref, i) => (
+      {/* Referral List - always show; empty state when no referrals */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" /> {t('customerReferral.myInvites')}
+            </CardTitle>
+            <CardDescription>
+              {t('customerReferral.myInvitesDescription')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data?.referrals && data.referrals.length > 0 ? (
+              data.referrals.map((ref, i) => (
                 <motion.div key={ref.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + i * 0.05 }}
                   className="flex items-center gap-3 p-3 rounded-xl bg-muted/30"
                 >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={ref.referred.image || ''} />
-                    <AvatarFallback className="bg-gradient-to-br from-pink-500 to-rose-600 text-white text-sm">
+                    <AvatarFallback className={cn(TW_BRAND_ORB_FILL, 'text-sm text-white')}>
                       {getInitials(ref.referred.name)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{ref.referred.name || 'Kullanıcı'}</p>
+                    <p className="font-medium text-sm truncate">{ref.referred.name || t('customerReferral.user')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(ref.createdAt).toLocaleDateString('tr-TR')}
+                      {new Date(ref.createdAt).toLocaleDateString(dateLocale)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -299,16 +294,25 @@ export default function CustomerReferralPage() {
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="text-xs">
-                        <Clock className="h-3 w-3 mr-1" /> Bekliyor
+                        <Clock className="h-3 w-3 mr-1" /> {t('customerReferral.pending')}
                       </Badge>
                     )}
                   </div>
                 </motion.div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+              ))
+            ) : (
+              <div className="text-center py-8 px-4 rounded-xl bg-muted/20 border border-dashed border-muted-foreground/20">
+                <Users className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="font-medium text-foreground mb-1">{t('customerReferral.emptyTitle')}</p>
+                <p className="text-sm text-muted-foreground mb-4">{t('customerReferral.emptyDescription')}</p>
+                <Button onClick={shareCode} size="sm" className={TW_BRAND_CTA_BUTTON}>
+                  <Share2 className="h-4 w-4 mr-2" /> {t('customerReferral.shareCode')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

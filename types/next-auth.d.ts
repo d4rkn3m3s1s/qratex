@@ -8,6 +8,8 @@ declare module 'next-auth' {
       role: string;
       points: number;
       level: number;
+      preferredLanguage?: 'tr' | 'en';
+      dealerId?: string; // when role is STAFF, the employer dealer id
     } & DefaultSession['user'];
   }
 
@@ -15,6 +17,7 @@ declare module 'next-auth' {
     role: string;
     points: number;
     level: number;
+    preferredLanguage?: 'tr' | 'en';
   }
 }
 
@@ -24,6 +27,9 @@ declare module 'next-auth/jwt' {
     role: string;
     points: number;
     level: number;
+    preferredLanguage?: 'tr' | 'en';
+    dealerId?: string;
+    jti?: string;
   }
 }
 

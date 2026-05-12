@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+
+export const dynamic = 'force-dynamic';
+
 const defaultSettings = {
   notifications: {
     emailBadge: true,
@@ -105,6 +108,13 @@ export async function PATCH(request: NextRequest) {
         category: 'user',
       },
     });
+
+    if (preferences?.language) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { preferredLanguage: preferences.language }
+      });
+    }
 
     return NextResponse.json({
       success: true,

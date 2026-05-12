@@ -2,18 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-const BIRTHDAY_BONUS = 500; // Points for birthday
+import { creditPointsAndXp } from '@/lib/points-wallet';
+import { getBirthdayBonusPoints, getPointsMatrix } from '@/lib/points-rules';
 
 // GET - Get birthday info
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
+    const matrix = await getPointsMatrix();
+    const birthdayBonus = getBirthdayBonusPoints(matrix);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const birthday = await (prisma as any).userBirthday.findUnique({
+    const birthday = await prisma.userBirthday.findUnique({
       where: { userId: session.user.id },
     });
 
@@ -42,7 +47,7 @@ export async function GET(req: NextRequest) {
       birthday,
       isBirthdayToday,
       canClaimBonus,
-      bonusAmount: BIRTHDAY_BONUS,
+      bonusAmount: birthdayBonus,
     });
   } catch (error) {
     console.error('Error fetching birthday:', error);
@@ -53,6 +58,8 @@ export async function GET(req: NextRequest) {
 // POST - Set or claim birthday bonus
 export async function POST(req: NextRequest) {
   try {
+    const matrix = await getPointsMatrix();
+    const birthdayBonus = getBirthdayBonusPoints(matrix);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -63,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'set' && birthDate) {
       // Set birthday
-      const birthday = await (prisma as any).userBirthday.upsert({
+      const birthday = await prisma.userBirthday.upsert({
         where: { userId: session.user.id },
         update: { birthDate: new Date(birthDate) },
         create: {
@@ -81,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'claim') {
       // Claim birthday bonus
-      const birthday = await (prisma as any).userBirthday.findUnique({
+      const birthday = await prisma.userBirthday.findUnique({
         where: { userId: session.user.id },
       });
 
@@ -109,32 +116,34 @@ export async function POST(req: NextRequest) {
       }
 
       // Claim bonus
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: session.user.id },
-          data: { points: { increment: BIRTHDAY_BONUS } },
-        }),
-        (prisma as any).userBirthday.update({
+      await prisma.$transaction(async (tx) => {
+        await creditPointsAndXp(tx, {
+          userId: session.user.id,
+          points: birthdayBonus,
+        });
+
+        await (tx as any).userBirthday.update({
           where: { userId: session.user.id },
           data: {
             bonusGiven: true,
             lastBonusAt: new Date(),
           },
-        }),
-        prisma.notification.create({
+        });
+
+        await tx.notification.create({
           data: {
             userId: session.user.id,
             type: 'BIRTHDAY_BONUS',
             title: '🎂 Doğum Günün Kutlu Olsun!',
-            message: `${BIRTHDAY_BONUS} bonus puan hesabına eklendi!`,
+            message: `${birthdayBonus} bonus puan hesabına eklendi!`,
           },
-        }),
-      ]);
+        });
+      });
 
       return NextResponse.json({
         success: true,
-        message: `🎂 Doğum günün kutlu olsun! ${BIRTHDAY_BONUS} puan kazandın!`,
-        pointsEarned: BIRTHDAY_BONUS,
+        message: `🎂 Doğum günün kutlu olsun! ${birthdayBonus} puan kazandın!`,
+        pointsEarned: birthdayBonus,
       });
     }
 

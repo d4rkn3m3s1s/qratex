@@ -5,7 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
-import { Twitter, Linkedin, Instagram, Github, Mail, MapPin } from 'lucide-react';
+import { Twitter, Linkedin, Instagram, Github, Mail, MapPin, Rss } from 'lucide-react';
+import { getRandomSlogan } from '@/lib/slogans';
+import { cn } from '@/lib/utils';
 
 const footerLinks = {
   product: [
@@ -14,13 +16,19 @@ const footerLinks = {
   ],
   company: [
     { label: 'Hakkımızda', href: '/#features' },
+    { label: 'Blog', href: '/blog' },
+    { label: 'Neden QRATEX?', href: '/neden-qratex' },
   ],
   support: [
     { label: 'SSS', href: '/#faq' },
+    { label: 'RSS', href: '/feed.xml' },
   ],
   legal: [
-    { label: 'Gizlilik', href: '/#privacy' },
-    { label: 'Şartlar', href: '/#terms' },
+    { label: 'Güven', href: '/guven' },
+    { label: 'Kullanım Şartları', href: '/kullanim-sartlari' },
+    { label: 'Gizlilik Politikası', href: '/gizlilik-politikasi' },
+    { label: 'Çerez Politikası', href: '/cerez-politikasi' },
+    { label: 'KVKK Aydınlatma Metni', href: '/kvkk-aydinlatma-metni' },
   ],
 };
 
@@ -33,10 +41,15 @@ const socialLinks = [
 
 export function Footer() {
   const [mounted, setMounted] = useState(false);
+  const [slogan, setSlogan] = useState('');
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setSlogan(getRandomSlogan());
   }, []);
 
   // Get the correct logo based on theme
@@ -48,13 +61,16 @@ export function Footer() {
     ? '/logo/font.png'
     : '/logo/font-light.png';
 
+  const linkFocus =
+    'rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
   return (
-    <footer className="border-t bg-card/50 backdrop-blur-xl">
+    <footer className="border-t border-border/60 bg-card/50 backdrop-blur-xl">
       <div className="container mx-auto px-4 py-12 lg:py-16">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            <Link href="/" className="flex items-center gap-3 mb-6">
+            <Link href="/" className={cn('mb-6 inline-flex items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2')}>
               {mounted && (
                 <>
                   <Image
@@ -75,9 +91,15 @@ export function Footer() {
                 </>
               )}
             </Link>
-            <p className="text-muted-foreground text-base mb-6 max-w-sm">
+            <p className="text-muted-foreground text-base mb-2 max-w-sm">
               QR tabanlı geri bildirim ve gamification platformu ile müşteri deneyimini dönüştürün.
             </p>
+            {slogan && (
+              <p className="text-muted-foreground/90 text-sm italic mb-6 max-w-sm border-l-2 border-primary/30 pl-3">
+                {slogan}
+              </p>
+            )}
+            {!slogan && <div className="mb-6" />}
             <div className="flex items-center gap-3">
               {socialLinks.map((social) => (
                 <motion.a
@@ -85,12 +107,12 @@ export function Footer() {
                   href={social.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
+                  aria-label={social.label}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary touch-manipulation"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <social.icon className="w-5 h-5" />
-                  <span className="sr-only">{social.label}</span>
+                  <social.icon className="h-5 w-5 shrink-0" aria-hidden />
                 </motion.a>
               ))}
             </div>
@@ -104,7 +126,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
                     {link.label}
                   </Link>
@@ -120,7 +142,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
                     {link.label}
                   </Link>
@@ -133,10 +155,12 @@ export function Footer() {
             <h3 className="font-semibold text-base mb-4">Destek</h3>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
-                <li key={link.href}>
+                <li key={link.href} className="flex items-center gap-1.5">
+                  {link.href === '/feed.xml' && <Rss className="h-4 w-4 shrink-0" aria-hidden />}
                   <Link
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className={cn('text-sm text-muted-foreground', linkFocus)}
+                    {...(link.href === '/feed.xml' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   >
                     {link.label}
                   </Link>
@@ -152,7 +176,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
                     {link.label}
                   </Link>
@@ -169,11 +193,13 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              <span>info@qratex.com</span>
+              <Mail className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+              <a href="mailto:info@qratex.com" className={cn('text-muted-foreground', linkFocus)}>
+                info@qratex.com
+              </a>
             </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
+            <div className="hidden items-center gap-2 sm:flex">
+              <MapPin className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
               <span>İstanbul, Türkiye</span>
             </div>
           </div>

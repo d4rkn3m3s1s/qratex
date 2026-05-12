@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
+import { CHART_HEX } from '@/lib/chart-palette';
 
 interface GeometricBackgroundProps {
   children?: React.ReactNode;
@@ -45,7 +47,14 @@ export function GeometricBackground({
       vy: number;
     }
 
-    const colors = ['#8b5cf6', '#d946ef', '#06b6d4', '#f472b6', '#818cf8', '#a78bfa'];
+    const colors = [
+      BRAND_PRIMARY_HEX,
+      BRAND_ACCENT_PINK_HEX,
+      CHART_HEX.cyan,
+      CHART_HEX.pinkLight,
+      CHART_HEX.indigo,
+      CHART_HEX.violet,
+    ];
     
     const shapes: Shape[] = Array.from({ length: 25 }, () => ({
       x: Math.random() * canvas.width,

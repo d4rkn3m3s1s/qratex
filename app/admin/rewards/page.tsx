@@ -12,8 +12,10 @@ import {
   Star,
   Package,
   ShoppingBag,
+  Upload,
+  Loader2,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +39,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 
 interface Reward {
   id: string;
@@ -73,6 +75,7 @@ export default function AdminRewardsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
+  const [iconUploading, setIconUploading] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -167,6 +170,31 @@ export default function AdminRewardsPage() {
     }
   };
 
+  const uploadIconFile = async (file: File) => {
+    try {
+      setIconUploading(true);
+      const payload = new FormData();
+      payload.append('folder', 'rewards');
+      payload.append('file', file);
+
+      const res = await fetch('/api/admin/assets/upload', {
+        method: 'POST',
+        body: payload,
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success || !data?.path) {
+        throw new Error(data?.error || 'Dosya yüklenemedi');
+      }
+
+      setFormData((prev) => ({ ...prev, icon: data.path as string }));
+      toast.success('Ödül görseli yüklendi');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Dosya yüklenemedi');
+    } finally {
+      setIconUploading(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -229,6 +257,29 @@ export default function AdminRewardsPage() {
           onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
           placeholder="🎁 veya /images/badges/icon.svg"
         />
+        <div className="flex items-center gap-2">
+          <Input
+            type="file"
+            accept=".svg,.png,image/svg+xml,image/png"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadIconFile(file);
+              e.currentTarget.value = '';
+            }}
+            className="cursor-pointer"
+          />
+          <div className="inline-flex h-10 items-center gap-2 rounded-md border px-3 text-sm text-muted-foreground">
+            {iconUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {iconUploading ? 'Yükleniyor...' : 'Dosya Seç'}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">SVG veya PNG (maksimum 2MB) yükleyebilirsiniz.</p>
+        {formData.icon?.startsWith('/') && (
+          <div className="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1">
+            <Image src={formData.icon} alt="Yüklenen ödül görseli" width={28} height={28} className="rounded-sm" />
+            <span className="text-xs text-muted-foreground truncate max-w-[220px]">{formData.icon}</span>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -284,12 +335,40 @@ export default function AdminRewardsPage() {
     </div>
   );
 
+  const activeRewards = rewards.filter((r) => r.isActive);
+  const poolMinCost = activeRewards.length > 0 ? Math.min(...activeRewards.map((r) => r.cost)) : 0;
+  const poolMaxCost = activeRewards.length > 0 ? Math.max(...activeRewards.map((r) => r.cost)) : 0;
+
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <AdminPremiumHero
         title="Ödül Yönetimi"
         description="Ödül mağazası ürünlerini yönetin"
+        icon={<Gift className="text-white" />}
       />
+
+      {/* Ödül mantığı ve havuz rehberi */}
+      <Card className="border-primary/20 bg-muted/30">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          <div>
+            <h3 className="font-semibold text-sm mb-1">Ödül mantığı</h3>
+            <p className="text-xs text-muted-foreground">
+              Sadece <strong>Aktif</strong> ödüller müşteri mağazasında listelenir. Stok 0 olan ödüller talep edilemez. Müşteri puanı &gt;= ödül maliyeti olduğunda talep edebilir; talep sonrası stok düşer (sınırsız stok için -1 girin).
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm mb-1">Ödül havuzu nasıl oluşturulur?</h3>
+            <p className="text-xs text-muted-foreground">
+              Yeni Ödül ile ekleyin → Puan maliyeti ve stok belirleyin → Aktif et. Havuz, aktif ödüllerin listesidir; müşteriler yalnızca bu listeyi görür. Puan eşiği her ödülün &quot;Puan Maliyeti&quot; alanıyla belirlenir.
+            </p>
+          </div>
+          {activeRewards.length > 0 && (
+            <p className="text-xs text-muted-foreground pt-2 border-t">
+              Havuz özeti: <strong>{activeRewards.length}</strong> aktif ödül, puan aralığı <strong>{poolMinCost.toLocaleString()}</strong> – <strong>{poolMaxCost.toLocaleString()}</strong>
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -411,7 +490,7 @@ export default function AdminRewardsPage() {
               <Card glass hover className="group overflow-hidden">
                 <CardContent className="p-0">
                   {/* Icon */}
-                  <div className="relative h-32 bg-gradient-to-br from-primary/20 to-purple-500/20 flex items-center justify-center">
+                  <div className="relative flex h-32 items-center justify-center bg-gradient-to-br from-primary/20 to-primary/30">
                     {reward.icon?.startsWith('/') ? (
                       <Image
                         src={reward.icon}

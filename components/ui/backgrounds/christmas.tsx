@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { CHRISTMAS_LIGHT_BULB_COLORS } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface Snowflake {
@@ -60,7 +61,7 @@ export function ChristmasBackground({
     }));
 
     // Noel ışıkları
-    const lightColors = ['#ff0000', '#00ff00', '#ffff00', '#ff00ff', '#00ffff', '#ff6600'];
+    const lightColors = [...CHRISTMAS_LIGHT_BULB_COLORS];
     const lights: Light[] = Array.from({ length: 30 }, (_, i) => ({
       x: (i / 30) * canvas.width + Math.random() * 50,
       y: 20 + Math.sin(i * 0.5) * 15,

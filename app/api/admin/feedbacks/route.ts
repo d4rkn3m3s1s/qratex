@@ -1,45 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { getSamplingConfig } from '@/lib/analytics-sampling';
+import { adminFeedbacksDeleteSchema, adminFeedbacksQuerySchema } from '@/lib/validations-admin';
+import { checkAdminRateLimit } from '@/lib/rate-limit';
+
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const queryParsed = adminFeedbacksQuerySchema.safeParse({
+      page: searchParams.get('page') || undefined,
+      pageSize: searchParams.get('pageSize') || undefined,
+      search: searchParams.get('search') || undefined,
+    });
+    const { page, pageSize, search: searchTrim } = queryParsed.success ? queryParsed.data : { page: 1, pageSize: 20, search: undefined as string | undefined };
     const sentiment = searchParams.get('sentiment');
     const dealerId = searchParams.get('dealerId');
     const minRating = searchParams.get('minRating');
     const maxRating = searchParams.get('maxRating');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const search = searchParams.get('search');
     const type = searchParams.get('type'); // 'all' | 'qr' | 'consumption'
+    const maxFraudScore = searchParams.get('maxFraudScore'); // 0-1; sahte yorum filtre (madde 41)
+    const needsReview = searchParams.get('needsReview') === 'true'; // P2-27: intentScore < 0.7 manuel inceleme
     const skip = (page - 1) * pageSize;
 
-    // Build QR feedback where clause
-    const qrWhere: any = {};
+    const qrWhere: any = { deletedAt: null };
+    if (needsReview) qrWhere.intentScore = { lt: 0.7 };
     if (sentiment && sentiment !== 'all') qrWhere.sentiment = sentiment;
+    if (maxFraudScore != null && maxFraudScore !== '') {
+      const v = parseFloat(maxFraudScore);
+      if (!Number.isNaN(v)) qrWhere.fraudScore = { lte: v };
+    }
     if (minRating) qrWhere.rating = { ...qrWhere.rating, gte: parseInt(minRating) };
     if (maxRating) qrWhere.rating = { ...qrWhere.rating, lte: parseInt(maxRating) };
     if (startDate) qrWhere.createdAt = { ...qrWhere.createdAt, gte: new Date(startDate) };
     if (endDate) qrWhere.createdAt = { ...qrWhere.createdAt, lte: new Date(endDate) };
-    if (search) {
+    if (searchTrim) {
       qrWhere.OR = [
-        { text: { contains: search, mode: 'insensitive' } },
-        { user: { name: { contains: search, mode: 'insensitive' } } },
-        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { text: { contains: searchTrim, mode: 'insensitive' } },
+        { user: { name: { contains: searchTrim, mode: 'insensitive' } } },
+        { user: { email: { contains: searchTrim, mode: 'insensitive' } } },
       ];
     }
     if (dealerId && dealerId !== 'all') {
       qrWhere.qrCode = { dealerId };
     }
+
+    const sampling = startDate && endDate
+      ? getSamplingConfig(new Date(startDate), new Date(endDate))
+      : { sampleRatio: 1 as const };
+    const takeLimit = sampling.sampleRatio < 1 && sampling.maxTake
+      ? Math.min(pageSize * 10, sampling.maxTake)
+      : 100;
 
     // Fetch QR feedbacks
     let qrFeedbacks: any[] = [];
@@ -50,7 +71,7 @@ export async function GET(request: NextRequest) {
         prisma.feedback.findMany({
           where: qrWhere,
           skip: type === 'qr' ? skip : 0,
-          take: type === 'qr' ? pageSize : 100,
+          take: type === 'qr' ? pageSize : takeLimit,
           orderBy: { createdAt: 'desc' },
           include: {
             user: { select: { id: true, name: true, email: true, image: true } },
@@ -88,10 +109,10 @@ export async function GET(request: NextRequest) {
         if (maxRating) consumptionWhere.rating = { ...consumptionWhere.rating, lte: parseInt(maxRating) };
         if (startDate) consumptionWhere.createdAt = { ...consumptionWhere.createdAt, gte: new Date(startDate) };
         if (endDate) consumptionWhere.createdAt = { ...consumptionWhere.createdAt, lte: new Date(endDate) };
-        if (search) {
+        if (searchTrim) {
           consumptionWhere.OR = [
-            { text: { contains: search, mode: 'insensitive' } },
-            { customer: { name: { contains: search, mode: 'insensitive' } } },
+            { text: { contains: searchTrim, mode: 'insensitive' } },
+            { customer: { name: { contains: searchTrim, mode: 'insensitive' } } },
           ];
         }
         if (dealerId && dealerId !== 'all') {
@@ -105,7 +126,7 @@ export async function GET(request: NextRequest) {
         }
 
         const [reviews, total] = await Promise.all([
-          (prisma as any).consumptionReview.findMany({
+          prisma.consumptionReview.findMany({
             where: consumptionWhere,
             skip: type === 'consumption' ? skip : 0,
             take: type === 'consumption' ? pageSize : 100,
@@ -120,7 +141,7 @@ export async function GET(request: NextRequest) {
               },
             },
           }),
-          (prisma as any).consumptionReview.count({ where: consumptionWhere }),
+          prisma.consumptionReview.count({ where: consumptionWhere }),
         ]);
         
         consumptionReviews = reviews.map((r: any) => ({
@@ -141,7 +162,7 @@ export async function GET(request: NextRequest) {
         }));
         consumptionTotal = total;
       } catch (e) {
-        console.log('Consumption reviews not available');
+        console.error('Consumption reviews not available:', e);
       }
     }
 
@@ -158,15 +179,17 @@ export async function GET(request: NextRequest) {
     // Calculate statistics
     const allQRFeedbacks = await prisma.feedback.findMany({
       where: qrWhere,
-      select: { rating: true, sentiment: true },
+      select: { rating: true, sentiment: true, npsScore: true },
     });
     
     let allConsumptionReviews: any[] = [];
     try {
-      allConsumptionReviews = await (prisma as any).consumptionReview.findMany({
+      allConsumptionReviews = await prisma.consumptionReview.findMany({
         select: { rating: true },
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error('Consumption stats not available:', e);
+    }
 
     const combinedForStats = [
       ...allQRFeedbacks.map(f => ({ rating: f.rating, sentiment: f.sentiment })),
@@ -175,6 +198,15 @@ export async function GET(request: NextRequest) {
         sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
       })),
     ];
+
+    const npsScores = allQRFeedbacks.map(f => f.npsScore).filter((n): n is number => n != null && n >= 0 && n <= 10);
+    const npsTotal = npsScores.length;
+    const npsPromoters = npsScores.filter(n => n >= 9).length;
+    const npsPassives = npsScores.filter(n => n >= 7 && n <= 8).length;
+    const npsDetractors = npsScores.filter(n => n <= 6).length;
+    const npsValue = npsTotal > 0
+      ? Math.round((npsPromoters / npsTotal) * 100 - (npsDetractors / npsTotal) * 100)
+      : null;
 
     const stats = {
       total: qrTotal + consumptionTotal,
@@ -193,6 +225,11 @@ export async function GET(request: NextRequest) {
         2: combinedForStats.filter(f => f.rating === 2).length,
         1: combinedForStats.filter(f => f.rating === 1).length,
       },
+      nps: npsValue,
+      npsTotal,
+      npsPromoters,
+      npsPassives,
+      npsDetractors,
     };
 
     // Get dealers for filter
@@ -212,6 +249,7 @@ export async function GET(request: NextRequest) {
         pageSize,
         totalPages: Math.ceil(totalItems / pageSize),
       },
+      ...(sampling.note && { samplingNote: sampling.note }),
     });
   } catch (error) {
     console.error('Admin feedbacks error:', error);
@@ -222,35 +260,45 @@ export async function GET(request: NextRequest) {
 // DELETE - Soft delete or remove feedback
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
+    const rl = checkAdminRateLimit(session.user.id);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
+        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+      );
     }
 
-    const { feedbackIds, type } = await request.json();
-
-    if (!feedbackIds || !Array.isArray(feedbackIds) || feedbackIds.length === 0) {
-      return NextResponse.json({ error: 'Feedback IDs gerekli' }, { status: 400 });
+    const raw = await request.json();
+    const parsed = adminFeedbacksDeleteSchema.safeParse(raw);
+    if (!parsed.success) {
+      const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
+      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
     }
+    const { feedbackIds, type } = parsed.data;
 
     if (type === 'consumption') {
-      await (prisma as any).consumptionReview.deleteMany({
+      await prisma.consumptionReview.deleteMany({
         where: { id: { in: feedbackIds } },
       });
     } else {
-      await prisma.feedback.deleteMany({
+      await prisma.feedback.updateMany({
         where: { id: { in: feedbackIds } },
+        data: { deletedAt: new Date() },
       });
     }
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        action: 'DELETE_FEEDBACKS',
-        entity: 'Feedback',
+        action: type === 'consumption' ? 'DELETE_FEEDBACKS' : 'SOFT_DELETE_FEEDBACKS',
+        entity: type === 'consumption' ? 'ConsumptionReview' : 'Feedback',
         entityId: feedbackIds.join(','),
         newData: { count: feedbackIds.length, type },
+        ...auditMeta,
       },
     });
 

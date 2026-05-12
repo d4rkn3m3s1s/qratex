@@ -1,22 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { motion } from 'framer-motion';
-import { Bell, Search, Settings, User, LogOut, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle, XCircle, ExternalLink, Moon, Sun } from 'lucide-react';
+import { Search, Settings, User, LogOut, Moon, Sun, Monitor, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,22 +16,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
 import { getInitials } from '@/lib/utils';
 import { signOut } from 'next-auth/react';
-import { toast } from 'sonner';
-import { formatDistanceToNow, format } from 'date-fns';
-import { tr } from 'date-fns/locale';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  isRead: boolean;
-  createdAt: string;
-  data?: Record<string, unknown>;
-}
+import { NotificationCenter } from './notification-center';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { GlobalSearchResults } from './global-search-results';
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
+import { useAppT } from '@/lib/app-locale';
 
 interface DashboardHeaderProps {
   title?: string;
@@ -49,194 +31,68 @@ interface DashboardHeaderProps {
   actions?: React.ReactNode;
 }
 
-const notificationIcons: Record<string, typeof Info> = {
-  info: Info,
-  success: CheckCircle,
-  warning: AlertTriangle,
-  error: XCircle,
-};
-
-// Default icon for unknown notification types
-const getNotificationIcon = (type: string | undefined) => {
-  return notificationIcons[type || 'info'] || Info;
-};
-
-const notificationColors = {
-  info: 'text-blue-500',
-  success: 'text-green-500',
-  warning: 'text-yellow-500',
-  error: 'text-red-500',
-};
+interface SearchResults {
+  users: { id: string; name: string | null; email: string; businessName: string | null; role: string; href: string }[];
+  feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
+  products: { id: string; name: string; categoryName?: string; href: string }[];
+  qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
+}
 
 export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
+  const t = useAppT();
   const router = useRouter();
   const { data: session } = useSession();
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const forceModeDom = (mode: 'light' | 'dark' | 'system') => {
+    const resolved =
+      mode === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+        : mode;
+    const root = document.documentElement;
+    const body = document.body;
+    root.classList.remove('light', 'dark');
+    root.classList.add(resolved);
+    root.setAttribute('data-theme', resolved);
+    root.style.colorScheme = resolved;
+    if (body) {
+      body.classList.remove('light', 'dark');
+      body.classList.add(resolved);
+      body.setAttribute('data-theme', resolved);
+      body.style.colorScheme = resolved;
+    }
+  };
+  const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
+    localStorage.setItem('qratex-theme', mode);
+    localStorage.setItem('theme', mode);
+    forceModeDom(mode);
+    setTheme(mode);
+  };
   const [mounted, setMounted] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
-  const lastNotificationIdRef = useRef<string | null>(null);
-  const isFirstLoadRef = useRef(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const desktopSearchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const desktopResultsRegionId = useId();
+  const mobileResultsRegionId = useId();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Fetch notifications
-  const fetchNotifications = useCallback(async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      const res = await fetch('/api/notifications?limit=10');
-      const data = await res.json();
-
-      if (data.success) {
-        const newNotifications = data.notifications as Notification[];
-        
-        // Check for new notifications and show toast (only after first load)
-        if (!isFirstLoadRef.current && newNotifications.length > 0) {
-          const latestNotification = newNotifications[0];
-          
-          if (lastNotificationIdRef.current && latestNotification.id !== lastNotificationIdRef.current) {
-            // Find all new notifications
-            const newOnes = newNotifications.filter(n => {
-              const existingIds = notifications.map(existing => existing.id);
-              return !existingIds.includes(n.id);
-            });
-
-            // Show toast for each new notification
-            newOnes.forEach((n) => {
-              const Icon = getNotificationIcon(n.type);
-              const colorClass = notificationColors[n.type] || notificationColors.info;
-              toast(n.title, {
-                description: n.message,
-                icon: <Icon className={`h-5 w-5 ${colorClass}`} />,
-                duration: 5000,
-              });
-            });
-          }
-        }
-
-        // Update last notification ID
-        if (newNotifications.length > 0) {
-          lastNotificationIdRef.current = newNotifications[0].id;
-        }
-
-        setNotifications(newNotifications);
-        setUnreadCount(data.unreadCount);
-        isFirstLoadRef.current = false;
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    }
-  }, [session?.user?.id, notifications]);
-
-  // Initial fetch and polling
-  useEffect(() => {
-    fetchNotifications();
-
-    // Poll for new notifications every 10 seconds
-    const interval = setInterval(fetchNotifications, 10000);
-
-    return () => clearInterval(interval);
-  }, [session?.user?.id]); // Only depend on session, not fetchNotifications
-
-  // Mark single notification as read
-  const markAsRead = async (notificationId: string) => {
-    try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId }),
-      });
-
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
-
-  // Mark all as read
-  const markAllAsRead = async () => {
-    try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markAllRead: true }),
-      });
-
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-      setUnreadCount(0);
-      toast.success('Tüm bildirimler okundu olarak işaretlendi');
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-    }
-  };
-
-  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut({ redirect: false });
       router.push('/auth/login');
       router.refresh();
-    } catch (error) {
-      console.error('Sign out error:', error);
-      // Fallback: force redirect
+    } catch {
       window.location.href = '/auth/login';
-    }
-  };
-
-  // Delete notification
-  const deleteNotification = async (notificationId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    try {
-      await fetch(`/api/notifications?id=${notificationId}`, {
-        method: 'DELETE',
-      });
-
-      const notification = notifications.find(n => n.id === notificationId);
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      if (notification && !notification.isRead) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-    }
-  };
-
-  // Format time
-  const formatTime = (dateString: string) => {
-    try {
-      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: tr });
-    } catch {
-      return '';
-    }
-  };
-
-  // Format full date
-  const formatFullDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'd MMMM yyyy, HH:mm', { locale: tr });
-    } catch {
-      return '';
-    }
-  };
-
-  // Open notification modal
-  const openNotification = (notification: Notification) => {
-    setSelectedNotification(notification);
-    setIsModalOpen(true);
-    setIsOpen(false);
-    
-    if (!notification.isRead) {
-      markAsRead(notification.id);
     }
   };
 
@@ -248,160 +104,358 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     }
   };
 
+  const fetchGlobalSearch = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setSearchResults(null);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.success && data.results) {
+        setSearchResults(data.results);
+        setSearchOpen(true);
+      } else {
+        setSearchResults(null);
+      }
+    } catch {
+      setSearchResults(null);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (q.length < 2) {
+      setSearchResults(null);
+      setSearchOpen(false);
+      return;
+    }
+    searchDebounceRef.current = setTimeout(() => fetchGlobalSearch(q), 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery, fetchGlobalSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const totalResults = useMemo(() => {
+    if (!searchResults) return 0;
+    return (
+      searchResults.users.length +
+      searchResults.feedbacks.length +
+      searchResults.products.length +
+      searchResults.qrCodes.length
+    );
+  }, [searchResults]);
+
+  /** Ekran okuyucular: arama yüklemesi ve sonuç özeti */
+  const searchStatusAnnouncement = useMemo(() => {
+    if (!showSearch) return '';
+    const q = searchQuery.trim();
+    if (q.length === 0) return '';
+    if (q.length < 2) return t('appShell.searchMinChars');
+    if (searchLoading) return t('appShell.searching');
+    if (!searchResults) return '';
+    if (totalResults === 0) return t('appShell.noResults');
+    return `${totalResults} ${t('appShell.resultsFound')}`;
+  }, [showSearch, searchQuery, searchLoading, searchResults, totalResults, t]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    if (searchResults && totalResults > 0) {
+      const first =
+        searchResults.users[0] || searchResults.feedbacks[0] || searchResults.products[0] || searchResults.qrCodes[0];
+      if (first && 'href' in first) {
+        router.push(first.href);
+        setSearchOpen(false);
+        setMobileSearchOpen(false);
+        setSearchQuery('');
+      }
+    } else {
+      const base =
+        session?.user?.role === 'ADMIN'
+          ? '/admin/feedbacks'
+          : session?.user?.role === 'DEALER'
+            ? '/dealer/feedbacks'
+            : '/customer/feedbacks';
+      router.push(`${base}?search=${encodeURIComponent(q)}`);
+      setMobileSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
+
+  const navigateToResult = (href: string) => {
+    router.push(href);
+    setSearchOpen(false);
+    setMobileSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  const showSearchResults =
+    (searchResults || searchLoading) && searchQuery.trim().length >= 2;
+
+  const desktopSearchPopoverOpen = Boolean(searchOpen && showSearchResults);
+  const mobileSearchPopoverOpen = Boolean(mobileSearchOpen && showSearchResults);
+
+  const focusFirstSearchHit = useCallback((regionId: string) => {
+    if (typeof document === 'undefined') return;
+    document.getElementById(regionId)?.querySelector<HTMLButtonElement>('button[data-global-search-hit]')?.focus();
+  }, []);
+
+  const focusActiveSearchInput = useCallback(() => {
+    if (mobileSearchOpen) mobileSearchInputRef.current?.focus();
+    else desktopSearchInputRef.current?.focus();
+  }, [mobileSearchOpen]);
+
+  const dismissSearchUi = useCallback(() => {
+    setSearchOpen(false);
+    setMobileSearchOpen(false);
+  }, []);
+
+  const handleDesktopSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setSearchOpen(false);
+      return;
+    }
+    if (
+      e.key === 'ArrowDown' &&
+      desktopSearchPopoverOpen &&
+      totalResults > 0 &&
+      !searchLoading
+    ) {
+      e.preventDefault();
+      focusFirstSearchHit(desktopResultsRegionId);
+    }
+  };
+
+  const handleMobileSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setMobileSearchOpen(false);
+      return;
+    }
+    if (
+      e.key === 'ArrowDown' &&
+      mobileSearchPopoverOpen &&
+      totalResults > 0 &&
+      !searchLoading
+    ) {
+      e.preventDefault();
+      focusFirstSearchHit(mobileResultsRegionId);
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 -mx-4 lg:-mx-6 px-4 lg:px-6 border-b bg-background/95 backdrop-blur-xl safe-top mb-2">
-      <div className="flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-40 -mx-3 sm:-mx-4 lg:-mx-6 px-3 sm:px-4 lg:px-6 py-2 sm:py-0 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 supports-[padding:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)] mb-3 sm:mb-4 min-h-14 sm:min-h-16">
+      {showSearch ? (
+        <p id="dashboard-global-search-status" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {searchStatusAnnouncement}
+        </p>
+      ) : null}
+      <div className="flex h-12 sm:h-16 items-center justify-between gap-2">
         {/* Left - Title & Search */}
-        <div className="flex items-center gap-4 flex-1">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
           {title && (
-            <div className="hidden sm:block">
-              <h1 className="text-lg font-semibold">{title}</h1>
+            <div className="hidden sm:block shrink-0">
+              <h1 className="text-base sm:text-lg font-semibold truncate">{title}</h1>
               {description && (
-                <p className="text-sm text-muted-foreground">{description}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{description}</p>
               )}
             </div>
           )}
           {showSearch && (
-            <div className="relative max-w-md flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Ara..."
-                className="pl-10 bg-muted/50 border-transparent focus:border-input"
-              />
+            <div ref={searchRef} className="relative max-w-md flex-1 min-w-0 hidden sm:block">
+              <form onSubmit={handleSearchSubmit} className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  ref={desktopSearchInputRef}
+                  type="search"
+                  placeholder={t('appShell.globalSearchPlaceholder')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => searchResults && totalResults > 0 && setSearchOpen(true)}
+                  onKeyDown={handleDesktopSearchKeyDown}
+                  className="pl-10 pr-10 bg-muted/50 border-transparent focus:border-border/80 dark:focus:border-white/25 w-full"
+                  aria-label={t('appShell.globalSearch')}
+                  aria-describedby="dashboard-global-search-status"
+                  aria-expanded={desktopSearchPopoverOpen}
+                  aria-haspopup="listbox"
+                  aria-autocomplete="list"
+                  aria-controls={desktopSearchPopoverOpen ? desktopResultsRegionId : undefined}
+                />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0"
+                  aria-label={t('appShell.search')}
+                >
+                  {searchLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Search className="h-4 w-4" aria-hidden />
+                  )}
+                </Button>
+              </form>
+
+              {searchOpen && showSearchResults && (
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border bg-popover shadow-lg z-50 max-h-[min(70vh,400px)] overflow-y-auto">
+                  <GlobalSearchResults
+                    resultsRegionId={desktopResultsRegionId}
+                    visible={showSearchResults}
+                    searchLoading={searchLoading}
+                    searchResults={searchResults}
+                    totalResults={totalResults}
+                    onNavigate={navigateToResult}
+                    onRequestFocusSearch={focusActiveSearchInput}
+                    onDismiss={dismissSearchUi}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* Right - Actions */}
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Page Actions */}
           {actions}
-          
-          {/* Theme Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-full hover:bg-muted"
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-          >
-            {mounted && resolvedTheme === 'dark' ? (
-              <Sun className="h-[18px] w-[18px] text-yellow-500" />
-            ) : mounted && resolvedTheme === 'light' ? (
-              <Moon className="h-[18px] w-[18px] text-slate-700" />
-            ) : (
-              <Moon className="h-[18px] w-[18px] text-slate-400" />
-            )}
-            <span className="sr-only">Tema değiştir</span>
-          </Button>
+          <LanguageSwitcher className="h-9 min-h-9 min-w-9 w-9 rounded-full" />
 
-          {/* Notifications */}
-          <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+          {showSearch && (
+            <Sheet open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 touch-manipulation transition-colors duration-200 sm:hidden min-h-11 min-w-11"
+                  aria-label={t('appShell.search')}
+                >
+                  <Search className="h-[18px] w-[18px]" aria-hidden />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="top" className="max-h-[90dvh] overflow-y-auto pt-12 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <SheetHeader className="text-left space-y-1 mb-4">
+                  <SheetTitle>{t('appShell.globalSearch')}</SheetTitle>
+                </SheetHeader>
+                <form onSubmit={handleSearchSubmit} className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <Input
+                    ref={mobileSearchInputRef}
+                    type="search"
+                    placeholder={t('appShell.globalSearchPlaceholderShort')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleMobileSearchKeyDown}
+                    className="pl-10 pr-10 bg-muted/50 border-transparent focus:border-border/80 dark:focus:border-white/25 w-full min-h-11 text-base"
+                    autoFocus
+                    aria-label={t('appShell.globalSearch')}
+                    aria-describedby="dashboard-global-search-status"
+                    aria-expanded={mobileSearchPopoverOpen}
+                    aria-haspopup="listbox"
+                    aria-autocomplete="list"
+                    aria-controls={mobileSearchPopoverOpen ? mobileResultsRegionId : undefined}
+                  />
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 shrink-0 touch-manipulation"
+                    aria-label={t('appShell.search')}
+                  >
+                    {searchLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Search className="h-4 w-4" aria-hidden />
+                    )}
+                  </Button>
+                </form>
+                <div className="rounded-lg border bg-muted/30 max-h-[min(55dvh,320px)] overflow-y-auto">
+                  <GlobalSearchResults
+                    resultsRegionId={mobileResultsRegionId}
+                    visible={showSearchResults}
+                    searchLoading={searchLoading}
+                    searchResults={searchResults}
+                    totalResults={totalResults}
+                    onNavigate={navigateToResult}
+                    onRequestFocusSearch={focusActiveSearchInput}
+                    onDismiss={dismissSearchUi}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+
+          {/* Theme: Sistem / Açık / Koyu (tercih localStorage'da qratex-theme ile saklanır) */}
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full hover:bg-muted">
-                <Bell className="h-[18px] w-[18px]" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-sm">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 min-h-9 min-w-9 w-9 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                aria-label={t('appShell.themeSelect')}
+              >
+                {mounted && (theme === 'system' || !theme) ? (
+                  <Monitor className="h-[18px] w-[18px]" aria-hidden />
+                ) : mounted && resolvedTheme === 'dark' ? (
+                  <Moon className="h-[18px] w-[18px] text-slate-300" aria-hidden />
+                ) : mounted ? (
+                  <Sun className="h-[18px] w-[18px] text-amber-600" aria-hidden />
+                ) : (
+                  <Monitor className="h-[18px] w-[18px]" aria-hidden />
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-96">
-              <DropdownMenuLabel className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Bildirimler
-                </span>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && (
-                    <>
-                      <Badge variant="secondary" className="text-xs">
-                        {unreadCount} yeni
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={markAllAsRead}
-                      >
-                        <CheckCheck className="h-3 w-3 mr-1" />
-                        Tümünü Oku
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              
-              {notifications.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Bildirim yok</p>
-                </div>
-              ) : (
-                <div className="max-h-[400px] overflow-y-auto">
-                  {notifications.map((notification) => {
-                    const Icon = getNotificationIcon(notification.type);
-                    const colorClass = notificationColors[notification.type] || notificationColors.info;
-                    return (
-                      <DropdownMenuItem
-                        key={notification.id}
-                        className="flex items-start gap-3 p-3 cursor-pointer group"
-                        onClick={() => openNotification(notification)}
-                      >
-                        <div className={`p-2 rounded-full ${notification.type === 'success' ? 'bg-green-500/10' : notification.type === 'warning' ? 'bg-yellow-500/10' : notification.type === 'error' ? 'bg-red-500/10' : 'bg-blue-500/10'}`}>
-                          <Icon className={`h-4 w-4 ${colorClass}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className={`text-sm ${!notification.isRead ? 'font-semibold' : ''}`}>
-                              {notification.title}
-                            </p>
-                            {!notification.isRead && (
-                              <span className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1.5" />
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                            {notification.message}
-                          </p>
-                          <div className="flex items-center justify-between mt-1">
-                            <p className="text-xs text-muted-foreground">
-                              {formatTime(notification.createdAt)}
-                            </p>
-                            <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                              Detay <ExternalLink className="h-3 w-3" />
-                            </span>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => deleteNotification(notification.id, e)}
-                        >
-                          <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                        </Button>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </div>
-              )}
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => applyThemeSelection('system')} onClick={() => applyThemeSelection('system')}>
+                <Monitor className="h-4 w-4 mr-2" />
+                {t('appShell.themeSystem')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => applyThemeSelection('light')} onClick={() => applyThemeSelection('light')}>
+                <Sun className="h-4 w-4 mr-2" />
+                {t('appShell.themeLight')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => applyThemeSelection('dark')} onClick={() => applyThemeSelection('dark')}>
+                <Moon className="h-4 w-4 mr-2" />
+                {t('appShell.themeDark')}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Notifications */}
+          <NotificationCenter />
 
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 hover:ring-2 hover:ring-primary/20 transition-all">
+              <Button
+                variant="ghost"
+                className="relative h-9 min-h-9 min-w-9 w-9 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
+                aria-label={t('appShell.accountMenu')}
+              >
                 <Avatar className="h-9 w-9">
                   <AvatarImage src={session?.user?.image || ''} />
-                  <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-sm">
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-sm text-primary-foreground">
                     {getInitials(session?.user?.name)}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56 max-h-[85vh] overflow-y-auto">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{session?.user?.name}</p>
@@ -411,19 +465,19 @@ export function DashboardHeader({ title, description, showSearch = true, actions
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={() => router.push(getSettingsLink())}
               >
                 <User className="mr-2 h-4 w-4" />
-                Profil
+                {t('appShell.profile')}
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="cursor-pointer"
                 onClick={() => router.push(getSettingsLink())}
               >
                 <Settings className="mr-2 h-4 w-4" />
-                Ayarlar
+                {t('appShell.settings')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -431,122 +485,14 @@ export function DashboardHeader({ title, description, showSearch = true, actions
                 onClick={handleSignOut}
               >
                 <LogOut className="mr-2 h-4 w-4" />
-                Çıkış Yap
+                {t('appShell.logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {/* Notification Detail Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-lg">
-          {selectedNotification && (
-            <>
-              <DialogHeader>
-                <div className="flex items-start gap-4">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 200 }}
-                    className={`p-3 rounded-full flex-shrink-0 ${
-                      selectedNotification.type === 'success' ? 'bg-green-500/10' : 
-                      selectedNotification.type === 'warning' ? 'bg-yellow-500/10' : 
-                      selectedNotification.type === 'error' ? 'bg-red-500/10' : 'bg-blue-500/10'
-                    }`}
-                  >
-                    {(() => {
-                      const Icon = getNotificationIcon(selectedNotification.type);
-                      const colorClass = notificationColors[selectedNotification.type] || notificationColors.info;
-                      return <Icon className={`h-6 w-6 ${colorClass}`} />;
-                    })()}
-                  </motion.div>
-                  <div className="flex-1">
-                    <DialogTitle className="text-lg">
-                      {selectedNotification.title}
-                    </DialogTitle>
-                    <DialogDescription className="mt-1">
-                      {formatFullDate(selectedNotification.createdAt)}
-                    </DialogDescription>
-                  </div>
-                  <Badge 
-                    variant={
-                      selectedNotification.type === 'success' ? 'default' :
-                      selectedNotification.type === 'warning' ? 'secondary' :
-                      selectedNotification.type === 'error' ? 'destructive' : 'outline'
-                    }
-                    className="flex-shrink-0"
-                  >
-                    {selectedNotification.type === 'success' && 'Başarılı'}
-                    {selectedNotification.type === 'warning' && 'Uyarı'}
-                    {selectedNotification.type === 'error' && 'Hata'}
-                    {selectedNotification.type === 'info' && 'Bilgi'}
-                  </Badge>
-                </div>
-              </DialogHeader>
-              
-              <Separator className="my-4" />
-              
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="space-y-4"
-              >
-                {/* Message Content */}
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {selectedNotification.message}
-                  </p>
-                </div>
 
-                {/* Additional Data */}
-                {selectedNotification.data && Object.keys(selectedNotification.data).length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">Ek Bilgiler</p>
-                    <div className="p-4 rounded-lg bg-muted/30 border">
-                      <div className="grid grid-cols-2 gap-3">
-                        {Object.entries(selectedNotification.data).map(([key, value]) => (
-                          <div key={key} className="space-y-1">
-                            <p className="text-xs text-muted-foreground capitalize">
-                              {key.replace(/_/g, ' ')}
-                            </p>
-                            <p className="text-sm font-medium">
-                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                      deleteNotification(selectedNotification.id, { stopPropagation: () => {} } as React.MouseEvent);
-                      setIsModalOpen(false);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Bildirimi Sil
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    Tamam
-                  </Button>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </header>
   );
 }

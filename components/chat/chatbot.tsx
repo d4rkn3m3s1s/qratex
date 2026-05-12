@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, useReducedMotion } from 'framer-motion';
 import {
   MessageCircle,
   X,
@@ -24,6 +24,21 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
+import { cn } from '@/lib/utils';
+import { floatingZTw } from '@/lib/ui-z';
+import {
+  TW_BRAND_AURA_LINEAR,
+  TW_BRAND_AVATAR_HALO,
+  TW_BRAND_CHAT_HEADER_BG,
+  TW_BRAND_DOT,
+  TW_BRAND_FACE_GRADIENT,
+  TW_BRAND_GRADIENT_STOPS_SOFT,
+  TW_BRAND_HEADLINE_GRADIENT,
+  TW_BRAND_ORB_FILL,
+  TW_BRAND_PANEL_SHELL_SOFT,
+  TW_BRAND_SEND_BTN,
+  TW_BRAND_USER_BUBBLE,
+} from '@/lib/tw-brand-classes';
 
 interface Message {
   id: string;
@@ -35,27 +50,30 @@ interface Message {
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: 'Merhaba! ✨ Ben QRA, senin süper güçlü AI asistanınım! Sana nasıl yardımcı olabilirim?',
+  content:
+    'Hey! Ben QRA — minik pencereden bile büyük işler çıkaran yardımcın. Bugün aklında ne var? Sor, merak ettiğini yaz, birlikte halledelim.',
   timestamp: new Date(),
 };
 
 const QUICK_ACTIONS = [
-  { label: 'Platform hakkında', message: 'QRATEX nedir ve nasıl çalışır?', icon: Rocket, color: 'from-violet-500 to-purple-500' },
-  { label: 'Puan sistemi', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star, color: 'from-amber-500 to-orange-500' },
-  { label: 'QR Kodlar', message: 'QR kod nasıl oluşturabilirim?', icon: Zap, color: 'from-cyan-500 to-blue-500' },
-  { label: 'Yardım', message: 'Bana yardım eder misin?', icon: Heart, color: 'from-pink-500 to-rose-500' },
+  { label: 'QRATEX nedir?', message: 'QRATEX nedir ve nasıl çalışır?', icon: Rocket, color: 'from-primary to-primary/80' },
+  { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star, color: 'from-amber-500 to-orange-500' },
+  { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?', icon: Zap, color: 'from-cyan-500 to-blue-500' },
+  { label: 'Yardım iste', message: 'Bana yardım eder misin?', icon: Heart, color: TW_BRAND_GRADIENT_STOPS_SOFT },
 ];
 
 const TYPING_MESSAGES = [
-  'Düşünüyorum... 🧠',
-  'Harika bir cevap hazırlıyorum... ✨',
-  'Neredeyse hazır... 🚀',
-  'Biraz sabır... 💫',
+  'Hmm, düşünüyorum…',
+  'Cevabı paketliyorum…',
+  'Neredeyse…',
+  'Son dokunuşlar…',
 ];
 
 // Floating particles component
-const FloatingParticles = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+const FloatingParticles = ({ enabled }: { enabled: boolean }) => {
+  if (!enabled) return null;
+  return (
+  <div className="pointer-events-none absolute inset-0 overflow-hidden">
     {[...Array(6)].map((_, i) => (
       <motion.div
         key={i}
@@ -82,32 +100,47 @@ const FloatingParticles = () => (
       />
     ))}
   </div>
-);
+  );
+};
 
 // Glowing orb for FAB
-const GlowingOrb = ({ isHovered }: { isHovered: boolean }) => (
-  <>
-    <motion.div
-      className="absolute inset-0 rounded-full bg-gradient-to-r from-primary via-purple-500 to-pink-500"
-      animate={{
-        scale: isHovered ? [1, 1.2, 1] : 1,
-        opacity: isHovered ? [0.5, 0.8, 0.5] : 0.5,
-      }}
-      transition={{ duration: 1.5, repeat: Infinity }}
-    />
-    <motion.div
-      className="absolute -inset-1 rounded-full bg-gradient-to-r from-primary via-purple-500 to-pink-500 blur-lg"
-      animate={{
-        scale: [1, 1.1, 1],
-        opacity: [0.3, 0.5, 0.3],
-      }}
-      transition={{ duration: 2, repeat: Infinity }}
-    />
-  </>
-);
+function GlowingOrb({ isHovered, reducedMotion }: { isHovered: boolean; reducedMotion: boolean }) {
+  if (reducedMotion) {
+    return (
+      <div
+        className={cn('absolute inset-0 rounded-full opacity-40', TW_BRAND_AURA_LINEAR)}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <>
+      <motion.div
+        className={cn('absolute inset-0 rounded-full', TW_BRAND_AURA_LINEAR)}
+        animate={{
+          scale: isHovered ? [1, 1.2, 1] : 1,
+          opacity: isHovered ? [0.5, 0.8, 0.5] : 0.5,
+        }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+        aria-hidden
+      />
+      <motion.div
+        className={cn('absolute -inset-1 rounded-full blur-lg', TW_BRAND_AURA_LINEAR)}
+        animate={{
+          scale: [1, 1.1, 1],
+          opacity: [0.3, 0.5, 0.3],
+        }}
+        transition={{ duration: 2, repeat: Infinity }}
+        aria-hidden
+      />
+    </>
+  );
+}
 
 export function Chatbot() {
   const { data: session } = useSession();
+  const prefersReducedMotion = useReducedMotion();
+  const motionLite = prefersReducedMotion === true;
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
@@ -130,6 +163,11 @@ export function Chatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
+  const closePanel = useCallback(() => {
+    setIsOpen(false);
+    setIsMinimized(false);
+  }, []);
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
@@ -138,6 +176,33 @@ export function Chatbot() {
     if (isOpen && !isMinimized) {
       inputRef.current?.focus();
     }
+  }, [isOpen, isMinimized]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      closePanel();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, closePanel]);
+
+  /** Arkaplan kaydırmasını tam genişlikte panel açıkken kapatır; scrollbar payı için padding telafisi */
+  useEffect(() => {
+    if (!isOpen || isMinimized) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const gap = typeof window !== 'undefined' ? window.innerWidth - document.documentElement.clientWidth : 0;
+    document.body.style.overflow = 'hidden';
+    if (gap > 0) {
+      document.body.style.paddingRight = `${gap}px`;
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
   }, [isOpen, isMinimized]);
 
   // Rotate typing message
@@ -190,7 +255,25 @@ export function Chatbot() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const waitSec = Math.max(
+          1,
+          Math.ceil((typeof data.retryAfterMs === 'number' ? data.retryAfterMs : 60_000) / 1000)
+        );
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content:
+            response.status === 429
+              ? `Vay, çok hızlısın! Dakika kotası doldu — ${waitSec} sn sonra tekrar dene. (Giriş yapan müşteriler de sınırlı; bayi ve admin daha rahat.)`
+              : (data.error as string) || 'Yanıt alınamadı.',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        return;
+      }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -205,7 +288,7 @@ export function Chatbot() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '❌ Bağlantı hatası. Lütfen tekrar deneyin.',
+        content: 'Bağlantı hatası. Lütfen tekrar deneyin.',
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -231,9 +314,17 @@ export function Chatbot() {
             animate={{ scale: 1, opacity: 1, rotate: 0 }}
             exit={{ scale: 0, opacity: 0, rotate: 180 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            className="fixed bottom-6 right-6 z-[9999]"
+            className={cn(
+              'fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))]',
+              floatingZTw.assistant
+            )}
           >
             <motion.button
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={false}
+              aria-controls="qratex-chatbot-panel"
+              aria-label="QRA sohbetini aç — yardıma hazırım"
               onClick={() => setIsOpen(true)}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => {
@@ -247,14 +338,16 @@ export function Chatbot() {
                 rotateY: springRotateY,
                 transformStyle: 'preserve-3d',
               }}
-              className="relative h-16 w-16 rounded-full shadow-2xl flex items-center justify-center group"
+              className="group relative flex h-16 w-16 touch-manipulation cursor-pointer items-center justify-center rounded-full shadow-2xl outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {/* Glow effects */}
-              <GlowingOrb isHovered={isHovered} />
+              <GlowingOrb isHovered={isHovered} reducedMotion={motionLite} />
               
               {/* Main button */}
               <motion.div
-                className="relative z-10 h-14 w-14 rounded-full bg-gradient-to-br from-primary via-purple-500 to-pink-500 flex items-center justify-center overflow-hidden shadow-inner"
+                className={cn(
+                  'relative z-10 h-14 w-14 rounded-full flex items-center justify-center overflow-hidden shadow-inner',
+                  TW_BRAND_ORB_FILL
+                )}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -275,6 +368,7 @@ export function Chatbot() {
                     alt="QRA Chatbot"
                     width={48}
                     height={48}
+                    priority
                     className="object-cover rounded-full"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
@@ -308,25 +402,28 @@ export function Chatbot() {
                     initial={{ opacity: 0, x: 10, scale: 0.8 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: 10, scale: 0.8 }}
-                    className="absolute right-full mr-3 px-3 py-2 bg-background/90 backdrop-blur-sm border border-border rounded-xl shadow-lg whitespace-nowrap"
+                    className="absolute right-full mr-3 max-w-[200px] rounded-2xl border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-xl shadow-primary/10 backdrop-blur-md"
                   >
-                    <div className="flex items-center gap-2">
-                      <Wand2 className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">AI Asistan</span>
+                    <p className="text-sm font-bold leading-tight text-foreground">QRA burada</p>
+                    <p className="mt-1 text-xs leading-snug text-muted-foreground">
+                      Soru sor, birlikte çözelim — tek dokunuş yeter.
+                    </p>
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                      <Wand2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Hazırım, bekliyorum
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">Sohbet etmek için tıkla!</p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </motion.button>
 
             {/* Orbiting particles */}
-            {isHovered && (
+            {isHovered && !motionLite && (
               <>
                 {[...Array(3)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-2 h-2 rounded-full bg-gradient-to-r from-primary to-purple-500"
+                    className={cn('absolute h-2 w-2 rounded-full', TW_BRAND_DOT)}
                     style={{
                       top: '50%',
                       left: '50%',
@@ -357,21 +454,34 @@ export function Chatbot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.8 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className={`fixed bottom-6 right-6 z-[9999] flex flex-col overflow-hidden ${
-              isMinimized ? 'w-80 h-16' : 'w-[400px] h-[550px] sm:w-[420px] sm:h-[600px]'
-            }`}
+            id="qratex-chatbot-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="QRA ile sohbet"
+            className={cn(
+              'fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] flex max-h-[calc(100dvh-6rem)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden',
+              floatingZTw.assistant,
+              isMinimized
+                ? 'h-16 w-[min(22rem,calc(100vw-2rem))] sm:w-80'
+                : 'h-[min(550px,calc(100dvh-5rem))] w-[min(400px,calc(100vw-2rem))] sm:h-[min(600px,calc(100dvh-4rem))] sm:w-[420px]'
+            )}
           >
             {/* Glassmorphism container */}
             <div className="absolute inset-0 bg-background/80 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl" />
             
             {/* Animated gradient border */}
-            <div className="absolute inset-0 rounded-3xl p-[1px] overflow-hidden">
-              <motion.div
-                className="absolute inset-[-50%] bg-gradient-conic from-primary via-purple-500 via-pink-500 via-orange-500 via-yellow-500 via-green-500 via-cyan-500 to-primary"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                style={{ opacity: 0.3 }}
-              />
+            <div className="absolute inset-0 overflow-hidden rounded-3xl p-[1px]">
+              {!motionLite ? (
+                <motion.div
+                  className="absolute inset-[-50%] bg-gradient-conic from-primary via-primary/80 via-violet-500 via-orange-500 via-yellow-500 via-green-500 via-cyan-500 to-primary"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                  style={{ opacity: 0.3 }}
+                  aria-hidden
+                />
+              ) : (
+                <div className={cn('absolute inset-0 rounded-3xl', TW_BRAND_PANEL_SHELL_SOFT)} aria-hidden />
+              )}
             </div>
 
             {/* Content wrapper */}
@@ -382,7 +492,7 @@ export function Chatbot() {
                 initial={false}
               >
                 {/* Header background with animated gradient */}
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-pink-500/20" />
+                <div className={cn('absolute inset-0', TW_BRAND_CHAT_HEADER_BG)} />
                 <motion.div
                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
                   animate={{ x: ['-100%', '100%'] }}
@@ -396,11 +506,16 @@ export function Chatbot() {
                     whileHover={{ scale: 1.1 }}
                   >
                     <motion.div
-                      className="absolute -inset-1 rounded-full bg-gradient-to-r from-primary to-purple-500 blur-sm"
+                      className={cn('absolute -inset-1 rounded-full blur-sm', TW_BRAND_AVATAR_HALO)}
                       animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     />
-                    <div className="relative h-11 w-11 rounded-full overflow-hidden bg-gradient-to-br from-primary to-purple-600 p-0.5">
+                    <div
+                      className={cn(
+                        'relative h-11 w-11 overflow-hidden rounded-full p-0.5',
+                        TW_BRAND_FACE_GRADIENT
+                      )}
+                    >
                       <div className="h-full w-full rounded-full overflow-hidden bg-background flex items-center justify-center">
                         <Image
                           src="/logo/chatbot.png"
@@ -423,30 +538,38 @@ export function Chatbot() {
                   </motion.div>
                   
                   <div>
-                    <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
-                      QRA Asistan
-                      <Sparkles className="h-4 w-4 text-yellow-500" />
+                    <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-bold sm:text-base">
+                      <span className={cn('truncate', TW_BRAND_HEADLINE_GRADIENT)}>
+                        QRA
+                      </span>
+                      {!isMinimized && (
+                        <Sparkles className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+                      )}
                     </h3>
-                    <motion.p 
-                      className="text-xs text-muted-foreground flex items-center gap-1"
-                      key={isLoading ? typingMessage : 'online'}
+                    <motion.p
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground sm:text-xs"
+                      key={isMinimized ? 'mini' : isLoading ? typingMessage : 'online'}
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
                     >
-                      {isLoading ? (
+                      {isMinimized ? (
+                        <span className="truncate text-primary/90">
+                          Küçük mod — genişlet, devam edelim
+                        </span>
+                      ) : isLoading ? (
                         <>
                           <motion.span
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                           >
-                            <Zap className="h-3 w-3 text-yellow-500" />
+                            <Zap className="h-3 w-3 text-amber-400" />
                           </motion.span>
-                          {typingMessage}
+                          <span className="text-foreground/80">{typingMessage}</span>
                         </>
                       ) : (
                         <>
-                          <span className="h-2 w-2 rounded-full bg-green-500" />
-                          Süper güçlerle donatılmış
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                          <span>Tatlı ama hızlı · Hazırım</span>
                         </>
                       )}
                     </motion.p>
@@ -457,11 +580,14 @@ export function Chatbot() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 rounded-xl hover:bg-white/10"
+                    aria-label={isMinimized ? 'Sohbeti genişlet — hadi devam' : 'Sohbeti küçült — minik mod'}
+                    title={isMinimized ? 'Genişlet, konuşalım' : 'Küçült — kenarda dursun'}
+                    type="button"
+                    className="h-11 w-11 touch-manipulation rounded-xl transition-colors duration-200 hover:bg-white/10 sm:h-9 sm:w-9"
                     onClick={() => setIsMinimized(!isMinimized)}
                   >
                     {isMinimized ? (
-                      <Maximize2 className="h-4 w-4" />
+                      <Maximize2 className="h-4 w-4 text-primary" />
                     ) : (
                       <Minimize2 className="h-4 w-4" />
                     )}
@@ -469,8 +595,11 @@ export function Chatbot() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 rounded-xl hover:bg-red-500/20 hover:text-red-500"
-                    onClick={() => setIsOpen(false)}
+                    type="button"
+                    aria-label="Sohbeti kapat — görüşürüz"
+                    title="Kapat"
+                    className="h-11 w-11 touch-manipulation rounded-xl transition-colors duration-200 hover:bg-red-500/20 hover:text-red-500 sm:h-9 sm:w-9"
+                    onClick={closePanel}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -481,10 +610,13 @@ export function Chatbot() {
               {!isMinimized && (
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
                   {/* Floating particles in chat */}
-                  <FloatingParticles />
+                  <FloatingParticles enabled={!motionLite} />
                   
                   {/* Messages container - scrollable */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ overflowY: 'auto' }}>
+                  <div
+                    className="flex-1 space-y-4 overflow-y-auto overscroll-contain touch-pan-y p-4"
+                    style={{ overflowY: 'auto' }}
+                  >
                     {messages.map((message, index) => (
                         <motion.div
                           key={message.id}
@@ -508,7 +640,7 @@ export function Chatbot() {
                               ) : (
                                 <>
                                   <AvatarImage src={session?.user?.image || ''} />
-                                  <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white">
+                                  <AvatarFallback className={cn(TW_BRAND_FACE_GRADIENT, 'text-white')}>
                                     <User className="h-4 w-4" />
                                   </AvatarFallback>
                                 </>
@@ -521,8 +653,8 @@ export function Chatbot() {
                             whileHover={{ scale: 1.02 }}
                             className={`relative max-w-[80%] ${
                               message.role === 'user'
-                                ? 'bg-gradient-to-br from-primary to-purple-600 text-white rounded-2xl rounded-tr-sm'
-                                : 'bg-muted/80 backdrop-blur-sm rounded-2xl rounded-tl-sm border border-border/50'
+                                ? cn(TW_BRAND_USER_BUBBLE, 'rounded-2xl rounded-tr-sm')
+                                : 'rounded-2xl rounded-tl-sm border border-border/50 bg-muted/80 backdrop-blur-sm'
                             } px-4 py-3 shadow-lg`}
                           >
                             {/* Shine effect for user messages */}
@@ -564,7 +696,7 @@ export function Chatbot() {
                                 {[0, 1, 2].map((i) => (
                                   <motion.span
                                     key={i}
-                                    className="h-2 w-2 bg-gradient-to-r from-primary to-purple-500 rounded-full"
+                                    className={cn('h-2 w-2 rounded-full', TW_BRAND_DOT)}
                                     animate={{
                                       y: [0, -8, 0],
                                       scale: [1, 1.2, 1],
@@ -582,7 +714,7 @@ export function Chatbot() {
                                 animate={{ opacity: [0.5, 1, 0.5] }}
                                 transition={{ duration: 1.5, repeat: Infinity }}
                               >
-                                AI düşünüyor...
+                                Hmm, düşünüyorum…
                               </motion.span>
                             </div>
                           </div>
@@ -600,9 +732,12 @@ export function Chatbot() {
                           exit={{ opacity: 0, y: 20 }}
                           className="px-4 pb-3 shrink-0"
                         >
-                          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                            <Lightbulb className="h-3 w-3" />
-                            Hızlı başlangıç
+                          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                            <Lightbulb className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                            Hadi başlayalım
+                          </p>
+                          <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+                            Aşağıdan birini seç veya aklına geleni yaz.
                           </p>
                           <div className="grid grid-cols-2 gap-2">
                             {QUICK_ACTIONS.map((action, i) => (
@@ -611,10 +746,11 @@ export function Chatbot() {
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ delay: i * 0.1 }}
-                                whileHover={{ scale: 1.03, y: -2 }}
-                                whileTap={{ scale: 0.97 }}
+                                whileHover={motionLite ? undefined : { scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
                                 onClick={() => sendMessage(action.message)}
-                                className={`relative p-3 rounded-xl bg-gradient-to-br ${action.color} text-white text-left overflow-hidden group`}
+                                className={`group relative overflow-hidden rounded-xl bg-gradient-to-br p-3 text-left text-white touch-manipulation transition-transform duration-200 ${action.color}`}
                               >
                                 <motion.div
                                   className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
@@ -638,27 +774,35 @@ export function Chatbot() {
                       <div className="relative flex gap-2">
                         <div className="flex-1 relative group">
                           <motion.div
-                            className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-primary via-purple-500 to-pink-500 opacity-0 group-focus-within:opacity-100 blur transition-opacity"
+                            className={cn(
+                              'absolute -inset-0.5 rounded-xl opacity-0 blur transition-opacity group-focus-within:opacity-100',
+                              TW_BRAND_AURA_LINEAR
+                            )}
                           />
                           <textarea
                             ref={inputRef}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Mesajını yaz... ✨"
+                            placeholder="Merhaba de… ya da merak ettiğini yaz"
                             disabled={isLoading}
                             rows={1}
-                            className="relative w-full px-4 py-3 bg-muted/50 backdrop-blur-sm border border-border/50 rounded-xl text-sm resize-none focus:outline-none focus:border-primary/50 transition-colors disabled:opacity-50"
-                            style={{ minHeight: '44px', maxHeight: '120px' }}
+                            className="relative min-h-[44px] w-full resize-none touch-manipulation rounded-xl border border-border/50 bg-muted/50 px-4 py-3 text-sm backdrop-blur-sm transition-[border-color,background-color] duration-200 focus:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
+                            style={{ maxHeight: '120px' }}
                           />
                         </div>
                         
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                           <Button
+                            type="button"
+                            aria-label="Gönder"
                             onClick={() => sendMessage(input)}
                             disabled={!input.trim() || isLoading}
                             size="icon"
-                            className="h-11 w-11 rounded-xl bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-lg shadow-primary/25 disabled:opacity-50 disabled:shadow-none"
+                            className={cn(
+                              'h-11 w-11 touch-manipulation rounded-xl transition-[opacity,box-shadow] duration-200 disabled:opacity-50 disabled:shadow-none',
+                              TW_BRAND_SEND_BTN
+                            )}
                           >
                             <motion.div
                               animate={input.trim() ? { rotate: [0, -10, 10, 0] } : {}}
@@ -670,15 +814,15 @@ export function Chatbot() {
                         </motion.div>
                       </div>
                       
-                      <motion.p 
-                        className="text-[10px] text-muted-foreground text-center mt-3 flex items-center justify-center gap-1"
+                      <motion.p
+                        className="mt-3 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.5 }}
                       >
-                        <Zap className="h-3 w-3 text-yellow-500" />
-                        Powered by Groq AI
-                        <Coffee className="h-3 w-3 text-orange-500" />
+                        <Zap className="h-3 w-3 text-amber-400" aria-hidden />
+                        Groq ile güçlü · Seni dinliyorum
+                        <Coffee className="h-3 w-3 text-orange-400" aria-hidden />
                       </motion.p>
                     </div>
                   </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { GALAXY_SPIRAL_ARM_COLORS } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface GalaxyBackgroundProps {
@@ -43,12 +44,7 @@ export function GalaxyBackground({ children, className }: GalaxyBackgroundProps)
       arm: number;
     }
 
-    const armColors = [
-      ['#ff6b9d', '#c44569', '#ff8a5c'],
-      ['#9b59b6', '#8e44ad', '#a569bd'],
-      ['#3498db', '#2980b9', '#5dade2'],
-      ['#1abc9c', '#16a085', '#48c9b0'],
-    ];
+    const armColors = GALAXY_SPIRAL_ARM_COLORS;
 
     const galaxyStars: GalaxyStar[] = [];
     const numArms = 4;

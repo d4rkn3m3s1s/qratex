@@ -6,12 +6,15 @@ import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SkipToMainContent } from '@/components/layout/skip-to-main';
+import { useAppT } from '@/lib/app-locale';
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const t = useAppT();
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
 
@@ -19,15 +22,47 @@ export default function AuthLayout({
     setMounted(true);
   }, []);
 
+  const forceModeDom = (mode: 'light' | 'dark' | 'system') => {
+    const resolved =
+      mode === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+        : mode;
+    const root = document.documentElement;
+    const body = document.body;
+    root.classList.remove('light', 'dark');
+    root.classList.add(resolved);
+    root.setAttribute('data-theme', resolved);
+    root.style.colorScheme = resolved;
+    if (body) {
+      body.classList.remove('light', 'dark');
+      body.classList.add(resolved);
+      body.setAttribute('data-theme', resolved);
+      body.style.colorScheme = resolved;
+    }
+  };
+
+  const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
+    localStorage.setItem('qratex-theme', mode);
+    localStorage.setItem('theme', mode);
+    forceModeDom(mode);
+    setTheme(mode);
+  };
+
   const toggleTheme = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+    applyThemeSelection(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div className="flex min-h-dvh flex-col">
+      <SkipToMainContent targetId="auth-main" />
       {/* Header */}
-      <header className="p-4 safe-top flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 w-fit">
+      <header className="safe-top sticky top-0 z-20 flex items-center justify-between border-b border-border/50 bg-background/80 px-4 py-3 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+        <Link
+          href="/"
+          className="flex w-fit cursor-pointer items-center gap-2 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+        >
           {mounted && (
             <>
               {/* Dark theme logo */}
@@ -36,7 +71,7 @@ export default function AuthLayout({
                 alt="QRATEX Logo"
                 width={56}
                 height={56}
-                className="object-contain w-12 h-12 sm:w-14 sm:h-14 hidden dark:block"
+                className="object-contain h-10 sm:h-11 hidden dark:block"
                 priority
               />
               {/* Light theme logo */}
@@ -45,7 +80,7 @@ export default function AuthLayout({
                 alt="QRATEX Logo"
                 width={56}
                 height={56}
-                className="object-contain w-12 h-12 sm:w-14 sm:h-14 block dark:hidden"
+                className="object-contain h-10 sm:h-11 block dark:hidden"
                 priority
               />
               {/* Dark theme font */}
@@ -54,7 +89,7 @@ export default function AuthLayout({
                 alt="QRATEX"
                 width={140}
                 height={36}
-                className="object-contain h-8 sm:h-9 hidden dark:block"
+                className="object-contain h-10 sm:h-11 hidden dark:block"
                 style={{ width: 'auto' }}
                 priority
               />
@@ -64,7 +99,7 @@ export default function AuthLayout({
                 alt="QRATEX"
                 width={140}
                 height={36}
-                className="object-contain h-8 sm:h-9 block dark:hidden"
+                className="object-contain h-10 sm:h-11 block dark:hidden"
                 style={{ width: 'auto' }}
                 priority
               />
@@ -72,24 +107,28 @@ export default function AuthLayout({
           )}
         </Link>
 
-        {/* Theme Toggle */}
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           onClick={toggleTheme}
-          className="rounded-full"
+          className="h-11 min-h-11 min-w-11 w-11 touch-manipulation rounded-full transition-colors duration-200"
+          aria-label={t('common.toggleTheme')}
         >
           {mounted && resolvedTheme === 'dark' ? (
-            <Sun className="h-5 w-5" />
+            <Sun className="h-5 w-5" aria-hidden />
           ) : (
-            <Moon className="h-5 w-5" />
+            <Moon className="h-5 w-5" aria-hidden />
           )}
-          <span className="sr-only">Tema Değiştir</span>
         </Button>
       </header>
 
       {/* Content */}
-      <main className="flex-1 flex items-center justify-center p-4">
+      <main
+        id="auth-main"
+        tabIndex={-1}
+        className="flex flex-1 items-center justify-center p-4 outline-none pb-[max(1.5rem,env(safe-area-inset-bottom))] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-6"
+      >
         {children}
       </main>
 

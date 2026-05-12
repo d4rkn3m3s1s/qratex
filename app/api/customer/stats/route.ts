@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Giriş yapmalısınız' }, { status: 401 });
-    }
+    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const userId = session.user.id;
 
@@ -50,13 +49,13 @@ export async function GET() {
     
     try {
       const [userCards, consumptionCount, consumptionReviewCount, recentConsumptions] = await Promise.all([
-        (prisma as any).physicalCard.findMany({
+        prisma.physicalCard.findMany({
           where: { customerId: userId, status: 'ACTIVATED' },
           select: { id: true, token: true, activatedAt: true, _count: { select: { consumptions: true } } },
         }),
-        (prisma as any).consumption.count({ where: { customerId: userId } }),
-        (prisma as any).consumptionReview.count({ where: { customerId: userId } }),
-        (prisma as any).consumption.findMany({
+        prisma.consumption.count({ where: { customerId: userId } }),
+        prisma.consumptionReview.count({ where: { customerId: userId } }),
+        prisma.consumption.findMany({
           where: { customerId: userId },
           orderBy: { createdAt: 'desc' },
           take: 5,
@@ -166,6 +165,8 @@ export async function GET() {
         })),
         recentConsumptions: formattedConsumptions,
       },
+    }, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
     });
   } catch (error) {
     console.error('Customer stats error:', error);

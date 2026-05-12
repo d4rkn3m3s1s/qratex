@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parseCursor, encodeCursor } from '@/lib/cursor-pagination';
+import { requireAuth } from '@/lib/api-auth';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
+import { adminUsersQuerySchema } from '@/lib/validations-admin';
+
+
+export const dynamic = 'force-dynamic';
 
 const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
@@ -12,8 +17,12 @@ const updateUserSchema = z.object({
   points: z.number().optional(),
   level: z.number().positive().optional(),
   xp: z.number().nonnegative().optional(),
+  phone: z.string().max(30).optional().nullable(),
   businessName: z.string().max(100).optional().nullable(),
   businessDesc: z.string().max(500).optional().nullable(),
+  address: z.string().max(200).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
   image: z.string().optional().nullable(),
 });
 
@@ -76,17 +85,23 @@ const sendNotificationSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
-    const role = searchParams.get('role');
-    const search = searchParams.get('search');
+    const queryParsed = adminUsersQuerySchema.safeParse({
+      page: searchParams.get('page') || undefined,
+      pageSize: searchParams.get('pageSize') || undefined,
+      search: searchParams.get('search') || undefined,
+      role: searchParams.get('role') || undefined,
+      cursor: searchParams.get('cursor') || undefined,
+    });
+    const { page, pageSize, search, role, cursor: cursorParam } = queryParsed.success
+      ? queryParsed.data
+      : { page: 1, pageSize: 20, search: undefined as string | undefined, role: undefined as string | undefined, cursor: undefined as string | undefined };
     const skip = (page - 1) * pageSize;
+    const useCursor = !!cursorParam;
 
     const where: Record<string, unknown> = {};
 
@@ -102,43 +117,90 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-          role: true,
-          points: true,
-          level: true,
-          xp: true,
-          businessName: true,
-          emailVerified: true,
-          createdAt: true,
-          updatedAt: true,
-          _count: {
+    const parsed = useCursor ? parseCursor(cursorParam) : undefined;
+
+    const [usersRaw, total] = await Promise.all([
+      useCursor
+        ? prisma.user.findMany({
+            where,
+            skip: parsed ? 1 : 0,
+            take: pageSize + 1,
+            orderBy: { id: 'desc' },
+            ...(parsed ? { cursor: { id: parsed.id } } : {}),
             select: {
-              feedbacks: true,
-              qrCodes: true,
-              badges: true,
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              role: true,
+              phone: true,
+              points: true,
+              level: true,
+              xp: true,
+              businessName: true,
+              businessDesc: true,
+              address: true,
+              latitude: true,
+              longitude: true,
+              emailVerified: true,
+              createdAt: true,
+              updatedAt: true,
+              _count: {
+                select: {
+                  feedbacks: true,
+                  qrCodes: true,
+                  badges: true,
+                },
+              },
             },
-          },
-        },
-      }),
+          })
+        : prisma.user.findMany({
+            where,
+            skip,
+            take: pageSize,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              role: true,
+              phone: true,
+              points: true,
+              level: true,
+              xp: true,
+              businessName: true,
+              businessDesc: true,
+              address: true,
+              latitude: true,
+              longitude: true,
+              emailVerified: true,
+              createdAt: true,
+              updatedAt: true,
+              _count: {
+                select: {
+                  feedbacks: true,
+                  qrCodes: true,
+                  badges: true,
+                },
+              },
+            },
+          }),
       prisma.user.count({ where }),
     ]);
+
+    const users = useCursor && usersRaw.length > pageSize ? usersRaw.slice(0, pageSize) : usersRaw;
+    const hasMore = useCursor && usersRaw.length > pageSize;
+    const lastId = users.length > 0 ? users[users.length - 1]?.id : null;
+    const nextCursor = useCursor && hasMore && lastId ? encodeCursor(lastId) : undefined;
 
     return NextResponse.json({
       items: users,
       total,
-      page,
+      page: useCursor ? undefined : page,
       pageSize,
-      totalPages: Math.ceil(total / pageSize),
+      totalPages: useCursor ? undefined : Math.ceil(total / pageSize),
+      ...(nextCursor && { nextCursor }),
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -154,10 +216,10 @@ export async function GET(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const validatedData = createUserSchema.safeParse(body);
@@ -211,6 +273,7 @@ export async function POST(request: NextRequest) {
         entity: 'user',
         entityId: user.id,
         newData: { name, email, role },
+        ...auditMeta,
       },
     });
 
@@ -229,10 +292,10 @@ export async function POST(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('id');
@@ -286,9 +349,14 @@ export async function PUT(request: NextRequest) {
         name: true,
         email: true,
         role: true,
+        phone: true,
         points: true,
         level: true,
         businessName: true,
+        businessDesc: true,
+        address: true,
+        latitude: true,
+        longitude: true,
         updatedAt: true,
       },
     });
@@ -307,6 +375,7 @@ export async function PUT(request: NextRequest) {
           points: existing.points,
         },
         newData: validatedData.data,
+        ...auditMeta,
       },
     });
 
@@ -325,10 +394,10 @@ export async function PUT(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const { action } = body;
@@ -362,6 +431,7 @@ export async function PATCH(request: NextRequest) {
             entity: 'user',
             entityId: data.userId,
             newData: { amount: data.amount, reason: data.reason },
+            ...auditMeta,
           },
         });
 
@@ -477,6 +547,7 @@ export async function PATCH(request: NextRequest) {
             entity: 'user_badge',
             entityId: userBadge.id,
             newData: { userId: data.userId, badgeId: data.badgeId },
+            ...auditMeta,
           },
         });
 
@@ -584,10 +655,10 @@ export async function PATCH(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('id');
@@ -634,6 +705,7 @@ export async function DELETE(request: NextRequest) {
           email: existing.email,
           role: existing.role,
         },
+        ...auditMeta,
       },
     });
 

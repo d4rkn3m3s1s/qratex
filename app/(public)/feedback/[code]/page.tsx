@@ -5,12 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, Send, Camera, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Star, Send, Camera, X, Check, Loader2, AlertCircle, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { t, Locale, defaultLocale } from '@/i18n/request';
+import { LOCALE_STORAGE_KEY, writeLocaleCookieClient } from '@/lib/locale-shared';
 
 interface QRCodeData {
   id: string;
@@ -19,6 +21,10 @@ interface QRCodeData {
   dealer: {
     businessName: string | null;
     name: string | null;
+    staffMembers?: {
+      id: string;
+      user: { name: string | null; image: string | null };
+    }[];
   };
 }
 
@@ -39,6 +45,33 @@ export default function FeedbackPage() {
   const [hoverRating, setHoverRating] = useState(0);
   const [text, setText] = useState('');
   const [images, setImages] = useState<string[]>([]);
+  const [npsScore, setNpsScore] = useState<number | null>(null);
+  const [staffId, setStaffId] = useState<string | null>(null);
+
+  // i18n
+  const [locale, setLocale] = useState<Locale>(defaultLocale);
+
+  useEffect(() => {
+    // If logged in user has a language preference, use it
+    const userPref = (session?.user as any)?.preferredLanguage;
+    if (userPref === 'en') {
+      setLocale('en');
+      writeLocaleCookieClient('en');
+    } else {
+      // Check localStorage for anonymous users
+      const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+      const next = saved === 'en' || saved === 'tr' ? saved : defaultLocale;
+      setLocale(next);
+      writeLocaleCookieClient(next);
+    }
+  }, [session]);
+
+  const toggleLocale = () => {
+    const nextLocale = locale === 'tr' ? 'en' : 'tr';
+    setLocale(nextLocale);
+    localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    writeLocaleCookieClient(nextLocale);
+  };
 
   // Fetch QR code data
   useEffect(() => {
@@ -84,6 +117,8 @@ export default function FeedbackPage() {
           rating,
           text: text.trim() || undefined,
           media: images.length > 0 ? images : undefined,
+          ...(npsScore != null && { npsScore }),
+          ...(staffId && { dealerStaffId: staffId }),
         }),
       });
 
@@ -135,7 +170,7 @@ export default function FeedbackPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Yükleniyor...</p>
+          <p className="text-muted-foreground">{t(locale, 'common.loading')}</p>
         </div>
       </div>
     );
@@ -148,10 +183,10 @@ export default function FeedbackPage() {
         <Card className="max-w-md w-full text-center">
           <CardContent className="pt-6">
             <AlertCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Hata</h2>
+            <h2 className="text-xl font-semibold mb-2">{t(locale, 'common.error')}</h2>
             <p className="text-muted-foreground mb-6">{error}</p>
             <Button asChild variant="outline">
-              <Link href="/">Ana Sayfaya Dön</Link>
+              <Link href="/">{t(locale, 'publicFeedback.returnHome')}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -180,14 +215,14 @@ export default function FeedbackPage() {
               </motion.div>
             </div>
             <CardContent className="pt-6 pb-8">
-              <h2 className="text-2xl font-bold mb-2">Teşekkürler! 🎉</h2>
+              <h2 className="text-2xl font-bold mb-2">{t(locale, 'publicFeedback.successMsg')}</h2>
               <p className="text-muted-foreground mb-6">
-                Geri bildiriminiz başarıyla kaydedildi.
+                {t(locale, 'publicFeedback.successMsg')}
                 {session?.user && (
                   <>
                     <br />
                     <span className="text-primary font-medium">
-                      +{text.trim().length > 50 ? 100 : 50} puan kazandınız!
+                      +{text.trim().length > 50 ? 100 : 50} {t(locale, 'publicFeedback.pointsEarned')}
                     </span>
                   </>
                 )}
@@ -195,17 +230,17 @@ export default function FeedbackPage() {
               <div className="space-y-3">
                 {session?.user ? (
                   <Button asChild variant="gradient" className="w-full">
-                    <Link href="/customer">Dashboard'a Git</Link>
+                    <Link href="/customer">{t(locale, 'publicFeedback.goToDashboard')}</Link>
                   </Button>
                 ) : (
                   <>
                     <Button asChild variant="gradient" className="w-full">
                       <Link href="/auth/register">
-                        Kayıt Ol ve Puan Kazan
+                        {t(locale, 'publicFeedback.signUpToEarn')}
                       </Link>
                     </Button>
                     <Button asChild variant="outline" className="w-full">
-                      <Link href="/">Ana Sayfaya Dön</Link>
+                      <Link href="/">{t(locale, 'publicFeedback.returnHome')}</Link>
                     </Button>
                   </>
                 )}
@@ -224,9 +259,14 @@ export default function FeedbackPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
+        <div className="flex justify-end mb-4">
+          <Button variant="ghost" size="sm" onClick={toggleLocale} className="text-xs uppercase font-semibold">
+            {locale === 'tr' ? 'EN' : 'TR'}
+          </Button>
+        </div>
         <Card glass>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Geri Bildirim</CardTitle>
+            <CardTitle className="text-2xl">{t(locale, 'publicFeedback.title')}</CardTitle>
             <CardDescription>
               <span className="font-medium text-foreground">
                 {qrData?.dealer.businessName || qrData?.dealer.name}
@@ -238,7 +278,7 @@ export default function FeedbackPage() {
           <CardContent className="space-y-6">
             {/* Rating */}
             <div className="space-y-3">
-              <Label className="text-center block">Deneyiminizi Değerlendirin</Label>
+              <Label className="text-center block">{t(locale, 'publicFeedback.rateExperience')}</Label>
               <div className="flex justify-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <motion.button
@@ -250,6 +290,7 @@ export default function FeedbackPage() {
                     onMouseEnter={() => setHoverRating(star)}
                     onMouseLeave={() => setHoverRating(0)}
                     className="touch-manipulation"
+                    aria-label={`${star} star`}
                   >
                     <Star
                       className={cn(
@@ -268,31 +309,116 @@ export default function FeedbackPage() {
                   animate={{ opacity: 1 }}
                   className="text-center text-sm text-muted-foreground"
                 >
-                  {rating === 5 && 'Mükemmel! 🌟'}
-                  {rating === 4 && 'Çok İyi! 😊'}
-                  {rating === 3 && 'İyi 👍'}
-                  {rating === 2 && 'Geliştirilmeli 🤔'}
-                  {rating === 1 && 'Kötü 😞'}
+                  {rating === 5 && t(locale, 'publicFeedback.excellent')}
+                  {rating === 4 && t(locale, 'publicFeedback.veryGood')}
+                  {rating === 3 && t(locale, 'publicFeedback.good')}
+                  {rating === 2 && t(locale, 'publicFeedback.needsImprovement')}
+                  {rating === 1 && t(locale, 'publicFeedback.bad')}
                 </motion.p>
               )}
             </div>
 
+            {/* Staff Selection (S6-T7) */}
+            {qrData?.dealer?.staffMembers && qrData.dealer.staffMembers.length > 0 && (
+              <div className="space-y-3">
+                <Label className="text-center block text-sm text-foreground/80 flex items-center justify-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  {t(locale, 'publicFeedback.rateStaff') || 'Hangi personelimizle ilgilendiniz? (Opsiyonel)'}
+                </Label>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x justify-start sm:justify-center">
+                  {qrData.dealer.staffMembers.map(staff => (
+                    <button
+                      key={staff.id}
+                      type="button"
+                      onClick={() => setStaffId(staffId === staff.id ? null : staff.id)}
+                      className={`flex flex-col items-center gap-2 min-w-[70px] p-2 rounded-2xl transition-all border snap-center ${staffId === staff.id
+                          ? 'border-primary bg-primary/10 shadow-sm scale-105'
+                          : 'border-transparent bg-muted/40 hover:bg-muted opacity-80'
+                        }`}
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-background flex items-center justify-center shadow-inner border border-border/80 dark:border-white/25">
+                        {staff.user.image ? (
+                          <img src={staff.user.image} alt={staff.user.name || ''} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold text-muted-foreground uppercase">{staff.user.name?.slice(0, 2) || 'PP'}</span>
+                        )}
+                      </div>
+                      <span className={`text-[11px] font-medium leading-tight text-center truncate w-full ${staffId === staff.id ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {staff.user.name?.split(' ')[0] || 'Personel'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* NPS (Ö6) – opsiyonel */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs">{t(locale, 'publicFeedback.npsQuestion')}</Label>
+              <div className="flex flex-wrap gap-1">
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setNpsScore(n)}
+                    className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${npsScore === n
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                      }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick feedback options (Ö3) */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs">{t(locale, 'publicFeedback.quickOptions')}</Label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'Çok memnunum',
+                  'Personel çok ilgili',
+                  'Temizlik mükemmel',
+                  'Fiyat uygun',
+                  'Tavsiye ederim',
+                  'Bekleme süresi uzundu',
+                  'Hizmet yavaştı',
+                  'Geliştirilmeli',
+                  'Geri döneceğim',
+                ].map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => {
+                      const sep = text ? ' ' : '';
+                      const newText = text + sep + option;
+                      if (newText.length <= 2000) setText(newText);
+                    }}
+                    className="inline-flex items-center rounded-full border border-border/80 bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-primary/10 hover:border-primary/30 transition-colors dark:border-white/25"
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Comment */}
             <div className="space-y-2">
-              <Label htmlFor="comment">Yorumunuz (opsiyonel)</Label>
+              <Label htmlFor="comment">{t(locale, 'publicFeedback.commentLabel')}</Label>
               <textarea
                 id="comment"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Deneyiminizi detaylı anlatın..."
+                placeholder={t(locale, 'publicFeedback.commentPlaceholder')}
                 rows={4}
-                className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                className="flex w-full rounded-lg border border-border/80 bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none dark:border-white/25 dark:bg-white/[0.07]"
                 maxLength={2000}
               />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>
                   {text.trim().length > 50 && (
-                    <span className="text-primary">+50 bonus puan!</span>
+                    <span className="text-primary">+50 {t(locale, 'publicFeedback.bonusPoints')}</span>
                   )}
                 </span>
                 <span>{text.length}/2000</span>
@@ -301,12 +427,12 @@ export default function FeedbackPage() {
 
             {/* Image Upload */}
             <div className="space-y-2">
-              <Label>Fotoğraf Ekle (opsiyonel)</Label>
+              <Label>{t(locale, 'publicFeedback.addPhoto')}</Label>
               <div className="flex flex-wrap gap-2">
                 <AnimatePresence>
                   {images.map((img, index) => (
                     <motion.div
-                      key={index}
+                      key={img}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
@@ -346,9 +472,9 @@ export default function FeedbackPage() {
             {!session?.user && (
               <div className="p-4 rounded-lg bg-primary/10 text-sm text-center">
                 <Link href="/auth/login" className="text-primary hover:underline font-medium">
-                  Giriş yapın
+                  {t(locale, 'publicFeedback.loginHint')}
                 </Link>{' '}
-                ve geri bildirimleriniz için puan kazanın!
+                {t(locale, 'publicFeedback.loginSuffix')}
               </div>
             )}
 
@@ -363,12 +489,12 @@ export default function FeedbackPage() {
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Gönderiliyor...
+                  {t(locale, 'publicFeedback.sending')}
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4 mr-2" />
-                  Gönder
+                  {t(locale, 'publicFeedback.send')}
                 </>
               )}
             </Button>

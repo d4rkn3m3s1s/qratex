@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { FIREFLIES_COLORS_DARK, FIREFLIES_COLORS_LIGHT } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface Firefly {
@@ -45,8 +46,8 @@ export function FirefliesBackground({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const darkColors = ['#fbbf24', '#f59e0b', '#d97706', '#fcd34d', '#fef3c7'];
-    const lightColors = ['#ea580c', '#c2410c', '#9a3412', '#f97316', '#fb923c'];
+    const darkColors = [...FIREFLIES_COLORS_DARK];
+    const lightColors = [...FIREFLIES_COLORS_LIGHT];
     const colors = isDark ? darkColors : lightColors;
 
     const fireflies: Firefly[] = Array.from({ length: count }, () => ({

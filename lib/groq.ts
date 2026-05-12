@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { detectPromptInjection } from '@/lib/prompt-injection';
 
 // Groq API Client (OpenAI uyumlu)
 let groqClient: OpenAI | null = null;
@@ -17,7 +18,7 @@ function getGroqClient(): OpenAI | null {
 }
 
 // Model seçenekleri
-const MODELS = {
+export const MODELS = {
   fast: 'llama-3.3-70b-versatile', // Hızlı ve güçlü (70B)
   reasoning: 'deepseek-r1-distill-llama-70b', // Akıl yürütme
   instant: 'llama-3.1-8b-instant', // Çok hızlı, küçük model (8B)
@@ -99,6 +100,9 @@ export async function chatWithQRA(
   if (!client) {
     return '🔧 AI asistanı şu anda bakımda. Lütfen daha sonra tekrar deneyin.';
   }
+  if (detectPromptInjection(message)) {
+    return 'Bu mesaj güvenlik nedeniyle işlenemiyor. Lütfen farklı bir soru deneyin.';
+  }
 
   try {
     // Context ekle
@@ -159,7 +163,10 @@ export async function suggestResponseWithGroq(
   }
 
   const sentiment = rating >= 4 ? 'olumlu' : rating <= 2 ? 'olumsuz' : 'nötr';
-  
+  if (detectPromptInjection(feedbackText)) {
+    return [];
+  }
+
   try {
     const response = await withRetry(() =>
       client.chat.completions.create({

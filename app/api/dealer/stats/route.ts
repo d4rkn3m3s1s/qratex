@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+/** Session + token replay uses `headers()` — must not participate in static route analysis. */
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(['DEALER']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
     const dealerId = session.user.id;
     
     // Date ranges for comparison
@@ -19,13 +18,18 @@ export async function GET() {
     const prev30Days = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Get dealer's QR codes
+    // Get dealer's QR codes (select only columns that exist on all deployments)
     const qrCodes = await prisma.qRCode.findMany({
       where: { dealerId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        isActive: true,
+        scanCount: true,
         _count: { select: { feedbacks: true } },
         feedbacks: {
-          select: { rating: true, sentiment: true, createdAt: true, text: true },
+          select: { rating: true, sentiment: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
         },
       },
@@ -38,11 +42,24 @@ export async function GET() {
       totalCustomers: 0,
       consumptionReviewCount: 0,
       recentConsumptionReviews: [] as any[],
+      /** İstatistik birleştirmesi için hafif satırlar (tam consumption listesi yerine). */
+      reviewsForMerge: [] as Array<{ rating: number; createdAt: Date }>,
     };
-    
+
     try {
-      const [consumptions, consumptionReviews, uniqueCustomers] = await Promise.all([
-        (prisma as any).consumption.findMany({
+      const [
+        totalConsumptions,
+        consumptionReviewCount,
+        consumptionsRecent,
+        consumptionReviews,
+        uniqueCustomers,
+        reviewsForMerge,
+      ] = await Promise.all([
+        prisma.consumption.count({ where: { dealerId } }),
+        prisma.consumption.count({
+          where: { dealerId, review: { isNot: null } },
+        }),
+        prisma.consumption.findMany({
           where: { dealerId },
           include: {
             customer: { select: { id: true, name: true, image: true } },
@@ -50,8 +67,9 @@ export async function GET() {
             review: { select: { id: true, rating: true, text: true, createdAt: true } },
           },
           orderBy: { createdAt: 'desc' },
+          take: 5,
         }),
-        (prisma as any).consumptionReview.findMany({
+        prisma.consumptionReview.findMany({
           where: { consumption: { dealerId } },
           include: {
             customer: { select: { name: true, image: true } },
@@ -60,18 +78,23 @@ export async function GET() {
           orderBy: { createdAt: 'desc' },
           take: 10,
         }),
-        (prisma as any).consumption.groupBy({
+        prisma.consumption.groupBy({
           by: ['customerId'],
           where: { dealerId },
         }),
+        prisma.consumptionReview.findMany({
+          where: { consumption: { dealerId } },
+          select: { rating: true, createdAt: true },
+        }),
       ]);
-      
+
       consumptionData = {
-        consumptions,
-        totalConsumptions: consumptions.length,
+        consumptions: consumptionsRecent,
+        totalConsumptions,
         totalCustomers: uniqueCustomers.length,
-        consumptionReviewCount: consumptions.filter((c: any) => c.review).length,
+        consumptionReviewCount,
         recentConsumptionReviews: consumptionReviews,
+        reviewsForMerge,
       };
     } catch (e) {
       console.log('Consumption data not available:', e);
@@ -84,14 +107,12 @@ export async function GET() {
     
     // Get all feedbacks (QR + Consumption)
     const allQRFeedbacks = qrCodes.flatMap(q => q.feedbacks);
-    const allConsumptionReviews = consumptionData.consumptions
-      .filter((c: any) => c.review)
-      .map((c: any) => ({
-        rating: c.review.rating,
-        sentiment: c.review.rating >= 4 ? 'positive' : c.review.rating >= 3 ? 'neutral' : 'negative',
-        createdAt: c.review.createdAt,
-        text: c.review.text,
-      }));
+    const allConsumptionReviews = consumptionData.reviewsForMerge.map((r) => ({
+      rating: r.rating,
+      sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
+      createdAt: r.createdAt,
+      text: null as string | null,
+    }));
     
     const allFeedbacks = [...allQRFeedbacks, ...allConsumptionReviews];
     const totalFeedbacks = allFeedbacks.length;
@@ -132,7 +153,7 @@ export async function GET() {
       negative: Math.round((sentimentData.negative / totalSentiment) * 100),
     };
     
-    // Weekly chart data
+    // Weekly chart data (last 7 days)
     const weeklyData = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
@@ -153,16 +174,50 @@ export async function GET() {
       });
     }
 
-    // Recent QR feedbacks
-    const recentFeedbacksData = await prisma.feedback.findMany({
-      where: { qrCode: { dealerId } },
-      include: {
-        qrCode: { select: { name: true } },
-        user: { select: { name: true, image: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
+    // Previous week (7–14 days ago) for comparison
+    const previousWeekData: Array<{ day: string; feedbacks: number; avgRating: number }> = [];
+    let previousWeekFeedbacks = 0;
+    for (let i = 13; i >= 7; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dayStart = new Date(date.setHours(0, 0, 0, 0));
+      const dayEnd = new Date(date.setHours(23, 59, 59, 999));
+      const dayFeedbacks = allFeedbacks.filter(f => {
+        const fDate = new Date(f.createdAt);
+        return fDate >= dayStart && fDate <= dayEnd;
+      });
+      previousWeekFeedbacks += dayFeedbacks.length;
+      previousWeekData.push({
+        day: dayStart.toLocaleDateString('tr-TR', { weekday: 'short' }),
+        feedbacks: dayFeedbacks.length,
+        avgRating: dayFeedbacks.length > 0
+          ? Number((dayFeedbacks.reduce((acc, f) => acc + f.rating, 0) / dayFeedbacks.length).toFixed(1))
+          : 0,
+      });
+    }
+
+    // Recent QR feedbacks (deletedAt may not exist in DB yet)
+    let recentFeedbacksData: Awaited<ReturnType<typeof prisma.feedback.findMany>>;
+    try {
+      recentFeedbacksData = await prisma.feedback.findMany({
+        where: { deletedAt: null, qrCode: { dealerId } },
+        include: {
+          qrCode: { select: { name: true } },
+          user: { select: { name: true, image: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+    } catch (deletedAtErr) {
+      recentFeedbacksData = await prisma.feedback.findMany({
+        where: { qrCode: { dealerId } },
+        include: {
+          qrCode: { select: { name: true } },
+          user: { select: { name: true, image: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+    }
 
     // Top QR codes
     const topQRCodes = qrCodes
@@ -212,14 +267,14 @@ export async function GET() {
     
     // Combine recent feedbacks
     const combinedRecentFeedbacks = [
-      ...recentFeedbacksData.map(f => ({
+      ...recentFeedbacksData.map((f: { id: string; rating: number; text: string | null; sentiment: string | null; createdAt: Date; qrCode?: { name: string }; user?: { name: string | null; image: string | null } }) => ({
         id: f.id,
         rating: f.rating,
         text: f.text,
         sentiment: f.sentiment,
         createdAt: f.createdAt,
-        qrName: f.qrCode.name,
-        userName: f.user?.name || 'Anonim',
+        qrName: f.qrCode?.name ?? 'QR',
+        userName: (f.user?.name as string) || 'Anonim',
         userImage: f.user?.image,
         type: 'qr' as const,
       })),
@@ -229,7 +284,14 @@ export async function GET() {
 
     const pendingReviews = consumptionData.totalConsumptions - consumptionData.consumptionReviewCount;
 
-    return NextResponse.json({
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [actionItemsTotal, actionItemsDone] = await Promise.all([
+      prisma.actionItem.count({ where: { dealerId, createdAt: { gte: startOfMonth } } }),
+      prisma.actionItem.count({ where: { dealerId, status: 'done', createdAt: { gte: startOfMonth } } }),
+    ]);
+    const actionCompletionRate = actionItemsTotal > 0 ? (actionItemsDone / actionItemsTotal) * 100 : 0;
+
+    const response = NextResponse.json({
       success: true,
       data: {
         stats: {
@@ -246,10 +308,15 @@ export async function GET() {
           totalCustomers: consumptionData.totalCustomers,
           consumptionReviewCount: consumptionData.consumptionReviewCount,
           pendingReviews,
+          actionCompletionRate: Math.round(actionCompletionRate * 10) / 10,
+          actionItemsTotal,
+          actionItemsDone,
         },
         performance: { score: performanceScore, level: performanceLevel, color: performanceColor },
         sentimentData: sentimentPercentage,
         weeklyData,
+        previousWeekData,
+        previousWeekFeedbacks,
         recentFeedbacks: combinedRecentFeedbacks,
         qrCodes: topQRCodes,
         consumptionStats: {
@@ -268,8 +335,41 @@ export async function GET() {
         })),
       },
     });
+    response.headers.set('Cache-Control', 'private, s-maxage=30, stale-while-revalidate=60');
+    return response;
   } catch (error) {
     console.error('Dealer stats error:', error);
-    return NextResponse.json({ success: false, error: 'İstatistikler yüklenemedi' }, { status: 500 });
+    const errMessage = error instanceof Error ? error.message : String(error);
+    const fallback = {
+      success: true,
+      data: {
+        stats: {
+          totalFeedbacks: 0,
+          avgRating: '0',
+          totalQRCodes: 0,
+          activeQRCodes: 0,
+          totalScans: 0,
+          feedbackGrowth: 0,
+          ratingChange: 0,
+          weeklyFeedbacks: 0,
+          conversionRate: '0',
+          totalConsumptions: 0,
+          totalCustomers: 0,
+          consumptionReviewCount: 0,
+          pendingReviews: 0,
+        },
+        performance: { score: 0, level: 'Başlangıç', color: 'gray' },
+        sentimentData: { positive: 0, neutral: 0, negative: 0 },
+        weeklyData: [] as Array<{ day: string; feedbacks: number; avgRating: number }>,
+        previousWeekData: [] as Array<{ day: string; feedbacks: number; avgRating: number }>,
+        previousWeekFeedbacks: 0,
+        recentFeedbacks: [] as Array<{ id: string; rating: number; text: string | null; sentiment: string | null; createdAt: string; qrName?: string; userName: string; type?: string }>,
+        qrCodes: [] as Array<{ id: string; name: string; code: string; scans: number; feedbacks: number; avgRating: string; isActive: boolean }>,
+        consumptionStats: { total: 0, customers: 0, reviewed: 0, pending: 0 },
+        recentConsumptions: [] as any[],
+      },
+      _debug: process.env.NODE_ENV === 'development' ? errMessage : undefined,
+    };
+    return NextResponse.json(fallback, { status: 200 });
   }
 }

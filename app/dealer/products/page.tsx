@@ -14,6 +14,7 @@ import {
   Layers,
   DollarSign,
 } from 'lucide-react';
+import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,8 +37,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
-import { formatCurrency } from '@/lib/utils';
+import { toast } from '@/lib/admin-toast';
+import { TW_BRAND_BG_SOFT_BR } from '@/lib/tw-brand-classes';
+import { cn, formatCurrency } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 interface Category {
   id: string;
@@ -62,6 +65,7 @@ interface Product {
 }
 
 export default function DealerProductsPage() {
+  const t = useAppT();
   const { data: session } = useSession();
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -99,7 +103,7 @@ export default function DealerProductsPage() {
       if (catData.success) setCategories(catData.categories);
       if (prodData.success) setProducts(prodData.products);
     } catch (err) {
-      toast.error('Veriler yüklenemedi');
+      toast.error(t('dealerProducts.loadError'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +111,7 @@ export default function DealerProductsPage() {
 
   const handleCreateCategory = async () => {
     if (!categoryForm.name) {
-      toast.error('Kategori adı gerekli');
+      toast.error(t('dealerProducts.categoryNameRequired'));
       return;
     }
 
@@ -126,12 +130,12 @@ export default function DealerProductsPage() {
         return;
       }
 
-      toast.success('Kategori oluşturuldu');
+      toast.success(t('dealerProducts.categoryCreated'));
       setShowCategoryDialog(false);
       setCategoryForm({ name: '', icon: '🍽️' });
       fetchData();
     } catch (err) {
-      toast.error('Kategori oluşturulamadı');
+      toast.error(t('dealerProducts.categoryCreateError'));
     } finally {
       setSubmitting(false);
     }
@@ -139,7 +143,7 @@ export default function DealerProductsPage() {
 
   const handleCreateProduct = async () => {
     if (!productForm.name || !productForm.categoryId) {
-      toast.error('Ürün adı ve kategori gerekli');
+      toast.error(t('dealerProducts.productNameCategoryRequired'));
       return;
     }
 
@@ -161,12 +165,12 @@ export default function DealerProductsPage() {
         return;
       }
 
-      toast.success('Ürün oluşturuldu');
+      toast.success(t('dealerProducts.productCreated'));
       setShowProductDialog(false);
       setProductForm({ name: '', description: '', price: '', categoryId: '' });
       fetchData();
     } catch (err) {
-      toast.error('Ürün oluşturulamadı');
+      toast.error(t('dealerProducts.productCreateError'));
     } finally {
       setSubmitting(false);
     }
@@ -183,68 +187,55 @@ export default function DealerProductsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-pink-500 via-rose-500 to-red-500 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-        </div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <Package className="w-8 h-8" />
-              Ürünlerim
-            </h1>
-            <p className="text-white/70 mt-1">Kategori ve ürün yönetimi</p>
-          </div>
-          <div className="flex gap-2">
-            <Button 
+      <DashboardPageHero
+        eyebrow={t('dealerProducts.eyebrow')}
+        title={t('dealerProducts.title')}
+        description={t('dealerProducts.description')}
+        icon={<Package className="h-7 w-7" aria-hidden />}
+        tone="auto"
+        actions={
+          <>
+            <Button
               variant="outline"
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+              type="button"
               onClick={() => setShowCategoryDialog(true)}
+              className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
             >
               <Layers className="h-4 w-4 mr-2" />
-              Kategori Ekle
+              {t('dealerProducts.addCategory')}
             </Button>
-            <Button 
-              className="bg-white text-rose-600 hover:bg-white/90"
-              onClick={() => setShowProductDialog(true)}
-            >
+            <Button type="button" onClick={() => setShowProductDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Ürün Ekle
+              {t('dealerProducts.addProduct')}
             </Button>
-          </div>
-        </div>
-      </motion.div>
+          </>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4">
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-rose-500/10">
-                <Layers className="h-5 w-5 text-rose-500" />
+              <div className="p-2.5 rounded-xl bg-primary/10">
+                <Layers className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{categories.length}</p>
-                <p className="text-xs text-muted-foreground">Kategori</p>
+                <p className="text-xs text-muted-foreground">{t('dealerProducts.category')}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-pink-500/10">
-                <Package className="h-5 w-5 text-pink-500" />
+              <div className="p-2.5 rounded-xl bg-violet-500/10">
+                <Package className="h-5 w-5 text-violet-600 dark:text-violet-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{products.length}</p>
-                <p className="text-xs text-muted-foreground">Ürün</p>
+                <p className="text-xs text-muted-foreground">{t('dealerProducts.product')}</p>
               </div>
             </div>
           </CardContent>
@@ -252,13 +243,13 @@ export default function DealerProductsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Ürün ara..."
+                placeholder={t('dealerProducts.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -266,7 +257,7 @@ export default function DealerProductsPage() {
             </div>
             <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full sm:w-auto">
               <TabsList className="w-full sm:w-auto overflow-x-auto">
-                <TabsTrigger value="all">Tümü</TabsTrigger>
+                <TabsTrigger value="all">{t('common.all')}</TabsTrigger>
                 {categories.map((cat) => (
                   <TabsTrigger key={cat.id} value={cat.id}>
                     {cat.icon} {cat.name}
@@ -284,18 +275,19 @@ export default function DealerProductsPage() {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : filteredProducts.length === 0 ? (
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-12 text-center">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted/50 flex items-center justify-center">
               <Package className="w-10 h-10 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Ürün bulunamadı</h3>
-            <p className="text-muted-foreground mb-6">
-              Henüz ürün eklememişsiniz veya filtreye uygun ürün yok
+            <h3 className="text-xl font-semibold mb-2">{t('dealerProducts.notFoundTitle')}</h3>
+            <p className="text-muted-foreground mb-2">
+              {t('dealerProducts.notFoundDescription')}
             </p>
+            <p className="text-sm text-muted-foreground mb-6">{t('dealerProducts.notFoundHint')}</p>
             <Button onClick={() => setShowProductDialog(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              İlk Ürününüzü Ekleyin
+              {t('dealerProducts.addFirstProduct')}
             </Button>
           </CardContent>
         </Card>
@@ -310,11 +302,16 @@ export default function DealerProductsPage() {
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <Card className="border-0 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500/20 to-pink-500/20 flex items-center justify-center text-2xl">
+                        <div
+                          className={cn(
+                            'flex h-12 w-12 items-center justify-center rounded-xl text-2xl',
+                            TW_BRAND_BG_SOFT_BR
+                          )}
+                        >
                           {product.category.icon}
                         </div>
                         <div>
@@ -331,11 +328,11 @@ export default function DealerProductsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem>
                             <Edit className="h-4 w-4 mr-2" />
-                            Düzenle
+                            {t('common.edit')}
                           </DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Sil
+                            {t('common.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -367,24 +364,24 @@ export default function DealerProductsPage() {
       <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Yeni Kategori</DialogTitle>
+            <DialogTitle>{t('dealerProducts.newCategory')}</DialogTitle>
             <DialogDescription>
-              Ürünlerinizi gruplamak için kategori oluşturun
+              {t('dealerProducts.newCategoryDescription')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Kategori Adı *</Label>
+              <Label>{t('dealerProducts.categoryNameRequiredLabel')}</Label>
               <Input
-                placeholder="Örn: Ana Yemekler"
+                placeholder={t('dealerProducts.categoryNamePlaceholder')}
                 value={categoryForm.name}
                 onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>İkon</Label>
+              <Label>{t('dealerProducts.icon')}</Label>
               <div className="flex flex-wrap gap-2">
                 {emojiOptions.map((emoji) => (
                   <button
@@ -406,10 +403,10 @@ export default function DealerProductsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCategoryDialog(false)}>
-              İptal
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateCategory} disabled={submitting}>
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Oluştur'}
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -419,30 +416,30 @@ export default function DealerProductsPage() {
       <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Yeni Ürün</DialogTitle>
+            <DialogTitle>{t('dealerProducts.newProduct')}</DialogTitle>
             <DialogDescription>
-              Menünüze yeni ürün ekleyin
+              {t('dealerProducts.newProductDescription')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Ürün Adı *</Label>
+              <Label>{t('dealerProducts.productNameRequiredLabel')}</Label>
               <Input
-                placeholder="Örn: Klasik Burger"
+                placeholder={t('dealerProducts.productNamePlaceholder')}
                 value={productForm.name}
                 onChange={(e) => setProductForm(prev => ({ ...prev, name: e.target.value }))}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Kategori *</Label>
+              <Label>{t('dealerProducts.categoryRequiredLabel')}</Label>
               <Select 
                 value={productForm.categoryId} 
                 onValueChange={(val) => setProductForm(prev => ({ ...prev, categoryId: val }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Kategori seçin..." />
+                  <SelectValue placeholder={t('dealerProducts.selectCategoryPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
@@ -455,9 +452,9 @@ export default function DealerProductsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Açıklama</Label>
+              <Label>{t('dealerProducts.productDescription')}</Label>
               <Textarea
-                placeholder="Ürün açıklaması..."
+                placeholder={t('dealerProducts.productDescriptionPlaceholder')}
                 value={productForm.description}
                 onChange={(e) => setProductForm(prev => ({ ...prev, description: e.target.value }))}
                 rows={2}
@@ -465,7 +462,7 @@ export default function DealerProductsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Fiyat (TL)</Label>
+              <Label>{t('dealerProducts.price')}</Label>
               <Input
                 type="number"
                 placeholder="0.00"
@@ -477,10 +474,10 @@ export default function DealerProductsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProductDialog(false)}>
-              İptal
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateProduct} disabled={submitting}>
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Oluştur'}
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // POST - Subscribe to push notifications
+
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert subscription
-    const pushSubscription = await (prisma as any).pushSubscription.upsert({
+    const pushSubscription = await prisma.pushSubscription.upsert({
       where: { endpoint },
       update: {
         userId: session.user.id,
@@ -60,7 +63,7 @@ export async function DELETE(req: NextRequest) {
     const { endpoint } = await req.json();
 
     if (endpoint) {
-      await (prisma as any).pushSubscription.updateMany({
+      await prisma.pushSubscription.updateMany({
         where: { 
           endpoint,
           userId: session.user.id,
@@ -69,7 +72,7 @@ export async function DELETE(req: NextRequest) {
       });
     } else {
       // Disable all subscriptions for user
-      await (prisma as any).pushSubscription.updateMany({
+      await prisma.pushSubscription.updateMany({
         where: { userId: session.user.id },
         data: { isActive: false },
       });

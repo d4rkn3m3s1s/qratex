@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { HEX_WHITE } from '@/lib/brand-colors';
+import { NEBULA_STAR_ACCENT_COLORS } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface NebulaBackgroundProps {
@@ -39,7 +41,7 @@ export function NebulaBackground({ children, className }: NebulaBackgroundProps)
       color: string;
     }
 
-    const starColors = ['#ffffff', '#ffe4c4', '#b0c4de', '#ffd700', '#ff69b4'];
+    const starColors = [HEX_WHITE, ...NEBULA_STAR_ACCENT_COLORS];
     const stars: Star[] = Array.from({ length: 200 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,

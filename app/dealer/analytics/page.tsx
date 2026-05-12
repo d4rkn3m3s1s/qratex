@@ -42,9 +42,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { DashboardPageHero, DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { exportToCSV, exportToPDF, buildAnalyticsPDFContent } from '@/lib/export-utils';
+import { CHART_BRAND, CHART_HEX } from '@/lib/chart-palette';
 import Link from 'next/link';
+import { useAppT } from '@/lib/app-locale';
 
 interface AnalyticsData {
   totalFeedbacks: number;
@@ -133,7 +136,7 @@ const AnimatedNumber = ({ value, decimals = 0 }: { value: number; decimals?: num
 const LineChart = ({ 
   data, 
   dataKey = 'feedbacks',
-  color = '#8b5cf6',
+  color = 'hsl(var(--primary))',
   height = 200,
   showArea = true,
 }: { 
@@ -224,17 +227,18 @@ const LineChart = ({
 
 // Heatmap Component
 const Heatmap = ({ data }: { data: number[][] }) => {
+  const t = useAppT();
   const maxValue = Math.max(...data.flat(), 1);
-  const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  const days = [t('dealerAnalytics.daySun'), t('dealerAnalytics.dayMon'), t('dealerAnalytics.dayTue'), t('dealerAnalytics.dayWed'), t('dealerAnalytics.dayThu'), t('dealerAnalytics.dayFri'), t('dealerAnalytics.daySat')];
   const hours = Array.from({ length: 24 }, (_, i) => i);
   
   const getColor = (value: number) => {
     const intensity = value / maxValue;
     if (intensity === 0) return 'bg-muted/30';
-    if (intensity < 0.25) return 'bg-violet-500/20';
-    if (intensity < 0.5) return 'bg-violet-500/40';
-    if (intensity < 0.75) return 'bg-violet-500/60';
-    return 'bg-violet-500/90';
+    if (intensity < 0.25) return 'bg-primary/20';
+    if (intensity < 0.5) return 'bg-primary/40';
+    if (intensity < 0.75) return 'bg-primary/60';
+    return 'bg-primary';
   };
   
   return (
@@ -257,8 +261,8 @@ const Heatmap = ({ data }: { data: number[][] }) => {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: (dayIndex * 24 + hour) * 0.002 }}
-                className={`flex-1 aspect-square rounded-sm ${getColor(data[dayIndex]?.[hour] || 0)} cursor-pointer hover:ring-1 hover:ring-violet-500`}
-                title={`${day} ${hour}:00 - ${data[dayIndex]?.[hour] || 0} geri bildirim`}
+                className={`aspect-square flex-1 cursor-pointer rounded-sm ${getColor(data[dayIndex]?.[hour] || 0)} hover:ring-1 hover:ring-primary`}
+                title={`${day} ${hour}:00 - ${data[dayIndex]?.[hour] || 0} ${t('dealerAnalytics.feedback')}`}
               />
             ))}
           </div>
@@ -276,7 +280,13 @@ const DonutChart = ({
   data: { label: string; value: number; color: string }[];
   size?: number;
 }) => {
-  const total = data.reduce((acc, d) => acc + d.value, 0) || 1;
+  const t = useAppT();
+  const normalizedData = data.map((segment) => ({
+    ...segment,
+    value: Number.isFinite(Number(segment.value)) ? Math.max(0, Number(segment.value)) : 0,
+  }));
+  const total = normalizedData.reduce((acc, d) => acc + d.value, 0) || 1;
+  const hasData = normalizedData.some((d) => d.value > 0);
   let currentAngle = -90;
   
   const radius = size / 2 - 15;
@@ -307,7 +317,28 @@ const DonutChart = ({
   
   return (
     <svg width={size} height={size} className="drop-shadow-lg">
-      {data.map((segment, i) => {
+      {!hasData && (
+        <>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={CHART_HEX.slate200}
+            strokeWidth={10}
+          />
+          <text
+            x="50%"
+            y="50%"
+            dominantBaseline="middle"
+            textAnchor="middle"
+            className="fill-muted-foreground text-xs"
+          >
+            {t('dealerAnalytics.noDataShort')}
+          </text>
+        </>
+      )}
+      {normalizedData.map((segment, i) => {
         const angle = (segment.value / total) * 360;
         if (angle === 0) return null;
         const path = getPath(currentAngle, currentAngle + angle, radius, innerRadius);
@@ -362,6 +393,43 @@ const DistributionBar = ({
   );
 };
 
+const SentimentTrendBars = ({
+  data,
+}: {
+  data: Array<{ label: string; positive: number; neutral: number; negative: number }>;
+}) => {
+  const t = useAppT();
+  return (
+    <div className="space-y-2">
+      {data.slice(-7).map((d, i) => {
+        const total = d.positive + d.neutral + d.negative;
+        const pos = total > 0 ? Math.round((d.positive / total) * 100) : 0;
+        const neu = total > 0 ? Math.round((d.neutral / total) * 100) : 0;
+        const neg = Math.max(0, 100 - pos - neu);
+        return (
+          <motion.div
+            key={`${d.label}-${i}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="space-y-1"
+          >
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">{d.label}</span>
+              <span className="font-medium">{total} {t('dealerAnalytics.records')}</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden flex bg-muted/40">
+              <div className="bg-emerald-500" style={{ width: `${pos}%` }} />
+              <div className="bg-blue-400" style={{ width: `${neu}%` }} />
+              <div className="bg-red-500" style={{ width: `${neg}%` }} />
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+};
+
 // Comparison Card
 const ComparisonCard = ({ 
   title, 
@@ -379,7 +447,9 @@ const ComparisonCard = ({
   suffix?: string;
   icon: React.ElementType;
   color: string;
-}) => (
+}) => {
+  const t = useAppT();
+  return (
   <div className="p-4 rounded-xl bg-muted/30 space-y-3">
     <div className="flex items-center justify-between">
       <div className={`p-2 rounded-lg ${color}`}>
@@ -395,18 +465,19 @@ const ComparisonCard = ({
       <p className="text-lg sm:text-2xl font-bold">{current}{suffix}</p>
     </div>
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span>Önceki dönem:</span>
+      <span>{t('dealerAnalytics.previousPeriod')}:</span>
       <span className="font-medium">{previous}{suffix}</span>
     </div>
   </div>
-);
+  );
+};
 
 export default function DealerAnalyticsPage() {
+  const t = useAppT();
   const [period, setPeriod] = useState('30d');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [chartView, setChartView] = useState<'feedbacks' | 'rating' | 'sentiment'>('feedbacks');
-
   useEffect(() => {
     fetchAnalytics();
   }, [period]);
@@ -420,10 +491,10 @@ export default function DealerAnalyticsPage() {
       if (result.success) {
         setData(result.data);
       } else {
-        toast.error('Analitik verileri yüklenemedi');
+        toast.error(t('dealerAnalytics.loadError'));
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      toast.error(t('common.error'));
     } finally {
       setLoading(false);
     }
@@ -431,9 +502,9 @@ export default function DealerAnalyticsPage() {
 
   const periodLabel = useMemo(() => {
     switch (period) {
-      case '7d': return 'Son 7 Gün';
-      case '90d': return 'Son 90 Gün';
-      default: return 'Son 30 Gün';
+      case '7d': return t('dealerAnalytics.period7d');
+      case '90d': return t('dealerAnalytics.period90d');
+      default: return t('dealerAnalytics.period30d');
     }
   }, [period]);
 
@@ -448,7 +519,7 @@ export default function DealerAnalyticsPage() {
             >
               <Loader2 className="h-12 w-12 text-primary mx-auto" />
             </motion.div>
-            <p className="text-muted-foreground">Analitik verileriniz yükleniyor...</p>
+            <p className="text-muted-foreground">{t('dealerAnalytics.loading')}</p>
           </div>
         </div>
       </div>
@@ -458,14 +529,14 @@ export default function DealerAnalyticsPage() {
   if (!data) {
     return (
       <div className="space-y-6 pb-8">
-        <Card className="border-0 bg-card/50">
+        <Card className="border-border/60 bg-card/50">
           <CardContent className="p-12 text-center">
             <BarChart3 className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
-            <h3 className="text-lg font-semibold mb-2">Veri Bulunamadı</h3>
-            <p className="text-muted-foreground mb-4">Analitik verileri yüklenemedi.</p>
+            <h3 className="text-lg font-semibold mb-2">{t('dealerAnalytics.noDataTitle')}</h3>
+            <p className="text-muted-foreground mb-4">{t('dealerAnalytics.noDataDescription')}</p>
             <Button onClick={fetchAnalytics}>
               <RefreshCw className="w-4 h-4 mr-2" />
-              Tekrar Dene
+              {t('common.retry')}
             </Button>
           </CardContent>
         </Card>
@@ -474,87 +545,74 @@ export default function DealerAnalyticsPage() {
   }
 
   const sentimentChartData = [
-    { label: 'Olumlu', value: data.sentimentBreakdown.positive, color: '#10b981' },
-    { label: 'Nötr', value: data.sentimentBreakdown.neutral, color: '#6b7280' },
-    { label: 'Olumsuz', value: data.sentimentBreakdown.negative, color: '#ef4444' },
+    { label: t('dealerAnalytics.positive'), value: Number(data.sentimentBreakdown.positive) || 0, color: CHART_HEX.emerald },
+    { label: t('dealerAnalytics.neutral'), value: Number(data.sentimentBreakdown.neutral) || 0, color: CHART_HEX.neutral },
+    { label: t('dealerAnalytics.negative'), value: Number(data.sentimentBreakdown.negative) || 0, color: CHART_HEX.red },
   ];
 
   const ratingChartData = [
-    { label: '5 Yıldız', value: data.ratingDistribution[5], color: 'bg-gradient-to-r from-yellow-400 to-yellow-500' },
-    { label: '4 Yıldız', value: data.ratingDistribution[4], color: 'bg-gradient-to-r from-emerald-400 to-emerald-500' },
-    { label: '3 Yıldız', value: data.ratingDistribution[3], color: 'bg-gradient-to-r from-blue-400 to-blue-500' },
-    { label: '2 Yıldız', value: data.ratingDistribution[2], color: 'bg-gradient-to-r from-orange-400 to-orange-500' },
-    { label: '1 Yıldız', value: data.ratingDistribution[1], color: 'bg-gradient-to-r from-red-400 to-red-500' },
+    { label: `5 ${t('dealerAnalytics.stars')}`, value: data.ratingDistribution[5], color: 'bg-gradient-to-r from-yellow-400 to-yellow-500' },
+    { label: `4 ${t('dealerAnalytics.stars')}`, value: data.ratingDistribution[4], color: 'bg-gradient-to-r from-emerald-400 to-emerald-500' },
+    { label: `3 ${t('dealerAnalytics.stars')}`, value: data.ratingDistribution[3], color: 'bg-gradient-to-r from-blue-400 to-blue-500' },
+    { label: `2 ${t('dealerAnalytics.stars')}`, value: data.ratingDistribution[2], color: 'bg-gradient-to-r from-orange-400 to-orange-500' },
+    { label: `1 ${t('dealerAnalytics.stars')}`, value: data.ratingDistribution[1], color: 'bg-gradient-to-r from-red-400 to-red-500' },
   ];
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-4 sm:p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-white/40 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <BarChart3 className="w-8 h-8" />
-              Analitik Paneli
-            </h1>
-            <p className="text-white/70 mt-1">Detaylı performans analizi ve içgörüler</p>
-          </div>
-          
-          <div className="flex items-center gap-3">
+      <DashboardPageHero
+        eyebrow={t('dealerAnalytics.eyebrow')}
+        title={t('dealerAnalytics.title')}
+        description={t('dealerAnalytics.description')}
+        icon={<BarChart3 className="h-7 w-7" aria-hidden />}
+        tone="auto"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[140px] bg-white/10 border-white/20 text-white">
-                <Calendar className="h-4 w-4 mr-2" />
+              <SelectTrigger className="w-[140px] border-border/70 bg-background/80 text-foreground dark:bg-white/15 dark:border-white/30 dark:text-white">
+                <Calendar className="h-4 w-4 mr-2 shrink-0" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="7d">Son 7 Gün</SelectItem>
-                <SelectItem value="30d">Son 30 Gün</SelectItem>
-                <SelectItem value="90d">Son 90 Gün</SelectItem>
+                <SelectItem value="7d">{t('dealerAnalytics.period7d')}</SelectItem>
+                <SelectItem value="30d">{t('dealerAnalytics.period30d')}</SelectItem>
+                <SelectItem value="90d">{t('dealerAnalytics.period90d')}</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="secondary" size="icon" onClick={fetchAnalytics}>
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              onClick={fetchAnalytics}
+              aria-label={t('common.refresh')}
+              className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {[
-          { title: 'Toplam Geri Bildirim', value: data.totalFeedbacks, change: data.feedbackGrowth, icon: MessageSquare, color: 'emerald' },
-          { title: 'Ortalama Puan', value: data.avgRating, change: data.ratingChange, suffix: '/5', icon: Star, color: 'yellow' },
-          { title: 'Dönüşüm Oranı', value: data.conversionRate, suffix: '%', icon: Target, color: 'violet' },
-          { title: 'Yanıt Oranı', value: data.responseRate, suffix: '%', icon: Activity, color: 'blue' },
+          { title: t('dealerAnalytics.totalFeedback'), value: data.totalFeedbacks, change: data.feedbackGrowth, icon: MessageSquare, iconBox: 'bg-emerald-500/10', iconColor: 'text-emerald-500' },
+          { title: t('dealerAnalytics.averageRating'), value: data.avgRating, change: data.ratingChange, suffix: '/5', icon: Star, iconBox: 'bg-yellow-500/10', iconColor: 'text-yellow-500' },
+          { title: t('dealerAnalytics.conversionRate'), value: data.conversionRate, suffix: '%', icon: Target, iconBox: 'bg-primary/10', iconColor: 'text-primary' },
+          { title: t('dealerAnalytics.responseRate'), value: data.responseRate, suffix: '%', icon: Activity, iconBox: 'bg-blue-500/10', iconColor: 'text-blue-500' },
         ].map((stat, index) => (
           <motion.div
             key={stat.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
+            className={stat.title === t('dealerAnalytics.averageRating') ? 'col-span-2 lg:col-span-1' : ''}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
-                  <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10`}>
-                    <stat.icon className={`w-5 h-5 text-${stat.color}-500`} />
+                  <div className={`rounded-xl p-2.5 ${stat.iconBox}`}>
+                    <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                   </div>
                   {stat.change !== undefined && (
                     <Badge className={`border-0 ${stat.change >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -564,7 +622,7 @@ export default function DealerAnalyticsPage() {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-1">{stat.title}</p>
-                <p className="text-lg sm:text-2xl font-bold">
+                <p className={stat.title === t('dealerAnalytics.averageRating') ? 'text-2xl sm:text-3xl font-bold' : 'text-lg sm:text-2xl font-bold'}>
                   {typeof stat.value === 'number' ? <AnimatedNumber value={stat.value} /> : stat.value}
                   {stat.suffix && <span className="text-sm text-muted-foreground ml-1">{stat.suffix}</span>}
                 </p>
@@ -576,28 +634,28 @@ export default function DealerAnalyticsPage() {
 
       {/* Trend Chart */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-violet-500" />
-                  Trend Analizi
+                  <Activity className="w-5 h-5 text-primary" aria-hidden />
+                  {t('dealerAnalytics.aiTrend')}
                 </CardTitle>
-                <CardDescription>{periodLabel} içindeki değişimler</CardDescription>
+                <CardDescription>{periodLabel} {t('dealerAnalytics.changesInPeriod')}</CardDescription>
               </div>
               <div className="flex gap-2">
                 {[
-                  { key: 'feedbacks', label: 'Geri Bildirim', color: 'violet' },
-                  { key: 'rating', label: 'Puan', color: 'yellow' },
-                  { key: 'sentiment', label: 'Duygu', color: 'emerald' },
+                  { key: 'feedbacks', label: t('dealerAnalytics.feedback'), activeClass: 'bg-primary hover:bg-primary/90' },
+                  { key: 'rating', label: t('dealerAnalytics.rating'), activeClass: 'bg-yellow-500 hover:bg-yellow-600' },
+                  { key: 'sentiment', label: t('dealerAnalytics.sentiment'), activeClass: 'bg-emerald-500 hover:bg-emerald-600' },
                 ].map((tab) => (
                   <Button
                     key={tab.key}
                     variant={chartView === tab.key ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setChartView(tab.key as typeof chartView)}
-                    className={chartView === tab.key ? `bg-${tab.color}-500 hover:bg-${tab.color}-600` : ''}
+                    className={chartView === tab.key ? tab.activeClass : ''}
                   >
                     {tab.label}
                   </Button>
@@ -610,10 +668,26 @@ export default function DealerAnalyticsPage() {
               <LineChart
                 data={data.dailyData}
                 dataKey={chartView === 'rating' ? 'avgRating' : chartView === 'sentiment' ? 'positive' : 'feedbacks'}
-                color={chartView === 'rating' ? '#eab308' : chartView === 'sentiment' ? '#10b981' : '#8b5cf6'}
+                color={chartView === 'rating' ? CHART_HEX.yellow : chartView === 'sentiment' ? CHART_HEX.emerald : CHART_BRAND}
                 height={220}
               />
             </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Duygu Analizi Trendi */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              {t('dealerAnalytics.sentimentChartTitle')}
+            </CardTitle>
+            <CardDescription>{t('dealerAnalytics.sentimentChartDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SentimentTrendBars data={data.dailyData} />
           </CardContent>
         </Card>
       </motion.div>
@@ -622,17 +696,17 @@ export default function DealerAnalyticsPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Period Comparison */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingUp className="w-5 h-5 text-emerald-500" />
-                Dönem Karşılaştırması
+                {t('dealerAnalytics.periodComparison')}
               </CardTitle>
-              <CardDescription>Önceki dönemle karşılaştırma</CardDescription>
+              <CardDescription>{t('dealerAnalytics.compareWithPrevious')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <ComparisonCard
-                title="Geri Bildirim"
+                title={t('dealerAnalytics.feedback')}
                 current={data.comparison.feedbacks.current}
                 previous={data.comparison.feedbacks.previous}
                 change={data.comparison.feedbacks.change}
@@ -640,7 +714,7 @@ export default function DealerAnalyticsPage() {
                 color="bg-emerald-500/10 text-emerald-500"
               />
               <ComparisonCard
-                title="Ortalama Puan"
+                title={t('dealerAnalytics.averageRating')}
                 current={data.comparison.rating.current}
                 previous={data.comparison.rating.previous}
                 change={data.comparison.rating.change}
@@ -649,7 +723,7 @@ export default function DealerAnalyticsPage() {
                 color="bg-yellow-500/10 text-yellow-500"
               />
               <ComparisonCard
-                title="Olumlu Oran"
+                title={t('dealerAnalytics.positiveRate')}
                 current={data.comparison.positive.current}
                 previous={data.comparison.positive.previous}
                 change={data.comparison.positive.change}
@@ -663,26 +737,26 @@ export default function DealerAnalyticsPage() {
 
         {/* Heatmap */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="lg:col-span-2">
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Flame className="w-5 h-5 text-orange-500" />
-                Aktivite Isı Haritası
+                {t('dealerAnalytics.activityHeatmap')}
               </CardTitle>
-              <CardDescription>Haftalık geri bildirim yoğunluğu</CardDescription>
+              <CardDescription>{t('dealerAnalytics.weeklyFeedbackDensity')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Heatmap data={data.heatmapData} />
               <div className="flex items-center justify-end gap-2 mt-4 text-xs text-muted-foreground">
-                <span>Az</span>
+                <span>{t('dealerAnalytics.low')}</span>
                 <div className="flex gap-0.5">
                   <div className="w-3 h-3 rounded-sm bg-muted/30" />
-                  <div className="w-3 h-3 rounded-sm bg-violet-500/20" />
-                  <div className="w-3 h-3 rounded-sm bg-violet-500/40" />
-                  <div className="w-3 h-3 rounded-sm bg-violet-500/60" />
-                  <div className="w-3 h-3 rounded-sm bg-violet-500/90" />
+                  <div className="h-3 w-3 rounded-sm bg-primary/20" />
+                  <div className="h-3 w-3 rounded-sm bg-primary/40" />
+                  <div className="h-3 w-3 rounded-sm bg-primary/60" />
+                  <div className="h-3 w-3 rounded-sm bg-primary" />
                 </div>
-                <span>Çok</span>
+                <span>{t('dealerAnalytics.high')}</span>
               </div>
             </CardContent>
           </Card>
@@ -693,16 +767,18 @@ export default function DealerAnalyticsPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Sentiment */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-500" />
-                Duygu Analizi
+                <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+                {t('dealerAnalytics.sentimentAnalysis')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-around">
-                <DonutChart data={sentimentChartData} size={150} />
+            <CardContent className="min-h-[240px]">
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-around sm:gap-6">
+                <div className="shrink-0">
+                  <DonutChart data={sentimentChartData} size={180} />
+                </div>
                 <div className="space-y-3">
                   {sentimentChartData.map((item, i) => (
                     <motion.div
@@ -727,11 +803,11 @@ export default function DealerAnalyticsPage() {
 
         {/* Rating Distribution */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                Puan Dağılımı
+                {t('dealerAnalytics.ratingDistribution')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -743,41 +819,41 @@ export default function DealerAnalyticsPage() {
 
       {/* Quick Insights */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-        <Card className="border-0 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-5">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-lg bg-violet-500/20">
-                <Zap className="w-5 h-5 text-violet-500" />
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Zap className="h-5 w-5 text-primary" aria-hidden />
               </div>
-              <h3 className="font-semibold">Hızlı İçgörüler</h3>
+              <h3 className="font-semibold">{t('dealerAnalytics.quickInsights')}</h3>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground mb-1">En Yoğun Saat</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('dealerAnalytics.peakHour')}</p>
                 <p className="font-semibold flex items-center gap-2">
                   <Clock className="w-4 h-4 text-blue-500" />
                   {data.insights.peakHour}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground mb-1">En Yoğun Gün</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('dealerAnalytics.peakDay')}</p>
                 <p className="font-semibold flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-emerald-500" />
                   {data.insights.peakDay}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground mb-1">En İyi QR</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('dealerAnalytics.bestQr')}</p>
                 <p className="font-semibold flex items-center gap-2">
-                  <QrCode className="w-4 h-4 text-violet-500" />
-                  {data.insights.bestQR || 'Henüz yok'}
+                  <QrCode className="h-4 w-4 text-primary" aria-hidden />
+                  {data.insights.bestQR || t('dealerAnalytics.notYet')}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-background/50">
-                <p className="text-xs text-muted-foreground mb-1">Dikkat Edilmeli</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('dealerAnalytics.needsAttention')}</p>
                 <p className="font-semibold flex items-center gap-2">
                   <Info className="w-4 h-4 text-orange-500" />
-                  {data.insights.worstTopic || 'Sorun yok'}
+                  {data.insights.worstTopic || t('dealerAnalytics.noIssue')}
                 </p>
               </div>
             </div>
@@ -789,18 +865,18 @@ export default function DealerAnalyticsPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Top QR Codes */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-violet-500" />
-                En Aktif QR Kodlar
+                <QrCode className="h-5 w-5 text-primary" aria-hidden />
+                {t('dealerAnalytics.topQrCodes')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {data.topQRCodes.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <QrCode className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                  <p>Henüz veri yok</p>
+                  <p>{t('dealerAnalytics.noDataShort')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -812,24 +888,27 @@ export default function DealerAnalyticsPage() {
                       transition={{ delay: 0.8 + index * 0.05 }}
                       className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-sm ${
-                        index === 0 ? 'bg-gradient-to-br from-yellow-400 to-orange-500' :
-                        index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-400' :
-                        index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
-                        'bg-violet-500'
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
+                        index === 0
+                          ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white'
+                          : index === 1
+                            ? 'bg-gradient-to-br from-gray-300 to-gray-400 text-slate-900'
+                            : index === 2
+                              ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white'
+                              : 'bg-primary text-primary-foreground'
                       }`}>
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{qr.name}</p>
-                        <p className="text-xs text-muted-foreground">{qr.scans} tarama · {qr.feedbacks} geri bildirim</p>
+                        <p className="text-xs text-muted-foreground">{qr.scans} {t('dealerAnalytics.scans')} · {qr.feedbacks} {t('dealerAnalytics.feedback')}</p>
                       </div>
                       <div className="text-right">
                         <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                           <span className="font-bold">{qr.rating}</span>
                         </div>
-                        <p className="text-xs text-emerald-500">{qr.positiveRate}% olumlu</p>
+                        <p className="text-xs text-emerald-500">{qr.positiveRate}% {t('dealerAnalytics.positiveLower')}</p>
                       </div>
                     </motion.div>
                   ))}
@@ -841,18 +920,18 @@ export default function DealerAnalyticsPage() {
 
         {/* Top Topics */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-emerald-500" />
-                Popüler Konular
+                {t('dealerAnalytics.popularTopics')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {data.topTopics.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <MessageSquare className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                  <p>Henüz veri yok</p>
+                  <p>{t('dealerAnalytics.noDataShort')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -879,13 +958,13 @@ export default function DealerAnalyticsPage() {
                             topic.sentiment === 'positive' ? 'text-emerald-500 border-emerald-500/30' :
                             topic.sentiment === 'negative' ? 'text-red-500 border-red-500/30' : 'text-gray-500 border-gray-500/30'
                           }`}>
-                            {topic.sentiment === 'positive' ? 'Olumlu' : topic.sentiment === 'negative' ? 'Olumsuz' : 'Nötr'}
+                            {topic.sentiment === 'positive' ? t('dealerAnalytics.positive') : topic.sentiment === 'negative' ? t('dealerAnalytics.negative') : t('dealerAnalytics.neutral')}
                           </Badge>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-lg sm:text-2xl font-bold">{topic.count}</p>
-                        <p className="text-xs text-muted-foreground">bahsetme</p>
+                        <p className="text-xs text-muted-foreground">{t('dealerAnalytics.mentions')}</p>
                       </div>
                     </motion.div>
                   ))}
@@ -896,40 +975,33 @@ export default function DealerAnalyticsPage() {
         </motion.div>
       </div>
 
-      {/* AI Insights CTA */}
+      <div className="flex items-center gap-2 pt-1">
+        <Sparkles className="h-5 w-5 text-primary" />
+        <h3 className="text-lg font-semibold">{t('dealerAnalytics.advancedAi')}</h3>
+      </div>
+
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-        <Card className="border-0 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white overflow-hidden">
-          <CardContent className="p-6 relative">
-            <div className="absolute inset-0 overflow-hidden">
-              {[...Array(15)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  className="absolute w-1 h-1 bg-white/30 rounded-full"
-                  style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-                  animate={{ opacity: [0.2, 0.8, 0.2] }}
-                  transition={{ duration: 2, repeat: Infinity, delay: Math.random() * 2 }}
-                />
-              ))}
-            </div>
-            <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-2xl bg-white/20">
-                  <Sparkles className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">AI İçgörüler</h3>
-                  <p className="text-white/70">Yapay zeka destekli detaylı analiz ve kişiselleştirilmiş öneriler</p>
-                </div>
+        <DashboardPageHeroChrome tone="auto" padded={false}>
+          <div className="relative flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="rounded-2xl border border-border/60 bg-primary/10 p-3 text-primary">
+                <Sparkles className="h-8 w-8 shrink-0" aria-hidden />
               </div>
-              <Button asChild size="lg" className="bg-white text-purple-600 hover:bg-white/90">
-                <Link href="/dealer/ai-insights">
-                  AI İçgörüleri Gör
-                  <ArrowUpRight className="w-5 h-5 ml-2" />
-                </Link>
-              </Button>
+              <div className="min-w-0">
+                <h3 className="text-xl font-bold text-foreground">{t('dealerAnalytics.aiInsights')}</h3>
+                <p className="text-pretty text-muted-foreground">
+                  {t('dealerAnalytics.aiInsightsDescription')}
+                </p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+            <Button asChild size="lg" className="shrink-0">
+              <Link href="/dealer/ai-insights">
+                {t('dealerAnalytics.viewAiInsights')}
+                <ArrowUpRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+          </div>
+        </DashboardPageHeroChrome>
       </motion.div>
     </div>
   );

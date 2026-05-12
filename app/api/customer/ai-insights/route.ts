@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { normalizeSentimentTriplet } from '@/lib/sentiment-percentages';
+
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -79,11 +83,11 @@ export async function GET() {
       { positive: 0, negative: 0, neutral: 0 }
     );
 
-    const sentimentDistribution = {
-      positive: Math.round((sentimentCounts.positive / totalFeedbacks) * 100),
-      negative: Math.round((sentimentCounts.negative / totalFeedbacks) * 100),
-      neutral: Math.round((sentimentCounts.neutral / totalFeedbacks) * 100),
-    };
+    const sentimentDistribution = normalizeSentimentTriplet({
+      positive: sentimentCounts.positive,
+      neutral: sentimentCounts.neutral,
+      negative: sentimentCounts.negative,
+    });
 
     // Overall sentiment
     const overallSentiment = sentimentCounts.positive > sentimentCounts.negative

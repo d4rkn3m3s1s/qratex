@@ -125,14 +125,14 @@ export default function CardActivationPage() {
   // Loading state
   if (loading || sessionStatus === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-950 via-slate-900 to-slate-950 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="text-center"
         >
-          <Loader2 className="w-12 h-12 animate-spin text-violet-500 mx-auto mb-4" />
-          <p className="text-white/70">Kart bilgisi yükleniyor...</p>
+          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Kart bilgisi yükleniyor...</p>
         </motion.div>
       </div>
     );
@@ -141,27 +141,27 @@ export default function CardActivationPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-950 via-slate-900 to-slate-950 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <Card className="border-0 bg-card/80 backdrop-blur-xl">
-            <CardHeader className="text-center px-4 sm:px-6">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+          <Card className="border-border/60 bg-card/80 backdrop-blur-xl">
+            <CardHeader className="px-4 text-center sm:px-6">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 sm:h-20 sm:w-20">
                 {errorCode === 'CARD_BLOCKED' ? (
-                  <AlertTriangle className="w-8 h-8 sm:w-10 sm:h-10 text-red-500" />
+                  <AlertTriangle className="h-8 w-8 text-red-500 sm:h-10 sm:w-10" />
                 ) : (
-                  <XCircle className="w-8 h-8 sm:w-10 sm:h-10 text-red-500" />
+                  <XCircle className="h-8 w-8 text-red-500 sm:h-10 sm:w-10" />
                 )}
               </div>
-              <CardTitle className="text-xl sm:text-2xl text-white">
+              <CardTitle className="text-xl sm:text-2xl">
                 {errorCode === 'CARD_NOT_FOUND' && 'Kart Bulunamadı'}
                 {errorCode === 'CARD_BLOCKED' && 'Kart Bloklanmış'}
                 {!errorCode && 'Hata'}
               </CardTitle>
-              <CardDescription className="text-white/60 text-sm sm:text-base">
+              <CardDescription className="text-sm sm:text-base">
                 {error}
               </CardDescription>
             </CardHeader>
@@ -181,49 +181,44 @@ export default function CardActivationPage() {
     const isOwnCard = session?.user?.id === cardInfo.customer.id;
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-950 via-slate-900 to-slate-950 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <Card className="border-0 bg-card/80 backdrop-blur-xl overflow-hidden">
-            {/* Animated background */}
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-violet-500/10 rounded-full blur-3xl" />
-              <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-fuchsia-500/10 rounded-full blur-3xl" />
+          <Card className="relative overflow-hidden border-border/60 bg-card/80 backdrop-blur-xl">
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+              <div className="absolute -right-1/2 -top-1/2 h-full w-full rounded-full bg-primary/[0.06] blur-3xl" />
+              <div className="absolute -bottom-1/2 -left-1/2 h-full w-full rounded-full bg-primary/[0.05] blur-3xl" />
             </div>
 
-            <CardHeader className="relative text-center px-4 sm:px-6">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10 text-emerald-500" />
+            <CardHeader className="relative px-4 text-center sm:px-6">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 sm:h-20 sm:w-20">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10 dark:text-emerald-500" />
               </div>
-              <CardTitle className="text-xl sm:text-2xl text-white">
-                Kart Aktif
-              </CardTitle>
-              <CardDescription className="text-white/60 text-sm sm:text-base">
-                Bu kart zaten aktive edilmiş
-              </CardDescription>
+              <CardTitle className="text-xl sm:text-2xl">Kart Aktif</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Bu kart zaten aktive edilmiş</CardDescription>
             </CardHeader>
 
             <CardContent className="relative space-y-4 px-4 sm:px-6">
               {/* Card owner info */}
-              <div className="p-3 sm:p-4 rounded-xl bg-white/5 border border-white/10">
+              <div className="rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
                     {cardInfo.customer.image ? (
                       <img 
                         src={cardInfo.customer.image} 
                         alt={cardInfo.customer.name || ''} 
-                        className="w-full h-full rounded-full object-cover"
+                        className="h-full w-full rounded-full object-cover"
                       />
                     ) : (
-                      <User className="w-5 h-5 sm:w-6 sm:h-6 text-violet-400" />
+                      <User className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-white font-medium truncate">{cardInfo.customer.name}</p>
-                    <p className="text-xs sm:text-sm text-white/50">
+                    <p className="truncate font-medium text-foreground">{cardInfo.customer.name}</p>
+                    <p className="text-xs text-muted-foreground sm:text-sm">
                       {isOwnCard ? 'Bu sizin kartınız' : 'Kart sahibi'}
                     </p>
                   </div>
@@ -239,15 +234,12 @@ export default function CardActivationPage() {
               )}
             </CardContent>
 
-            <CardFooter className="relative flex-col gap-2 px-4 sm:px-6 pb-6">
+            <CardFooter className="relative flex-col gap-2 px-4 pb-6 sm:px-6">
               {isOwnCard ? (
                 <>
-                  <Button 
-                    className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                    asChild
-                  >
+                  <Button className="w-full" asChild>
                     <Link href="/customer/my-card">
-                      <CreditCard className="w-4 h-4 mr-2" />
+                      <CreditCard className="mr-2 h-4 w-4" />
                       Kartımı Görüntüle
                     </Link>
                   </Button>
@@ -266,11 +258,8 @@ export default function CardActivationPage() {
                 <>
                   {!session?.user ? (
                     <>
-                      <Button 
-                        className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                        onClick={() => signIn(undefined, { callbackUrl: `/c/${token}` })}
-                      >
-                        <LogIn className="w-4 h-4 mr-2" />
+                      <Button className="w-full" onClick={() => signIn(undefined, { callbackUrl: `/c/${token}` })}>
+                        <LogIn className="mr-2 h-4 w-4" />
                         Giriş Yap
                       </Button>
                       <Button 
@@ -300,33 +289,34 @@ export default function CardActivationPage() {
 
   // Card not activated - show activation flow
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-950 via-slate-900 to-slate-950 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <Card className="border-0 bg-card/80 backdrop-blur-xl overflow-hidden">
-          {/* Animated background */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-violet-500/10 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-fuchsia-500/10 rounded-full blur-3xl animate-pulse" />
+        <Card className="relative overflow-hidden border-border/60 bg-card/80 backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+            <div className="absolute -right-1/2 -top-1/2 h-full w-full animate-pulse rounded-full bg-primary/[0.07] blur-3xl" />
+            <div className="absolute -bottom-1/2 -left-1/2 h-full w-full animate-pulse rounded-full bg-primary/[0.05] blur-3xl" />
           </div>
 
-          <CardHeader className="relative text-center px-4 sm:px-6">
-            <motion.div 
-              className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/30"
-              animate={{ 
-                boxShadow: ['0 10px 40px rgba(139, 92, 246, 0.3)', '0 10px 40px rgba(217, 70, 239, 0.3)', '0 10px 40px rgba(139, 92, 246, 0.3)']
+          <CardHeader className="relative px-4 text-center sm:px-6">
+            <motion.div
+              className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 sm:h-24 sm:w-24"
+              animate={{
+                boxShadow: [
+                  '0 10px 40px hsl(var(--primary) / 0.25)',
+                  '0 14px 44px hsl(var(--primary) / 0.35)',
+                  '0 10px 40px hsl(var(--primary) / 0.25)',
+                ],
               }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <CreditCard className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
+              <CreditCard className="h-10 w-10 sm:h-12 sm:w-12" aria-hidden />
             </motion.div>
-            <CardTitle className="text-xl sm:text-2xl text-white">
-              QRateX Kartı
-            </CardTitle>
-            <CardDescription className="text-white/60 text-sm sm:text-base">
+            <CardTitle className="text-xl sm:text-2xl">QRateX Kartı</CardTitle>
+            <CardDescription className="text-sm sm:text-base">
               Bu kartı aktive ederek QRateX ayrıcalıklarına katılın
             </CardDescription>
           </CardHeader>
@@ -335,21 +325,21 @@ export default function CardActivationPage() {
             {/* Benefits */}
             <div className="space-y-2 sm:space-y-3">
               {[
-                { icon: Gift, text: 'Puan kazanın ve ödüllere ulaşın', color: 'text-amber-400' },
-                { icon: History, text: 'Tüketimlerinizi takip edin', color: 'text-blue-400' },
-                { icon: Star, text: 'Yorum yaparak puan kazanın', color: 'text-purple-400' },
+                { icon: Gift, text: 'Puan kazanın ve ödüllere ulaşın', color: 'text-amber-600 dark:text-amber-400' },
+                { icon: History, text: 'Tüketimlerinizi takip edin', color: 'text-blue-600 dark:text-blue-400' },
+                { icon: Star, text: 'Yorum yaparak puan kazanın', color: 'text-primary' },
               ].map((item, index) => (
                 <motion.div
-                  key={index}
+                  key={item.text}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="flex items-center gap-3 p-2.5 sm:p-3 rounded-lg bg-white/5"
+                  className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/40 p-2.5 sm:p-3"
                 >
-                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <item.icon className={`w-4 h-4 ${item.color}`} />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/80">
+                    <item.icon className={`h-4 w-4 ${item.color}`} aria-hidden />
                   </div>
-                  <span className="text-white/80 text-xs sm:text-sm">{item.text}</span>
+                  <span className="text-xs text-foreground sm:text-sm">{item.text}</span>
                 </motion.div>
               ))}
             </div>
@@ -376,12 +366,9 @@ export default function CardActivationPage() {
                       <LogIn className="w-4 h-4 mr-2" />
                       Giriş Yap
                     </Button>
-                    <Button 
-                      className="flex-1 h-10 sm:h-9 bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                      asChild
-                    >
+                    <Button className="h-10 flex-1 sm:h-9" asChild>
                       <Link href={`/auth/register?callbackUrl=/c/${token}`}>
-                        <UserPlus className="w-4 h-4 mr-2" />
+                        <UserPlus className="mr-2 h-4 w-4" />
                         Kayıt Ol
                       </Link>
                     </Button>
@@ -425,10 +412,10 @@ export default function CardActivationPage() {
             </AnimatePresence>
           </CardContent>
 
-          <CardFooter className="relative px-4 sm:px-6 pb-6">
+          <CardFooter className="relative px-4 pb-6 sm:px-6">
             {session?.user && session.user.role === 'CUSTOMER' && (
-              <Button 
-                className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 h-11 sm:h-12 text-base sm:text-lg"
+              <Button
+                className="h-11 w-full text-base sm:h-12 sm:text-lg"
                 onClick={handleActivate}
                 disabled={activating}
               >
@@ -449,8 +436,8 @@ export default function CardActivationPage() {
         </Card>
 
         {/* Footer */}
-        <p className="text-center text-white/40 text-xs sm:text-sm mt-6">
-          Powered by <span className="text-violet-400 font-medium">QRateX</span>
+        <p className="mt-6 text-center text-xs text-muted-foreground sm:text-sm">
+          Powered by <span className="font-medium text-primary">QRateX</span>
         </p>
       </motion.div>
     </div>

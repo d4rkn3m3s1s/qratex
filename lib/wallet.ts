@@ -1,8 +1,15 @@
 import crypto from 'crypto';
+import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
 
 // ─────────────────────────────────────────────────────────────
 // APPLE WALLET PASS GENERATION
 // ─────────────────────────────────────────────────────────────
+//
+// Canlıda gerekli env: APPLE_PASS_TYPE_IDENTIFIER, APPLE_TEAM_IDENTIFIER,
+// APPLE_WALLET_CERT_* (sertifika ve key). APPLE_TEAM_IDENTIFIER yoksa
+// 'XXXXXXXXXX' placeholder kullanılır; imza üretimi production'da gerçek
+// Apple sertifikası ile yapılmalı. Bkz. IMPROVEMENTS.md "Apple Wallet".
+//
 
 interface PassData {
   serialNumber: string;
@@ -216,7 +223,7 @@ export function generateGooglePassObject(data: GooglePassData): object {
     id: `${issuerId}.${data.id}`,
     classId: `${issuerId}.${data.classId}`,
     genericType: 'GENERIC_TYPE_UNSPECIFIED',
-    hexBackgroundColor: '#6366f1', // Indigo-500
+    hexBackgroundColor: BRAND_PRIMARY_HEX,
     logo: {
       sourceUri: {
         uri: `${webServiceURL}/logo/logo.png`,

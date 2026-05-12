@@ -2,9 +2,40 @@ import { NextAuthOptions } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
 import bcrypt from 'bcryptjs';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
+import {
+  checkRateLimit,
+  getLoginLockout,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+} from '@/lib/rate-limit';
+import {
+  logLoginFailed,
+  logLockout,
+  logLoginSuccess,
+  logRateLimit,
+} from '@/lib/auth-events';
 import type { Adapter } from 'next-auth/adapters';
+
+const providers = [
+  GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    allowDangerousEmailAccountLinking: true,
+  }),
+  ...(process.env.GITHUB_ID && process.env.GITHUB_SECRET
+    ? [
+        GitHubProvider({
+          clientId: process.env.GITHUB_ID,
+          clientSecret: process.env.GITHUB_SECRET,
+          allowDangerousEmailAccountLinking: true,
+        }),
+      ]
+    : []),
+];
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
@@ -18,11 +49,7 @@ export const authOptions: NextAuthOptions = {
     verifyRequest: '/auth/verify',
   },
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      allowDangerousEmailAccountLinking: true,
-    }),
+    ...providers,
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -32,6 +59,32 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials || !credentials.email || !credentials.password) {
           throw new Error('Email ve şifre gerekli');
+        }
+
+        const headersList = await headers();
+        const forwarded = headersList.get('x-forwarded-for');
+        const ip = forwarded ? forwarded.split(',')[0].trim() : headersList.get('x-real-ip') || 'unknown';
+        const identifier = `${ip}:${credentials.email}`;
+        const lockout = getLoginLockout(identifier);
+        if (lockout.locked) {
+          const sec = lockout.retryAfterMs
+            ? Math.ceil(lockout.retryAfterMs / 1000)
+            : 900;
+          logLockout(ip, credentials.email, sec);
+          throw new Error(`Çok fazla başarısız deneme. ${sec} saniye sonra tekrar deneyin.`);
+        }
+
+        const limit = checkRateLimit('login', identifier);
+        if (!limit.ok) {
+          logRateLimit(
+            ip,
+            credentials.email,
+            limit.retryAfterMs ? Math.ceil(limit.retryAfterMs / 1000) : undefined
+          );
+          const msg = limit.retryAfterMs
+            ? `Çok fazla giriş denemesi. ${Math.ceil(limit.retryAfterMs / 1000)} saniye sonra tekrar deneyin.`
+            : 'Çok fazla giriş denemesi. Lütfen 1 dakika sonra tekrar deneyin.';
+          throw new Error(msg);
         }
 
         const user = await prisma.user.findUnique({
@@ -45,11 +98,21 @@ export const authOptions: NextAuthOptions = {
             image: true,
             points: true,
             level: true,
+            preferredLanguage: true,
+            emailVerified: true,
           },
         });
 
         if (!user || !user.password) {
+          recordFailedLoginAttempt(identifier);
+          logLoginFailed(ip, credentials.email, 'user_not_found');
           throw new Error('Kullanıcı bulunamadı');
+        }
+
+        if (!user.emailVerified) {
+          recordFailedLoginAttempt(identifier);
+          logLoginFailed(ip, credentials.email, 'email_not_verified');
+          throw new Error('E-posta adresinizi doğrulayın. Kayıt sonrası size gönderilen linke tıklayın.');
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -58,9 +121,13 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!isPasswordValid) {
+          recordFailedLoginAttempt(identifier);
+          logLoginFailed(ip, credentials.email, 'invalid_password');
           throw new Error('Şifre hatalı');
         }
 
+        clearFailedLoginAttempts(identifier);
+        logLoginSuccess(ip, credentials.email);
         return {
           id: user.id,
           email: user.email,
@@ -69,14 +136,16 @@ export const authOptions: NextAuthOptions = {
           image: user.image,
           points: user.points,
           level: user.level,
+          preferredLanguage: (user.preferredLanguage as 'tr' | 'en' | null) ?? 'tr',
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger, session, account }) {
-      // On initial sign in, fetch user data from database
+    async jwt({ token, user, trigger, session }) {
+      // Session fixation: her login'de yeni JTI üret; eski token geçersiz kılınır
       if (user) {
+        token.jti = crypto.randomUUID();
         // For OAuth providers, we need to fetch the full user data from DB
         // because the user object only contains basic OAuth info
         const dbUser = await prisma.user.findUnique({
@@ -86,6 +155,9 @@ export const authOptions: NextAuthOptions = {
             role: true,
             points: true,
             level: true,
+            image: true,
+            preferredLanguage: true,
+            staffProfile: { select: { dealerId: true } },
           },
         });
 
@@ -94,12 +166,19 @@ export const authOptions: NextAuthOptions = {
           token.role = dbUser.role;
           token.points = dbUser.points;
           token.level = dbUser.level;
+          token.image = dbUser.image || user.image || token.image;
+          token.preferredLanguage = (dbUser.preferredLanguage as 'tr' | 'en' | null) ?? 'tr';
+          if (dbUser.role === 'STAFF' && dbUser.staffProfile?.dealerId) {
+            token.dealerId = dbUser.staffProfile.dealerId;
+          }
         } else {
           // Fallback to user object (for credentials)
           token.id = user.id;
           token.role = user.role || 'CUSTOMER';
           token.points = user.points || 0;
           token.level = user.level || 1;
+          token.image = user.image || token.image;
+          token.preferredLanguage = (user.preferredLanguage as 'tr' | 'en' | undefined) ?? 'tr';
         }
       }
 
@@ -109,6 +188,7 @@ export const authOptions: NextAuthOptions = {
         token.image = session.image;
         token.points = session.points;
         token.level = session.level;
+        token.preferredLanguage = session.preferredLanguage;
       }
 
       return token;
@@ -119,6 +199,10 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role as string;
         session.user.points = token.points as number;
         session.user.level = token.level as number;
+        session.user.image = token.image as string;
+        session.user.preferredLanguage = (token.preferredLanguage as 'tr' | 'en' | undefined) ?? 'tr';
+        if (token.dealerId) session.user.dealerId = token.dealerId as string;
+        (session as { jti?: string }).jti = token.jti as string;
       }
       return session;
     },
@@ -132,12 +216,14 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signIn({ user }) {
-      // Log sign in event
-      console.log(`User signed in: ${user.email}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`User signed in: ${user.email}`);
+      }
     },
     async signOut({ token }) {
-      // Log sign out event
-      console.log(`User signed out: ${token.email}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`User signed out: ${token?.email ?? '[session]'}`);
+      }
     },
   },
   secret: process.env.NEXTAUTH_SECRET,

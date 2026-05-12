@@ -30,6 +30,10 @@ import {
   ExternalLink,
   Copy,
   Link2,
+  ChevronLeft,
+  ChevronRight,
+  LayoutList,
+  KanbanSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,11 +74,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { BRAND_CARD_QR_DARK_HEX, HEX_WHITE } from '@/lib/brand-colors';
 import { formatDate, getCardStatusLabel, getCardStatusColor } from '@/lib/utils';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 // QR Code domain
 const QR_DOMAIN = 'https://demoqratex.vercel.app';
+
+const cardToasts = {
+  success: (message: string) => toast.success(message),
+  info: (message: string) => toast(message),
+  warn: (message: string) => toast.error(message),
+};
 
 interface PhysicalCard {
   id: string;
@@ -138,6 +150,9 @@ export default function AdminCardsPage() {
   const [batchFilter, setBatchFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
 
   // Generate dialog
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
@@ -191,9 +206,11 @@ export default function AdminCardsPage() {
       if (data.success) {
         setCards(data.items);
         setStats(data.stats);
+        setTotalPages(data.pagination?.totalPages ?? 1);
+        setTotalItems(data.pagination?.total ?? data.items?.length ?? 0);
       }
     } catch (err) {
-      toast.error('Kartlar yüklenemedi');
+      cardToasts.warn('Kart listesi getirilemedi.');
     } finally {
       setLoading(false);
     }
@@ -225,7 +242,7 @@ export default function AdminCardsPage() {
 
   const handleGenerate = async () => {
     if (!generateForm.batchName || generateForm.quantity < 1) {
-      toast.error('Batch adı ve miktar gerekli');
+      cardToasts.warn('Batch adi ve miktar zorunludur.');
       return;
     }
 
@@ -240,17 +257,17 @@ export default function AdminCardsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error);
+        cardToasts.warn(data.error ?? 'Kart uretimi tamamlanamadi.');
         return;
       }
 
-      toast.success(data.message);
+      cardToasts.success(data.message ?? `${generateForm.quantity} kart uretildi.`);
       setShowGenerateDialog(false);
       setGenerateForm({ quantity: 100, batchName: '', prefix: '' });
       fetchCards();
       fetchBatches();
     } catch (err) {
-      toast.error('Kartlar oluşturulamadı');
+      cardToasts.warn('Kartlar olusturulamadi.');
     } finally {
       setGenerating(false);
     }
@@ -270,20 +287,20 @@ export default function AdminCardsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error);
+        cardToasts.warn(data.error ?? 'Kart durumu guncellenemedi.');
         return;
       }
 
-      toast.success(data.message);
+      cardToasts.success(data.message ?? 'Kart durumu guncellendi.');
       fetchCards();
     } catch (err) {
-      toast.error('İşlem başarısız');
+      cardToasts.warn('Islem tamamlanamadi.');
     }
   };
 
   const handleAssignCard = async () => {
     if (!assigningCard || !selectedCustomerId) {
-      toast.error('Müşteri seçin');
+      cardToasts.warn('Musteri secmeden atama yapilamaz.');
       return;
     }
 
@@ -298,17 +315,17 @@ export default function AdminCardsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error);
+        cardToasts.warn(data.error ?? 'Kart atamasi tamamlanamadi.');
         return;
       }
 
-      toast.success('Kart müşteriye atandı!');
+      cardToasts.success('Kart musteriye atandi.');
       setShowAssignDialog(false);
       setAssigningCard(null);
       setSelectedCustomerId('');
       fetchCards();
     } catch (err) {
-      toast.error('Atama başarısız');
+      cardToasts.warn('Atama islemi basarisiz oldu.');
     } finally {
       setAssigning(false);
     }
@@ -326,16 +343,16 @@ export default function AdminCardsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error);
+        cardToasts.warn(data.error ?? 'Musteriden kaldirma islemi tamamlanamadi.');
         return;
       }
 
-      toast.success('Kart müşteriden kaldırıldı!');
+      cardToasts.success('Kart musteriden kaldirildi.');
       setShowUnassignDialog(false);
       setUnassigningCard(null);
       fetchCards();
     } catch (err) {
-      toast.error('İşlem başarısız');
+      cardToasts.warn('Islem tamamlanamadi.');
     } finally {
       setUnassigning(false);
     }
@@ -353,16 +370,16 @@ export default function AdminCardsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error);
+        cardToasts.warn(data.error ?? 'Kart silme islemi tamamlanamadi.');
         return;
       }
 
-      toast.success('Kart silindi!');
+      cardToasts.success('Kart silindi.');
       setShowDeleteDialog(false);
       setDeletingCard(null);
       fetchCards();
     } catch (err) {
-      toast.error('Silme başarısız');
+      cardToasts.warn('Silme islemi basarisiz oldu.');
     } finally {
       setDeleting(false);
     }
@@ -378,7 +395,7 @@ export default function AdminCardsPage() {
       const qrDataUrl = await QRCode.toDataURL(url, {
         width: 256,
         margin: 2,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: BRAND_CARD_QR_DARK_HEX, light: HEX_WHITE },
         errorCorrectionLevel: 'H',
       });
       setCardQrCode(qrDataUrl);
@@ -389,12 +406,12 @@ export default function AdminCardsPage() {
 
   const copyToken = (token: string) => {
     navigator.clipboard.writeText(token);
-    toast.success('Token kopyalandı!');
+    cardToasts.info('Token panoya kopyalandi.');
   };
 
   const copyUrl = (token: string) => {
     navigator.clipboard.writeText(`${QR_DOMAIN}/c/${token}`);
-    toast.success('URL kopyalandı!');
+    cardToasts.info('Aktivasyon URL panoya kopyalandi.');
   };
 
   const filteredCards = cards.filter((card) => {
@@ -407,44 +424,58 @@ export default function AdminCardsPage() {
     );
   });
 
+  const kanbanColumns = {
+    UNUSED: filteredCards.filter((c) => c.status === 'UNUSED'),
+    ACTIVATED: filteredCards.filter((c) => c.status === 'ACTIVATED'),
+    BLOCKED: filteredCards.filter((c) => c.status === 'BLOCKED'),
+  };
+
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-        </div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <CreditCard className="w-8 h-8" />
-              Fiziksel Kartlar
-            </h1>
-            <p className="text-white/70 mt-1">Kart üretimi, atama ve yönetimi</p>
+      <AdminPremiumHero
+        eyebrow="Canlı kart operasyon merkezi"
+        title="Fiziksel Kartlar"
+        description="Kart üretimi, müşteri atama, blok yönetimi ve yaşam döngüsü aksiyonlarını tek panelden yönetin. Hızlı, güvenli ve tam kontrol sizde."
+        icon={<CreditCard className="text-white" />}
+        chips={
+          <>
+            <span className="text-[11px] px-2 py-1 rounded-full bg-background/85 border border-border/70 text-foreground dark:bg-white/20 dark:border-white/30 dark:text-cyan-50">Canlı durum</span>
+            <span className="text-[11px] px-2 py-1 rounded-full bg-background/85 border border-border/70 text-foreground dark:bg-white/15 dark:border-white/25 dark:text-emerald-50">Mobil uyumlu</span>
+            <span className="text-[11px] px-2 py-1 rounded-full bg-background/85 border border-border/70 text-foreground dark:bg-white/15 dark:border-white/25 dark:text-amber-50">Hızlı aksiyonlar</span>
+            <span className="text-[11px] px-2 py-1 rounded-full bg-background/85 border border-border/70 text-foreground dark:bg-white/15 dark:border-white/25 dark:text-sky-50">Kanban + Liste</span>
+          </>
+        }
+        aside={
+          <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row items-stretch gap-2 md:min-w-[260px]">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background/85 border border-border/70 px-3 py-2 text-center shadow-sm dark:bg-white/15 dark:border-white/25">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-white/80">Toplam</p>
+                <p className="text-xl font-bold text-foreground dark:text-white tabular-nums">{stats.total}</p>
+              </div>
+              <div className="rounded-xl bg-background/85 border border-border/70 px-3 py-2 text-center shadow-sm dark:bg-white/15 dark:border-white/25">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground dark:text-white/80">Aktif</p>
+                <p className="text-xl font-bold text-foreground dark:text-white tabular-nums">{stats.ACTIVATED}</p>
+              </div>
+            </div>
+            <Button
+              size="lg"
+              className="bg-white text-emerald-900 hover:bg-white/95 gap-2 shadow-xl font-semibold"
+              onClick={() => setShowGenerateDialog(true)}
+            >
+              <Plus className="h-5 w-5" />
+              Kart Üret
+            </Button>
           </div>
-          <Button 
-            size="lg" 
-            className="bg-white text-purple-600 hover:bg-white/90 gap-2 shadow-lg"
-            onClick={() => setShowGenerateDialog(true)}
-          >
-            <Plus className="h-5 w-5" />
-            Kart Üret
-          </Button>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Toplam', value: stats.total, icon: CreditCard, color: 'from-violet-500 to-purple-600' },
+          { label: 'Toplam', value: stats.total, icon: CreditCard, color: 'from-sky-600 to-cyan-700' },
           { label: 'Aktive Edilmemiş', value: stats.UNUSED, icon: Package, color: 'from-slate-500 to-slate-600' },
           { label: 'Aktif', value: stats.ACTIVATED, icon: CheckCircle2, color: 'from-emerald-500 to-green-600' },
-          { label: 'Bloklu', value: stats.BLOCKED, icon: Ban, color: 'from-red-500 to-rose-600' },
+          { label: 'Bloklu', value: stats.BLOCKED, icon: Ban, color: 'from-red-500 to-red-700' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -452,7 +483,7 @@ export default function AdminCardsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden group hover:scale-105 transition-transform">
+            <Card className="border border-border/60 bg-card/70 backdrop-blur-sm overflow-hidden group hover:scale-[1.02] transition-all shadow-sm hover:shadow-lg">
               <CardContent className="p-4 relative">
                 <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="flex items-center gap-3 relative z-10">
@@ -472,16 +503,16 @@ export default function AdminCardsPage() {
 
       {/* Batches */}
       {batches.length > 0 && (
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border border-border/60 bg-card/70 backdrop-blur-sm shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">Son Üretimler</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {batches.slice(0, 6).map((batch) => (
-                <div 
+                <div
                   key={batch.id} 
-                  className={`p-4 rounded-xl bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer border-2 ${batchFilter === batch.id ? 'border-purple-500' : 'border-transparent'}`}
+                  className={`p-4 rounded-xl bg-muted/40 hover:bg-muted/70 transition-all cursor-pointer border ${batchFilter === batch.id ? 'border-sky-500 shadow-md shadow-sky-500/10' : 'border-border/60'}`}
                   onClick={() => setBatchFilter(batchFilter === batch.id ? '' : batch.id)}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -501,8 +532,36 @@ export default function AdminCardsPage() {
       )}
 
       {/* Filters */}
-      <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border border-border/60 bg-card/70 backdrop-blur-sm shadow-sm">
         <CardContent className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{totalItems}</span> kart bulundu
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-lg border bg-background p-1">
+                <Button
+                  size="sm"
+                  variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                  className="h-8 px-3"
+                  onClick={() => setViewMode('kanban')}
+                >
+                  <KanbanSquare className="h-4 w-4 mr-1.5" />
+                  Kanban
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  className="h-8 px-3"
+                  onClick={() => setViewMode('list')}
+                >
+                  <LayoutList className="h-4 w-4 mr-1.5" />
+                  Liste
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Sayfa {page} / {Math.max(1, totalPages)}</p>
+            </div>
+          </div>
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -546,7 +605,7 @@ export default function AdminCardsPage() {
       </Card>
 
       {/* Cards Table */}
-      <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border border-border/60 bg-card/70 backdrop-blur-sm shadow-sm">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -557,70 +616,192 @@ export default function AdminCardsPage() {
               <CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground">Kart bulunamadı</p>
             </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Token</TableHead>
-                  <TableHead>Durum</TableHead>
-                  <TableHead>Müşteri</TableHead>
-                  <TableHead>Tüketim</TableHead>
-                  <TableHead>Tarih</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCards.map((card) => (
-                  <TableRow key={card.id} className="group">
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs bg-muted px-2 py-1 rounded">
-                          {card.token.length > 20 ? `${card.token.slice(0, 20)}...` : card.token}
-                        </code>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => copyToken(card.token)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getCardStatusColor(card.status)}>
-                        {getCardStatusLabel(card.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {card.customer ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            {card.customer.image ? (
-                              <img src={card.customer.image} alt="" className="w-full h-full rounded-full" />
-                            ) : (
-                              <User className="w-4 h-4 text-primary" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{card.customer.name}</p>
-                            <p className="text-xs text-muted-foreground">{card.customer.email}</p>
-                          </div>
+          ) : viewMode === 'kanban' ? (
+            <div className="p-3 md:p-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
+              {([
+                { key: 'UNUSED', title: 'Aktive Edilmemiş', tone: 'from-slate-500/10 to-slate-600/5' },
+                { key: 'ACTIVATED', title: 'Aktif', tone: 'from-emerald-500/10 to-green-600/5' },
+                { key: 'BLOCKED', title: 'Bloklu', tone: 'from-red-500/10 to-red-700/5' },
+              ] as const).map((col) => {
+                const colCards = kanbanColumns[col.key];
+                return (
+                  <div key={col.key} className={`rounded-xl border bg-gradient-to-br ${col.tone} p-3`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold">{col.title}</h3>
+                      <Badge variant="secondary">{colCards.length}</Badge>
+                    </div>
+                    <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                      {colCards.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                          Bu kolonda kart yok
                         </div>
                       ) : (
-                        <span className="text-muted-foreground text-sm">Atanmamış</span>
+                        colCards.map((card) => (
+                          <div key={card.id} className="rounded-lg border bg-card p-3 space-y-2 shadow-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <code className="text-[11px] bg-muted px-2 py-1 rounded truncate max-w-[170px]">
+                                {card.token}
+                              </code>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copyToken(card.token)}>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {card.customer ? `${card.customer.name} · ${card.customer.email}` : 'Atanmamış'}
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span>Tüketim: <strong>{card._count.consumptions}</strong></span>
+                              <span>{formatDate(card.createdAt)}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" className="flex-1" onClick={() => openCardDetail(card)}>
+                                <Eye className="h-4 w-4 mr-1" /> Detay
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline" className="flex-1">
+                                    <MoreVertical className="h-4 w-4 mr-1" /> İşlemler
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => copyUrl(card.token)}>
+                                    <Link2 className="h-4 w-4 mr-2" />
+                                    URL Kopyala
+                                  </DropdownMenuItem>
+                                  {!card.customer && card.status === 'UNUSED' && (
+                                    <DropdownMenuItem onClick={() => { setAssigningCard(card); setShowAssignDialog(true); }} className="text-blue-500">
+                                      <UserPlus className="h-4 w-4 mr-2" />
+                                      Müşteriye Ata
+                                    </DropdownMenuItem>
+                                  )}
+                                  {card.customer && (
+                                    <DropdownMenuItem onClick={() => { setUnassigningCard(card); setShowUnassignDialog(true); }} className="text-orange-500">
+                                      <UserMinus className="h-4 w-4 mr-2" />
+                                      Müşteriden Kaldır
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  {card.status !== 'BLOCKED' ? (
+                                    <DropdownMenuItem className="text-amber-500" onClick={() => handleBlockCard(card, true)}>
+                                      <Ban className="h-4 w-4 mr-2" />
+                                      Blokla
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem className="text-emerald-500" onClick={() => handleBlockCard(card, false)}>
+                                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                                      Blok Kaldır
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-red-500" onClick={() => { setDeletingCard(card); setShowDeleteDialog(true); }}>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Sil
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        ))
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{card._count.consumptions}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {formatDate(card.createdAt)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="grid grid-cols-1 gap-3 p-3 md:hidden">
+                {filteredCards.map((card) => (
+                  <div key={card.id} className="rounded-xl border border-border/70 bg-card/90 p-3 space-y-2 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge className={getCardStatusColor(card.status)}>{getCardStatusLabel(card.status)}</Badge>
+                      <code className="text-[11px] bg-muted px-2 py-1 rounded max-w-[180px] truncate">{card.token}</code>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {card.customer ? `${card.customer.name} · ${card.customer.email}` : 'Atanmamış'}
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Tüketim: <strong>{card._count.consumptions}</strong></span>
+                      <span>{formatDate(card.createdAt)}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => openCardDetail(card)}>
+                        <Eye className="h-4 w-4 mr-1" /> Detay
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => copyUrl(card.token)}>
+                        <Copy className="h-4 w-4 mr-1" /> URL
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Token</TableHead>
+                      <TableHead>Durum</TableHead>
+                      <TableHead>Müşteri</TableHead>
+                      <TableHead>Tüketim</TableHead>
+                      <TableHead>Tarih</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCards.map((card) => (
+                      <TableRow key={card.id} className="group">
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-muted px-2 py-1 rounded">
+                              {card.token.length > 20 ? `${card.token.slice(0, 20)}...` : card.token}
+                            </code>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => copyToken(card.token)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={getCardStatusColor(card.status)}>
+                            {getCardStatusLabel(card.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {card.customer ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                {card.customer.image ? (
+                                  <img src={card.customer.image} alt="" className="w-full h-full rounded-full" />
+                                ) : (
+                                  <User className="w-4 h-4 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">{card.customer.name}</p>
+                                <p className="text-xs text-muted-foreground">{card.customer.email}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Atanmamış</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">{card._count.consumptions}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {formatDate(card.createdAt)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
                             <MoreVertical className="h-4 w-4" />
@@ -689,22 +870,51 @@ export default function AdminCardsPage() {
                             Sil
                           </DropdownMenuItem>
                         </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2">
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Sayfa <span className="font-semibold text-foreground">{page}</span> / {Math.max(1, totalPages)}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Önceki
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Sonraki
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      </div>
 
       {/* Generate Dialog */}
       <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-violet-500" />
+              <Sparkles className="w-5 h-5 text-sky-500" />
               Toplu Kart Üret
             </DialogTitle>
             <DialogDescription>
@@ -762,7 +972,7 @@ export default function AdminCardsPage() {
             <Button 
               onClick={handleGenerate}
               disabled={generating || !generateForm.batchName}
-              className="bg-gradient-to-r from-violet-600 to-fuchsia-600"
+              className="bg-gradient-to-r from-sky-700 to-cyan-700"
             >
               {generating ? (
                 <>
@@ -795,7 +1005,7 @@ export default function AdminCardsPage() {
               {cardQrCode && (
                 <div className="flex justify-center">
                   <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-2xl blur-xl opacity-30" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-cyan-500 rounded-2xl blur-xl opacity-30" />
                     <div className="relative bg-white p-4 rounded-2xl shadow-lg">
                       <img src={cardQrCode} alt="QR Code" className="w-48 h-48" />
                     </div>

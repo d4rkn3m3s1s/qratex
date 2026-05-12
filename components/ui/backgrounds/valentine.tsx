@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { VALENTINE_HEART_COLORS_DARK, VALENTINE_HEART_COLORS_LIGHT } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface Heart {
@@ -45,9 +46,7 @@ export function ValentineBackground({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const darkColors = ['#ff1744', '#ff4081', '#f50057', '#ff80ab', '#ff5252', '#e91e63'];
-    const lightColors = ['#e91e63', '#c2185b', '#ad1457', '#880e4f', '#d81b60', '#f06292'];
-    const colors = isDark ? darkColors : lightColors;
+    const colors = isDark ? [...VALENTINE_HEART_COLORS_DARK] : [...VALENTINE_HEART_COLORS_LIGHT];
 
     const hearts: Heart[] = Array.from({ length: 40 }, () => ({
       x: Math.random() * canvas.width,

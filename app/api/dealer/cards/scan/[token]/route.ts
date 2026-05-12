@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/dealer/cards/scan/[token]
@@ -12,22 +14,9 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Giriş yapmanız gerekiyor' },
-        { status: 401 }
-      );
-    }
-
-    // Sadece DEALER rolü tarayabilir
-    if (session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Sadece bayiler kart tarayabilir' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { token } = await params;
 

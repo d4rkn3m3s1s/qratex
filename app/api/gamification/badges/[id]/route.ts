@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 // GET /api/gamification/badges/[id] - Get single badge
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -43,6 +47,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -60,7 +65,6 @@ export async function PATCH(
       );
     }
 
-    // Update badge
     const badge = await prisma.badge.update({
       where: { id },
       data: {
@@ -69,7 +73,10 @@ export async function PATCH(
         icon: body.icon,
         category: body.category || undefined,
         rarity: (body.rarity || 'common').toLowerCase(),
-        requirement: { type: 'custom', value: body.points || 100 },
+        requirement: (typeof body.requirement === 'object' && body.requirement)
+          ? body.requirement as object
+          : { type: 'custom', value: body.points || 100 },
+        ...(typeof body.pointCost === 'number' || body.pointCost === null ? { pointCost: body.pointCost } : {}),
         isActive: body.isActive,
       },
     });
@@ -83,6 +90,7 @@ export async function PATCH(
         entityId: badge.id,
         oldData: oldBadge as object,
         newData: badge as object,
+        ...auditMeta,
       },
     });
 
@@ -102,6 +110,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -129,6 +138,7 @@ export async function DELETE(
         entity: 'Badge',
         entityId: id,
         oldData: badge as object,
+        ...auditMeta,
       },
     });
 

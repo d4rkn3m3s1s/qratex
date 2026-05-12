@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAppT } from '@/lib/app-locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import JSZip from 'jszip';
 import {
   QrCode,
   Plus,
@@ -19,7 +20,6 @@ import {
   Star,
   MessageSquare,
   Calendar,
-  MapPin,
   CheckCircle2,
   XCircle,
   Sparkles,
@@ -28,11 +28,19 @@ import {
   Zap,
   TrendingUp,
   Activity,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  Ban,
 } from 'lucide-react';
+import { BRAND_PRIMARY_HEX, HEX_BLACK, HEX_WHITE, QR_PRESET_DISPLAY_HEX } from '@/lib/brand-colors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +60,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import { formatDate } from '@/lib/utils';
 import QRCodeLib from 'qrcode';
 
@@ -61,11 +69,11 @@ interface QRCode {
   code: string;
   name: string;
   description: string | null;
-  businessName: string;
-  location: string | null;
   isActive: boolean;
   scanCount: number;
   createdAt: string;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
 }
 
 // Animated Counter
@@ -100,16 +108,20 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 };
 
 export default function DealerQRCodesPage() {
-  const { data: session } = useSession();
+  const t = useAppT();
   const [qrCodes, setQRCodes] = useState<QRCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [selectedQR, setSelectedQR] = useState<QRCode | null>(null);
   const [qrPreview, setQrPreview] = useState<string>('');
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-  const [qrFgColor, setQrFgColor] = useState('#000000');
-
+  const [qrFgColor, setQrFgColor] = useState<string>(HEX_BLACK);
   const downloadQR = async (code: string, format: 'png' | 'svg' = 'png') => {
     const url = `${window.location.origin}/feedback/${code}`;
     if (format === 'svg') {
@@ -128,34 +140,39 @@ export default function DealerQRCodesPage() {
       a.download = `qr-${code}.png`;
       a.click();
     }
-    toast.success(`QR kod ${format.toUpperCase()} olarak indirildi!`);
+    toast.success(t('dealerQrCodes.downloadedFormat').replace('{format}', format.toUpperCase()));
   };
-  const [qrBgColor, setQrBgColor] = useState('#FFFFFF');
+  const [qrBgColor, setQrBgColor] = useState<string>(HEX_WHITE);
   const [qrFrame, setQrFrame] = useState<'none' | 'rounded' | 'circle' | 'badge'>('none');
   
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    businessName: '',
-    location: '',
     isActive: true,
   });
 
-  useEffect(() => {
-    fetchQRCodes();
-  }, []);
+  const pageSize = 12;
 
-  const fetchQRCodes = async () => {
+  useEffect(() => {
+    fetchQRCodes(page);
+  }, [page]);
+
+  const fetchQRCodes = async (p = 1) => {
     try {
       setLoading(true);
-      const res = await fetch('/api/qr-codes');
+      const res = await fetch(`/api/qr-codes?page=${p}&pageSize=${pageSize}`, { cache: 'no-store' });
       const data = await res.json();
-      
-      if (data.success) {
-        setQRCodes(data.data);
+
+      if (!res.ok) {
+        throw new Error(data?.error || t('dealerQrCodes.loadFailed'));
       }
+
+      const list = Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : [];
+      setQRCodes(list);
+      setTotalPages(data?.totalPages ?? 1);
+      setTotal(data?.total ?? list.length);
     } catch (error) {
-      toast.error('QR kodlar yüklenemedi');
+      toast.error(error instanceof Error ? error.message : t('dealerQrCodes.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -180,8 +197,8 @@ export default function DealerQRCodesPage() {
   };
 
   const handleCreate = async () => {
-    if (!formData.name || !formData.businessName) {
-      toast.error('Lütfen zorunlu alanları doldurun');
+    if (!formData.name) {
+      toast.error(t('dealerQrCodes.fillRequiredFields'));
       return;
     }
     
@@ -195,20 +212,20 @@ export default function DealerQRCodesPage() {
       const data = await res.json();
       
       if (data.success) {
-        toast.success('QR kod oluşturuldu!');
+        toast.success(t('dealerQrCodes.created'));
         setCreateDialogOpen(false);
         resetForm();
-        fetchQRCodes();
+        fetchQRCodes(page);
       } else {
-        toast.error(data.error || 'QR kod oluşturulamadı');
+        toast.error(data.error || t('dealerQrCodes.createFailed'));
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      toast.error(t('dealerQrCodes.genericError'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bu QR kodu silmek istediğinizden emin misiniz?')) return;
+    if (!confirm(t('dealerQrCodes.confirmDelete'))) return;
     
     try {
       const res = await fetch(`/api/qr-codes/${id}`, {
@@ -216,20 +233,56 @@ export default function DealerQRCodesPage() {
       });
       
       if (res.ok) {
-        toast.success('QR kod silindi');
-        fetchQRCodes();
+        toast.success(t('dealerQrCodes.deleted'));
+        fetchQRCodes(page);
       } else {
-        toast.error('QR kod silinemedi');
+        toast.error(t('dealerQrCodes.deleteFailed'));
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      toast.error(t('dealerQrCodes.genericError'));
+    }
+  };
+
+  const handleRevoke = async (qr: QRCode) => {
+    if (!confirm(t('dealerQrCodes.confirmRevoke'))) return;
+    try {
+      const res = await fetch(`/api/qr-codes/${qr.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revoke: true }),
+      });
+      if (res.ok) {
+        toast.success(t('dealerQrCodes.revoked'));
+        fetchQRCodes(page);
+      } else {
+        const d = await res.json();
+        toast.error(d.error || t('dealerQrCodes.revokeFailed'));
+      }
+    } catch {
+      toast.error(t('dealerQrCodes.genericError'));
+    }
+  };
+
+  const handleRotate = async (qr: QRCode) => {
+    if (!confirm(t('dealerQrCodes.confirmRotate'))) return;
+    try {
+      const res = await fetch(`/api/qr-codes/${qr.id}/rotate`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(t('dealerQrCodes.rotated'));
+        fetchQRCodes(page);
+      } else {
+        toast.error(data.error || t('dealerQrCodes.rotateFailed'));
+      }
+    } catch {
+      toast.error(t('dealerQrCodes.genericError'));
     }
   };
 
   const handleCopyLink = async (code: string) => {
     const url = `${window.location.origin}/feedback/${code}`;
     await navigator.clipboard.writeText(url);
-    toast.success('Link panoya kopyalandı!');
+    toast.success(t('dealerQrCodes.linkCopied'));
   };
 
   const handleDownloadQR = async (qr: QRCode) => {
@@ -238,7 +291,7 @@ export default function DealerQRCodesPage() {
     link.download = `qr-${qr.name}.png`;
     link.href = qrImage;
     link.click();
-    toast.success('QR kod indirildi!');
+    toast.success(t('dealerQrCodes.singleDownloadSuccess'));
   };
 
   const handlePreviewQR = async (qr: QRCode) => {
@@ -252,146 +305,172 @@ export default function DealerQRCodesPage() {
     setFormData({
       name: '',
       description: '',
-      businessName: session?.user?.name || '',
-      location: '',
       isActive: true,
     });
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const selectAllOnPage = () => {
+    if (selectedIds.size === filteredQRCodes.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredQRCodes.map((q) => q.id)));
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const runBulk = async (action: 'activate' | 'deactivate' | 'delete') => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (action === 'delete' && !confirm(t('dealerQrCodes.bulkDeleteConfirm').replace('{count}', String(ids.length)))) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/qr-codes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(t('dealerQrCodes.bulkUpdated').replace('{count}', String(data.count)));
+        clearSelection();
+        fetchQRCodes(page);
+      } else {
+        toast.error(data.error || t('dealerQrCodes.bulkFailed'));
+      }
+    } catch {
+      toast.error(t('dealerQrCodes.connectionError'));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkDownloadZip = async () => {
+    const toExport = qrCodes.filter((q) => selectedIds.has(q.id));
+    if (!toExport.length) return;
+    setBulkLoading(true);
+    try {
+      const zip = new JSZip();
+      for (const qr of toExport) {
+        const url = `${window.location.origin}/feedback/${qr.code}`;
+        const dataUrl = await QRCodeLib.toDataURL(url, { width: 400, margin: 2, color: { dark: qrFgColor, light: qrBgColor } });
+        const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+        zip.file(`qr-${qr.name.replace(/[^a-z0-9-_]/gi, '_')}-${qr.code}.png`, base64, { base64: true });
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `qr-kodlari-${Date.now()}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success(t('dealerQrCodes.zipDownloaded').replace('{count}', String(toExport.length)));
+      clearSelection();
+    } catch (e) {
+      toast.error(t('dealerQrCodes.zipFailed'));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const filteredQRCodes = qrCodes.filter((qr) =>
-    qr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    qr.businessName.toLowerCase().includes(searchQuery.toLowerCase())
+    qr.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const selectedOnPage = filteredQRCodes.filter((q) => selectedIds.has(q.id));
 
   const stats = {
-    total: qrCodes.length,
+    total,
     active: qrCodes.filter(q => q.isActive).length,
     totalScans: qrCodes.reduce((acc, q) => acc + q.scanCount, 0),
   };
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-primary/10 dark:bg-black/20 rounded-full blur-3xl" />
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1.5 h-1.5 bg-white/30 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        
-        <div className="relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-                <QrCode className="w-8 h-8" />
-                QR Kodlarım
-              </h1>
-              <p className="text-white/70 mt-1">Geri bildirim toplamak için QR kodlarınızı yönetin</p>
-            </div>
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <DashboardPageHero
+        eyebrow={t('dealerQrCodes.eyebrow')}
+        title={t('dealerQrCodes.title')}
+        description={t('dealerQrCodes.description')}
+        icon={<QrCode className="h-7 w-7" aria-hidden />}
+        tone="auto"
+        actions={
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="lg" className="bg-white text-purple-600 hover:bg-white/90 gap-2 shadow-lg">
+                <Button size="lg" className="gap-2 shadow-md">
                   <Plus className="h-5 w-5" />
-                  Yeni QR Kod
+                  {t('dealerQrCodes.newQr')}
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600">
-                      <QrCode className="h-5 w-5 text-white" />
+                    <div className="rounded-lg bg-primary/15 p-2 text-primary">
+                      <QrCode className="h-5 w-5" aria-hidden />
                     </div>
-                    Yeni QR Kod Oluştur
+                    {t('dealerQrCodes.createTitle')}
                   </DialogTitle>
                   <DialogDescription>
-                    Müşterilerinizden geri bildirim toplamak için QR kod oluşturun
+                    {t('dealerQrCodes.createDescription')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>QR Kod Adı *</Label>
+                    <Label>{t('dealerQrCodes.nameRequired')}</Label>
                     <Input
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Örn: Ana Giriş Masası"
+                      placeholder={t('dealerQrCodes.namePlaceholder')}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>İşletme Adı *</Label>
-                    <Input
-                      value={formData.businessName}
-                      onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                      placeholder="Örn: Cafe Merkez"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Açıklama</Label>
+                    <Label>{t('dealerQrCodes.descriptionLabel')}</Label>
                     <Textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="QR kod açıklaması..."
+                      placeholder={t('dealerQrCodes.descriptionPlaceholder')}
                       rows={2}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Konum</Label>
-                    <Input
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      placeholder="Örn: İstanbul, Kadıköy"
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                    İptal
+                    {t('common.cancel')}
                   </Button>
-                  <Button onClick={handleCreate} className="bg-gradient-to-r from-violet-600 to-fuchsia-600">
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Oluştur
+                  <Button onClick={handleCreate}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {t('common.create')}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Toplam QR', value: stats.total, icon: QrCode, color: 'violet', gradient: 'from-violet-500 to-purple-600' },
-          { label: 'Aktif', value: stats.active, icon: CheckCircle2, color: 'emerald', gradient: 'from-emerald-500 to-teal-600' },
-          { label: 'Toplam Tarama', value: stats.totalScans, icon: Eye, color: 'blue', gradient: 'from-blue-500 to-cyan-600' },
+          { labelKey: 'dealerQrCodes.statTotalQr', value: stats.total, icon: QrCode, iconBox: 'bg-primary/10', iconColor: 'text-primary', gradient: 'from-primary to-primary/80' },
+          { labelKey: 'dealerQrCodes.statActive', value: stats.active, icon: CheckCircle2, iconBox: 'bg-emerald-500/10', iconColor: 'text-emerald-500', gradient: 'from-emerald-500 to-teal-600' },
+          { labelKey: 'dealerQrCodes.statTotalScans', value: stats.totalScans, icon: Eye, iconBox: 'bg-blue-500/10', iconColor: 'text-blue-500', gradient: 'from-blue-500 to-cyan-600' },
         ].map((stat, index) => (
           <motion.div
-            key={stat.label}
+            key={stat.labelKey}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="relative overflow-hidden border-0 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
+            <Card className="relative overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
               <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-5 transition-opacity`} />
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10`}>
-                    <stat.icon className={`h-5 w-5 text-${stat.color}-500`} />
+                  <div className={`rounded-xl p-2.5 ${stat.iconBox}`}>
+                    <stat.icon className={`h-5 w-5 ${stat.iconColor}`} />
                   </div>
                   <div>
                     <p className="text-2xl font-bold"><AnimatedNumber value={stat.value} /></p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
+                    <p className="text-xs text-muted-foreground">{t(stat.labelKey)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -401,12 +480,12 @@ export default function DealerQRCodesPage() {
       </div>
 
       {/* Search */}
-      <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="QR kod veya işletme ara..."
+              placeholder={t('dealerQrCodes.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-background/50"
@@ -415,11 +494,39 @@ export default function DealerQRCodesPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-3 flex flex-wrap items-center gap-3">
+            <span className="font-medium">{t('dealerQrCodes.selectedCount').replace('{count}', String(selectedIds.size))}</span>
+            <Button variant="outline" size="sm" onClick={clearSelection} disabled={bulkLoading}>
+              {t('dealerQrCodes.clearSelection')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runBulk('activate')} disabled={bulkLoading}>
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              {t('dealerQrCodes.bulkActivate')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => runBulk('deactivate')} disabled={bulkLoading}>
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4 mr-1" />}
+              {t('dealerQrCodes.bulkDeactivate')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleBulkDownloadZip} disabled={bulkLoading}>
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+              {t('dealerQrCodes.downloadZip')}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => runBulk('delete')} disabled={bulkLoading}>
+              {bulkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              {t('dealerQrCodes.bulkDelete')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* QR Codes Grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
-            <Card key={i} className="border-0 bg-card/50">
+            <Card key={i} className="border-border/60 bg-card/50">
               <CardContent className="p-6">
                 <div className="animate-pulse space-y-4">
                   <div className="h-40 bg-muted rounded-xl" />
@@ -431,26 +538,34 @@ export default function DealerQRCodesPage() {
           ))}
         </div>
       ) : filteredQRCodes.length === 0 ? (
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-12 text-center">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
             >
-              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
-                <QrCode className="h-12 w-12 text-violet-500" />
+              <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
+                <QrCode className="h-12 w-12 text-primary" aria-hidden />
               </div>
-              <h3 className="text-xl font-semibold mb-2">Henüz QR kod yok</h3>
-              <p className="text-muted-foreground mb-6">İlk QR kodunuzu oluşturarak müşteri geri bildirimi toplamaya başlayın</p>
-              <Button onClick={() => setCreateDialogOpen(true)} className="bg-gradient-to-r from-violet-600 to-fuchsia-600">
-                <Plus className="h-4 w-4 mr-2" />
-                İlk QR Kodunuzu Oluşturun
+              <h3 className="text-xl font-semibold mb-2">{t('dealerQrCodes.emptyTitle')}</h3>
+              <p className="text-muted-foreground mb-6">{t('dealerQrCodes.emptyDescription')}</p>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('dealerQrCodes.ctaFirstQr')}
               </Button>
             </motion.div>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <Checkbox
+              checked={selectedIds.size > 0 && selectedOnPage.length === filteredQRCodes.length}
+              onCheckedChange={selectAllOnPage}
+            />
+            <span className="text-sm text-muted-foreground">{t('dealerQrCodes.selectPage')}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence>
             {filteredQRCodes.map((qr, index) => (
               <motion.div
@@ -461,33 +576,40 @@ export default function DealerQRCodesPage() {
                 transition={{ delay: index * 0.05 }}
                 layout
               >
-                <Card className="border-0 bg-card/50 backdrop-blur-sm group hover:shadow-xl transition-all overflow-hidden">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-xl transition-all overflow-hidden">
                   <CardContent className="p-0">
                     {/* QR Preview Area */}
                     <div 
                       className="relative h-44 bg-gradient-to-br from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 flex items-center justify-center cursor-pointer overflow-hidden"
                       onClick={() => handlePreviewQR(qr)}
                     >
+                      <div className="absolute top-3 left-3 z-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(qr.id)}
+                          onCheckedChange={() => toggleSelect(qr.id)}
+                        />
+                      </div>
                       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
                         <div className="bg-white/90 dark:bg-black/80 rounded-full p-3">
-                          <Eye className="h-6 w-6" />
+                          <Eye className="h-6 w-6 text-foreground dark:text-white" />
                         </div>
                       </div>
                       <QrCode className="h-24 w-24 text-gray-800 dark:text-white group-hover:scale-95 transition-transform" />
                       
-                      {/* Status Badge */}
+                      {/* Status Badge - P2-32 lifecycle */}
                       <div className="absolute top-3 right-3">
-                        <Badge className={qr.isActive 
-                          ? 'bg-emerald-500/90 text-white border-0' 
-                          : 'bg-gray-500/90 text-white border-0'
-                        }>
-                          {qr.isActive ? (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
-                              Aktif
-                            </>
-                          ) : 'Pasif'}
-                        </Badge>
+                        {qr.revokedAt ? (
+                          <Badge className="bg-amber-600/90 text-white border-0">{t('dealerQrCodes.badgeRevoked')}</Badge>
+                        ) : qr.expiresAt && new Date(qr.expiresAt) < new Date() ? (
+                          <Badge className="bg-destructive text-destructive-foreground border-0">{t('dealerQrCodes.badgeExpired')}</Badge>
+                        ) : qr.isActive ? (
+                          <Badge className="bg-emerald-500/90 text-white border-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
+                            {t('dealerQrCodes.badgeActive')}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-500/90 text-white border-0">{t('dealerQrCodes.badgeInactive')}</Badge>
+                        )}
                       </div>
                     </div>
 
@@ -505,24 +627,40 @@ export default function DealerQRCodesPage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handlePreviewQR(qr)}>
                                 <Eye className="h-4 w-4 mr-2" />
-                                Önizle
+                                {t('dealerQrCodes.menuPreview')}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => window.open(`/feedback/${qr.code}`, '_blank')}>
                                 <ExternalLink className="h-4 w-4 mr-2" />
-                                Sayfayı Aç
+                                {t('dealerQrCodes.menuOpenPage')}
                               </DropdownMenuItem>
+                              {!qr.revokedAt && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => handleRotate(qr)}>
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    {t('dealerQrCodes.menuRotate')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-amber-600 focus:text-amber-600"
+                                    onClick={() => handleRevoke(qr)}
+                                  >
+                                    <Ban className="h-4 w-4 mr-2" />
+                                    {t('dealerQrCodes.menuRevoke')}
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => handleDelete(qr.id)}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
-                                Sil
+                                {t('dealerQrCodes.menuDelete')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                        <p className="text-sm text-muted-foreground">{qr.businessName}</p>
+                        <p className="text-sm text-muted-foreground">{t('dealerQrCodes.codeLabel')} {qr.code}</p>
                       </div>
 
                       {/* Stats Row */}
@@ -530,14 +668,8 @@ export default function DealerQRCodesPage() {
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Eye className="h-4 w-4 text-blue-500" />
                           <span className="font-medium">{qr.scanCount}</span>
-                          <span>tarama</span>
+                          <span>{t('dealerQrCodes.scansSuffix')}</span>
                         </div>
-                        {qr.location && (
-                          <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <MapPin className="h-4 w-4 text-rose-500" />
-                            <span className="truncate max-w-[100px]">{qr.location}</span>
-                          </div>
-                        )}
                       </div>
 
                       {/* Actions */}
@@ -549,7 +681,7 @@ export default function DealerQRCodesPage() {
                           onClick={() => handleCopyLink(qr.code)}
                         >
                           <Copy className="h-4 w-4 mr-2" />
-                          Kopyala
+                          {t('dealerQrCodes.copy')}
                         </Button>
                         <Button
                           variant="outline"
@@ -558,7 +690,7 @@ export default function DealerQRCodesPage() {
                           onClick={() => handleDownloadQR(qr)}
                         >
                           <Download className="h-4 w-4 mr-2" />
-                          İndir
+                          {t('dealerQrCodes.download')}
                         </Button>
                       </div>
                     </div>
@@ -567,6 +699,37 @@ export default function DealerQRCodesPage() {
               </motion.div>
             ))}
           </AnimatePresence>
+        </div>
+        </>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && !loading && (
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            {t('dealerQrCodes.paginationPrevious')}
+          </Button>
+          <span className="text-sm text-muted-foreground px-2">
+            {t('dealerQrCodes.paginationPage')
+              .replace('{page}', String(page))
+              .replace('{totalPages}', String(totalPages))
+              .replace('{total}', String(total))}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages}
+          >
+            {t('dealerQrCodes.paginationNext')}
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
         </div>
       )}
 
@@ -589,19 +752,19 @@ export default function DealerQRCodesPage() {
             >
               <Card className="border-0 shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="relative p-6 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600">
+                <div className="relative border-b border-border bg-muted/40 p-6">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-4 right-4 text-white/80 hover:text-white hover:bg-white/20"
+                    className="absolute right-4 top-4 text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => setPreviewDialogOpen(false)}
                   >
                     <X className="h-5 w-5" />
                   </Button>
-                  
-                  <div className="text-white">
-                    <h2 className="text-xl font-bold">{selectedQR.name}</h2>
-                    <p className="text-white/70">{selectedQR.businessName}</p>
+
+                  <div>
+                    <h2 className="text-xl font-bold text-foreground">{selectedQR.name}</h2>
+                    <p className="text-sm text-muted-foreground">{t('dealerQrCodes.codeLabel')} {selectedQR.code}</p>
                   </div>
                 </div>
 
@@ -612,7 +775,7 @@ export default function DealerQRCodesPage() {
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       src={qrPreview} 
-                      alt="QR Code" 
+                      alt={t('dealerQrCodes.previewAlt')} 
                       className={`shadow-lg max-w-[250px] ${qrFrame === "rounded" ? "border-4 border-primary rounded-2xl" : qrFrame === "circle" ? "border-4 border-amber-500 rounded-full" : qrFrame === "badge" ? "border-[6px] border-double border-emerald-500 rounded-xl" : "rounded-xl"}`} 
                     />
                   )}
@@ -621,11 +784,11 @@ export default function DealerQRCodesPage() {
                 {/* Color Customization */}
                 <div className="px-6 pt-4 pb-2 bg-card">
                   <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-                    <Palette className="h-3 w-3" /> QR Renk Özelleştirme
+                    <Palette className="h-3 w-3" /> {t('dealerQrCodes.colorsTitle')}
                   </p>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">Ön Plan</label>
+                      <label className="text-xs text-muted-foreground">{t('dealerQrCodes.foreground')}</label>
                       <input type="color" value={qrFgColor} onChange={async (e) => {
                         setQrFgColor(e.target.value);
                         if (selectedQR) {
@@ -636,7 +799,7 @@ export default function DealerQRCodesPage() {
                       }} className="w-8 h-8 rounded cursor-pointer border-0" />
                     </div>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-muted-foreground">Arka Plan</label>
+                      <label className="text-xs text-muted-foreground">{t('dealerQrCodes.background')}</label>
                       <input type="color" value={qrBgColor} onChange={async (e) => {
                         setQrBgColor(e.target.value);
                         if (selectedQR) {
@@ -649,15 +812,15 @@ export default function DealerQRCodesPage() {
                   </div>
                   {/* Quick Color Presets */}
                   <div className="flex items-center gap-2 mt-3">
-                    <span className="text-xs text-muted-foreground">Hazır:</span>
+                    <span className="text-xs text-muted-foreground">{t('dealerQrCodes.presetQuickLabel')}</span>
                     {[
-                      { fg: '#000000', bg: '#FFFFFF', label: 'Klasik' },
-                      { fg: '#6d28d9', bg: '#f5f3ff', label: 'Mor' },
-                      { fg: '#0369a1', bg: '#f0f9ff', label: 'Mavi' },
-                      { fg: '#b91c1c', bg: '#fef2f2', label: 'Kırmızı' },
-                      { fg: '#FFFFFF', bg: '#000000', label: 'Ters' },
+                      { fg: HEX_BLACK, bg: HEX_WHITE, labelKey: 'dealerQrCodes.presetClassic' },
+                      { fg: BRAND_PRIMARY_HEX, bg: QR_PRESET_DISPLAY_HEX.violet50, labelKey: 'dealerQrCodes.presetPurple' },
+                      { fg: QR_PRESET_DISPLAY_HEX.sky700, bg: QR_PRESET_DISPLAY_HEX.sky50, labelKey: 'dealerQrCodes.presetBlue' },
+                      { fg: QR_PRESET_DISPLAY_HEX.red700, bg: QR_PRESET_DISPLAY_HEX.red50, labelKey: 'dealerQrCodes.presetRed' },
+                      { fg: HEX_WHITE, bg: HEX_BLACK, labelKey: 'dealerQrCodes.presetInverted' },
                     ].map((preset) => (
-                      <button key={preset.label} onClick={async () => {
+                      <button key={preset.labelKey} onClick={async () => {
                         setQrFgColor(preset.fg);
                         setQrBgColor(preset.bg);
                         if (selectedQR) {
@@ -667,29 +830,29 @@ export default function DealerQRCodesPage() {
                         }
                       }}
                         className="flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-medium hover:bg-muted transition-colors"
-                        title={preset.label}
+                        title={t(preset.labelKey)}
                       >
                         <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: preset.fg }} />
                         <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: preset.bg }} />
-                        {preset.label}
+                        {t(preset.labelKey)}
                       </button>
                     ))}
                   </div>
                   {/* Frame Templates */}
                   <div className="mt-3 pt-3 border-t border-border/50">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Çerçeve Şablonu</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerQrCodes.frameTemplates')}</p>
                     <div className="flex gap-2">
                       {[
-                        { id: 'none', label: 'Yok', style: 'border-0' },
-                        { id: 'rounded', label: 'Yumuşak', style: 'border-4 border-primary rounded-2xl' },
-                        { id: 'circle', label: 'Daire', style: 'border-4 border-amber-500 rounded-full' },
-                        { id: 'badge', label: 'Rozet', style: 'border-[6px] border-double border-emerald-500 rounded-xl' },
+                        { id: 'none', labelKey: 'dealerQrCodes.frameNone', style: 'border-0' },
+                        { id: 'rounded', labelKey: 'dealerQrCodes.frameSoft', style: 'border-4 border-primary rounded-2xl' },
+                        { id: 'circle', labelKey: 'dealerQrCodes.frameCircle', style: 'border-4 border-amber-500 rounded-full' },
+                        { id: 'badge', labelKey: 'dealerQrCodes.frameBadge', style: 'border-[6px] border-double border-emerald-500 rounded-xl' },
                       ].map((frame) => (
                         <button key={frame.id} onClick={() => setQrFrame(frame.id as any)}
                           className={`flex-1 p-2 rounded-lg border-2 text-center text-[10px] font-medium transition-all ${qrFrame === frame.id ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50'}`}
                         >
                           <div className={`w-10 h-10 mx-auto mb-1 bg-muted/50 ${frame.style}`} />
-                          {frame.label}
+                          {t(frame.labelKey)}
                         </button>
                       ))}
                     </div>
@@ -702,10 +865,10 @@ export default function DealerQRCodesPage() {
                     <div className="flex items-center gap-2">
                       <Eye className="h-4 w-4 text-blue-500" />
                       <span className="font-medium">{selectedQR.scanCount}</span>
-                      <span className="text-muted-foreground">tarama</span>
+                      <span className="text-muted-foreground">{t('dealerQrCodes.scansSuffix')}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-violet-500" />
+                      <Calendar className="h-4 w-4 text-primary" aria-hidden />
                       <span className="text-muted-foreground">{formatDate(selectedQR.createdAt)}</span>
                     </div>
                   </div>
@@ -717,7 +880,7 @@ export default function DealerQRCodesPage() {
                       onClick={() => handleCopyLink(selectedQR.code)}
                     >
                       <Copy className="h-4 w-4 mr-2" />
-                      Link
+                      {t('dealerQrCodes.linkButton')}
                     </Button>
                     <Button 
                       variant="outline"
@@ -727,10 +890,7 @@ export default function DealerQRCodesPage() {
                       <Download className="h-4 w-4 mr-2" />
                       PNG
                     </Button>
-                    <Button 
-                      className="flex-1 bg-gradient-to-r from-violet-600 to-fuchsia-600"
-                      onClick={() => downloadQR(selectedQR.code, 'svg')}
-                    >
+                    <Button className="flex-1" onClick={() => downloadQR(selectedQR.code, 'svg')}>
                       <Download className="h-4 w-4 mr-2" />
                       SVG
                     </Button>
@@ -742,7 +902,7 @@ export default function DealerQRCodesPage() {
                     onClick={() => window.open(`/feedback/${selectedQR.code}`, '_blank')}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
-                    Geri Bildirim Sayfasını Aç
+                    {t('dealerQrCodes.openFeedbackPage')}
                   </Button>
                 </CardContent>
               </Card>

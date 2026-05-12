@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
+import { CHART_HEX } from '@/lib/chart-palette';
 
 interface CyberpunkBackgroundProps {
   children?: React.ReactNode;
@@ -32,7 +34,13 @@ export function CyberpunkBackground({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const colors = ['#8b5cf6', '#d946ef', '#06b6d4', '#f472b6', '#818cf8'];
+    const colors = [
+      BRAND_PRIMARY_HEX,
+      BRAND_ACCENT_PINK_HEX,
+      CHART_HEX.cyan,
+      CHART_HEX.pinkLight,
+      CHART_HEX.indigo,
+    ];
     
     interface Line {
       x: number;

@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 // GET - Get dealer's quick scan presets
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
-    const presets = await (prisma as any).quickScanPreset.findMany({
+    const presets = await prisma.quickScanPreset.findMany({
       where: { dealerId: session.user.id },
       include: {
         product: {
@@ -34,10 +35,9 @@ export async function GET(req: NextRequest) {
 // POST - Create quick scan preset
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const { name, productId, amount, note, isDefault } = body;
@@ -48,19 +48,19 @@ export async function POST(req: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault) {
-      await (prisma as any).quickScanPreset.updateMany({
+      await prisma.quickScanPreset.updateMany({
         where: { dealerId: session.user.id, isDefault: true },
         data: { isDefault: false },
       });
     }
 
     // Get next order number
-    const lastPreset = await (prisma as any).quickScanPreset.findFirst({
+    const lastPreset = await prisma.quickScanPreset.findFirst({
       where: { dealerId: session.user.id },
       orderBy: { order: 'desc' },
     });
 
-    const preset = await (prisma as any).quickScanPreset.create({
+    const preset = await prisma.quickScanPreset.create({
       data: {
         dealerId: session.user.id,
         name,
@@ -90,10 +90,9 @@ export async function POST(req: NextRequest) {
 // PATCH - Update quick scan preset
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const { id, name, productId, amount, note, isDefault, order } = body;
@@ -103,7 +102,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Verify ownership
-    const existing = await (prisma as any).quickScanPreset.findFirst({
+    const existing = await prisma.quickScanPreset.findFirst({
       where: { id, dealerId: session.user.id },
     });
 
@@ -113,13 +112,13 @@ export async function PATCH(req: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault && !existing.isDefault) {
-      await (prisma as any).quickScanPreset.updateMany({
+      await prisma.quickScanPreset.updateMany({
         where: { dealerId: session.user.id, isDefault: true },
         data: { isDefault: false },
       });
     }
 
-    const preset = await (prisma as any).quickScanPreset.update({
+    const preset = await prisma.quickScanPreset.update({
       where: { id },
       data: {
         name: name !== undefined ? name : existing.name,
@@ -149,10 +148,9 @@ export async function PATCH(req: NextRequest) {
 // DELETE - Delete quick scan preset
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
@@ -162,7 +160,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Verify ownership
-    const existing = await (prisma as any).quickScanPreset.findFirst({
+    const existing = await prisma.quickScanPreset.findFirst({
       where: { id, dealerId: session.user.id },
     });
 
@@ -170,7 +168,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Preset not found' }, { status: 404 });
     }
 
-    await (prisma as any).quickScanPreset.delete({
+    await prisma.quickScanPreset.delete({
       where: { id },
     });
 

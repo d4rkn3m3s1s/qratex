@@ -1,8 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { createConsumptionReviewSchema } from '@/lib/validations';
+import { getConsumptionReviewReward, getPointsMatrix } from '@/lib/points-rules';
+import { creditPointsAndXp } from '@/lib/points-wallet';
+import { analyzeWithFallback } from '@/lib/ai-engine';
+
+
+export const dynamic = 'force-dynamic';
+
+async function analyzeAndPersistConsumptionReview(params: {
+  reviewId: string;
+  dealerId: string;
+  customerId: string;
+  rating: number;
+  text?: string;
+}) {
+  const text = params.text?.trim();
+  if (!text || text.length < 5) {
+    const sentimentFromRating = params.rating >= 4 ? 'positive' : params.rating >= 3 ? 'neutral' : 'negative';
+    await prisma.analyticsEvent.create({
+      data: {
+        userId: params.customerId,
+        event: 'consumption_review_analyzed',
+        category: 'ai',
+        data: {
+          reviewId: params.reviewId,
+          dealerId: params.dealerId,
+          sentiment: sentimentFromRating,
+          source: 'rating_fallback',
+          textLength: text?.length ?? 0,
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return;
+  }
+
+  const analysis = await analyzeWithFallback(text, { dealerId: params.dealerId });
+  await prisma.analyticsEvent.create({
+    data: {
+      userId: params.customerId,
+      event: 'consumption_review_analyzed',
+      category: 'ai',
+      data: {
+        reviewId: params.reviewId,
+        dealerId: params.dealerId,
+        sentiment: analysis.sentiment.label,
+        intent: analysis.intent?.label ?? null,
+        intentScore: analysis.intent?.score ?? null,
+        urgency: analysis.urgency ?? null,
+        churnRisk: analysis.churnRisk ?? null,
+        topics: analysis.topics ?? [],
+        themes: analysis.themes ?? [],
+        model: analysis.modelUsed ?? null,
+        version: analysis.version ?? null,
+        source: 'ai',
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+}
 
 /**
  * POST /api/customer/consumptions/[id]/review
@@ -13,6 +72,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const idemCheck = await checkIdempotency(request, 'consumption-review');
+    if ('error' in idemCheck) return idemCheck.error;
+    if (idemCheck.cached) return idemCheck.response;
+    const idemKey = idemCheck.key;
+
     const session = await getServerSession(authOptions);
     const { id } = await params;
     
@@ -91,15 +155,15 @@ export async function POST(
     });
 
     // Kullanıcıya puan ver (gamification)
-    const pointsEarned = text && text.length > 50 ? 100 : 50; // Detaylı yorum için daha fazla puan
-    const xpEarned = text && text.length > 50 ? 50 : 25;
+    const matrix = await getPointsMatrix();
+    const reward = getConsumptionReviewReward(text, matrix);
+    const pointsEarned = reward.points;
+    const xpEarned = reward.xp;
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        points: { increment: pointsEarned },
-        xp: { increment: xpEarned },
-      },
+    await creditPointsAndXp(prisma, {
+      userId: session.user.id,
+      points: pointsEarned,
+      xp: xpEarned,
     });
 
     // Bildirim gönder
@@ -132,15 +196,25 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({
+    // Yorum geldiği anda analiz + segment sinyallerini DB'ye kaydet
+    analyzeAndPersistConsumptionReview({
+      reviewId: review.id,
+      dealerId: consumption.dealerId,
+      customerId: session.user.id,
+      rating,
+      text: text || undefined,
+    }).catch((err) => {
+      console.error('Consumption review analysis failed:', err);
+    });
+
+    const resBody = {
       success: true,
       message: 'Yorumunuz kaydedildi!',
       review,
-      rewards: {
-        points: pointsEarned,
-        xp: xpEarned,
-      },
-    });
+      rewards: { points: pointsEarned, xp: xpEarned },
+    };
+    if (idemKey) await storeIdempotency(idemKey, 'consumption-review', 200, resBody);
+    return NextResponse.json(resBody);
   } catch (error) {
     console.error('Error creating review:', error);
     return NextResponse.json(
@@ -187,6 +261,13 @@ export async function PUT(
         consumptionId: id,
         customerId: session.user.id,
       },
+      include: {
+        consumption: {
+          select: {
+            dealerId: true,
+          },
+        },
+      },
     });
 
     if (!existingReview) {
@@ -204,6 +285,17 @@ export async function PUT(
         text: text || undefined,
         dimensions: dimensions || undefined,
       },
+    });
+
+    // Güncellemede de anlık analiz sinyalini yenile
+    analyzeAndPersistConsumptionReview({
+      reviewId: review.id,
+      dealerId: existingReview.consumption.dealerId,
+      customerId: session.user.id,
+      rating,
+      text: text || undefined,
+    }).catch((err) => {
+      console.error('Consumption review re-analysis failed:', err);
     });
 
     return NextResponse.json({

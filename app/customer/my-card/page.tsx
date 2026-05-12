@@ -29,12 +29,15 @@ import {
   Wifi,
   Fingerprint,
   Award,
+  Info,
 } from 'lucide-react';
+import { BRAND_CARD_QR_DARK_HEX, BRAND_PRIMARY_HEX, HEX_WHITE } from '@/lib/brand-colors';
+import { CHART_HEX } from '@/lib/chart-palette';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor } from '@/lib/utils';
 
 // QR Code domain - production URL
@@ -76,8 +79,12 @@ export default function CustomerMyCardPage() {
   const [selectedCard, setSelectedCard] = useState<UserCard | null>(null);
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 });
+  const [particlesMounted, setParticlesMounted] = useState(false);
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
+  useEffect(() => {
+    setParticlesMounted(true);
+  }, []);
   useEffect(() => {
     fetchCards();
   }, []);
@@ -99,8 +106,8 @@ export default function CustomerMyCardPage() {
             width: 400,
             margin: 2,
             color: {
-              dark: '#1a1a2e',
-              light: '#ffffff',
+              dark: BRAND_CARD_QR_DARK_HEX,
+              light: HEX_WHITE,
             },
             errorCorrectionLevel: 'H',
           });
@@ -227,7 +234,7 @@ export default function CustomerMyCardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[320px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -239,49 +246,51 @@ export default function CustomerMyCardPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 sm:p-6 md:p-8"
+        className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-slate-900 via-primary/35 to-slate-900 p-4 shadow-lg ring-1 ring-black/20 sm:rounded-2xl sm:p-6 md:p-8 dark:ring-white/10"
       >
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-purple-500/20 rounded-full blur-3xl" />
+          <div className="absolute -right-1/2 -top-1/2 h-full w-full rounded-full bg-primary/20 blur-3xl" />
           <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-cyan-500/20 rounded-full blur-3xl" />
         </div>
         
-        {/* Animated particles */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-white/30 rounded-full"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              animate={{
-                y: [-20, 20],
-                opacity: [0, 1, 0],
-              }}
-              transition={{
-                duration: 3 + Math.random() * 2,
-                repeat: Infinity,
-                delay: Math.random() * 2,
-              }}
-            />
-          ))}
-        </div>
+        {/* Animated particles (client-only to avoid hydration mismatch) */}
+        {particlesMounted && (
+          <div className="absolute inset-0 overflow-hidden">
+            {[...Array(20)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-1 h-1 bg-white/30 rounded-full"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+                animate={{
+                  y: [-20, 20],
+                  opacity: [0, 1, 0],
+                }}
+                transition={{
+                  duration: 3 + Math.random() * 2,
+                  repeat: Infinity,
+                  delay: Math.random() * 2,
+                }}
+              />
+            ))}
+          </div>
+        )}
         
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
-            <Crown className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3 text-balance">
+            <Crown className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-amber-400" />
             Dijital Kartlarım
           </h1>
-          <p className="text-white/70 mt-1 text-sm sm:text-base">Efsanevi QRateX kartınız ve ayrıcalıklarınız</p>
+          <p className="text-white/70 mt-1 text-sm sm:text-base max-w-2xl text-pretty leading-relaxed">Efsanevi QRateX kartınız ve ayrıcalıklarınız</p>
         </div>
       </motion.div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
-          { label: 'Aktif Kart', value: stats.totalCards, icon: CreditCard, color: 'from-violet-500 to-purple-600' },
+          { label: 'Aktif Kart', value: stats.totalCards, icon: CreditCard, color: 'from-primary to-primary/80' },
           { label: 'Toplam Tüketim', value: stats.totalConsumptions, icon: Zap, color: 'from-cyan-500 to-blue-600' },
           { label: 'Yorum Bekliyor', value: stats.reviewPending, icon: Star, color: 'from-amber-500 to-orange-600' },
         ].map((stat, index) => (
@@ -291,7 +300,7 @@ export default function CustomerMyCardPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden group hover:scale-105 transition-transform">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden group hover:scale-105 transition-transform">
               <CardContent className="p-2 sm:p-4 relative">
                 <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
                 <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 relative z-10">
@@ -309,22 +318,89 @@ export default function CustomerMyCardPage() {
         ))}
       </div>
 
+      {/* Digital card sharing explanation - redesigned */}
+      <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary/5 via-background to-cyan-500/5 shadow-sm dark:from-primary/10 dark:to-cyan-500/10">
+        <CardContent className="p-0">
+          {/* Header */}
+          <div className="p-5 sm:p-6 flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20">
+              <CreditCard className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-foreground mb-1">Dijital Kart Paylaşımı Nedir?</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
+                Fiziksel kart taşımadan, kartının linki veya QR kodu ile işletmenin seni tanımasını sağlarsın.
+                Böylece tüketim kaydı açılır, puan ve rozet akışı başlar; geçmiş işlemler tek hesapta birikir.
+              </p>
+            </div>
+          </div>
+
+          {/* 3 steps */}
+          <div className="grid sm:grid-cols-3 gap-3 px-5 sm:px-6 pb-5 sm:pb-6">
+            <div className="group rounded-xl border border-primary/20 bg-card/80 p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md dark:border-primary/25 dark:bg-card/50 dark:hover:border-primary/35">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20">
+                  <Share2 className="h-4 w-4 text-primary" />
+                </div>
+                <span className="font-semibold text-sm text-foreground">1) Nasıl Paylaşılır?</span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                Kart üzerindeki <span className="font-medium text-foreground">Paylaş</span> veya <span className="font-medium text-foreground">Kopyala</span> butonunu kullan.
+              </p>
+            </div>
+            <div className="group rounded-xl border border-cyan-200/60 dark:border-cyan-500/20 bg-card/80 dark:bg-card/50 p-4 shadow-sm hover:shadow-md hover:border-cyan-300/50 dark:hover:border-cyan-500/30 transition-all">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-cyan-500/10 dark:bg-cyan-500/20 flex items-center justify-center">
+                  <QrCode className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                </div>
+                <span className="font-semibold text-sm text-foreground">2) Nerede Kullanılır?</span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                İşletmede QR okutulduğunda veya link açıldığında hesabınla eşleşir.
+              </p>
+            </div>
+            <div className="group rounded-xl border border-emerald-200/60 dark:border-emerald-500/20 bg-card/80 dark:bg-card/50 p-4 shadow-sm hover:shadow-md hover:border-emerald-300/50 dark:hover:border-emerald-500/30 transition-all">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
+                  <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span className="font-semibold text-sm text-foreground">3) Güvenlik</span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                Link sadece kart kimliğini içerir; parola veya özel kişisel veri içermez.
+              </p>
+            </div>
+          </div>
+
+          {/* Tip */}
+          <div className="mx-5 sm:mx-6 mb-5 sm:mb-6 flex items-start gap-3 rounded-xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/20 p-4">
+            <Zap className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-0.5">İpucu</p>
+              <p className="text-sm text-amber-700/90 dark:text-amber-300/90">
+                Yoğun saatlerde kasada hızlı işlem için QR ekranını önceden açman deneyimi hızlandırır.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Cards */}
       {cards.length === 0 ? (
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-8 sm:p-12 text-center">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
             >
-              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center">
-                <CreditCard className="w-10 h-10 sm:w-12 sm:h-12 text-purple-500" />
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-cyan-500/20 sm:mb-6 sm:h-24 sm:w-24">
+                <CreditCard className="h-10 w-10 text-primary sm:h-12 sm:w-12" />
               </div>
               <h3 className="text-lg sm:text-xl font-semibold mb-2">Henüz kartınız yok</h3>
               <p className="text-muted-foreground mb-4 sm:mb-6 text-sm sm:text-base">
                 Restoran veya kafeden aldığınız QR kartı tarayarak aktive edin
               </p>
-              <Button asChild className="bg-gradient-to-r from-purple-600 to-cyan-600">
+              <Button asChild className="bg-gradient-to-r from-primary to-cyan-600">
                 <Link href="/customer/scan">
                   <QrCode className="w-4 h-4 mr-2" />
                   QR Tara
@@ -365,7 +441,7 @@ export default function CustomerMyCardPage() {
                   {/* Card Background */}
                   <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden">
                     {/* Animated gradient background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-primary/35 to-slate-900" />
                     
                     {/* Holographic effect - animates with mouse */}
                     <motion.div
@@ -393,9 +469,9 @@ export default function CustomerMyCardPage() {
                     <motion.div
                       className="absolute inset-0 rounded-xl sm:rounded-2xl"
                       style={{
-                        background: `linear-gradient(${mousePosition.x * 360}deg, #9333ea, #22d3ee, #ec4899, #9333ea)`,
+                        background: `linear-gradient(${mousePosition.x * 360}deg, ${BRAND_PRIMARY_HEX}, ${CHART_HEX.skyLight}, ${CHART_HEX.pink}, ${BRAND_PRIMARY_HEX})`,
                         padding: '2px',
-                        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                        WebkitMask: `linear-gradient(${HEX_WHITE} 0 0) content-box, linear-gradient(${HEX_WHITE} 0 0)`,
                         WebkitMaskComposite: 'xor',
                         maskComposite: 'exclude',
                       }}
@@ -428,7 +504,7 @@ export default function CustomerMyCardPage() {
                         {/* Logo & Title */}
                         <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
                           <motion.div 
-                            className="w-6 h-6 sm:w-8 sm:h-8 rounded-md sm:rounded-lg bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center"
+                            className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-cyan-500 sm:h-8 sm:w-8 sm:rounded-lg"
                             animate={{ 
                               boxShadow: ['0 0 20px rgba(147, 51, 234, 0.5)', '0 0 30px rgba(34, 211, 238, 0.5)', '0 0 20px rgba(147, 51, 234, 0.5)']
                             }}
@@ -467,7 +543,7 @@ export default function CustomerMyCardPage() {
                       >
                         {/* QR Animated Glow */}
                         <motion.div 
-                          className="absolute inset-0 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-lg sm:rounded-xl blur-lg sm:blur-xl"
+                          className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary to-cyan-500 blur-lg sm:rounded-xl sm:blur-xl"
                           animate={{ 
                             opacity: [0.4, 0.7, 0.4],
                             scale: [1, 1.1, 1],
@@ -580,7 +656,7 @@ export default function CustomerMyCardPage() {
               </div>
 
               {/* Card Info Below */}
-              <Card className="border-0 bg-card/50 backdrop-blur-sm mt-3 sm:mt-4">
+              <Card className="border-border/60 bg-card/50 backdrop-blur-sm mt-3 sm:mt-4">
                 <CardContent className="p-3 sm:p-4 md:p-6">
                   {/* Stats */}
                   <div className="flex flex-wrap items-center gap-3 sm:gap-6 mb-3 sm:mb-4">
@@ -628,7 +704,7 @@ export default function CustomerMyCardPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2">
-                    <Button asChild className="flex-1 h-9 sm:h-10 text-xs sm:text-sm bg-gradient-to-r from-purple-600 to-cyan-600">
+                    <Button asChild className="flex-1 h-9 bg-gradient-to-r from-primary to-cyan-600 text-xs sm:h-10 sm:text-sm">
                       <Link href="/customer/consumptions">
                         Tüm Tüketimlerimi Gör
                         <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1.5 sm:ml-2" />
@@ -652,14 +728,14 @@ export default function CustomerMyCardPage() {
 
       {/* QR Code Dialog - Legendary Design */}
       <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md bg-gradient-to-br from-slate-900 via-purple-900/50 to-slate-900 border-purple-500/20 p-4 sm:p-6">
+        <DialogContent className="max-w-[calc(100vw-2rem)] border-primary/20 bg-gradient-to-br from-slate-900 via-primary/25 to-slate-900 p-4 sm:max-w-md sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-center text-white flex items-center justify-center gap-2 text-base sm:text-lg">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
               >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+                <Sparkles className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
               </motion.div>
               QRateX Dijital Kart
             </DialogTitle>
@@ -675,7 +751,7 @@ export default function CustomerMyCardPage() {
               >
                 {/* Animated glow effect */}
                 <motion.div 
-                  className="absolute inset-0 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-xl sm:rounded-2xl blur-xl sm:blur-2xl"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary to-cyan-500 blur-xl sm:rounded-2xl sm:blur-2xl"
                   animate={{ 
                     opacity: [0.3, 0.6, 0.3],
                     scale: [1, 1.1, 1],
@@ -696,7 +772,7 @@ export default function CustomerMyCardPage() {
                 
                 {/* Animated corners */}
                 <motion.div 
-                  className="absolute -top-1 -left-1 w-4 h-4 sm:w-6 sm:h-6 border-t-2 border-l-2 border-purple-500 rounded-tl-lg"
+                  className="absolute -left-1 -top-1 h-4 w-4 rounded-tl-lg border-l-2 border-t-2 border-primary sm:h-6 sm:w-6"
                   animate={{ opacity: [0.5, 1, 0.5] }}
                   transition={{ duration: 1.5, repeat: Infinity }}
                 />
@@ -711,7 +787,7 @@ export default function CustomerMyCardPage() {
                   transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }}
                 />
                 <motion.div 
-                  className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-6 sm:h-6 border-b-2 border-r-2 border-purple-500 rounded-br-lg"
+                  className="absolute -bottom-1 -right-1 h-4 w-4 rounded-br-lg border-b-2 border-r-2 border-primary sm:h-6 sm:w-6"
                   animate={{ opacity: [0.5, 1, 0.5] }}
                   transition={{ duration: 1.5, repeat: Infinity, delay: 0.9 }}
                 />
@@ -740,7 +816,7 @@ export default function CustomerMyCardPage() {
                     Kopyala
                   </Button>
                   <Button 
-                    className="flex-1 h-10 text-xs sm:text-sm bg-gradient-to-r from-purple-600 to-cyan-600"
+                    className="flex-1 h-10 bg-gradient-to-r from-primary to-cyan-600 text-xs sm:text-sm"
                     onClick={() => shareCard(selectedCard.token)}
                   >
                     <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />

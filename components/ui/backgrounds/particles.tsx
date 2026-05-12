@@ -3,6 +3,15 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
+import { CHART_HEX } from '@/lib/chart-palette';
+
+const DEFAULT_PARTICLE_COLORS: string[] = [
+  BRAND_PRIMARY_HEX,
+  BRAND_ACCENT_PINK_HEX,
+  CHART_HEX.pinkLight,
+  CHART_HEX.indigo,
+];
 
 interface Particle {
   x: number;
@@ -25,7 +34,7 @@ export function ParticlesBackground({
   children,
   className,
   particleCount = 80,
-  colors = ['#8b5cf6', '#d946ef', '#f472b6', '#818cf8'],
+  colors = DEFAULT_PARTICLE_COLORS,
   connectDistance = 150,
 }: ParticlesBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

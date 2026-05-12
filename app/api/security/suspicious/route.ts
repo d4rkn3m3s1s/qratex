@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { reportSuspiciousActivity } from '@/lib/security';
 
 // GET - Get suspicious activities (admin only)
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -23,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (resolved !== null) where.isResolved = resolved === 'true';
 
     const [activities, total] = await Promise.all([
-      (prisma as any).suspiciousActivity.findMany({
+      prisma.suspiciousActivity.findMany({
         where,
         include: {
           user: { select: { id: true, name: true, email: true, image: true } },
@@ -33,11 +36,11 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      (prisma as any).suspiciousActivity.count({ where }),
+      prisma.suspiciousActivity.count({ where }),
     ]);
 
     // Stats
-    const stats = await (prisma as any).suspiciousActivity.groupBy({
+    const stats = await prisma.suspiciousActivity.groupBy({
       by: ['severity', 'isResolved'],
       _count: true,
     });
@@ -95,7 +98,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { id, resolution } = body;
 
-    const activity = await (prisma as any).suspiciousActivity.update({
+    const activity = await prisma.suspiciousActivity.update({
       where: { id },
       data: {
         isResolved: true,

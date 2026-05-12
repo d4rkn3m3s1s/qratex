@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
   Gift,
@@ -23,26 +23,26 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
+import { CHART_HEX } from '@/lib/chart-palette';
 
 interface Prize {
-  id: number;
+  id: string;
   label: string;
   value: number;
-  type: 'points' | 'xp' | 'badge' | 'multiplier' | 'nothing';
+  type: 'points' | 'xp' | 'nothing';
   color: string;
   icon: React.ElementType;
-  probability: number;
 }
 
-const prizes: Prize[] = [
-  { id: 1, label: '10 Puan', value: 10, type: 'points', color: '#22c55e', icon: Coins, probability: 25 },
-  { id: 2, label: '25 Puan', value: 25, type: 'points', color: '#3b82f6', icon: Coins, probability: 20 },
-  { id: 3, label: '50 Puan', value: 50, type: 'points', color: '#8b5cf6', icon: Star, probability: 15 },
-  { id: 4, label: '100 Puan', value: 100, type: 'points', color: '#f59e0b', icon: Trophy, probability: 10 },
-  { id: 5, label: '20 XP', value: 20, type: 'xp', color: '#ec4899', icon: Zap, probability: 15 },
-  { id: 6, label: '50 XP', value: 50, type: 'xp', color: '#14b8a6', icon: Zap, probability: 8 },
-  { id: 7, label: '2x Bonus', value: 2, type: 'multiplier', color: '#f97316', icon: Crown, probability: 5 },
-  { id: 8, label: 'Tekrar Dene', value: 0, type: 'nothing', color: '#64748b', icon: Heart, probability: 2 },
+const DEFAULT_PRIZES: Prize[] = [
+  { id: 'spin_p_10', label: '10 Puan', value: 10, type: 'points', color: CHART_HEX.green, icon: Coins },
+  { id: 'spin_p_25', label: '25 Puan', value: 25, type: 'points', color: CHART_HEX.blue, icon: Coins },
+  { id: 'spin_p_50', label: '50 Puan', value: 50, type: 'points', color: BRAND_PRIMARY_HEX, icon: Star },
+  { id: 'spin_p_100', label: '100 Puan', value: 100, type: 'points', color: CHART_HEX.amber, icon: Trophy },
+  { id: 'spin_x_20', label: '20 XP', value: 20, type: 'xp', color: CHART_HEX.pink, icon: Zap },
+  { id: 'spin_x_50', label: '50 XP', value: 50, type: 'xp', color: CHART_HEX.teal, icon: Zap },
+  { id: 'spin_n_0', label: 'Tekrar Dene', value: 0, type: 'nothing', color: CHART_HEX.slate, icon: Heart },
 ];
 
 interface SpinWheelProps {
@@ -58,6 +58,7 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [canSpin, setCanSpin] = useState(true);
+  const [prizes, setPrizes] = useState<Prize[]>(DEFAULT_PRIZES);
   const wheelRef = useRef<HTMLDivElement>(null);
 
   // Check if user can spin today
@@ -70,124 +71,148 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
     }
   }, [lastSpinDate]);
 
-  const segmentAngle = 360 / prizes.length;
+  useEffect(() => {
+    const loadSpinState = async () => {
+      try {
+        const res = await fetch('/api/gamification/spin', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || data?.error) return;
+
+        if (Array.isArray(data.prizes) && data.prizes.length > 0) {
+          const mapped: Prize[] = data.prizes.map(
+            (
+              prize: { id?: string; label?: string; type?: 'points' | 'xp' | 'nothing'; value?: number },
+              index: number
+            ) => {
+              const fallback = DEFAULT_PRIZES[index % DEFAULT_PRIZES.length];
+              const type = prize.type === 'points' || prize.type === 'xp' || prize.type === 'nothing' ? prize.type : fallback.type;
+              const icon = type === 'points' ? Coins : type === 'xp' ? Zap : Heart;
+              const palette = [
+                CHART_HEX.green,
+                CHART_HEX.blue,
+                BRAND_PRIMARY_HEX,
+                CHART_HEX.amber,
+                CHART_HEX.pink,
+                CHART_HEX.teal,
+                CHART_HEX.slate,
+              ];
+              return {
+                id: prize.id || fallback.id,
+                label: prize.label || fallback.label,
+                type,
+                value: Number(prize.value ?? fallback.value),
+                color: palette[index % palette.length],
+                icon,
+              };
+            }
+          );
+          setPrizes(mapped);
+        }
+
+        setCanSpin(Boolean(data.canSpin));
+      } catch (error) {
+        console.error('Spin state load failed:', error);
+      }
+    };
+    loadSpinState();
+  }, []);
+
+  const segmentAngle = 360 / Math.max(prizes.length, 1);
 
   const spinWheel = async () => {
     if (isSpinning || disabled || !canSpin) return;
-
-    // Önce sunucudan kontrol et
-    try {
-      const checkRes = await fetch('/api/gamification/spin');
-      const checkData = await checkRes.json();
-      
-      if (!checkData.canSpin) {
-        setCanSpin(false);
-        toast.error('Bugün zaten çevirdiniz! Yarın tekrar gelin.');
-        return;
-      }
-    } catch (error) {
-      console.error('Spin check failed:', error);
-    }
 
     setIsSpinning(true);
     setSelectedPrize(null);
     setShowResult(false);
 
-    // Weighted random selection
-    const totalProbability = prizes.reduce((sum, p) => sum + p.probability, 0);
-    let random = Math.random() * totalProbability;
-    let selectedIndex = 0;
-
-    for (let i = 0; i < prizes.length; i++) {
-      random -= prizes[i].probability;
-      if (random <= 0) {
-        selectedIndex = i;
-        break;
-      }
-    }
-
-    const prize = prizes[selectedIndex];
-    
-    // Calculate rotation to land on selected prize
-    const prizeAngle = selectedIndex * segmentAngle + segmentAngle / 2;
-    const spins = 5 + Math.random() * 3; // 5-8 full rotations
-    const finalRotation = rotation + (spins * 360) + (360 - prizeAngle);
-
-    setRotation(finalRotation);
-
-    // Wait for animation
-    setTimeout(() => {
-      setIsSpinning(false);
-      setSelectedPrize(prize);
-      setShowResult(true);
-      setCanSpin(false);
-
-      // Trigger confetti for good prizes
-      if (prize.type !== 'nothing' && prize.value >= 50) {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#8b5cf6', '#d946ef', '#f59e0b', '#22c55e'],
-        });
-      }
-
-      // Callback
-      if (onPrizeWon) {
-        onPrizeWon(prize);
-      }
-
-      // Save to API
-      saveSpin(prize);
-    }, 4000);
-  };
-
-  const saveSpin = async (prize: Prize) => {
     try {
       const res = await fetch('/api/gamification/spin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prizeType: prize.type,
-          prizeValue: prize.value,
-          prizeLabel: prize.label,
-        }),
       });
-
       const data = await res.json();
+      if (!res.ok || !data?.success || !data?.prize) {
+        setIsSpinning(false);
+        if (data?.canSpin === false) {
+          setCanSpin(false);
+        }
+        toast.error(data?.error || 'Çark çevrilemedi');
+        return;
+      }
 
-      if (data.success) {
+      const apiPrize = data.prize as {
+        id?: string;
+        type: 'points' | 'xp' | 'nothing';
+        value: number;
+        label: string;
+        index?: number;
+      };
+      const selectedIndexFromId = prizes.findIndex((p) => p.id === apiPrize.id);
+      const selectedIndex =
+        selectedIndexFromId >= 0
+          ? selectedIndexFromId
+          : typeof apiPrize.index === 'number'
+            ? Math.max(0, Math.min(prizes.length - 1, apiPrize.index))
+            : 0;
+      const prize = prizes[selectedIndex];
+
+      if (!prize) {
+        setIsSpinning(false);
+        toast.error('Çark ödülü eşleştirilemedi');
+        return;
+      }
+
+      const prizeAngle = selectedIndex * segmentAngle + segmentAngle / 2;
+      const spins = 5 + Math.random() * 3;
+      const finalRotation = rotation + spins * 360 + (360 - prizeAngle);
+      setRotation(finalRotation);
+
+      setTimeout(() => {
+        setIsSpinning(false);
+        setSelectedPrize(prize);
+        setShowResult(true);
+        setCanSpin(false);
+
         if (prize.type === 'points') {
           toast.success(`🎉 ${prize.value} puan hesabına eklendi!`);
         } else if (prize.type === 'xp') {
           toast.success(`⚡ ${prize.value} XP kazandın!`);
-        } else if (prize.type === 'multiplier') {
-          toast.success(`🚀 ${prize.value}x bonus aktif!`);
+        } else {
+          toast.info('Bir dahaki sefere şansın açık olsun!');
         }
-      } else {
-        toast.error(data.error || 'Ödül kaydedilemedi');
-        // Eğer zaten bugün çevirmişse canSpin'i güncelle
-        if (data.canSpin === false) {
-          setCanSpin(false);
+
+        if (prize.type !== 'nothing' && prize.value >= 50) {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: [BRAND_PRIMARY_HEX, BRAND_ACCENT_PINK_HEX, CHART_HEX.amber, CHART_HEX.green],
+          });
         }
-      }
+
+        if (onPrizeWon) {
+          onPrizeWon(prize);
+        }
+      }, 4000);
     } catch (error) {
-      console.error('Failed to save spin:', error);
-      toast.error('Bağlantı hatası - ödül kaydedilemedi');
+      console.error('Spin failed:', error);
+      setIsSpinning(false);
+      toast.error('Bağlantı hatası - çark çevrilemedi');
     }
   };
 
   if (compact) {
     return (
-      <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 overflow-hidden h-full">
+      <Card className="bg-card border-border/50 overflow-hidden h-full">
         <CardContent className="p-4 flex flex-col items-center justify-center h-full">
           {/* Mini Wheel */}
           <div className="relative w-14 h-14 mb-2">
-            <motion.div
+            <m.div
               ref={wheelRef}
               className="w-full h-full rounded-full"
               style={{
-                background: `conic-gradient(${prizes.map((p, i) => 
+                background: `conic-gradient(${prizes.map((p, i) =>
                   `${p.color} ${i * segmentAngle}deg ${(i + 1) * segmentAngle}deg`
                 ).join(', ')})`,
                 boxShadow: '0 0 15px rgba(139, 92, 246, 0.4)',
@@ -197,7 +222,7 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
             />
             {/* Center */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shadow-lg">
                 <Sparkles className="h-3 w-3 text-white" />
               </div>
             </div>
@@ -210,15 +235,15 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
               onClick={spinWheel}
               disabled={isSpinning}
               size="sm"
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-xs h-8"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8"
             >
               {isSpinning ? (
-                <motion.div
+                <m.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 >
                   <Sparkles className="h-3 w-3" />
-                </motion.div>
+                </m.div>
               ) : (
                 <span className="flex items-center gap-1">
                   <Gift className="h-3 w-3" />
@@ -239,14 +264,14 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
 
         {/* Result Dialog */}
         <Dialog open={showResult} onOpenChange={setShowResult}>
-          <DialogContent className="bg-gradient-to-br from-slate-900 to-slate-950 border-purple-500/30 text-center max-w-sm">
+          <DialogContent className="bg-card border-border text-center max-w-sm">
             <DialogHeader>
               <DialogTitle className="text-2xl">
                 {selectedPrize?.type !== 'nothing' ? '🎉 Tebrikler!' : '😅 Bir Dahaki Sefere!'}
               </DialogTitle>
             </DialogHeader>
             {selectedPrize && (
-              <motion.div
+              <m.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 className="py-6"
@@ -257,14 +282,13 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
                 >
                   <selectedPrize.icon className="h-12 w-12" style={{ color: selectedPrize.color }} />
                 </div>
-                <p className="text-3xl font-bold text-white mb-2">{selectedPrize.label}</p>
+                <p className="text-3xl font-bold text-foreground mb-2">{selectedPrize.label}</p>
                 <p className="text-muted-foreground">
                   {selectedPrize.type === 'points' && 'Puanlar hesabına eklendi!'}
                   {selectedPrize.type === 'xp' && 'XP kazandın!'}
-                  {selectedPrize.type === 'multiplier' && 'Sonraki puanların 2 katı!'}
                   {selectedPrize.type === 'nothing' && 'Yarın tekrar dene!'}
                 </p>
-              </motion.div>
+              </m.div>
             )}
             <Button onClick={() => setShowResult(false)} className="w-full">
               Tamam
@@ -277,10 +301,10 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
 
   // Full size wheel
   return (
-    <Card className="bg-gradient-to-br from-slate-900/50 to-slate-950/50 border-purple-500/30 overflow-hidden">
+    <Card className="bg-card border-border/50 overflow-hidden">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 justify-center">
-          <Gift className="h-5 w-5 text-purple-400" />
+          <Gift className="h-5 w-5 text-primary" />
           Günlük Şans Çarkı
         </CardTitle>
       </CardHeader>
@@ -288,11 +312,11 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
         {/* Wheel Container */}
         <div className="relative">
           {/* Glow effect */}
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-purple-500/30 to-pink-500/30 blur-2xl scale-110" />
-          
+          <div className="absolute inset-0 rounded-full bg-primary/10 blur-2xl scale-110" />
+
           {/* Wheel */}
           <div className="relative w-64 h-64 md:w-80 md:h-80">
-            <motion.div
+            <m.div
               ref={wheelRef}
               className="w-full h-full rounded-full relative overflow-hidden"
               style={{
@@ -331,18 +355,18 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
                   </div>
                 );
               })}
-            </motion.div>
+            </m.div>
 
             {/* Center button */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <motion.div
-                className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-2xl cursor-pointer"
+              <m.div
+                className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-primary flex items-center justify-center shadow-2xl cursor-pointer"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={spinWheel}
               >
                 <Sparkles className="h-8 w-8 text-white" />
-              </motion.div>
+              </m.div>
             </div>
 
             {/* Pointer */}
@@ -358,16 +382,16 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
             onClick={spinWheel}
             disabled={isSpinning}
             size="lg"
-            className="w-full max-w-xs bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-lg font-bold"
+            className="w-full max-w-xs bg-primary hover:bg-primary/90 text-primary-foreground text-lg font-bold"
           >
             {isSpinning ? (
               <span className="flex items-center gap-2">
-                <motion.div
+                <m.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 >
                   <Sparkles className="h-5 w-5" />
-                </motion.div>
+                </m.div>
                 Çark Dönüyor...
               </span>
             ) : (
@@ -415,14 +439,14 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
 
       {/* Result Dialog */}
       <Dialog open={showResult} onOpenChange={setShowResult}>
-        <DialogContent className="bg-gradient-to-br from-slate-900 to-slate-950 border-purple-500/30 text-center max-w-sm">
+        <DialogContent className="bg-card border-border text-center max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {selectedPrize?.type !== 'nothing' ? '🎉 Tebrikler!' : '😅 Bir Dahaki Sefere!'}
             </DialogTitle>
           </DialogHeader>
           {selectedPrize && (
-            <motion.div
+            <m.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="py-6"
@@ -433,14 +457,13 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
               >
                 <selectedPrize.icon className="h-12 w-12" style={{ color: selectedPrize.color }} />
               </div>
-              <p className="text-3xl font-bold text-white mb-2">{selectedPrize.label}</p>
+              <p className="text-3xl font-bold text-foreground mb-2">{selectedPrize.label}</p>
               <p className="text-muted-foreground">
                 {selectedPrize.type === 'points' && 'Puanlar hesabına eklendi!'}
                 {selectedPrize.type === 'xp' && 'XP kazandın!'}
-                {selectedPrize.type === 'multiplier' && 'Sonraki puanların 2 katı!'}
                 {selectedPrize.type === 'nothing' && 'Yarın tekrar dene!'}
               </p>
-            </motion.div>
+            </m.div>
           )}
           <Button onClick={() => setShowResult(false)} className="w-full">
             Tamam

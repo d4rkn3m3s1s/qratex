@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/settings/theme - Public endpoint for theme settings
 // ─────────────────────────────────────────────────────────────
 export async function GET() {
   try {
-    const settings = await prisma.settings.findMany({
-      where: { category: 'theme' },
-      select: {
-        key: true,
-        value: true,
-      },
-    });
-
+    const settings = await getPublicThemeSettings();
     return NextResponse.json({ raw: settings });
   } catch (error) {
     console.error('Error fetching theme settings:', error);

@@ -2,17 +2,145 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isSuspiciousPoints } from '@/lib/points-velocity';
+import {
+  getLeagueRules,
+  getLeagueMetaFromRules,
+  getLeagueProgressFromRules,
+  getNextLeagueMetaFromRules,
+} from '@/lib/league-rules';
+import { assertModuleEnabled } from '@/lib/module-gate';
 
-// Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+const CACHE_SECONDS = 60;
+/** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
+const MAX_LEADERBOARD_FETCH = 5000;
 
 export async function GET(request: NextRequest) {
   try {
+    const gate = await assertModuleEnabled('rewards');
+    if (gate) return gate;
     const session = await getServerSession(authOptions);
+    const leagueRules = await getLeagueRules();
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'weekly';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const category = searchParams.get('category') || 'points';
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+
+    const getCategoryLabel = () => {
+      if (category === 'feedbacks') return 'Geri Bildirim';
+      if (category === 'badges') return 'Rozet';
+      if (category === 'referrals') return 'Davet';
+      return 'Puan';
+    };
+
+    const getScoreFromUser = (user: {
+      points: number;
+      _count: { feedbacks: number; badges: number; referralsMade: number };
+    }) => {
+      if (category === 'feedbacks') return user._count.feedbacks;
+      if (category === 'badges') return user._count.badges;
+      if (category === 'referrals') return user._count.referralsMade;
+      return user.points;
+    };
+
+    if (category !== 'points') {
+      const orderBy =
+        category === 'feedbacks'
+          ? { feedbacks: { _count: 'desc' as const } }
+          : category === 'badges'
+            ? { badges: { _count: 'desc' as const } }
+            : { referralsMade: { _count: 'desc' as const } };
+
+      const [allUsers, totalUsersCount] = await Promise.all([
+        prisma.user.findMany({
+          where: { role: 'CUSTOMER' },
+          orderBy,
+          take: MAX_LEADERBOARD_FETCH,
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            points: true,
+            level: true,
+            _count: {
+              select: {
+                feedbacks: true,
+                badges: true,
+                referralsMade: true,
+              },
+            },
+          },
+        }),
+        prisma.user.count({ where: { role: 'CUSTOMER' } }),
+      ]);
+
+      const sortedUsers = allUsers
+        .map((user) => {
+          const league = getLeagueMetaFromRules(user.points, leagueRules);
+          const nextLeague = getNextLeagueMetaFromRules(user.points, leagueRules);
+          const score = getScoreFromUser(user);
+          return {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            points: user.points,
+            score,
+            level: user.level,
+            feedbackCount: user._count.feedbacks,
+            badgeCount: user._count.badges,
+            referralCount: user._count.referralsMade,
+            league: league.name,
+            leagueKey: league.key,
+            leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
+            nextLeague: nextLeague?.name || null,
+            pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
+          };
+        })
+        .sort((a, b) => b.score - a.score);
+
+      const suspiciousIds = new Set<string>();
+      await Promise.all(
+        sortedUsers.slice(0, limit).map(async (u) => {
+          const suspicious = await isSuspiciousPoints(u.id);
+          if (suspicious) suspiciousIds.add(u.id);
+        })
+      );
+
+      const leaderboard = sortedUsers.slice(0, limit).map((user, index) => ({
+        ...user,
+        rank: index + 1,
+        isCurrentUser: session?.user?.id === user.id,
+        needsReview: suspiciousIds.has(user.id),
+      }));
+
+      const userRank =
+        session?.user?.id
+          ? (sortedUsers.findIndex((u) => u.id === session.user.id) ?? -1) + 1 || null
+          : null;
+      const totalUsers = totalUsersCount;
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            leaderboard,
+            userRank,
+            currentUser: null,
+            period,
+            totalUsers,
+            category,
+            categoryLabel: getCategoryLabel(),
+            periodLabel: period === 'weekly' ? 'Bu Hafta' : period === 'monthly' ? 'Bu Ay' : 'Tüm Zamanlar',
+          },
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        }
+      );
+    }
 
     // Calculate date range based on period
     const now = new Date();
@@ -49,24 +177,39 @@ export async function GET(request: NextRequest) {
           level: true,
           xp: true,
           _count: {
-            select: { feedbacks: true, badges: true },
+            select: { feedbacks: true, badges: true, referralsMade: true },
           },
         },
         orderBy: { points: 'desc' },
         take: limit,
       });
 
-      leaderboardData = users.map((user, index) => ({
-        id: user.id,
-        name: user.name,
-        image: user.image,
-        points: user.points,
-        level: user.level,
-        rank: index + 1,
-        feedbackCount: user._count.feedbacks,
-        badgeCount: user._count.badges,
-        isCurrentUser: session?.user?.id === user.id,
+      const suspiciousIds = new Set<string>();
+      await Promise.all(users.map(async (u) => {
+        if (await isSuspiciousPoints(u.id)) suspiciousIds.add(u.id);
       }));
+
+      leaderboardData = users.map((user, index) => {
+        const league = getLeagueMetaFromRules(user.points, leagueRules);
+        const nextLeague = getNextLeagueMetaFromRules(user.points, leagueRules);
+        return {
+          id: user.id,
+          name: user.name,
+          image: user.image,
+          points: user.points,
+          level: user.level,
+          rank: index + 1,
+          feedbackCount: user._count.feedbacks,
+          badgeCount: user._count.badges,
+          league: league.name,
+          leagueKey: league.key,
+          leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
+          nextLeague: nextLeague?.name || null,
+          pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
+          isCurrentUser: session?.user?.id === user.id,
+          needsReview: suspiciousIds.has(user.id),
+        };
+      });
     } else {
       // Weekly/Monthly - calculate points from feedbacks in the period
       const feedbackPoints = await prisma.feedback.groupBy({
@@ -84,7 +227,6 @@ export async function GET(request: NextRequest) {
         .map(f => f.userId as string);
 
       if (userIds.length === 0) {
-        // Fallback to all-time if no activity in period
         const users = await prisma.user.findMany({
           where: {
             role: 'CUSTOMER',
@@ -97,24 +239,39 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true },
+              select: { feedbacks: true, badges: true, referralsMade: true },
             },
           },
           orderBy: { points: 'desc' },
           take: limit,
         });
 
-        leaderboardData = users.map((user, index) => ({
-          id: user.id,
-          name: user.name,
-          image: user.image,
-          points: user.points,
-          level: user.level,
-          rank: index + 1,
-          feedbackCount: user._count.feedbacks,
-          badgeCount: user._count.badges,
-          isCurrentUser: session?.user?.id === user.id,
+        const fallbackSuspicious = new Set<string>();
+        await Promise.all(users.map(async (u) => {
+          if (await isSuspiciousPoints(u.id)) fallbackSuspicious.add(u.id);
         }));
+
+        leaderboardData = users.map((user, index) => {
+          const league = getLeagueMetaFromRules(user.points, leagueRules);
+          const nextLeague = getNextLeagueMetaFromRules(user.points, leagueRules);
+          return {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            points: user.points,
+            level: user.level,
+            rank: index + 1,
+            feedbackCount: user._count.feedbacks,
+            badgeCount: user._count.badges,
+            league: league.name,
+            leagueKey: league.key,
+            leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
+            nextLeague: nextLeague?.name || null,
+            pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
+            isCurrentUser: session?.user?.id === user.id,
+            needsReview: fallbackSuspicious.has(user.id),
+          };
+        });
       } else {
         // Get users with their period stats
         const users = await prisma.user.findMany({
@@ -129,7 +286,7 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true },
+              select: { feedbacks: true, badges: true, referralsMade: true },
             },
           },
         });
@@ -163,18 +320,33 @@ export async function GET(request: NextRequest) {
           .sort((a, b) => b.periodPoints - a.periodPoints)
           .slice(0, limit);
 
-        leaderboardData = sortedUsers.map((user, index) => ({
-          id: user.id,
-          name: user.name,
-          image: user.image,
-          points: user.periodPoints, // Use period points for display
-          totalPoints: user.points, // Keep total points too
-          level: user.level,
-          rank: index + 1,
-          feedbackCount: user._count.feedbacks,
-          badgeCount: user._count.badges,
-          isCurrentUser: session?.user?.id === user.id,
+        const suspiciousIdsPeriod = new Set<string>();
+        await Promise.all(sortedUsers.map(async (u) => {
+          if (await isSuspiciousPoints(u.id)) suspiciousIdsPeriod.add(u.id);
         }));
+
+        leaderboardData = sortedUsers.map((user, index) => {
+          const league = getLeagueMetaFromRules(user.points, leagueRules);
+          const nextLeague = getNextLeagueMetaFromRules(user.points, leagueRules);
+          return {
+            id: user.id,
+            name: user.name,
+            image: user.image,
+            points: user.periodPoints,
+            totalPoints: user.points,
+            level: user.level,
+            rank: index + 1,
+            feedbackCount: user._count.feedbacks,
+            badgeCount: user._count.badges,
+            league: league.name,
+            leagueKey: league.key,
+            leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
+            nextLeague: nextLeague?.name || null,
+            pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
+            isCurrentUser: session?.user?.id === user.id,
+            needsReview: suspiciousIdsPeriod.has(user.id),
+          };
+        });
       }
     }
 
@@ -196,7 +368,7 @@ export async function GET(request: NextRequest) {
             points: true,
             level: true,
             _count: {
-              select: { feedbacks: true, badges: true },
+              select: { feedbacks: true, badges: true, referralsMade: true },
             },
           },
         });
@@ -209,11 +381,18 @@ export async function GET(request: NextRequest) {
             },
           });
           userRank = usersAbove + 1;
+          const league = getLeagueMetaFromRules(currentUser.points, leagueRules);
+          const nextLeague = getNextLeagueMetaFromRules(currentUser.points, leagueRules);
           currentUserData = {
             ...currentUser,
             rank: userRank,
             feedbackCount: currentUser._count.feedbacks,
             badgeCount: currentUser._count.badges,
+            league: league.name,
+            leagueKey: league.key,
+            leagueProgress: getLeagueProgressFromRules(currentUser.points, leagueRules),
+            nextLeague: nextLeague?.name || null,
+            pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - currentUser.points) : 0,
           };
         }
       } else {
@@ -230,12 +409,14 @@ export async function GET(request: NextRequest) {
         userRank,
         currentUser: currentUserData,
         period,
+        category,
+        categoryLabel: getCategoryLabel(),
         totalUsers,
         periodLabel: period === 'weekly' ? 'Bu Hafta' : period === 'monthly' ? 'Bu Ay' : 'Tüm Zamanlar',
       },
     }, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Cache-Control': `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
       },
     });
   } catch (error) {

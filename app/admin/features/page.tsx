@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { ElementType } from 'react';
 import { motion } from 'framer-motion';
 import {
   ToggleLeft,
   Plus,
   Search,
-  Edit,
   Trash2,
   Check,
   X,
@@ -16,7 +16,8 @@ import {
   Bell,
   MessageSquare,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { PageHeader } from '@/components/dashboard/page-header';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +34,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 
 interface FeatureFlag {
   id: string;
@@ -44,7 +45,7 @@ interface FeatureFlag {
   createdAt: string;
 }
 
-const featureIcons: Record<string, React.ElementType> = {
+const featureIcons: Record<string, ElementType> = {
   ai: Sparkles,
   notifications: Bell,
   gamification: Zap,
@@ -75,32 +76,15 @@ export default function AdminFeaturesPage() {
       setLoading(true);
       const res = await fetch('/api/admin/features');
       const data = await res.json();
-      
-      if (data.success) {
-        setFeatures(data.data);
+      if (res.ok) {
+        setFeatures(Array.isArray(data.features) ? data.features : []);
       } else {
-        // Fallback simulated data
-        setFeatures([
-          { id: '1', key: 'ai_sentiment', name: 'AI Duygu Analizi', description: 'OpenAI ile otomatik duygu analizi', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '2', key: 'gamification', name: 'Gamification', description: 'Puanlar, rozetler ve ödüller sistemi', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '3', key: 'push_notifications', name: 'Push Bildirimleri', description: 'Anlık push bildirimleri', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '4', key: 'social_login', name: 'Sosyal Giriş', description: 'Google ve sosyal medya ile giriş', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '5', key: 'dark_mode', name: 'Karanlık Mod', description: 'Karanlık tema desteği', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '6', key: 'analytics', name: 'Gelişmiş Analitik', description: 'Detaylı analiz raporları', isEnabled: true, createdAt: new Date().toISOString() },
-          { id: '7', key: 'api_access', name: 'API Erişimi', description: 'Harici API entegrasyonu', isEnabled: false, createdAt: new Date().toISOString() },
-          { id: '8', key: 'export', name: 'Veri Dışa Aktarma', description: 'CSV/Excel dışa aktarma', isEnabled: true, createdAt: new Date().toISOString() },
-        ]);
+        toast.error(data.error ?? 'Özellik bayrakları alınamadı');
+        setFeatures([]);
       }
     } catch (error) {
-      // Fallback simulated data
-      setFeatures([
-        { id: '1', key: 'ai_sentiment', name: 'AI Duygu Analizi', description: 'OpenAI ile otomatik duygu analizi', isEnabled: true, createdAt: new Date().toISOString() },
-        { id: '2', key: 'gamification', name: 'Gamification', description: 'Puanlar, rozetler ve ödüller sistemi', isEnabled: true, createdAt: new Date().toISOString() },
-        { id: '3', key: 'push_notifications', name: 'Push Bildirimleri', description: 'Anlık push bildirimleri', isEnabled: true, createdAt: new Date().toISOString() },
-        { id: '4', key: 'social_login', name: 'Sosyal Giriş', description: 'Google ve sosyal medya ile giriş', isEnabled: true, createdAt: new Date().toISOString() },
-        { id: '5', key: 'dark_mode', name: 'Karanlık Mod', description: 'Karanlık tema desteği', isEnabled: true, createdAt: new Date().toISOString() },
-        { id: '6', key: 'analytics', name: 'Gelişmiş Analitik', description: 'Detaylı analiz raporları', isEnabled: true, createdAt: new Date().toISOString() },
-      ]);
+      toast.error(error instanceof Error ? error.message : 'Özellik bayrakları yüklenemedi');
+      setFeatures([]);
     } finally {
       setLoading(false);
     }
@@ -113,19 +97,16 @@ export default function AdminFeaturesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, isEnabled: !currentState }),
       });
-      
-      if (res.ok) {
-        setFeatures(features.map(f => 
-          f.id === id ? { ...f, isEnabled: !currentState } : f
-        ));
-        toast.success(`Özellik ${!currentState ? 'aktif' : 'pasif'} edildi`);
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Güncellenemedi');
       }
-    } catch (error) {
-      // Optimistic update
       setFeatures(features.map(f => 
         f.id === id ? { ...f, isEnabled: !currentState } : f
       ));
       toast.success(`Özellik ${!currentState ? 'aktif' : 'pasif'} edildi`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Özellik güncellenemedi');
     }
   };
 
@@ -137,29 +118,33 @@ export default function AdminFeaturesPage() {
         body: JSON.stringify(formData),
       });
       
-      if (res.ok) {
-        toast.success('Özellik oluşturuldu');
-        setCreateDialogOpen(false);
-        resetForm();
-        fetchFeatures();
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Oluşturulamadı');
       }
-    } catch (error) {
-      // Optimistic add
-      const newFeature: FeatureFlag = {
-        id: Date.now().toString(),
-        ...formData,
-        createdAt: new Date().toISOString(),
-      };
-      setFeatures([...features, newFeature]);
       toast.success('Özellik oluşturuldu');
       setCreateDialogOpen(false);
       resetForm();
+      fetchFeatures();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Özellik oluşturulamadı');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setFeatures(features.filter(f => f.id !== id));
-    toast.success('Özellik silindi');
+  const handleDelete = async (feature: FeatureFlag) => {
+    try {
+      const res = await fetch(`/api/admin/features?key=${encodeURIComponent(feature.key)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Silinemedi');
+      }
+      setFeatures(features.filter((f) => f.id !== feature.id));
+      toast.success('Özellik silindi');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Özellik silinemedi');
+    }
   };
 
   const resetForm = () => {
@@ -194,10 +179,24 @@ export default function AdminFeaturesPage() {
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <PageHeader
         title="Özellik Yönetimi"
         description="Platform özelliklerini açıp kapatın"
       />
+
+      <Card>
+        <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Özellik mantığı</p>
+            <p className="text-xs text-muted-foreground">
+              Buradaki her kayıt bir feature flag&apos;dir. Yeni özellik ekleyip aç/kapat yaparak modülleri canlıda kontrollü yayınlayabilirsiniz.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/tech/add">Teknoloji Ekle ekranını aç</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -373,7 +372,7 @@ export default function AdminFeaturesPage() {
                         variant="ghost"
                         size="sm"
                         className="w-full text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(feature.id)}
+                        onClick={() => handleDelete(feature)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Sil

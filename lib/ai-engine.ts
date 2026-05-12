@@ -12,6 +12,9 @@
  */
 
 import OpenAI from 'openai';
+import { checkAiCostGuard, recordAiCostUsage } from '@/lib/ai-cost-guard';
+import { detectPromptInjection } from '@/lib/prompt-injection';
+import { getSystemLearningProfile } from '@/lib/ai-learning';
 import type {
   AIAnalysisResult,
   AIEntity,
@@ -25,6 +28,7 @@ import type {
 export interface AnalyzeOptions {
   customPrompt?: string;
   adaptiveProfile?: string;
+  dealerId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -209,8 +213,16 @@ export async function analyzeComprehensive(
   if (!text || text.trim().length < 5) {
     return null;
   }
+  if (detectPromptInjection(text)) {
+    console.warn('[AI] Prompt injection attempt detected, rejecting input');
+    return null;
+  }
 
   const startTime = Date.now();
+
+  if (options.dealerId) {
+    await checkAiCostGuard(options.dealerId);
+  }
 
   try {
     const response = await withRetry(() =>
@@ -289,8 +301,13 @@ export async function analyzeComprehensive(
       version: AI_VERSION,
     };
 
-    // Log usage
     logAIUsage('analyze', modelUsed, latencyMs, true);
+    if (options.dealerId) {
+      const u = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
+      const in_ = u?.prompt_tokens ?? 0;
+      const out = u?.completion_tokens ?? 0;
+      await recordAiCostUsage(options.dealerId, in_, out, 'analyze', modelUsed, latencyMs);
+    }
 
     return result;
   } catch (error) {
@@ -315,21 +332,33 @@ export async function analyzeBulk(
 
   // 2'li batch'ler halinde işle (rate limit koruması - Groq free tier için)
   const batchSize = 2;
-  console.log(`[AI] analyzeBulk: ${feedbacks.length} feedbacks, batchSize=${batchSize}`);
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[AI] analyzeBulk: ${feedbacks.length} feedbacks, batchSize=${batchSize}`);
+  }
   for (let i = 0; i < feedbacks.length; i += batchSize) {
     const batch = feedbacks.slice(i, i + batchSize);
     const promises = batch.map(async (fb) => {
       try {
-        console.log(`[AI] Analyzing fb ${fb.id}: "${fb.text.slice(0, 50)}..."`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[AI] Analyzing fb ${fb.id}: "${fb.text?.slice(0, 50) ?? ''}..."`);
+        }
         const result = await analyzeComprehensive(fb.text, options);
         if (result) {
-          console.log(`[AI] ✓ fb ${fb.id} analyzed: intent=${result.intent?.label}, urgency=${result.urgency}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[AI] ✓ fb ${fb.id} analyzed: intent=${result.intent?.label}, urgency=${result.urgency}`);
+          }
           results.set(fb.id, result);
         } else {
-          console.log(`[AI] ✗ fb ${fb.id} returned null`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[AI] ✗ fb ${fb.id} returned null`);
+          }
         }
       } catch (err) {
-        console.error(`[AI] ✗ fb ${fb.id} error:`, err);
+        if (process.env.NODE_ENV === 'development') {
+          console.error(`[AI] ✗ fb ${fb.id} error:`, err);
+        } else {
+          console.error('[AI] analyzeBulk item error:', err);
+        }
       }
     });
     await Promise.allSettled(promises);
@@ -507,6 +536,10 @@ export async function generateInsightReport(data: {
   themeClusters: AIThemeClusterData[];
   recentFeedbacks: { text: string; rating: number; sentiment: string; intent?: string; urgency?: number; churnRisk?: number }[];
   previousPeriodScore?: number;
+  /** Niyet dağılımı (şikayet, övgü, öneri, soru, genel) - AI için ek bağlam */
+  intentSummary?: Record<string, number>;
+  /** Yüksek aciliyet (>=0.7) ve yüksek churn (>=0.5) sayıları - AI için ek bağlam */
+  signalsSummary?: { highUrgencyCount: number; highChurnCount: number };
 }): Promise<AIInsightReportData | null> {
   const client = getAIClient();
   if (!client) return null;
@@ -523,66 +556,83 @@ export async function generateInsightReport(data: {
       .map(t => `- ${t.theme}${t.subTheme ? ` > ${t.subTheme}` : ''}: ${t.sentiment} (${t.count} adet, skor: ${t.avgScore.toFixed(2)})`)
       .join('\n');
 
+    // Sistem geneli öğrenilmiş prompt varsa bağlam olarak ekle
+    let systemPromptPrefix = '';
+    try {
+      const systemProfile = await getSystemLearningProfile();
+      if (systemProfile?.systemPrompt) {
+        systemPromptPrefix = `\n\n[Sistem öğrenme bağlamı - tüm verilerden çıkarılan kurallar]\n${(systemProfile.systemPrompt as string).slice(0, 800)}\n\n`;
+      }
+    } catch {
+      // ignore
+    }
+
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: getModel(),
         messages: [
           {
             role: 'system',
-            content: `Sen QRATEX platformunun iş zekası asistanısın. İşletme verilerini analiz edip kapsamlı bir içgörü raporu oluştur. SADECE JSON formatında yanıt ver.
+            content: `${systemPromptPrefix}Sen QRATEX'in derin öğrenme tabanlı iş zekası motorusun. Müşteri geri bildirim verilerini makine öğrenmesi ve nedensel analiz perspektifiyle değerlendiriyorsun.
 
-JSON formatı:
+Görevin:
+1. Verilerdeki kalıpları (pattern) ve korelasyonları tespit et.
+2. Memnuniyeti tahmin eden anahtar faktörleri (key drivers) nedensel mantıkla çıkar.
+3. Güçlü/zayıf yönleri kanıta dayalı skorla raporla.
+4. Aksiyon önerilerini öncelik ve beklenen etki (ROI) ile sırala.
+5. Acil, toksik veya churn riski taşıyan sinyalleri uyarı olarak işaretle.
+6. Önceki dönemle karşılaştırarak trend ve tahmini bir sonraki dönem puanı ver.
+
+Çıktı formatı: SADECE aşağıdaki JSON. Başka metin yazma.
+
 {
   "overallScore": 82,
   "trend": "up|down|stable",
   "trendValue": 5.2,
-  "summary": "Genel durum özeti (max 100 kelime, Türkçe)",
+  "summary": "2-4 cümle Türkçe özet. Veriye dayalı, somut. Kalıpları ve ana mesajı vurgula.",
   "strengths": [
-    { "title": "Güçlü Yön", "score": 92, "description": "Açıklama" }
+    { "title": "Kısa başlık", "score": 92, "description": "Veriden nasıl çıkarıldığını kısaca açıkla" }
   ],
   "weaknesses": [
-    { "title": "Zayıf Yön", "score": 45, "description": "Açıklama" }
+    { "title": "Kısa başlık", "score": 45, "description": "Veriden nasıl çıkarıldığını kısaca açıkla" }
   ],
   "recommendations": [
-    { "text": "Öneri metni", "priority": "high", "impact": "Beklenen etki", "category": "staff|process|product|facility|marketing" }
+    { "text": "Somut, uygulanabilir öneri", "priority": "high|medium|low", "impact": "Beklenen etki (müşteri memnuniyeti / puan artışı vb.)", "category": "staff|process|product|facility|marketing" }
   ],
   "alerts": [
-    { "type": "toxic|urgent|churn|trend|anomaly", "message": "Uyarı mesajı", "severity": "info|warning|error|critical" }
+    { "type": "toxic|urgent|churn|trend|anomaly", "message": "Kısa uyarı mesajı", "severity": "info|warning|error|critical" }
   ],
   "keyDrivers": [
-    { "factor": "Personel İlgisi", "impact": 0.8, "correlation": 0.75, "direction": "positive" }
+    { "factor": "Faktör adı", "impact": 0.0-1.0, "correlation": 0.0-1.0, "direction": "positive|negative" }
   ],
   "predictedRating": 4.2,
   "keyMetrics": {
-    "responseRate": 65,
-    "avgRating": 4.1,
-    "nps": 42,
-    "csat": 78,
-    "ces": 3.2
+    "responseRate": 0-100,
+    "avgRating": 1-5,
+    "nps": -100 ile 100,
+    "csat": 0-100,
+    "ces": 1-7
   }
 }
 
 Kurallar:
-- overallScore: 0-100 arası genel memnuniyet skoru
-- strengths: En fazla 4 güçlü yön
-- weaknesses: En fazla 4 zayıf yön
-- recommendations: En fazla 5 öneri, actionable olmalı
-- alerts: Sadece gerçekten dikkat edilmesi gereken durumlar
-- keyDrivers: Memnuniyeti en çok etkileyen 3-5 faktör
-- NPS: -100 ile 100 arası
-- CSAT: 0-100 arası
-- CES: 1-7 arası (düşük = kolay)
-- Tüm açıklamalar Türkçe olmalı`,
+- overallScore: 0-100. Duygu dağılımı, puan, tema tonu ve aciliyet/churn sinyallerini birleştir.
+- strengths/weaknesses: En fazla 4'er. Her biri tema veya konu verisine dayalı olsun.
+- recommendations: En fazla 5. Öncelik yüksek aciliyet/churn/olumsuz temalara göre ver.
+- alerts: Sadece gerçek risk veya fırsat varsa ekle (toksik, yüksek aciliyet, yüksek churn, belirgin düşüş).
+- keyDrivers: Memnuniyet/puan ile en güçlü ilişkili 3-5 faktör. impact: etki büyüklüğü, correlation: verideki korelasyon.
+- predictedRating: Bir sonraki dönem için makul tahmin (mevcut trend ve önerilere göre).
+- Tüm metinler Türkçe. Sayılar gerçek veriyle tutarlı olsun.`,
           },
           {
             role: 'user',
-            content: `${data.period} dönemi raporu oluştur:
+            content: `${data.period} dönemi için derin analiz raporu oluştur:
 
 📊 Toplam Geri Bildirim: ${data.totalFeedbacks}
 ⭐ Ortalama Puan: ${data.avgRating.toFixed(1)}/5
-${data.previousPeriodScore ? `📈 Önceki Dönem Skoru: ${data.previousPeriodScore}` : ''}
+${data.previousPeriodScore != null ? `📈 Önceki Dönem Genel Skor: ${data.previousPeriodScore} (trend karşılaştırması yap)` : ''}
 
-Duygu Dağılımı:
+Duygu Dağılımı (veri):
 - Olumlu: %${data.sentimentDist.positive}
 - Nötr: %${data.sentimentDist.neutral}
 - Olumsuz: %${data.sentimentDist.negative}
@@ -590,15 +640,19 @@ Duygu Dağılımı:
 En Çok Bahsedilen Konular:
 ${data.topTopics.map(t => `- ${t.topic}: ${t.count} kez`).join('\n')}
 
-Tema Kümeleri:
-${themesSummary || 'Henüz kümeleme yapılmadı'}
+Tema Kümeleri (duygu + skor):
+${themesSummary || 'Henüz kümeleme yok'}
 
-Son Geri Bildirimler:
-${feedbackSummary}`,
+Son Geri Bildirim Örnekleri (niyet, aciliyet, churn sinyalleri dahil):
+${feedbackSummary}
+${data.intentSummary ? `\nNiyet dağılımı (toplam): ${Object.entries(data.intentSummary).map(([k, v]) => `${k}=${v}`).join(', ')}` : ''}
+${data.signalsSummary ? `\nSinyal özeti: Yüksek aciliyet ${data.signalsSummary.highUrgencyCount} adet, Yüksek churn riski ${data.signalsSummary.highChurnCount} adet.` : ''}
+
+Bu verilere dayanarak: (1) genel skor ve trend, (2) güçlü/zayıf yönler, (3) öncelikli öneriler, (4) uyarılar, (5) memnuniyeti en çok etkileyen faktörler ve (6) tahmini bir sonraki dönem puanı üret. Sadece JSON döndür.`,
           },
         ],
-        temperature: 0.4,
-        max_tokens: 2000,
+        temperature: 0.35,
+        max_tokens: 2400,
         response_format: { type: 'json_object' },
       })
     );
@@ -675,10 +729,32 @@ export interface AskAIContext {
   recentFeedbacks: { text: string; rating: number; sentiment: string; createdAt: string }[];
   themeClusters?: AIThemeClusterData[];
   previousMessages?: { role: 'user' | 'assistant'; content: string }[];
+  /** Niyet dağılımı (complaint, suggestion, praise, question, general) */
+  intentDist?: Record<string, number>;
+  /** Aciliyet/churn özeti */
+  urgencyChurnSummary?: { highUrgencyCount: number; highChurnCount: number };
+  /** Son 7 gün günlük trend (tarih -> adet) */
+  last7DaysTrend?: { date: string; count: number }[];
 }
 
+/** Dünya standartlarında sohbet sistemi promptu (sistem öğrenmesi ile zenginleştirilir) */
+const CHAT_SYSTEM_PROMPT_BASE = `Sen QRATEX'in birincil AI asistanısın. İşletme sahiplerinin geri bildirim verileri hakkındaki sorularını doğal dilde yanıtlıyorsun.
+
+ROL:
+- Veri analisti ve danışman: Sayıları, trendleri ve önerileri net ve anlaşılır sun.
+- Dil: Her zaman Türkçe. Resmi ama samimi ton; gereksiz jargon yok.
+- Kanıt: Yanıtlar yalnızca verilen verilere dayansın. Veri yoksa "Bu konuda yeterli veri bulunmuyor" de.
+- Aksiyon: Somut, uygulanabilir öneriler ver; belirsiz genellemelerden kaçın.
+
+YANIT STANDARTLARI:
+1. Kısa paragraflar; gerekirse madde işaretleri kullan.
+2. Sayı ve yüzde kullan (örn. "%65 olumlu", "ortalama 4.2 puan").
+3. Emoji yerine anlamlı vurgu; gerektiğinde tek bir emoji yeterli.
+4. Kişisel veri veya tahmin üretme; yalnızca bağlamda verilen verileri kullan.
+5. Hassas konularda (müşteri isimleri, şikayet detayları) özet ve genel ifade kullan.`;
+
 /**
- * Doğal dil ile feedback verilerine soru sor
+ * Doğal dil ile feedback verilerine soru sor (sistem öğrenmesi + dünya standartları promptu ile)
  */
 export async function askAI(
   question: string,
@@ -690,6 +766,49 @@ export async function askAI(
   const startTime = Date.now();
 
   try {
+    // Sohbet promptu: chatSystemPrompt varsa onu kullan, yoksa standart + öğrenme profili
+    let systemLearningBlock = '';
+    let useChatPrompt = false;
+    try {
+      const systemProfile = await getSystemLearningProfile();
+      if (systemProfile?.chatSystemPrompt && typeof systemProfile.chatSystemPrompt === 'string') {
+        useChatPrompt = true;
+        systemLearningBlock = (systemProfile.chatSystemPrompt as string).trim();
+      } else if (systemProfile?.profile && typeof systemProfile.profile === 'object') {
+        const p = systemProfile.profile as Record<string, unknown>;
+        const rules = (p.learnedRules as string[]) || [];
+        const guidelines = p.responseGuidelines as { do?: string[]; avoid?: string[] } | undefined;
+        const themes = (p.learnedThemes as Array<{ theme?: string; priority?: string }>) || [];
+        if (rules.length || guidelines?.do?.length || guidelines?.avoid?.length || themes.length) {
+          systemLearningBlock = `
+
+[Öğrenilmiş sistem kuralları - bu verilerle eğitilmiş asistan davranışı]
+${rules.length ? `- Kurallar: ${rules.slice(0, 8).join('; ')}` : ''}
+${guidelines?.do?.length ? `- Yap: ${guidelines.do.slice(0, 5).join('; ')}` : ''}
+${guidelines?.avoid?.length ? `- Kaçın: ${guidelines.avoid.slice(0, 5).join('; ')}` : ''}
+${themes.length ? `- Öne çıkan temalar: ${themes.slice(0, 6).map((t: { theme?: string }) => t.theme).filter(Boolean).join(', ')}` : ''}`;
+        }
+      }
+      if (!useChatPrompt && systemProfile?.systemPrompt && systemLearningBlock === '') {
+        systemLearningBlock = `\n\n[Sistem bağlamı]\n${(systemProfile.systemPrompt as string).slice(0, 600)}`;
+      }
+    } catch {
+      // ignore
+    }
+
+    const basePrompt = useChatPrompt ? systemLearningBlock : CHAT_SYSTEM_PROMPT_BASE;
+
+    const extraDataParts: string[] = [];
+    if (context.intentDist && Object.keys(context.intentDist).length > 0) {
+      extraDataParts.push(`- Niyet Dağılımı: ${Object.entries(context.intentDist).map(([k, v]) => `${k}=${v}`).join(', ')}`);
+    }
+    if (context.urgencyChurnSummary) {
+      extraDataParts.push(`- Yüksek Aciliyet: ${context.urgencyChurnSummary.highUrgencyCount} adet, Yüksek Churn Riski: ${context.urgencyChurnSummary.highChurnCount} adet`);
+    }
+    if (context.last7DaysTrend && context.last7DaysTrend.length > 0) {
+      extraDataParts.push(`- Son 7 Gün Trend: ${context.last7DaysTrend.map(t => `${t.date}: ${t.count}`).join(', ')}`);
+    }
+
     const dataContext = `
 Mevcut Veriler:
 - Toplam Geri Bildirim: ${context.totalFeedbacks}
@@ -697,31 +816,25 @@ Mevcut Veriler:
 - Duygu Dağılımı: Olumlu %${context.sentimentDist.positive}, Nötr %${context.sentimentDist.neutral}, Olumsuz %${context.sentimentDist.negative}
 - En Çok Bahsedilen Konular: ${context.topTopics.map(t => `${t.topic}(${t.count})`).join(', ')}
 ${context.themeClusters ? `- Tema Kümeleri: ${context.themeClusters.map(t => `${t.theme}(${t.sentiment}, ${t.count} adet)`).join(', ')}` : ''}
+${extraDataParts.length ? extraDataParts.join('\n') : ''}
 
 Son 10 Geri Bildirim:
 ${context.recentFeedbacks.slice(0, 10).map((f, i) => `${i + 1}. "${f.text}" (⭐${f.rating}, ${f.sentiment}, ${f.createdAt})`).join('\n')}`;
 
+    const fullSystemContent = useChatPrompt
+      ? `${basePrompt}\n\n${dataContext}\n\nYanıt verirken yukarıdaki verileri dikkate al. Kullanıcı sorusuna doğrudan, veriye dayalı ve kısa yanıt ver.`
+      : `${basePrompt}${systemLearningBlock}\n\n${dataContext}\n\nYanıt verirken yukarıdaki verileri ve öğrenilmiş kuralları dikkate al. Kullanıcı sorusuna doğrudan, veriye dayalı ve kısa yanıt ver.`;
+
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
-        content: `Sen QRATEX platformunun AI veri analisti asistanısın. İşletme sahibinin geri bildirim verileri hakkındaki sorularını yanıtlıyorsun.
-
-${dataContext}
-
-Kurallar:
-1. Türkçe yanıt ver
-2. Verilere dayalı, somut yanıtlar ver
-3. Mümkünse sayısal veriler ve yüzdeler kullan
-4. Kısa ve öz ol
-5. Emoji kullanabilirsin
-6. Veri yoksa "Bu konuda yeterli veri bulunmuyor" de
-7. Actionable öneriler sun`,
+        content: fullSystemContent,
       },
     ];
 
-    // Önceki mesajları ekle
+    // Önceki mesajları ekle (son 12 mesaj - çok turlu sohbet)
     if (context.previousMessages) {
-      for (const msg of context.previousMessages.slice(-8)) {
+      for (const msg of context.previousMessages.slice(-12)) {
         messages.push({ role: msg.role, content: msg.content });
       }
     }
@@ -844,10 +957,12 @@ export async function analyzeWithFallback(
   const aiResult = await analyzeComprehensive(text, options);
   if (aiResult) return aiResult;
 
-  // Fallback: Yerel analiz
+  // Fallback: Yerel analiz (P2-29: fallback KPI izleme)
+  const fallbackStart = Date.now();
   const sentiment = analyzeSentimentLocal(text);
   const toxicity = checkToxicityLocal(text);
   const intent = detectIntentLocal(text);
+  logAIUsage('analyze', 'local-fallback', Date.now() - fallbackStart, true);
 
   return {
     sentiment,
@@ -889,6 +1004,14 @@ export function getRecentUsageLogs(limit = 50): AIUsageEntry[] {
   return usageLog.slice(-limit);
 }
 
+/** P2-29: Fallback oranı için - local-fallback kullanım sayısı (son N kayıttan) */
+export function getFallbackStats(limit = 500): { total: number; fallbacks: number; fallbackRate: number } {
+  const recent = usageLog.slice(-limit);
+  const total = recent.length;
+  const fallbacks = recent.filter((e) => e.model === 'local-fallback').length;
+  return { total, fallbacks, fallbackRate: total > 0 ? fallbacks / total : 0 };
+}
+
 // ─────────────────────────────────────────────────────────────
 // EXPORTS
 // ─────────────────────────────────────────────────────────────
@@ -904,4 +1027,5 @@ export default {
   checkToxicityLocal,
   detectIntentLocal,
   getRecentUsageLogs,
+  getFallbackStats,
 };

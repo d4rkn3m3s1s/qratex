@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   Brain,
@@ -29,7 +29,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 interface DetailedSignals {
   intentDist: Record<string, number>;
@@ -60,28 +61,23 @@ const getPriorityColor = (p: string) => {
 };
 
 export default function AdminAIDetailedPage() {
-  const [loading, setLoading] = useState(true);
-  const [signals, setSignals] = useState<DetailedSignals | null>(null);
-
-  useEffect(() => { fetchData(); }, []);
-
-  const fetchData = async () => {
-    try {
+  const { data: queryData, isLoading: loading, refetch } = useQuery<{ success: boolean; signals: DetailedSignals }>({
+    queryKey: ['admin', 'ai-detailed'],
+    queryFn: async () => {
       const res = await fetch('/api/ai/detailed');
       const data = await res.json();
-      if (data.success) setSignals(data.signals);
-    } catch (error) {
-      console.error('Failed to fetch:', error);
-      toast.error('Detaylı veriler yüklenemedi');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!data.success) throw new Error('Detaylı veriler yüklenemedi');
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const signals = queryData?.signals ?? null;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground">Derin AI analiz verileri yükleniyor...</p>
       </div>
     );
@@ -97,36 +93,33 @@ export default function AdminAIDetailedPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-600 via-pink-600 to-fuchsia-700 p-6 md:p-8"
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5 text-white/80" />
-              <span className="text-white/80 text-sm font-medium">Derin Analiz</span>
+      <AdminPremiumHero
+        eyebrow="Derin analiz"
+        title={
+          <span className="flex items-center gap-3">
+            <Brain className="w-8 h-8 shrink-0" /> AI Detaylı Analiz Merkezi
+          </span>
+        }
+        description="Sistem geneli Experience Signals, NLP ve derin öğrenme metrikleri"
+        icon={<Shield className="text-white" />}
+        actions={
+          <Button onClick={() => refetch()} className="bg-white text-emerald-900 hover:bg-white/90 shadow-md">
+            <RefreshCw className="h-4 w-4 mr-2" /> Yenile
+          </Button>
+        }
+        aside={
+          <div className="flex flex-wrap gap-2 justify-end">
+            <div className="rounded-xl px-4 py-2 text-center border min-w-[5.5rem] backdrop-blur-sm bg-background/85 border-border/70 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+              <span className="text-xs text-muted-foreground dark:text-white/70">Toplam</span>
+              <p className="text-2xl font-bold tabular-nums">{signals.totalFeedbacks}</p>
             </div>
-            <h1 className="text-2xl md:text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
-              <Brain className="w-8 h-8" /> AI Detaylı Analiz Merkezi
-            </h1>
-            <p className="text-white/70 mt-1">Sistem geneli Experience Signals, NLP ve derin öğrenme metrikleri</p>
+            <div className="rounded-xl px-4 py-2 text-center border min-w-[5.5rem] backdrop-blur-sm bg-background/85 border-border/70 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+              <span className="text-xs text-muted-foreground dark:text-white/70">Analiz edilmiş</span>
+              <p className="text-2xl font-bold tabular-nums">{signals.totalAnalyzed}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">Toplam</span>
-              <p className="text-2xl font-bold">{signals.totalFeedbacks}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">Analiz Edilmiş</span>
-              <p className="text-2xl font-bold">{signals.totalAnalyzed}</p>
-            </div>
-            <Button onClick={() => { setLoading(true); fetchData(); }} className="bg-white text-pink-600 hover:bg-white/90">
-              <RefreshCw className="h-4 w-4 mr-2" /> Yenile
-            </Button>
-          </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Experience Signal Averages */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -138,7 +131,7 @@ export default function AdminAIDetailedPage() {
           const Icon = item.icon;
           return (
             <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-              <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-4 text-center">
                   <Icon className={`h-6 w-6 mx-auto mb-2 ${item.color}`} />
                   <p className={`text-2xl sm:text-3xl font-bold ${item.color}`}>{item.value}{item.max ? `/${item.max}` : ''}</p>
@@ -154,7 +147,7 @@ export default function AdminAIDetailedPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Intent */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Target className="h-5 w-5 text-orange-500" /> Niyet Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {[
@@ -165,7 +158,7 @@ export default function AdminAIDetailedPage() {
                 { key: 'general', label: 'Genel', color: 'bg-gray-500' },
               ].map((item, idx) => (
                 <div key={item.key} className="flex items-center gap-3">
-                  <span className="w-16 text-xs font-medium">{item.label}</span>
+                  <span className="w-14 sm:w-16 text-xs font-medium">{item.label}</span>
                   <div className="flex-1"><AnimatedProgress value={intentTotal > 0 ? ((signals.intentDist[item.key] || 0) / intentTotal) * 100 : 0} color={item.color} delay={0.2 + idx * 0.05} /></div>
                   <span className="text-xs text-muted-foreground w-8 text-right">{signals.intentDist[item.key] || 0}</span>
                 </div>
@@ -176,7 +169,7 @@ export default function AdminAIDetailedPage() {
 
         {/* Urgency */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-5 w-5 text-red-500" /> Aciliyet Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {[
@@ -186,7 +179,7 @@ export default function AdminAIDetailedPage() {
                 { key: 'critical', label: 'Kritik', color: 'bg-red-500' },
               ].map((item, idx) => (
                 <div key={item.key} className="flex items-center gap-3">
-                  <span className="w-16 text-xs font-medium">{item.label}</span>
+                  <span className="w-14 sm:w-16 text-xs font-medium">{item.label}</span>
                   <div className="flex-1"><AnimatedProgress value={urgencyTotal > 0 ? ((signals.urgencyBuckets[item.key] || 0) / urgencyTotal) * 100 : 0} color={item.color} delay={0.25 + idx * 0.05} /></div>
                   <span className="text-xs text-muted-foreground w-8 text-right">{signals.urgencyBuckets[item.key] || 0}</span>
                 </div>
@@ -197,8 +190,8 @@ export default function AdminAIDetailedPage() {
 
         {/* Churn Risk */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-5 w-5 text-pink-500" /> Churn Risk Dağılımı</CardTitle></CardHeader>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-5 w-5 text-destructive" /> Churn Risk Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               {[
                 { key: 'safe', label: 'Güvenli', color: 'bg-emerald-500' },
@@ -207,7 +200,7 @@ export default function AdminAIDetailedPage() {
                 { key: 'high', label: 'Yüksek', color: 'bg-red-500' },
               ].map((item, idx) => (
                 <div key={item.key} className="flex items-center gap-3">
-                  <span className="w-16 text-xs font-medium">{item.label}</span>
+                  <span className="w-14 sm:w-16 text-xs font-medium">{item.label}</span>
                   <div className="flex-1"><AnimatedProgress value={churnTotal > 0 ? ((signals.churnBuckets[item.key] || 0) / churnTotal) * 100 : 0} color={item.color} delay={0.3 + idx * 0.05} /></div>
                   <span className="text-xs text-muted-foreground w-8 text-right">{signals.churnBuckets[item.key] || 0}</span>
                 </div>
@@ -222,8 +215,8 @@ export default function AdminAIDetailedPage() {
         {/* Entities */}
         {signals.topEntities.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Search className="h-5 w-5 text-violet-500" /> Varlık Tanıma (NER)</CardTitle></CardHeader>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Search className="h-5 w-5 text-primary" aria-hidden /> Varlık Tanıma (NER)</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {signals.topEntities.slice(0, 12).map((ent, i) => (
@@ -250,8 +243,8 @@ export default function AdminAIDetailedPage() {
         {/* Themes */}
         {signals.topThemes.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5 text-indigo-500" /> Tema Analizi</CardTitle></CardHeader>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /> Tema Analizi</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {signals.topThemes.slice(0, 10).map((theme, i) => (
@@ -287,7 +280,7 @@ export default function AdminAIDetailedPage() {
         {/* Action Suggestions */}
         {signals.topActions.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
               <CardHeader><CardTitle className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-yellow-500" /> AI Aksiyon Önerileri</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -312,15 +305,15 @@ export default function AdminAIDetailedPage() {
         {/* Emotions */}
         {signals.topEmotions.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-pink-500" /> Duygu Haritası</CardTitle></CardHeader>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> Duygu Haritası</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {signals.topEmotions.slice(0, 10).map((emo, idx) => {
                   const maxCount = signals.topEmotions[0]?.count || 1;
                   return (
                     <div key={emo.emotion} className="flex items-center gap-3">
-                      <span className="w-24 text-sm font-medium capitalize">{emo.emotion}</span>
-                      <div className="flex-1"><AnimatedProgress value={(emo.count / maxCount) * 100} color="bg-pink-500" delay={0.5 + idx * 0.05} /></div>
+                      <span className="w-20 sm:w-24 text-sm font-medium capitalize truncate">{emo.emotion}</span>
+                      <div className="flex-1"><AnimatedProgress value={(emo.count / maxCount) * 100} color="bg-primary" delay={0.5 + idx * 0.05} /></div>
                       <span className="text-xs text-muted-foreground w-8 text-right">{emo.count}</span>
                     </div>
                   );
@@ -333,10 +326,10 @@ export default function AdminAIDetailedPage() {
 
       {/* Rating Distribution */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
           <CardHeader><CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-yellow-500" /> Puan Dağılımı & Duygu Analizi</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-4">
               {[1, 2, 3, 4, 5].map(rating => {
                 const count = signals.ratingDist[rating] || 0;
                 const maxCount = Math.max(...Object.values(signals.ratingDist), 1);
@@ -350,7 +343,7 @@ export default function AdminAIDetailedPage() {
                     <div className="h-24 relative flex items-end justify-center">
                       <motion.div initial={{ height: 0 }} animate={{ height: `${(count / maxCount) * 100}%` }}
                         transition={{ duration: 0.8, delay: 0.5 + rating * 0.1 }}
-                        className="w-10 bg-gradient-to-t from-violet-500 to-violet-400 rounded-t-lg"
+                        className="w-10 max-h-full min-h-[4px] rounded-t-lg bg-gradient-to-t from-primary to-primary/80"
                       />
                     </div>
                     <p className="text-lg font-bold mt-1">{count}</p>

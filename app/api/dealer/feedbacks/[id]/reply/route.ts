@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { suggestResponseWithGroq } from '@/lib/groq';
 import { z } from 'zod';
+import { INPUT_LIMITS } from '@/lib/input-limits';
+
+
+export const dynamic = 'force-dynamic';
 
 const replySchema = z.object({
-  reply: z.string().min(1, 'Yanıt boş olamaz').max(2000),
+  reply: z.string().min(1, 'Yanıt boş olamaz').max(INPUT_LIMITS.replyText),
   type: z.enum(['feedback', 'review']).optional(), // feedback = QR, review = consumption
 });
 
@@ -16,10 +19,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || (session.user.role !== 'DEALER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { id } = await params;
     const body = await request.json();
@@ -31,7 +33,7 @@ export async function POST(
       let rating = 3;
 
       if (replyType === 'review') {
-        const review = await (prisma as any).consumptionReview.findUnique({
+        const review = await prisma.consumptionReview.findUnique({
           where: { id },
           select: { text: true, rating: true },
         });
@@ -60,7 +62,7 @@ export async function POST(
 
     // ── Handle Consumption Review Reply ──
     if (replyType === 'review') {
-      const review = await (prisma as any).consumptionReview.findUnique({
+      const review = await prisma.consumptionReview.findUnique({
         where: { id },
         include: {
           consumption: {
@@ -77,7 +79,7 @@ export async function POST(
         return NextResponse.json({ error: 'Bu yoruma yanıt verme yetkiniz yok' }, { status: 403 });
       }
 
-      const updated = await (prisma as any).consumptionReview.update({
+      const updated = await prisma.consumptionReview.update({
         where: { id },
         data: {
           dealerReply: validated.data.reply,
@@ -122,6 +124,7 @@ export async function POST(
       data: {
         dealerReply: validated.data.reply,
         dealerRepliedAt: new Date(),
+        dealerFirstViewedAt: feedback.dealerFirstViewedAt ?? new Date(),
       },
     });
 
@@ -142,6 +145,8 @@ export async function POST(
 
     return NextResponse.json({ success: true, feedback: updated });
   } catch (error) {
+    const { captureApiError } = await import('@/lib/capture-api-error');
+    captureApiError(error, { route: 'POST /api/dealer/feedbacks/[id]/reply', status: 500 });
     console.error('Error replying to feedback:', error);
     return NextResponse.json({ error: 'Yanıt kaydedilemedi' }, { status: 500 });
   }

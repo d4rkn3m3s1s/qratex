@@ -6,7 +6,9 @@ const config: Config = {
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  safelist: ['z-[40]', 'z-[45]', 'z-[70]', 'z-[100]'],
   theme: {
     container: {
       center: true,
@@ -69,8 +71,8 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
+        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
       },
       keyframes: {
         'accordion-down': {
@@ -128,6 +130,27 @@ const config: Config = {
           '0%, 100%': { 'background-position': '0% 50%' },
           '50%': { 'background-position': '100% 50%' },
         },
+        'gradient-rotate': {
+          '0%': { '--gradient-angle': '0deg' },
+          '100%': { '--gradient-angle': '360deg' },
+        },
+        'shine': {
+          '0%': { transform: 'translateX(-100%) skewX(-15deg)' },
+          '100%': { transform: 'translateX(200%) skewX(-15deg)' },
+        },
+        'float-slow': {
+          '0%, 100%': { transform: 'translateY(0) translateX(0)' },
+          '33%': { transform: 'translateY(-8px) translateX(4px)' },
+          '66%': { transform: 'translateY(4px) translateX(-4px)' },
+        },
+        'glow-strong': {
+          '0%, 100%': { opacity: '0.6', filter: 'blur(40px)' },
+          '50%': { opacity: '0.9', filter: 'blur(50px)' },
+        },
+        spotlight: {
+          '0%': { opacity: '0', transform: 'translate(-72%, -62%) scale(0.5)' },
+          '100%': { opacity: '1', transform: 'translate(-50%, -40%) scale(1)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -144,6 +167,11 @@ const config: Config = {
         'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
         float: 'float 6s ease-in-out infinite',
         'gradient-x': 'gradient-x 3s ease infinite',
+        'gradient-rotate': 'gradient-rotate 4s linear infinite',
+        'shine': 'shine 2s ease-in-out',
+        'float-slow': 'float-slow 8s ease-in-out infinite',
+        'glow-strong': 'glow-strong 4s ease-in-out infinite',
+        spotlight: 'spotlight 2s ease 0.75s 1 forwards',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

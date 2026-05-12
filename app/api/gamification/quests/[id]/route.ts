@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 // GET /api/gamification/quests/[id]
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,6 +42,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -76,6 +81,7 @@ export async function PATCH(
         entityId: quest.id,
         oldData: oldQuest as object,
         newData: quest as object,
+        ...auditMeta,
       },
     });
 
@@ -95,6 +101,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -119,6 +126,7 @@ export async function DELETE(
         entity: 'Quest',
         entityId: id,
         oldData: quest as object,
+        ...auditMeta,
       },
     });
 

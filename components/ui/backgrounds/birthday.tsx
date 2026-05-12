@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
+import { HEX_WHITE } from '@/lib/brand-colors';
+import { BIRTHDAY_BALLOON_COLORS, BIRTHDAY_CONFETTI_COLORS } from '@/lib/decorative-canvas-colors';
 import { cn } from '@/lib/utils';
 
 interface Balloon {
@@ -56,8 +58,8 @@ export function BirthdayBackground({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const balloonColors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#a8d8ea'];
-    const confettiColors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#ff9f43', '#00d2d3', '#54a0ff'];
+    const balloonColors = BIRTHDAY_BALLOON_COLORS;
+    const confettiColors = BIRTHDAY_CONFETTI_COLORS;
 
     // Balonlar
     const balloons: Balloon[] = Array.from({ length: 15 }, () => ({
@@ -115,7 +117,7 @@ export function BirthdayBackground({
         y,
         size
       );
-      gradient.addColorStop(0, '#ffffff');
+      gradient.addColorStop(0, HEX_WHITE);
       gradient.addColorStop(0.2, color);
       gradient.addColorStop(1, color + '80');
       

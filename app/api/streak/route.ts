@@ -2,22 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { creditPointsAndXp } from '@/lib/points-wallet';
+import { getPointsMatrix, getStreakMilestoneBonus, getStreakMilestones } from '@/lib/points-rules';
 
 // GET - Get user's streak info
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
+    const matrix = await getPointsMatrix();
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Get or create streak record
-    let streak = await (prisma as any).userStreak.findUnique({
+    let streak = await prisma.userStreak.findUnique({
       where: { userId: session.user.id },
     });
 
     if (!streak) {
-      streak = await (prisma as any).userStreak.create({
+      streak = await prisma.userStreak.create({
         data: { userId: session.user.id },
       });
     }
@@ -32,7 +38,7 @@ export async function GET(req: NextRequest) {
       
       // If more than 1 day has passed and not frozen, break streak
       if (daysDiff > 1 && (!streak.frozenUntil || new Date(streak.frozenUntil) < now)) {
-        streak = await (prisma as any).userStreak.update({
+        streak = await prisma.userStreak.update({
           where: { userId: session.user.id },
           data: { currentStreak: 0 },
         });
@@ -40,15 +46,11 @@ export async function GET(req: NextRequest) {
     }
 
     // Calculate streak bonus
-    const streakBonuses = [
-      { days: 7, bonus: 100, label: '1 Hafta' },
-      { days: 14, bonus: 250, label: '2 Hafta' },
-      { days: 30, bonus: 500, label: '1 Ay' },
-      { days: 60, bonus: 1000, label: '2 Ay' },
-      { days: 90, bonus: 2000, label: '3 Ay' },
-      { days: 180, bonus: 5000, label: '6 Ay' },
-      { days: 365, bonus: 10000, label: '1 Yıl' },
-    ];
+    const streakBonuses = getStreakMilestones(matrix).map((entry) => ({
+      days: entry.days,
+      bonus: entry.points,
+      label: `${entry.days} Gün`,
+    }));
 
     const nextMilestone = streakBonuses.find(b => b.days > streak.currentStreak);
     const daysUntilNextMilestone = nextMilestone ? nextMilestone.days - streak.currentStreak : null;
@@ -73,6 +75,7 @@ export async function GET(req: NextRequest) {
 // POST - Check in for the day (update streak)
 export async function POST(req: NextRequest) {
   try {
+    const matrix = await getPointsMatrix();
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -81,12 +84,12 @@ export async function POST(req: NextRequest) {
     const { action } = await req.json();
 
     // Get current streak
-    let streak = await (prisma as any).userStreak.findUnique({
+    let streak = await prisma.userStreak.findUnique({
       where: { userId: session.user.id },
     });
 
     if (!streak) {
-      streak = await (prisma as any).userStreak.create({
+      streak = await prisma.userStreak.create({
         data: { userId: session.user.id },
       });
     }
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
       const frozenUntil = new Date();
       frozenUntil.setDate(frozenUntil.getDate() + 1);
 
-      streak = await (prisma as any).userStreak.update({
+      streak = await prisma.userStreak.update({
         where: { userId: session.user.id },
         data: {
           streakFreezes: { decrement: 1 },
@@ -144,20 +147,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check for milestone bonus
-    const milestones = [7, 14, 30, 60, 90, 180, 365];
-    const bonusMap: { [key: number]: number } = {
-      7: 100, 14: 250, 30: 500, 60: 1000, 90: 2000, 180: 5000, 365: 10000,
-    };
-    
-    let bonusEarned = 0;
-    const milestoneReached = milestones.find(m => m === newStreak);
-    if (milestoneReached) {
-      bonusEarned = bonusMap[milestoneReached];
-    }
+    const bonusEarned = getStreakMilestoneBonus(newStreak, matrix);
+    const milestoneReached = bonusEarned > 0;
 
     // Update streak
-    streak = await (prisma as any).userStreak.update({
+    streak = await prisma.userStreak.update({
       where: { userId: session.user.id },
       data: {
         currentStreak: newStreak,
@@ -170,9 +164,9 @@ export async function POST(req: NextRequest) {
 
     // Award bonus points if milestone reached
     if (bonusEarned > 0) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { points: { increment: bonusEarned } },
+      await creditPointsAndXp(prisma, {
+        userId: session.user.id,
+        points: bonusEarned,
       });
 
       await prisma.notification.create({
@@ -192,7 +186,7 @@ export async function POST(req: NextRequest) {
         : `🔥 ${newStreak} günlük seri!`,
       streak,
       bonusEarned,
-      milestoneReached: !!milestoneReached,
+      milestoneReached,
     });
   } catch (error) {
     console.error('Error updating streak:', error);

@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createPkPass, generateSerialNumber } from '@/lib/wallet';
 
+
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/wallet/apple
  * Generate and download Apple Wallet .pkpass file
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
     try {
       if (cardId) {
         // Get specific card
-        card = await (prisma as any).physicalCard.findFirst({
+        card = await prisma.physicalCard.findFirst({
           where: {
             id: cardId,
             customerId: session.user.id,
@@ -44,7 +47,7 @@ export async function GET(request: NextRequest) {
         });
       } else {
         // Get user's first activated card
-        card = await (prisma as any).physicalCard.findFirst({
+        card = await prisma.physicalCard.findFirst({
           where: {
             customerId: session.user.id,
             status: 'ACTIVATED',
@@ -97,7 +100,7 @@ export async function GET(request: NextRequest) {
       cardId: card.id,
       points: user.points,
       level: user.level,
-      activatedAt: card.activatedAt,
+      activatedAt: card.activatedAt ?? undefined,
     });
 
     // Return the .pkpass file
@@ -140,7 +143,7 @@ export async function POST(request: NextRequest) {
     // Check if user has an activated card
     let hasCard = false;
     try {
-      const card = await (prisma as any).physicalCard.findFirst({
+      const card = await prisma.physicalCard.findFirst({
         where: {
           customerId: session.user.id,
           status: 'ACTIVATED',

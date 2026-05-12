@@ -1,18 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { getPointsMatrix } from '@/lib/points-rules';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
     const userId = session.user.id;
 
     // Son 30 günlük veri için tarih aralığı
@@ -44,19 +41,21 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Geri bildirimleri günlük bazda grupla (son 30 gün)
-    const feedbacks = await prisma.feedback.findMany({
-      where: {
-        userId,
-        createdAt: { gte: thirtyDaysAgo }
-      },
-      select: {
-        createdAt: true,
-        rating: true,
-        sentiment: true,
-      },
-      orderBy: { createdAt: 'asc' }
-    });
+    const [matrix, feedbacks] = await Promise.all([
+      getPointsMatrix(),
+      prisma.feedback.findMany({
+        where: {
+          userId,
+          createdAt: { gte: thirtyDaysAgo }
+        },
+        select: {
+          createdAt: true,
+          rating: true,
+          sentiment: true,
+        },
+        orderBy: { createdAt: 'asc' }
+      }),
+    ]);
     
     // Tüketim yorumlarını da al
     let consumptionReviews: any[] = [];
@@ -64,12 +63,12 @@ export async function GET() {
     
     try {
       const [reviews, consCount] = await Promise.all([
-        (prisma as any).consumptionReview.findMany({
+        prisma.consumptionReview.findMany({
           where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
           select: { createdAt: true, rating: true },
           orderBy: { createdAt: 'asc' },
         }),
-        (prisma as any).consumption.count({ where: { customerId: userId } }),
+        prisma.consumption.count({ where: { customerId: userId } }),
       ]);
       consumptionReviews = reviews;
       consumptionCount = consCount;
@@ -78,23 +77,29 @@ export async function GET() {
     }
     
     // Tüm yorumları birleştir (QR + Consumption)
-    const allFeedbacks = [
+    const allFeedbacks: Array<{
+      createdAt: Date;
+      rating: number | null;
+      sentiment: string | null;
+      type: 'qr' | 'consumption';
+    }> = [
       ...feedbacks.map(f => ({
         createdAt: f.createdAt,
         rating: f.rating,
         sentiment: f.sentiment,
-        type: 'qr',
+        type: 'qr' as const,
       })),
       ...consumptionReviews.map((r: any) => ({
         createdAt: new Date(r.createdAt),
         rating: r.rating,
         sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
-        type: 'consumption',
+        type: 'consumption' as const,
       })),
     ];
 
     // Günlük feedback sayıları (QR + Consumption birleşik)
     const feedbackByDay: Record<string, number> = {};
+    const pointsByDay: Record<string, number> = {};
     const ratingByDay: Record<string, { sum: number; count: number }> = {};
     const sentimentByDay: Record<string, { positive: number; negative: number; neutral: number }> = {};
 
@@ -103,6 +108,8 @@ export async function GET() {
       
       // Feedback sayısı
       feedbackByDay[day] = (feedbackByDay[day] || 0) + 1;
+      const pointsForEvent = fb.type === 'consumption' ? matrix.consumptionReview.base.points : matrix.feedback.base.points;
+      pointsByDay[day] = (pointsByDay[day] || 0) + pointsForEvent;
       
       // Rating ortalaması
       if (fb.rating) {
@@ -137,19 +144,16 @@ export async function GET() {
       });
     }
 
-    // Puan geçmişi (son işlemler) - activities tablosu yerine hesaplamalı
-    // Gerçek uygulamada activities veya point_history tablosu kullanılır
+    // Puan geçmişi (matrix tabanlı yaklaşık hesap)
     const pointsTrend: { date: string; points: number }[] = [];
     let cumulativePoints = 0;
-    const pointsPerFeedback = 10; // Varsayılan puan
     
     for (let i = 29; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const day = date.toISOString().split('T')[0];
       
-      const dayFeedbacks = feedbackByDay[day] || 0;
-      cumulativePoints += dayFeedbacks * pointsPerFeedback;
+      cumulativePoints += pointsByDay[day] || 0;
       
       pointsTrend.push({
         date: day,
@@ -282,6 +286,8 @@ export async function GET() {
         avgDailyFeedbacks: (allFeedbacks.length / 30).toFixed(1),
       },
       badges: badges.slice(0, 5),
+    }, {
+      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
     });
   } catch (error) {
     console.error('Trends API error:', error);

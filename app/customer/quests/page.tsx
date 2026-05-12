@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Target,
@@ -23,14 +24,17 @@ import {
   Filter,
   Lock,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import confetti from 'canvas-confetti';
+import { CHART_BRAND, CHART_HEX } from '@/lib/chart-palette';
+import { useAppT } from '@/lib/app-locale';
 
 interface Quest {
   id: string;
@@ -60,7 +64,7 @@ const getRewardXP = (reward: Quest['reward']): number => {
 };
 
 const typeConfigData = {
-  label: 'Günlük',
+  label: 'Daily',
   icon: Calendar,
   color: 'from-green-500 to-emerald-500',
   bgColor: 'bg-green-500/10',
@@ -69,9 +73,9 @@ const typeConfigData = {
   badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30',
 };
 
-const typeConfig: Record<string, typeof typeConfigData> = {
+const buildTypeConfig = (t: (key: string) => string): Record<string, typeof typeConfigData> => ({
   DAILY: {
-    label: 'Günlük',
+    label: t('customerQuests.types.daily'),
     icon: Calendar,
     color: 'from-green-500 to-emerald-500',
     bgColor: 'bg-green-500/10',
@@ -80,7 +84,7 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30',
   },
   daily: {
-    label: 'Günlük',
+    label: t('customerQuests.types.daily'),
     icon: Calendar,
     color: 'from-green-500 to-emerald-500',
     bgColor: 'bg-green-500/10',
@@ -89,7 +93,7 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30',
   },
   WEEKLY: {
-    label: 'Haftalık',
+    label: t('customerQuests.types.weekly'),
     icon: CalendarDays,
     color: 'from-blue-500 to-cyan-500',
     bgColor: 'bg-blue-500/10',
@@ -98,7 +102,7 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   },
   weekly: {
-    label: 'Haftalık',
+    label: t('customerQuests.types.weekly'),
     icon: CalendarDays,
     color: 'from-blue-500 to-cyan-500',
     bgColor: 'bg-blue-500/10',
@@ -107,25 +111,25 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     badgeClass: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   },
   MONTHLY: {
-    label: 'Aylık',
+    label: t('customerQuests.types.monthly'),
     icon: Trophy,
-    color: 'from-purple-500 to-violet-500',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500/30',
-    textColor: 'text-purple-500',
-    badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    color: 'from-primary to-primary/80',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
+    textColor: 'text-primary',
+    badgeClass: 'border-primary/30 bg-primary/20 text-primary',
   },
   monthly: {
-    label: 'Aylık',
+    label: t('customerQuests.types.monthly'),
     icon: Trophy,
-    color: 'from-purple-500 to-violet-500',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500/30',
-    textColor: 'text-purple-500',
-    badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    color: 'from-primary to-primary/80',
+    bgColor: 'bg-primary/10',
+    borderColor: 'border-primary/30',
+    textColor: 'text-primary',
+    badgeClass: 'border-primary/30 bg-primary/20 text-primary',
   },
   SPECIAL: {
-    label: 'Özel',
+    label: t('customerQuests.types.special'),
     icon: Sparkles,
     color: 'from-amber-500 to-orange-500',
     bgColor: 'bg-amber-500/10',
@@ -134,7 +138,7 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   },
   special: {
-    label: 'Özel',
+    label: t('customerQuests.types.special'),
     icon: Sparkles,
     color: 'from-amber-500 to-orange-500',
     bgColor: 'bg-amber-500/10',
@@ -142,11 +146,11 @@ const typeConfig: Record<string, typeof typeConfigData> = {
     textColor: 'text-amber-500',
     badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   },
-};
+});
 
 // Default config for unknown types
 const defaultTypeConfig = {
-  label: 'Görev',
+  label: 'Quest',
   icon: Target,
   color: 'from-gray-500 to-slate-500',
   bgColor: 'bg-gray-500/10',
@@ -156,32 +160,34 @@ const defaultTypeConfig = {
 };
 
 const difficultyConfig = {
-  easy: { label: 'Kolay', color: 'text-green-500', stars: 1 },
-  medium: { label: 'Orta', color: 'text-yellow-500', stars: 2 },
-  hard: { label: 'Zor', color: 'text-red-500', stars: 3 },
+  easy: { label: 'Easy', color: 'text-green-500', stars: 1 },
+  medium: { label: 'Medium', color: 'text-yellow-500', stars: 2 },
+  hard: { label: 'Hard', color: 'text-red-500', stars: 3 },
 };
 
 // Calculate time remaining
-const getTimeRemaining = (expiresAt: string | null): string => {
+const getTimeRemaining = (expiresAt: string | null, t: (key: string) => string): string => {
   if (!expiresAt) return '';
   const now = new Date();
   const expires = new Date(expiresAt);
   const diff = expires.getTime() - now.getTime();
   
-  if (diff <= 0) return 'Süresi doldu';
+  if (diff <= 0) return t('customerQuests.expired');
   
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   
   if (hours >= 24) {
     const days = Math.floor(hours / 24);
-    return `${days} gün kaldı`;
+    return `${days} ${t('customerQuests.daysLeft')}`;
   }
   
-  return `${hours}s ${minutes}d kaldı`;
+  return `${hours}${t('customerQuests.hourShort')} ${minutes}${t('customerQuests.minuteShort')} ${t('customerQuests.left')}`;
 };
 
 export default function CustomerQuestsPage() {
+  const t = useAppT();
+  const typeConfig = buildTypeConfig(t);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -198,19 +204,15 @@ export default function CustomerQuestsPage() {
       const data = await res.json();
 
       if (data.success) {
-        // Add progress simulation and difficulty
         const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
         const questsWithProgress = data.data.map((quest: Quest, index: number) => ({
           ...quest,
-          progress: index === 0 ? quest.target : Math.floor(Math.random() * quest.target),
-          completed: index === 0,
-          claimed: false,
           difficulty: difficulties[index % 3],
         }));
         setQuests(questsWithProgress);
       }
     } catch (error) {
-      toast.error('Görevler yüklenemedi');
+      toast.error(t('customerQuests.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -238,38 +240,48 @@ export default function CustomerQuestsPage() {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchQuests();
-    toast.success('Görevler güncellendi');
+    toast.success(t('customerQuests.refreshed'));
   };
 
   const handleClaimReward = async (quest: Quest) => {
     if (quest.claimed || claimingId) return;
     
     setClaimingId(quest.id);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Confetti effect
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#8b5cf6', '#22c55e', '#eab308', '#ef4444'],
-    });
-    
-    const points = getRewardPoints(quest.reward);
-    const xp = getRewardXP(quest.reward);
-    
-    toast.success('🎉 Ödül alındı!', {
-      description: `+${points} puan, +${xp} XP kazandınız!`,
-    });
-    
-    // Update quest as claimed
-    setQuests(prev => prev.map(q => 
-      q.id === quest.id ? { ...q, claimed: true } : q
-    ));
-    
-    setClaimingId(null);
+
+    try {
+      const response = await fetch(`/api/gamification/quests/${quest.id}/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        toast.error(data.error || t('customerQuests.claimError'));
+        return;
+      }
+
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: [CHART_BRAND, CHART_HEX.green, CHART_HEX.yellow, CHART_HEX.red],
+      });
+
+      const points = data?.data?.reward?.points ?? getRewardPoints(quest.reward);
+      const xp = data?.data?.reward?.xp ?? getRewardXP(quest.reward);
+
+      toast.success(t('customerQuests.claimedTitle'), {
+        description: `+${points} ${t('customerQuests.points')}, +${xp} XP ${t('customerQuests.earned')}`,
+      });
+
+      setQuests((prev) =>
+        prev.map((q) => (q.id === quest.id ? { ...q, claimed: true } : q))
+      );
+    } catch {
+      toast.error(t('customerQuests.claimError'));
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   const filteredQuests = filter === 'all' 
@@ -295,48 +307,50 @@ export default function CustomerQuestsPage() {
 
   return (
     <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
-      <DashboardHeader
-        title="Görevler"
-        description="Günlük görevleri tamamlayarak puan ve XP kazanın"
+      <DashboardPageHeading
+        title={t('customerQuests.title')}
+        description={t('customerQuests.description')}
         actions={
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="gap-1.5 sm:gap-2 h-9"
+            className="gap-1.5 sm:gap-2 h-9 touch-manipulation shrink-0"
           >
-            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Yenile</span>
+            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{t('common.refresh')}</span>
           </Button>
         }
       />
 
-      {/* Hero Banner */}
-      <Card className="relative overflow-hidden border-primary/20">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-purple-500/10 to-pink-500/10" />
-        <div className="absolute -right-8 -top-8 sm:-right-10 sm:-top-10 w-28 sm:w-40 h-28 sm:h-40 bg-primary/20 rounded-full blur-3xl" />
-        <div className="absolute -left-8 -bottom-8 sm:-left-10 sm:-bottom-10 w-24 sm:w-32 h-24 sm:h-32 bg-purple-500/20 rounded-full blur-3xl" />
-        
-        <CardContent className="relative p-4 sm:p-6">
+      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
+        <h1 className="text-xl font-bold tracking-tight text-balance">{t('customerQuests.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">
+          {t('customerQuests.description')}
+        </p>
+      </div>
+
+      <DashboardPageHeroChrome tone="auto" padded={false}>
+        <div className="relative p-4 sm:p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {/* Daily Progress */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-4">
-                <div className="p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-gradient-to-br from-primary to-purple-600 shadow-lg">
+                <div className="shrink-0 rounded-lg bg-gradient-to-br from-primary to-primary/80 p-2.5 shadow-lg sm:rounded-xl sm:p-3">
                   <Target className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                 </div>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-bold">Günlük Görevler</h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {dailyCompleted}/{dailyQuests.length} tamamlandı
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold text-balance">{t('customerQuests.dailyQuests')}</h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground text-pretty">
+                    {dailyCompleted}/{dailyQuests.length} {t('customerQuests.completed')}
                   </p>
                 </div>
               </div>
               
               <div className="space-y-1.5 sm:space-y-2">
                 <div className="flex justify-between text-xs sm:text-sm">
-                  <span className="text-muted-foreground">İlerleme</span>
+                  <span className="text-muted-foreground">{t('customerQuests.progress')}</span>
                   <span className="font-medium">{Math.round(dailyProgress)}%</span>
                 </div>
                 <div className="relative">
@@ -361,7 +375,7 @@ export default function CustomerQuestsPage() {
                 >
                   <p className="text-xs sm:text-sm text-green-500 font-medium flex items-center gap-1.5 sm:gap-2">
                     <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    Tüm günlük görevler tamamlandı! 🎉
+                    {t('customerQuests.dailyAllDone')}
                   </p>
                 </motion.div>
               )}
@@ -378,8 +392,8 @@ export default function CustomerQuestsPage() {
                     <Flame className={`h-6 w-6 sm:h-8 sm:w-8 ${streak > 0 ? 'text-orange-500 fill-orange-500' : 'text-muted-foreground'}`} />
                   </motion.div>
                   <div>
-                    <p className="text-xl sm:text-2xl font-bold">{streak} gün</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">Aktif Seri</p>
+                    <p className="text-xl sm:text-2xl font-bold">{streak} {t('customerQuests.day')}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{t('customerQuests.activeStreak')}</p>
                   </div>
                 </div>
               </div>
@@ -387,25 +401,25 @@ export default function CustomerQuestsPage() {
               <div className="flex gap-2 sm:gap-3">
                 <div className="flex-1 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-muted/50 text-center">
                   <p className="text-base sm:text-lg font-bold text-primary">{stats.completed}</p>
-                  <p className="text-[9px] sm:text-[10px] text-muted-foreground">Tamamlanan</p>
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground">{t('customerQuests.completed')}</p>
                 </div>
                 <div className="flex-1 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-muted/50 text-center">
                   <p className="text-base sm:text-lg font-bold text-yellow-500">{stats.totalRewards}</p>
-                  <p className="text-[9px] sm:text-[10px] text-muted-foreground">Puan</p>
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground">{t('customerQuests.points')}</p>
                 </div>
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </DashboardPageHeroChrome>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
-          { label: 'Aktif Görev', value: stats.active, icon: Target, color: 'text-primary', bg: 'bg-primary/10' },
-          { label: 'Tamamlanan', value: stats.completed, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
-          { label: 'Kazanılan Puan', value: stats.totalRewards, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
-          { label: 'Kazanılan XP', value: stats.totalXP, icon: Zap, color: 'text-pink-500', bg: 'bg-pink-500/10' },
+          { label: t('customerQuests.activeQuest'), value: stats.active, icon: Target, color: 'text-primary', bg: 'bg-primary/10' },
+          { label: t('customerQuests.completed'), value: stats.completed, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
+          { label: t('customerQuests.earnedPoints'), value: stats.totalRewards, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+          { label: t('customerQuests.earnedXp'), value: stats.totalXP, icon: Zap, color: 'text-primary', bg: 'bg-primary/10' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -436,29 +450,29 @@ export default function CustomerQuestsPage() {
           <TabsList className="h-9 sm:h-10 w-full sm:w-auto">
             <TabsTrigger value="all" className="gap-1 px-2 sm:px-3 text-xs sm:text-sm">
               <Filter className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden xs:inline">Tümü</span>
+              <span className="hidden xs:inline">{t('customerQuests.all')}</span>
             </TabsTrigger>
             <TabsTrigger value="DAILY" className="gap-1 px-2 sm:px-3 text-xs sm:text-sm">
               <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Günlük</span>
+              <span className="hidden sm:inline">{t('customerQuests.types.daily')}</span>
             </TabsTrigger>
             <TabsTrigger value="WEEKLY" className="gap-1 px-2 sm:px-3 text-xs sm:text-sm">
               <CalendarDays className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Haftalık</span>
+              <span className="hidden sm:inline">{t('customerQuests.types.weekly')}</span>
             </TabsTrigger>
             <TabsTrigger value="MONTHLY" className="gap-1 px-2 sm:px-3 text-xs sm:text-sm">
               <Trophy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Aylık</span>
+              <span className="hidden sm:inline">{t('customerQuests.types.monthly')}</span>
             </TabsTrigger>
             <TabsTrigger value="SPECIAL" className="gap-1 px-2 sm:px-3 text-xs sm:text-sm">
               <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Özel</span>
+              <span className="hidden sm:inline">{t('customerQuests.types.special')}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
         
         <Badge variant="outline" className="hidden sm:flex gap-1 shrink-0">
-          {filteredQuests.length} görev
+          {filteredQuests.length} {t('customerQuests.quest')}
         </Badge>
       </div>
 
@@ -488,7 +502,7 @@ export default function CustomerQuestsPage() {
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                <h2 className="text-base sm:text-lg font-semibold">Aktif Görevler</h2>
+                <h2 className="text-base sm:text-lg font-semibold">{t('customerQuests.activeQuests')}</h2>
                 <Badge variant="outline" className="text-[10px] sm:text-xs">{activeQuests.length}</Badge>
               </div>
               
@@ -563,7 +577,7 @@ export default function CustomerQuestsPage() {
                                       <span className="text-xs sm:text-sm font-medium">{getRewardPoints(quest.reward)}</span>
                                     </div>
                                     <div className="flex items-center gap-0.5 sm:gap-1">
-                                      <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-pink-500" />
+                                      <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                                       <span className="text-xs sm:text-sm font-medium">{getRewardXP(quest.reward)}</span>
                                     </div>
                                   </div>
@@ -583,7 +597,7 @@ export default function CustomerQuestsPage() {
                                     {quest.expiresAt && (
                                       <Badge variant="outline" className="text-[9px] sm:text-[10px] gap-0.5 sm:gap-1 px-1.5 sm:px-2">
                                         <Timer className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                        {getTimeRemaining(quest.expiresAt)}
+                                        {getTimeRemaining(quest.expiresAt, t)}
                                       </Badge>
                                     )}
                                   </div>
@@ -605,7 +619,7 @@ export default function CustomerQuestsPage() {
             <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
-                <h2 className="text-base sm:text-lg font-semibold">Tamamlanan Görevler</h2>
+                <h2 className="text-base sm:text-lg font-semibold">{t('customerQuests.completedQuests')}</h2>
                 <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 text-[10px] sm:text-xs">
                   {completedQuests.length}
                 </Badge>
@@ -668,14 +682,14 @@ export default function CustomerQuestsPage() {
                                   ) : (
                                     <>
                                       <Gift className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                      <span className="hidden sm:inline">Ödül Al</span>
+                                      <span className="hidden sm:inline">{t('customerQuests.claimReward')}</span>
                                     </>
                                   )}
                                 </Button>
                               ) : (
                                 <Badge variant="secondary" className="gap-1 shrink-0 text-[10px] sm:text-xs">
                                   <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                  Alındı
+                                  {t('customerQuests.claimed')}
                                 </Badge>
                               )}
                             </div>
@@ -688,7 +702,7 @@ export default function CustomerQuestsPage() {
                                   <span className="text-xs sm:text-sm font-medium">+{getRewardPoints(quest.reward)}</span>
                                 </div>
                                 <div className="flex items-center gap-1 sm:gap-1.5">
-                                  <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-pink-500" />
+                                  <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                                   <span className="text-xs sm:text-sm font-medium">+{getRewardXP(quest.reward)}</span>
                                 </div>
                               </div>
@@ -709,16 +723,25 @@ export default function CustomerQuestsPage() {
                 <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-3 sm:mb-4 rounded-full bg-muted/50 flex items-center justify-center">
                   <Target className="h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground/30" />
                 </div>
-                <h3 className="font-semibold text-sm sm:text-base mb-1">Görev bulunamadı</h3>
+                <h3 className="font-semibold text-sm sm:text-base mb-1">{t('customerQuests.notFound')}</h3>
                 <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                  {filter !== 'all' 
-                    ? `${(typeConfig[filter] || defaultTypeConfig).label} görevi bulunmuyor` 
-                    : 'Henüz aktif görev yok'}
+                  {filter !== 'all'
+                    ? `${(typeConfig[filter] || defaultTypeConfig).label} ${t('customerQuests.notFoundTypeSuffix')}`
+                    : t('customerQuests.noActiveHint')}
                 </p>
-                {filter !== 'all' && (
+                {filter !== 'all' ? (
                   <Button variant="outline" onClick={() => setFilter('all')} className="h-9 sm:h-10 text-xs sm:text-sm">
-                    Tüm Görevleri Göster
+                    {t('customerQuests.showAll')}
                   </Button>
+                ) : (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                      <Link href="/customer/consumptions">{t('customerQuests.myConsumptions')}</Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                      <Link href="/customer/feedbacks">{t('customerQuests.myFeedbacks')}</Link>
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>

@@ -1,15 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+
+function normalizePercentages(values: number[]) {
+  const total = values.reduce((a, b) => a + b, 0);
+  if (total <= 0) return values.map(() => 0);
+
+  const raw = values.map((v) => (v / total) * 100);
+  const rounded = raw.map((v) => Math.round(v));
+  let diff = 100 - rounded.reduce((a, b) => a + b, 0);
+
+  const order = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => (diff > 0 ? b.frac - a.frac : a.frac - b.frac));
+
+  for (const item of order) {
+    if (diff === 0) break;
+    rounded[item.i] += diff > 0 ? 1 : -1;
+    diff += diff > 0 ? -1 : 1;
+  }
+
+  return rounded;
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const dealerId = session.user.id;
     const { searchParams } = new URL(request.url);
@@ -65,15 +85,15 @@ export async function GET(request: NextRequest) {
     
     try {
       const [consumptions, reviews, uniqueCustomers] = await Promise.all([
-        (prisma as any).consumption.findMany({
+        prisma.consumption.findMany({
           where: { dealerId, createdAt: { gte: prevStartDate } },
           include: { review: { select: { rating: true, createdAt: true } } },
         }),
-        (prisma as any).consumptionReview.findMany({
+        prisma.consumptionReview.findMany({
           where: { consumption: { dealerId }, createdAt: { gte: prevStartDate } },
           select: { rating: true, createdAt: true },
         }),
-        (prisma as any).consumption.groupBy({ by: ['customerId'], where: { dealerId } }),
+        prisma.consumption.groupBy({ by: ['customerId'], where: { dealerId } }),
       ]);
       
       consumptionReviews = reviews;
@@ -134,12 +154,19 @@ export async function GET(request: NextRequest) {
       }
     });
     const ratingTotal = totalFeedbacks || 1;
+    const normalizedRatings = normalizePercentages([
+      ratingCounts[5],
+      ratingCounts[4],
+      ratingCounts[3],
+      ratingCounts[2],
+      ratingCounts[1],
+    ]);
     const ratingDistribution = {
-      5: Math.round((ratingCounts[5] / ratingTotal) * 100),
-      4: Math.round((ratingCounts[4] / ratingTotal) * 100),
-      3: Math.round((ratingCounts[3] / ratingTotal) * 100),
-      2: Math.round((ratingCounts[2] / ratingTotal) * 100),
-      1: Math.round((ratingCounts[1] / ratingTotal) * 100),
+      5: normalizedRatings[0],
+      4: normalizedRatings[1],
+      3: normalizedRatings[2],
+      2: normalizedRatings[3],
+      1: normalizedRatings[4],
     };
 
     // Daily trend data
@@ -288,6 +315,12 @@ export async function GET(request: NextRequest) {
     // Response rate (feedbacks with text / total feedbacks) - simulated
     const responseRate = totalFeedbacks > 0 ? Math.round(Math.random() * 30 + 60) : 0;
 
+    const [positivePct, neutralPct, negativePct] = normalizePercentages([
+      positiveCount,
+      neutralCount,
+      negativeCount,
+    ]);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -299,9 +332,9 @@ export async function GET(request: NextRequest) {
         ratingChange,
         responseRate,
         sentimentBreakdown: {
-          positive: Math.round((positiveCount / totalSentiment) * 100),
-          neutral: Math.round((neutralCount / totalSentiment) * 100),
-          negative: Math.round((negativeCount / totalSentiment) * 100),
+          positive: positivePct,
+          neutral: neutralPct,
+          negative: negativePct,
         },
         ratingDistribution,
         topQRCodes,

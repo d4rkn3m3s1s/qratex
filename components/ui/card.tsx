@@ -12,10 +12,12 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      'rounded-xl border bg-card text-card-foreground shadow-sm',
+      'min-w-0 h-full rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col',
       gradient && 'border-0 bg-gradient-to-br from-primary/20 via-background to-background',
-      glass && 'bg-white/5 backdrop-blur-xl border-white/10',
-      hover && 'transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:-translate-y-1',
+      glass &&
+        'border-border/60 bg-white/85 backdrop-blur-xl shadow-sm dark:bg-white/[0.06] dark:border-white/10 dark:shadow-glass',
+      hover &&
+        'touch-manipulation transition-[box-shadow,border-color] duration-200 ease-out hover:border-border hover:shadow-lg hover:shadow-primary/10 motion-reduce:transition-none motion-reduce:hover:shadow-sm',
       className
     )}
     {...props}
@@ -66,7 +68,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('min-w-0 p-6 pt-0', className)} {...props} />
 ));
 CardContent.displayName = 'CardContent';
 

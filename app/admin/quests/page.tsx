@@ -14,7 +14,7 @@ import {
   XCircle,
   Calendar,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +39,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 
 interface Quest {
   id: string;
@@ -66,7 +66,7 @@ const typeLabels: Record<string, string> = {
 const typeColors: Record<string, string> = {
   daily: 'bg-green-500/10 text-green-500 border-green-500/20',
   weekly: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  monthly: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  monthly: 'border-primary/20 bg-primary/10 text-primary',
   special: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
 };
 
@@ -193,6 +193,22 @@ export default function AdminQuestsPage() {
     }
   };
 
+  const bootstrapQuests = async () => {
+    try {
+      const res = await fetch('/api/admin/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'quests_defaults' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'G?revler olu?turulamad?');
+      toast.success(`${data.created ?? 0} varsay?lan g?rev haz?rland?`);
+      fetchQuests();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'G?revler haz?rlanamad?');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -311,9 +327,10 @@ export default function AdminQuestsPage() {
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <AdminPremiumHero
         title="Görev Yönetimi"
         description="Gamification görevlerini oluşturun ve yönetin"
+        icon={<Target className="text-white" />}
       />
 
       {/* Actions */}

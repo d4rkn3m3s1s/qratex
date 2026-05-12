@@ -42,7 +42,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 // ── Types ──
 interface SystemAIStats {
@@ -91,7 +92,6 @@ export default function AdminAIDashboardPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     fetchStats();
   }, []);
@@ -173,6 +173,31 @@ export default function AdminAIDashboardPage() {
     }
   };
 
+  const bootstrapAIData = async () => {
+    try {
+      const [synthRes, settingsRes] = await Promise.all([
+        fetch('/api/admin/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'synthesize_ai_signals' }),
+        }),
+        fetch('/api/admin/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ensure_ai_settings' }),
+        }),
+      ]);
+      const synth = await synthRes.json();
+      const settings = await settingsRes.json();
+      if (!synthRes.ok || !synth.success) throw new Error(synth.error || 'AI sinyalleri ?retilemedi');
+      if (!settingsRes.ok || !settings.success) throw new Error(settings.error || 'AI ayarlar? haz?rlanamad?');
+      toast.success(`AI bootstrap tamamland?: ${synth.updated ?? 0} geri bildirim i?lendi`);
+      await fetchStats();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'AI bootstrap ba?ar?s?z');
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await fetchStats();
@@ -212,7 +237,7 @@ export default function AdminAIDashboardPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground">Sistem AI istatistikleri yükleniyor...</p>
       </div>
     );
@@ -220,65 +245,67 @@ export default function AdminAIDashboardPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-4 sm:p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(15)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-white/30 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ y: [0, -15, 0], opacity: [0.2, 0.8, 0.2] }}
-              transition={{ duration: 3 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5 text-white/80" />
-              <span className="text-white/80 text-sm font-medium">Sistem Yönetimi</span>
+      <AdminPremiumHero
+        eyebrow="Sistem yönetimi"
+        title={
+          <span className="flex items-center gap-3">
+            <Brain className="w-8 h-8 shrink-0" /> AI Kontrol Merkezi
+          </span>
+        }
+        description="Tüm sistem genelinde AI analiz istatistikleri ve yönetimi"
+        icon={<Shield className="text-white" />}
+        aside={
+          <div className="flex flex-col gap-3 w-full lg:items-end">
+            <div className="flex flex-wrap gap-2 justify-end">
+              <div className="rounded-xl px-4 py-2 text-center border min-w-[6rem] backdrop-blur-sm border-border/70 bg-background/80 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+                <span className="text-xs text-muted-foreground dark:text-white/70">Toplam analiz</span>
+                <p className="text-lg sm:text-2xl font-bold tabular-nums">{stats?.analyzedFeedbacks || 0}</p>
+              </div>
+              <div className="rounded-xl px-4 py-2 text-center border min-w-[6rem] backdrop-blur-sm border-border/70 bg-background/80 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+                <span className="text-xs text-muted-foreground dark:text-white/70">AI başarı</span>
+                <p className="text-2xl font-bold tabular-nums">{stats?.aiUsageStats.successRate || 100}%</p>
+              </div>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <Brain className="w-8 h-8" /> AI Kontrol Merkezi
-            </h1>
-            <p className="text-white/70 mt-1">Tüm sistem genelinde AI analiz istatistikleri ve yönetimi</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">Toplam Analiz</span>
-              <p className="text-lg sm:text-2xl font-bold">{stats?.analyzedFeedbacks || 0}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">AI Başarı</span>
-              <p className="text-2xl font-bold">{stats?.aiUsageStats.successRate || 100}%</p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button onClick={handleRefresh} disabled={refreshing} className="bg-white text-purple-600 hover:bg-white/90">
+            <div className="flex flex-col gap-2 w-full sm:w-auto">
+              <Button onClick={handleRefresh} disabled={refreshing} className="bg-white text-emerald-900 hover:bg-white/90 shadow-md">
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                 Yenile
               </Button>
-              <Button onClick={() => setChatOpen(!chatOpen)} variant="outline" className="border-white/30 text-white hover:bg-white/10">
+              <Button onClick={bootstrapAIData} variant="outline" className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Veri doldur
+              </Button>
+              <Button onClick={() => setChatOpen(!chatOpen)} variant="outline" className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 AI&apos;a Sor
               </Button>
             </div>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
+
+      {stats && stats.analyzedFeedbacks === 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              AI analizi hen?z ?retilmemi? g?r?n?yor. Geri bildirimlerden bootstrap veri olu?turabilirsiniz.
+            </p>
+            <Button size="sm" onClick={bootstrapAIData}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI verisini ba?lat
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AI Chat Panel */}
       <AnimatePresence>
         {chatOpen && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Bot className="h-5 w-5 text-violet-500" /> AI Asistanı (Admin)
+                  <Bot className="h-5 w-5 text-primary" /> AI Asistanı (Admin)
                 </CardTitle>
                 <CardDescription>Tüm sistem verilerini doğal dilde sorgulayın</CardDescription>
               </CardHeader>
@@ -302,7 +329,7 @@ export default function AdminAIDashboardPage() {
                       className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {msg.role === 'assistant' && (
-                        <div className="p-2 rounded-lg bg-violet-500/10 h-fit"><Bot className="h-4 w-4 text-violet-500" /></div>
+                        <div className="p-2 rounded-lg bg-primary/10 h-fit"><Bot className="h-4 w-4 text-primary" /></div>
                       )}
                       <div className={`max-w-[80%] p-3 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-card border'}`}>
                         {msg.content}
@@ -314,7 +341,7 @@ export default function AdminAIDashboardPage() {
                   ))}
                   {chatLoading && (
                     <div className="flex gap-3">
-                      <div className="p-2 rounded-lg bg-violet-500/10 h-fit"><Bot className="h-4 w-4 text-violet-500" /></div>
+                      <div className="p-2 rounded-lg bg-primary/10 h-fit"><Bot className="h-4 w-4 text-primary" /></div>
                       <div className="bg-card border p-3 rounded-xl">
                         <div className="flex gap-1">
                           <div className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -367,11 +394,11 @@ export default function AdminAIDashboardPage() {
           )}
           {stats.highChurnRisk > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <Card className="border-0 bg-pink-500/5 border-pink-500/20">
+              <Card className="border-0 bg-destructive/5 border-destructive/20">
                 <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-pink-500/10"><Users className="h-6 w-6 text-pink-500" /></div>
+                  <div className="p-3 rounded-xl bg-destructive/10"><Users className="h-6 w-6 text-destructive" /></div>
                   <div>
-                    <p className="text-2xl font-bold text-pink-500">{stats.highChurnRisk}</p>
+                    <p className="text-2xl font-bold text-destructive">{stats.highChurnRisk}</p>
                     <p className="text-sm text-muted-foreground">Yüksek Churn Riski</p>
                   </div>
                 </CardContent>
@@ -385,14 +412,14 @@ export default function AdminAIDashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {[
           { label: 'Toplam Feedback', value: stats?.totalFeedbacks || 0, icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-          { label: 'AI Analiz Edilmiş', value: stats?.analyzedFeedbacks || 0, icon: Brain, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+          { label: 'AI Analiz Edilmiş', value: stats?.analyzedFeedbacks || 0, icon: Brain, color: 'text-primary', bg: 'bg-primary/10' },
           { label: 'Ort. Puan', value: `${(stats?.avgRating || 0).toFixed(1)}/5`, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: 'AI Model', value: stats?.aiUsageStats.model?.split('/').pop() || 'N/A', icon: Cpu, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
         ].map((item, index) => {
           const Icon = item.icon;
           return (
             <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
-              <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>
                     <Icon className={`h-5 w-5 ${item.color}`} />
@@ -410,17 +437,17 @@ export default function AdminAIDashboardPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* AI Performance */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Server className="h-5 w-5 text-violet-500" /> AI Performans
+                <Server className="h-5 w-5 text-primary" /> AI Performans
               </CardTitle>
               <CardDescription>AI motorunun sistem performansı</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-3 rounded-xl bg-muted/30">
-                  <p className="text-2xl font-bold text-violet-500">{stats?.aiUsageStats.totalCalls || 0}</p>
+                  <p className="text-2xl font-bold text-primary">{stats?.aiUsageStats.totalCalls || 0}</p>
                   <p className="text-xs text-muted-foreground">Toplam Çağrı</p>
                 </div>
                 <div className="text-center p-3 rounded-xl bg-muted/30">
@@ -442,10 +469,10 @@ export default function AdminAIDashboardPage() {
 
         {/* Sentiment Distribution */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-violet-500" /> Sistem Duygu Dağılımı
+                <BarChart3 className="h-5 w-5 text-primary" /> Sistem Duygu Dağılımı
               </CardTitle>
               <CardDescription>Tüm geri bildirimlerin duygu analizi</CardDescription>
             </CardHeader>
@@ -480,7 +507,7 @@ export default function AdminAIDashboardPage() {
       {/* Intent Distribution */}
       {stats?.intentDistribution && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="h-5 w-5 text-orange-500" /> Niyet Dağılımı (Intent)
@@ -518,7 +545,7 @@ export default function AdminAIDashboardPage() {
       {/* Top Topics */}
       {stats?.topTopics && stats.topTopics.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-blue-500" /> Sistem Geneli En Çok Bahsedilen Konular
@@ -546,10 +573,10 @@ export default function AdminAIDashboardPage() {
       {/* Theme Clusters */}
       {stats?.themeClusters && stats.themeClusters.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-indigo-500" /> Tema Kümeleri (Tüm Sistem)
+                <Layers className="h-5 w-5 text-primary" /> Tema Kümeleri (Tüm Sistem)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -580,10 +607,10 @@ export default function AdminAIDashboardPage() {
       {/* Top Dealers */}
       {stats?.topDealers && stats.topDealers.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Store className="h-5 w-5 text-violet-500" /> Dealer AI Performansı
+                <Store className="h-5 w-5 text-primary" /> Dealer AI Performansı
               </CardTitle>
               <CardDescription>İşletmelerin AI analiz sonuçlarına göre sıralaması</CardDescription>
             </CardHeader>
@@ -592,7 +619,7 @@ export default function AdminAIDashboardPage() {
                 {stats.topDealers.map((dealer, index) => (
                   <motion.div key={dealer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.65 + index * 0.05 }} className="flex items-center justify-between p-3 rounded-xl border bg-card">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-500 font-bold text-sm">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                         {index + 1}
                       </div>
                       <div>
@@ -619,7 +646,7 @@ export default function AdminAIDashboardPage() {
       {/* Recent AI Analyses */}
       {stats?.recentAnalyses && stats.recentAnalyses.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-blue-500" /> Son AI Analizleri

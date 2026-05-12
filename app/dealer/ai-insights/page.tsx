@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import {
   Sparkles,
   Brain,
@@ -47,7 +47,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Link from 'next/link';
+import { toast } from '@/lib/admin-toast';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { DashboardPageHero, DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
+import { normalizeSentimentTriplet } from '@/lib/sentiment-percentages';
 
 // ── Types ──
 interface InsightReport {
@@ -107,6 +113,17 @@ interface ActionSuggestion {
   category: string;
 }
 
+interface DealerStaffMember {
+  id: string;
+  userId: string;
+  user: { id: string; name: string | null; email: string };
+}
+
+interface ExistingActionItem {
+  suggestionText: string;
+  priority: string;
+}
+
 interface DetailedFeedback {
   id: string;
   rating: number;
@@ -158,6 +175,12 @@ interface LearningStatus {
   } | null;
   embeddingsCount: number;
   correctionsCount: number;
+  retrainSuggestion?: {
+    shouldRetrain: boolean;
+    reason: string | null;
+    newFeedbackCount: number;
+    newCorrectionsCount: number;
+  } | null;
 }
 
 interface CorrectionItem {
@@ -172,14 +195,16 @@ interface CorrectionItem {
 }
 
 // ── Circular Progress Component ──
-const CircularProgress = ({ 
-  value, 
-  size = 140, 
+const CircularProgress = ({
+  value,
+  size = 140,
   strokeWidth = 12,
-}: { 
-  value: number; 
-  size?: number; 
+  scoreLabel,
+}: {
+  value: number;
+  size?: number;
   strokeWidth?: number;
+  scoreLabel: string;
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -197,7 +222,7 @@ const CircularProgress = ({
     <div className="relative" style={{ width: size, height: size }}>
       <svg className="transform -rotate-90" width={size} height={size}>
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-muted/20" />
-        <motion.circle
+        <m.circle
           cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} strokeLinecap="round"
           className={getColor(value)}
           initial={{ strokeDashoffset: circumference }}
@@ -207,10 +232,10 @@ const CircularProgress = ({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring' }} className="text-4xl font-bold">
+        <m.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.5, type: 'spring' }} className="text-4xl font-bold">
           {value}
-        </motion.span>
-        <span className="text-sm text-muted-foreground">Puan</span>
+        </m.span>
+        <span className="text-sm text-muted-foreground">{scoreLabel}</span>
       </div>
     </div>
   );
@@ -219,7 +244,7 @@ const CircularProgress = ({
 // ── Animated Progress Bar ──
 const AnimatedProgress = ({ value, color, delay = 0 }: { value: number; color: string; delay?: number }) => (
   <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
-    <motion.div
+    <m.div
       initial={{ width: 0 }}
       animate={{ width: `${value}%` }}
       transition={{ duration: 1, delay, ease: 'easeOut' }}
@@ -229,6 +254,10 @@ const AnimatedProgress = ({ value, color, delay = 0 }: { value: number; color: s
 );
 
 export default function DealerAIInsightsPage() {
+  const t = useAppT();
+  const { locale } = useAppLocale();
+  const localeTag = locale === 'en' ? 'en-US' : 'tr-TR';
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [report, setReport] = useState<InsightReport | null>(null);
@@ -240,6 +269,14 @@ export default function DealerAIInsightsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sentimentFilter, setSentimentFilter] = useState<'all' | 'positive' | 'negative' | 'neutral' | 'mixed'>('all');
   const [showAllFeedbacks, setShowAllFeedbacks] = useState(false);
+  const [showAllTopActions, setShowAllTopActions] = useState(false);
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false);
+  const [savingActionKey, setSavingActionKey] = useState<string | null>(null);
+  const [addedActionKeys, setAddedActionKeys] = useState<Record<string, boolean>>({});
+  const [staffMembers, setStaffMembers] = useState<DealerStaffMember[]>([]);
+  const [actionAssignOpen, setActionAssignOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ action: string; priority: string; key: string } | null>(null);
+  const [assignForm, setAssignForm] = useState({ assignedToId: '', dueAt: '' });
   
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -251,6 +288,11 @@ export default function DealerAIInsightsPage() {
 
   // Theme clusters expand
   const [showAllClusters, setShowAllClusters] = useState(false);
+
+  // Period: haftalık / aylık (API'ye type + period gider)
+  const [periodType, setPeriodType] = useState<'weekly' | 'monthly'>('monthly');
+  const [reportGeneratedAt, setReportGeneratedAt] = useState<string | null>(null);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Learning state
   const [learningStatus, setLearningStatus] = useState<LearningStatus | null>(null);
@@ -275,17 +317,45 @@ export default function DealerAIInsightsPage() {
   }, []);
 
   useEffect(() => {
+    const fetchStaffMembers = async () => {
+      try {
+        const response = await fetch('/api/dealer/staff', { cache: 'no-store' });
+        const data = await response.json();
+        if (data.success && Array.isArray(data.staff)) {
+          setStaffMembers(data.staff);
+        }
+      } catch {
+        // staff optional
+      }
+    };
+    fetchStaffMembers();
+  }, []);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  const getPeriodString = () => {
+    if (periodType === 'weekly') {
+      const d = new Date();
+      const start = new Date(d);
+      start.setDate(d.getDate() - d.getDay() + 1);
+      const y = start.getFullYear();
+      const w = Math.ceil((start.getDate() + new Date(y, start.getMonth(), 0).getDate()) / 7);
+      return `${y}-W${String(w).padStart(2, '0')}`;
+    }
+    return new Date().toISOString().slice(0, 7);
+  };
 
   const fetchInsights = async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
+      const period = getPeriodString();
       const [insightsRes, detailedRes, learningRes] = await Promise.all([
         fetch('/api/ai/analyze?action=insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'monthly' }),
+          body: JSON.stringify({ type: periodType, period }),
         }),
         fetch('/api/ai/detailed?limit=50'),
         fetch('/api/ai/learning'),
@@ -296,6 +366,7 @@ export default function DealerAIInsightsPage() {
         if (insightsData.report) setReport(insightsData.report);
         if (insightsData.themeClusters) setThemeClusters(insightsData.themeClusters);
         if (insightsData.stats) setStats(insightsData.stats);
+        setReportGeneratedAt(new Date().toISOString());
       }
 
       const detailedData = await detailedRes.json();
@@ -319,12 +390,13 @@ export default function DealerAIInsightsPage() {
           profile: learningData.profile || null,
           embeddingsCount: learningData.embeddingsCount ?? 0,
           correctionsCount: learningData.correctionsCount ?? 0,
+          retrainSuggestion: learningData.retrainSuggestion ?? null,
         });
         setCorrections(Array.isArray(learningData.corrections) ? learningData.corrections : []);
       }
     } catch (error) {
       console.error('Failed to fetch insights:', error);
-      toast.error('İçgörüler yüklenemedi');
+      toast.error(t('dealerAiInsights.toastLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -334,7 +406,107 @@ export default function DealerAIInsightsPage() {
     setRefreshing(true);
     await fetchInsights(true);
     setRefreshing(false);
-      toast.success('AI içgörüleri güncellendi!');
+    toast.success(t('dealerAiInsights.toastRefreshed'));
+  };
+
+  const buildActionKey = (actionText: string, priority: string) =>
+    `${actionText.trim().toLowerCase()}::${priority.trim().toLowerCase()}`;
+
+  useEffect(() => {
+    const loadExistingActionKeys = async () => {
+      try {
+        const statuses = ['pending', 'assigned', 'in_progress'];
+        const results = await Promise.all(
+          statuses.map((status) =>
+            fetch(`/api/dealer/action-items?status=${status}&page=1&pageSize=100`, { cache: 'no-store' }).then((res) =>
+              res.json()
+            )
+          )
+        );
+        const actionMap: Record<string, boolean> = {};
+        results.forEach((result) => {
+          const items: ExistingActionItem[] = Array.isArray(result?.items) ? result.items : [];
+          items.forEach((item) => {
+            if (!item?.suggestionText) return;
+            const key = buildActionKey(item.suggestionText, item.priority || 'medium');
+            actionMap[key] = true;
+          });
+        });
+        setAddedActionKeys(actionMap);
+      } catch {
+        // preload optional
+      }
+    };
+    loadExistingActionKeys();
+  }, []);
+
+  const handleCreateActionItem = async (
+    action: { action: string; priority: string },
+    actionKey: string,
+    payload?: { assignedToId?: string; dueAt?: string }
+  ): Promise<boolean> => {
+    setSavingActionKey(actionKey);
+    try {
+      const response = await fetch('/api/dealer/action-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          suggestionText: action.action,
+          priority: ['low', 'medium', 'high'].includes(action.priority) ? action.priority : 'medium',
+          sourceModule: 'ai_aggregate',
+          assignedToId: payload?.assignedToId || null,
+          dueAt: payload?.dueAt ? new Date(payload.dueAt).toISOString() : null,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) {
+          setAddedActionKeys((prev) => ({ ...prev, [actionKey]: true }));
+          toast.success(t('dealerAiInsights.toastActionExists'));
+          return true;
+        }
+        throw new Error(data?.error || t('dealerAiInsights.errActionCreate'));
+      }
+      setAddedActionKeys((prev) => ({ ...prev, [actionKey]: true }));
+      toast.success(t('dealerAiInsights.toastActionAdded'));
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('dealerAiInsights.errActionCreate'));
+      return false;
+    } finally {
+      setSavingActionKey(null);
+    }
+  };
+
+  const openAssignDialog = (action: { action: string; priority: string }, actionKey: string) => {
+    setPendingAction({ ...action, key: actionKey });
+    setAssignForm({ assignedToId: '', dueAt: '' });
+    setActionAssignOpen(true);
+  };
+
+  const handlePeriodChange = (type: 'weekly' | 'monthly') => {
+    setPeriodType(type);
+    setLoading(true);
+    const period = type === 'weekly'
+      ? (() => { const d = new Date(); const start = new Date(d); start.setDate(d.getDate() - d.getDay() + 1); const y = start.getFullYear(); const w = Math.ceil((start.getDate() + new Date(y, start.getMonth(), 0).getDate()) / 7); return `${y}-W${String(w).padStart(2, '0')}`; })()
+      : new Date().toISOString().slice(0, 7);
+    fetch('/api/ai/analyze?action=insights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, period }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          if (data.report) setReport(data.report);
+          if (data.themeClusters) setThemeClusters(data.themeClusters);
+          if (data.stats) setStats(data.stats);
+          setReportGeneratedAt(new Date().toISOString());
+          toast.success(type === 'weekly' ? t('dealerAiInsights.toastReportWeekly') : t('dealerAiInsights.toastReportMonthly'));
+        }
+      })
+      .catch(() => toast.error(t('dealerAiInsights.toastReportFailed')))
+      .finally(() => setLoading(false));
   };
 
   const stringifyValue = (value: unknown) => {
@@ -367,14 +539,14 @@ export default function DealerAIInsightsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('Öğrenme profili güncellendi');
-        setLearningStatus(prev => (prev ? { ...prev, profile: data.profile || prev.profile } : prev));
+        toast.success(t('dealerAiInsights.toastLearningUpdated'));
+        setLearningStatus(prev => (prev ? { ...prev, profile: data.profile || prev.profile, retrainSuggestion: null } : prev));
       } else {
-        toast.error(data.error || 'Profil güncelleme başarısız');
+        toast.error(data.error || t('dealerAiInsights.errLearningUpdate'));
       }
     } catch (error) {
       console.error('Learning update failed:', error);
-      toast.error('Profil güncellenemedi');
+      toast.error(t('dealerAiInsights.toastLearningFailed'));
     } finally {
       setLearningUpdating(false);
     }
@@ -382,17 +554,17 @@ export default function DealerAIInsightsPage() {
 
   const handleSubmitCorrection = async () => {
     if (!correctionForm.feedbackId.trim()) {
-      toast.error('Feedback ID gerekli');
+      toast.error(t('dealerAiInsights.toastFeedbackIdRequired'));
       return;
     }
     if (!correctionForm.field.trim()) {
-      toast.error('Alan adı gerekli');
+      toast.error(t('dealerAiInsights.toastFieldRequired'));
       return;
     }
 
     const newValue = parseMaybeJson(correctionForm.newValue);
     if (newValue === undefined) {
-      toast.error('Yeni değer gerekli');
+      toast.error(t('dealerAiInsights.toastNewValueRequired'));
       return;
     }
 
@@ -413,7 +585,7 @@ export default function DealerAIInsightsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('Düzeltme kaydedildi');
+        toast.success(t('dealerAiInsights.toastCorrectionSaved'));
         setCorrectionForm(prev => ({ ...prev, newValue: '', oldValue: '', note: '' }));
         const statusRes = await fetch('/api/ai/learning');
         const statusData = await statusRes.json();
@@ -422,15 +594,16 @@ export default function DealerAIInsightsPage() {
             profile: statusData.profile || null,
             embeddingsCount: statusData.embeddingsCount ?? 0,
             correctionsCount: statusData.correctionsCount ?? 0,
+            retrainSuggestion: statusData.retrainSuggestion ?? null,
           });
           setCorrections(Array.isArray(statusData.corrections) ? statusData.corrections : []);
         }
       } else {
-        toast.error(data.error || 'Düzeltme kaydedilemedi');
+        toast.error(data.error || t('dealerAiInsights.errCorrectionSave'));
       }
     } catch (error) {
       console.error('Correction submit failed:', error);
-      toast.error('Düzeltme kaydedilemedi');
+      toast.error(t('dealerAiInsights.toastCorrectionFailed'));
     } finally {
       setCorrectionSubmitting(false);
     }
@@ -440,7 +613,7 @@ export default function DealerAIInsightsPage() {
     if (bulkAnalyzing) return;
     setBulkAnalyzing(true);
     setBulkProgress({ done: 0, total: 0, running: true });
-    toast.info('Toplu AI analizi başlatılıyor...');
+    toast.info(t('dealerAiInsights.toastBulkStarting'));
 
     try {
       // Analiz edilmemiş feedbackları bul
@@ -449,7 +622,7 @@ export default function DealerAIInsightsPage() {
         .map(fb => fb.id);
 
       if (unanalyzedIds.length === 0) {
-        toast.info('Tüm feedbacklar zaten analiz edilmiş!');
+        toast.info(t('dealerAiInsights.toastBulkNone'));
         setBulkAnalyzing(false);
         setBulkProgress({ done: 0, total: 0, running: false });
         return;
@@ -479,7 +652,7 @@ export default function DealerAIInsightsPage() {
         }
       }
 
-      toast.success('Toplu analiz tamamlandı! Sayfa yenileniyor...');
+      toast.success(t('dealerAiInsights.toastBulkDone'));
       setBulkProgress(prev => ({ ...prev, running: false }));
 
       // Profili güncelle
@@ -489,13 +662,15 @@ export default function DealerAIInsightsPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         });
-      } catch {}
+      } catch (err) {
+        console.warn('Profil güncelleme atlandı:', err);
+      }
 
       // Sayfayı yenile
       await fetchInsights(true);
     } catch (error) {
       console.error('Bulk analyze failed:', error);
-      toast.error('Toplu analiz başarısız oldu');
+      toast.error(t('dealerAiInsights.toastBulkFailed'));
     } finally {
       setBulkAnalyzing(false);
       setBulkProgress(prev => ({ ...prev, running: false }));
@@ -506,7 +681,7 @@ export default function DealerAIInsightsPage() {
     setCorrectionForm(prev => ({
       ...prev,
       feedbackId,
-      note: prev.note || (preview ? `Hızlı seçim: ${preview.slice(0, 120)}` : prev.note),
+      note: prev.note || (preview ? `${t('dealerAiInsights.quickPickPrefix')} ${preview.slice(0, 120)}` : prev.note),
     }));
     correctionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -529,10 +704,10 @@ export default function DealerAIInsightsPage() {
         setChatMessages(prev => [...prev, { role: 'assistant', content: data.answer, timestamp: new Date().toISOString() }]);
         if (data.conversationId) setConversationId(data.conversationId);
       } else {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: data.error || 'Bir hata oluştu. Lütfen tekrar deneyin.', timestamp: new Date().toISOString() }]);
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.error || t('dealerAiInsights.chatErrorGeneric'), timestamp: new Date().toISOString() }]);
       }
     } catch {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Bağlantı hatası. Lütfen tekrar deneyin.', timestamp: new Date().toISOString() }]);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: t('dealerAiInsights.chatErrorConnection'), timestamp: new Date().toISOString() }]);
     } finally {
       setChatLoading(false);
     }
@@ -549,11 +724,11 @@ export default function DealerAIInsightsPage() {
   const getPriorityConfig = (priority: string) => {
     switch (priority) {
       case 'high': case 'critical':
-        return { color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', label: priority === 'critical' ? 'Kritik' : 'Yüksek', gradient: 'from-red-500 to-rose-600' };
+        return { color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/30', label: priority === 'critical' ? t('dealerAiInsights.priorityCritical') : t('dealerAiInsights.priorityHigh'), gradient: 'from-red-500 to-red-700' };
       case 'medium':
-        return { color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', label: 'Orta', gradient: 'from-yellow-500 to-orange-500' };
+        return { color: 'text-yellow-500', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', label: t('dealerAiInsights.priorityMedium'), gradient: 'from-yellow-500 to-orange-500' };
       default:
-        return { color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', label: 'Düşük', gradient: 'from-emerald-500 to-teal-600' };
+        return { color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', label: t('dealerAiInsights.priorityLow'), gradient: 'from-emerald-500 to-teal-600' };
     }
   };
 
@@ -594,50 +769,49 @@ export default function DealerAIInsightsPage() {
   const getSentimentConfig = (sentiment?: string | null) => {
     switch ((sentiment || 'neutral').toLowerCase()) {
       case 'positive':
-        return { label: 'Olumlu', color: 'text-emerald-500', bg: 'bg-emerald-500/10', icon: ThumbsUp };
+        return { label: t('dealerAiInsights.sentimentPositive'), color: 'text-emerald-500', bg: 'bg-emerald-500/10', icon: ThumbsUp };
       case 'negative':
-        return { label: 'Olumsuz', color: 'text-red-500', bg: 'bg-red-500/10', icon: ThumbsDown };
+        return { label: t('dealerAiInsights.sentimentNegative'), color: 'text-red-500', bg: 'bg-red-500/10', icon: ThumbsDown };
       case 'mixed':
-        return { label: 'Karışık', color: 'text-yellow-500', bg: 'bg-yellow-500/10', icon: AlertTriangle };
+        return { label: t('dealerAiInsights.sentimentMixed'), color: 'text-yellow-500', bg: 'bg-yellow-500/10', icon: AlertTriangle };
       default:
-        return { label: 'Nötr', color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Minus };
+        return { label: t('dealerAiInsights.sentimentNeutral'), color: 'text-blue-500', bg: 'bg-blue-500/10', icon: Minus };
     }
   };
 
   const getIntentLabel = (intent?: string | null) => {
     switch ((intent || '').toLowerCase()) {
       case 'complaint':
-        return { label: 'Şikayet', color: 'bg-red-500/10 text-red-500 border-red-500/20' };
+        return { label: t('dealerAiInsights.intentComplaint'), color: 'bg-red-500/10 text-red-500 border-red-500/20' };
       case 'suggestion':
-        return { label: 'Öneri', color: 'bg-violet-500/10 text-violet-500 border-violet-500/20' };
+        return { label: t('dealerAiInsights.intentSuggestion'), color: 'border-primary/20 bg-primary/10 text-primary' };
       case 'praise':
-        return { label: 'Övgü', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' };
+        return { label: t('dealerAiInsights.intentPraise'), color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' };
       case 'question':
-        return { label: 'Soru', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' };
+        return { label: t('dealerAiInsights.intentQuestion'), color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' };
       default:
-        return { label: 'Genel', color: 'bg-muted text-muted-foreground border-muted' };
+        return { label: t('dealerAiInsights.intentGeneral'), color: 'bg-muted text-muted-foreground border-muted' };
     }
   };
 
   const getUrgencyLabel = (value: number | null) => {
     if (value == null) return null;
-    if (value < 0.3) return { label: 'Düşük', color: 'text-emerald-500' };
-    if (value < 0.5) return { label: 'Orta', color: 'text-yellow-500' };
-    if (value < 0.7) return { label: 'Yüksek', color: 'text-orange-500' };
-    return { label: 'Kritik', color: 'text-red-500' };
+    if (value < 0.3) return { label: t('dealerAiInsights.priorityLow'), color: 'text-emerald-500' };
+    if (value < 0.5) return { label: t('dealerAiInsights.priorityMedium'), color: 'text-yellow-500' };
+    if (value < 0.7) return { label: t('dealerAiInsights.priorityHigh'), color: 'text-orange-500' };
+    return { label: t('dealerAiInsights.priorityCritical'), color: 'text-red-500' };
   };
 
   const getChurnLabel = (value: number | null) => {
     if (value == null) return null;
-    if (value < 0.25) return { label: 'Güvenli', color: 'text-emerald-500' };
-    if (value < 0.5) return { label: 'Düşük', color: 'text-yellow-500' };
-    if (value < 0.75) return { label: 'Orta', color: 'text-orange-500' };
-    return { label: 'Yüksek', color: 'text-red-500' };
+    if (value < 0.25) return { label: t('dealerAiInsights.churnSafe'), color: 'text-emerald-500' };
+    if (value < 0.5) return { label: t('dealerAiInsights.churnLow'), color: 'text-yellow-500' };
+    if (value < 0.75) return { label: t('dealerAiInsights.churnMedium'), color: 'text-orange-500' };
+    return { label: t('dealerAiInsights.churnHigh'), color: 'text-red-500' };
   };
 
   const sumRecord = (record: Record<string, number>) => Object.values(record).reduce((a, b) => a + b, 0);
   const toPercent = (value: number, total: number) => total > 0 ? Math.round((value / total) * 100) : 0;
-
   const filteredFeedbacks = useMemo(() => {
     return detailedFeedbacks.filter(fb => {
       const sentimentValue = (fb.sentiment || 'neutral').toLowerCase();
@@ -650,6 +824,8 @@ export default function DealerAIInsightsPage() {
   }, [detailedFeedbacks, sentimentFilter, searchQuery]);
 
   const visibleFeedbacks = showAllFeedbacks ? filteredFeedbacks : filteredFeedbacks.slice(0, 10);
+  const visibleTopActions = showAllTopActions ? (signals?.topActions || []) : (signals?.topActions || []).slice(0, 5);
+  const visibleRecommendations = showAllRecommendations ? (report?.recommendations || []) : (report?.recommendations || []).slice(0, 5);
 
   const latestProcessedAt = useMemo(() => {
     let latest: string | null = null;
@@ -663,34 +839,67 @@ export default function DealerAIInsightsPage() {
   }, [detailedFeedbacks]);
 
   const analyzedRate = signals ? toPercent(signals.totalAnalyzed, signals.totalFeedbacks) : 0;
+  const normalizedSentiment = normalizeSentimentTriplet(
+    {
+      positive: stats?.sentimentDistribution?.positive ?? 0,
+      neutral: stats?.sentimentDistribution?.neutral ?? 0,
+      negative: stats?.sentimentDistribution?.negative ?? 0,
+    },
+    { autoScaleRatio: true }
+  );
+  const topicKeys = ['service', 'speed', 'quality', 'price', 'cleanliness', 'location', 'ambience', 'support', 'staff', 'wait'] as const;
+  const topicLabelMap = useMemo(
+    () =>
+      Object.fromEntries(topicKeys.map((k) => [k, t(`dealerAiInsights.topics.${k}`)])) as Record<string, string>,
+    [t],
+  );
+  const emotionKeys = ['happy', 'joy', 'satisfied', 'neutral', 'disappointed', 'angry', 'frustrated', 'upset', 'confused', 'excited'] as const;
+  const emotionLabelMap = useMemo(
+    () =>
+      Object.fromEntries(emotionKeys.map((k) => [k, t(`dealerAiInsights.emotions.${k}`)])) as Record<string, string>,
+    [t],
+  );
+  const toLocalizedLabel = (value: string, map: Record<string, string>) => {
+    const normalized = value.trim().toLowerCase();
+    return map[normalized] || value;
+  };
 
-  const intentItems = [
-    { key: 'complaint', label: 'Şikayet', color: 'bg-red-500' },
-    { key: 'suggestion', label: 'Öneri', color: 'bg-violet-500' },
-    { key: 'praise', label: 'Övgü', color: 'bg-emerald-500' },
-    { key: 'question', label: 'Soru', color: 'bg-blue-500' },
-    { key: 'general', label: 'Genel', color: 'bg-slate-500' },
-  ];
+  const intentItems = useMemo(
+    () => [
+      { key: 'complaint', label: t('dealerAiInsights.intentComplaint'), color: 'bg-red-500' },
+      { key: 'suggestion', label: t('dealerAiInsights.intentSuggestion'), color: 'bg-primary' },
+      { key: 'praise', label: t('dealerAiInsights.intentPraise'), color: 'bg-emerald-500' },
+      { key: 'question', label: t('dealerAiInsights.intentQuestion'), color: 'bg-blue-500' },
+      { key: 'general', label: t('dealerAiInsights.intentGeneral'), color: 'bg-slate-500' },
+    ],
+    [t],
+  );
 
-  const urgencyItems = [
-    { key: 'low', label: 'Düşük', color: 'bg-emerald-500' },
-    { key: 'medium', label: 'Orta', color: 'bg-yellow-500' },
-    { key: 'high', label: 'Yüksek', color: 'bg-orange-500' },
-    { key: 'critical', label: 'Kritik', color: 'bg-red-500' },
-  ];
+  const urgencyItems = useMemo(
+    () => [
+      { key: 'low', label: t('dealerAiInsights.priorityLow'), color: 'bg-emerald-500' },
+      { key: 'medium', label: t('dealerAiInsights.priorityMedium'), color: 'bg-yellow-500' },
+      { key: 'high', label: t('dealerAiInsights.priorityHigh'), color: 'bg-orange-500' },
+      { key: 'critical', label: t('dealerAiInsights.priorityCritical'), color: 'bg-red-500' },
+    ],
+    [t],
+  );
 
-  const churnItems = [
-    { key: 'safe', label: 'Güvenli', color: 'bg-emerald-500' },
-    { key: 'low', label: 'Düşük', color: 'bg-yellow-500' },
-    { key: 'medium', label: 'Orta', color: 'bg-orange-500' },
-    { key: 'high', label: 'Yüksek', color: 'bg-red-500' },
-  ];
+  const churnItems = useMemo(
+    () => [
+      { key: 'safe', label: t('dealerAiInsights.churnSafe'), color: 'bg-emerald-500' },
+      { key: 'low', label: t('dealerAiInsights.churnLow'), color: 'bg-yellow-500' },
+      { key: 'medium', label: t('dealerAiInsights.churnMedium'), color: 'bg-orange-500' },
+      { key: 'high', label: t('dealerAiInsights.churnHigh'), color: 'bg-red-500' },
+    ],
+    [t],
+  );
 
   if (loading) {
   return (
       <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
-        <p className="text-muted-foreground">AI içgörüleri yükleniyor...</p>
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground">{t('dealerAiInsights.loadingInsights')}</p>
       </div>
     );
   }
@@ -698,117 +907,196 @@ export default function DealerAIInsightsPage() {
   // No data state
   if (!report && !stats && detailedFeedbacks.length === 0 && !signals) {
     return (
+      <LazyMotion features={domAnimation} strict>
       <div className="space-y-6 pb-8">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
-        >
-          <div className="relative z-10">
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <Sparkles className="w-8 h-8" /> AI İçgörüler
-            </h1>
-            <p className="text-white/70 mt-1">Henüz yeterli geri bildirim verisi yok</p>
-          </div>
-        </motion.div>
-        <Card className="border-0 bg-card/50">
+        <DashboardPageHero
+          eyebrow={t('dealerAiInsights.emptyEyebrow')}
+          title={t('dealerAiInsights.emptyHeroTitle')}
+          description={t('dealerAiInsights.emptyHeroDesc')}
+          icon={<Sparkles className="h-7 w-7" aria-hidden />}
+          tone="auto"
+        />
+        <Card className="border-border/60 bg-card/50">
           <CardContent className="p-12 text-center">
             <Brain className="h-16 w-16 mx-auto text-muted-foreground/40 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Veri Bekleniyor</h3>
+            <h3 className="text-xl font-bold mb-2">{t('dealerAiInsights.dataWaitingTitle')}</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              AI içgörüleri oluşturabilmek için en az 3 geri bildirim gereklidir. QR kodlarınızı paylaşarak geri bildirim toplamaya başlayın.
+              {t('dealerAiInsights.dataWaitingBody')}
             </p>
           </CardContent>
         </Card>
       </div>
+      </LazyMotion>
     );
   }
 
   return (
+    <LazyMotion features={domAnimation} strict>
     <div className="space-y-6 pb-8">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-primary/10 dark:bg-black/20 rounded-full blur-3xl" />
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-white/40 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ y: [0, -20, 0], opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 3 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        
-        <div className="relative z-10">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div>
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 mb-2">
-                <Brain className="w-6 h-6 text-white/80" />
-                <span className="text-white/80 text-sm font-medium">Yapay Zeka Destekli</span>
-              </motion.div>
-              <motion.h1 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-                className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3"
+      <DashboardPageHeroChrome tone="auto" padded={false}>
+        <m.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="relative px-6 py-6 md:px-8 md:py-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <m.div
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground"
               >
-                <Sparkles className="w-8 h-8" /> AI İçgörüler
-              </motion.h1>
-              <motion.p initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="text-white/70 mt-1">
-                İşletmeniz için akıllı analiz ve kişiselleştirilmiş öneriler
-              </motion.p>
-            </div>
-            
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="flex items-center gap-4">
-              {report && (
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-4">
-                  <CircularProgress value={report.overallScore} size={100} strokeWidth={10} />
-                <div className="text-white">
-                  <p className="text-white/60 text-sm">Genel Skor</p>
-                  <div className="flex items-center gap-2">
-                      {report.trend === 'up' ? <TrendingUp className="w-5 h-5 text-emerald-400" /> : report.trend === 'down' ? <TrendingDown className="w-5 h-5 text-red-400" /> : <Minus className="w-5 h-5 text-white/60" />}
-                      <span className={`font-semibold ${report.trend === 'up' ? 'text-emerald-400' : report.trend === 'down' ? 'text-red-400' : 'text-white/60'}`}>
-                        {report.trend === 'up' ? '+' : ''}{report.trendValue.toFixed(1)} bu dönem
-                    </span>
-                  </div>
-                    <p className="text-white/50 text-xs mt-1">{report.totalFeedbacks} geri bildirim analiz edildi</p>
+                <Cpu className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                <span className="text-pretty">{t('dealerAiInsights.heroChip')}</span>
+              </m.div>
+              <m.h1
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.06 }}
+                className="flex items-center gap-3 text-balance text-2xl font-bold tracking-tight text-foreground md:text-4xl"
+              >
+                <Sparkles className="h-9 w-9 shrink-0 text-primary" aria-hidden /> {t('dealerAiInsights.heroTitle')}
+              </m.h1>
+              <m.p
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.12 }}
+                className="mt-2 max-w-xl text-base leading-relaxed text-pretty text-muted-foreground"
+              >
+                {t('dealerAiInsights.heroSubtitle')}
+              </m.p>
+              <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-border bg-muted/50 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handlePeriodChange('weekly')}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      periodType === 'weekly'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t('dealerAiInsights.periodWeekly')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePeriodChange('monthly')}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      periodType === 'monthly'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t('dealerAiInsights.periodMonthly')}
+                  </button>
                 </div>
-              </div>
+                {reportGeneratedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('dealerAiInsights.lastUpdatedPrefix')}{' '}
+                    {new Date(reportGeneratedAt).toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </m.div>
+            </div>
+            <m.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.15 }}
+              className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center lg:flex-col xl:flex-row"
+            >
+              {report && (
+                <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm backdrop-blur-sm dark:bg-card/60">
+                  <CircularProgress value={report.overallScore} size={100} strokeWidth={10} scoreLabel={t('dealerAiInsights.scoreShort')} />
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t('dealerAiInsights.overallScoreLabel')}</p>
+                    <div className="flex items-center gap-2">
+                      {report.trend === 'up' ? (
+                        <TrendingUp className="h-5 w-5 text-emerald-500" />
+                      ) : report.trend === 'down' ? (
+                        <TrendingDown className="h-5 w-5 text-red-500" />
+                      ) : (
+                        <Minus className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <span
+                        className={`font-semibold ${
+                          report.trend === 'up'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : report.trend === 'down'
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-muted-foreground'
+                        }`}
+                      >
+                        {report.trend === 'up' ? '+' : ''}
+                        {report.trendValue.toFixed(1)} {t('dealerAiInsights.trendThisPeriod')}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('dealerAiInsights.feedbacksAnalyzedLine').replace('{count}', String(report.totalFeedbacks))}</p>
+                  </div>
+                </div>
               )}
-              <div className="flex flex-col gap-2">
-                <Button onClick={handleRefresh} disabled={refreshing} className="bg-white text-purple-600 hover:bg-white/90">
-                  <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                  {refreshing ? 'Yenileniyor...' : 'Yenile'}
+              <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
+                <Button onClick={handleRefresh} disabled={refreshing}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? t('dealerAiInsights.refreshing') : t('dealerAiInsights.refresh')}
                 </Button>
-                <Button onClick={() => setChatOpen(!chatOpen)} variant="outline" className="border-white/30 text-white hover:bg-white/10">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  AI&apos;a Sor
+                <Button onClick={() => setChatOpen(!chatOpen)} variant="outline">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  {t('dealerAiInsights.askAi')}
                 </Button>
               </div>
-            </motion.div>
+            </m.div>
           </div>
-        </div>
-      </motion.div>
+        </m.div>
+      </DashboardPageHeroChrome>
+
+      {/* Bu rapor nasıl üretildi? — Şeffaflık / güven */}
+      <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+        <Card className="border-0 bg-muted/30 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowHowItWorks(!showHowItWorks)}
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/50 transition-colors"
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <FileText className="h-4 w-4 text-primary" />
+              {t('dealerAiInsights.reportHowTitle')}
+            </span>
+            {showHowItWorks ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          <AnimatePresence>
+            {showHowItWorks && (
+              <m.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <CardContent className="pt-0 pb-4 text-sm text-muted-foreground space-y-2 border-t">
+                  <p><strong className="text-foreground">{t('dealerAiInsights.methodologyStep1Lead')}</strong>{t('dealerAiInsights.methodologyStep1Body')}</p>
+                  <p><strong className="text-foreground">{t('dealerAiInsights.methodologyStep2Lead')}</strong>{t('dealerAiInsights.methodologyStep2Body')}</p>
+                  <p><strong className="text-foreground">{t('dealerAiInsights.methodologyStep3Lead')}</strong>{t('dealerAiInsights.methodologyStep3Body')}</p>
+                  <p><strong className="text-foreground">{t('dealerAiInsights.methodologyStep4Lead')}</strong>{t('dealerAiInsights.methodologyStep4Body')}</p>
+                </CardContent>
+              </m.div>
+            )}
+          </AnimatePresence>
+        </Card>
+      </m.div>
 
       {/* AI Chat Panel */}
       <AnimatePresence>
         {chatOpen && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <Bot className="h-5 w-5 text-violet-500" />
-                  AI Asistanı
+                  <Bot className="h-5 w-5 text-primary" />
+                  {t('dealerAiInsights.assistantTitle')}
                 </CardTitle>
                 <CardDescription>
-                  Geri bildirim verileriniz hakkında doğal dilde sorular sorun
+                  {t('dealerAiInsights.assistantSubtitle')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -817,9 +1105,9 @@ export default function DealerAIInsightsPage() {
                   {chatMessages.length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
                       <Bot className="h-10 w-10 mx-auto mb-3 opacity-40" />
-                      <p className="text-sm">Merhaba! Geri bildirimleriniz hakkında soru sorabilirsiniz.</p>
+                      <p className="text-sm">{t('dealerAiInsights.chatWelcome')}</p>
                       <div className="flex flex-wrap gap-2 justify-center mt-4">
-                        {['En çok şikayet edilen konu ne?', 'Genel memnuniyet durumum nasıl?', 'Son hafta hangi konularda iyileşme var?'].map(q => (
+                        {[t('dealerAiInsights.quickQuestion1'), t('dealerAiInsights.quickQuestion2'), t('dealerAiInsights.quickQuestion3')].map(q => (
                           <Button key={q} variant="outline" size="sm" className="text-xs" onClick={() => { sendQuickMessage(q); }}>
                             {q}
               </Button>
@@ -828,15 +1116,15 @@ export default function DealerAIInsightsPage() {
                     </div>
                   )}
                   {chatMessages.map((msg, i) => (
-                    <motion.div
+                    <m.div
                       key={i}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {msg.role === 'assistant' && (
-                        <div className="p-2 rounded-lg bg-violet-500/10 h-fit">
-                          <Bot className="h-4 w-4 text-violet-500" />
+                        <div className="p-2 rounded-lg bg-primary/10 h-fit">
+                          <Bot className="h-4 w-4 text-primary" />
                         </div>
                       )}
                       <div className={`max-w-[80%] p-3 rounded-xl text-sm whitespace-pre-wrap ${
@@ -849,12 +1137,12 @@ export default function DealerAIInsightsPage() {
                           <User className="h-4 w-4 text-primary" />
                         </div>
                       )}
-            </motion.div>
+            </m.div>
                   ))}
                   {chatLoading && (
                     <div className="flex gap-3">
-                      <div className="p-2 rounded-lg bg-violet-500/10 h-fit">
-                        <Bot className="h-4 w-4 text-violet-500" />
+                      <div className="p-2 rounded-lg bg-primary/10 h-fit">
+                        <Bot className="h-4 w-4 text-primary" />
           </div>
                       <div className="bg-card border p-3 rounded-xl">
                         <div className="flex gap-1">
@@ -873,7 +1161,7 @@ export default function DealerAIInsightsPage() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                    placeholder="Sorunuzu yazın..."
+                    placeholder={t('dealerAiInsights.chatPlaceholder')}
                     disabled={chatLoading}
                     className="flex-1"
                   />
@@ -883,7 +1171,7 @@ export default function DealerAIInsightsPage() {
                 </div>
               </CardContent>
             </Card>
-      </motion.div>
+      </m.div>
         )}
       </AnimatePresence>
 
@@ -894,7 +1182,7 @@ export default function DealerAIInsightsPage() {
             const config = getAlertConfig(alert.severity);
           const AlertIcon = config.icon;
           return (
-              <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
+              <m.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
               <Card className={`border-0 ${config.bg}`}>
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -908,33 +1196,39 @@ export default function DealerAIInsightsPage() {
                     </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
       )}
 
+      {/* AI Analiz Özeti */}
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-5 w-5 text-primary" />
+        <h2 className="text-lg font-semibold">{t('dealerAiInsights.sectionAiAnalysisTitle')}</h2>
+      </div>
+
       {/* Key Metrics */}
       {report?.keyMetrics && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: 'Ort. Puan', value: `${report.keyMetrics.avgRating.toFixed(1)}/5`, icon: Star, color: 'text-yellow-500' },
-            { label: 'NPS', value: report.keyMetrics.nps.toString(), icon: TrendingUp, color: report.keyMetrics.nps >= 50 ? 'text-emerald-500' : report.keyMetrics.nps >= 0 ? 'text-yellow-500' : 'text-red-500' },
-            { label: 'CSAT', value: `${report.keyMetrics.csat}%`, icon: ThumbsUp, color: report.keyMetrics.csat >= 70 ? 'text-emerald-500' : 'text-yellow-500' },
-            { label: 'CES', value: report.keyMetrics.ces.toFixed(1), icon: Activity, color: report.keyMetrics.ces <= 3 ? 'text-emerald-500' : 'text-yellow-500' },
-            { label: 'Yanıt Oranı', value: `${report.keyMetrics.responseRate}%`, icon: MessageSquare, color: 'text-blue-500' },
+            { label: t('dealerAiInsights.metricAvgRating'), value: `${report.keyMetrics.avgRating.toFixed(1)}/5`, icon: Star, color: 'text-yellow-500' },
+            { label: t('dealerAiInsights.metricNps'), value: report.keyMetrics.nps.toString(), icon: TrendingUp, color: report.keyMetrics.nps >= 50 ? 'text-emerald-500' : report.keyMetrics.nps >= 0 ? 'text-yellow-500' : 'text-red-500' },
+            { label: t('dealerAiInsights.metricCsat'), value: `${report.keyMetrics.csat}%`, icon: ThumbsUp, color: report.keyMetrics.csat >= 70 ? 'text-emerald-500' : 'text-yellow-500' },
+            { label: t('dealerAiInsights.metricCes'), value: report.keyMetrics.ces.toFixed(1), icon: Activity, color: report.keyMetrics.ces <= 3 ? 'text-emerald-500' : 'text-yellow-500' },
+            { label: t('dealerAiInsights.metricResponseRate'), value: `${report.keyMetrics.responseRate}%`, icon: MessageSquare, color: 'text-blue-500' },
           ].map((metric, index) => {
             const MetricIcon = metric.icon;
             return (
-              <motion.div key={metric.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + index * 0.05 }}>
-                <Card className="border-0 bg-card/50 backdrop-blur-sm">
+              <m.div key={metric.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + index * 0.05 }}>
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardContent className="p-4 text-center">
                     <MetricIcon className={`h-5 w-5 mx-auto mb-2 ${metric.color}`} />
                     <p className="text-2xl font-bold">{metric.value}</p>
                     <p className="text-xs text-muted-foreground">{metric.label}</p>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </m.div>
             );
           })}
         </div>
@@ -942,79 +1236,85 @@ export default function DealerAIInsightsPage() {
 
       {/* Sentiment Distribution */}
       {stats?.sentimentDistribution && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <BarChart3 className="h-5 w-5 text-violet-500" />
-                Duygu Dağılımı
+                <BarChart3 className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.sentimentDistTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent>
       <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
                   <ThumbsUp className="h-6 w-6 mx-auto text-emerald-500 mb-2" />
-                  <p className="text-3xl font-bold text-emerald-500">{stats.sentimentDistribution.positive}%</p>
-                  <p className="text-sm text-muted-foreground">Olumlu</p>
+                  <p className="text-3xl font-bold text-emerald-500">{normalizedSentiment.positive}%</p>
+                  <p className="text-sm text-muted-foreground">{t('dealerAiInsights.sentimentPositive')}</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
                   <Minus className="h-6 w-6 mx-auto text-blue-500 mb-2" />
-                  <p className="text-3xl font-bold text-blue-500">{stats.sentimentDistribution.neutral}%</p>
-                  <p className="text-sm text-muted-foreground">Nötr</p>
+                  <p className="text-3xl font-bold text-blue-500">{normalizedSentiment.neutral}%</p>
+                  <p className="text-sm text-muted-foreground">{t('dealerAiInsights.sentimentNeutral')}</p>
                 </div>
                 <div className="text-center p-4 rounded-xl bg-red-500/5 border border-red-500/20">
                   <ThumbsDown className="h-6 w-6 mx-auto text-red-500 mb-2" />
-                  <p className="text-3xl font-bold text-red-500">{stats.sentimentDistribution.negative}%</p>
-                  <p className="text-sm text-muted-foreground">Olumsuz</p>
+                  <p className="text-3xl font-bold text-red-500">{normalizedSentiment.negative}%</p>
+                  <p className="text-sm text-muted-foreground">{t('dealerAiInsights.sentimentNegative')}</p>
                 </div>
               </div>
               {/* Sentiment bar */}
               <div className="mt-4 h-4 rounded-full overflow-hidden flex">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats.sentimentDistribution.positive}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats.sentimentDistribution.neutral}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats.sentimentDistribution.negative}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
+                <m.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.positive}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
+                <m.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.neutral}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
+                <m.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.negative}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
+
+      {/* Gelişmiş AI */}
+      <div className="flex items-center gap-2 pt-2">
+        <Layers className="h-5 w-5 text-primary" />
+        <h2 className="text-lg font-semibold">{t('dealerAiInsights.advancedAiTitle')}</h2>
+      </div>
 
       {/* Experience Signals */}
       {signals && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Zap className="h-5 w-5 text-violet-500" />
-                Experience Signals
+                <Zap className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.experienceSignalsTitle')}
               </CardTitle>
-              <CardDescription>Geri bildirimlerden çıkarılan çok katmanlı sinyaller</CardDescription>
+              <CardDescription>{t('dealerAiInsights.experienceSignalsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="p-4 rounded-xl border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Toplam Geri Bildirim</p>
+                  <p className="text-xs text-muted-foreground">{t('dealerAiInsights.statTotalFeedback')}</p>
                   <p className="text-2xl font-bold">{signals.totalFeedbacks}</p>
                 </div>
                 <div className="p-4 rounded-xl border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">AI Analiz Kapsamı</p>
+                  <p className="text-xs text-muted-foreground">{t('dealerAiInsights.statAiCoverage')}</p>
                   <p className="text-2xl font-bold">{analyzedRate}%</p>
-                  <AnimatedProgress value={analyzedRate} color="bg-violet-500" delay={0.1} />
+                  <AnimatedProgress value={analyzedRate} color="bg-primary" delay={0.1} />
                 </div>
                 <div className="p-4 rounded-xl border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Ort. Efor</p>
+                  <p className="text-xs text-muted-foreground">{t('dealerAiInsights.statAvgEffort')}</p>
                   <p className={`text-2xl font-bold ${signals.avgEffort > 0.7 ? 'text-red-500' : signals.avgEffort > 0.4 ? 'text-yellow-500' : 'text-emerald-500'}`}>
                     {(signals.avgEffort * 10).toFixed(1)}/10
                   </p>
                 </div>
                 <div className="p-4 rounded-xl border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Ort. Aciliyet</p>
+                  <p className="text-xs text-muted-foreground">{t('dealerAiInsights.statAvgUrgency')}</p>
                   <p className={`text-2xl font-bold ${signals.avgUrgency > 0.7 ? 'text-red-500' : signals.avgUrgency > 0.4 ? 'text-yellow-500' : 'text-emerald-500'}`}>
                     {(signals.avgUrgency * 10).toFixed(1)}/10
                   </p>
                 </div>
                 <div className="p-4 rounded-xl border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Ort. Churn Riski</p>
+                  <p className="text-xs text-muted-foreground">{t('dealerAiInsights.statAvgChurnRisk')}</p>
                   <p className={`text-2xl font-bold ${signals.avgChurnRisk > 0.7 ? 'text-red-500' : signals.avgChurnRisk > 0.4 ? 'text-yellow-500' : 'text-emerald-500'}`}>
                     {(signals.avgChurnRisk * 100).toFixed(0)}%
                   </p>
@@ -1022,7 +1322,7 @@ export default function DealerAIInsightsPage() {
               </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </m.div>
       )}
 
       {/* Intent / Urgency / Churn Distributions */}
@@ -1031,20 +1331,20 @@ export default function DealerAIInsightsPage() {
         const totalUrgency = sumRecord(signals.urgencyBuckets);
         const totalChurn = sumRecord(signals.churnBuckets);
         return (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}>
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
-                  <BarChart3 className="h-5 w-5 text-indigo-500" />
-                  Niyet, Aciliyet ve Churn Dağılımları
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  {t('dealerAiInsights.distributionCardTitle')}
                 </CardTitle>
-                <CardDescription>İçgörülerde öne çıkan davranış sinyalleri</CardDescription>
+                <CardDescription>{t('dealerAiInsights.distributionCardDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-3 gap-6">
                   <div className="space-y-3">
                     <p className="text-sm font-medium flex items-center gap-2">
-                      <Target className="h-4 w-4 text-violet-500" /> Niyet
+                      <Target className="h-4 w-4 text-primary" /> {t('dealerAiInsights.intentAxisTitle')}
                     </p>
                     {intentItems.map((item, index) => {
                       const value = signals.intentDist[item.key] || 0;
@@ -1062,7 +1362,7 @@ export default function DealerAIInsightsPage() {
                   </div>
                   <div className="space-y-3">
                     <p className="text-sm font-medium flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-orange-500" /> Aciliyet
+                      <AlertTriangle className="h-4 w-4 text-orange-500" /> {t('dealerAiInsights.urgencyAxisTitle')}
                     </p>
                     {urgencyItems.map((item, index) => {
                       const value = signals.urgencyBuckets[item.key as keyof typeof signals.urgencyBuckets] || 0;
@@ -1080,7 +1380,7 @@ export default function DealerAIInsightsPage() {
                   </div>
                   <div className="space-y-3">
                     <p className="text-sm font-medium flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-emerald-500" /> Churn Riski
+                      <Shield className="h-4 w-4 text-emerald-500" /> {t('dealerAiInsights.churnAxisTitle')}
                     </p>
                     {churnItems.map((item, index) => {
                       const value = signals.churnBuckets[item.key as keyof typeof signals.churnBuckets] || 0;
@@ -1099,47 +1399,47 @@ export default function DealerAIInsightsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </m.div>
         );
       })()}
 
       {/* Summary */}
       {report?.summary && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <Card className="border-0 bg-gradient-to-r from-violet-500/5 via-purple-500/5 to-fuchsia-500/5">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shrink-0">
-                  <Brain className="h-6 w-6 text-white" />
+                <div className="shrink-0 rounded-xl bg-primary p-3 text-primary-foreground">
+                  <Brain className="h-6 w-6" aria-hidden />
                 </div>
                 <div>
-                  <h3 className="font-bold mb-2 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-violet-500" />
-                    AI Özet
+                  <h3 className="mb-2 flex items-center gap-2 font-bold">
+                    <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+                    {t('dealerAiInsights.aiSummaryTitle')}
                   </h3>
                   <p className="text-muted-foreground leading-relaxed">{report.summary}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Strengths & Weaknesses */}
       {report && (
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Strengths */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <m.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-emerald-500">
-                  <ThumbsUp className="h-5 w-5" /> Güçlü Yönler
+                  <ThumbsUp className="h-5 w-5" /> {t('dealerAiInsights.strengthsTitle')}
               </CardTitle>
-              <CardDescription>Müşterilerinizin en çok beğendiği özellikler</CardDescription>
+              <CardDescription>{t('dealerAiInsights.strengthsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {report.strengths.map((item, index) => (
-                  <motion.div
+                  <m.div
                     key={item.title}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1159,24 +1459,24 @@ export default function DealerAIInsightsPage() {
                         <AnimatedProgress value={item.score} color="bg-emerald-500" delay={0.6 + index * 0.1} />
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
 
         {/* Weaknesses */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm h-full">
+          <m.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-yellow-500">
-                  <ThumbsDown className="h-5 w-5" /> İyileştirme Alanları
+                  <ThumbsDown className="h-5 w-5" /> {t('dealerAiInsights.weaknessesTitle')}
               </CardTitle>
-              <CardDescription>Geliştirilmesi gereken noktalar</CardDescription>
+              <CardDescription>{t('dealerAiInsights.weaknessesDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {report.weaknesses.map((item, index) => (
-                  <motion.div
+                  <m.div
                     key={item.title}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1196,29 +1496,29 @@ export default function DealerAIInsightsPage() {
                         <AnimatedProgress value={item.score} color="bg-yellow-500" delay={0.6 + index * 0.1} />
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
               </CardContent>
             </Card>
-          </motion.div>
+          </m.div>
         </div>
       )}
 
       {/* Key Drivers */}
       {report?.keyDrivers && report.keyDrivers.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-violet-500" />
-                Anahtar Faktörler
+                <Target className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.keyFactorsTitle')}
               </CardTitle>
-              <CardDescription>Memnuniyeti en çok etkileyen faktörler</CardDescription>
+              <CardDescription>{t('dealerAiInsights.keyFactorsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {report.keyDrivers.map((driver, index) => (
-                  <motion.div
+                  <m.div
                     key={driver.factor}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1232,35 +1532,35 @@ export default function DealerAIInsightsPage() {
                         {(driver.impact * 100).toFixed(0)}%
                       </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2">Korelasyon: {(driver.correlation * 100).toFixed(0)}%</div>
+                    <div className="text-xs text-muted-foreground mb-2">{t('dealerAiInsights.correlationLabel').replace('{pct}', (driver.correlation * 100).toFixed(0))}</div>
                     <AnimatedProgress
                       value={driver.impact * 100}
                       color={driver.direction === 'positive' ? 'bg-emerald-500' : 'bg-red-500'}
                       delay={0.6 + index * 0.05}
                     />
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Theme Clusters */}
       {themeClusters.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-indigo-500" />
-                Tema Kümeleri
+                <Layers className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.themeClustersTitle')}
               </CardTitle>
-              <CardDescription>Geri bildirimlerden otomatik keşfedilen temalar</CardDescription>
+              <CardDescription>{t('dealerAiInsights.themeClustersDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-4">
                 {(showAllClusters ? themeClusters : themeClusters.slice(0, 6)).map((cluster, index) => (
-                  <motion.div
+                  <m.div
                     key={`${cluster.theme}-${cluster.subTheme}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1273,11 +1573,11 @@ export default function DealerAIInsightsPage() {
                         {cluster.subTheme && <p className="text-xs text-muted-foreground">{cluster.subTheme}</p>}
                       </div>
                       <Badge className={`border ${getSentimentColor(cluster.sentiment)}`}>
-                        {cluster.sentiment === 'positive' ? 'Olumlu' : cluster.sentiment === 'negative' ? 'Olumsuz' : cluster.sentiment === 'mixed' ? 'Karışık' : 'Nötr'}
+                        {cluster.sentiment === 'positive' ? t('dealerAiInsights.sentimentPositive') : cluster.sentiment === 'negative' ? t('dealerAiInsights.sentimentNegative') : cluster.sentiment === 'mixed' ? t('dealerAiInsights.sentimentMixed') : t('dealerAiInsights.sentimentNeutral')}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-                      <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{cluster.count} geri bildirim</span>
+                      <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{t('dealerAiInsights.feedbackCountShort').replace('{count}', String(cluster.count))}</span>
                       <span className="flex items-center gap-1"><Star className="h-3 w-3" />{(cluster.avgScore * 5).toFixed(1)}/5</span>
                     </div>
                     {cluster.keywords && cluster.keywords.length > 0 && (
@@ -1287,34 +1587,34 @@ export default function DealerAIInsightsPage() {
                         ))}
                       </div>
                     )}
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
               {themeClusters.length > 6 && (
                 <Button variant="ghost" className="w-full mt-4" onClick={() => setShowAllClusters(!showAllClusters)}>
-                  {showAllClusters ? <><ChevronUp className="h-4 w-4 mr-2" />Daha Az Göster</> : <><ChevronDown className="h-4 w-4 mr-2" />Tümünü Göster ({themeClusters.length})</>}
+                  {showAllClusters ? <><ChevronUp className="h-4 w-4 mr-2" />{t('dealerAiInsights.showLess')}</> : <><ChevronDown className="h-4 w-4 mr-2" />{t('dealerAiInsights.showAllWithCount').replace('{count}', String(themeClusters.length))}</>}
                 </Button>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Deep Theme Analysis */}
       {signals?.topThemes && signals.topThemes.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.58 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.58 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5 text-violet-500" />
-                Tema Performansı
+                <Layers className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.themePerformanceTitle')}
               </CardTitle>
-              <CardDescription>Temaların duygu ve skor performansı</CardDescription>
+              <CardDescription>{t('dealerAiInsights.themePerformanceDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-4">
                 {signals.topThemes.map((theme, index) => (
-                  <motion.div
+                  <m.div
                     key={`${theme.theme}-${theme.subTheme || ''}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1327,7 +1627,7 @@ export default function DealerAIInsightsPage() {
                         {theme.subTheme && <p className="text-xs text-muted-foreground">{theme.subTheme}</p>}
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {theme.count} feedback
+                        {t('dealerAiInsights.feedbackCountShort').replace('{count}', String(theme.count))}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
@@ -1340,22 +1640,22 @@ export default function DealerAIInsightsPage() {
                       <div className="bg-red-500" style={{ width: `${theme.negRate}%` }} />
                       <div className="bg-blue-400" style={{ width: `${Math.max(0, 100 - theme.posRate - theme.negRate)}%` }} />
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Top Topics */}
       {stats?.topTopics && stats.topTopics.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-blue-500" />
-                En Çok Bahsedilen Konular
+                {t('dealerAiInsights.topTopicsTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1364,42 +1664,42 @@ export default function DealerAIInsightsPage() {
                   const maxCount = stats.topTopics[0]?.count || 1;
                   const percentage = (topic.count / maxCount) * 100;
                   return (
-                    <motion.div
+                    <m.div
                       key={topic.topic}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.65 + index * 0.05 }}
                       className="flex items-center gap-3"
                     >
-                      <span className="w-24 text-sm font-medium capitalize">{topic.topic}</span>
+                      <span className="w-24 text-sm font-medium capitalize">{toLocalizedLabel(topic.topic, topicLabelMap)}</span>
                       <div className="flex-1">
                         <AnimatedProgress value={percentage} color="bg-blue-500" delay={0.7 + index * 0.05} />
                       </div>
                       <span className="text-sm text-muted-foreground w-12 text-right">{topic.count}</span>
-                  </motion.div>
+                  </m.div>
                 );
               })}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Entity Recognition */}
       {signals?.topEntities && signals.topEntities.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.62 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.62 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Database className="h-5 w-5 text-emerald-500" />
-                Varlık Tanıma
+                {t('dealerAiInsights.entityRecognitionTitle')}
               </CardTitle>
-              <CardDescription>Metinden otomatik çıkarılan varlıklar</CardDescription>
+              <CardDescription>{t('dealerAiInsights.entityRecognitionDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-4">
                 {signals.topEntities.map((entity, index) => (
-                  <motion.div
+                  <m.div
                     key={`${entity.type}-${entity.name}`}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1423,55 +1723,69 @@ export default function DealerAIInsightsPage() {
                       <div className="bg-red-500" style={{ width: `${entity.negRate}%` }} />
                       <div className="bg-blue-400" style={{ width: `${Math.max(0, 100 - entity.posRate - entity.negRate)}%` }} />
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Emotions */}
       {signals?.topEmotions && signals.topEmotions.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.64 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.64 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Flame className="h-5 w-5 text-orange-500" />
-                Duygu Haritası
+                {t('dealerAiInsights.sentimentMapTitle')}
               </CardTitle>
-              <CardDescription>En sık görülen duygu etiketleri</CardDescription>
+              <CardDescription>{t('dealerAiInsights.sentimentMapDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {signals.topEmotions.map((em) => (
-                  <Badge key={em.emotion} variant="outline" className="text-xs">
-                    {em.emotion} <span className="ml-1 text-muted-foreground">{em.count}</span>
-                  </Badge>
-                ))}
+              <div className="space-y-3">
+                {signals.topEmotions.slice(0, 8).map((em, index) => {
+                  const maxEmotionCount = signals.topEmotions[0]?.count || 1;
+                  const ratio = Math.max(6, Math.round((em.count / maxEmotionCount) * 100));
+                  return (
+                    <div key={em.emotion} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium capitalize">{toLocalizedLabel(em.emotion, emotionLabelMap)}</span>
+                        <span className="text-xs text-muted-foreground">{t('dealerAiInsights.feedbackCountShort').replace('{count}', String(em.count))}</span>
+                      </div>
+                      <m.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${ratio}%` }}
+                        transition={{ delay: 0.2 + index * 0.05, duration: 0.5 }}
+                        className="h-2 rounded-full bg-gradient-to-r from-orange-400 via-pink-500 to-violet-500"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Action Suggestions Aggregation */}
       {signals?.topActions && signals.topActions.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.66 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.66 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ListChecks className="h-5 w-5 text-violet-500" />
-                Aksiyon Önerileri (Gerçek Veri)
+                <ListChecks className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.topActionsTitle')}
               </CardTitle>
-              <CardDescription>AI tarafından sık önerilen aksiyonlar</CardDescription>
+              <CardDescription>{t('dealerAiInsights.topActionsDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {signals.topActions.map((action, index) => {
+              <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2">
+                {visibleTopActions.map((action, index) => {
                   const priorityConfig = getPriorityConfig(action.priority);
+                  const actionKey = buildActionKey(action.action, action.priority);
                   return (
-      <motion.div
+      <m.div
                       key={`${action.action}-${index}`}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -1485,100 +1799,141 @@ export default function DealerAIInsightsPage() {
                         <div className="flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <p className="font-semibold">{action.action}</p>
-                            <Badge className={`${priorityConfig.bg} ${priorityConfig.color} ${priorityConfig.border} border`}>
-                              {priorityConfig.label}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              {addedActionKeys[actionKey] && (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  {t('dealerAiInsights.onActionList')}
+                                </Badge>
+                              )}
+                              <Badge className={`${priorityConfig.bg} ${priorityConfig.color} ${priorityConfig.border} border`}>
+                                {priorityConfig.label}
+                              </Badge>
+                            </div>
                           </div>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {action.category} • {action.impact || 'Etkisi belirtilmemiş'}
+                            {action.category} • {action.impact || t('dealerAiInsights.impactUnknown')}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {action.count} geri bildirimde önerildi
+                            {t('dealerAiInsights.actionSuggestedIn').replace('{count}', String(action.count))}
                           </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-3"
+                            onClick={() => openAssignDialog(action, actionKey)}
+                            disabled={savingActionKey === actionKey || !!addedActionKeys[actionKey]}
+                          >
+                            {savingActionKey === actionKey ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <ListChecks className="h-4 w-4 mr-2" />
+                            )}
+                            {addedActionKeys[actionKey] ? t('dealerAiInsights.onActionList') : t('dealerAiInsights.addToActionList')}
+                          </Button>
+                          <Button asChild size="sm" variant="ghost" className="mt-2">
+                            <Link href={`/dealer/action-items?q=${encodeURIComponent(action.action)}`}>{t('dealerAiInsights.goToActions')}</Link>
+                          </Button>
                         </div>
                       </div>
-                    </motion.div>
+                    </m.div>
                   );
                 })}
               </div>
+              {signals.topActions.length > 5 && (
+                <Button
+                  variant="ghost"
+                  className="w-full mt-4"
+                  onClick={() => setShowAllTopActions(!showAllTopActions)}
+                >
+                  {showAllTopActions ? <><ChevronUp className="h-4 w-4 mr-2" />{t('dealerAiInsights.showLess')}</> : <><ChevronDown className="h-4 w-4 mr-2" />{t('dealerAiInsights.loadMoreWithCount').replace('{count}', String(signals.topActions.length))}</>}
+                </Button>
+              )}
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* AI Deep Learning */}
       {signals && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.68 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.68 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-indigo-500" />
-                AI Öğrenme ve Adaptasyon
+                <Cpu className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.learningCardTitle')}
               </CardTitle>
-              <CardDescription>Sistem derinliği ve öğrenme kapsamı</CardDescription>
+              <CardDescription>{t('dealerAiInsights.learningCardDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <p className="text-sm font-semibold">{t('dealerAiInsights.howToUseTitle')}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('dealerAiInsights.howToUseBody')}
+                </p>
+              </div>
               <div className="grid md:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl border bg-card">
-                  <p className="text-xs text-muted-foreground mb-1">Öğrenme Kapsamı</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('dealerAiInsights.learningScopeLabel')}</p>
                   <p className="text-2xl font-bold">{analyzedRate}%</p>
-                  <AnimatedProgress value={analyzedRate} color="bg-indigo-500" delay={0.1} />
+                  <AnimatedProgress value={analyzedRate} color="bg-primary" delay={0.1} />
                 </div>
                 <div className="p-4 rounded-xl border bg-card">
-                  <p className="text-xs text-muted-foreground mb-1">Son AI Güncelleme</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('dealerAiInsights.lastAiUpdateLabel')}</p>
                   <p className="text-sm font-semibold">
-                    {latestProcessedAt ? new Date(latestProcessedAt).toLocaleString('tr-TR') : 'Henüz yok'}
+                    {latestProcessedAt ? new Date(latestProcessedAt).toLocaleString(localeTag) : t('dealerAiInsights.notYet')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {signals.totalAnalyzed} analiz edilmiş kayıt
+                    {t('dealerAiInsights.analyzedRecordsLine').replace('{count}', String(signals.totalAnalyzed))}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl border bg-card">
-                  <p className="text-xs text-muted-foreground mb-1">Bilgi Derinliği</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('dealerAiInsights.infoDepthLabel')}</p>
                   <p className="text-sm font-semibold">
-                    {signals.topThemes.length} tema • {signals.topEntities.length} varlık
+                    {t('dealerAiInsights.themeEntityActionLine')
+                      .replace('{themes}', String(signals.topThemes.length))
+                      .replace('{entities}', String(signals.topEntities.length))}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {signals.topActions.length} aksiyon deseni
+                    {t('dealerAiInsights.actionPatternsLine').replace('{count}', String(signals.topActions.length))}
                   </p>
                 </div>
               </div>
 
               {/* Toplu AI Analiz */}
               {analyzedRate < 100 && (
-                <div className="mt-4 p-4 rounded-xl border-2 border-dashed border-indigo-500/40 bg-indigo-500/5">
+                <div className="mt-4 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
                       <p className="text-sm font-semibold flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-indigo-500" />
-                        Feedbackları AI ile Analiz Et
+                        <Zap className="h-4 w-4 text-primary" />
+                        {t('dealerAiInsights.bulkAnalyzeTitle')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {signals.totalFeedbacks - signals.totalAnalyzed} feedback henüz yeni AI motoru ile analiz edilmedi.
-                        Bu butona tıklayarak tüm feedbacklarınızı intent, urgency, entity, theme, churn gibi derinlikli katmanlarla analiz edebilirsiniz.
+                        {t('dealerAiInsights.bulkAnalyzeBody').replace('{pending}', String(signals.totalFeedbacks - signals.totalAnalyzed))}
                       </p>
                     </div>
                     <Button
                       onClick={handleBulkAnalyze}
                       disabled={bulkAnalyzing}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                      className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       {bulkAnalyzing ? (
-                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analiz Ediliyor...</>
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('dealerAiInsights.bulkAnalyzing')}</>
                       ) : (
-                        <><Rocket className="h-4 w-4 mr-2" />Toplu AI Analiz Başlat</>
+                        <><Rocket className="h-4 w-4 mr-2" />{t('dealerAiInsights.bulkAnalyzeCta')}</>
                       )}
                     </Button>
                   </div>
                   {bulkProgress.running && (
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                        <span>{bulkProgress.done} / {bulkProgress.total} analiz edildi</span>
+                        <span>{t('dealerAiInsights.bulkProgressLine').replace('{done}', String(bulkProgress.done)).replace('{total}', String(bulkProgress.total))}</span>
                         <span>{bulkProgress.total > 0 ? Math.round((bulkProgress.done / bulkProgress.total) * 100) : 0}%</span>
                       </div>
                       <AnimatedProgress
                         value={bulkProgress.total > 0 ? Math.round((bulkProgress.done / bulkProgress.total) * 100) : 0}
-                        color="bg-indigo-500"
+                        color="bg-primary"
                         delay={0}
                       />
                     </div>
@@ -1586,46 +1941,65 @@ export default function DealerAIInsightsPage() {
                 </div>
               )}
 
+              {/* Öğrenme / güncelleme önerisi banner */}
+              {learningStatus?.retrainSuggestion?.shouldRetrain && learningStatus.retrainSuggestion.reason && (
+                <div className="mt-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex flex-wrap items-center gap-3">
+                  <p className="flex-1 text-sm text-foreground">
+                    <strong>{t('dealerAiInsights.retrainBannerLead')}</strong> {learningStatus.retrainSuggestion.reason}
+                  </p>
+                  <Button onClick={handleUpdateLearningProfile} disabled={learningUpdating} size="sm" variant="outline" className="border-amber-500/30">
+                    {learningUpdating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                    {t('dealerAiInsights.updateProfile')}
+                  </Button>
+                </div>
+              )}
+
               <div className="mt-6 grid lg:grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl border bg-card">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Öğrenme Profili</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t('dealerAiInsights.learningProfileTitle')}</p>
                       <p className="text-sm font-semibold">
-                        {learningStatus?.profile?.status || 'Henüz yok'}
+                        {learningStatus?.profile?.status || t('dealerAiInsights.notYet')}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Versiyon: {learningStatus?.profile?.version ?? 0} • Eğitim: {learningStatus?.profile?.trainingFeedbackCount ?? 0} kayıt
+                        {t('dealerAiInsights.learningProfileHint')}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Son eğitim: {learningStatus?.profile?.lastTrainedAt ? new Date(learningStatus.profile.lastTrainedAt).toLocaleString('tr-TR') : 'Henüz yok'}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {t('dealerAiInsights.profileMetaLine')
+                          .replace('{version}', String(learningStatus?.profile?.version ?? 0))
+                          .replace('{count}', String(learningStatus?.profile?.trainingFeedbackCount ?? 0))
+                          .replace('{last}', learningStatus?.profile?.lastTrainedAt ? new Date(learningStatus.profile.lastTrainedAt).toLocaleString(localeTag) : t('dealerAiInsights.notYet'))}
                       </p>
                     </div>
                     <Button onClick={handleUpdateLearningProfile} disabled={learningUpdating} size="sm" variant="secondary">
                       {learningUpdating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                      Profili Güncelle
+                      {t('dealerAiInsights.updateProfile')}
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                    {t('dealerAiInsights.whenToUpdateHint')}
+                  </p>
                 </div>
 
                 <div className="p-4 rounded-xl border bg-card">
-                  <p className="text-xs text-muted-foreground mb-1">Embedding ve Düzeltme</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('dealerAiInsights.embeddingCorrectionTitle')}</p>
                   <div className="grid grid-cols-3 gap-3 text-sm">
                     <div className="rounded-lg border bg-muted/30 p-3">
-                      <p className="text-xs text-muted-foreground">Embedding</p>
+                      <p className="text-xs text-muted-foreground">{t('dealerAiInsights.embeddingLabel')}</p>
                       <p className="font-semibold">{learningStatus?.embeddingsCount ?? 0}</p>
                     </div>
                     <div className="rounded-lg border bg-muted/30 p-3">
-                      <p className="text-xs text-muted-foreground">Düzeltme</p>
+                      <p className="text-xs text-muted-foreground">{t('dealerAiInsights.correctionLabel')}</p>
                       <p className="font-semibold">{learningStatus?.correctionsCount ?? 0}</p>
                     </div>
                     <div className="rounded-lg border bg-muted/30 p-3">
-                      <p className="text-xs text-muted-foreground">Kullanılan Düzeltme</p>
+                      <p className="text-xs text-muted-foreground">{t('dealerAiInsights.correctionsUsedLabel')}</p>
                       <p className="font-semibold">{learningStatus?.profile?.correctionsUsed ?? 0}</p>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">
-                    Düzeltmeler sonraki profil güncellemesinde adaptasyona dahil edilir.
+                    {t('dealerAiInsights.correctionsIncludedHint')}
                   </p>
                 </div>
               </div>
@@ -1633,21 +2007,21 @@ export default function DealerAIInsightsPage() {
               <div ref={correctionRef} className="mt-6 p-4 rounded-xl border bg-card">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold">Düzeltme Gönder</p>
-                    <p className="text-xs text-muted-foreground">Alan ve değeri düzeltip öğrenmeyi güçlendir</p>
+                    <p className="text-sm font-semibold">{t('dealerAiInsights.submitCorrectionTitle')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dealerAiInsights.submitCorrectionDesc')}</p>
                   </div>
-                  <Badge variant="secondary">AI Feedback Loop</Badge>
+                  <Badge variant="secondary">{t('dealerAiInsights.feedbackLoopBadge')}</Badge>
                 </div>
 
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">Feedback</label>
+                    <label className="text-xs text-muted-foreground">{t('dealerAiInsights.feedbackSelectLabel')}</label>
                     <select
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={correctionForm.feedbackId}
                       onChange={(event) => setCorrectionForm(prev => ({ ...prev, feedbackId: event.target.value }))}
                     >
-                      <option value="">Geri bildirim seç</option>
+                      <option value="">{t('dealerAiInsights.selectFeedbackPlaceholder')}</option>
                       {visibleFeedbacks.map((fb) => (
                         <option key={fb.id} value={fb.id}>
                           {fb.text.slice(0, 60)}
@@ -1655,14 +2029,14 @@ export default function DealerAIInsightsPage() {
                       ))}
                     </select>
                     <Input
-                      placeholder="Feedback ID (opsiyonel)"
+                      placeholder={t('dealerAiInsights.feedbackIdOptionalPlaceholder')}
                       value={correctionForm.feedbackId}
                       onChange={(event) => setCorrectionForm(prev => ({ ...prev, feedbackId: event.target.value }))}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">Alan</label>
+                    <label className="text-xs text-muted-foreground">{t('dealerAiInsights.fieldLabel')}</label>
                     <select
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={correctionForm.field}
@@ -1683,34 +2057,34 @@ export default function DealerAIInsightsPage() {
 
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">Yeni Değer (JSON veya düz metin)</label>
+                    <label className="text-xs text-muted-foreground">{t('dealerAiInsights.newValueLabel')}</label>
                     <textarea
                       className="min-h-[90px] w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={correctionForm.newValue}
                       onChange={(event) => setCorrectionForm(prev => ({ ...prev, newValue: event.target.value }))}
-                      placeholder='Örn: \"positive\" veya {\"label\":\"positive\"}'
+                      placeholder={t('dealerAiInsights.newValuePlaceholder')}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-muted-foreground">Eski Değer (opsiyonel)</label>
+                    <label className="text-xs text-muted-foreground">{t('dealerAiInsights.oldValueLabel')}</label>
                     <textarea
                       className="min-h-[90px] w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={correctionForm.oldValue}
                       onChange={(event) => setCorrectionForm(prev => ({ ...prev, oldValue: event.target.value }))}
-                      placeholder='Örn: \"neutral\"'
+                      placeholder={t('dealerAiInsights.oldValuePlaceholder')}
                     />
                   </div>
                 </div>
 
                 <div className="mt-4 flex flex-col md:flex-row md:items-center gap-3">
                   <Input
-                    placeholder="Not (opsiyonel)"
+                    placeholder={t('dealerAiInsights.noteOptionalPlaceholder')}
                     value={correctionForm.note}
                     onChange={(event) => setCorrectionForm(prev => ({ ...prev, note: event.target.value }))}
                   />
                   <Button onClick={handleSubmitCorrection} disabled={correctionSubmitting}>
                     {correctionSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                    Düzeltmeyi Gönder
+                    {t('dealerAiInsights.submitCorrectionCta')}
                   </Button>
                 </div>
               </div>
@@ -1718,30 +2092,30 @@ export default function DealerAIInsightsPage() {
               <div className="mt-6 rounded-xl border bg-card p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold">Düzeltme Geçmişi</p>
-                    <p className="text-xs text-muted-foreground">Son gönderilen düzeltmeler</p>
+                    <p className="text-sm font-semibold">{t('dealerAiInsights.correctionHistoryTitle')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dealerAiInsights.correctionHistoryDesc')}</p>
                   </div>
-                  <Badge variant="outline">{corrections.length} kayıt</Badge>
+                  <Badge variant="outline">{t('dealerAiInsights.recordsCount').replace('{count}', String(corrections.length))}</Badge>
                 </div>
                 <div className="mt-4 space-y-3">
                   {corrections.length === 0 && (
-                    <p className="text-sm text-muted-foreground">Henüz düzeltme yok.</p>
+                    <p className="text-sm text-muted-foreground">{t('dealerAiInsights.noCorrectionsYet')}</p>
                   )}
                   {corrections.map((correction) => (
                     <div key={correction.id} className="rounded-lg border bg-muted/20 p-3">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div className="text-xs text-muted-foreground">
-                          {new Date(correction.createdAt).toLocaleString('tr-TR')}
+                          {new Date(correction.createdAt).toLocaleString(localeTag)}
                         </div>
                         <Badge variant="secondary">{correction.field}</Badge>
                       </div>
                       <p className="text-sm mt-2">
-                        <span className="text-xs text-muted-foreground">Yeni:</span>{' '}
+                        <span className="text-xs text-muted-foreground">{t('dealerAiInsights.newValueShort')}</span>{' '}
                         {stringifyValue(correction.newValue)}
                       </p>
                       {correction.oldValue !== null && correction.oldValue !== undefined && (
                         <p className="text-sm mt-1">
-                          <span className="text-xs text-muted-foreground">Eski:</span>{' '}
+                          <span className="text-xs text-muted-foreground">{t('dealerAiInsights.oldValueShort')}</span>{' '}
                           {stringifyValue(correction.oldValue)}
                         </p>
                       )}
@@ -1750,7 +2124,7 @@ export default function DealerAIInsightsPage() {
                       )}
                       {correction.feedback?.text && (
                         <p className="text-xs text-muted-foreground mt-2">
-                          Feedback: {correction.feedback.text.slice(0, 120)}
+                          {t('dealerAiInsights.feedbackPrefix')} {correction.feedback.text.slice(0, 120)}
                         </p>
                       )}
                     </div>
@@ -1759,19 +2133,19 @@ export default function DealerAIInsightsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* Detailed Feedbacks */}
       {detailedFeedbacks.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-violet-500" />
-                Detaylı Geri Bildirim Analizi
+                <FileText className="h-5 w-5 text-primary" />
+                {t('dealerAiInsights.detailedFeedbackTitle')}
               </CardTitle>
-              <CardDescription>Her bir geri bildirimin AI katmanları</CardDescription>
+              <CardDescription>{t('dealerAiInsights.detailedFeedbackDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col md:flex-row gap-3 mb-4">
@@ -1780,7 +2154,7 @@ export default function DealerAIInsightsPage() {
                   <Input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Metin veya müşteri adı ara..."
+                    placeholder={t('dealerAiInsights.searchPlaceholder')}
                     className="pl-9"
                   />
                 </div>
@@ -1793,7 +2167,7 @@ export default function DealerAIInsightsPage() {
                       size="sm"
                       onClick={() => setSentimentFilter(s)}
                     >
-                      {s === 'all' ? 'Tümü' : getSentimentConfig(s).label}
+                      {s === 'all' ? t('dealerAiInsights.filterAll') : getSentimentConfig(s).label}
                     </Button>
                   ))}
                 </div>
@@ -1807,7 +2181,7 @@ export default function DealerAIInsightsPage() {
                   const intentLabel = getIntentLabel(fb.intent);
                   const isExpanded = expandedFeedbackId === fb.id;
                   return (
-                    <motion.div
+                    <m.div
                       key={fb.id}
                       initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1828,10 +2202,10 @@ export default function DealerAIInsightsPage() {
                               </Badge>
                             )}
                             {fb.emotions.slice(0, 2).map(e => (
-                              <Badge key={e} className="text-xs border-0 bg-orange-500/10 text-orange-500">{e}</Badge>
+                              <Badge key={e} className="text-xs border-0 bg-orange-500/10 text-orange-500">{toLocalizedLabel(e, emotionLabelMap)}</Badge>
                             ))}
                             {fb.isToxic && (
-                              <Badge className="text-xs border-0 bg-red-500/10 text-red-500">Toksik</Badge>
+                              <Badge className="text-xs border-0 bg-red-500/10 text-red-500">{t('dealerAiInsights.toxic')}</Badge>
                             )}
                           </div>
                         </div>
@@ -1841,7 +2215,7 @@ export default function DealerAIInsightsPage() {
                               <Star key={s} className={`h-3 w-3 ${s <= fb.rating ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground/30'}`} />
                             ))}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">{new Date(fb.createdAt).toLocaleDateString('tr-TR')}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{new Date(fb.createdAt).toLocaleDateString(localeTag)}</p>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1849,7 +2223,7 @@ export default function DealerAIInsightsPage() {
                             onClick={() => selectFeedbackForCorrection(fb.id, fb.text)}
                           >
                             <ListChecks className="h-4 w-4 mr-1" />
-                            Düzelt
+                            {t('dealerAiInsights.correct')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -1857,17 +2231,17 @@ export default function DealerAIInsightsPage() {
                             className="mt-2"
                             onClick={() => setExpandedFeedbackId(isExpanded ? null : fb.id)}
                           >
-                            {isExpanded ? <><ChevronUp className="h-4 w-4 mr-1" />Kapat</> : <><ChevronDown className="h-4 w-4 mr-1" />Detay</>}
+                            {isExpanded ? <><ChevronUp className="h-4 w-4 mr-1" />{t('dealerAiInsights.close')}</> : <><ChevronDown className="h-4 w-4 mr-1" />{t('dealerAiInsights.detail')}</>}
                           </Button>
                         </div>
                       </div>
 
                       {isExpanded && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t space-y-4">
+                        <m.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t space-y-4">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {fb.urgency !== null && (
                               <div className="p-2 rounded-lg bg-muted/30 text-center">
-                                <p className="text-xs text-muted-foreground">Aciliyet</p>
+                                <p className="text-xs text-muted-foreground">{t('dealerAiInsights.urgencyLabel')}</p>
                                 <p className={`text-lg font-bold ${urgencyLabel?.color || 'text-emerald-500'}`}>
                                   {(fb.urgency * 10).toFixed(0)}/10
                                 </p>
@@ -1875,7 +2249,7 @@ export default function DealerAIInsightsPage() {
                             )}
                             {fb.effortScore !== null && (
                               <div className="p-2 rounded-lg bg-muted/30 text-center">
-                                <p className="text-xs text-muted-foreground">Efor</p>
+                                <p className="text-xs text-muted-foreground">{t('dealerAiInsights.effortLabel')}</p>
                                 <p className={`text-lg font-bold ${fb.effortScore > 0.7 ? 'text-red-500' : fb.effortScore > 0.4 ? 'text-yellow-500' : 'text-emerald-500'}`}>
                                   {(fb.effortScore * 10).toFixed(0)}/10
                                 </p>
@@ -1883,7 +2257,7 @@ export default function DealerAIInsightsPage() {
                             )}
                             {fb.churnRisk !== null && (
                               <div className="p-2 rounded-lg bg-muted/30 text-center">
-                                <p className="text-xs text-muted-foreground">Churn</p>
+                                <p className="text-xs text-muted-foreground">{t('dealerAiInsights.churnRiskLabel')}</p>
                                 <p className={`text-lg font-bold ${churnLabel?.color || 'text-emerald-500'}`}>
                                   {(fb.churnRisk * 100).toFixed(0)}%
                                 </p>
@@ -1891,18 +2265,18 @@ export default function DealerAIInsightsPage() {
                             )}
                             {fb.intentScore !== null && (
                               <div className="p-2 rounded-lg bg-muted/30 text-center">
-                                <p className="text-xs text-muted-foreground">Niyet Skoru</p>
-                                <p className="text-lg font-bold text-violet-500">{(fb.intentScore * 100).toFixed(0)}%</p>
+                                <p className="text-xs text-muted-foreground">{t('dealerAiInsights.intentScoreLabel')}</p>
+                                <p className="text-lg font-bold text-primary">{(fb.intentScore * 100).toFixed(0)}%</p>
                               </div>
                             )}
                           </div>
 
                           {fb.topics.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Konular</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerAiInsights.topicsLabel')}</p>
                               <div className="flex flex-wrap gap-2">
                                 {fb.topics.map((t) => (
-                                  <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
+                                  <Badge key={t} variant="outline" className="text-xs">{toLocalizedLabel(t, topicLabelMap)}</Badge>
                                 ))}
                               </div>
                             </div>
@@ -1910,7 +2284,7 @@ export default function DealerAIInsightsPage() {
 
                           {fb.statementSentiments.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Cümle Bazlı Duygu Analizi</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerAiInsights.sentenceSentimentTitle')}</p>
                               <div className="space-y-2">
                                 {fb.statementSentiments.map((ss, i) => {
                                   const ssConfig = getSentimentConfig(ss.sentiment);
@@ -1927,11 +2301,11 @@ export default function DealerAIInsightsPage() {
 
                           {fb.entities.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Tespit Edilen Varlıklar</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerAiInsights.entitiesDetectedTitle')}</p>
                               <div className="flex flex-wrap gap-2">
                                 {fb.entities.map((entity, i) => (
                                   <Badge key={`${entity.name}-${i}`} variant="outline" className="text-xs">
-                                    {entity.name} ({entity.type}) {entity.sentiment === 'positive' ? '👍' : entity.sentiment === 'negative' ? '👎' : '➖'}
+                                    {entity.name} ({entity.type}) {entity.sentiment === 'positive' ? t('dealerAiInsights.sentimentPositive') : entity.sentiment === 'negative' ? t('dealerAiInsights.sentimentNegative') : t('dealerAiInsights.sentimentNeutral')}
                                   </Badge>
                                 ))}
                               </div>
@@ -1940,7 +2314,7 @@ export default function DealerAIInsightsPage() {
 
                           {fb.themes.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Temalar</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerAiInsights.themesLabel')}</p>
                               <div className="flex flex-wrap gap-2">
                                 {fb.themes.map((theme, i) => (
                                   <Badge
@@ -1956,7 +2330,7 @@ export default function DealerAIInsightsPage() {
 
                           {fb.actionSuggestions.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Aksiyon Önerileri</p>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">{t('dealerAiInsights.actionSuggestionsTitle')}</p>
                               <div className="space-y-2">
                                 {fb.actionSuggestions.map((a, i) => {
                                   const cfg = getPriorityConfig(a.priority);
@@ -1972,48 +2346,48 @@ export default function DealerAIInsightsPage() {
                           )}
 
                           <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
-                            <span>AI Model: {fb.aiModelUsed || '-'}</span>
-                            <span>Versiyon: {fb.aiVersion || '-'}</span>
-                            <span>İşleme: {fb.aiProcessedAt ? new Date(fb.aiProcessedAt).toLocaleString('tr-TR') : 'Bekleniyor'}</span>
+                            <span>{t('dealerAiInsights.aiModelLine')} {fb.aiModelUsed || '-'}</span>
+                            <span>{t('dealerAiInsights.versionLabel')} {fb.aiVersion || '-'}</span>
+                            <span>{t('dealerAiInsights.processedLabel')} {fb.aiProcessedAt ? new Date(fb.aiProcessedAt).toLocaleString(localeTag) : t('dealerAiInsights.pendingProcessing')}</span>
                           </div>
-                        </motion.div>
+                        </m.div>
                       )}
-                    </motion.div>
+                    </m.div>
                   );
                 })}
               </div>
               {filteredFeedbacks.length > 10 && (
                 <Button variant="ghost" className="w-full mt-4" onClick={() => setShowAllFeedbacks(!showAllFeedbacks)}>
-                  {showAllFeedbacks ? <><ChevronUp className="h-4 w-4 mr-2" />Daha Az Göster</> : <><ChevronDown className="h-4 w-4 mr-2" />Tümünü Göster ({filteredFeedbacks.length})</>}
+                  {showAllFeedbacks ? <><ChevronUp className="h-4 w-4 mr-2" />{t('dealerAiInsights.showLess')}</> : <><ChevronDown className="h-4 w-4 mr-2" />{t('dealerAiInsights.showAllWithCount').replace('{count}', String(filteredFeedbacks.length))}</>}
                 </Button>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </m.div>
       )}
 
       {/* AI Recommendations */}
       {report?.recommendations && report.recommendations.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.65 }}>
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600">
-                <Lightbulb className="h-5 w-5 text-white" />
+              <div className="rounded-lg bg-primary p-2 text-primary-foreground">
+                <Lightbulb className="h-5 w-5" aria-hidden />
               </div>
-              AI Önerileri
+              {t('dealerAiInsights.aiRecommendationsTitle')}
             </CardTitle>
             <CardDescription>
-              Yapay zeka tarafından oluşturulan kişiselleştirilmiş iyileştirme önerileri
+              {t('dealerAiInsights.aiRecommendationsDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-                {report.recommendations.map((rec, index) => {
+                {visibleRecommendations.map((rec, index) => {
                 const priorityConfig = getPriorityConfig(rec.priority);
                   const RecIcon = getCategoryIcon(rec.category);
                 return (
-                  <motion.div
+                  <m.div
                       key={index}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -2022,13 +2396,13 @@ export default function DealerAIInsightsPage() {
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-4">
                       <div className={`p-3 rounded-xl bg-gradient-to-br ${priorityConfig.gradient} shrink-0`}>
-                        <RecIcon className="h-6 w-6 text-white" />
+                        <RecIcon className="h-6 w-6 text-foreground/95 dark:text-white" />
                       </div>
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                             <h4 className="font-bold text-lg">{rec.text}</h4>
                           <Badge className={`${priorityConfig.bg} ${priorityConfig.color} ${priorityConfig.border} border`}>
-                              {priorityConfig.label} Öncelik
+                              {priorityConfig.label} {t('dealerAiInsights.priorityWord')}
                           </Badge>
                         </div>
                           {rec.impact && (
@@ -2039,44 +2413,60 @@ export default function DealerAIInsightsPage() {
                           )}
                           </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </div>
+            {report.recommendations.length > 5 && (
+              <Button
+                variant="ghost"
+                className="w-full mt-4"
+                onClick={() => setShowAllRecommendations(!showAllRecommendations)}
+              >
+                {showAllRecommendations ? <><ChevronUp className="h-4 w-4 mr-2" />{t('dealerAiInsights.showLess')}</> : <><ChevronDown className="h-4 w-4 mr-2" />{t('dealerAiInsights.loadMoreWithCount').replace('{count}', String(report.recommendations.length))}</>}
+              </Button>
+            )}
           </CardContent>
         </Card>
-      </motion.div>
+      </m.div>
       )}
 
       {/* AI Prediction */}
       {report?.predictedRating && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
-        <Card className="border-0 bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10">
+        <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <motion.div 
-                  className="p-4 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600"
-                    animate={{ boxShadow: ['0 0 20px rgba(139, 92, 246, 0.3)', '0 0 40px rgba(139, 92, 246, 0.5)', '0 0 20px rgba(139, 92, 246, 0.3)'] }}
+                <m.div
+                  className="rounded-2xl bg-primary p-4 text-primary-foreground"
+                  animate={{
+                    boxShadow: [
+                      '0 0 20px hsl(var(--primary) / 0.25)',
+                      '0 0 36px hsl(var(--primary) / 0.35)',
+                      '0 0 20px hsl(var(--primary) / 0.25)',
+                    ],
+                  }}
                   transition={{ duration: 2, repeat: Infinity }}
                 >
-                  <Brain className="h-8 w-8 text-white" />
-                </motion.div>
+                  <Brain className="h-8 w-8" aria-hidden />
+                </m.div>
                 <div>
-                  <h3 className="text-lg font-bold flex items-center gap-2">
-                    <Rocket className="h-5 w-5 text-violet-500" />
-                    AI Tahmin
+                  <h3 className="flex items-center gap-2 text-lg font-bold">
+                    <Rocket className="h-5 w-5 text-primary" aria-hidden />
+                    {t('dealerAiInsights.aiPredictionTitle')}
                   </h3>
                   <p className="text-muted-foreground">
-                    Önerileri uygularsanız, önümüzdeki 30 gün içinde puanınızın{' '}
-                      <span className="text-emerald-500 font-bold text-xl">{report.predictedRating.toFixed(1)}</span>&apos;a
-                    çıkması bekleniyor.
+                    {t('dealerAiInsights.aiPredictionLead')}{' '}
+                      <span className="text-emerald-500 font-bold text-xl">{report.predictedRating.toFixed(1)}</span>
+                    {t('dealerAiInsights.aiPredictionMid')}
+                    {t('dealerAiInsights.aiPredictionTrail')}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <motion.div
+                  <m.div
                     key={star}
                     initial={{ opacity: 0, scale: 0 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -2085,14 +2475,78 @@ export default function DealerAIInsightsPage() {
                     <Star 
                         className={`h-8 w-8 ${star <= Math.floor(report.predictedRating) ? 'text-yellow-500 fill-yellow-500' : star - 0.5 <= report.predictedRating ? 'text-yellow-500 fill-yellow-500/50' : 'text-muted-foreground/30'}`}
                     />
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </m.div>
       )}
+      <Dialog open={actionAssignOpen} onOpenChange={setActionAssignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('dealerAiInsights.assignDialogTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('dealerAiInsights.assignDialogDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              {pendingAction?.action}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="assignedToId">{t('dealerAiInsights.labelAssignee')}</Label>
+              <select
+                id="assignedToId"
+                value={assignForm.assignedToId}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, assignedToId: event.target.value }))}
+                className="flex h-10 w-full rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-foreground shadow-sm dark:border-white/25 dark:bg-white/[0.07]"
+              >
+                <option value="">{t('dealerAiInsights.unassigned')}</option>
+                {staffMembers.map((staff) => (
+                  <option key={staff.id} value={staff.userId}>
+                    {staff.user.name || staff.user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dueAt">{t('dealerAiInsights.labelDueDate')}</Label>
+              <Input
+                id="dueAt"
+                type="date"
+                value={assignForm.dueAt}
+                onChange={(event) => setAssignForm((prev) => ({ ...prev, dueAt: event.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionAssignOpen(false)}>
+              {t('dealerAiInsights.cancel')}
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!pendingAction) return;
+                const ok = await handleCreateActionItem(
+                  { action: pendingAction.action, priority: pendingAction.priority },
+                  pendingAction.key,
+                  { assignedToId: assignForm.assignedToId, dueAt: assignForm.dueAt }
+                );
+                if (ok) {
+                  setActionAssignOpen(false);
+                  setPendingAction(null);
+                }
+              }}
+              disabled={!!pendingAction && savingActionKey === pendingAction.key}
+            >
+              {!!pendingAction && savingActionKey === pendingAction.key ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {t('dealerAiInsights.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+    </LazyMotion>
   );
 }

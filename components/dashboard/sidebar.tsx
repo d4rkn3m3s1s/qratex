@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   QrCode,
   MessageSquare,
+  MessageCircle,
   Trophy,
   Gift,
   BarChart3,
@@ -23,6 +24,7 @@ import {
   ChevronLeft,
   Shield,
   Sparkles,
+  Crown,
   Target,
   Store,
   CreditCard,
@@ -34,6 +36,7 @@ import {
   ScanLine,
   History,
   Package,
+  Box,
   Layers,
   Brain,
   Database,
@@ -42,6 +45,28 @@ import {
   Share2,
   Megaphone,
   PieChart,
+  SlidersHorizontal,
+  MapPin,
+  AlertTriangle,
+  ListChecks,
+  ClipboardList,
+  TrendingDown,
+  Bot,
+  Compass,
+  Search,
+  Link2,
+  Key,
+  Plus,
+  Activity,
+  ShieldAlert,
+  Beaker,
+  Globe,
+  Users2,
+  ShoppingBag,
+  Radar,
+  BookOpen,
+  Star,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -49,88 +74,191 @@ import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { cn, getInitials, calculateLevelProgress } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 interface NavItem {
+  key?: string;
+  /** Messages path suffix: `sidebarNav.admin|dealer|customer.{labelKey}` */
+  labelKey: string;
   href: string;
-  label: string;
   icon: React.ElementType;
   badge?: number;
 }
 
 interface SidebarProps {
   role: 'ADMIN' | 'DEALER' | 'CUSTOMER';
+  /** Admin SEO’dan gelen site adı; yoksa "QRATEX" kullanılır */
+  siteName?: string;
 }
 
 const adminNavItems: NavItem[] = [
-  { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/cards', label: 'Kartlar', icon: CreditCard },
-  { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
-  { href: '/admin/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare },
-  { href: '/admin/badges', label: 'Rozetler', icon: Trophy },
-  { href: '/admin/quests', label: 'Görevler', icon: Target },
-  { href: '/admin/rewards', label: 'Ödüller', icon: Gift },
-  { href: '/admin/analytics', label: 'Analitik', icon: BarChart3 },
-  { href: '/admin/segments', label: 'Segmentler', icon: PieChart },
-  { href: '/admin/ai-dashboard', label: 'AI Kontrol Merkezi', icon: Brain },
-  { href: '/admin/ai-detailed', label: 'AI Detaylı Analiz', icon: Eye },
-  { href: '/admin/ai-learning', label: 'AI Öğrenme', icon: Database },
-  { href: '/admin/ai-settings', label: 'AI Ayarları', icon: Cpu },
-  { href: '/admin/pricing', label: 'Fiyatlandırma', icon: Layers },
-  { href: '/admin/pages', label: 'Sayfalar', icon: FileText },
-  { href: '/admin/themes', label: 'Temalar', icon: Palette },
-  { href: '/admin/features', label: 'Özellikler', icon: ToggleLeft },
-  { href: '/admin/settings', label: 'Ayarlar', icon: Settings },
+  { key: 'dashboard', labelKey: 'dashboard', href: '/admin', icon: LayoutDashboard },
+  { labelKey: 'cards', href: '/admin/cards', icon: CreditCard },
+  { labelKey: 'users', href: '/admin/users', icon: Users },
+  { labelKey: 'feedbacks', href: '/admin/feedbacks', icon: MessageSquare },
+  { labelKey: 'badges', href: '/admin/badges', icon: Trophy },
+  { labelKey: 'quests', href: '/admin/quests', icon: Target },
+  { labelKey: 'rewards', href: '/admin/rewards', icon: Gift },
+  { labelKey: 'surprise_send', href: '/admin/surprise-boxes', icon: Box },
+  { labelKey: 'global_benchmarks', href: '/admin/insights', icon: Globe },
+  { labelKey: 'donations', href: '/admin/donations', icon: Heart },
+  { labelKey: 'referrals', href: '/admin/referrals', icon: Share2 },
+  { labelKey: 'squads', href: '/admin/squads', icon: Users2 },
+  { labelKey: 'fraud_prevention', href: '/admin/fraud-prevention', icon: ShieldAlert },
+  { labelKey: 'trust_command', href: '/admin/trust-command', icon: Shield },
+  { labelKey: 'economy_sim', href: '/admin/economy-sim', icon: Activity },
+  { labelKey: 'dealers_health', href: '/admin/dealers-health', icon: Heart },
+  { labelKey: 'innovation_platform', href: '/admin/innovation', icon: Radar },
+  { labelKey: 'ab_testing', href: '/admin/ab-testing', icon: Beaker },
+  { labelKey: 'analytics', href: '/admin/analytics', icon: BarChart3 },
+  { labelKey: 'segments', href: '/admin/segments', icon: PieChart },
+  { labelKey: 'playbooks', href: '/admin/playbooks', icon: BookOpen },
+  { labelKey: 'ai_control', href: '/admin/ai-dashboard', icon: Brain },
+  { labelKey: 'grok_council', href: '/admin/agent-council', icon: Bot },
+  { labelKey: 'ai_detailed', href: '/admin/ai-detailed', icon: Eye },
+  { labelKey: 'ai_learning', href: '/admin/ai-learning', icon: Database },
+  { labelKey: 'ai_quality', href: '/admin/ai-quality', icon: Eye },
+  { labelKey: 'ai_settings', href: '/admin/ai-settings', icon: Cpu },
+  { labelKey: 'qra_chat_logs', href: '/admin/qra-chat-logs', icon: MessageCircle },
+  { labelKey: 'pricing', href: '/admin/pricing', icon: Layers },
+  { labelKey: 'partners', href: '/admin/partners', icon: Share2 },
+  { labelKey: 'pages', href: '/admin/pages', icon: FileText },
+  { labelKey: 'themes', href: '/admin/themes', icon: Palette },
+  { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
+  { labelKey: 'compliance', href: '/admin/compliance', icon: Shield },
+  { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
+  { labelKey: 'league_settings', href: '/admin/league-settings', icon: Trophy },
+  { labelKey: 'discovery', href: '/admin/discovery', icon: MapPin },
+  { labelKey: 'seo', href: '/admin/seo', icon: Search },
+  { labelKey: 'audit', href: '/admin/audit', icon: History },
+  { labelKey: 'webhooks', href: '/admin/webhooks', icon: Link2 },
+  { labelKey: 'api_keys', href: '/admin/api-keys', icon: Key },
+  { labelKey: 'modules', href: '/admin/modules', icon: Layers },
+  { labelKey: 'tech_add', href: '/admin/tech/add', icon: Plus },
+  { labelKey: 'observability', href: '/admin/observability', icon: Activity },
+  { key: 'settings', labelKey: 'settings', href: '/admin/settings', icon: Settings },
 ];
 
 const dealerNavItems: NavItem[] = [
-  { href: '/dealer', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dealer/scan', label: 'Kart Tara', icon: ScanLine },
-  { href: '/dealer/products', label: 'Ürünlerim', icon: Package },
-  { href: '/dealer/qr-codes', label: 'QR Kodlar', icon: QrCode },
-  { href: '/dealer/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare, badge: 5 },
-  { href: '/dealer/analytics', label: 'Analitik', icon: BarChart3 },
-  { href: '/dealer/campaigns', label: 'Kampanyalar', icon: Megaphone },
-  { href: '/dealer/ai-insights', label: 'AI İçgörüler', icon: Sparkles },
-  { href: '/dealer/ai-settings', label: 'AI Ayarları', icon: Brain },
-  { href: '/dealer/settings', label: 'Ayarlar', icon: Settings },
+  { key: 'dashboard', labelKey: 'dashboard', href: '/dealer', icon: LayoutDashboard },
+  { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target },
+  { key: 'scan', labelKey: 'scan_card', href: '/dealer/scan', icon: ScanLine },
+  { key: 'products', labelKey: 'products', href: '/dealer/products', icon: Package },
+  { key: 'qr_codes', labelKey: 'qr_codes', href: '/dealer/qr-codes', icon: QrCode },
+  { key: 'consumptions', labelKey: 'consumptions', href: '/dealer/consumptions', icon: History },
+  { key: 'feedbacks', labelKey: 'feedbacks', href: '/dealer/feedbacks', icon: MessageSquare },
+  { key: 'reviews', labelKey: 'reviews', href: '/dealer/reviews', icon: Star },
+  { key: 'remedy_queue', labelKey: 'remedy_queue', href: '/dealer/remedy-queue', icon: ClipboardList },
+  { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap },
+  { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3 },
+  { key: 'campaigns', labelKey: 'campaigns', href: '/dealer/campaigns', icon: Megaphone },
+  { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles },
+  { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText },
+  { key: 'incidents', labelKey: 'incidents', href: '/dealer/incidents', icon: AlertTriangle },
+  { key: 'action_items', labelKey: 'action_items', href: '/dealer/action-items', icon: ListChecks },
+  { key: 'churn_risk', labelKey: 'churn_risk', href: '/dealer/churn-risk', icon: TrendingDown },
+  { key: 'roi', labelKey: 'roi', href: '/dealer/roi', icon: PieChart },
+  { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3 },
+  { key: 'copilot', labelKey: 'copilot', href: '/dealer/copilot', icon: Bot },
+  { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle },
+  { key: 'voc_wall', labelKey: 'voc_wall', href: '/dealer/voc-wall', icon: MessageSquare },
+  { key: 'heatmap', labelKey: 'heatmap', href: '/dealer/heatmap', icon: MapPin },
+  { key: 'radar', labelKey: 'radar', href: '/dealer/radar', icon: Radar },
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/dealer/ai-insights', icon: Sparkles },
+  { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain },
+  { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users },
+  { key: 'settings', labelKey: 'settings', href: '/dealer/settings', icon: Settings },
 ];
 
 const customerNavItems: NavItem[] = [
-  { href: '/customer', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/customer/my-card', label: 'Kartım', icon: CreditCard },
-  { href: '/customer/consumptions', label: 'Tüketimlerim', icon: History },
-  { href: '/customer/scan', label: 'QR Tara', icon: QrCode },
-  { href: '/customer/feedbacks', label: 'Geri Bildirimlerim', icon: MessageSquare },
-  { href: '/customer/ai-insights', label: 'AI Analizlerim', icon: Sparkles },
-  { href: '/customer/trends', label: 'Trend Analizi', icon: TrendingUp },
-  { href: '/customer/analytics', label: 'Kişisel Analitik', icon: BarChart3 },
-  { href: '/customer/badges', label: 'Rozetlerim', icon: Trophy },
-  { href: '/customer/quests', label: 'Görevler', icon: Target },
-  { href: '/customer/rewards', label: 'Ödüller', icon: Gift },
-  { href: '/customer/referral', label: 'Davet Et', icon: Share2 },
-  { href: '/customer/campaigns', label: 'Kampanyalar', icon: Megaphone },
-  { href: '/customer/donations', label: 'Sosyal Sorumluluk', icon: Heart },
-  { href: '/customer/leaderboard', label: 'Liderlik', icon: BarChart3 },
-  { href: '/customer/settings', label: 'Ayarlar', icon: Settings },
+  { key: 'dashboard', labelKey: 'dashboard', href: '/customer', icon: LayoutDashboard },
+  { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard },
+  { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History },
+  { key: 'scan', labelKey: 'scan', href: '/customer/scan', icon: QrCode },
+  { key: 'feedbacks', labelKey: 'feedbacks', href: '/customer/feedbacks', icon: MessageSquare },
+  { key: 'remedy', labelKey: 'remedy', href: '/customer/remedy', icon: Gift },
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/customer/ai-insights', icon: Sparkles },
+  { key: 'trends', labelKey: 'trends', href: '/customer/trends', icon: TrendingUp },
+  { key: 'journey_score', labelKey: 'journey_score', href: '/customer/journey-score', icon: Compass },
+  { key: 'nearby', labelKey: 'nearby', href: '/customer/nearby', icon: MapPin },
+  { key: 'experiences', labelKey: 'experiences', href: '/customer/experiences', icon: Share2 },
+  { key: 'analytics', labelKey: 'analytics', href: '/customer/analytics', icon: BarChart3 },
+  { key: 'badges', labelKey: 'badges', href: '/customer/badges', icon: Trophy },
+  { key: 'shop', labelKey: 'shop', href: '/customer/shop', icon: ShoppingBag },
+  { key: 'squads', labelKey: 'squads', href: '/customer/squads', icon: Users2 },
+  { key: 'quests', labelKey: 'quests', href: '/customer/quests', icon: Target },
+  { key: 'rewards', labelKey: 'rewards', href: '/customer/rewards', icon: Gift },
+  { key: 'surprise_boxes', labelKey: 'surprise_boxes', href: '/customer/surprise-boxes', icon: Box },
+  { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone },
+  { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart },
+  { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy },
+  { key: 'settings', labelKey: 'settings', href: '/customer/settings', icon: Settings },
 ];
 
-export function Sidebar({ role }: SidebarProps) {
+export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
+  const t = useAppT();
   const pathname = usePathname();
   const { data: session } = useSession();
   const { resolvedTheme } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [feedbackBadge, setFeedbackBadge] = useState<number | null>(null);
+  const [menuVisibility, setMenuVisibility] = useState<Record<string, boolean>>({});
+  const [featureVisibility, setFeatureVisibility] = useState<Record<string, boolean>>({});
+  const [moduleControls, setModuleControls] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const navItems = role === 'ADMIN' 
-    ? adminNavItems 
-    : role === 'DEALER' 
-    ? dealerNavItems 
-    : customerNavItems;
+  useEffect(() => {
+    if (role !== 'DEALER') return;
+    fetch('/api/dealer/notification-badges')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data?.badgeCount === 'number') setFeedbackBadge(data.badgeCount);
+      })
+      .catch(() => { });
+  }, [role]);
+
+  useEffect(() => {
+    if (role === 'ADMIN') return;
+    fetch('/api/settings/visibility', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.success && data?.menuVisibility && typeof data.menuVisibility === 'object') {
+          setMenuVisibility(data.menuVisibility as Record<string, boolean>);
+        }
+        if (data?.success && data?.featureVisibility && typeof data.featureVisibility === 'object') {
+          setFeatureVisibility(data.featureVisibility as Record<string, boolean>);
+        }
+        if (data?.success && data?.moduleControls && typeof data.moduleControls === 'object') {
+          setModuleControls(data.moduleControls as Record<string, boolean>);
+        }
+      })
+      .catch(() => {});
+  }, [role]);
+
+  const navItems = role === 'ADMIN'
+    ? adminNavItems
+    : role === 'DEALER'
+      ? dealerNavItems
+      : customerNavItems;
+  const filteredNavItems = role === 'ADMIN'
+    ? navItems
+    : navItems.filter((item) => {
+      const key = item.key ?? item.href;
+      const menuEnabled = menuVisibility[key] !== false;
+      const featureEnabled = featureVisibility[key] !== false;
+      const moduleEnabled = moduleControls[key] !== false;
+      return menuEnabled && featureEnabled && moduleEnabled;
+    });
+  const navNs = role === 'ADMIN' ? 'admin' : role === 'DEALER' ? 'dealer' : 'customer';
+  const visibleNavItems = filteredNavItems.map((item) => ({
+    ...item,
+    label: t(`sidebarNav.${navNs}.${item.labelKey}`),
+  }));
 
   const levelProgress = calculateLevelProgress(session?.user?.points || 0);
 
@@ -139,50 +267,51 @@ export function Sidebar({ role }: SidebarProps) {
       'flex flex-col h-full',
       mobile ? 'w-full' : isCollapsed ? 'w-[72px]' : 'w-64'
     )}>
-      {/* Header */}
-      <div className="p-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
+      {/* Header — band height + border matches DashboardHeader (min-h-14 / sm h-16) */}
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 px-4 sm:h-16">
+        <Link
+          href="/"
+          className="flex min-h-0 min-w-0 cursor-pointer items-center gap-2 sm:gap-3 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+        >
           {mounted && (
             <>
               {/* Dark theme logo (light/white colored) */}
               <Image
                 src="/logo/logo.png"
-                alt="QRATEX Logo"
-                width={48}
-                height={48}
+                alt={`${siteName} Logo`}
+                width={56}
+                height={56}
                 priority
-                className="object-contain flex-shrink-0 hidden dark:block"
+                className="hidden h-11 w-11 shrink-0 object-contain dark:block sm:h-[3rem] sm:w-[3rem]"
               />
               {/* Light theme logo (dark colored) */}
               <Image
                 src="/logo/logo-light.png"
-                alt="QRATEX Logo"
-                width={48}
-                height={48}
+                alt={`${siteName} Logo`}
+                width={56}
+                height={56}
                 priority
-                className="object-contain flex-shrink-0 block dark:hidden"
+                className="block h-11 w-11 shrink-0 object-contain dark:hidden sm:h-[3rem] sm:w-[3rem]"
               />
               {(!isCollapsed || mobile) && (
                 <>
                   {/* Dark theme font (light/white colored) */}
                   <Image
                     src="/logo/font.png"
-                    alt="QRATEX"
-                    width={120}
-                    height={32}
+                    alt={siteName}
+                    width={180}
+                    height={52}
                     priority
-                    className="object-contain hidden dark:block"
-                    style={{ height: 'auto' }}
+                    className="hidden max-h-[2.5rem] w-auto shrink object-contain dark:block sm:max-h-[2.875rem]"
                   />
                   {/* Light theme font (dark colored) */}
                   <Image
                     src="/logo/font-light.png"
-                    alt="QRATEX"
-                    width={120}
-                    height={32}
+                    alt={siteName}
+                    width={180}
+                    height={52}
                     priority
-                    className="object-contain block dark:hidden"
-                    style={{ height: 'auto' }}
+                    className="block max-h-[2.5rem] w-auto shrink object-contain dark:hidden sm:max-h-[2.875rem]"
                   />
                 </>
               )}
@@ -193,56 +322,62 @@ export function Sidebar({ role }: SidebarProps) {
           <Button
             variant="ghost"
             size="icon"
+            type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden lg:flex h-8 w-8"
+            className="hidden h-11 min-h-11 w-11 min-w-11 shrink-0 cursor-pointer touch-manipulation transition-colors duration-200 lg:flex"
+            aria-label={isCollapsed ? t('appShell.sidebarExpand') : t('appShell.sidebarCollapse')}
           >
-            <ChevronLeft className={cn(
-              'w-4 h-4 transition-transform',
-              isCollapsed && 'rotate-180'
-            )} />
+            <ChevronLeft
+              aria-hidden
+              className={cn(
+                'h-4 w-4 transition-transform',
+                isCollapsed && 'rotate-180'
+              )}
+            />
           </Button>
         )}
       </div>
 
-      <Separator />
-
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto no-scrollbar">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || 
+      <nav className="flex-1 space-y-1 overflow-y-auto p-4 no-scrollbar" aria-label={t('appShell.sidebarAppMenu')}>
+        {visibleNavItems.map((item) => {
+          const isActive = pathname === item.href ||
             (item.href !== `/${role.toLowerCase()}` && pathname.startsWith(item.href));
-          
+          const badgeNum = item.href === '/dealer/feedbacks' && feedbackBadge != null
+            ? feedbackBadge
+            : item.badge;
+          const showBadge = typeof badgeNum === 'number' && badgeNum > 0;
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => mobile && setIsMobileOpen(false)}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group relative',
+                'group relative flex min-h-11 cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] duration-200 ease-out',
                 isActive
-                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 border border-transparent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/80 border border-transparent hover:border-border/50'
               )}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
               {(!isCollapsed || mobile) && (
                 <>
                   <span className="flex-1">{item.label}</span>
-                  {item.badge && (
+                  {showBadge && (
                     <span className={cn(
-                      'px-2 py-0.5 text-xs rounded-full',
-                      isActive 
-                        ? 'bg-primary-foreground/20 text-primary-foreground' 
+                      'px-2 py-0.5 text-xs rounded-full min-w-[1.25rem] text-center',
+                      isActive
+                        ? 'bg-primary-foreground/20 text-primary-foreground'
                         : 'bg-primary text-primary-foreground'
                     )}>
-                      {item.badge}
+                      {badgeNum > 99 ? '99+' : badgeNum}
                     </span>
                   )}
                 </>
               )}
-              {isCollapsed && !mobile && item.badge && (
+              {isCollapsed && !mobile && showBadge && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
-                  {item.badge}
+                  {badgeNum > 99 ? '99+' : badgeNum}
                 </span>
               )}
             </Link>
@@ -255,9 +390,9 @@ export function Sidebar({ role }: SidebarProps) {
       {/* User Section */}
       <div className="p-4">
         {role !== 'ADMIN' && (!isCollapsed || mobile) && (
-          <div className="mb-4 p-3 rounded-lg bg-muted/50">
+          <div className="mb-4 p-3 rounded-xl border border-border/40 bg-muted/40">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Seviye {session?.user?.level || 1}</span>
+              <span className="text-sm font-medium">{t('appShell.level')} {session?.user?.level || 1}</span>
               <span className="text-xs text-muted-foreground">{session?.user?.points || 0} XP</span>
             </div>
             <Progress value={levelProgress} className="h-2" />
@@ -270,7 +405,7 @@ export function Sidebar({ role }: SidebarProps) {
         )}>
           <Avatar>
             <AvatarImage src={session?.user?.image || ''} />
-            <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+            <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
               {getInitials(session?.user?.name)}
             </AvatarFallback>
           </Avatar>
@@ -298,24 +433,36 @@ export function Sidebar({ role }: SidebarProps) {
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className={cn(
-        'hidden lg:flex flex-col border-r bg-card transition-all duration-300',
-        isCollapsed ? 'w-[72px]' : 'w-64'
-      )}>
+      <aside
+        aria-label={t('appShell.sidebarPanelMenu')}
+        className={cn(
+          'app-sidebar-surface hidden lg:flex flex-col border-r border-border/60 backdrop-blur-md transition-all duration-300',
+          isCollapsed ? 'w-[72px]' : 'w-64'
+        )}
+      >
         <SidebarContent />
       </aside>
 
-      {/* Mobile Sidebar */}
-      <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-        <SheetTrigger asChild className="lg:hidden fixed bottom-4 left-4 z-50">
-          <Button variant="gradient" size="icon" className="h-14 w-14 rounded-full shadow-xl">
-            <Menu className="w-6 h-6" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="left" className="p-0 w-80">
-          <SidebarContent mobile />
-        </SheetContent>
-      </Sheet>
+      {/* Mobile Sidebar - floating button + drawer. Sheet only after mount to avoid Radix aria-controls hydration mismatch. */}
+      {mounted ? (
+        <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+          <SheetTrigger asChild className="lg:hidden fixed z-50 touch-manipulation left-4 bottom-[max(1rem,env(safe-area-inset-bottom))]">
+            <Button
+              variant="gradient"
+              size="icon"
+              className="h-14 min-h-14 min-w-14 w-14 touch-manipulation rounded-full shadow-xl transition-shadow duration-200"
+              aria-label={t('appShell.openMenu')}
+            >
+              <Menu className="h-6 w-6" aria-hidden />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-[min(20rem,85vw)] max-w-sm">
+            <SidebarContent mobile />
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div className="lg:hidden fixed z-50 left-4 bottom-[max(1rem,env(safe-area-inset-bottom))] h-14 w-14 min-w-14 min-h-14 rounded-full bg-primary shadow-xl" aria-hidden />
+      )}
     </>
   );
 }

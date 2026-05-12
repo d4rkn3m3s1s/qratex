@@ -3,9 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+
+
+export const dynamic = 'force-dynamic';
 
 export async function PATCH(request: NextRequest) {
   try {
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -66,6 +71,7 @@ export async function PATCH(request: NextRequest) {
         action: 'CHANGE_PASSWORD',
         entity: 'User',
         entityId: session.user.id,
+        ...auditMeta,
       },
     });
 

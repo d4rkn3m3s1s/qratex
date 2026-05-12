@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ScanLine,
@@ -12,7 +10,6 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  AlertTriangle,
   ShoppingBag,
   Plus,
   History,
@@ -23,7 +20,6 @@ import {
   Volume2,
   VolumeX,
   FlipHorizontal,
-  Flashlight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,8 +29,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 interface ScannedCard {
   id: string;
@@ -72,8 +70,7 @@ interface Product {
 }
 
 export default function DealerScanPage() {
-  const { data: session } = useSession();
-  const router = useRouter();
+  const t = useAppT();
   const scannerRef = useRef<any>(null);
   const scannerContainerRef = useRef<HTMLDivElement>(null);
   
@@ -193,7 +190,7 @@ export default function DealerScanPage() {
       const { Html5Qrcode } = await import('html5-qrcode');
       
       if (!scannerContainerRef.current) {
-        toast.error('Scanner container bulunamadı');
+        toast.error(t('dealerScan.scannerContainerError'));
         return;
       }
 
@@ -223,15 +220,15 @@ export default function DealerScanPage() {
       );
 
       setCameraActive(true);
-      toast.success('Kamera aktif - QR kodu gösterin');
+      toast.success(t('dealerScan.cameraActiveSuccess'));
     } catch (err: any) {
       console.error('Camera error:', err);
       if (err.name === 'NotAllowedError') {
-        toast.error('Kamera izni verilmedi. Tarayıcı ayarlarından izin verin.');
+        toast.error(t('dealerScan.cameraPermissionDenied'));
       } else if (err.name === 'NotFoundError') {
-        toast.error('Kamera bulunamadı');
+        toast.error(t('dealerScan.cameraNotFound'));
       } else {
-        toast.error('Kamera başlatılamadı: ' + (err.message || 'Bilinmeyen hata'));
+        toast.error(`${t('dealerScan.cameraStartFailed')}${err.message ? `: ${err.message}` : ''}`);
       }
     }
   };
@@ -258,7 +255,7 @@ export default function DealerScanPage() {
 
   const handleScan = async (token: string) => {
     if (!token.trim()) {
-      toast.error('Token gerekli');
+      toast.error(t('dealerScan.tokenRequired'));
       return;
     }
 
@@ -271,11 +268,11 @@ export default function DealerScanPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Kart bulunamadı');
+        setError(data.error || t('dealerScan.cardNotFound'));
         if (data.code === 'CARD_NOT_ACTIVATED') {
-          toast.error('Bu kart henüz aktive edilmemiş');
+          toast.error(t('dealerScan.cardNotActivated'));
         } else if (data.code === 'CARD_BLOCKED') {
-          toast.error('Bu kart bloklanmış');
+          toast.error(t('dealerScan.cardBlocked'));
         } else {
           toast.error(data.error);
         }
@@ -283,11 +280,11 @@ export default function DealerScanPage() {
       }
 
       setScannedCard(data.card);
-      toast.success(`${data.card.customer.name} bulundu!`);
+      toast.success(t('dealerScan.customerFoundToast').replace('{name}', data.card.customer.name));
       await stopCamera();
     } catch (err) {
-      setError('Kart taranamadı');
-      toast.error('Bir hata oluştu');
+      setError(t('dealerScan.scanFailedGeneric'));
+      toast.error(t('dealerScan.genericError'));
     } finally {
       setScanning(false);
     }
@@ -318,18 +315,18 @@ export default function DealerScanPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || 'Tüketim kaydedilemedi');
+        toast.error(data.error || t('dealerScan.consumptionSaveFailed'));
         return;
       }
 
-      toast.success('Tüketim kaydedildi!');
+      toast.success(t('dealerScan.consumptionSaved'));
       setShowConsumptionForm(false);
       resetForm();
       
       // Kartı yeniden tara (güncel bilgi için)
       handleScan(scannedCard.token);
     } catch (err) {
-      toast.error('Bir hata oluştu');
+      toast.error(t('dealerScan.genericError'));
     } finally {
       setSubmitting(false);
     }
@@ -351,54 +348,43 @@ export default function DealerScanPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-600 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-        </div>
-        
-        <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-            <ScanLine className="w-8 h-8" />
-            Kart Tara
-          </h1>
-          <p className="text-white/70 mt-1">Müşteri kartındaki QR kodu kameraya gösterin</p>
-        </div>
-      </motion.div>
+      <DashboardPageHero
+        eyebrow={t('dealerScan.eyebrow')}
+        title={t('dealerScan.title')}
+        description={t('dealerScan.description')}
+        icon={<ScanLine className="h-7 w-7" aria-hidden />}
+        tone="auto"
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Scanner Section */}
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
+        {/* Scanner Section - full screen camera on mobile when active */}
+        <Card className={`border-border/60 bg-card/50 backdrop-blur-sm md:block ${cameraActive ? 'fixed inset-0 z-40 m-0 rounded-none flex flex-col' : ''}`}>
+          <CardHeader className={cameraActive ? 'flex-shrink-0' : ''}>
             <CardTitle className="flex items-center gap-2">
               <Camera className="w-5 h-5" />
-              QR Tarayıcı
+              {t('dealerScan.qrScannerTitle')}
             </CardTitle>
             <CardDescription>
-              Müşteri kartındaki QR kodu kameraya gösterin
+              {t('dealerScan.qrScannerDescription')}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Camera Preview */}
-            <div className="relative aspect-square bg-muted dark:bg-slate-900 rounded-xl overflow-hidden">
+          <CardContent className={`space-y-4 flex-1 flex flex-col min-h-0 ${cameraActive ? 'md:flex-initial' : ''}`}>
+            {/* Camera Preview - full area on mobile when active */}
+            <div className={`relative bg-muted dark:bg-slate-900 rounded-xl overflow-hidden ${cameraActive ? 'flex-1 min-h-[50vh] md:min-h-0 md:aspect-square' : 'aspect-square'}`}>
               <div 
                 id="qr-reader" 
                 ref={scannerContainerRef}
-                className={`w-full h-full ${!cameraActive ? 'hidden' : ''}`}
+                className={`w-full h-full ${!cameraActive ? 'hidden' : ''} ${cameraActive ? 'min-h-[60vh] md:min-h-0' : ''}`}
                 style={{ 
-                  minHeight: '300px',
+                  minHeight: cameraActive ? undefined : '300px',
                 }}
               />
               
               {!cameraActive && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
                   <CameraOff className="w-16 h-16 mb-4" />
-                  <p>Kamera kapalı</p>
-                  <p className="text-xs text-slate-600 mt-2">Taramak için kamerayı açın</p>
+                  <p>{t('dealerScan.cameraOffTitle')}</p>
+                  <p className="text-xs text-slate-600 mt-2">{t('dealerScan.cameraOffHint')}</p>
                 </div>
               )}
 
@@ -419,7 +405,7 @@ export default function DealerScanPage() {
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <div className="text-center text-white">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-                    <p>Kart doğrulanıyor...</p>
+                    <p>{t('dealerScan.validatingCard')}</p>
                   </div>
                 </div>
               )}
@@ -430,22 +416,22 @@ export default function DealerScanPage() {
               {!cameraActive ? (
                 <Button onClick={startCamera} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
                   <Camera className="w-4 h-4 mr-2" />
-                  Kamerayı Aç
+                  {t('dealerScan.openCamera')}
                 </Button>
               ) : (
                 <>
                   <Button onClick={stopCamera} variant="destructive" className="flex-1">
                     <CameraOff className="w-4 h-4 mr-2" />
-                    Kapat
+                    {t('dealerScan.closeCamera')}
                   </Button>
-                  <Button onClick={switchCamera} variant="outline" size="icon" title="Kamera değiştir">
+                  <Button onClick={switchCamera} variant="outline" size="icon" title={t('dealerScan.flipCameraTitle')}>
                     <FlipHorizontal className="w-4 h-4" />
                   </Button>
                   <Button 
                     onClick={() => setSoundEnabled(!soundEnabled)} 
                     variant="outline" 
                     size="icon"
-                    title={soundEnabled ? 'Sesi kapat' : 'Sesi aç'}
+                    title={soundEnabled ? t('dealerScan.soundMuteTitle') : t('dealerScan.soundOnTitle')}
                   >
                     {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                   </Button>
@@ -465,16 +451,16 @@ export default function DealerScanPage() {
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 />
-                <span className="text-sm text-emerald-400">Tarama aktif - QR kodu gösterin</span>
+                <span className="text-sm text-emerald-400">{t('dealerScan.scanActiveHint')}</span>
               </motion.div>
             )}
 
             {/* Manual input */}
             <div className="space-y-2 pt-2 border-t">
-              <Label className="text-xs text-muted-foreground">Manuel Token Girişi</Label>
+              <Label className="text-xs text-muted-foreground">{t('dealerScan.manualTokenLabel')}</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Kart token'ını girin..."
+                  placeholder={t('dealerScan.manualTokenPlaceholder')}
                   value={manualToken}
                   onChange={(e) => setManualToken(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleManualScan()}
@@ -497,14 +483,14 @@ export default function DealerScanPage() {
         </Card>
 
         {/* Result Section */}
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="w-5 h-5" />
-              Müşteri Bilgisi
+              {t('dealerScan.customerInfoTitle')}
             </CardTitle>
             <CardDescription>
-              Taranan kartın müşteri bilgileri
+              {t('dealerScan.customerInfoDescription')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -523,7 +509,7 @@ export default function DealerScanPage() {
                   <p className="text-red-400 mb-4">{error}</p>
                   <Button variant="outline" onClick={resetScan}>
                     <RefreshCw className="w-4 h-4 mr-2" />
-                    Tekrar Dene
+                    {t('dealerScan.retryScan')}
                   </Button>
                 </motion.div>
               ) : scannedCard ? (
@@ -553,10 +539,10 @@ export default function DealerScanPage() {
                         <p className="text-sm text-muted-foreground">{scannedCard.customer.email}</p>
                         <div className="flex gap-2 mt-1">
                           <Badge variant="outline" className="text-xs">
-                            Seviye {scannedCard.customer.level}
+                            {t('dealerScan.levelBadge')} {scannedCard.customer.level}
                           </Badge>
                           <Badge variant="outline" className="text-xs">
-                            {scannedCard.customer.points} Puan
+                            {scannedCard.customer.points} {t('dealerScan.points')}
                           </Badge>
                         </div>
                       </div>
@@ -568,21 +554,21 @@ export default function DealerScanPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-muted/50 text-center">
                       <p className="text-2xl font-bold">{scannedCard.totalConsumptions}</p>
-                      <p className="text-xs text-muted-foreground">Toplam Tüketim</p>
+                      <p className="text-xs text-muted-foreground">{t('dealerScan.totalConsumption')}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-muted/50 text-center">
                       <p className="text-2xl font-bold">{scannedCard.recentConsumptions.length}</p>
-                      <p className="text-xs text-muted-foreground">Son 5 Tüketim</p>
+                      <p className="text-xs text-muted-foreground">{t('dealerScan.recentFive')}</p>
                     </div>
                   </div>
 
                   {/* Recent consumptions */}
                   {scannedCard.recentConsumptions.length > 0 && (
                     <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Son Tüketimler</Label>
+                      <Label className="text-xs text-muted-foreground">{t('dealerScan.recentConsumptions')}</Label>
                       {scannedCard.recentConsumptions.slice(0, 3).map((consumption) => (
                         <div key={consumption.id} className="p-2 rounded-lg bg-muted/30 text-sm flex items-center justify-between">
-                          <span>{consumption.product?.name || 'Ürün belirtilmemiş'}</span>
+                          <span>{consumption.product?.name || t('dealerScan.productUnspecified')}</span>
                           <span className="text-muted-foreground">
                             {formatRelativeTime(consumption.createdAt)}
                           </span>
@@ -598,7 +584,7 @@ export default function DealerScanPage() {
                       onClick={() => setShowConsumptionForm(true)}
                     >
                       <Plus className="w-4 h-4 mr-2" />
-                      Tüketim Ekle
+                      {t('dealerScan.addConsumption')}
                     </Button>
                     <Button variant="outline" onClick={resetScan}>
                       <RefreshCw className="w-4 h-4" />
@@ -617,10 +603,10 @@ export default function DealerScanPage() {
                     <CreditCard className="w-10 h-10 text-muted-foreground" />
                   </div>
                   <p className="text-muted-foreground">
-                    Müşteri kartını tarayın
+                    {t('dealerScan.emptyHintTitle')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Kamerayı açıp QR kodu gösterin
+                    {t('dealerScan.emptyHintSub')}
                   </p>
                 </motion.div>
               )}
@@ -635,20 +621,22 @@ export default function DealerScanPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5" />
-              Tüketim Kaydı Ekle
+              {t('dealerScan.consumptionDialogTitle')}
             </DialogTitle>
             <DialogDescription>
-              {scannedCard?.customer.name} için tüketim kaydı oluşturun
+              {scannedCard?.customer.name
+                ? t('dealerScan.consumptionDialogDescription').replace('{name}', scannedCard.customer.name)
+                : ''}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             {/* Category selection */}
             <div className="space-y-2">
-              <Label>Kategori</Label>
+              <Label>{t('dealerScan.categoryLabel')}</Label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Kategori seçin..." />
+                  <SelectValue placeholder={t('dealerScan.selectCategoryPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
@@ -667,7 +655,7 @@ export default function DealerScanPage() {
             {/* Product selection */}
             {selectedCategory && (
               <div className="space-y-2">
-                <Label>Ürün</Label>
+                <Label>{t('dealerScan.productLabel')}</Label>
                 <Select value={selectedProduct} onValueChange={(val) => {
                   setSelectedProduct(val);
                   const product = products.find(p => p.id === val);
@@ -676,7 +664,7 @@ export default function DealerScanPage() {
                   }
                 }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Ürün seçin..." />
+                    <SelectValue placeholder={t('dealerScan.selectProductPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((product) => (
@@ -698,7 +686,7 @@ export default function DealerScanPage() {
 
             {/* Amount */}
             <div className="space-y-2">
-              <Label>Tutar (TL) - Opsiyonel</Label>
+              <Label>{t('dealerScan.amountOptional')}</Label>
               <Input
                 type="number"
                 placeholder="0.00"
@@ -709,9 +697,9 @@ export default function DealerScanPage() {
 
             {/* Note */}
             <div className="space-y-2">
-              <Label>Not - Opsiyonel</Label>
+              <Label>{t('dealerScan.noteOptional')}</Label>
               <Textarea
-                placeholder="Ek not ekleyin..."
+                placeholder={t('dealerScan.notePlaceholder')}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
@@ -721,7 +709,7 @@ export default function DealerScanPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConsumptionForm(false)}>
-              İptal
+              {t('common.cancel')}
             </Button>
             <Button 
               onClick={handleSubmitConsumption} 
@@ -731,12 +719,12 @@ export default function DealerScanPage() {
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Kaydediliyor...
+                  {t('dealerScan.saving')}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Kaydet
+                  {t('common.save')}
                 </>
               )}
             </Button>

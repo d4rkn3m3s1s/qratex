@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createProductSchema } from '@/lib/validations';
+
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/dealer/products
@@ -10,14 +12,9 @@ import { createProductSchema } from '@/lib/validations';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const categoryId = searchParams.get('categoryId');
@@ -67,14 +64,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const validatedData = createProductSchema.safeParse(body);

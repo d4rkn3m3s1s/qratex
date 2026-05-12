@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { 
-  generateGooglePassObject, 
-  generateGoogleWalletJWT, 
+import {
+  generateGooglePassObject,
+  generateGoogleWalletJWT,
   getGoogleWalletSaveUrl,
-  generateSerialNumber 
+  generateSerialNumber
 } from '@/lib/wallet';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/wallet/google
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
     
     try {
       if (cardId) {
-        card = await (prisma as any).physicalCard.findFirst({
+        card = await prisma.physicalCard.findFirst({
           where: {
             id: cardId,
             customerId: session.user.id,
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
           },
         });
       } else {
-        card = await (prisma as any).physicalCard.findFirst({
+        card = await prisma.physicalCard.findFirst({
           where: {
             customerId: session.user.id,
             status: 'ACTIVATED',
@@ -170,7 +172,7 @@ export async function POST(request: NextRequest) {
     // Check if user has an activated card
     let hasCard = false;
     try {
-      const card = await (prisma as any).physicalCard.findFirst({
+      const card = await prisma.physicalCard.findFirst({
         where: {
           customerId: session.user.id,
           status: 'ACTIVATED',

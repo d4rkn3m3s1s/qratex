@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
+import { CHART_BRAND, CHART_HEX } from '@/lib/chart-palette';
 import {
   BarChart3,
   TrendingUp,
@@ -33,7 +35,6 @@ import {
   UserCheck,
   Store,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -46,7 +47,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -85,6 +87,23 @@ interface AnalyticsData {
     feedbackCount: number;
     avgRating: number;
     positiveRate: number;
+  }>;
+  rootCauseGraph: Array<{
+    topic: string;
+    dealer: string;
+    timeBucket: string;
+    count: number;
+    impactScore: number;
+  }>;
+  tenantBenchmark: Array<{
+    dealerId: string;
+    dealerName: string;
+    segment: string;
+    feedbackCount: number;
+    avgRating: number;
+    segmentAvg: number;
+    deviation: number;
+    anomaly: 'negative' | 'positive' | 'normal';
   }>;
   recentActivity: Array<{
     type: string;
@@ -139,7 +158,7 @@ const AnimatedNumber = ({ value, decimals = 0 }: { value: number; decimals?: num
 };
 
 // Mini Line Chart
-const MiniLineChart = ({ data, color = '#8b5cf6', height = 60 }: { data: number[]; color?: string; height?: number }) => {
+const MiniLineChart = ({ data, color = 'hsl(var(--primary))', height = 60 }: { data: number[]; color?: string; height?: number }) => {
   if (data.length === 0) return null;
   const max = Math.max(...data, 1);
   const points = data.map((v, i) => {
@@ -156,7 +175,7 @@ const MiniLineChart = ({ data, color = '#8b5cf6', height = 60 }: { data: number[
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <motion.polyline
+      <m.polyline
         fill="none"
         stroke={color}
         strokeWidth="2"
@@ -167,7 +186,7 @@ const MiniLineChart = ({ data, color = '#8b5cf6', height = 60 }: { data: number[
         animate={{ pathLength: 1 }}
         transition={{ duration: 1 }}
       />
-      <motion.polygon
+      <m.polygon
         fill={`url(#gradient-${color})`}
         points={`0,100 ${points} 100,100`}
         initial={{ opacity: 0 }}
@@ -207,7 +226,7 @@ const Heatmap = ({ data }: { data: number[][] }) => {
           <div className="w-8 text-[10px] text-muted-foreground">{day}</div>
           <div className="flex-1 flex gap-0.5">
             {Array.from({ length: 24 }, (_, hour) => (
-              <motion.div
+              <m.div
                 key={hour}
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -235,6 +254,7 @@ const Heatmap = ({ data }: { data: number[][] }) => {
 // Donut Chart
 const DonutChart = ({ data, size = 140 }: { data: { label: string; value: number; color: string }[]; size?: number }) => {
   const total = data.reduce((acc, d) => acc + d.value, 0) || 1;
+  const nonZeroSegments = data.filter((segment) => segment.value > 0);
   let currentAngle = -90;
   const radius = size / 2 - 12;
   const innerRadius = radius * 0.65;
@@ -242,8 +262,14 @@ const DonutChart = ({ data, size = 140 }: { data: { label: string; value: number
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size}>
-        {data.map((segment, i) => {
-          if (segment.value === 0) return null;
+        {nonZeroSegments.length === 1 ? (
+          <>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill={nonZeroSegments[0].color} />
+            <circle cx={size / 2} cy={size / 2} r={innerRadius} fill="hsl(var(--card))" />
+          </>
+        ) : (
+          data.map((segment, i) => {
+            if (segment.value === 0) return null;
           const angle = (segment.value / total) * 360;
           const startAngle = currentAngle;
           const endAngle = currentAngle + angle;
@@ -261,7 +287,7 @@ const DonutChart = ({ data, size = 140 }: { data: { label: string; value: number
           const largeArc = angle > 180 ? 1 : 0;
           
           return (
-            <motion.path
+            <m.path
               key={i}
               d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z`}
               fill={segment.color}
@@ -271,7 +297,8 @@ const DonutChart = ({ data, size = 140 }: { data: { label: string; value: number
               className="hover:opacity-80 transition-opacity cursor-pointer"
             />
           );
-        })}
+          })
+        )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
@@ -283,33 +310,48 @@ const DonutChart = ({ data, size = 140 }: { data: { label: string; value: number
   );
 };
 
+const TAB_TO_SECTION: Record<string, string> = {
+  overview: 'overview',
+  trends: 'trends',
+  dealers: 'dealers',
+  cards: 'cards',
+  root: 'root',
+};
+const INITIAL_SECTIONS = ['overview', 'trends', 'activity'];
+
 export default function AdminAnalyticsPage() {
   const [period, setPeriod] = useState('30d');
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<AnalyticsData | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [requestedSections, setRequestedSections] = useState<string[]>(INITIAL_SECTIONS);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, [period]);
-
-  const fetchAnalytics = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/analytics?period=${period}`);
+  const {
+    data: dataFromQuery,
+    isLoading: loading,
+    isFetching,
+    error: fetchError,
+    refetch: fetchAnalytics,
+  } = useQuery({
+    queryKey: ['admin', 'analytics', period, requestedSections.join(',')],
+    queryFn: async () => {
+      const sections = requestedSections.join(',');
+      const res = await fetch(`/api/admin/analytics?period=${period}&sections=${sections}`);
       const result = await res.json();
-      
-      if (result.success) {
-        setData(result.data);
-      } else {
-        toast.error('Analitik verileri yüklenemedi');
-      }
-    } catch (error) {
-      toast.error('Bağlantı hatası');
-    } finally {
-      setLoading(false);
+      if (!result.success) throw new Error(result.error || 'Yüklenemedi');
+      return result.data as AnalyticsData;
+    },
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData,
+  });
+  const data = dataFromQuery ?? null;
+
+  const onTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const section = TAB_TO_SECTION[tab];
+    if (section && !requestedSections.includes(section)) {
+      setRequestedSections((prev) => [...prev, section]);
     }
   };
+
 
   const periodLabel = {
     '7d': 'Son 7 Gün',
@@ -321,12 +363,11 @@ export default function AdminAnalyticsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Analitik" description="Platform istatistikleri ve raporları" />
         <div className="flex items-center justify-center min-h-[500px]">
           <div className="text-center space-y-4">
-            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
+            <m.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
               <Loader2 className="h-12 w-12 text-primary mx-auto" />
-            </motion.div>
+            </m.div>
             <p className="text-muted-foreground">Analitik veriler yükleniyor...</p>
           </div>
         </div>
@@ -337,12 +378,11 @@ export default function AdminAnalyticsPage() {
   if (!data) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Analitik" description="Platform istatistikleri ve raporları" />
-        <Card className="border-0 bg-card/50">
+        <Card className="border-border/60 bg-card/50">
           <CardContent className="p-12 text-center">
             <BarChart3 className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
             <h3 className="text-lg font-semibold mb-2">Veri Bulunamadı</h3>
-            <Button onClick={fetchAnalytics}><RefreshCw className="w-4 h-4 mr-2" />Tekrar Dene</Button>
+            <Button onClick={() => fetchAnalytics()}><RefreshCw className="w-4 h-4 mr-2" />Tekrar Dene</Button>
           </CardContent>
         </Card>
       </div>
@@ -350,51 +390,35 @@ export default function AdminAnalyticsPage() {
   }
 
   const sentimentChartData = [
-    { label: 'Olumlu', value: data.sentimentBreakdown.positive, color: '#22c55e' },
-    { label: 'Nötr', value: data.sentimentBreakdown.neutral, color: '#6b7280' },
-    { label: 'Olumsuz', value: data.sentimentBreakdown.negative, color: '#ef4444' },
+    { label: 'Olumlu', value: data.sentimentBreakdown.positive, color: CHART_HEX.green },
+    { label: 'Nötr', value: data.sentimentBreakdown.neutral, color: CHART_HEX.neutral },
+    { label: 'Olumsuz', value: data.sentimentBreakdown.negative, color: CHART_HEX.red },
   ];
 
   const roleChartData = [
-    { label: 'Müşteri', value: data.roleDistribution.CUSTOMER || 0, color: '#8b5cf6' },
-    { label: 'Bayi', value: data.roleDistribution.DEALER || 0, color: '#f59e0b' },
-    { label: 'Admin', value: data.roleDistribution.ADMIN || 0, color: '#06b6d4' },
+    { label: 'Müşteri', value: data.roleDistribution.CUSTOMER || 0, color: CHART_BRAND },
+    { label: 'Bayi', value: data.roleDistribution.DEALER || 0, color: CHART_HEX.amber },
+    { label: 'Admin', value: data.roleDistribution.ADMIN || 0, color: CHART_HEX.cyan },
   ];
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Hero Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-          {[...Array(15)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute w-1 h-1 bg-white/40 rounded-full"
-              style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-              animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
-              transition={{ duration: 2 + Math.random() * 2, repeat: Infinity, delay: Math.random() * 2 }}
-            />
-          ))}
-        </div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <BarChart3 className="w-8 h-8" />
-              Platform Analitikleri
-            </h1>
-            <p className="text-white/70 mt-1">{periodLabel} - Detaylı performans analizi</p>
-          </div>
-          
-          <div className="flex items-center gap-3">
+    <LazyMotion features={domAnimation} strict>
+    <div className="space-y-6 pb-8 px-1 sm:px-0">
+      <AdminPremiumHero
+        eyebrow="Analitik"
+        title={
+          <span className="flex items-center gap-3">
+            <BarChart3 className="w-8 h-8 shrink-0" />
+            Platform Analitikleri
+          </span>
+        }
+        description={`${periodLabel} — Detaylı performans analizi`}
+        icon={<Shield className="text-white" />}
+        actions={
+          <div className="flex items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-[140px] bg-white/10 border-white/20 text-white">
-                <Calendar className="h-4 w-4 mr-2" />
+              <SelectTrigger className="w-full sm:w-[160px] border-border/70 bg-background/80 text-foreground dark:bg-white/15 dark:border-white/30 dark:text-white">
+                <Calendar className="h-4 w-4 mr-2 shrink-0" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -404,32 +428,57 @@ export default function AdminAnalyticsPage() {
                 <SelectItem value="1y">Son 1 Yıl</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="secondary" size="icon" onClick={fetchAnalytics}>
+            <Button
+              variant="secondary"
+              size="icon"
+              onClick={() => fetchAnalytics()}
+              className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/30 dark:bg-white/15 dark:text-white dark:hover:bg-white/25"
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
           { title: 'Toplam Kullanıcı', value: data.totalUsers, change: data.userGrowth, icon: Users, color: 'blue', trend: data.dailyData.map(d => d.feedbacks) },
           { title: 'Geri Bildirim', value: data.totalFeedbacks, change: data.feedbackGrowth, icon: MessageSquare, color: 'green', trend: data.dailyData.map(d => d.feedbacks) },
-          { title: 'QR Tarama', value: data.totalScans, icon: Eye, color: 'purple', trend: data.dailyData.map(d => d.feedbacks) },
+          { title: 'QR Tarama', value: data.totalScans, icon: Eye, color: 'primary', trend: data.dailyData.map(d => d.feedbacks) },
           { title: 'Ortalama Puan', value: data.avgRating, suffix: '/5', icon: Star, color: 'yellow', change: data.comparison.rating.change },
         ].map((stat, index) => (
-          <motion.div
+          <m.div
             key={stat.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
-                  <div className={`p-2.5 rounded-xl bg-${stat.color}-500/10`}>
-                    <stat.icon className={`w-5 h-5 text-${stat.color}-500`} />
+                  <div
+                    className={`rounded-xl p-2.5 ${
+                      stat.color === 'blue'
+                        ? 'bg-blue-500/10'
+                        : stat.color === 'green'
+                          ? 'bg-green-500/10'
+                          : stat.color === 'primary'
+                            ? 'bg-primary/10'
+                            : 'bg-yellow-500/10'
+                    }`}
+                  >
+                    <stat.icon
+                      className={`w-5 h-5 ${
+                        stat.color === 'blue'
+                          ? 'text-blue-500'
+                          : stat.color === 'green'
+                            ? 'text-green-500'
+                            : stat.color === 'primary'
+                              ? 'text-primary'
+                              : 'text-yellow-500'
+                      }`}
+                    />
                   </div>
                   {stat.change !== undefined && (
                     <Badge className={`border-0 ${stat.change >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -445,29 +494,42 @@ export default function AdminAnalyticsPage() {
                 </p>
                 {stat.trend && (
                   <div className="mt-3 -mx-1">
-                    <MiniLineChart data={stat.trend} color={stat.color === 'blue' ? '#3b82f6' : stat.color === 'green' ? '#22c55e' : stat.color === 'purple' ? '#8b5cf6' : '#eab308'} height={40} />
+                    <MiniLineChart
+                      data={stat.trend}
+                      color={
+                        stat.color === 'blue'
+                          ? CHART_HEX.blue
+                          : stat.color === 'green'
+                            ? CHART_HEX.green
+                            : stat.color === 'primary'
+                              ? CHART_BRAND
+                              : CHART_HEX.yellow
+                      }
+                      height={40}
+                    />
                   </div>
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </m.div>
         ))}
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 h-12">
-          <TabsTrigger value="overview" className="gap-2"><BarChart3 className="w-4 h-4" /><span className="hidden sm:inline">Genel Bakış</span></TabsTrigger>
-          <TabsTrigger value="trends" className="gap-2"><TrendingUp className="w-4 h-4" /><span className="hidden sm:inline">Trendler</span></TabsTrigger>
-          <TabsTrigger value="dealers" className="gap-2"><Store className="w-4 h-4" /><span className="hidden sm:inline">Bayiler</span></TabsTrigger>
-          <TabsTrigger value="cards" className="gap-2"><CreditCard className="w-4 h-4" /><span className="hidden sm:inline">Kart Sistemi</span></TabsTrigger>
+      <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto min-h-12 gap-1 p-1">
+          <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2.5"><BarChart3 className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Genel Bakış</span><span className="sm:hidden sr-only">Genel</span></TabsTrigger>
+          <TabsTrigger value="trends" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2.5"><TrendingUp className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Trendler</span></TabsTrigger>
+          <TabsTrigger value="dealers" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2.5"><Store className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Bayiler</span></TabsTrigger>
+          <TabsTrigger value="root" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2.5"><Target className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Kök Neden</span></TabsTrigger>
+          <TabsTrigger value="cards" className="gap-1 sm:gap-2 text-xs sm:text-sm py-2.5"><CreditCard className="w-4 h-4 shrink-0" /><span className="hidden sm:inline">Kart Sistemi</span><span className="sm:hidden sr-only">Kart</span></TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Sentiment Chart */}
-            <Card className="border-0 bg-card/50">
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <PieChart className="w-5 h-5 text-primary" />
@@ -475,16 +537,20 @@ export default function AdminAnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-around">
-                  <DonutChart data={sentimentChartData} />
-                  <div className="space-y-3">
+                <div className="grid grid-cols-1 xl:grid-cols-[auto,1fr] items-center gap-4 min-w-0">
+                  <div className="mx-auto xl:mx-0">
+                    <DonutChart data={sentimentChartData} />
+                  </div>
+                  <div className="space-y-3 w-full min-w-0">
                     {sentimentChartData.map((item, i) => (
-                      <div key={item.label} className="flex items-center gap-3">
+                      <div key={item.label} className="flex items-center justify-between gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                         <div>
                           <p className="text-sm font-medium">{item.label}</p>
-                          <p className="text-lg font-bold">{item.value}%</p>
                         </div>
+                        </div>
+                        <p className="text-lg font-bold shrink-0">{item.value}%</p>
                       </div>
                     ))}
                   </div>
@@ -493,7 +559,7 @@ export default function AdminAnalyticsPage() {
             </Card>
 
             {/* Rating Distribution */}
-            <Card className="border-0 bg-card/50">
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Star className="w-5 h-5 text-yellow-500" />
@@ -521,7 +587,7 @@ export default function AdminAnalyticsPage() {
             </Card>
 
             {/* User Distribution */}
-            <Card className="border-0 bg-card/50">
+            <Card className="border-border/60 bg-card/50">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
@@ -529,18 +595,22 @@ export default function AdminAnalyticsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-around">
-                  <DonutChart data={roleChartData} />
-                  <div className="space-y-3">
+                <div className="grid grid-cols-1 xl:grid-cols-[auto,1fr] items-center gap-4 min-w-0">
+                  <div className="mx-auto xl:mx-0">
+                    <DonutChart data={roleChartData} />
+                  </div>
+                  <div className="space-y-3 min-w-0">
                     {[
-                      { label: 'Müşteri', value: data.roleDistribution.CUSTOMER || 0, icon: UserCheck, color: 'text-purple-500' },
+                      { label: 'Müşteri', value: data.roleDistribution.CUSTOMER || 0, icon: UserCheck, color: 'text-primary' },
                       { label: 'Bayi', value: data.roleDistribution.DEALER || 0, icon: Store, color: 'text-amber-500' },
                       { label: 'Admin', value: data.roleDistribution.ADMIN || 0, icon: Shield, color: 'text-cyan-500' },
                     ].map(item => (
-                      <div key={item.label} className="flex items-center gap-3">
-                        <item.icon className={`w-4 h-4 ${item.color}`} />
-                        <div>
-                          <p className="text-sm text-muted-foreground">{item.label}</p>
+                      <div key={item.label} className="flex items-center justify-between gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <item.icon className={`w-4 h-4 shrink-0 ${item.color}`} />
+                          <p className="text-sm text-muted-foreground truncate">{item.label}</p>
+                        </div>
+                        <div className="text-right shrink-0">
                           <p className="font-bold">{item.value}</p>
                         </div>
                       </div>
@@ -558,8 +628,8 @@ export default function AdminAnalyticsPage() {
               { title: 'Ortalama Puan', data: data.comparison.rating, icon: Star, color: 'yellow', suffix: '/5' },
               { title: 'Yeni Kullanıcı', data: data.comparison.users, icon: Users, color: 'blue' },
             ].map((item, i) => (
-              <motion.div key={item.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
-                <Card className="border-0 bg-card/50">
+              <m.div key={item.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+                <Card className="border-border/60 bg-card/50">
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between mb-4">
                       <div className={`p-2 rounded-lg bg-${item.color}-500/10`}>
@@ -577,7 +647,7 @@ export default function AdminAnalyticsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </m.div>
             ))}
           </div>
         </TabsContent>
@@ -585,7 +655,7 @@ export default function AdminAnalyticsPage() {
         {/* Trends Tab */}
         <TabsContent value="trends" className="space-y-6">
           {/* Daily Trend Chart */}
-          <Card className="border-0 bg-card/50">
+          <Card className="border-border/60 bg-card/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="w-5 h-5 text-primary" />
@@ -600,7 +670,7 @@ export default function AdminAnalyticsPage() {
                     const maxFeedbacks = Math.max(...data.dailyData.map(d => d.feedbacks), 1);
                     const height = (day.feedbacks / maxFeedbacks) * 100;
                     return (
-                      <motion.div
+                      <m.div
                         key={day.date}
                         initial={{ height: 0 }}
                         animate={{ height: `${height}%` }}
@@ -613,7 +683,7 @@ export default function AdminAnalyticsPage() {
                           <p>{day.feedbacks} geri bildirim</p>
                           <p>Ort. {day.avgRating} puan</p>
                         </div>
-                      </motion.div>
+                      </m.div>
                     );
                   })}
                 </div>
@@ -626,7 +696,7 @@ export default function AdminAnalyticsPage() {
           </Card>
 
           {/* Heatmap */}
-          <Card className="border-0 bg-card/50">
+          <Card className="border-border/60 bg-card/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Flame className="w-5 h-5 text-orange-500" />
@@ -642,7 +712,7 @@ export default function AdminAnalyticsPage() {
 
         {/* Dealers Tab */}
         <TabsContent value="dealers" className="space-y-6">
-          <Card className="border-0 bg-card/50">
+          <Card className="border-border/60 bg-card/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-primary" />
@@ -651,7 +721,12 @@ export default function AdminAnalyticsPage() {
               <CardDescription>Geri bildirim sayısına göre sıralanmış</CardDescription>
             </CardHeader>
             <CardContent>
-              {data.topDealers.length === 0 ? (
+              {!data.topDealers ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 mx-auto animate-spin mb-2" />
+                  <p>Yükleniyor...</p>
+                </div>
+              ) : data.topDealers.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Store className="w-12 h-12 mx-auto mb-2 opacity-30" />
                   <p>Henüz bayi verisi yok</p>
@@ -659,7 +734,7 @@ export default function AdminAnalyticsPage() {
               ) : (
                 <div className="space-y-4">
                   {data.topDealers.map((dealer, index) => (
-                    <motion.div
+                    <m.div
                       key={dealer.id}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -685,7 +760,119 @@ export default function AdminAnalyticsPage() {
                         </div>
                         <p className="text-xs text-emerald-500">{dealer.positiveRate}% olumlu</p>
                       </div>
-                    </motion.div>
+                    </m.div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Tenant Benchmark ve Anomali
+              </CardTitle>
+              <CardDescription>Segment ortalamasına göre beklenmeyen sapma işaretleme</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!data.tenantBenchmark ? (
+                <p className="text-center py-6 text-muted-foreground">Yükleniyor...</p>
+              ) : data.tenantBenchmark.length === 0 ? (
+                <p className="text-center py-6 text-muted-foreground">Benchmark verisi yok</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.tenantBenchmark.slice(0, 10).map((row) => (
+                    <div key={row.dealerId} className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{row.dealerName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Segment: {row.segment} · {row.feedbackCount} geri bildirim
+                          </p>
+                        </div>
+                        <Badge
+                          className={
+                            row.anomaly === 'negative'
+                              ? 'bg-red-500/15 text-red-500 border-0'
+                              : row.anomaly === 'positive'
+                              ? 'bg-emerald-500/15 text-emerald-500 border-0'
+                              : 'bg-muted text-muted-foreground border-0'
+                          }
+                        >
+                          {row.anomaly === 'negative'
+                            ? 'Negatif sapma'
+                            : row.anomaly === 'positive'
+                            ? 'Pozitif sapma'
+                            : 'Normal'}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                        <div className="rounded-md bg-background/70 p-2">
+                          <p className="text-xs text-muted-foreground">Bayi ort. puan</p>
+                          <p className="font-semibold">{row.avgRating}</p>
+                        </div>
+                        <div className="rounded-md bg-background/70 p-2">
+                          <p className="text-xs text-muted-foreground">Segment ort.</p>
+                          <p className="font-semibold">{row.segmentAvg}</p>
+                        </div>
+                        <div className="rounded-md bg-background/70 p-2">
+                          <p className="text-xs text-muted-foreground">Sapma</p>
+                          <p className={`font-semibold ${row.deviation < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                            {row.deviation > 0 ? '+' : ''}
+                            {row.deviation}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Root Cause Tab */}
+        <TabsContent value="root" className="space-y-6">
+          <Card className="border-border/60 bg-card/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-primary" />
+                Root Cause Graph
+              </CardTitle>
+              <CardDescription>
+                Konu → Şube → Zaman dilimi → Etki zinciri
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!data.rootCauseGraph ? (
+                <p className="text-center py-8 text-muted-foreground">Yükleniyor...</p>
+              ) : data.rootCauseGraph.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">Kök neden verisi henüz oluşmadı</p>
+              ) : (
+                <div className="space-y-3">
+                  {data.rootCauseGraph.map((node, idx) => (
+                    <div
+                      key={`${node.topic}-${node.dealer}-${idx}`}
+                      className="rounded-xl border border-border/60 bg-muted/20 p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Badge variant="secondary">{node.topic}</Badge>
+                        <span className="text-muted-foreground">→</span>
+                        <Badge variant="outline">{node.dealer}</Badge>
+                        <span className="text-muted-foreground">→</span>
+                        <Badge variant="outline">{node.timeBucket}</Badge>
+                        <span className="text-muted-foreground">→</span>
+                        <Badge className="bg-primary/15 text-primary border-0">Etki {node.impactScore}</Badge>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                          <span>Gözlem sayısı</span>
+                          <span>{node.count}</span>
+                        </div>
+                        <Progress value={Math.min(100, node.impactScore)} className="h-2" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -695,7 +882,11 @@ export default function AdminAnalyticsPage() {
 
         {/* Cards Tab */}
         <TabsContent value="cards" className="space-y-6">
-          {data.cardStats.total > 0 ? (
+          {!data.cardStats ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : data.cardStats.total > 0 ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
@@ -704,10 +895,10 @@ export default function AdminAnalyticsPage() {
                   { title: 'Boş', value: data.cardStats.unused, icon: CreditCard, color: 'bg-gray-500/10 text-gray-500' },
                   { title: 'Bloklu', value: data.cardStats.blocked, icon: Shield, color: 'bg-red-500/10 text-red-500' },
                   { title: 'Tüketim', value: data.cardStats.consumptions, icon: ShoppingBag, color: 'bg-orange-500/10 text-orange-500' },
-                  { title: 'Yorum', value: data.cardStats.reviews, icon: MessageSquare, color: 'bg-purple-500/10 text-purple-500' },
+                  { title: 'Yorum', value: data.cardStats.reviews, icon: MessageSquare, color: 'bg-primary/10 text-primary' },
                 ].map((stat, i) => (
-                  <motion.div key={stat.title} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
-                    <Card className="border-0 bg-card/50 text-center">
+                  <m.div key={stat.title} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
+                    <Card className="border-border/60 bg-card/50 text-center">
                       <CardContent className="p-4">
                         <div className={`w-10 h-10 rounded-xl ${stat.color} flex items-center justify-center mx-auto mb-2`}>
                           <stat.icon className="w-5 h-5" />
@@ -716,12 +907,12 @@ export default function AdminAnalyticsPage() {
                         <p className="text-xs text-muted-foreground">{stat.title}</p>
                       </CardContent>
                     </Card>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
 
               {/* Card Stats Visualization */}
-              <Card className="border-0 bg-card/50">
+              <Card className="border-border/60 bg-card/50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Target className="w-5 h-5 text-primary" />
@@ -748,7 +939,7 @@ export default function AdminAnalyticsPage() {
               </Card>
             </>
           ) : (
-            <Card className="border-0 bg-card/50">
+            <Card className="border-border/60 bg-card/50">
               <CardContent className="p-12 text-center">
                 <CreditCard className="w-16 h-16 mx-auto mb-4 text-muted-foreground/30" />
                 <h3 className="text-lg font-semibold mb-2">Kart Sistemi Aktif Değil</h3>
@@ -760,7 +951,7 @@ export default function AdminAnalyticsPage() {
       </Tabs>
 
       {/* Recent Activity */}
-      <Card className="border-0 bg-card/50">
+      <Card className="border-border/60 bg-card/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-primary" />
@@ -768,13 +959,15 @@ export default function AdminAnalyticsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {data.recentActivity.length === 0 ? (
+          {!data.recentActivity ? (
+            <p className="text-center py-8 text-muted-foreground">Yükleniyor...</p>
+          ) : data.recentActivity.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">Henüz aktivite yok</p>
           ) : (
             <div className="space-y-3">
               {data.recentActivity.map((activity, index) => (
-                <motion.div
-                  key={index}
+                <m.div
+                  key={`recent-${activity.timestamp}-${index}`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
@@ -794,12 +987,13 @@ export default function AdminAnalyticsPage() {
                     <p className="text-sm">{activity.description}</p>
                   </div>
                   <span className="text-xs text-muted-foreground">{activity.timestamp}</span>
-                </motion.div>
+                </m.div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
     </div>
+    </LazyMotion>
   );
 }

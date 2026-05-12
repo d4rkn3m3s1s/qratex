@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INPUT_LIMITS } from '@/lib/input-limits';
 
 // ─────────────────────────────────────────────────────────────
 // AUTH VALIDATIONS
@@ -7,38 +8,38 @@ import { z } from 'zod';
 export const loginSchema = z.object({
   email: z
     .string()
-    .min(1, 'Email gerekli')
-    .email('Geçerli bir email adresi girin'),
+    .min(1, 'validation.login.emailRequired')
+    .email('validation.login.emailInvalid'),
   password: z
     .string()
-    .min(1, 'Şifre gerekli')
-    .min(8, 'Şifre en az 8 karakter olmalı'),
+    .min(1, 'validation.login.passwordRequired')
+    .min(8, 'validation.login.passwordMinLength'),
 });
 
 export const registerSchema = z
   .object({
     name: z
       .string()
-      .min(1, 'İsim gerekli')
-      .min(2, 'İsim en az 2 karakter olmalı')
-      .max(50, 'İsim en fazla 50 karakter olabilir'),
+      .min(1, 'validation.register.nameRequired')
+      .min(2, 'validation.register.nameMinLength')
+      .max(50, 'validation.register.nameMaxLength'),
     email: z
       .string()
-      .min(1, 'Email gerekli')
-      .email('Geçerli bir email adresi girin'),
+      .min(1, 'validation.register.emailRequired')
+      .email('validation.register.emailInvalid'),
     password: z
       .string()
-      .min(1, 'Şifre gerekli')
-      .min(8, 'Şifre en az 8 karakter olmalı')
+      .min(1, 'validation.register.passwordRequired')
+      .min(8, 'validation.register.passwordMinLength')
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-        'Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermeli'
+        'validation.register.passwordComplexity'
       ),
-    confirmPassword: z.string().min(1, 'Şifre tekrarı gerekli'),
+    confirmPassword: z.string().min(1, 'validation.register.confirmPasswordRequired'),
     role: z.enum(['CUSTOMER', 'DEALER']).default('CUSTOMER'),
   })
   .refine(data => data.password === data.confirmPassword, {
-    message: 'Şifreler eşleşmiyor',
+    message: 'validation.register.passwordsMismatch',
     path: ['confirmPassword'],
   });
 
@@ -48,7 +49,14 @@ export const updateProfileSchema = z.object({
     .min(2, 'İsim en az 2 karakter olmalı')
     .max(50, 'İsim en fazla 50 karakter olabilir')
     .optional(),
-  image: z.string().url('Geçerli bir URL girin').optional().nullable(),
+  image: z
+    .string()
+    .refine(
+      (value) => value.startsWith('/') || /^https?:\/\//.test(value),
+      'Geçerli bir URL veya / ile başlayan dosya yolu girin'
+    )
+    .optional()
+    .nullable(),
   businessName: z.string().max(100).optional().nullable(),
   businessDesc: z.string().max(500).optional().nullable(),
 });
@@ -71,6 +79,14 @@ export const changePasswordSchema = z
   });
 
 // ─────────────────────────────────────────────────────────────
+// LIST QUERY (K1: sayfalama - genel API listeleri)
+// ─────────────────────────────────────────────────────────────
+export const listQueryPageSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+// ─────────────────────────────────────────────────────────────
 // FEEDBACK VALIDATIONS
 // ─────────────────────────────────────────────────────────────
 
@@ -80,9 +96,23 @@ export const feedbackSchema = z.object({
     .number()
     .min(1, 'Puan 1-5 arasında olmalı')
     .max(5, 'Puan 1-5 arasında olmalı'),
-  text: z.string().max(2000, 'Metin en fazla 2000 karakter olabilir').optional(),
-  media: z.array(z.string().url()).max(5, 'En fazla 5 medya yüklenebilir').optional(),
+  text: z.string().max(INPUT_LIMITS.feedbackText, `Metin en fazla ${INPUT_LIMITS.feedbackText} karakter olabilir`).optional(),
+  media: z
+    .array(
+      z.union([
+        z.string().url(),
+        z.object({ url: z.string().url(), type: z.enum(['image', 'audio', 'video']).optional() }),
+      ])
+    )
+    .max(5, 'En fazla 5 medya yüklenebilir')
+    .optional(),
   isPublic: z.boolean().default(true),
+  npsScore: z.number().min(0, 'NPS 0-10 arası').max(10, 'NPS 0-10 arası').optional().nullable(),
+  utmSource: z.string().max(200).optional(),
+  utmCampaign: z.string().max(200).optional(),
+  utmMedium: z.string().max(200).optional(),
+  attributionSource: z.string().max(100).optional(),
+  dealerStaffId: z.string().optional().nullable(),
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -106,6 +136,12 @@ export const updateQRCodeSchema = z.object({
     .optional(),
   description: z.string().max(500).optional().nullable(),
   isActive: z.boolean().optional(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  revoke: z.boolean().optional(), // true = set revokedAt to now, false = clear revokedAt
+  segmentConfig: z
+    .record(z.string(), z.object({ welcomeText: z.string().optional() }).passthrough())
+    .optional()
+    .nullable(),
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -147,6 +183,13 @@ export const createRewardSchema = z.object({
   cost: z.number().positive('Maliyet pozitif olmalı'),
   type: z.enum(['digital', 'physical', 'coupon']),
   stock: z.number().min(-1, 'Stok -1 veya daha fazla olmalı'),
+  metadata: z
+    .object({
+      perUserLimit: z.number().int().positive().optional(),
+      validFrom: z.string().datetime().optional(),
+      validUntil: z.string().datetime().optional(),
+    })
+    .optional(),
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -237,7 +280,7 @@ export const createConsumptionReviewSchema = z.object({
     .max(5, 'Puan 1-5 arasında olmalı'),
   text: z
     .string()
-    .max(2000, 'Yorum en fazla 2000 karakter olabilir')
+    .max(INPUT_LIMITS.feedbackText, `Yorum en fazla ${INPUT_LIMITS.feedbackText} karakter olabilir`)
     .optional(),
   dimensions: z
     .object({

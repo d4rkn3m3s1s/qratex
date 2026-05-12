@@ -1,18 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  FileText,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Eye,
-  Globe,
-  Lock,
-} from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { FileText, Plus, Search, Edit, Trash2, Globe, Lock, Loader2 } from 'lucide-react';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -26,12 +17,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { useAppT } from '@/lib/app-locale';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 
-interface Page {
+type CmsPage = {
   id: string;
   title: string;
   slug: string;
@@ -39,101 +32,111 @@ interface Page {
   isPublished: boolean;
   createdAt: string;
   updatedAt: string;
-}
+};
+
+const initialForm = { title: '', slug: '', content: '', isPublished: true };
 
 export default function AdminPagesPage() {
-  const [pages, setPages] = useState<Page[]>([
-    {
-      id: '1',
-      title: 'Hakkımızda',
-      slug: 'about',
-      content: 'QRATEX hakkında içerik...',
-      isPublished: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      title: 'Gizlilik Politikası',
-      slug: 'privacy',
-      content: 'Gizlilik politikası içeriği...',
-      isPublished: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      title: 'Kullanım Koşulları',
-      slug: 'terms',
-      content: 'Kullanım koşulları içeriği...',
-      isPublished: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      title: 'SSS',
-      slug: 'faq',
-      content: 'Sık sorulan sorular...',
-      isPublished: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ]);
+  const t = useAppT();
+  const [pages, setPages] = useState<CmsPage[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedPage, setSelectedPage] = useState<Page | null>(null);
-  
-  const [formData, setFormData] = useState({
-    title: '',
-    slug: '',
-    content: '',
-    isPublished: true,
-  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedPage, setSelectedPage] = useState<CmsPage | null>(null);
+  const [formData, setFormData] = useState(initialForm);
 
-  const handleCreate = () => {
-    const newPage: Page = {
-      id: Date.now().toString(),
-      ...formData,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setPages([...pages, newPage]);
-    toast.success('Sayfa oluşturuldu');
-    setCreateDialogOpen(false);
-    resetForm();
+  const loadPages = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/pages', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfalar alınamadı');
+      setPages((data.pages ?? []) as CmsPage[]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Yükleme hatası');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdate = () => {
+  useEffect(() => {
+    void loadPages();
+  }, []);
+
+  const filteredPages = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return pages;
+    return pages.filter((p) => p.title.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q));
+  }, [pages, searchQuery]);
+
+  const resetForm = () => setFormData(initialForm);
+
+  const handleCreate = async () => {
+    if (formData.title.trim().length < 2 || formData.slug.trim().length < 1) {
+      toast.error('Başlık ve slug zorunlu');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfa oluşturulamadı');
+      toast.success('Sayfa oluşturuldu');
+      setCreateOpen(false);
+      resetForm();
+      await loadPages();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
     if (!selectedPage) return;
-    
-    setPages(pages.map(p => 
-      p.id === selectedPage.id 
-        ? { ...p, ...formData, updatedAt: new Date().toISOString() }
-        : p
-    ));
-    toast.success('Sayfa güncellendi');
-    setEditDialogOpen(false);
-    setSelectedPage(null);
-    resetForm();
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/pages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedPage.id, ...formData }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfa güncellenemedi');
+      toast.success('Sayfa güncellendi');
+      setEditOpen(false);
+      setSelectedPage(null);
+      resetForm();
+      await loadPages();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setPages(pages.filter(p => p.id !== id));
-    toast.success('Sayfa silindi');
+  const handleDelete = async (id: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/pages?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfa silinemedi');
+      toast.success('Sayfa silindi');
+      await loadPages();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      slug: '',
-      content: '',
-      isPublished: true,
-    });
-  };
-
-  const openEditDialog = (page: Page) => {
+  const openEditDialog = (page: CmsPage) => {
     setSelectedPage(page);
     setFormData({
       title: page.title,
@@ -141,74 +144,65 @@ export default function AdminPagesPage() {
       content: page.content,
       isPublished: page.isPublished,
     });
-    setEditDialogOpen(true);
+    setEditOpen(true);
   };
-
-  const filteredPages = pages.filter((page) =>
-    page.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    page.slug.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const PageForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Sayfa Başlığı</Label>
-          <Input
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="Örn: Hakkımızda"
-          />
+          <Label>Sayfa başlığı</Label>
+          <Input value={formData.title} onChange={(e) => setFormData((s) => ({ ...s, title: e.target.value }))} />
         </div>
         <div className="space-y-2">
-          <Label>URL Slug</Label>
+          <Label>Slug</Label>
           <Input
             value={formData.slug}
-            onChange={(e) => setFormData({ 
-              ...formData, 
-              slug: e.target.value.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, '')
-            })}
-            placeholder="about"
+            onChange={(e) =>
+              setFormData((s) => ({
+                ...s,
+                slug: e.target.value.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, ''),
+              }))
+            }
           />
         </div>
       </div>
       <div className="space-y-2">
         <Label>İçerik</Label>
-        <Textarea
-          value={formData.content}
-          onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-          placeholder="Sayfa içeriği..."
-          rows={10}
-        />
+        <Textarea rows={10} value={formData.content} onChange={(e) => setFormData((s) => ({ ...s, content: e.target.value }))} />
       </div>
       <div className="flex items-center justify-between">
         <Label>Yayınla</Label>
-        <Switch
-          checked={formData.isPublished}
-          onCheckedChange={(checked) => setFormData({ ...formData, isPublished: checked })}
-        />
+        <Switch checked={formData.isPublished} onCheckedChange={(v) => setFormData((s) => ({ ...s, isPublished: v }))} />
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={() => {
-          setCreateDialogOpen(false);
-          setEditDialogOpen(false);
-          resetForm();
-        }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setCreateOpen(false);
+            setEditOpen(false);
+            setSelectedPage(null);
+            resetForm();
+          }}
+        >
           İptal
         </Button>
-        <Button onClick={onSubmit}>{submitLabel}</Button>
+        <Button onClick={onSubmit} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          {submitLabel}
+        </Button>
       </DialogFooter>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <AdminPremiumHero
         title="Sayfa Yönetimi"
-        description="Statik sayfaları oluşturun ve düzenleyin"
+        description="CMS sayfalarını veritabanından yönetin"
+        icon={<FileText className="text-white" />}
       />
 
-      {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -219,7 +213,8 @@ export default function AdminPagesPage() {
             className="pl-10"
           />
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
@@ -229,97 +224,60 @@ export default function AdminPagesPage() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Yeni Sayfa Oluştur</DialogTitle>
-              <DialogDescription>
-                Site için yeni bir statik sayfa oluşturun
-              </DialogDescription>
+              <DialogDescription>CMS sayfası bilgilerini doldurun</DialogDescription>
             </DialogHeader>
             <PageForm onSubmit={handleCreate} submitLabel="Oluştur" />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Pages List */}
-      <div className="space-y-4">
-        {filteredPages.length === 0 ? (
-          <Card glass>
-            <CardContent className="p-8 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Sayfa bulunamadı</p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredPages.map((page, index) => (
-            <motion.div
-              key={page.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card glass hover className="group">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-lg bg-primary/10">
-                        <FileText className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{page.title}</h3>
-                          {page.isPublished ? (
-                            <Badge variant="outline" className="text-green-500 border-green-500/20">
-                              <Globe className="h-3 w-3 mr-1" />
-                              Yayında
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-yellow-500 border-yellow-500/20">
-                              <Lock className="h-3 w-3 mr-1" />
-                              Taslak
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">/{page.slug}</p>
-                      </div>
+      {loading ? (
+        <InlineLoadingStatus className="py-16" label={t('adminInlineLoading.pages')} />
+      ) : filteredPages.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center text-muted-foreground">Sayfa bulunamadı.</CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {filteredPages.map((page, index) => (
+            <motion.div key={page.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
+              <Card>
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 min-w-0">
+                      <h3 className="font-semibold line-clamp-1">{page.title}</h3>
+                      <p className="text-sm text-muted-foreground font-mono">/{page.slug}</p>
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`/${page.slug}`, '_blank')}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(page)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(page.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Badge variant={page.isPublished ? 'default' : 'secondary'}>
+                      {page.isPublished ? <Globe className="h-3 w-3 mr-1" /> : <Lock className="h-3 w-3 mr-1" />}
+                      {page.isPublished ? 'Yayında' : 'Taslak'}
+                    </Badge>
+                  </div>
+
+                  <p className="text-sm text-muted-foreground line-clamp-3">{page.content || 'İçerik yok'}</p>
+
+                  <div className="text-xs text-muted-foreground">Güncelleme: {new Date(page.updatedAt).toLocaleDateString('tr-TR')}</div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => openEditDialog(page)}>
+                      <Edit className="h-4 w-4 mr-2" /> Düzenle
+                    </Button>
+                    <Button variant="outline" size="icon" className="text-destructive" onClick={() => void handleDelete(page.id)} disabled={saving}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Sayfa Düzenle</DialogTitle>
-            <DialogDescription>
-              {selectedPage?.title} sayfasını düzenleyin
-            </DialogDescription>
+            <DialogDescription>{selectedPage?.title}</DialogDescription>
           </DialogHeader>
           <PageForm onSubmit={handleUpdate} submitLabel="Güncelle" />
         </DialogContent>
@@ -327,7 +285,3 @@ export default function AdminPagesPage() {
     </div>
   );
 }
-
-
-
-

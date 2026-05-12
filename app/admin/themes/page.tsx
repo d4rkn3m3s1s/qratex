@@ -1,29 +1,40 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
 import {
   Palette,
   Check,
   Sun,
   Moon,
-  Monitor,
   Sparkles,
   Save,
   Loader2,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { useAppT } from '@/lib/app-locale';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { applyRuntimeThemeToRoot } from '@/lib/apply-runtime-theme';
+import {
+  THEME_SETTINGS_ADMIN_API_BASE,
+  THEME_SETTINGS_CATEGORY,
+  THEME_SETTINGS_KEYS,
+  themeAdminSettingsListUrl,
+} from '@/lib/theme-settings-keys';
+import { DEFAULT_CUSTOM_THEME_HEX, getAdminThemePresetsBase } from '@/lib/theme-presets';
 
 interface ThemePreset {
   id: string;
   name: string;
   description: string;
+  mode: 'light' | 'dark';
   colors: {
     primary: string;
     secondary: string;
@@ -34,97 +45,114 @@ interface ThemePreset {
   isActive: boolean;
 }
 
-const themePresets: ThemePreset[] = [
-  {
-    id: 'purple',
-    name: 'Mor Gece',
-    description: 'Varsayılan koyu tema',
-    colors: {
-      primary: '#8B5CF6',
-      secondary: '#A855F7',
-      accent: '#F472B6',
-      background: '#0A0A0B',
-      foreground: '#FAFAFA',
-    },
-    isActive: true,
-  },
-  {
-    id: 'blue',
-    name: 'Okyanus',
-    description: 'Mavi tonları',
-    colors: {
-      primary: '#3B82F6',
-      secondary: '#06B6D4',
-      accent: '#22D3EE',
-      background: '#0F172A',
-      foreground: '#F8FAFC',
-    },
-    isActive: false,
-  },
-  {
-    id: 'green',
-    name: 'Orman',
-    description: 'Yeşil tonları',
-    colors: {
-      primary: '#22C55E',
-      secondary: '#10B981',
-      accent: '#34D399',
-      background: '#0D1117',
-      foreground: '#F0FDF4',
-    },
-    isActive: false,
-  },
-  {
-    id: 'orange',
-    name: 'Gün Batımı',
-    description: 'Sıcak tonlar',
-    colors: {
-      primary: '#F97316',
-      secondary: '#FB923C',
-      accent: '#FBBF24',
-      background: '#1C1917',
-      foreground: '#FEF3C7',
-    },
-    isActive: false,
-  },
-  {
-    id: 'pink',
-    name: 'Çiçek',
-    description: 'Pembe tonları',
-    colors: {
-      primary: '#EC4899',
-      secondary: '#F472B6',
-      accent: '#F9A8D4',
-      background: '#1A1A2E',
-      foreground: '#FDF2F8',
-    },
-    isActive: false,
-  },
-  {
-    id: 'light',
-    name: 'Aydınlık',
-    description: 'Açık tema',
-    colors: {
-      primary: '#7C3AED',
-      secondary: '#8B5CF6',
-      accent: '#A78BFA',
-      background: '#FFFFFF',
-      foreground: '#1F2937',
-    },
-    isActive: false,
-  },
-];
+function getThemeFamilyKey(themeId: string): string {
+  return themeId.replace(/Light$/i, '');
+}
+
+function getResolvedMode(mode: 'light' | 'dark' | 'system'): 'light' | 'dark' {
+  if (mode === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return mode;
+}
+
+function getRuntimeMode(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'dark';
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
+
+function getEffectiveMode(resolvedTheme?: string): 'light' | 'dark' {
+  if (typeof document !== 'undefined') {
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  }
+  if (resolvedTheme === 'dark') return 'dark';
+  if (resolvedTheme === 'light') return 'light';
+  return getRuntimeMode();
+}
+
+function resolveThemeIdForMode(themeFamilyOrId: string, mode: 'light' | 'dark', themes: ThemePreset[]): string {
+  const family = getThemeFamilyKey(themeFamilyOrId);
+  const preferred = mode === 'light' ? `${family}Light` : family;
+  if (themes.some((t) => t.id === preferred)) return preferred;
+  if (themes.some((t) => t.id === themeFamilyOrId)) return themeFamilyOrId;
+  return 'purple';
+}
 
 export default function AdminThemesPage() {
-  const [themes, setThemes] = useState(themePresets);
-  const [customColors, setCustomColors] = useState({
-    primary: '#8B5CF6',
-    secondary: '#A855F7',
-    accent: '#F472B6',
+  const t = useAppT();
+  const { resolvedTheme } = useTheme();
+  const [themes, setThemes] = useState<ThemePreset[]>(() =>
+    getAdminThemePresetsBase().map((t, i) => ({ ...t, isActive: i === 0 }))
+  );
+  const [customColors, setCustomColors] = useState<{
+    primary: string;
+    secondary: string;
+    accent: string;
+  }>({
+    primary: DEFAULT_CUSTOM_THEME_HEX.primary,
+    secondary: DEFAULT_CUSTOM_THEME_HEX.secondary,
+    accent: DEFAULT_CUSTOM_THEME_HEX.accent,
   });
-  const [defaultMode, setDefaultMode] = useState<'light' | 'dark' | 'system'>('dark');
+  const [activeThemeId, setActiveThemeId] = useState<string>('purple');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const currentMode: 'light' | 'dark' = getEffectiveMode(resolvedTheme);
+
+  const themeFamilies = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { familyKey: string; dark?: ThemePreset; light?: ThemePreset; displayName: string; description: string }
+    >();
+
+    for (const theme of themes) {
+      const familyKey = theme.id.replace(/Light$/i, '');
+      const existing = grouped.get(familyKey) || {
+        familyKey,
+        displayName: theme.name.replace(/\s+Gün$/i, ''),
+        description: theme.description,
+      };
+      if (theme.mode === 'dark') existing.dark = theme;
+      if (theme.mode === 'light') existing.light = theme;
+      if (!existing.description && theme.description) existing.description = theme.description;
+      grouped.set(familyKey, existing);
+    }
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, 'tr')
+    );
+  }, [themes]);
+
+  useEffect(() => {
+    if (activeThemeId === 'custom') {
+      applyRuntimeThemeToRoot({
+        primary: customColors.primary,
+        secondary: customColors.secondary,
+        accent: customColors.accent,
+      });
+      return;
+    }
+    const effectiveId = resolveThemeIdForMode(activeThemeId, getEffectiveMode(resolvedTheme), themes);
+    const selected = themes.find((t) => t.id === effectiveId);
+    if (selected) {
+      applyThemeColors(selected.colors);
+      window.dispatchEvent(
+        new CustomEvent('qratex:theme-palette-preview', {
+          detail: {
+            activeThemeId: getThemeFamilyKey(activeThemeId),
+            mode: getEffectiveMode(resolvedTheme),
+            colors: {
+              primary: selected.colors.primary,
+              secondary: selected.colors.secondary,
+              accent: selected.colors.accent,
+              background: selected.colors.background,
+              foreground: selected.colors.foreground,
+            },
+          },
+        })
+      );
+    }
+  }, [activeThemeId, customColors, resolvedTheme, themes]);
 
   // Fetch theme settings on mount
   useEffect(() => {
@@ -133,21 +161,31 @@ export default function AdminThemesPage() {
 
   const fetchThemeSettings = async () => {
     try {
-      const res = await fetch('/api/admin/settings?category=theme');
+      const res = await fetch(themeAdminSettingsListUrl());
       const data = await res.json();
       
       if (data.raw) {
+        let nextActiveTheme = activeThemeId;
+        let nextCustomColors = customColors;
+
         data.raw.forEach((setting: { key: string; value: unknown }) => {
-          if (setting.key === 'activeTheme' && typeof setting.value === 'string') {
-            setThemes(themes.map(t => ({ ...t, isActive: t.id === setting.value })));
+          if (setting.key === THEME_SETTINGS_KEYS.activeTheme && typeof setting.value === 'string') {
+            nextActiveTheme = setting.value;
           }
-          if (setting.key === 'customColors' && typeof setting.value === 'object') {
-            setCustomColors(setting.value as typeof customColors);
-          }
-          if (setting.key === 'defaultMode' && typeof setting.value === 'string') {
-            setDefaultMode(setting.value as 'light' | 'dark' | 'system');
+          if (setting.key === THEME_SETTINGS_KEYS.customColors && typeof setting.value === 'object') {
+            const raw = setting.value as Record<string, unknown>;
+            nextCustomColors = {
+              primary: typeof raw.primary === 'string' ? raw.primary : DEFAULT_CUSTOM_THEME_HEX.primary,
+              secondary: typeof raw.secondary === 'string' ? raw.secondary : DEFAULT_CUSTOM_THEME_HEX.secondary,
+              accent: typeof raw.accent === 'string' ? raw.accent : DEFAULT_CUSTOM_THEME_HEX.accent,
+            };
           }
         });
+
+        setActiveThemeId(nextActiveTheme);
+        setCustomColors(nextCustomColors);
+        const effective = resolveThemeIdForMode(nextActiveTheme, getEffectiveMode(resolvedTheme), themes);
+        setThemes((prev) => prev.map((t) => ({ ...t, isActive: t.id === effective })));
       }
     } catch (error) {
       console.error('Failed to fetch theme settings:', error);
@@ -156,53 +194,41 @@ export default function AdminThemesPage() {
     }
   };
 
-  // HEX to HSL conversion
-  const hexToHSL = (hex: string): string => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!result) return '0 0% 0%';
-    let r = parseInt(result[1], 16) / 255;
-    let g = parseInt(result[2], 16) / 255;
-    let b = parseInt(result[3], 16) / 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    let h = 0, s = 0;
-    const l = (max + min) / 2;
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-        case g: h = ((b - r) / d + 2) / 6; break;
-        case b: h = ((r - g) / d + 4) / 6; break;
-      }
-    }
-    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-  };
-
   const applyThemeColors = (colors: ThemePreset['colors']) => {
-    const root = document.documentElement;
-    root.style.setProperty('--primary', hexToHSL(colors.primary));
-    root.style.setProperty('--ring', hexToHSL(colors.primary));
-    root.style.setProperty('--gradient-from', hexToHSL(colors.primary));
-    root.style.setProperty('--gradient-to', hexToHSL(colors.secondary));
-    root.style.setProperty('--accent', hexToHSL(colors.accent));
+    applyRuntimeThemeToRoot({
+      primary: colors.primary,
+      secondary: colors.secondary,
+      accent: colors.accent,
+      background: colors.background,
+      foreground: colors.foreground,
+      mode: currentMode,
+    });
   };
 
   const activateTheme = async (id: string) => {
+    const resolvedMode = getEffectiveMode(resolvedTheme);
+    const family = getThemeFamilyKey(id);
+    const effectiveId = resolveThemeIdForMode(family, resolvedMode, themes);
+    const selected = themes.find((t) => t.id === effectiveId);
+    if (selected) {
+      applyThemeColors(selected.colors);
+    }
+    setActiveThemeId(family);
+    setThemes((prev) => prev.map((t) => ({ ...t, isActive: t.id === effectiveId })));
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/settings', {
+      const themeRes = await fetch(THEME_SETTINGS_ADMIN_API_BASE, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'activeTheme', value: id, category: 'theme' }),
+        body: JSON.stringify({
+          key: THEME_SETTINGS_KEYS.activeTheme,
+          value: family,
+          category: THEME_SETTINGS_CATEGORY,
+        }),
       });
       
-      if (res.ok) {
-        const selectedTheme = themes.find(t => t.id === id);
-        if (selectedTheme) {
-          applyThemeColors(selectedTheme.colors);
-        }
-        setThemes(themes.map(t => ({ ...t, isActive: t.id === id })));
+      if (themeRes.ok) {
+        window.dispatchEvent(new CustomEvent('qratex:theme-palette-changed'));
         toast.success('Tema aktifleştirildi ve kaydedildi');
       } else {
         toast.error('Tema kaydedilemedi');
@@ -217,20 +243,45 @@ export default function AdminThemesPage() {
   const saveCustomTheme = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'customColors', value: customColors, category: 'theme' }),
-      });
-      
-      if (res.ok) {
-        // Apply custom colors immediately
-        const root = document.documentElement;
-        root.style.setProperty('--primary', hexToHSL(customColors.primary));
-        root.style.setProperty('--ring', hexToHSL(customColors.primary));
-        root.style.setProperty('--gradient-from', hexToHSL(customColors.primary));
-        root.style.setProperty('--gradient-to', hexToHSL(customColors.secondary));
-        root.style.setProperty('--accent', hexToHSL(customColors.accent));
+      const [saveColorsRes, activateCustomRes] = await Promise.all([
+        fetch(THEME_SETTINGS_ADMIN_API_BASE, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: THEME_SETTINGS_KEYS.customColors,
+            value: customColors,
+            category: THEME_SETTINGS_CATEGORY,
+          }),
+        }),
+        fetch(THEME_SETTINGS_ADMIN_API_BASE, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: THEME_SETTINGS_KEYS.activeTheme,
+            value: 'custom',
+            category: THEME_SETTINGS_CATEGORY,
+          }),
+        }),
+      ]);
+
+      if (saveColorsRes.ok && activateCustomRes.ok) {
+        setActiveThemeId('custom');
+        setThemes((prev) => prev.map((t) => ({ ...t, isActive: false })));
+        applyRuntimeThemeToRoot({ ...customColors, mode: currentMode });
+        window.dispatchEvent(
+          new CustomEvent('qratex:theme-palette-preview', {
+            detail: {
+              activeThemeId: 'custom',
+              mode: currentMode,
+              colors: {
+                primary: customColors.primary,
+                secondary: customColors.secondary,
+                accent: customColors.accent,
+              },
+            },
+          })
+        );
+        window.dispatchEvent(new CustomEvent('qratex:theme-palette-changed'));
         toast.success('Özel tema kaydedildi ve uygulandı');
       } else {
         toast.error('Tema kaydedilemedi');
@@ -242,49 +293,27 @@ export default function AdminThemesPage() {
     }
   };
 
-  const saveDefaultMode = async (mode: 'light' | 'dark' | 'system') => {
-    setDefaultMode(mode);
-    setSaving(true);
-    try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'defaultMode', value: mode, category: 'theme' }),
-      });
-      
-      if (res.ok) {
-        toast.success('Varsayılan mod kaydedildi');
-      } else {
-        toast.error('Mod kaydedilemedi');
-      }
-    } catch (error) {
-      toast.error('Bir hata oluştu');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const activeTheme = themes.find(t => t.isActive);
+  const activeTheme = themes.find((t) => t.isActive);
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <DashboardHeader
+        <AdminPremiumHero
           title="Tema Yönetimi"
           description="Platform görünümünü özelleştirin"
+          icon={<Sparkles className="text-white" />}
         />
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <InlineLoadingStatus className="h-64" spinnerClassName="text-primary" label={t('adminInlineLoading.themes')} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <AdminPremiumHero
         title="Tema Yönetimi"
         description="Platform görünümünü özelleştirin"
+        icon={<Sparkles className="text-white" />}
       />
 
       {/* Current Theme Preview */}
@@ -293,11 +322,22 @@ export default function AdminThemesPage() {
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             Aktif Tema: {activeTheme?.name}
+            {!activeTheme && activeThemeId === 'custom' ? 'Özel Tema' : ''}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            {activeTheme && Object.entries(activeTheme.colors).map(([key, value]) => (
+            {activeThemeId === 'custom'
+              ? Object.entries(customColors).map(([key, value]) => (
+                <div key={key} className="text-center">
+                  <div
+                    className="w-16 h-16 rounded-lg border shadow-lg mb-2"
+                    style={{ backgroundColor: value }}
+                  />
+                  <p className="text-xs text-muted-foreground capitalize">{key}</p>
+                </div>
+              ))
+              : activeTheme && Object.entries(activeTheme.colors).map(([key, value]) => (
               <div key={key} className="text-center">
                 <div
                   className="w-16 h-16 rounded-lg border shadow-lg mb-2"
@@ -312,11 +352,11 @@ export default function AdminThemesPage() {
 
       {/* Theme Presets */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Hazır Temalar</h2>
+        <h2 className="text-lg font-semibold mb-4">Hazır Temalar (Açık + Koyu)</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {themes.map((theme, index) => (
+          {themeFamilies.map((family, index) => (
             <motion.div
-              key={theme.id}
+              key={family.familyKey}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -325,48 +365,63 @@ export default function AdminThemesPage() {
                 glass
                 hover
                 className={`cursor-pointer relative overflow-hidden ${
-                  theme.isActive ? 'ring-2 ring-primary' : ''
+                  family.dark?.isActive || family.light?.isActive ? 'ring-2 ring-primary' : ''
                 }`}
-                onClick={() => activateTheme(theme.id)}
+                onClick={() => activateTheme(family.familyKey)}
               >
-                {theme.isActive && (
+                {(family.dark?.isActive || family.light?.isActive) && (
                   <div className="absolute top-2 right-2">
                     <Badge className="bg-primary">
                       <Check className="h-3 w-3 mr-1" />
-                      Aktif
+                      Palette aktif
                     </Badge>
                   </div>
                 )}
                 <CardContent className="p-6">
-                  {/* Color Preview */}
-                  <div className="flex gap-2 mb-4">
-                    {Object.values(theme.colors).slice(0, 3).map((color, i) => (
+                  <div className="mb-2">
+                    <h3 className="font-semibold">{family.displayName}</h3>
+                    <p className="text-sm text-muted-foreground">{family.description}</p>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {family.dark ? (
                       <div
-                        key={i}
-                        className="w-8 h-8 rounded-full shadow-md"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
+                        className={`rounded-lg border p-3 text-left transition ${
+                          family.dark.isActive ? 'border-primary ring-2 ring-primary/40' : 'border-border/60'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center gap-2 text-sm">
+                          <Moon className="h-4 w-4" />
+                          <span>Koyu</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {[family.dark.colors.primary, family.dark.colors.secondary, family.dark.colors.accent].map((color) => (
+                            <span key={color} className="h-6 w-6 rounded-full border" style={{ backgroundColor: color }} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {family.light ? (
+                      <div
+                        className={`rounded-lg border p-3 text-left transition ${
+                          family.light.isActive ? 'border-primary ring-2 ring-primary/40' : 'border-border/60'
+                        }`}
+                      >
+                        <div className="mb-2 flex items-center gap-2 text-sm">
+                          <Sun className="h-4 w-4" />
+                          <span>Açık</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {[family.light.colors.primary, family.light.colors.secondary, family.light.colors.accent].map((color) => (
+                            <span key={color} className="h-6 w-6 rounded-full border" style={{ backgroundColor: color }} />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-
-                  {/* Theme Info */}
-                  <h3 className="font-semibold">{theme.name}</h3>
-                  <p className="text-sm text-muted-foreground">{theme.description}</p>
-
-                  {/* Theme Type Icon */}
-                  <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-                    {theme.id === 'light' ? (
-                      <>
-                        <Sun className="h-4 w-4" />
-                        <span>Açık Mod</span>
-                      </>
-                    ) : (
-                      <>
-                        <Moon className="h-4 w-4" />
-                        <span>Koyu Mod</span>
-                      </>
-                    )}
-                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Bu karttan sadece palette seçilir. Açık/Koyu geçişini alttaki "Varsayılan Mod" otomatik yönetir.
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -457,43 +512,6 @@ export default function AdminThemesPage() {
         </CardContent>
       </Card>
 
-      {/* Mode Selection */}
-      <Card glass>
-        <CardHeader>
-          <CardTitle>Varsayılan Mod</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Button 
-              variant={defaultMode === 'light' ? 'default' : 'outline'} 
-              className="flex-1 h-24 flex-col gap-2"
-              onClick={() => saveDefaultMode('light')}
-              disabled={saving}
-            >
-              <Sun className="h-6 w-6" />
-              <span>Açık</span>
-            </Button>
-            <Button 
-              variant={defaultMode === 'dark' ? 'default' : 'outline'} 
-              className="flex-1 h-24 flex-col gap-2"
-              onClick={() => saveDefaultMode('dark')}
-              disabled={saving}
-            >
-              <Moon className="h-6 w-6" />
-              <span>Koyu</span>
-            </Button>
-            <Button 
-              variant={defaultMode === 'system' ? 'default' : 'outline'} 
-              className="flex-1 h-24 flex-col gap-2"
-              onClick={() => saveDefaultMode('system')}
-              disabled={saving}
-            >
-              <Monitor className="h-6 w-6" />
-              <span>Sistem</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

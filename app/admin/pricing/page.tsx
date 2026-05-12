@@ -1,22 +1,11 @@
-'use client';
+﻿'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  CreditCard,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Check,
-  Star,
-  Zap,
-} from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { Plus, Edit, Trash2, Check, Star, Loader2, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -27,163 +16,230 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { useAppT } from '@/lib/app-locale';
 
-interface PricingPlan {
+type PricingPlan = {
   id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  interval: 'monthly' | 'yearly' | 'lifetime';
+  features: string[];
+  maxQRCodes: number | null;
+  maxBranches: number | null;
+  pricePerBranch: number | null;
+  isPopular: boolean;
+  isActive: boolean;
+  order: number;
+};
+
+type FormData = {
   name: string;
   description: string;
   price: number;
   currency: string;
-  interval: 'MONTHLY' | 'YEARLY';
-  features: string[];
+  interval: 'monthly' | 'yearly' | 'lifetime';
+  features: string;
+  maxQRCodes: number | null;
+  maxBranches: number | null;
+  pricePerBranch: number | null;
   isPopular: boolean;
   isActive: boolean;
+};
+
+const initialForm: FormData = {
+  name: '',
+  description: '',
+  price: 0,
+  currency: 'TRY',
+  interval: 'monthly',
+  features: '',
+  maxQRCodes: null,
+  maxBranches: null,
+  pricePerBranch: null,
+  isPopular: false,
+  isActive: true,
+};
+
+function normalizeFeatures(lines: string): string[] {
+  return lines
+    .split('\n')
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 export default function AdminPricingPage() {
+  const t = useAppT();
   const [plans, setPlans] = useState<PricingPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PricingPlan | null>(null);
-  
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    price: 0,
-    currency: 'TRY',
-    interval: 'MONTHLY' as 'MONTHLY' | 'YEARLY',
-    features: '',
-    isPopular: false,
-    isActive: true,
-  });
+  const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [selected, setSelected] = useState<PricingPlan | null>(null);
+  const [formData, setFormData] = useState<FormData>(initialForm);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/admin/pricing', { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok || !j.success) throw new Error(j.error || 'Fiyat planları yüklenemedi');
+      const list = (j.plans ?? []) as Array<Record<string, unknown>>;
+      const mapped: PricingPlan[] = list.map((p) => ({
+        id: String(p.id),
+        name: String(p.name),
+        description: p.description == null ? null : String(p.description),
+        price: Number(p.price) || 0,
+        currency: String(p.currency || 'TRY'),
+        interval: (String(p.interval || 'monthly') as PricingPlan['interval']),
+        features: Array.isArray(p.features)
+          ? p.features.map((f) => String(f))
+          : Array.isArray((p.features as { features?: unknown })?.features)
+            ? ((p.features as { features: unknown[] }).features.map((f) => String(f)))
+            : [],
+        maxQRCodes: p.maxQRCodes == null ? null : Number(p.maxQRCodes),
+        maxBranches: p.maxBranches == null ? null : Number(p.maxBranches),
+        pricePerBranch: p.pricePerBranch == null ? null : Number(p.pricePerBranch),
+        isPopular: Boolean(p.isPopular),
+        isActive: Boolean(p.isActive),
+        order: Number(p.order) || 0,
+      }));
+      setPlans(mapped);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Yükleme hatası');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    fetchPlans();
+    void load();
   }, []);
 
-  const fetchPlans = async () => {
-    setLoading(true);
-    // Simulated data - replace with API
-    setTimeout(() => {
-      setPlans([
-        {
-          id: '1',
-          name: 'Ücretsiz',
-          description: 'Küçük işletmeler için ideal başlangıç',
-          price: 0,
-          currency: 'TRY',
-          interval: 'MONTHLY',
-          features: ['3 QR Kod', 'Aylık 100 Geri Bildirim', 'Temel Analitik', 'E-posta Desteği'],
-          isPopular: false,
-          isActive: true,
-        },
-        {
-          id: '2',
-          name: 'Başlangıç',
-          description: 'Büyüyen işletmeler için',
-          price: 299,
-          currency: 'TRY',
-          interval: 'MONTHLY',
-          features: ['10 QR Kod', 'Aylık 500 Geri Bildirim', 'Gelişmiş Analitik', 'AI Duygu Analizi', 'Öncelikli Destek'],
-          isPopular: true,
-          isActive: true,
-        },
-        {
-          id: '3',
-          name: 'Profesyonel',
-          description: 'Orta ölçekli işletmeler için',
-          price: 699,
-          currency: 'TRY',
-          interval: 'MONTHLY',
-          features: ['Sınırsız QR Kod', 'Sınırsız Geri Bildirim', 'Tam Analitik Paketi', 'AI Asistan', 'API Erişimi', '7/24 Destek'],
-          isPopular: false,
-          isActive: true,
-        },
-      ]);
-      setLoading(false);
-    }, 500);
-  };
+  const reset = () => setFormData(initialForm);
 
-  const handleCreate = async () => {
-    const newPlan: PricingPlan = {
-      id: Date.now().toString(),
-      ...formData,
-      features: formData.features.split('\n').filter(f => f.trim()),
-    };
-    setPlans([...plans, newPlan]);
-    toast.success('Plan oluşturuldu');
-    setCreateDialogOpen(false);
-    resetForm();
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedPlan) return;
-    
-    setPlans(plans.map(p => 
-      p.id === selectedPlan.id 
-        ? { ...p, ...formData, features: formData.features.split('\n').filter(f => f.trim()) }
-        : p
-    ));
-    toast.success('Plan güncellendi');
-    setEditDialogOpen(false);
-    setSelectedPlan(null);
-    resetForm();
-  };
-
-  const handleDelete = async (id: string) => {
-    setPlans(plans.filter(p => p.id !== id));
-    toast.success('Plan silindi');
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      price: 0,
-      currency: 'TRY',
-      interval: 'MONTHLY',
-      features: '',
-      isPopular: false,
-      isActive: true,
-    });
-  };
-
-  const openEditDialog = (plan: PricingPlan) => {
-    setSelectedPlan(plan);
+  const openEdit = (plan: PricingPlan) => {
+    setSelected(plan);
     setFormData({
       name: plan.name,
-      description: plan.description,
+      description: plan.description || '',
       price: plan.price,
       currency: plan.currency,
       interval: plan.interval,
       features: plan.features.join('\n'),
+      maxQRCodes: plan.maxQRCodes,
+      maxBranches: plan.maxBranches,
+      pricePerBranch: plan.pricePerBranch,
       isPopular: plan.isPopular,
       isActive: plan.isActive,
     });
-    setEditDialogOpen(true);
+    setEditOpen(true);
   };
 
-  const PlanForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
+  const payload = useMemo(
+    () => ({
+      name: formData.name.trim(),
+      description: formData.description.trim() || null,
+      price: formData.price,
+      currency: formData.currency.trim() || 'TRY',
+      interval: formData.interval,
+      features: normalizeFeatures(formData.features),
+      maxQRCodes: formData.maxQRCodes,
+      maxBranches: formData.maxBranches,
+      pricePerBranch: formData.pricePerBranch,
+      isPopular: formData.isPopular,
+      isActive: formData.isActive,
+    }),
+    [formData]
+  );
+
+  const createPlan = async () => {
+    if (payload.name.length < 2 || payload.features.length === 0) {
+      toast.error('Plan adı ve en az 1 özellik gerekli');
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.success) throw new Error(j.error || 'Plan oluşturulamadı');
+      toast.success('Plan oluşturuldu');
+      setCreateOpen(false);
+      reset();
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updatePlan = async () => {
+    if (!selected) return;
+    if (payload.name.length < 2 || payload.features.length === 0) {
+      toast.error('Plan adı ve en az 1 özellik gerekli');
+      return;
+    }
+    setSaving(true);
+    try {
+      const r = await fetch('/api/admin/pricing', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selected.id, ...payload }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.success) throw new Error(j.error || 'Plan güncellenemedi');
+      toast.success('Plan güncellendi');
+      setEditOpen(false);
+      setSelected(null);
+      reset();
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePlan = async (id: string) => {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/admin/pricing?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const j = await r.json();
+      if (!r.ok || !j.success) throw new Error(j.error || 'Plan silinemedi');
+      toast.success('Plan silindi');
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Hata');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const Form = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Plan Adı</Label>
-          <Input
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Örn: Profesyonel"
-          />
+          <Label>Plan adı</Label>
+          <Input value={formData.name} onChange={(e) => setFormData((s) => ({ ...s, name: e.target.value }))} />
         </div>
         <div className="space-y-2">
-          <Label>Fiyat (₺)</Label>
+          <Label>Fiyat</Label>
           <Input
             type="number"
             value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
+            onChange={(e) => setFormData((s) => ({ ...s, price: Number(e.target.value) || 0 }))}
           />
         </div>
       </div>
@@ -191,162 +247,183 @@ export default function AdminPricingPage() {
         <Label>Açıklama</Label>
         <Input
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Plan açıklaması..."
+          onChange={(e) => setFormData((s) => ({ ...s, description: e.target.value }))}
         />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Para birimi</Label>
+          <Input
+            value={formData.currency}
+            onChange={(e) => setFormData((s) => ({ ...s, currency: e.target.value.toUpperCase() }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Döngü (monthly/yearly/lifetime)</Label>
+          <Input
+            value={formData.interval}
+            onChange={(e) => {
+              const v = e.target.value as FormData['interval'];
+              if (v === 'monthly' || v === 'yearly' || v === 'lifetime') {
+                setFormData((s) => ({ ...s, interval: v }));
+              }
+            }}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Maks QR (boş=sınırsız)</Label>
+          <Input
+            type="number"
+            value={formData.maxQRCodes ?? ''}
+            onChange={(e) =>
+              setFormData((s) => ({
+                ...s,
+                maxQRCodes: e.target.value === '' ? null : Number(e.target.value) || null,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Maks şube (boş=sınırsız)</Label>
+          <Input
+            type="number"
+            value={formData.maxBranches ?? ''}
+            onChange={(e) =>
+              setFormData((s) => ({
+                ...s,
+                maxBranches: e.target.value === '' ? null : Number(e.target.value) || null,
+              }))
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Şube başına fiyat</Label>
+          <Input
+            type="number"
+            value={formData.pricePerBranch ?? ''}
+            onChange={(e) =>
+              setFormData((s) => ({
+                ...s,
+                pricePerBranch: e.target.value === '' ? null : Number(e.target.value) || null,
+              }))
+            }
+          />
+        </div>
       </div>
       <div className="space-y-2">
-        <Label>Özellikler (Her satıra bir özellik)</Label>
+        <Label>Özellikler (satır satır)</Label>
         <Textarea
-          value={formData.features}
-          onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-          placeholder="Sınırsız QR Kod&#10;AI Analiz&#10;7/24 Destek"
           rows={5}
+          value={formData.features}
+          onChange={(e) => setFormData((s) => ({ ...s, features: e.target.value }))}
         />
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <Switch
-            checked={formData.isPopular}
-            onCheckedChange={(checked) => setFormData({ ...formData, isPopular: checked })}
-          />
-          <Label>Popüler Plan</Label>
+          <Switch checked={formData.isPopular} onCheckedChange={(v) => setFormData((s) => ({ ...s, isPopular: v }))} />
+          <Label>Popüler</Label>
         </div>
         <div className="flex items-center gap-2">
-          <Switch
-            checked={formData.isActive}
-            onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-          />
+          <Switch checked={formData.isActive} onCheckedChange={(v) => setFormData((s) => ({ ...s, isActive: v }))} />
           <Label>Aktif</Label>
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={() => {
-          setCreateDialogOpen(false);
-          setEditDialogOpen(false);
-          resetForm();
-        }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setCreateOpen(false);
+            setEditOpen(false);
+            setSelected(null);
+            reset();
+          }}
+        >
           İptal
         </Button>
-        <Button onClick={onSubmit}>{submitLabel}</Button>
+        <Button onClick={onSubmit} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          {submitLabel}
+        </Button>
       </DialogFooter>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <AdminPremiumHero
+        eyebrow="Gelir"
         title="Fiyatlandırma"
-        description="Abonelik planlarını yönetin"
+        description="Abonelik planları gerçek veritabanından yönetilir."
+        icon={<CreditCard className="text-white" />}
+        actions={
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2 bg-white text-emerald-900 hover:bg-white/90 shadow-md">
+                <Plus className="h-4 w-4" /> Yeni plan
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Yeni plan</DialogTitle>
+                <DialogDescription>Plan bilgilerini doldurun</DialogDescription>
+              </DialogHeader>
+              <Form onSubmit={createPlan} submitLabel="Oluştur" />
+            </DialogContent>
+          </Dialog>
+        }
       />
 
-      {/* Actions */}
-      <div className="flex justify-end">
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Yeni Plan
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Yeni Plan Oluştur</DialogTitle>
-              <DialogDescription>
-                Yeni bir fiyatlandırma planı ekleyin
-              </DialogDescription>
-            </DialogHeader>
-            <PlanForm onSubmit={handleCreate} submitLabel="Oluştur" />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Plans Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i} glass>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="h-6 bg-muted rounded w-1/2" />
-                  <div className="h-10 bg-muted rounded w-3/4" />
-                  <div className="space-y-2">
-                    {[...Array(4)].map((_, j) => (
-                      <div key={j} className="h-4 bg-muted rounded" />
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <InlineLoadingStatus className="py-16" label={t('adminInlineLoading.pricingPlans')} />
+      ) : plans.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">Henüz fiyat planı yok.</CardContent>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {plans.map((plan, index) => (
-            <motion.div
-              key={plan.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
-              <Card 
-                glass 
-                className={`relative overflow-hidden ${plan.isPopular ? 'ring-2 ring-primary' : ''}`}
-              >
-                {plan.isPopular && (
-                  <div className="absolute top-0 right-0">
-                    <Badge className="rounded-none rounded-bl-lg bg-primary">
-                      <Star className="h-3 w-3 mr-1 fill-white" />
-                      Popüler
-                    </Badge>
-                  </div>
-                )}
-                <CardContent className="p-6 space-y-6">
-                  {/* Header */}
-                  <div>
-                    <h3 className="text-xl font-bold">{plan.name}</h3>
-                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+            <motion.div key={plan.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
+              <Card className={plan.isPopular ? 'ring-2 ring-primary/60' : ''}>
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-lg font-semibold leading-tight">{plan.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{plan.description || 'Açıklama yok'}</p>
+                    </div>
+                    {plan.isPopular ? (
+                      <Badge>
+                        <Star className="h-3 w-3 mr-1" /> Popüler
+                      </Badge>
+                    ) : null}
                   </div>
 
-                  {/* Price */}
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-bold">₺{plan.price}</span>
-                    <span className="text-muted-foreground">/ay</span>
+                  <div className="text-2xl font-bold tabular-nums">
+                    {plan.currency} {plan.price.toLocaleString('tr-TR')}
+                    <span className="text-sm text-muted-foreground font-normal"> / {plan.interval}</span>
                   </div>
 
-                  {/* Features */}
-                  <ul className="space-y-3">
-                    {plan.features.map((feature, i) => (
-                      <li key={i} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        {feature}
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    {plan.maxQRCodes != null ? <Badge variant="outline">{plan.maxQRCodes} QR</Badge> : <Badge variant="outline">QR sınırsız</Badge>}
+                    {plan.maxBranches != null ? <Badge variant="outline">{plan.maxBranches} şube</Badge> : <Badge variant="outline">Şube sınırsız</Badge>}
+                    {!plan.isActive ? <Badge variant="secondary">Pasif</Badge> : <Badge>Aktif</Badge>}
+                  </div>
+
+                  <ul className="space-y-1.5 text-sm">
+                    {plan.features.slice(0, 5).map((feature) => (
+                      <li key={feature} className="flex items-center gap-2">
+                        <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span className="line-clamp-1">{feature}</span>
                       </li>
                     ))}
                   </ul>
 
-                  {/* Status */}
-                  <div className="flex items-center justify-between">
-                    <Badge variant={plan.isActive ? 'default' : 'secondary'}>
-                      {plan.isActive ? 'Aktif' : 'Pasif'}
-                    </Badge>
-                  </div>
-
-                  {/* Actions */}
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => openEditDialog(plan)}
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Düzenle
+                    <Button variant="outline" className="flex-1" onClick={() => openEdit(plan)}>
+                      <Edit className="h-4 w-4 mr-2" /> Düzenle
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(plan.id)}
-                    >
+                    <Button variant="outline" size="icon" className="text-destructive" onClick={() => void deletePlan(plan.id)} disabled={saving}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -357,22 +434,15 @@ export default function AdminPricingPage() {
         </div>
       )}
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Plan Düzenle</DialogTitle>
-            <DialogDescription>
-              {selectedPlan?.name} planını düzenleyin
-            </DialogDescription>
+            <DialogTitle>Plan düzenle</DialogTitle>
+            <DialogDescription>{selected?.name}</DialogDescription>
           </DialogHeader>
-          <PlanForm onSubmit={handleUpdate} submitLabel="Güncelle" />
+          <Form onSubmit={updatePlan} submitLabel="Güncelle" />
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
-
-
-

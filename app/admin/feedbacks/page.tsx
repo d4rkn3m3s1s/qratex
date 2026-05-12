@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
@@ -28,14 +29,14 @@ import {
   User,
   SlidersHorizontal,
   X,
-  Loader2,
   BarChart3,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { useAppT } from '@/lib/app-locale';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -70,8 +71,17 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { formatDate, formatRelativeTime, getSentimentColor, getSentimentEmoji, getInitials } from '@/lib/utils';
+import {
+  exportToCSV,
+  exportToPDF,
+  feedbackCSVColumns,
+  buildFeedbackListPDFContent,
+  buildAnalyticsPDFContent,
+  type FeedbackExportRow,
+} from '@/lib/export-utils';
 
 interface Feedback {
   id: string;
@@ -109,6 +119,11 @@ interface Stats {
   neutral: number;
   negative: number;
   ratingDistribution: { [key: number]: number };
+  nps?: number | null;
+  npsTotal?: number;
+  npsPromoters?: number;
+  npsPassives?: number;
+  npsDetractors?: number;
 }
 
 interface Dealer {
@@ -123,6 +138,8 @@ const sentimentIcons = {
 };
 
 export default function AdminFeedbacksPage() {
+  const t = useAppT();
+  const searchParams = useSearchParams();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [dealers, setDealers] = useState<Dealer[]>([]);
@@ -130,6 +147,7 @@ export default function AdminFeedbacksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sentimentFilter, setSentimentFilter] = useState<string>('all');
   const [dealerFilter, setDealerFilter] = useState<string>('all');
+  const [needsReview, setNeedsReview] = useState(false); // P2-27: intentScore < 0.7 manuel inceleme
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [minRating, setMinRating] = useState<string>('');
   const [maxRating, setMaxRating] = useState<string>('');
@@ -145,8 +163,13 @@ export default function AdminFeedbacksPage() {
   const pageSize = 20;
 
   useEffect(() => {
+    const q = searchParams?.get('search') ?? '';
+    setSearchQuery(q);
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchFeedbacks();
-  }, [sentimentFilter, dealerFilter, typeFilter, minRating, maxRating, startDate, endDate, page]);
+  }, [sentimentFilter, dealerFilter, typeFilter, minRating, maxRating, startDate, endDate, page, needsReview, searchQuery]);
 
   const fetchFeedbacks = async () => {
     try {
@@ -162,6 +185,7 @@ export default function AdminFeedbacksPage() {
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
       if (searchQuery) params.append('search', searchQuery);
+      if (needsReview) params.append('needsReview', 'true');
       
       const res = await fetch(`/api/admin/feedbacks?${params}`);
       const data = await res.json();
@@ -239,6 +263,7 @@ export default function AdminFeedbacksPage() {
   const clearFilters = () => {
     setSentimentFilter('all');
     setDealerFilter('all');
+    setNeedsReview(false);
     setTypeFilter('all');
     setMinRating('');
     setMaxRating('');
@@ -248,7 +273,7 @@ export default function AdminFeedbacksPage() {
     setPage(1);
   };
 
-  const hasActiveFilters = sentimentFilter !== 'all' || dealerFilter !== 'all' || typeFilter !== 'all' || minRating || maxRating || startDate || endDate || searchQuery;
+  const hasActiveFilters = sentimentFilter !== 'all' || dealerFilter !== 'all' || typeFilter !== 'all' || minRating || maxRating || startDate || endDate || searchQuery || needsReview;
 
   const filteredFeedbacks = useMemo(() => {
     return feedbacks.filter((feedback) =>
@@ -258,6 +283,38 @@ export default function AdminFeedbacksPage() {
       feedback.user?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [feedbacks, searchQuery]);
+
+  const exportRows: FeedbackExportRow[] = filteredFeedbacks.map((f) => ({
+    createdAt: formatDate(f.createdAt),
+    userName: f.user?.name || f.user?.email || 'Anonim',
+    rating: f.rating,
+    text: f.text || '',
+    sentiment: f.sentiment === 'positive' ? 'Olumlu' : f.sentiment === 'negative' ? 'Olumsuz' : 'Nötr',
+    qrName: f.type === 'consumption' ? (f.productName || 'Ürün') : (f.businessName || f.qrCode?.name || 'QR'),
+    dealerReply: (f as { dealerReply?: string }).dealerReply || '',
+  }));
+
+  const handleExportCSV = () => {
+    const data = exportRows.map((r) => ({ ...r }));
+    exportToCSV(data, 'geribildirimler', feedbackCSVColumns, {
+      watermark: { userId: 'admin', timestamp: new Date().toISOString() },
+    });
+    toast.success('Excel (CSV) indirildi');
+  };
+
+  const handleExportPDF = () => {
+    const tableContent = buildFeedbackListPDFContent(exportRows);
+    const summaryContent = stats
+      ? buildAnalyticsPDFContent({
+          totalFeedbacks: stats.total,
+          avgRating: stats.avgRating,
+          sentimentBreakdown: { positive: stats.positive, neutral: stats.neutral, negative: stats.negative },
+        })
+      : '';
+    const content = summaryContent + tableContent;
+    exportToPDF('Geri Bildirimler Raporu', content, 'geribildirimler-raporu');
+    toast.success('PDF indirildi');
+  };
 
   const renderStars = (rating: number) => (
     <div className="flex gap-0.5">
@@ -271,34 +328,42 @@ export default function AdminFeedbacksPage() {
   );
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <DashboardHeader
-          title="Geri Bildirimler"
-          description="Tüm müşteri geri bildirimlerini yönetin"
-        />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchFeedbacks}>
+    <div className="space-y-6 pb-8 px-1 sm:px-0">
+      <AdminPremiumHero
+        eyebrow="İçgörü"
+        title="Geri bildirimler"
+        description="Tüm müşteri geri bildirimlerini yönetin."
+        icon={<MessageSquare className="text-white" />}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchFeedbacks}
+            className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+          >
             <RefreshCw className="w-4 h-4 mr-2" />
             Yenile
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
           {[
             { title: 'Toplam', value: stats.total, icon: MessageSquare, color: 'bg-primary/10 text-primary' },
-            { title: 'QR Yorum', value: stats.qrFeedbacks, icon: QrCode, color: 'bg-purple-500/10 text-purple-500' },
+            { title: 'QR Yorum', value: stats.qrFeedbacks, icon: QrCode, color: 'bg-primary/10 text-primary' },
             { title: 'Tüketim Yorum', value: stats.consumptionReviews, icon: ShoppingBag, color: 'bg-orange-500/10 text-orange-500' },
             { title: 'Ort. Puan', value: stats.avgRating, icon: Star, color: 'bg-yellow-500/10 text-yellow-500' },
+            ...(stats.npsTotal != null && stats.npsTotal > 0
+              ? [{ title: 'NPS', value: `${stats.nps ?? 0}`, icon: BarChart3, color: 'bg-cyan-500/10 text-cyan-500' as const }]
+              : []),
             { title: 'Olumlu', value: stats.positive, icon: ThumbsUp, color: 'bg-green-500/10 text-green-500' },
             { title: 'Nötr', value: stats.neutral, icon: Meh, color: 'bg-gray-500/10 text-gray-500' },
             { title: 'Olumsuz', value: stats.negative, icon: ThumbsDown, color: 'bg-red-500/10 text-red-500' },
           ].map((stat, i) => (
             <motion.div key={stat.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-              <Card className="border-0 bg-card/50">
+              <Card className="border-border/60 bg-card/50">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
                     <div className={`p-1.5 rounded-lg ${stat.color}`}>
@@ -318,7 +383,7 @@ export default function AdminFeedbacksPage() {
 
       {/* Rating Distribution */}
       {stats && (
-        <Card className="border-0 bg-card/50">
+        <Card className="border-border/60 bg-card/50">
           <CardContent className="p-4">
             <div className="flex items-center gap-4">
               <BarChart3 className="w-5 h-5 text-muted-foreground" />
@@ -343,7 +408,7 @@ export default function AdminFeedbacksPage() {
       )}
 
       {/* Filters */}
-      <Card className="border-0 bg-card/50">
+      <Card className="border-border/60 bg-card/50">
         <CardContent className="p-4">
           <div className="flex flex-col gap-4">
             {/* Search & Type */}
@@ -359,10 +424,10 @@ export default function AdminFeedbacksPage() {
                 />
               </div>
               <Tabs value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }} className="w-full sm:w-auto">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="all" className="text-xs">Tümü</TabsTrigger>
-                  <TabsTrigger value="qr" className="text-xs gap-1"><QrCode className="w-3 h-3" />QR</TabsTrigger>
-                  <TabsTrigger value="consumption" className="text-xs gap-1"><ShoppingBag className="w-3 h-3" />Tüketim</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 h-auto min-h-11 gap-1 p-1">
+                  <TabsTrigger value="all" className="text-[11px] sm:text-xs py-2.5 px-1.5">Tümü</TabsTrigger>
+                  <TabsTrigger value="qr" className="text-[11px] sm:text-xs gap-1 py-2.5 px-1.5"><QrCode className="w-3 h-3 shrink-0" />QR</TabsTrigger>
+                  <TabsTrigger value="consumption" className="text-[11px] sm:text-xs gap-1 py-2.5 px-1.5"><ShoppingBag className="w-3 h-3 shrink-0" />Tüketim</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -370,7 +435,7 @@ export default function AdminFeedbacksPage() {
             {/* Advanced Filters */}
             <div className="flex flex-wrap gap-3">
               <Select value={sentimentFilter} onValueChange={(v) => { setSentimentFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-full sm:w-[140px]">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Duygu" />
                 </SelectTrigger>
@@ -383,7 +448,7 @@ export default function AdminFeedbacksPage() {
               </Select>
 
               <Select value={dealerFilter} onValueChange={(v) => { setDealerFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <Building className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Bayi" />
                 </SelectTrigger>
@@ -412,18 +477,18 @@ export default function AdminFeedbacksPage() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Puan Aralığı</label>
                       <div className="flex items-center gap-2">
-                        <Select value={minRating} onValueChange={setMinRating}>
+                        <Select value={minRating || 'any'} onValueChange={(v) => setMinRating(v === 'any' ? '' : v)}>
                           <SelectTrigger><SelectValue placeholder="Min" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Hepsi</SelectItem>
+                            <SelectItem value="any">Hepsi</SelectItem>
                             {[1,2,3,4,5].map(r => <SelectItem key={r} value={r.toString()}>{r} ⭐</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <span>-</span>
-                        <Select value={maxRating} onValueChange={setMaxRating}>
+                        <Select value={maxRating || 'any'} onValueChange={(v) => setMaxRating(v === 'any' ? '' : v)}>
                           <SelectTrigger><SelectValue placeholder="Max" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Hepsi</SelectItem>
+                            <SelectItem value="any">Hepsi</SelectItem>
                             {[1,2,3,4,5].map(r => <SelectItem key={r} value={r.toString()}>{r} ⭐</SelectItem>)}
                           </SelectContent>
                         </Select>
@@ -435,6 +500,17 @@ export default function AdminFeedbacksPage() {
                         <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                         <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 space-y-0">
+                      <Checkbox
+                        id="needsReview"
+                        checked={needsReview}
+                        onCheckedChange={(c) => { setNeedsReview(!!c); setPage(1); }}
+                      />
+                      <label htmlFor="needsReview" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                        <AlertCircle className="h-4 w-4 text-amber-500" />
+                        Manuel İnceleme (düşük AI güveni &lt;%70)
+                      </label>
                     </div>
                     <div className="flex gap-2">
                       <Button onClick={() => { setPage(1); fetchFeedbacks(); }} className="flex-1">Uygula</Button>
@@ -450,6 +526,23 @@ export default function AdminFeedbacksPage() {
                   Filtreleri Temizle
                 </Button>
               )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 ml-auto">
+                    <Download className="w-4 h-4" />
+                    Dışa aktar
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportCSV} disabled={filteredFeedbacks.length === 0}>
+                    Excel (CSV)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPDF} disabled={filteredFeedbacks.length === 0}>
+                    PDF indir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </CardContent>
@@ -478,14 +571,13 @@ export default function AdminFeedbacksPage() {
       {/* Feedbacks List */}
       <div className="space-y-3">
         {loading ? (
-          <Card className="border-0 bg-card/50">
+          <Card className="border-border/60 bg-card/50">
             <CardContent className="p-12 text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-              <p className="mt-4 text-muted-foreground">Yükleniyor...</p>
+              <InlineLoadingStatus spinnerClassName="text-primary" description={t('adminInlineLoading.feedbacks')} />
             </CardContent>
           </Card>
         ) : filteredFeedbacks.length === 0 ? (
-          <Card className="border-0 bg-card/50">
+          <Card className="border-border/60 bg-card/50">
             <CardContent className="p-12 text-center">
               <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-30" />
               <p className="text-muted-foreground">Geri bildirim bulunamadı</p>
@@ -506,14 +598,14 @@ export default function AdminFeedbacksPage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: index * 0.03 }}
                 >
-                  <Card className={`border-0 bg-card/50 hover:bg-card/80 transition-colors ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                  <Card className={`border-border/60 bg-card/50 hover:bg-card/80 transition-colors ${isSelected ? 'ring-2 ring-primary' : ''}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
                         {/* Checkbox */}
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(feedback.id)} className="mt-1" />
                         
                         {/* User Info */}
-                        <div className="flex items-center gap-3 min-w-[180px]">
+                        <div className="flex items-center gap-3 min-w-0 sm:min-w-[180px]">
                           <Avatar className="h-10 w-10">
                             <AvatarImage src={feedback.user?.image || ''} />
                             <AvatarFallback className="bg-primary/10 text-primary text-sm">

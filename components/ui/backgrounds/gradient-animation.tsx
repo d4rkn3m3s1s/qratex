@@ -13,8 +13,8 @@ export function GradientAnimation({
   className,
 }: GradientAnimationProps) {
   const colors = [
-    '139, 92, 246',   // violet
-    '168, 85, 247',   // purple
+    '147, 51, 234', // primary (~hsl var(--primary))
+    '168, 85, 247', // accent magenta
     '236, 72, 153',   // pink
     '59, 130, 246',   // blue
     '16, 185, 129',   // emerald

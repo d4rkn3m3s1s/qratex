@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { askAI } from '@/lib/ai-engine';
 import { z } from 'zod';
 
+
+export const dynamic = 'force-dynamic';
+
 const chatSchema = z.object({
   question: z.string().min(1).max(1000),
   conversationId: z.string().optional(),
@@ -113,7 +116,7 @@ export async function POST(request: NextRequest) {
           select: { messages: true },
         });
         if (conv?.messages) {
-          previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-8);
+          previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-12);
         }
       } catch {
         // ignore

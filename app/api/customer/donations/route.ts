@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
+import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
 
 // Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 // GET - Fetch projects and user donation stats
 export async function GET(request: NextRequest) {
@@ -14,6 +15,19 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const menuGate = await assertMenuItemVisible('donations', 'customer', {
+      request,
+      userId: session.user.id,
+      routeKey: '/customer/donations',
+    });
+    if (menuGate) return menuGate;
+    const gate = await assertModuleEnabled('donations', {
+      role: 'customer',
+      request,
+      userId: session.user.id,
+      routeKey: '/customer/donations',
+    });
+    if (gate) return gate;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
@@ -148,22 +162,25 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const menuGate = await assertMenuItemVisible('donations', 'customer', {
+      request,
+      userId: session.user.id,
+      routeKey: '/customer/donations',
+    });
+    if (menuGate) return menuGate;
+    const gate = await assertModuleEnabled('donations', {
+      role: 'customer',
+      request,
+      userId: session.user.id,
+      routeKey: '/customer/donations',
+    });
+    if (gate) return gate;
 
     const body = await request.json();
     const { projectId, points, message, isPublic = true } = body;
 
     if (!projectId || !points || points < 1) {
       return NextResponse.json({ error: 'Geçersiz bağış bilgisi' }, { status: 400 });
-    }
-
-    // Check user has enough points
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { points: true },
-    });
-
-    if (!user || user.points < points) {
-      return NextResponse.json({ error: 'Yetersiz puan' }, { status: 400 });
     }
 
     // Check project exists and is active
@@ -176,8 +193,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Create donation and update points in a transaction
-    const [donation] = await prisma.$transaction([
-      prisma.donation.create({
+    const [donation, updatedWallet] = await prisma.$transaction(async (tx) => {
+      const wallet = await debitPoints(tx, {
+        userId: session.user.id,
+        points,
+      });
+
+      const donation = await tx.donation.create({
         data: {
           userId: session.user.id,
           projectId,
@@ -185,25 +207,24 @@ export async function POST(request: NextRequest) {
           message,
           isPublic,
         },
-      }),
-      prisma.user.update({
-        where: { id: session.user.id },
-        data: { points: { decrement: points } },
-      }),
-      prisma.donationProject.update({
+      });
+
+      await tx.donationProject.update({
         where: { id: projectId },
         data: { current: { increment: points } },
-      }),
-      // Create notification
-      prisma.notification.create({
+      });
+
+      await tx.notification.create({
         data: {
           userId: session.user.id,
           title: 'Bağış Başarılı! 🎉',
           message: `${project.name} projesine ${points} puan bağışladınız. Teşekkürler!`,
           type: 'success',
         },
-      }),
-    ]);
+      });
+
+      return [donation, wallet] as const;
+    });
 
     // Calculate impact
     const impact = project.impact as { unit: string; perPoint: number; label: string };
@@ -218,10 +239,13 @@ export async function POST(request: NextRequest) {
           unit: impact?.unit || 'birim',
           label: impact?.label || 'Etki',
         },
-        newBalance: user.points - points,
+        newBalance: updatedWallet.points,
       },
     });
   } catch (error) {
+    if (error instanceof InsufficientPointsError) {
+      return NextResponse.json({ error: 'Yetersiz puan' }, { status: 400 });
+    }
     console.error('Donations POST error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

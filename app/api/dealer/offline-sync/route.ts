@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 
 // GET - Get pending offline queue items
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
-    const pendingItems = await (prisma as any).offlineQueue.findMany({
+    const pendingItems = await prisma.offlineQueue.findMany({
       where: {
         dealerId: session.user.id,
         status: { in: ['PENDING', 'FAILED'] },
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
       orderBy: { queuedAt: 'asc' },
     });
 
-    const stats = await (prisma as any).offlineQueue.groupBy({
+    const stats = await prisma.offlineQueue.groupBy({
       by: ['status'],
       where: { dealerId: session.user.id },
       _count: true,
@@ -39,10 +40,9 @@ export async function GET(req: NextRequest) {
 // POST - Add item to offline queue
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const { action, payload } = body;
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Action and payload are required' }, { status: 400 });
     }
 
-    const queueItem = await (prisma as any).offlineQueue.create({
+    const queueItem = await prisma.offlineQueue.create({
       data: {
         dealerId: session.user.id,
         action,
@@ -72,10 +72,9 @@ export async function POST(req: NextRequest) {
 // PATCH - Sync offline queue items
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const { items } = body; // Array of { id, action, payload }
@@ -103,7 +102,7 @@ export async function PATCH(req: NextRequest) {
         }
 
         // Update queue item status
-        await (prisma as any).offlineQueue.update({
+        await prisma.offlineQueue.update({
           where: { id: item.id },
           data: {
             status: result.success ? 'SYNCED' : 'FAILED',
@@ -116,7 +115,7 @@ export async function PATCH(req: NextRequest) {
         results.push({ id: item.id, ...result });
       } catch (error: any) {
         // Update as failed
-        await (prisma as any).offlineQueue.update({
+        await prisma.offlineQueue.update({
           where: { id: item.id },
           data: {
             status: 'FAILED',

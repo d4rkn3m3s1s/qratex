@@ -17,6 +17,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  QrCode,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +26,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatRelativeTime, formatCurrency } from '@/lib/utils';
+import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
+import { useAppT } from '@/lib/app-locale';
 
 interface Consumption {
   id: string;
@@ -55,6 +59,7 @@ interface Consumption {
 }
 
 export default function CustomerConsumptionsPage() {
+  const t = useAppT();
   const { data: session } = useSession();
   const [consumptions, setConsumptions] = useState<Consumption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,31 +107,20 @@ export default function CustomerConsumptionsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 p-4 sm:p-6 md:p-8"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-white/10 rounded-full blur-3xl" />
-        </div>
-        
-        <div className="relative z-10">
-          <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-            <History className="w-8 h-8" />
-            Tüketim Geçmişim
-          </h1>
-          <p className="text-white/70 mt-1">Tüm tüketimlerinizi görüntüleyin ve yorum yapın</p>
-        </div>
-      </motion.div>
+      <DashboardPageHero
+        eyebrow={t('customerConsumptions.eyebrow')}
+        title={t('customerConsumptions.title')}
+        description={t('customerConsumptions.description')}
+        icon={<History className="h-7 w-7" aria-hidden />}
+        tone="auto"
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[
-          { label: 'Toplam', value: stats.total, icon: History, color: 'violet' },
-          { label: 'Yorum Bekliyor', value: stats.reviewPending, icon: Clock, color: 'amber' },
-          { label: 'Yorumlandı', value: stats.reviewed, icon: CheckCircle2, color: 'emerald' },
+          { label: t('customerConsumptions.total'), value: stats.total, icon: History, iconBox: 'bg-primary/10', iconColor: 'text-primary' },
+          { label: t('customerConsumptions.pendingReview'), value: stats.reviewPending, icon: Clock, iconBox: 'bg-amber-500/10', iconColor: 'text-amber-500' },
+          { label: t('customerConsumptions.reviewed'), value: stats.reviewed, icon: CheckCircle2, iconBox: 'bg-emerald-500/10', iconColor: 'text-emerald-500' },
         ].map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -134,11 +128,11 @@ export default function CustomerConsumptionsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardContent className="p-2.5 sm:p-4">
                 <div className="flex flex-col items-center text-center gap-1 sm:flex-row sm:text-left sm:gap-3">
-                  <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-${stat.color}-500/10`}>
-                    <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 text-${stat.color}-500`} />
+                  <div className={`rounded-lg p-1.5 sm:rounded-xl sm:p-2.5 ${stat.iconBox}`}>
+                    <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.iconColor}`} />
                   </div>
                   <div>
                     <p className="text-base sm:text-2xl font-bold">{stat.value}</p>
@@ -152,13 +146,13 @@ export default function CustomerConsumptionsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="border-0 bg-card/50 backdrop-blur-sm">
+      <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="İşletme veya ürün ara..."
+                placeholder={t('customerConsumptions.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -166,9 +160,9 @@ export default function CustomerConsumptionsPage() {
             </div>
             <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="w-full sm:w-auto">
               <TabsList className="grid grid-cols-3 w-full sm:w-auto">
-                <TabsTrigger value="all">Tümü</TabsTrigger>
-                <TabsTrigger value="pending">Bekleyen</TabsTrigger>
-                <TabsTrigger value="reviewed">Yorumlanan</TabsTrigger>
+                <TabsTrigger value="all">{t('customerConsumptions.tabAll')}</TabsTrigger>
+                <TabsTrigger value="pending">{t('customerConsumptions.tabPending')}</TabsTrigger>
+                <TabsTrigger value="reviewed">{t('customerConsumptions.tabReviewed')}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -179,7 +173,7 @@ export default function CustomerConsumptionsPage() {
       {loading ? (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <Card key={i} className="border-0 bg-card/50">
+            <Card key={i} className="border-border/60 bg-card/50">
               <CardContent className="p-3 sm:p-6">
                 <div className="animate-pulse space-y-4">
                   <div className="flex items-center gap-4">
@@ -195,19 +189,35 @@ export default function CustomerConsumptionsPage() {
           ))}
         </div>
       ) : filteredConsumptions.length === 0 ? (
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-12 text-center">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted/50 flex items-center justify-center">
               <History className="w-10 h-10 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-semibold mb-2">Tüketim bulunamadı</h3>
-            <p className="text-muted-foreground">
-              {filter === 'pending' 
-                ? 'Yorum bekleyen tüketim bulunmuyor' 
+            <h3 className="text-xl font-semibold mb-2">{t('customerConsumptions.emptyTitle')}</h3>
+            <p className="text-muted-foreground mb-6">
+              {filter === 'pending'
+                ? t('customerConsumptions.emptyPending')
                 : filter === 'reviewed'
-                ? 'Henüz yorum yapılmış tüketim yok'
-                : 'Henüz tüketim kaydınız yok'}
+                  ? t('customerConsumptions.emptyReviewed')
+                  : t('customerConsumptions.emptyAll')}
             </p>
+            {filter === 'all' && (
+              <div className="flex flex-wrap justify-center gap-3">
+                <Button asChild variant="default" className="gap-2">
+                  <Link href="/customer/scan">
+                    <QrCode className="h-4 w-4" />
+                    {t('customerConsumptions.scanQr')}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="gap-2">
+                  <Link href="/customer/my-card">
+                    <CreditCard className="h-4 w-4" />
+                    {t('customerConsumptions.myCard')}
+                  </Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -222,11 +232,11 @@ export default function CustomerConsumptionsPage() {
                 transition={{ delay: index * 0.05 }}
               >
                 <Link href={`/customer/consumptions/${consumption.id}`}>
-                  <Card className="border-0 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-all cursor-pointer group">
+                  <Card className="border-border/60 bg-card/50 backdrop-blur-sm hover:bg-card/70 transition-all cursor-pointer group">
                     <CardContent className="p-3 sm:p-4">
                       <div className="flex items-start gap-2 sm:gap-3 overflow-hidden">
                         {/* Dealer logo */}
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center shrink-0">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 sm:h-12 sm:w-12">
                           {consumption.dealer.businessLogo ? (
                             <img 
                               src={consumption.dealer.businessLogo} 
@@ -234,7 +244,7 @@ export default function CustomerConsumptionsPage() {
                               className="w-full h-full rounded-xl object-cover"
                             />
                           ) : (
-                            <Store className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
+                            <Store className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
                           )}
                         </div>
 
@@ -253,7 +263,7 @@ export default function CustomerConsumptionsPage() {
                               ) : (
                                 <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 text-[10px] sm:text-xs px-1.5 py-0">
                                   <MessageSquare className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5" />
-                                  Yorum Yap
+                                  {t('customerConsumptions.reviewNow')}
                                 </Badge>
                               )}
                               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />

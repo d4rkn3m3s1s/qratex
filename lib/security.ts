@@ -81,7 +81,7 @@ export async function reportSuspiciousActivity(data: {
 }) {
   try {
     // Create suspicious activity record
-    const activity = await (prisma as any).suspiciousActivity.create({
+    const activity = await prisma.suspiciousActivity.create({
       data: {
         userId: data.userId,
         dealerId: data.dealerId,
@@ -97,7 +97,7 @@ export async function reportSuspiciousActivity(data: {
 
     // Create security alert for high severity
     if (data.severity === 'HIGH' || data.severity === 'CRITICAL') {
-      await (prisma as any).securityAlert.create({
+      await prisma.securityAlert.create({
         data: {
           type: data.type,
           message: data.description,

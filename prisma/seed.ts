@@ -1,5 +1,11 @@
 import { PrismaClient, Role, CardStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { getBadgePointCostById } from '../lib/badge-catalog';
+import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '../lib/brand-colors';
+import {
+  THEME_LEGACY_CONFIG_SETTING_KEY,
+  THEME_SETTINGS_CATEGORY,
+} from '../lib/theme-settings-keys';
 
 const prisma = new PrismaClient();
 
@@ -192,10 +198,10 @@ async function main() {
           name: b.name,
           description: b.desc,
           icon: b.icon,
-          
           category: b.cat,
           rarity: b.rarity,
           requirement: b.req,
+          pointCost: getBadgePointCostById(b.id),
           isActive: true,
         },
       })
@@ -258,6 +264,45 @@ async function main() {
         type: 'daily',
         requirement: { type: 'detailed_feedback', count: 1 },
         reward: { points: 100, xp: 50 },
+      },
+    }),
+    prisma.quest.upsert({
+      where: { id: 'quest-weekly-feedback' },
+      update: {},
+      create: {
+        id: 'quest-weekly-feedback',
+        name: 'Haftalık Geri Bildirim',
+        description: 'Bu hafta 3 geri bildirim gönderin',
+        icon: '/images/badges/YENİ SES.svg',
+        type: 'weekly',
+        requirement: { type: 'give_feedback', count: 3 },
+        reward: { points: 150, xp: 75 },
+      },
+    }),
+    prisma.quest.upsert({
+      where: { id: 'quest-first-referral' },
+      update: {},
+      create: {
+        id: 'quest-first-referral',
+        name: 'İlk Davet',
+        description: 'Bir arkadaşınızı davet edin (referans kodu ile kayıt olmalı)',
+        icon: '/images/badges/YANKI.svg',
+        type: 'special',
+        requirement: { type: 'referral', count: 1 },
+        reward: { points: 300, xp: 150 },
+      },
+    }),
+    prisma.quest.upsert({
+      where: { id: 'quest-three-businesses' },
+      update: {},
+      create: {
+        id: 'quest-three-businesses',
+        name: 'Üç Farklı İşletme',
+        description: '3 farklı işletmeye geri bildirim verin',
+        icon: '/images/badges/KONUK OYUNCU.svg',
+        type: 'weekly',
+        requirement: { type: 'visit_businesses', count: 3 },
+        reward: { points: 180, xp: 90 },
       },
     }),
   ]);
@@ -512,17 +557,17 @@ async function main() {
       },
     }),
     prisma.settings.upsert({
-      where: { key: 'theme_config' },
+      where: { key: THEME_LEGACY_CONFIG_SETTING_KEY },
       update: {},
       create: {
-        key: 'theme_config',
+        key: THEME_LEGACY_CONFIG_SETTING_KEY,
         value: {
           defaultTheme: 'dark',
           allowUserTheme: true,
-          primaryColor: '#8b5cf6',
-          accentColor: '#d946ef',
+          primaryColor: BRAND_PRIMARY_HEX,
+          accentColor: BRAND_ACCENT_PINK_HEX,
         },
-        category: 'theme',
+        category: THEME_SETTINGS_CATEGORY,
       },
     }),
     prisma.settings.upsert({
@@ -1303,7 +1348,7 @@ async function main() {
   ];
 
   for (const tier of vipTiers) {
-    await (prisma as any).vIPTier.upsert({
+    await prisma.vIPTier.upsert({
       where: { name: tier.name },
       update: tier,
       create: tier,
@@ -1314,7 +1359,7 @@ async function main() {
   // ─────────────────────────────────────────────────────────────
   // CREATE HAPPY HOURS
   // ─────────────────────────────────────────────────────────────
-  await (prisma as any).happyHour.upsert({
+  await prisma.happyHour.upsert({
     where: { id: 'hh-lunch-special' },
     update: {},
     create: {
@@ -1330,7 +1375,7 @@ async function main() {
     },
   });
 
-  await (prisma as any).happyHour.upsert({
+  await prisma.happyHour.upsert({
     where: { id: 'hh-weekend-special' },
     update: {},
     create: {
@@ -1351,7 +1396,7 @@ async function main() {
   // ─────────────────────────────────────────────────────────────
   // CREATE CUSTOMER STREAK
   // ─────────────────────────────────────────────────────────────
-  await (prisma as any).userStreak.upsert({
+  await prisma.userStreak.upsert({
     where: { userId: customer.id },
     update: {},
     create: {
@@ -1368,7 +1413,7 @@ async function main() {
   // ─────────────────────────────────────────────────────────────
   // CREATE REFERRAL CODE
   // ─────────────────────────────────────────────────────────────
-  await (prisma as any).referralCode.upsert({
+  await prisma.referralCode.upsert({
     where: { userId: customer.id },
     update: {},
     create: {

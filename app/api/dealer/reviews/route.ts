@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/dealer/reviews
@@ -9,14 +11,9 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const ratingFilter = searchParams.get('rating');
@@ -29,7 +26,10 @@ export async function GET(request: NextRequest) {
     };
 
     if (ratingFilter && ratingFilter !== 'all') {
-      where.rating = parseInt(ratingFilter);
+      const n = parseInt(ratingFilter, 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= 5) {
+        where.rating = n;
+      }
     }
 
     const reviews = await prisma.consumptionReview.findMany({
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching dealer reviews:', error);
     return NextResponse.json(
-      { error: 'Yorumlar getirilemedi' },
+      { success: false, error: 'Yorumlar getirilemedi' },
       { status: 500 }
     );
   }

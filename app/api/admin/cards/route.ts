@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { adminCardsQuerySchema } from '@/lib/validations-admin';
+
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/cards
@@ -9,35 +12,34 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
-    const status = searchParams.get('status'); // UNUSED, ACTIVATED, BLOCKED
-    const batchId = searchParams.get('batchId');
-    const search = searchParams.get('search');
-    
+    const parsed = adminCardsQuerySchema.safeParse({
+      page: searchParams.get('page') ?? undefined,
+      pageSize: searchParams.get('pageSize') ?? undefined,
+      search: searchParams.get('search') ?? undefined,
+      status: searchParams.get('status') ?? undefined,
+      batchId: searchParams.get('batchId') ?? undefined,
+    });
+    const { page, pageSize, search, status, batchId } = parsed.success
+      ? parsed.data
+      : { page: 1, pageSize: 20, search: undefined as string | undefined, status: undefined as string | undefined, batchId: undefined as string | undefined };
+
     const skip = (page - 1) * pageSize;
 
     // Filter oluştur
-    const where: any = {};
-    
+    const where: Record<string, unknown> = {};
+
     if (status) {
       where.status = status;
     }
-    
+
     if (batchId) {
       where.batchId = batchId;
     }
-    
+
     if (search) {
       where.OR = [
         { token: { contains: search, mode: 'insensitive' } },

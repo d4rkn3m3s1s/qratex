@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -28,9 +28,10 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 interface Consumption {
   id: string;
@@ -77,11 +78,60 @@ const ratingDimensions = [
   { key: 'value', label: 'Fiyat/Performans', icon: Coins },
 ];
 
-export default function ConsumptionDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+type FeedbackQuality = {
+  tone: 'great' | 'ok' | 'needs-work';
+  score: number;
+  tips: string[];
+  suggestedVersion: string | null;
+};
+
+function evaluateFeedbackQuality(input: string): FeedbackQuality {
+  const text = input.trim();
+  if (!text) {
+    return {
+      tone: 'ok',
+      score: 0,
+      tips: ['Yorumunuzu yazmaya başlayın; kısa, saygılı ve net bir çözüm beklentisi ekleyin.'],
+      suggestedVersion: null,
+    };
+  }
+
+  let score = 0;
+  const tips: string[] = [];
+  const lower = text.toLocaleLowerCase('tr-TR');
+  const hasPoliteWords = /(lütfen|rica|teşekkür|nazikçe|yardımcı olabilir misiniz)/.test(lower);
+  const hasExpectation = /(bekliyorum|çözüm|düzeltilmesini|telafi|geri dönüş)/.test(lower);
+  const rudeWords = /(rezalet|berbat|iğrenç|saçma|aptalca|kötüsünüz)/.test(lower);
+
+  if (text.length >= 25) score += 35;
+  else tips.push('Biraz daha detay ekleyin (ne yaşadınız, ne zaman oldu?).');
+
+  if (hasPoliteWords) score += 30;
+  else tips.push('Üslubu yumuşatmak için "lütfen/rica ederim" gibi ifadeler ekleyin.');
+
+  if (hasExpectation) score += 35;
+  else tips.push('Net çözüm beklentinizi ekleyin (örn. geri dönüş veya telafi talebi).');
+
+  if (rudeWords) {
+    score = Math.max(0, score - 25);
+    tips.push('Hakaret veya kırıcı ifadeleri çıkarın; saygılı dil daha hızlı çözüm getirir.');
+  }
+
+  const tone: FeedbackQuality['tone'] =
+    score >= 80 ? 'great' : score >= 50 ? 'ok' : 'needs-work';
+
+  const suggestedVersion =
+    text.length >= 10
+      ? `Merhaba, ${text.replace(/\s+/g, ' ').trim()} Bu konuda ${hasExpectation ? 'hızlı bir geri dönüş' : 'çözüm odaklı bir geri dönüş'} rica ediyorum. Teşekkür ederim.`
+      : null;
+
+  return { tone, score, tips, suggestedVersion };
+}
+
+export default function ConsumptionDetailPage() {
+  const t = useAppT();
+  const params = useParams();
+  const id = params.id as string;
   const { data: session } = useSession();
   const router = useRouter();
   const [consumption, setConsumption] = useState<Consumption | null>(null);
@@ -97,12 +147,14 @@ export default function ConsumptionDetailPage({
 
   useEffect(() => {
     fetchConsumption();
-  }, [params.id]);
+  }, [id]);
+
+  const feedbackQuality = useMemo(() => evaluateFeedbackQuality(reviewText), [reviewText]);
 
   const fetchConsumption = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/customer/consumptions/${params.id}`);
+      const res = await fetch(`/api/customer/consumptions/${id}`);
       const data = await res.json();
 
       if (data.success) {
@@ -117,7 +169,7 @@ export default function ConsumptionDetailPage({
         router.push('/customer/consumptions');
       }
     } catch (err) {
-      toast.error('Tüketim bilgisi alınamadı');
+      toast.error(t('customerConsumptionDetail.loadError'));
       router.push('/customer/consumptions');
     } finally {
       setLoading(false);
@@ -126,14 +178,14 @@ export default function ConsumptionDetailPage({
 
   const handleSubmitReview = async () => {
     if (rating === 0) {
-      toast.error('Lütfen bir puan verin');
+      toast.error(t('customerConsumptionDetail.giveRating'));
       return;
     }
 
     setSubmitting(true);
     try {
       const method = consumption?.review ? 'PUT' : 'POST';
-      const res = await fetch(`/api/customer/consumptions/${params.id}/review`, {
+      const res = await fetch(`/api/customer/consumptions/${id}/review`, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -155,7 +207,7 @@ export default function ConsumptionDetailPage({
       
       if (data.rewards) {
         setTimeout(() => {
-          toast.success(`+${data.rewards.points} puan kazandınız!`, {
+          toast.success(`+${data.rewards.points} ${t('customerConsumptionDetail.pointsEarned')}`, {
             icon: '🎉',
           });
         }, 500);
@@ -164,7 +216,7 @@ export default function ConsumptionDetailPage({
       // Refresh data
       fetchConsumption();
     } catch (err) {
-      toast.error('Yorum kaydedilemedi');
+      toast.error(t('customerConsumptionDetail.saveError'));
     } finally {
       setSubmitting(false);
     }
@@ -172,7 +224,7 @@ export default function ConsumptionDetailPage({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[320px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -188,23 +240,23 @@ export default function ConsumptionDetailPage({
       <Button variant="ghost" asChild className="gap-2">
         <Link href="/customer/consumptions">
           <ArrowLeft className="w-4 h-4" />
-          Geri
+          {t('common.back')}
         </Link>
       </Button>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Consumption Details */}
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Store className="w-5 h-5" />
-              Tüketim Detayı
+              {t('customerConsumptionDetail.title')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Dealer info */}
             <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/50">
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/15">
                 {consumption.dealer.businessLogo ? (
                   <img 
                     src={consumption.dealer.businessLogo} 
@@ -212,7 +264,7 @@ export default function ConsumptionDetailPage({
                     className="w-full h-full rounded-xl object-cover"
                   />
                 ) : (
-                  <Store className="w-8 h-8 text-violet-500" />
+                  <Store className="h-8 w-8 text-primary" />
                 )}
               </div>
               <div>
@@ -230,7 +282,7 @@ export default function ConsumptionDetailPage({
             {/* Product info */}
             {consumption.product && (
               <div className="space-y-2">
-                <Label className="text-muted-foreground">Ürün</Label>
+                <Label className="text-muted-foreground">{t('customerConsumptionDetail.product')}</Label>
                 <div className="p-4 rounded-xl bg-muted/50">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{consumption.product.category.icon}</span>
@@ -255,7 +307,7 @@ export default function ConsumptionDetailPage({
               <div className="p-4 rounded-xl bg-muted/50">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Calendar className="w-4 h-4" />
-                  <span className="text-xs">Tarih</span>
+                    <span className="text-xs">{t('customerConsumptionDetail.date')}</span>
                 </div>
                 <p className="font-medium">{formatDate(consumption.createdAt)}</p>
               </div>
@@ -263,7 +315,7 @@ export default function ConsumptionDetailPage({
                 <div className="p-4 rounded-xl bg-muted/50">
                   <div className="flex items-center gap-2 text-muted-foreground mb-1">
                     <Coins className="w-4 h-4" />
-                    <span className="text-xs">Tutar</span>
+                    <span className="text-xs">{t('customerConsumptionDetail.amount')}</span>
                   </div>
                   <p className="font-medium">{formatCurrency(consumption.amount)}</p>
                 </div>
@@ -272,7 +324,7 @@ export default function ConsumptionDetailPage({
 
             {consumption.note && (
               <div className="p-4 rounded-xl bg-muted/50">
-                <Label className="text-muted-foreground text-xs">İşletme Notu</Label>
+                <Label className="text-muted-foreground text-xs">{t('customerConsumptionDetail.businessNote')}</Label>
                 <p className="text-sm mt-1">{consumption.note}</p>
               </div>
             )}
@@ -280,23 +332,23 @@ export default function ConsumptionDetailPage({
         </Card>
 
         {/* Review Section */}
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" />
-              {hasReview ? 'Yorumunuz' : 'Yorum Yap'}
+              {hasReview ? t('customerConsumptionDetail.yourReview') : t('customerConsumptionDetail.reviewNow')}
             </CardTitle>
             <CardDescription>
               {hasReview 
-                ? 'Yorumunuzu güncelleyebilirsiniz' 
-                : 'Deneyiminizi puanlayın ve yorum yazın'
+                ? t('customerConsumptionDetail.updateReviewDesc') 
+                : t('customerConsumptionDetail.reviewDesc')
               }
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Star Rating */}
             <div className="space-y-2">
-              <Label>Genel Puan</Label>
+              <Label>{t('customerConsumptionDetail.overallRating')}</Label>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <motion.button
@@ -327,7 +379,7 @@ export default function ConsumptionDetailPage({
 
             {/* Dimension Ratings */}
             <div className="space-y-4">
-              <Label>Detaylı Puanlama (Opsiyonel)</Label>
+              <Label>{t('customerConsumptionDetail.detailedRating')}</Label>
               <div className="grid grid-cols-2 gap-3">
                 {ratingDimensions.map((dim) => (
                   <div key={dim.key} className="p-3 rounded-xl bg-muted/50">
@@ -363,9 +415,9 @@ export default function ConsumptionDetailPage({
 
             {/* Review Text */}
             <div className="space-y-2">
-              <Label>Yorumunuz (Opsiyonel)</Label>
+              <Label>{t('customerConsumptionDetail.comment')}</Label>
               <Textarea
-                placeholder="Deneyiminizi paylaşın... (50+ karakter için bonus puan!)"
+                placeholder={t('customerConsumptionDetail.commentPlaceholder')}
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 rows={4}
@@ -375,10 +427,48 @@ export default function ConsumptionDetailPage({
                 {reviewText.length >= 50 && (
                   <span className="text-emerald-500 ml-2">
                     <Sparkle className="w-3 h-3 inline mr-1" />
-                    Detaylı yorum bonusu!
+                    {t('customerConsumptionDetail.bonusComment')}
                   </span>
                 )}
               </p>
+            </div>
+
+            <div
+              className={cn(
+                'rounded-xl border p-4 space-y-3',
+                feedbackQuality.tone === 'great'
+                  ? 'border-emerald-500/30 bg-emerald-500/5'
+                  : feedbackQuality.tone === 'ok'
+                  ? 'border-amber-500/30 bg-amber-500/5'
+                  : 'border-sky-500/30 bg-sky-500/5'
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  {t('customerConsumptionDetail.aiHelperTitle')}
+                </p>
+                <Badge variant="secondary">Skor: {feedbackQuality.score}/100</Badge>
+              </div>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {feedbackQuality.tips.slice(0, 3).map((tip) => (
+                  <li key={tip}>• {tip}</li>
+                ))}
+              </ul>
+              {feedbackQuality.suggestedVersion && (
+                <div className="rounded-lg bg-background/80 border p-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">{t('customerConsumptionDetail.suggestedText')}</p>
+                  <p className="text-sm">{feedbackQuality.suggestedVersion}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setReviewText(feedbackQuality.suggestedVersion || reviewText)}
+                  >
+                    {t('customerConsumptionDetail.applySuggestion')}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Submit Button */}
@@ -390,17 +480,17 @@ export default function ConsumptionDetailPage({
               {submitting ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Gönderiliyor...
+                  {t('customerConsumptionDetail.submitting')}
                 </>
               ) : hasReview ? (
                 <>
                   <CheckCircle2 className="w-5 h-5 mr-2" />
-                  Yorumu Güncelle
+                  {t('customerConsumptionDetail.updateReview')}
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 mr-2" />
-                  Yorum Gönder & Puan Kazan
+                  {t('customerConsumptionDetail.submitAndEarn')}
                 </>
               )}
             </Button>
@@ -410,11 +500,11 @@ export default function ConsumptionDetailPage({
               <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
                 <div className="flex items-center gap-2 text-amber-500 mb-2">
                   <Sparkles className="w-4 h-4" />
-                  <span className="font-medium">Kazanacağınız Ödüller</span>
+                  <span className="font-medium">{t('customerConsumptionDetail.rewardsTitle')}</span>
                 </div>
                 <ul className="space-y-1 text-sm text-muted-foreground">
-                  <li>• Yorum için: <span className="text-amber-500 font-medium">+50 puan</span></li>
-                  <li>• 50+ karakter yorum için: <span className="text-amber-500 font-medium">+100 puan</span></li>
+                  <li>• {t('customerConsumptionDetail.rewardReview')} <span className="text-amber-500 font-medium">+50 {t('customerConsumptionDetail.points')}</span></li>
+                  <li>• {t('customerConsumptionDetail.rewardLongComment')} <span className="text-amber-500 font-medium">+100 {t('customerConsumptionDetail.points')}</span></li>
                 </ul>
               </div>
             )}

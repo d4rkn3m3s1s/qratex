@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
+
+
+export const dynamic = 'force-dynamic';
 
 const createFeatureFlagSchema = z.object({
   key: z.string().min(1).max(50),
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   isEnabled: z.boolean().default(false),
+  expiresAt: z.string().datetime().optional(),
+  ownerId: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -16,7 +21,14 @@ const updateFeatureFlagSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
   isEnabled: z.boolean().optional(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  ownerId: z.string().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+const patchFeatureFlagSchema = z.object({
+  id: z.string().min(1, 'ID gerekli'),
+  isEnabled: z.boolean(),
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -24,10 +36,8 @@ const updateFeatureFlagSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
     const features = await prisma.featureFlag.findMany({
       orderBy: { key: 'asc' },
@@ -48,10 +58,10 @@ export async function GET() {
 // ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const validatedData = createFeatureFlagSchema.safeParse(body);
@@ -81,6 +91,8 @@ export async function POST(request: NextRequest) {
         name: validatedData.data.name,
         description: validatedData.data.description,
         isEnabled: validatedData.data.isEnabled,
+        expiresAt: validatedData.data.expiresAt ? new Date(validatedData.data.expiresAt) : null,
+        ownerId: validatedData.data.ownerId ?? session.user.id,
         metadata: validatedData.data.metadata as object | undefined,
       },
     });
@@ -93,6 +105,7 @@ export async function POST(request: NextRequest) {
         entity: 'FeatureFlag',
         entityId: feature.id,
         newData: feature as object,
+        ...auditMeta,
       },
     });
 
@@ -111,10 +124,10 @@ export async function POST(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
@@ -151,6 +164,8 @@ export async function PUT(request: NextRequest) {
     if (validatedData.data.name !== undefined) updateData.name = validatedData.data.name;
     if (validatedData.data.description !== undefined) updateData.description = validatedData.data.description;
     if (validatedData.data.isEnabled !== undefined) updateData.isEnabled = validatedData.data.isEnabled;
+    if (validatedData.data.expiresAt !== undefined) updateData.expiresAt = validatedData.data.expiresAt ? new Date(validatedData.data.expiresAt) : null;
+    if (validatedData.data.ownerId !== undefined) updateData.ownerId = validatedData.data.ownerId;
     if (validatedData.data.metadata !== undefined) updateData.metadata = validatedData.data.metadata as object;
 
     const feature = await prisma.featureFlag.update({
@@ -167,6 +182,7 @@ export async function PUT(request: NextRequest) {
         entityId: feature.id,
         oldData: existing as object,
         newData: feature as object,
+        ...auditMeta,
       },
     });
 
@@ -181,14 +197,70 @@ export async function PUT(request: NextRequest) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// PATCH /api/admin/features - Toggle or partial update by id (admin UI)
+// ─────────────────────────────────────────────────────────────
+export async function PATCH(request: NextRequest) {
+  try {
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
+
+    const body = await request.json();
+    const validated = patchFeatureFlagSchema.safeParse(body);
+    if (!validated.success) {
+      return NextResponse.json(
+        { error: validated.error.errors[0].message },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.featureFlag.findUnique({
+      where: { id: validated.data.id },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Özellik bayrağı bulunamadı' },
+        { status: 404 }
+      );
+    }
+
+    const feature = await prisma.featureFlag.update({
+      where: { id: validated.data.id },
+      data: { isEnabled: validated.data.isEnabled },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        action: 'UPDATE_FEATURE',
+        entity: 'FeatureFlag',
+        entityId: feature.id,
+        oldData: existing as object,
+        newData: feature as object,
+        ...auditMeta,
+      },
+    });
+
+    return NextResponse.json({ success: true, feature });
+  } catch (error) {
+    console.error('Error PATCH feature flag:', error);
+    return NextResponse.json(
+      { error: 'Özellik bayrağı güncellenemedi' },
+      { status: 500 }
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // DELETE /api/admin/features - Delete feature flag
 // ─────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
@@ -223,6 +295,7 @@ export async function DELETE(request: NextRequest) {
         entity: 'FeatureFlag',
         entityId: existing.id,
         oldData: existing as object,
+        ...auditMeta,
       },
     });
 

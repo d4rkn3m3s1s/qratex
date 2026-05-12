@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { assertModuleEnabled } from '@/lib/module-gate';
 
 // GET /api/gamification/rewards/[id]
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await assertModuleEnabled('rewards');
+    if (gate) return gate;
     const { id } = await params;
     
     const reward = await prisma.reward.findUnique({
@@ -38,6 +45,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await assertModuleEnabled('rewards');
+    if (gate) return gate;
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -63,6 +73,7 @@ export async function PATCH(
         type: body.type,
         cost: body.cost,
         stock: body.stock,
+        ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
         isActive: body.isActive ?? true,
       },
     });
@@ -75,6 +86,7 @@ export async function PATCH(
         entityId: reward.id,
         oldData: oldReward as object,
         newData: reward as object,
+        ...auditMeta,
       },
     });
 
@@ -94,6 +106,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gate = await assertModuleEnabled('rewards');
+    if (gate) return gate;
+    const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -118,6 +133,7 @@ export async function DELETE(
         entity: 'Reward',
         entityId: id,
         oldData: reward as object,
+        ...auditMeta,
       },
     });
 

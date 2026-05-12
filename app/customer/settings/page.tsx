@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
@@ -14,8 +15,14 @@ import {
   Globe,
   Check,
   Camera,
+  Eye,
+  ZapOff,
+  Database,
+  FileDown,
+  Trash2,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { signOut } from 'next-auth/react';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,88 +45,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
 import { getInitials } from '@/lib/utils';
-
-// Avatar listesi
-const avatarList = [
-  // İnsanlar
-  { category: 'Erkek', items: [
-    '/images/avatar/AVATAR ERKEK 1.svg',
-    '/images/avatar/AVATAR ERKEK 2.svg',
-    '/images/avatar/AVATAR ERKEK 3.svg',
-    '/images/avatar/AVATAR ERKEK 4.svg',
-    '/images/avatar/AVATAR ERKEK 5.svg',
-    '/images/avatar/AVATAR ERKEK 6.svg',
-    '/images/avatar/AVATAR ERKEK 8.svg',
-    '/images/avatar/AVATAR ERKEK 9.svg',
-    '/images/avatar/AVATAR ERKEK 10.svg',
-    '/images/avatar/AVATAR ERKEK 11.svg',
-    '/images/avatar/AVATAR ERKEK 12.svg',
-  ]},
-  { category: 'Kadın', items: [
-    '/images/avatar/AVATAR KADIN 1.svg',
-    '/images/avatar/AVATAR KADIN 2.svg',
-    '/images/avatar/AVATAR KADIN 3.svg',
-    '/images/avatar/AVATAR KADIN 4.svg',
-    '/images/avatar/AVATAR KADIN 6.svg',
-    '/images/avatar/AVATAR KADIN 7.svg',
-    '/images/avatar/AVATAR KADIN 8.svg',
-    '/images/avatar/AVATAR KADIN 9.svg',
-    '/images/avatar/AVATAR KADIN 10.svg',
-    '/images/avatar/KADIN2.svg',
-  ]},
-  { category: 'Hayvanlar', items: [
-    '/images/avatar/CAT.svg',
-    '/images/avatar/DOG.svg',
-    '/images/avatar/ELEPHANT.svg',
-    '/images/avatar/FROG.svg',
-    '/images/avatar/KOALA.svg',
-    '/images/avatar/LİON.svg',
-    '/images/avatar/MONKEY.svg',
-    '/images/avatar/PANDA.svg',
-    '/images/avatar/SHEEP.svg',
-    '/images/avatar/TİGER.svg',
-    '/images/avatar/ZÜRAFA.svg',
-  ]},
-  { category: 'Meyveler', items: [
-    '/images/avatar/APPLE.svg',
-    '/images/avatar/AVACADO.svg',
-    '/images/avatar/BANANA.svg',
-    '/images/avatar/BLUEBERRY.svg',
-    '/images/avatar/CHERRRY.svg',
-    '/images/avatar/DRAGON FRUİT.svg',
-    '/images/avatar/GRAPE.svg',
-    '/images/avatar/ORANGE.svg',
-    '/images/avatar/STRAWBERRY.svg',
-    '/images/avatar/WATERMELON.svg',
-  ]},
-  { category: 'Yiyecekler', items: [
-    '/images/avatar/COFFFE.svg',
-    '/images/avatar/DONUT.svg',
-    '/images/avatar/DRİNKS.svg',
-    '/images/avatar/FRİES.svg',
-    '/images/avatar/HAMBURGER.svg',
-    '/images/avatar/İCE CREAM.svg',
-    '/images/avatar/PİZZ.svg',
-  ]},
-  { category: 'Emojiler', items: [
-    '/images/avatar/EMOJİ1.svg',
-    '/images/avatar/EMOJİ2.svg',
-    '/images/avatar/EMOJİ3.svg',
-    '/images/avatar/EMOJİ4.svg',
-    '/images/avatar/EMOJİ5.svg',
-    '/images/avatar/EMOJİ6.svg',
-    '/images/avatar/EMOJİ7.svg',
-    '/images/avatar/EMOJİ8.svg',
-  ]},
-  { category: 'Diğer', items: [
-    '/images/avatar/CPW.svg',
-  ]},
-];
+import { avatarList } from '@/lib/avatar-options';
+import { t, type Locale } from '@/i18n/request';
+import { useAppLocale } from '@/lib/app-locale';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function CustomerSettingsPage() {
+  const queryClient = useQueryClient();
   const { data: session, update } = useSession();
+  const { setLocale } = useAppLocale();
   const [saving, setSaving] = useState(false);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Erkek');
@@ -160,7 +104,14 @@ export default function CustomerSettingsPage() {
     theme: 'dark',
     showProfile: true,
     showLeaderboard: true,
+    highContrast: false,
+    reduceAnimations: false,
   });
+
+  const [exportingData, setExportingData] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Fetch settings on mount
   useEffect(() => {
@@ -280,6 +231,11 @@ export default function CustomerSettingsPage() {
       const data = await res.json();
       if (data.success) {
         toast.success('Tercihler güncellendi');
+        if (preferences.language === 'tr' || preferences.language === 'en') {
+          setLocale(preferences.language);
+        }
+        await update({ preferredLanguage: preferences.language });
+        await queryClient.invalidateQueries({ queryKey: ['customer', 'settings-preferences', 'language'] });
       } else {
         toast.error(data.error || 'Bir hata oluştu');
       }
@@ -290,32 +246,98 @@ export default function CustomerSettingsPage() {
     }
   };
 
-  const currentCategoryAvatars = avatarList.find(c => c.category === selectedCategory)?.items || [];
+  const customerAvatarList = avatarList.filter((c) => c.category !== 'Bayi');
+  const effectiveCategory = customerAvatarList.some((c) => c.category === selectedCategory) ? selectedCategory : (customerAvatarList[0]?.category ?? 'Erkek');
+  const displayCategoryAvatars = customerAvatarList.find((c) => c.category === effectiveCategory)?.items || [];
+
+  const uiLocale: Locale = preferences.language === 'en' ? 'en' : 'tr';
+  const tp = (key: string) => t(uiLocale, key);
+
+  const handleExportPersonalData = async () => {
+    setExportingData(true);
+    try {
+      const res = await fetch('/api/user/data-export', { credentials: 'same-origin' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(typeof err.error === 'string' ? err.error : tp('common.error'));
+        return;
+      }
+      const blob = await res.blob();
+      const dispo = res.headers.get('Content-Disposition');
+      let filename = 'qratex-data-export.json';
+      const match = dispo?.match(/filename="([^"]+)"/);
+      if (match?.[1]) filename = match[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(uiLocale === 'en' ? 'Download started' : 'İndirme başladı');
+    } catch {
+      toast.error(tp('common.error'));
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const res = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmEmail: deleteConfirmEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success(typeof data.message === 'string' ? data.message : tp('customerPrivacy.confirmDelete'));
+        await signOut({ callbackUrl: '/' });
+        return;
+      }
+      toast.error(typeof data.error === 'string' ? data.error : tp('common.error'));
+    } catch {
+      toast.error(tp('common.error'));
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
+      <DashboardPageHeading
         title="Ayarlar"
         description="Hesap ayarlarınızı yönetin"
       />
 
+      {/* Üst çubukta başlık gizli (<sm); mobilde sayfa bağlamı */}
+      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
+        <h1 className="text-xl font-bold tracking-tight text-balance">Ayarlar</h1>
+        <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">Hesap ayarlarınızı yönetin</p>
+      </div>
+
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList className="flex flex-wrap gap-1 w-full lg:w-auto">
           <TabsTrigger value="profile" className="gap-2">
-            <User className="h-4 w-4" />
+            <User className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Profil</span>
           </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-2">
-            <Bell className="h-4 w-4" />
+            <Bell className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Bildirimler</span>
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
-            <Shield className="h-4 w-4" />
+            <Shield className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Güvenlik</span>
           </TabsTrigger>
           <TabsTrigger value="preferences" className="gap-2">
-            <Palette className="h-4 w-4" />
+            <Palette className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Tercihler</span>
+          </TabsTrigger>
+          <TabsTrigger value="privacy" className="gap-2">
+            <Database className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">{tp('customerPrivacy.tab')}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -354,13 +376,13 @@ export default function CustomerSettingsPage() {
                             Profiliniz için bir avatar seçin
                           </DialogDescription>
                         </DialogHeader>
-                        
+
                         {/* Category Tabs */}
                         <div className="flex flex-wrap gap-2 py-2 border-b">
-                          {avatarList.map((category) => (
+                          {customerAvatarList.map((category) => (
                             <Button
                               key={category.category}
-                              variant={selectedCategory === category.category ? 'default' : 'outline'}
+                              variant={effectiveCategory === category.category ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setSelectedCategory(category.category)}
                             >
@@ -371,16 +393,15 @@ export default function CustomerSettingsPage() {
 
                         {/* Avatar Grid */}
                         <div className="flex-1 overflow-y-auto py-4">
-                          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
-                            {currentCategoryAvatars.map((avatar) => (
+                          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3">
+                            {displayCategoryAvatars.map((avatar) => (
                               <button
                                 key={avatar}
                                 onClick={() => handleSelectAvatar(avatar)}
-                                className={`relative p-2 rounded-xl border-2 transition-all hover:scale-105 ${
-                                  profile.avatar === avatar
+                                className={`relative p-2 rounded-xl border-2 transition-all hover:scale-105 ${profile.avatar === avatar
                                     ? 'border-primary bg-primary/10 ring-2 ring-primary/50'
                                     : 'border-border hover:border-primary/50'
-                                }`}
+                                  }`}
                               >
                                 <Image
                                   src={avatar}
@@ -647,15 +668,136 @@ export default function CustomerSettingsPage() {
                   </div>
                 </div>
 
-                <Button onClick={handleSavePreferences} disabled={saving} className="gap-2">
+                {/* Accessibility Settings (S6-T8) */}
+                <div className="space-y-4">
+                  <h4 className="font-medium text-primary">Erişilebilirlik</h4>
+                  <div className="space-y-4 pl-4 border-l-2 border-primary/20">
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-3">
+                        <div className="mt-1"><Eye className="h-5 w-5 text-muted-foreground" /></div>
+                        <div>
+                          <p className="font-medium">Yüksek Kontrast Modu</p>
+                          <p className="text-sm text-muted-foreground">Metinler ve arka planlar arasındaki zıtlığı artırır</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={preferences.highContrast}
+                        onCheckedChange={(checked) => setPreferences({ ...preferences, highContrast: checked })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-3">
+                        <div className="mt-1"><ZapOff className="h-5 w-5 text-muted-foreground" /></div>
+                        <div>
+                          <p className="font-medium">Animasyonları Azalt</p>
+                          <p className="text-sm text-muted-foreground">Görsel geçişleri ve hareket efektlerini en aza indirir</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={preferences.reduceAnimations}
+                        onCheckedChange={(checked) => setPreferences({ ...preferences, reduceAnimations: checked })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button onClick={handleSavePreferences} disabled={saving} className="gap-2 w-full sm:w-auto mt-4">
                   <Save className="h-4 w-4" />
-                  {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                  {saving ? 'Kaydediliyor...' : 'Tercihleri Kaydet'}
                 </Button>
               </CardContent>
             </Card>
           </motion.div>
         </TabsContent>
+
+        <TabsContent value="privacy">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <Card glass>
+              <CardHeader>
+                <CardTitle>{tp('customerPrivacy.title')}</CardTitle>
+                <CardDescription>{tp('customerPrivacy.description')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <FileDown className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium">{tp('customerPrivacy.exportTitle')}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{tp('customerPrivacy.exportDesc')}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="gap-2"
+                    disabled={exportingData}
+                    onClick={handleExportPersonalData}
+                  >
+                    <FileDown className="h-4 w-4" />
+                    {exportingData ? tp('customerPrivacy.exporting') : tp('customerPrivacy.exportBtn')}
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Trash2 className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium text-destructive">{tp('customerPrivacy.deleteTitle')}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{tp('customerPrivacy.deleteDesc')}</p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="gap-2"
+                    onClick={() => {
+                      setDeleteConfirmEmail('');
+                      setDeleteDialogOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {tp('customerPrivacy.deleteOpen')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
       </Tabs>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{tp('customerPrivacy.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">{tp('customerPrivacy.deleteDesc')}</span>
+              <Label className="text-foreground">{tp('customerPrivacy.confirmEmail')}</Label>
+              <Input
+                type="email"
+                autoComplete="email"
+                value={deleteConfirmEmail}
+                onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                placeholder={profile.email || 'email@ornek.com'}
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAccount}>{tp('customerPrivacy.cancel')}</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingAccount || !deleteConfirmEmail.trim()}
+              onClick={() => void handleDeleteAccount()}
+            >
+              {deletingAccount ? '…' : tp('customerPrivacy.confirmDelete')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

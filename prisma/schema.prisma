@@ -1,5 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
+  output        = "../generated-prisma-client"
   binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
@@ -16,6 +17,7 @@ enum Role {
   ADMIN
   DEALER
   CUSTOMER
+  STAFF
 }
 
 model User {
@@ -24,6 +26,7 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
+  phone         String?
   password      String?
   role          Role      @default(CUSTOMER)
   points        Int       @default(0)
@@ -47,9 +50,24 @@ model User {
   donations     Donation[]
 
   // Dealer specific
-  businessName  String?
-  businessLogo  String?
-  businessDesc  String?
+  businessName         String?
+  businessLogo         String?
+  businessDesc         String?
+  address              String?
+  latitude             Float?
+  longitude            Float?
+  businessHours        String? @db.Text // JSON: { "mon": { "open": "09:00", "close": "18:00" }, ... }
+  defaultReplyTemplate String? @db.Text
+  preferredLanguage    String? @default("tr")
+  holidayMode          Boolean @default(false)
+  /// Bayi: otomatik telafi eşikleri ve bütçe (JSON)
+  dealerRemedyAutomation Json?
+
+  // Admin Features (Insights, Fraud, A/B Testing)
+  businessCategory String? // e.g. "cafe", "restaurant" for global insights
+  fraudStatus      String  @default("clean") // "clean", "flagged", "shadow_ban"
+  fraudScore       Float?  @default(0.0)
+  abCohort         String? // for Gamification A/B tests: A, B, C...
 
   // Physical Card System Relations
   physicalCards        PhysicalCard[]      @relation("CustomerCards")
@@ -60,32 +78,132 @@ model User {
   dealerProducts       Product[]           @relation("DealerProducts")
   cardAuditLogs        CardAuditLog[]      @relation("CardAuditLogs")
   createdBatches       CardBatch[]         @relation("CreatedBatches")
-  
+
   // New Feature Relations
-  referralsMade        Referral[]            @relation("Referrals")
-  referredBy           Referral?             @relation("ReferredBy")
-  referralCode         ReferralCode?         @relation("UserReferralCode")
-  streak               UserStreak?           @relation("UserStreak")
-  vipStatus            UserVIPStatus?        @relation("UserVIP")
-  birthday             UserBirthday?         @relation("UserBirthday")
-  happyHours           HappyHour[]           @relation("DealerHappyHours")
-  suspiciousActivities SuspiciousActivity[]  @relation("UserSuspiciousActivities")
-  dealerAlerts         SuspiciousActivity[]  @relation("DealerSuspiciousActivities")
-  pushSubscriptions    PushSubscription[]    @relation("PushSubscriptions")
-  pushNotifications    PushNotificationLog[] @relation("PushNotificationLogs")
-  offlineQueue         OfflineQueue[]        @relation("DealerOfflineQueue")
-  favoriteProducts     DealerFavoriteProduct[] @relation("DealerFavorites")
-  quickPresets         QuickScanPreset[]     @relation("DealerQuickPresets")
-  customerCLV          CustomerLifetimeValue? @relation("CustomerCLV")
-  heatmapData          HeatmapData[]         @relation("DealerHeatmap")
-  aiSettings           AISettings?
-  aiConversations      AIConversation[]
-  aiEmbeddings         AIEmbedding[]
-  aiCorrections        AIFeedbackCorrection[]
-  aiLearningProfile    AIDealerLearningProfile?
+  referralsMade             Referral[]                 @relation("Referrals")
+  referredBy                Referral?                  @relation("ReferredBy")
+  referralCode              ReferralCode?              @relation("UserReferralCode")
+  streak                    UserStreak?                @relation("UserStreak")
+  vipStatus                 UserVIPStatus?             @relation("UserVIP")
+  birthday                  UserBirthday?              @relation("UserBirthday")
+  happyHours                HappyHour[]                @relation("DealerHappyHours")
+  suspiciousActivities      SuspiciousActivity[]       @relation("UserSuspiciousActivities")
+  dealerAlerts              SuspiciousActivity[]       @relation("DealerSuspiciousActivities")
+  pushSubscriptions         PushSubscription[]         @relation("PushSubscriptions")
+  pushNotifications         PushNotificationLog[]      @relation("PushNotificationLogs")
+  offlineQueue              OfflineQueue[]             @relation("DealerOfflineQueue")
+  favoriteProducts          DealerFavoriteProduct[]    @relation("DealerFavorites")
+  quickPresets              QuickScanPreset[]          @relation("DealerQuickPresets")
+  customerCLV               CustomerLifetimeValue?     @relation("CustomerCLV")
+  heatmapData               HeatmapData[]              @relation("DealerHeatmap")
+  incidents                 Incident[] // dealer'ın kriz/incident kayıtları
+  incidentAssignments       Incident[]                 @relation("IncidentAssignments")
+  csmTasks                  CSMTask[] // dealer'a atanan CSM görevleri
+  csmTasksAssigned          CSMTask[]                  @relation("CSMTaskAssignments")
+  actionItems               ActionItem[] // dealer'ın aksiyon öğeleri
+  actionItemAssignments     ActionItem[]               @relation("ActionItemAssignments")
+  remedyOffersSent          RemedyOffer[]              @relation("DealerRemedyOffers")
+  remedyOffersReceived      RemedyOffer[]              @relation("CustomerRemedyOffers")
+  aiSettings                AISettings?
+  aiConversations           AIConversation[]
+  aiEmbeddings              AIEmbedding[]
+  aiCorrections             AIFeedbackCorrection[]
+  aiLearningProfile         AIDealerLearningProfile?
+  dailyStats                DailyDealerStats[]
+  dealerOnboardingEvents    DealerOnboardingEvent[]
+  webhooksCreated           Webhook[]
+  apiKeysCreated            ApiKey[]
+  surpriseBoxesReceived     UserSurpriseBox[]          @relation("UserSurpriseBoxesReceived")
+  surpriseBoxesSent         UserSurpriseBox[]          @relation("UserSurpriseBoxesSent")
+  // Staff (employee) — belongs to one dealer
+  staffProfile              DealerStaff?
+  // Dealer — has many staff
+  staffMembers              DealerStaff[]              @relation("DealerStaffMembers")
+  trainingModules           TrainingModule[]           @relation("DealerTrainingModules")
+  checklistTemplates        ChecklistTemplate[]        @relation("DealerChecklistTemplates")
+  // Staff: tasks/shifts/leave assigned to this user
+  staffTasksAssigned        StaffTask[]                @relation("StaffTaskAssignments")
+  staffShifts               StaffShift[]
+  staffLeaveRequests        StaffLeaveRequest[]
+  staffTrainingCompletions  StaffTrainingCompletion[]
+  staffChecklistCompletions StaffChecklistCompletion[]
+  // Dealer: created tasks, shifts, leave requests
+  staffTasksCreated         StaffTask[]                @relation("DealerStaffTasks")
+  staffShiftsCreated        StaffShift[]               @relation("DealerStaffShifts")
+  staffLeaveRequestsCreated StaffLeaveRequest[]        @relation("DealerStaffLeaveRequests")
+  // Müşteri: favori işletmeler (Ö2)
+  favoriteDealers           CustomerFavoriteDealer[]   @relation("CustomerFavorites")
+  favoritedByCustomers      CustomerFavoriteDealer[]   @relation("DealerFavoritedBy")
+  autoReplyRules            AutoReplyRule[]            @relation("DealerAutoReplyRules")
+  surveys                   Survey[]                   @relation("DealerSurveys")
+  campaigns                 Campaign[]                 @relation("DealerCampaigns")
+  dashboardLayout           DashboardLayout?           @relation("UserDashboardLayout")
+  automationRulesCreated    UserAutomationRule[]       @relation("AutomationRulesCreatedBy")
+  automationRulesUpdated    UserAutomationRule[]       @relation("AutomationRulesUpdatedBy")
+  automationRulesApproved   UserAutomationRule[]       @relation("AutomationRulesApprovedBy")
+  automationRunsTriggered   UserAutomationRun[]        @relation("AutomationRunsTriggeredBy")
+  qraChatLogs               QraChatLog[]
+  /// Masa sessiz sinyali (işletme tarafı listeler)
+  dealerTablePulses         TablePulse[]              @relation("DealerTablePulses")
+  dealerFlashOffers         DealerFlashOffer[]        @relation("DealerFlashOffers")
+  dealerWeeklyBriefs        DealerWeeklyBrief[]       @relation("DealerWeeklyBriefs")
+  dealerSegmentProposals    SegmentCampaignProposal[] @relation("DealerSegmentProposals")
+  /// Müşteri masadan sinyal gönderdiyse
+  customerTablePulses       TablePulse[]              @relation("CustomerTablePulses")
+  experienceSharesCreated   ExperienceShareToken[]   @relation("ExperienceSharesCreated")
+  experienceSharesForDealer ExperienceShareToken[] @relation("ExperienceSharesDealer")
+  improvementRequestsAsCustomer ImprovementRequest[] @relation("ImprovementRequestCustomer")
+  improvementRequestsForDealer  ImprovementRequest[] @relation("ImprovementRequestDealer")
+  dataSubjectRequests       DataSubjectRequest[]
+
+  // Squads Relations (Customer)
+  ownedSquad        Squad?         @relation("SquadOwner")
+  squadMemberships  SquadMember[]  @relation("UserSquadMemberships")
+  equippedCosmetics UserCosmetic[] @relation("UserCosmetics")
+
+  // 2FA
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean @default(false)
 
   @@index([email])
   @@index([role])
+}
+
+// Müşteri favori işletmeler (Ö2)
+model CustomerFavoriteDealer {
+  id        String   @id @default(cuid())
+  userId    String // müşteri
+  dealerId  String // işletme (User role=DEALER)
+  createdAt DateTime @default(now())
+
+  user   User @relation("CustomerFavorites", fields: [userId], references: [id], onDelete: Cascade)
+  dealer User @relation("DealerFavoritedBy", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dealerId])
+  @@index([userId])
+  @@index([dealerId])
+}
+
+// Admin tarafından kullanıcıya gönderilen sürpriz kutu (isimle veya rastgele)
+model UserSurpriseBox {
+  id           String    @id @default(cuid())
+  userId       String // alıcı müşteri
+  sentByUserId String? // gönderen admin
+  title        String // "Sürpriz Ödülünüz!"
+  message      String?   @db.Text
+  couponCode   String?
+  points       Int       @default(0)
+  rewardType   String? // coupon, points, badge, reward
+  metadata     Json? // ek veri
+  openedAt     DateTime? // null = henüz açılmadı
+  createdAt    DateTime  @default(now())
+
+  user   User  @relation("UserSurpriseBoxesReceived", fields: [userId], references: [id], onDelete: Cascade)
+  sentBy User? @relation("UserSurpriseBoxesSent", fields: [sentByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([openedAt])
+  @@index([createdAt])
 }
 
 model Account {
@@ -118,6 +236,44 @@ model Session {
   @@index([userId])
 }
 
+// Token replay: JWT jti + IP/UA ile farklı cihazdan kullanım tespiti
+model SessionTokenUsage {
+  id            String   @id @default(cuid())
+  jti           String // JWT ID (session fixation için üretilen)
+  ipHash        String // SHA256(ip) ilk 16 karakter
+  userAgentHash String // SHA256(ua) ilk 16 karakter
+  lastSeen      DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([jti])
+  @@index([lastSeen])
+}
+
+// Idempotency: kritik POST'larda tekrar isteği çift işlem engelleme
+model IdempotencyKey {
+  id           String   @id @default(cuid())
+  key          String   @unique // Idempotency-Key header değeri
+  route        String // Örn: feedback, remedy, spin
+  statusCode   Int // Cached response status
+  responseBody String   @db.Text // JSON string
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Outbox: DB yazımı + event publish atomik olsun
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  eventName   String // feedback/created vb.
+  payload     Json // event data
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt])
+  @@index([eventName])
+}
+
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -130,17 +286,85 @@ model VerificationToken {
 // GAMIFICATION MODELS
 // ─────────────────────────────────────────────────────────────
 
+// ------ 1. SQUADS & CLANS (SOSYAL MOD) ------
+model Squad {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  inviteCode  String   @unique // Örn: JKL58M
+  totalPoints Int      @default(0)
+  ownerId     String   @unique
+  /// Haftalık ekip hedefi (örn. 5 geri bildirim); progress haftalık sıfırlanır
+  weeklyTeamTarget   Int       @default(5)
+  weeklyTeamProgress Int       @default(0)
+  weeklyGoalResetAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User          @relation("SquadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members SquadMember[]
+
+  @@index([ownerId])
+  @@index([totalPoints])
+}
+
+model SquadMember {
+  id       String   @id @default(cuid())
+  userId   String
+  squadId  String
+  joinedAt DateTime @default(now())
+
+  user  User  @relation("UserSquadMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  squad Squad @relation(fields: [squadId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, squadId])
+  @@index([userId])
+  @@index([squadId])
+}
+
+// ------ 2. COSMETIC ITEMS (ROZET KABİNESİ & AVATAR) ------
+model CosmeticItem {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String // "avatar_frame", "profile_badge", "profile_background"
+  price       Int      @default(0) // XP / Puan bedeli
+  imageUrl    String?
+  rarity      String   @default("common")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  owners UserCosmetic[]
+
+  @@index([type])
+}
+
+model UserCosmetic {
+  id         String   @id @default(cuid())
+  userId     String
+  cosmeticId String
+  isEquipped Boolean  @default(false)
+  acquiredAt DateTime @default(now())
+
+  user     User         @relation("UserCosmetics", fields: [userId], references: [id], onDelete: Cascade)
+  cosmetic CosmeticItem @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cosmeticId])
+  @@index([userId])
+}
+
 model Badge {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
   description String
   icon        String
-  category    String      @default("general")
-  rarity      String      @default("common") // common, rare, epic, legendary
-  requirement Json        // { type: "feedback_count", value: 10 }
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  category    String   @default("general")
+  rarity      String   @default("common") // common, rare, epic, legendary
+  requirement Json // { type: "feedback_count", value: 10 }
+  pointCost   Int? // puanla açılabilir (null = sadece requirement ile)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   users UserBadge[]
 
@@ -149,10 +373,10 @@ model Badge {
 }
 
 model UserBadge {
-  id        String   @id @default(cuid())
-  userId    String
-  badgeId   String
-  earnedAt  DateTime @default(now())
+  id       String   @id @default(cuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
@@ -163,17 +387,17 @@ model UserBadge {
 }
 
 model Quest {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   description String
   icon        String
-  type        String   @default("daily") // daily, weekly, special
-  requirement Json     // { type: "give_feedback", count: 3 }
-  reward      Json     // { points: 100, xp: 50 }
+  type        String    @default("daily") // daily, weekly, special, mystery
+  requirement Json // { type: "give_feedback", count: 3 }
+  reward      Json // { points: 100, xp: 50 }
   expiresAt   DateTime?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   users UserQuest[]
 
@@ -202,10 +426,10 @@ model Reward {
   name        String
   description String
   icon        String
-  cost        Int      // Points required
+  cost        Int // Points required
   type        String   @default("digital") // digital, physical, coupon
   stock       Int      @default(-1) // -1 = unlimited
-  metadata    Json?    // Additional reward data
+  metadata    Json? // Additional reward data
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -217,12 +441,12 @@ model Reward {
 }
 
 model UserReward {
-  id          String    @id @default(cuid())
-  userId      String
-  rewardId    String
-  redeemedAt  DateTime  @default(now())
-  claimedAt   DateTime?
-  code        String?   @unique // For coupon codes
+  id         String    @id @default(cuid())
+  userId     String
+  rewardId   String
+  redeemedAt DateTime  @default(now())
+  claimedAt  DateTime?
+  code       String?   @unique // For coupon codes
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   reward Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
@@ -236,71 +460,93 @@ model UserReward {
 // ─────────────────────────────────────────────────────────────
 
 model QRCode {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  name        String
-  description String?
-  dealerId    String
-  isActive    Boolean  @default(true)
-  scanCount   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(cuid())
+  code          String    @unique
+  name          String
+  description   String?
+  dealerId      String
+  isActive      Boolean   @default(true)
+  scanCount     Int       @default(0)
+  expiresAt     DateTime? // lifecycle: optional expiry; null = no expiry
+  revokedAt     DateTime? // lifecycle: revoked (e.g. lost); null = not revoked
+  segmentConfig Json? // madde 45: { "new": { "welcomeText": "..." }, "returning": { "welcomeText": "..." } }
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   dealer    User       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
   feedbacks Feedback[]
+  tablePulses TablePulse[]
 
   @@index([code])
   @@index([dealerId])
   @@index([isActive])
+  @@index([expiresAt])
 }
 
 model Feedback {
-  id          String   @id @default(cuid())
-  qrCodeId    String
-  userId      String?  // Can be anonymous
-  rating      Int      // 1-5
-  text        String?  @db.Text
-  media       Json?    // Array of media URLs
+  id            String  @id @default(cuid())
+  qrCodeId      String
+  userId        String? // Can be anonymous
+  dealerStaffId String? // Rating a specific staff member
+  rating        Int // 1-5
+  text          String? @db.Text
+  media         Json? // Array of media URLs
+  npsScore      Int? // 0-10 Net Promoter Score (Ö6)
 
   // -- AI Analysis: Core Sentiment --
-  sentiment   String?  // positive, negative, neutral
-  emotions    Json?    // [{ label: "happy", score: 0.8 }, ...]
-  topics      Json?    // ["service", "quality", ...]
-  isToxic     Boolean  @default(false)
-  aiAnalysis  Json?    // Full AI response (legacy compat)
+  sentiment  String? // positive, negative, neutral
+  emotions   Json? // [{ label: "happy", score: 0.8 }, ...]
+  topics     Json? // ["service", "quality", ...]
+  isToxic    Boolean @default(false)
+  aiAnalysis Json? // Full AI response (legacy compat)
 
   // -- AI Analysis: Experience Signals --
-  intent          String?  // complaint, suggestion, praise, question, general
-  intentScore     Float?   // 0-1 confidence score
-  urgency         Float?   // 0-1 urgency score
-  effortScore     Float?   // 0-1 customer effort
-  churnRisk       Float?   // 0-1 churn probability
+  intent      String? // complaint, suggestion, praise, question, general
+  intentScore Float? // 0-1 confidence score
+  urgency     Float? // 0-1 urgency score
+  effortScore Float? // 0-1 customer effort
+  churnRisk   Float? // 0-1 churn probability
 
   // -- AI Analysis: Advanced NLP --
-  entities            Json?    // [{ type: "product"|"person"|"location", name: "...", sentiment: "positive" }]
-  themes              Json?    // [{ theme: "Hizmet Kalitesi", subTheme: "Personel", sentiment: "positive", score: 0.9 }]
-  statementSentiments Json?    // [{ statement: "Yemekler harika", sentiment: "positive", score: 0.95 }]
-  actionSuggestions   Json?    // [{ action: "Garson egitimi verin", priority: "high", impact: "..." }]
+  entities            Json? // [{ type: "product"|"person"|"location", name: "...", sentiment: "positive" }]
+  themes              Json? // [{ theme: "Hizmet Kalitesi", subTheme: "Personel", sentiment: "positive", score: 0.9 }]
+  statementSentiments Json? // [{ statement: "Yemekler harika", sentiment: "positive", score: 0.95 }]
+  actionSuggestions   Json? // [{ action: "Garson egitimi verin", priority: "high", impact: "..." }]
 
   // -- AI Learning Relations --
   aiEmbedding   AIEmbedding?
   aiCorrections AIFeedbackCorrection[]
 
   // -- AI Processing Meta --
-  aiProcessedAt   DateTime? // AI analiz zamani
-  aiModelUsed     String?   // groq/openai + model adi
-  aiVersion       String?   // AI analiz prompt versiyonu
+  aiProcessedAt DateTime? // AI analiz zamani
+  aiModelUsed   String? // groq/openai + model adi
+  aiVersion     String? // AI analiz prompt versiyonu
 
   // -- Dealer Reply --
-  dealerReply     String?   @db.Text
-  dealerRepliedAt DateTime?
+  dealerReply          String?   @db.Text
+  dealerRepliedAt      DateTime?
+  /// Bayi geri bildirimi ilk kez açtığında (şeffaf yolculuk için)
+  dealerFirstViewedAt DateTime?
 
-  isPublic    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // -- Scan attribution (ROI / campaign) --
+  utmSource         String? // utm_source
+  utmCampaign       String? // utm_campaign
+  utmMedium         String? // utm_medium
+  attributionSource String? // branch, app, web
 
-  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
-  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fraudScore Float? // 0-1 sahte yorum / anomali skoru (madde 41)
+
+  isPublic  Boolean   @default(true)
+  deletedAt DateTime? // soft delete; null = active
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  qrCode           QRCode            @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  staff            DealerStaff?      @relation(fields: [dealerStaffId], references: [id], onDelete: SetNull)
+  actionItems      ActionItem[]
+  remedyOffers     RemedyOffer[]
+  aiQualitySamples AIQualitySample[]
 
   @@index([qrCodeId])
   @@index([userId])
@@ -309,11 +555,50 @@ model Feedback {
   @@index([intent])
   @@index([createdAt])
   @@index([aiProcessedAt])
+  @@index([deletedAt])
+  @@index([dealerStaffId])
 }
 
 // ─────────────────────────────────────────────────────────────
 // SYSTEM MODELS
 // ─────────────────────────────────────────────────────────────
+
+// P1: Install-to-value - işletme kayıttan ilk anlamlı insight'a süre
+model DealerOnboardingEvent {
+  id        String   @id @default(cuid())
+  dealerId  String
+  eventType String // registered, firstQR, firstFeedback, firstInsight
+  createdAt DateTime @default(now())
+
+  dealer User @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// P2-22: Pre-aggregated daily dealer stats for fast dashboard
+model DailyDealerStats {
+  id                     String   @id @default(cuid())
+  dealerId               String
+  date                   DateTime @db.Date
+  feedbackCount          Int      @default(0)
+  avgRating              Float    @default(0)
+  consumptionCount       Int      @default(0)
+  consumptionReviewCount Int      @default(0)
+  scanCount              Int      @default(0)
+  positiveCount          Int      @default(0)
+  neutralCount           Int      @default(0)
+  negativeCount          Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  dealer User @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([dealerId, date])
+  @@index([dealerId])
+  @@index([date])
+}
 
 model Settings {
   id        String   @id @default(cuid())
@@ -326,16 +611,19 @@ model Settings {
 }
 
 model FeatureFlag {
-  id          String   @id @default(cuid())
-  key         String   @unique
+  id          String    @id @default(cuid())
+  key         String    @unique
   name        String
   description String?
-  isEnabled   Boolean  @default(false)
+  isEnabled   Boolean   @default(false)
+  expiresAt   DateTime?
+  ownerId     String?
   metadata    Json?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime  @updatedAt
 
   @@index([key])
   @@index([isEnabled])
+  @@index([expiresAt])
 }
 
 model Notification {
@@ -408,6 +696,231 @@ model AuditLog {
   @@index([createdAt])
 }
 
+model UserAutomationRule {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?  @db.Text
+  triggerType      String   @default("manual") // manual, schedule, event
+  triggerConfig    Json?
+  condition        Json // { role, minPoints, ... }
+  actions          Json // [{ type, ... }]
+  isActive         Boolean  @default(true)
+  priority         Int      @default(100)
+  requiresApproval Boolean  @default(false)
+  createdById      String
+  updatedById      String?
+  approvedById     String?
+  approvedAt       DateTime?
+  lastRunAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  createdBy User  @relation("AutomationRulesCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("AutomationRulesUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  approvedBy User? @relation("AutomationRulesApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  runs UserAutomationRun[]
+  jobs AutomationJob[]
+
+  @@index([isActive])
+  @@index([priority])
+  @@index([triggerType])
+  @@index([createdById])
+}
+
+model UserAutomationRun {
+  id             String    @id @default(cuid())
+  ruleId         String?
+  status         String    @default("pending") // pending, running, completed, failed, cancelled
+  mode           String    @default("execute") // execute, dry_run
+  triggeredById  String?
+  idempotencyKey String?
+  source         String? // ui, api, scheduler
+  summary        Json?
+  affectedCount  Int       @default(0)
+  successCount   Int       @default(0)
+  failedCount    Int       @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  rule        UserAutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  triggeredBy User?               @relation("AutomationRunsTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+  jobs        AutomationJob[]
+
+  @@index([ruleId])
+  @@index([status])
+  @@index([mode])
+  @@index([createdAt])
+  @@index([idempotencyKey])
+}
+
+model AutomationJob {
+  id             String    @id @default(cuid())
+  ruleId         String?
+  runId          String?
+  status         String    @default("queued") // queued, processing, completed, failed, cancelled
+  payload        Json?
+  idempotencyKey String?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  nextRunAt      DateTime  @default(now())
+  lockedAt       DateTime?
+  lockedBy       String?
+  lastError      String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  rule UserAutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  run  UserAutomationRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextRunAt])
+  @@index([ruleId])
+  @@index([runId])
+  @@index([idempotencyKey])
+}
+
+// Bölüm 11: Dış sistemlere olay bildirimi (Admin’de yapılandırma)
+model Webhook {
+  id          String   @id @default(cuid())
+  url         String   @db.Text
+  secret      String?  @db.Text // HMAC imza için opsiyonel
+  events      Json // ["feedback.created", "badge.earned", ...]
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([isActive])
+  @@index([createdById])
+}
+
+// Bölüm 11: Harici entegrasyon için API anahtarları (Admin’de oluşturma/yönetim)
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  keyHash     String // SHA-256 hash; ham anahtar sadece oluşturulurken gösterilir
+  keyPrefix   String // İlk 8 karakter (gösterim için)
+  scope       Json? // ["read:feedbacks", "write:cards"] vb.
+  lastUsedAt  DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([keyPrefix])
+  @@index([createdById])
+}
+
+// Incident/Kriz radarı (madde 35): eşik aşımında alarm + görev
+model Incident {
+  id             String    @id @default(cuid())
+  dealerId       String
+  type           String // rating_drop, nps_drop, negative_spike, custom
+  severity       String // low, medium, high, critical
+  status         String    @default("open") // open, assigned, in_progress, resolved
+  title          String
+  description    String?   @db.Text
+  thresholdValue Float? // eşik değeri (örn. ortalama rating)
+  assignedToId   String?
+  dueAt          DateTime?
+  resolvedAt     DateTime?
+  metadata       Json? // ek bağlam
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  dealer     User  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("IncidentAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([dealerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// P2 Churn playbook: CSM görevi - düşük tenant health için CSM takibi
+model CSMTask {
+  id               String    @id @default(cuid())
+  dealerId         String
+  type             String    @default("churn_risk") // churn_risk, at_risk, etc.
+  status           String    @default("open") // open, in_progress, resolved
+  priority         String    @default("medium") // low, medium, high
+  healthScore      Float? // Tenant health at creation
+  suggestedActions Json? // [{ action: string, priority: string }]
+  telafiDraft      String?   @db.Text // Telafi önerisi taslak metni
+  assignedToId     String?
+  dueAt            DateTime?
+  resolvedAt       DateTime?
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  dealer     User  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("CSMTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([dealerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// AI Action Engine (madde 36): öneri -> sahip atama -> takip
+// feedbackId null ise sistem/AI aggregate önerisi (sidebar verilerinden üretilmiş)
+model ActionItem {
+  id             String    @id @default(cuid())
+  feedbackId     String? // null = AI aggregate (sidebar verilerinden)
+  dealerId       String
+  suggestionText String    @db.Text // AI önerisi metni
+  priority       String    @default("medium") // low, medium, high
+  status         String    @default("pending") // pending, assigned, in_progress, done, cancelled
+  assignedToId   String?
+  dueAt          DateTime?
+  completedAt    DateTime?
+  sourceModule   String? // ai_aggregate, feedback, incident, agent_council
+  impactScore    Float? // 0–100 tahmini etki
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  feedback   Feedback? @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  dealer     User      @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("ActionItemAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([feedbackId])
+  @@index([dealerId])
+  @@index([status])
+}
+
+// Telafi teklifi: dealer gönderir, müşteri tür/miktar seçip kabul eder. QR feedback veya tüketim yorumundan tetiklenebilir.
+model RemedyOffer {
+  id                  String    @id @default(cuid())
+  feedbackId          String? // QR feedback (null ise consumptionReviewId dolu)
+  consumptionReviewId String? // tüketim yorumu (null ise feedbackId dolu)
+  dealerId            String
+  userId              String // müşteri
+  message             String    @db.Text
+  /// pending=müşteriye açık; awaiting_dealer_approval=onay kuyruğu; accepted, expired, rejected
+  status              String    @default("pending")
+  options             Json? // [{ type, label, unit, values: [] }] müşterinin seçebileceği tür ve miktarlar
+  selectedType        String? // müşterinin seçtiği: discount, points, free_item
+  selectedValue       String? // müşterinin seçtiği değer: "20", "100", "1"
+  createdAt           DateTime  @default(now())
+  acceptedAt          DateTime?
+
+  feedback          Feedback?          @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  consumptionReview ConsumptionReview? @relation(fields: [consumptionReviewId], references: [id], onDelete: Cascade)
+  dealer            User               @relation("DealerRemedyOffers", fields: [dealerId], references: [id], onDelete: Cascade)
+  user              User               @relation("CustomerRemedyOffers", fields: [userId], references: [id], onDelete: Cascade)
+  timelineEvents    RemedyTimelineEvent[]
+
+  @@index([feedbackId])
+  @@index([consumptionReviewId])
+  @@index([dealerId])
+  @@index([userId])
+  @@index([status])
+}
+
 // ─────────────────────────────────────────────────────────────
 // CMS MODELS
 // ─────────────────────────────────────────────────────────────
@@ -416,8 +929,8 @@ model Page {
   id          String   @id @default(cuid())
   slug        String   @unique
   title       String
-  content     Json     // Block-based content
-  meta        Json?    // SEO metadata
+  content     Json // Block-based content
+  meta        Json? // SEO metadata
   isPublished Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -428,14 +941,14 @@ model Page {
 
 model MenuItem {
   id        String   @id @default(cuid())
-  location  String   // header, footer, sidebar
+  location  String // header, footer, sidebar
   label     String
   href      String
   icon      String?
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   parentId  String?
-  roles     Json?    // ["ADMIN", "DEALER"] or null for all
+  roles     Json? // ["ADMIN", "DEALER"] or null for all
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -445,48 +958,67 @@ model MenuItem {
 }
 
 model Theme {
-  id          String   @id @default(cuid())
-  name        String
-  isActive    Boolean  @default(false)
-  colors      Json     // Color palette
-  fonts       Json?    // Font settings
-  customCss   String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(false)
+  colors    Json // Color palette
+  fonts     Json? // Font settings
+  customCss String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
 }
 
 model PricingPlan {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  price       Float
-  currency    String   @default("TRY")
-  interval    String   @default("monthly") // monthly, yearly, lifetime
-  features    Json     // Array of feature strings
-  isPopular   Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  price          Float
+  currency       String   @default("TRY")
+  interval       String   @default("monthly") // monthly, yearly, lifetime
+  features       Json // Array of feature strings
+  maxQRCodes     Int? // null = unlimited (P3 segment fiyatlandırma)
+  maxBranches    Int? // null = unlimited
+  pricePerBranch Float? // Şube başına ek ücret (opsiyonel)
+  isPopular      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([isActive])
   @@index([order])
 }
 
+// P3 Partner kanalı: entegrasyon partnerleri
+model Partner {
+  id         String   @id @default(cuid())
+  name       String
+  type       String // POS, ajans, dijital_menu
+  apiKeyHash String? // API anahtarı hash (saklanır)
+  webhookUrl String? // Event webhook URL
+  metadata   Json?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+}
+
 model Coupon {
-  id           String    @id @default(cuid())
-  code         String    @unique
-  type         String    @default("percentage") // percentage, fixed
-  value        Float
-  minPurchase  Float?
-  maxUses      Int       @default(-1) // -1 = unlimited
-  usedCount    Int       @default(0)
-  expiresAt    DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  code        String    @unique
+  type        String    @default("percentage") // percentage, fixed
+  value       Float
+  minPurchase Float?
+  maxUses     Int       @default(-1) // -1 = unlimited
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([code])
   @@index([isActive])
@@ -497,24 +1029,24 @@ model Coupon {
 // ─────────────────────────────────────────────────────────────
 
 enum CardStatus {
-  UNUSED      // Henüz aktive edilmemiş
-  ACTIVATED   // Müşteriye bağlanmış
-  BLOCKED     // Bloklanmış
+  UNUSED // Henüz aktive edilmemiş
+  ACTIVATED // Müşteriye bağlanmış
+  BLOCKED // Bloklanmış
 }
 
 model PhysicalCard {
   id          String     @id @default(cuid())
   token       String     @unique // Benzersiz QR token (nanoid)
-  batchId     String?    // Toplu üretim batch ID
+  batchId     String? // Toplu üretim batch ID
   status      CardStatus @default(UNUSED)
-  customerId  String?    // Aktive edildiğinde müşteri ID
+  customerId  String? // Aktive edildiğinde müşteri ID
   activatedAt DateTime?
   blockedAt   DateTime?
   blockReason String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  customer     User?           @relation("CustomerCards", fields: [customerId], references: [id], onDelete: SetNull)
+  customer     User?          @relation("CustomerCards", fields: [customerId], references: [id], onDelete: SetNull)
   consumptions Consumption[]
   auditLogs    CardAuditLog[]
 
@@ -529,7 +1061,7 @@ model ProductCategory {
   id        String   @id @default(cuid())
   name      String
   icon      String   @default("🍽️")
-  dealerId  String?  // null = global kategori
+  dealerId  String? // null = global kategori
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -549,14 +1081,14 @@ model Product {
   description String?
   price       Float?
   categoryId  String
-  dealerId    String?  // null = global ürün
+  dealerId    String? // null = global ürün
   image       String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category     ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  dealer       User?           @relation("DealerProducts", fields: [dealerId], references: [id], onDelete: Cascade)
+  category     ProductCategory         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  dealer       User?                   @relation("DealerProducts", fields: [dealerId], references: [id], onDelete: Cascade)
   consumptions Consumption[]
   favoritedBy  DealerFavoriteProduct[] @relation("FavoritedBy")
   quickPresets QuickScanPreset[]       @relation("QuickPresetProducts")
@@ -572,15 +1104,15 @@ model Consumption {
   customerId String
   dealerId   String
   productId  String?
-  amount     Float?   // Tutar (opsiyonel)
-  note       String?  // Bayi notu
+  amount     Float? // Tutar (opsiyonel)
+  note       String? // Bayi notu
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  card     PhysicalCard        @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  customer User                @relation("CustomerConsumptions", fields: [customerId], references: [id], onDelete: Cascade)
-  dealer   User                @relation("DealerConsumptions", fields: [dealerId], references: [id], onDelete: Cascade)
-  product  Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  card     PhysicalCard       @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  customer User               @relation("CustomerConsumptions", fields: [customerId], references: [id], onDelete: Cascade)
+  dealer   User               @relation("DealerConsumptions", fields: [dealerId], references: [id], onDelete: Cascade)
+  product  Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
   review   ConsumptionReview?
 
   @@index([cardId])
@@ -591,19 +1123,20 @@ model Consumption {
 }
 
 model ConsumptionReview {
-  id            String   @id @default(cuid())
-  consumptionId String   @unique
-  customerId    String
-  rating        Int      // 1-5 genel puan
-  text          String?  @db.Text
-  dimensions    Json?    // { taste: 5, service: 4, ambiance: 5, value: 4 }
+  id              String    @id @default(cuid())
+  consumptionId   String    @unique
+  customerId      String
+  rating          Int // 1-5 genel puan
+  text            String?   @db.Text
+  dimensions      Json? // { taste: 5, service: 4, ambiance: 5, value: 4 }
   dealerReply     String?   @db.Text
   dealerRepliedAt DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  consumption Consumption @relation(fields: [consumptionId], references: [id], onDelete: Cascade)
-  customer    User        @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  consumption  Consumption   @relation(fields: [consumptionId], references: [id], onDelete: Cascade)
+  customer     User          @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  remedyOffers RemedyOffer[]
 
   @@index([consumptionId])
   @@index([customerId])
@@ -615,8 +1148,8 @@ model CardAuditLog {
   id        String   @id @default(cuid())
   cardId    String
   userId    String?
-  action    String   // CREATED, ACTIVATED, BLOCKED, UNBLOCKED, SCANNED, CONSUMPTION_ADDED
-  metadata  Json?    // Ek bilgiler
+  action    String // CREATED, ACTIVATED, BLOCKED, UNBLOCKED, SCANNED, CONSUMPTION_ADDED
+  metadata  Json? // Ek bilgiler
   ipAddress String?
   userAgent String?
   createdAt DateTime @default(now())
@@ -632,9 +1165,9 @@ model CardAuditLog {
 
 model CardBatch {
   id          String   @id @default(cuid())
-  name        String   // Batch adı (ör: "Ocak 2024 - 1000 Kart")
-  quantity    Int      // Üretilen kart sayısı
-  prefix      String?  // Token prefix (opsiyonel)
+  name        String // Batch adı (ör: "Ocak 2024 - 1000 Kart")
+  quantity    Int // Üretilen kart sayısı
+  prefix      String? // Token prefix (opsiyonel)
   createdById String
   createdAt   DateTime @default(now())
 
@@ -649,21 +1182,21 @@ model CardBatch {
 // ─────────────────────────────────────────────────────────────
 
 model DonationProject {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
-  description String   @db.Text
-  icon        String   // Emoji or icon path
-  category    String   // water, education, environment, animals, health
-  goal        Int      // Target points
-  current     Int      @default(0) // Current collected points
-  impact      Json     // { unit: "litre", perPoint: 10, label: "Temiz Su" }
-  tags        Json?    // ["Temel İhtiyaç", "Afrika"]
-  isActive    Boolean  @default(true)
-  isFeatured  Boolean  @default(false)
-  startDate   DateTime @default(now())
+  description String    @db.Text
+  icon        String // Emoji or icon path
+  category    String // water, education, environment, animals, health
+  goal        Int // Target points
+  current     Int       @default(0) // Current collected points
+  impact      Json // { unit: "litre", perPoint: 10, label: "Temiz Su" }
+  tags        Json? // ["Temel İhtiyaç", "Afrika"]
+  isActive    Boolean   @default(true)
+  isFeatured  Boolean   @default(false)
+  startDate   DateTime  @default(now())
   endDate     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   donations Donation[]
 
@@ -676,14 +1209,14 @@ model Donation {
   id        String   @id @default(cuid())
   userId    String
   projectId String
-  points    Int      // Points donated
-  message   String?  // Optional message
+  points    Int // Points donated
+  message   String? // Optional message
   isPublic  Boolean  @default(true) // Show in leaderboard
   createdAt DateTime @default(now())
-  
+
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   project DonationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@index([projectId])
   @@index([createdAt])
@@ -694,36 +1227,36 @@ model Donation {
 // ─────────────────────────────────────────────────────────────
 
 model Referral {
-  id             String    @id @default(cuid())
-  referrerId     String    // User who referred
-  referredId     String    @unique // User who was referred
-  referralCode   String    // Code used
-  status         String    @default("PENDING") // PENDING, COMPLETED, EXPIRED
-  pointsEarned   Int       @default(0) // Points earned by referrer
-  bonusGiven     Int       @default(0) // Bonus given to referred
-  completedAt    DateTime? // When referral was completed (first purchase)
-  expiresAt      DateTime? // Referral expiration
-  createdAt      DateTime  @default(now())
-  
+  id           String    @id @default(cuid())
+  referrerId   String // User who referred
+  referredId   String    @unique // User who was referred
+  referralCode String // Code used
+  status       String    @default("PENDING") // PENDING, COMPLETED, EXPIRED
+  pointsEarned Int       @default(0) // Points earned by referrer
+  bonusGiven   Int       @default(0) // Bonus given to referred
+  completedAt  DateTime? // When referral was completed (first purchase)
+  expiresAt    DateTime? // Referral expiration
+  createdAt    DateTime  @default(now())
+
   referrer User @relation("Referrals", fields: [referrerId], references: [id], onDelete: Cascade)
   referred User @relation("ReferredBy", fields: [referredId], references: [id], onDelete: Cascade)
-  
+
   @@index([referrerId])
   @@index([referralCode])
   @@index([status])
 }
 
 model ReferralCode {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  code        String   @unique
-  usageCount  Int      @default(0)
-  maxUsage    Int?     // null = unlimited
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  code       String   @unique
+  usageCount Int      @default(0)
+  maxUsage   Int? // null = unlimited
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
   user User @relation("UserReferralCode", fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([code])
 }
 
@@ -742,40 +1275,40 @@ model UserStreak {
   frozenUntil     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
+
   user User @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VIPTier {
-  id              String   @id @default(cuid())
-  name            String   @unique // Bronze, Silver, Gold, Platinum
-  minPoints       Int      // Minimum points required
-  multiplier      Float    @default(1.0) // Points multiplier
-  benefits        Json     // Array of benefit objects
-  color           String   // Hex color for UI
-  icon            String   // Emoji or icon
-  order           Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  
+  id         String   @id @default(cuid())
+  name       String   @unique // Bronze, Silver, Gold, Platinum
+  minPoints  Int // Minimum points required
+  multiplier Float    @default(1.0) // Points multiplier
+  benefits   Json // Array of benefit objects
+  color      String // Hex color for UI
+  icon       String // Emoji or icon
+  order      Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
   users UserVIPStatus[]
-  
+
   @@index([minPoints])
   @@index([order])
 }
 
 model UserVIPStatus {
-  id            String    @id @default(cuid())
-  userId        String    @unique
-  tierId        String
-  totalSpent    Float     @default(0)
-  lifetimePoints Int      @default(0)
-  tierExpiry    DateTime? // When tier expires (if applicable)
-  upgradedAt    DateTime  @default(now())
-  
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  tierId         String
+  totalSpent     Float     @default(0)
+  lifetimePoints Int       @default(0)
+  tierExpiry     DateTime? // When tier expires (if applicable)
+  upgradedAt     DateTime  @default(now())
+
   user User    @relation("UserVIP", fields: [userId], references: [id], onDelete: Cascade)
   tier VIPTier @relation(fields: [tierId], references: [id])
-  
+
   @@index([tierId])
 }
 
@@ -784,41 +1317,41 @@ model UserVIPStatus {
 // ─────────────────────────────────────────────────────────────
 
 model HappyHour {
-  id           String   @id @default(cuid())
-  dealerId     String?  // null = global
-  name         String
-  description  String?
-  multiplier   Float    @default(2.0) // Points multiplier
-  startTime    String   // HH:mm format
-  endTime      String   // HH:mm format
-  daysOfWeek   Json     // [0,1,2,3,4,5,6] - 0=Sunday
-  isActive     Boolean  @default(true)
-  validFrom    DateTime?
-  validUntil   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
+  id          String    @id @default(cuid())
+  dealerId    String? // null = global
+  name        String
+  description String?
+  multiplier  Float     @default(2.0) // Points multiplier
+  startTime   String // HH:mm format
+  endTime     String // HH:mm format
+  daysOfWeek  Json // [0,1,2,3,4,5,6] - 0=Sunday
+  isActive    Boolean   @default(true)
+  validFrom   DateTime?
+  validUntil  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   dealer User? @relation("DealerHappyHours", fields: [dealerId], references: [id], onDelete: Cascade)
-  
+
   @@index([dealerId])
   @@index([isActive])
 }
 
 model SeasonalCampaign {
-  id           String    @id @default(cuid())
-  name         String
-  description  String    @db.Text
-  type         String    // BIRTHDAY, ANNIVERSARY, SEASONAL, SPECIAL
-  multiplier   Float     @default(1.5)
-  bonusPoints  Int       @default(0)
-  discount     Float?    // Percentage discount
-  imageUrl     String?
-  conditions   Json?     // Eligibility conditions
-  isActive     Boolean   @default(true)
-  startDate    DateTime
-  endDate      DateTime
-  createdAt    DateTime  @default(now())
-  
+  id          String   @id @default(cuid())
+  name        String
+  description String   @db.Text
+  type        String // BIRTHDAY, ANNIVERSARY, SEASONAL, SPECIAL
+  multiplier  Float    @default(1.5)
+  bonusPoints Int      @default(0)
+  discount    Float? // Percentage discount
+  imageUrl    String?
+  conditions  Json? // Eligibility conditions
+  isActive    Boolean  @default(true)
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+
   @@index([type])
   @@index([isActive])
   @@index([startDate])
@@ -826,14 +1359,14 @@ model SeasonalCampaign {
 }
 
 model UserBirthday {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  birthDate    DateTime
-  bonusGiven   Boolean   @default(false)
-  lastBonusAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  birthDate   DateTime
+  bonusGiven  Boolean   @default(false)
+  lastBonusAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   user User @relation("UserBirthday", fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -842,25 +1375,25 @@ model UserBirthday {
 // ─────────────────────────────────────────────────────────────
 
 model SuspiciousActivity {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String?
   dealerId    String?
   cardId      String?
-  type        String   // RAPID_SCAN, DUPLICATE_ENTRY, UNUSUAL_AMOUNT, IP_MISMATCH, etc.
-  severity    String   @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
-  description String   @db.Text
-  metadata    Json?    // Additional context
+  type        String // RAPID_SCAN, DUPLICATE_ENTRY, UNUSUAL_AMOUNT, IP_MISMATCH, etc.
+  severity    String    @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  description String    @db.Text
+  metadata    Json? // Additional context
   ipAddress   String?
   userAgent   String?
-  isResolved  Boolean  @default(false)
+  isResolved  Boolean   @default(false)
   resolvedBy  String?
   resolvedAt  DateTime?
   resolution  String?
-  createdAt   DateTime @default(now())
-  
-  user    User? @relation("UserSuspiciousActivities", fields: [userId], references: [id], onDelete: SetNull)
-  dealer  User? @relation("DealerSuspiciousActivities", fields: [dealerId], references: [id], onDelete: SetNull)
-  
+  createdAt   DateTime  @default(now())
+
+  user   User? @relation("UserSuspiciousActivities", fields: [userId], references: [id], onDelete: SetNull)
+  dealer User? @relation("DealerSuspiciousActivities", fields: [dealerId], references: [id], onDelete: SetNull)
+
   @@index([userId])
   @@index([dealerId])
   @@index([type])
@@ -870,17 +1403,17 @@ model SuspiciousActivity {
 }
 
 model SecurityAlert {
-  id          String   @id @default(cuid())
-  type        String   // BRUTE_FORCE, UNUSUAL_LOGIN, MULTIPLE_FAILED_SCANS, etc.
-  message     String
-  severity    String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
-  targetId    String?  // User/Dealer ID if applicable
-  targetType  String?  // USER, DEALER, CARD
-  metadata    Json?
-  isRead      Boolean  @default(false)
-  isResolved  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  
+  id         String   @id @default(cuid())
+  type       String // BRUTE_FORCE, UNUSUAL_LOGIN, MULTIPLE_FAILED_SCANS, etc.
+  message    String
+  severity   String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+  targetId   String? // User/Dealer ID if applicable
+  targetType String? // USER, DEALER, CARD
+  metadata   Json?
+  isRead     Boolean  @default(false)
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
   @@index([type])
   @@index([severity])
   @@index([isRead])
@@ -892,37 +1425,37 @@ model SecurityAlert {
 // ─────────────────────────────────────────────────────────────
 
 model PushSubscription {
-  id           String   @id @default(cuid())
-  userId       String
-  endpoint     String   @unique
-  p256dh       String   // Public key
-  auth         String   // Auth secret
-  userAgent    String?
-  isActive     Boolean  @default(true)
-  lastUsedAt   DateTime?
-  createdAt    DateTime @default(now())
-  
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String // Public key
+  auth       String // Auth secret
+  userAgent  String?
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
   user User @relation("PushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@index([isActive])
 }
 
 model PushNotificationLog {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   userId         String
   subscriptionId String?
   title          String
   body           String
   data           Json?
-  status         String   @default("SENT") // SENT, DELIVERED, FAILED, CLICKED
+  status         String    @default("SENT") // SENT, DELIVERED, FAILED, CLICKED
   error          String?
-  sentAt         DateTime @default(now())
+  sentAt         DateTime  @default(now())
   deliveredAt    DateTime?
   clickedAt      DateTime?
-  
+
   user User @relation("PushNotificationLogs", fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId])
   @@index([status])
   @@index([sentAt])
@@ -933,18 +1466,18 @@ model PushNotificationLog {
 // ─────────────────────────────────────────────────────────────
 
 model OfflineQueue {
-  id          String   @id @default(cuid())
-  dealerId    String
-  action      String   // CREATE_CONSUMPTION, SCAN_CARD, etc.
-  payload     Json     // Action data
-  status      String   @default("PENDING") // PENDING, SYNCED, FAILED
-  retries     Int      @default(0)
-  error       String?
-  queuedAt    DateTime @default(now())
-  syncedAt    DateTime?
-  
+  id       String    @id @default(cuid())
+  dealerId String
+  action   String // CREATE_CONSUMPTION, SCAN_CARD, etc.
+  payload  Json // Action data
+  status   String    @default("PENDING") // PENDING, SYNCED, FAILED
+  retries  Int       @default(0)
+  error    String?
+  queuedAt DateTime  @default(now())
+  syncedAt DateTime?
+
   dealer User @relation("DealerOfflineQueue", fields: [dealerId], references: [id], onDelete: Cascade)
-  
+
   @@index([dealerId])
   @@index([status])
   @@index([queuedAt])
@@ -960,29 +1493,29 @@ model DealerFavoriteProduct {
   productId String
   order     Int      @default(0)
   createdAt DateTime @default(now())
-  
+
   dealer  User    @relation("DealerFavorites", fields: [dealerId], references: [id], onDelete: Cascade)
   product Product @relation("FavoritedBy", fields: [productId], references: [id], onDelete: Cascade)
-  
+
   @@unique([dealerId, productId])
   @@index([dealerId])
   @@index([order])
 }
 
 model QuickScanPreset {
-  id          String   @id @default(cuid())
-  dealerId    String
-  name        String
-  productId   String?
-  amount      Float?
-  note        String?
-  isDefault   Boolean  @default(false)
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  dealerId  String
+  name      String
+  productId String?
+  amount    Float?
+  note      String?
+  isDefault Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
   dealer  User     @relation("DealerQuickPresets", fields: [dealerId], references: [id], onDelete: Cascade)
   product Product? @relation("QuickPresetProducts", fields: [productId], references: [id], onDelete: SetNull)
-  
+
   @@index([dealerId])
   @@index([isDefault])
 }
@@ -992,21 +1525,21 @@ model QuickScanPreset {
 // ─────────────────────────────────────────────────────────────
 
 model CustomerLifetimeValue {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  totalSpent         Float    @default(0)
-  totalVisits        Int      @default(0)
-  avgOrderValue      Float    @default(0)
-  firstPurchaseAt    DateTime?
-  lastPurchaseAt     DateTime?
-  predictedChurn     Float?   // 0-1 probability
-  churnRisk          String?  // LOW, MEDIUM, HIGH
-  segmentId          String?
-  calculatedAt       DateTime @default(now())
-  
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  totalSpent      Float     @default(0)
+  totalVisits     Int       @default(0)
+  avgOrderValue   Float     @default(0)
+  firstPurchaseAt DateTime?
+  lastPurchaseAt  DateTime?
+  predictedChurn  Float? // 0-1 probability
+  churnRisk       String? // LOW, MEDIUM, HIGH
+  segmentId       String?
+  calculatedAt    DateTime  @default(now())
+
   user    User             @relation("CustomerCLV", fields: [userId], references: [id], onDelete: Cascade)
   segment CustomerSegment? @relation(fields: [segmentId], references: [id])
-  
+
   @@index([predictedChurn])
   @@index([churnRisk])
 }
@@ -1015,11 +1548,11 @@ model CustomerSegment {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
-  criteria    Json     // Segmentation rules
+  criteria    Json // Segmentation rules
   color       String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
-  
+
   customers CustomerLifetimeValue[]
 }
 
@@ -1027,14 +1560,14 @@ model HeatmapData {
   id        String   @id @default(cuid())
   dealerId  String
   date      DateTime @db.Date
-  hour      Int      // 0-23
-  dayOfWeek Int      // 0-6 (Sunday = 0)
+  hour      Int // 0-23
+  dayOfWeek Int // 0-6 (Sunday = 0)
   count     Int      @default(0)
   revenue   Float    @default(0)
   createdAt DateTime @default(now())
-  
+
   dealer User @relation("DealerHeatmap", fields: [dealerId], references: [id], onDelete: Cascade)
-  
+
   @@unique([dealerId, date, hour])
   @@index([dealerId])
   @@index([date])
@@ -1047,16 +1580,16 @@ model HeatmapData {
 model AIThemeCluster {
   id          String   @id @default(cuid())
   dealerId    String
-  period      String   // "2026-02", "2026-W06", "2026-02-06"
-  theme       String   // Ana tema: "Hizmet Kalitesi"
-  subTheme    String?  // Alt tema: "Personel Ilgisi"
-  sentiment   String   // positive, negative, neutral, mixed
+  period      String // "2026-02", "2026-W06", "2026-02-06"
+  theme       String // Ana tema: "Hizmet Kalitesi"
+  subTheme    String? // Alt tema: "Personel Ilgisi"
+  sentiment   String // positive, negative, neutral, mixed
   count       Int      @default(1)
   avgScore    Float    @default(0)
-  trend       String?  // up, down, stable
-  trendValue  Float?   // Degisim yuzdesi
-  sampleTexts Json?    // Ornek geri bildirim metinleri (max 5)
-  keywords    Json?    // Iliskili anahtar kelimeler
+  trend       String? // up, down, stable
+  trendValue  Float? // Degisim yuzdesi
+  sampleTexts Json? // Ornek geri bildirim metinleri (max 5)
+  keywords    Json? // Iliskili anahtar kelimeler
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1070,20 +1603,20 @@ model AIThemeCluster {
 model AIInsightReport {
   id              String   @id @default(cuid())
   dealerId        String
-  period          String   // "2026-02", "2026-W06"
-  type            String   // daily, weekly, monthly
-  overallScore    Float    // 0-100
-  trend           String   // up, down, stable
-  trendValue      Float    // Degisim yuzdesi
+  period          String // "2026-02", "2026-W06"
+  type            String // daily, weekly, monthly
+  overallScore    Float // 0-100
+  trend           String // up, down, stable
+  trendValue      Float // Degisim yuzdesi
   totalFeedbacks  Int      @default(0)
   summary         String   @db.Text
-  strengths       Json     // [{ title, score, description, icon }]
-  weaknesses      Json     // [{ title, score, description, icon }]
-  recommendations Json     // [{ text, priority, impact, category }]
-  alerts          Json?    // [{ type, message, severity }]
-  keyDrivers      Json?    // [{ factor, impact, correlation }]
-  predictedRating Float?   // Tahmini gelecek donem puani
-  keyMetrics      Json?    // { responseRate, avgRating, nps, csat, ces }
+  strengths       Json // [{ title, score, description, icon }]
+  weaknesses      Json // [{ title, score, description, icon }]
+  recommendations Json // [{ text, priority, impact, category }]
+  alerts          Json? // [{ type, message, severity }]
+  keyDrivers      Json? // [{ factor, impact, correlation }]
+  predictedRating Float? // Tahmini gelecek donem puani
+  keyMetrics      Json? // { responseRate, avgRating, nps, csat, ces }
   generatedAt     DateTime @default(now())
 
   @@unique([dealerId, period, type])
@@ -1094,61 +1627,186 @@ model AIInsightReport {
 }
 
 model AIConversation {
-  id          String   @id @default(cuid())
-  dealerId    String
-  dealer      User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  title       String?
-  messages    Json     // [{ role: "user"|"assistant", content: "...", timestamp }]
-  context     Json?    // Sohbet baglami (filtreler, secili donem vs.)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  dealerId  String
+  dealer    User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  title     String?
+  messages  Json // [{ role: "user"|"assistant", content: "...", timestamp }]
+  context   Json? // Sohbet baglami (filtreler, secili donem vs.)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([dealerId])
   @@index([createdAt])
 }
 
 model AISettings {
-  id                  String   @id @default(cuid())
-  dealerId            String   @unique
-  dealer              User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
-  isEnabled           Boolean  @default(true)
-  autoAnalyze         Boolean  @default(true)  // Otomatik analiz
-  analysisLanguage    String   @default("tr")
-  sentimentEnabled    Boolean  @default(true)
-  emotionEnabled      Boolean  @default(true)
-  topicEnabled        Boolean  @default(true)
-  intentEnabled       Boolean  @default(true)
-  urgencyEnabled      Boolean  @default(true)
-  entityEnabled       Boolean  @default(true)
-  toxicityEnabled     Boolean  @default(true)
-  churnEnabled        Boolean  @default(true)
-  themeClusterEnabled Boolean  @default(true)
-  weeklyReportEnabled Boolean  @default(true)
-  monthlyReportEnabled Boolean @default(true)
-  alertOnToxic        Boolean  @default(true)
-  alertOnUrgent       Boolean  @default(true)  // urgency > 0.7
-  alertOnChurnRisk    Boolean  @default(true)  // churnRisk > 0.7
-  customPrompt        String?  @db.Text  // Dealer ozel prompt eklentisi
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  dealerId             String   @unique
+  dealer               User     @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  isEnabled            Boolean  @default(true)
+  autoAnalyze          Boolean  @default(true) // Otomatik analiz
+  analysisLanguage     String   @default("tr")
+  sentimentEnabled     Boolean  @default(true)
+  emotionEnabled       Boolean  @default(true)
+  topicEnabled         Boolean  @default(true)
+  intentEnabled        Boolean  @default(true)
+  urgencyEnabled       Boolean  @default(true)
+  entityEnabled        Boolean  @default(true)
+  toxicityEnabled      Boolean  @default(true)
+  churnEnabled         Boolean  @default(true)
+  themeClusterEnabled  Boolean  @default(true)
+  weeklyReportEnabled  Boolean  @default(true)
+  monthlyReportEnabled Boolean  @default(true)
+  alertOnToxic         Boolean  @default(true)
+  alertOnUrgent        Boolean  @default(true) // urgency > 0.7
+  alertOnChurnRisk     Boolean  @default(true) // churnRisk > 0.7
+  customPrompt         String?  @db.Text // Dealer ozel prompt eklentisi
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// P3 AI quality review: haftalık manuel örnek skorlama
+model AIQualitySample {
+  id            String    @id @default(cuid())
+  feedbackId    String
+  reviewedAt    DateTime?
+  reviewerId    String?
+  accuracyScore Float? // 0-100 manuel skor
+  notes         String?   @db.Text
+  status        String    @default("pending") // pending, reviewed
+  createdAt     DateTime  @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model AIUsageLog {
-  id          String   @id @default(cuid())
-  dealerId    String?
-  action      String   // analyze, insights, chat, bulk_analyze, theme_cluster
-  model       String   // Kullanilan model
-  inputTokens  Int     @default(0)
-  outputTokens Int     @default(0)
-  latencyMs   Int      @default(0)
-  success     Boolean  @default(true)
-  error       String?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  dealerId     String?
+  action       String // analyze, insights, chat, bulk_analyze, theme_cluster
+  model        String // Kullanilan model
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  latencyMs    Int      @default(0)
+  success      Boolean  @default(true)
+  error        String?
+  createdAt    DateTime @default(now())
 
   @@index([dealerId])
   @@index([action])
   @@index([createdAt])
   @@index([success])
+}
+
+/// QRA floating chat — kötüye kullanım incelemesi ve admin denetimi
+model QraChatLog {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Giriş yapmamış veya IP: sha256 tabanlı kısa parmak izi (ham IP tutulmaz)
+  ipFingerprint    String?
+  userRoleSnapshot String? // ADMIN, DEALER, CUSTOMER, STAFF, ANON
+  userMessage      String   @db.Text
+  assistantMessage String   @db.Text
+  model            String   @default("llama-3.3-70b-versatile")
+  latencyMs        Int?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([ipFingerprint, createdAt])
+}
+
+model AgentRun {
+  id             String   @id @default(cuid())
+  goal           String   @db.Text
+  status         String   @default("completed") // running, completed, failed
+  createdById    String?
+  context        Json?
+  finalDecision  String?  @db.Text
+  winnerAgent    String?
+  confidence     Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  messages  AgentMessage[]
+  proposals AgentProposal[]
+  decisions AgentDecision[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
+model AgentMessage {
+  id        String   @id @default(cuid())
+  runId     String
+  agentName String
+  role      String // proposal, critique, consensus, system
+  content   String   @db.Text
+  round     Int      @default(1)
+  score     Float?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, round])
+  @@index([agentName])
+}
+
+model AgentProposal {
+  id             String   @id @default(cuid())
+  runId          String
+  agentName      String
+  proposalType   String
+  title          String
+  details        String   @db.Text
+  expectedImpact Float?
+  confidence     Float?
+  priority       String   @default("medium")
+  createdAt      DateTime @default(now())
+
+  run AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([agentName])
+  @@index([priority])
+}
+
+model AgentDecision {
+  id               String   @id @default(cuid())
+  runId            String
+  winnerAgent      String
+  rationale        String   @db.Text
+  suggestedActions Json
+  consensusScore   Float?
+  createdAt        DateTime @default(now())
+
+  run      AgentRun       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  outcomes AgentOutcome[]
+
+  @@index([runId])
+  @@index([winnerAgent])
+}
+
+model AgentOutcome {
+  id          String   @id @default(cuid())
+  decisionId  String
+  metricName  String
+  metricDelta Float
+  successScore Float?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  decision AgentDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@index([decisionId])
+  @@index([metricName])
 }
 
 model AIEmbedding {
@@ -1171,7 +1829,7 @@ model AIFeedbackCorrection {
   id         String   @id @default(cuid())
   feedbackId String
   dealerId   String
-  field      String   // sentiment, intent, topics, themes, entities, urgency, churn, action
+  field      String // sentiment, intent, topics, themes, entities, urgency, churn, action
   oldValue   Json?
   newValue   Json
   note       String?  @db.Text
@@ -1187,19 +1845,427 @@ model AIFeedbackCorrection {
 }
 
 model AIDealerLearningProfile {
-  id                    String   @id @default(cuid())
-  dealerId              String   @unique
-  version               Int      @default(1)
-  status                String   @default("idle") // idle, training, ready
+  id                    String    @id @default(cuid())
+  dealerId              String    @unique
+  version               Int       @default(1)
+  status                String    @default("idle") // idle, training, ready
   profile               Json?
   lastTrainedAt         DateTime?
-  trainingFeedbackCount Int      @default(0)
-  correctionsUsed       Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  trainingFeedbackCount Int       @default(0)
+  correctionsUsed       Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   dealer User @relation(fields: [dealerId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([updatedAt])
+}
+
+// Sistem geneli AI öğrenme profili (admin tarafından eğitilir, tüm verilerle)
+model AISystemLearningProfile {
+  id                String    @id @default(cuid())
+  version           Int       @default(1)
+  status            String    @default("idle") // idle, training, ready
+  profile           Json? // master adaptive prompt + öğrenilen kalıplar
+  systemPrompt      String?   @db.Text // dünya standartlarında ana sistem promptu
+  chatSystemPrompt  String?   @db.Text // sadece sohbet için ayrı prompt (opsiyonel)
+  trainingDataStats Json? // { feedbackCount, correctionCount, userCount, dealerCount, ... }
+  lastTrainedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([updatedAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// STAFF (EMPLOYEE) MODULE
+// ─────────────────────────────────────────────────────────────
+
+model DealerStaff {
+  id        String   @id @default(cuid())
+  dealerId  String // Dealer/Restaurant Owner
+  userId    String   @unique // The actual user account for the staff
+  jobTitle  String?
+  pinCode   String? // Optional 4-6 digit PIN
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer    User       @relation("DealerStaffMembers", fields: [dealerId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedbacks Feedback[]
+
+  @@unique([dealerId, userId])
+  @@index([dealerId])
+  @@index([userId])
+}
+
+model StaffTask {
+  id          String    @id @default(cuid())
+  dealerId    String
+  assignedTo  String
+  title       String
+  description String?   @db.Text
+  status      String    @default("pending") // pending, in_progress, completed, cancelled
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  dealer User @relation("DealerStaffTasks", fields: [dealerId], references: [id], onDelete: Cascade)
+  user   User @relation("StaffTaskAssignments", fields: [assignedTo], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([dueAt])
+}
+
+model StaffShift {
+  id         String    @id @default(cuid())
+  dealerId   String
+  userId     String
+  date       DateTime  @db.Date
+  startTime  String // "09:00"
+  endTime    String // "18:00"
+  clockInAt  DateTime?
+  clockOutAt DateTime?
+  note       String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  dealer User @relation("DealerStaffShifts", fields: [dealerId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([userId])
+  @@index([date])
+}
+
+model StaffLeaveRequest {
+  id        String   @id @default(cuid())
+  dealerId  String
+  userId    String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  reason    String?  @db.Text
+  status    String   @default("pending") // pending, approved, rejected
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer User @relation("DealerStaffLeaveRequests", fields: [dealerId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([userId])
+  @@index([status])
+}
+
+model TrainingModule {
+  id          String   @id @default(cuid())
+  dealerId    String? // null = global (admin-created)
+  title       String
+  description String?  @db.Text
+  content     String   @db.Text // markdown or HTML
+  orderIndex  Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dealer      User?                     @relation("DealerTrainingModules", fields: [dealerId], references: [id], onDelete: Cascade)
+  completions StaffTrainingCompletion[]
+
+  @@index([dealerId])
+  @@index([isActive])
+}
+
+model StaffTrainingCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  moduleId    String
+  completedAt DateTime @default(now())
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, moduleId])
+  @@index([userId])
+  @@index([moduleId])
+}
+
+model ChecklistTemplate {
+  id        String   @id @default(cuid())
+  dealerId  String
+  type      String // open, close, custom
+  title     String
+  items     Json // [{ id, label, required: boolean }]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer      User                       @relation("DealerChecklistTemplates", fields: [dealerId], references: [id], onDelete: Cascade)
+  completions StaffChecklistCompletion[]
+
+  @@index([dealerId])
+  @@index([type])
+}
+
+model StaffChecklistCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  templateId  String
+  shiftId     String? // optional link to shift
+  completedAt DateTime @default(now())
+  items       Json // [{ itemId, done: boolean }]
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([templateId])
+  @@index([completedAt])
+}
+
+model AutoReplyRule {
+  id        String   @id @default(cuid())
+  dealerId  String
+  dealer    User     @relation("DealerAutoReplyRules", fields: [dealerId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean  @default(true)
+  priority  Int      @default(0)
+  condition Json // { field: "rating"|"sentiment"|"text", op: "lte"|"gte"|"eq"|"contains", value: any }
+  action    String   @default("reply") // "reply" | "incident"
+  template  String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealerId, isActive])
+}
+
+// ─────────────────────────────────────────────────────────────
+// SURVEY MODULE
+// ─────────────────────────────────────────────────────────────
+
+model Survey {
+  id          String           @id @default(cuid())
+  dealerId    String
+  dealer      User             @relation("DealerSurveys", fields: [dealerId], references: [id], onDelete: Cascade)
+  title       String
+  description String?          @db.Text
+  isActive    Boolean          @default(true)
+  questions   SurveyQuestion[]
+  responses   SurveyResponse[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([dealerId, isActive])
+}
+
+model SurveyQuestion {
+  id       String  @id @default(cuid())
+  surveyId String
+  survey   Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  type     String // "multiple_choice" | "single_choice" | "open_text" | "rating"
+  text     String
+  options  Json? // ["A","B","C"] for choice types
+  required Boolean @default(true)
+  order    Int     @default(0)
+
+  @@index([surveyId])
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  userId    String?
+  answers   Json // [{ questionId: string, value: string | string[] | number }]
+  createdAt DateTime @default(now())
+
+  @@index([surveyId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CAMPAIGN & DASHBOARD LAYOUT
+// ─────────────────────────────────────────────────────────────
+
+model Campaign {
+  id            String    @id @default(cuid())
+  dealerId      String
+  dealer        User      @relation("DealerCampaigns", fields: [dealerId], references: [id], onDelete: Cascade)
+  title         String
+  message       String    @db.Text
+  targetSegment String // "vip" | "loyal" | "active" | "risk" | "all"
+  channel       String    @default("notification") // "notification" | "email"
+  status        String    @default("draft") // "draft" | "sent" | "scheduled"
+  sentAt        DateTime?
+  sentCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([dealerId, status])
+}
+
+model DashboardLayout {
+  id      String @id @default(cuid())
+  userId  String @unique
+  user    User   @relation("UserDashboardLayout", fields: [userId], references: [id], onDelete: Cascade)
+  widgets Json // [{ id: string, visible: boolean, order: number }]
+}
+
+// ─────────────────────────────────────────────────────────────
+// INNOVATION PLATFORM (sessiz sinyal, flash teklif, özet, segment, telafi zaman çizelgesi)
+// ─────────────────────────────────────────────────────────────
+
+/// Masada tek dokunuş: OK / CONCERN — şikâyet öncesi iç alarm
+model TablePulse {
+  id         String   @id @default(cuid())
+  dealerId   String
+  qrCodeId   String?
+  tableCode  String? // "M7" — personel/masa etiketi (isim zorunlu değil)
+  mood       String // OK | CONCERN
+  customerId String?
+  note       String?  @db.VarChar(400)
+  /// Ekip içi kapanış (sağlık skoru 2.0)
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  dealer   User    @relation("DealerTablePulses", fields: [dealerId], references: [id], onDelete: Cascade)
+  qrCode   QRCode? @relation(fields: [qrCodeId], references: [id], onDelete: SetNull)
+  customer User?   @relation("CustomerTablePulses", fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([dealerId, createdAt])
+  @@index([qrCodeId])
+}
+
+/// Kısa süreli mutlu saat / flash — yakınımda listesi için kaba konum
+model DealerFlashOffer {
+  id              String   @id @default(cuid())
+  dealerId        String
+  title           String
+  body            String   @db.Text
+  offerType       String // PERCENT | FIXED_TRY | COMPLIMENTARY
+  value           Float?
+  validFrom       DateTime
+  validTo         DateTime
+  isActive        Boolean  @default(true)
+  maxRedemptions  Int      @default(200)
+  redemptionCount Int      @default(0)
+  /// İşletme konumundan türetilir (~5 karakter geohash); müşteri sorgusunda gizlilik
+  geohash5        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  dealer User @relation("DealerFlashOffers", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, isActive, validTo])
+  @@index([geohash5, isActive])
+}
+
+/// Haftalık tema özeti + önerilen aksiyon (iş kararı formatı)
+model DealerWeeklyBrief {
+  id                String   @id @default(cuid())
+  dealerId          String
+  weekStart         DateTime
+  topThemes         Json // [{ "theme": "...", "count": n }]
+  recommendedAction String   @db.Text
+  createdAt         DateTime @default(now())
+
+  dealer User @relation("DealerWeeklyBriefs", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@unique([dealerId, weekStart])
+  @@index([dealerId])
+}
+
+/// Segment kampanya taslağı — bayi oluşturur, admin onayı ile gönderilebilir
+model SegmentCampaignProposal {
+  id          String    @id @default(cuid())
+  dealerId    String
+  segmentKey  String // sleeping | loyal | first_visit | ...
+  title       String
+  message     String    @db.Text
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | SENT
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedById String?
+
+  dealer User @relation("DealerSegmentProposals", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, status])
+  @@index([status])
+}
+
+/// Telafi süreci şeffaflığı — müşteri zaman çizelgesi
+model RemedyTimelineEvent {
+  id            String   @id @default(cuid())
+  remedyOfferId String
+  kind          String // created | notified | accepted | completed | expired
+  label         String
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  remedyOffer RemedyOffer @relation(fields: [remedyOfferId], references: [id], onDelete: Cascade)
+
+  @@index([remedyOfferId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// MÜŞTERİ DENEYİM — paylaşım, iyileştirme isteği, KVKK kuyruğu
+// ─────────────────────────────────────────────────────────────
+
+/// Arkadaşla paylaşılabilen anonim deneyim linki
+model ExperienceShareToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  creatorId String
+  dealerId  String
+  caption   String?  @db.VarChar(200)
+  mood      String   @default("good")
+  expiresAt DateTime
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  creator User @relation("ExperienceSharesCreated", fields: [creatorId], references: [id], onDelete: Cascade)
+  dealer  User @relation("ExperienceSharesDealer", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([token])
+}
+
+/// Şikâyet değil — iyileştirme isteği
+model ImprovementRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  dealerId      String
+  templateKey   String
+  message       String   @db.Text
+  status        String   @default("open")
+  expectedHours Int      @default(48)
+  createdAt     DateTime @default(now())
+
+  user   User @relation("ImprovementRequestCustomer", fields: [userId], references: [id], onDelete: Cascade)
+  dealer User @relation("ImprovementRequestDealer", fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, status])
+  @@index([userId])
+}
+
+/// KVKK başvuru kuyruğu (silme / erişim / düzeltme)
+model DataSubjectRequest {
+  id            String    @id @default(cuid())
+  userId        String?
+  email         String
+  type          String
+  status        String    @default("received")
+  message       String?   @db.Text
+  receiptSentAt DateTime?
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([status, createdAt])
 }

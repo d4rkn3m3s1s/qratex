@@ -3,7 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { recordFeedbackCorrection, updateAdaptiveProfile } from '@/lib/ai-learning';
+import { recordFeedbackCorrection, updateAdaptiveProfile, getLearningRetrainSuggestion } from '@/lib/ai-learning';
+
+
+export const dynamic = 'force-dynamic';
 
 const correctionSchema = z.object({
   feedbackId: z.string(),
@@ -42,12 +45,15 @@ export async function GET(request: NextRequest) {
       },
     }) : [];
 
+    const retrainSuggestion = dealerId ? await getLearningRetrainSuggestion(dealerId) : null;
+
     return NextResponse.json({
       success: true,
       profile,
       embeddingsCount,
       correctionsCount,
       corrections,
+      retrainSuggestion,
     });
   } catch (error) {
     console.error('Learning status error:', error);

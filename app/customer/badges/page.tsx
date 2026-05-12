@@ -21,12 +21,16 @@ import {
   MapPin,
   Coffee,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { BADGE_RARITY_DARK } from '@/lib/badge-rarity-surfaces';
+import { TW_BRAND_GRADIENT_STOPS_SOFT } from '@/lib/tw-brand-classes';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
 
 interface BadgeType {
   id: string;
@@ -36,6 +40,7 @@ interface BadgeType {
   rarity: 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
   category: string;
   points: number;
+  pointCost?: number | null;
   requirement: string;
   earned?: boolean;
   earnedAt?: string;
@@ -46,67 +51,80 @@ interface BadgeType {
 
 const rarityConfig = {
   COMMON: {
-    label: 'Yaygın',
+    labelKey: 'customerBadges.rarity.common',
     color: 'from-gray-400 to-gray-600',
-    cardBg: 'bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100 dark:from-[#0a0e1a] dark:via-[#111827] dark:to-[#0a0e1a]',
-    borderColor: 'border-gray-300 dark:border-slate-500/40',
-    textColor: 'text-gray-600 dark:text-gray-400',
+    cardBg: `bg-gradient-to-br from-slate-50 via-white to-slate-100 ${BADGE_RARITY_DARK.slate}`,
+    borderColor: 'border-slate-300/80 dark:border-slate-500/40',
+    textColor: 'text-slate-700 dark:text-gray-400',
     glowColor: 'shadow-gray-400/20 dark:shadow-slate-400/20',
     neonGlow: 'dark:shadow-[0_0_15px_rgba(148,163,184,0.15),0_0_30px_rgba(148,163,184,0.08)]',
-    badgeBg: 'bg-gray-200 dark:bg-gray-700/50',
+    badgeBg: 'bg-slate-100 dark:bg-gray-700/50',
     icon: Medal,
   },
   RARE: {
-    label: 'Nadir',
+    labelKey: 'customerBadges.rarity.rare',
     color: 'from-blue-400 to-cyan-500',
-    cardBg: 'bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-100 dark:from-[#040d1f] dark:via-[#0a1628] dark:to-[#061225]',
-    borderColor: 'border-blue-300 dark:border-cyan-500/40',
-    textColor: 'text-blue-600 dark:text-cyan-400',
+    cardBg: `bg-gradient-to-br from-sky-50/90 via-white to-blue-100/90 ${BADGE_RARITY_DARK.blue}`,
+    borderColor: 'border-sky-300/90 dark:border-cyan-500/40',
+    textColor: 'text-sky-700 dark:text-cyan-400',
     glowColor: 'shadow-blue-400/20 dark:shadow-cyan-500/30',
     neonGlow: 'dark:shadow-[0_0_15px_rgba(34,211,238,0.2),0_0_40px_rgba(34,211,238,0.1)]',
-    badgeBg: 'bg-blue-100 dark:bg-cyan-900/40',
+    badgeBg: 'bg-sky-100 dark:bg-cyan-900/40',
     icon: Shield,
   },
   EPIC: {
-    label: 'Epik',
-    color: 'from-purple-400 to-pink-500',
-    cardBg: 'bg-gradient-to-br from-purple-50 via-pink-50 to-fuchsia-100 dark:from-[#0d0520] dark:via-[#150a25] dark:to-[#10061f]',
-    borderColor: 'border-purple-300 dark:border-purple-500/50',
-    textColor: 'text-purple-600 dark:text-purple-400',
-    glowColor: 'shadow-purple-400/20 dark:shadow-purple-500/30',
-    neonGlow: 'dark:shadow-[0_0_15px_rgba(168,85,247,0.2),0_0_40px_rgba(168,85,247,0.1)]',
-    badgeBg: 'bg-purple-100 dark:bg-purple-900/40',
+    labelKey: 'customerBadges.rarity.epic',
+    color: TW_BRAND_GRADIENT_STOPS_SOFT,
+    cardBg: `bg-gradient-to-br from-primary/[0.06] via-white to-primary/10 ${BADGE_RARITY_DARK.epic}`,
+    borderColor: 'border-primary/40 dark:border-primary/50',
+    textColor: 'text-primary dark:text-primary',
+    glowColor: 'shadow-primary/20 dark:shadow-primary/30',
+    neonGlow: 'dark:shadow-[0_0_15px_hsl(var(--primary)_/_0.25),0_0_40px_hsl(var(--primary)_/_0.12)]',
+    badgeBg: 'bg-primary/15 dark:bg-primary/25',
     icon: Zap,
   },
   LEGENDARY: {
-    label: 'Efsanevi',
+    labelKey: 'customerBadges.rarity.legendary',
     color: 'from-yellow-400 via-orange-500 to-red-500',
-    cardBg: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 dark:from-[#1a0f05] dark:via-[#1f1008] dark:to-[#1a0805]',
-    borderColor: 'border-amber-300 dark:border-yellow-500/50',
-    textColor: 'text-amber-600 dark:text-yellow-400',
+    cardBg: `bg-gradient-to-br from-amber-50/90 via-white to-orange-100/90 ${BADGE_RARITY_DARK.ember}`,
+    borderColor: 'border-amber-400/90 dark:border-yellow-500/50',
+    textColor: 'text-amber-700 dark:text-yellow-400',
     glowColor: 'shadow-yellow-400/30 dark:shadow-yellow-500/50',
     neonGlow: 'dark:shadow-[0_0_20px_rgba(250,204,21,0.2),0_0_50px_rgba(250,204,21,0.1)]',
-    badgeBg: 'bg-amber-100 dark:bg-amber-900/40',
+    badgeBg: 'bg-yellow-100 dark:bg-amber-900/40',
     icon: Crown,
   },
 };
 
-const categoryConfig: Record<string, { label: string; icon: typeof Trophy }> = {
-  feedback: { label: 'Geri Bildirim', icon: Target },
-  engagement: { label: 'Etkileşim', icon: Heart },
-  streak: { label: 'Seri', icon: Flame },
-  speed: { label: 'Hız', icon: Clock },
-  exploration: { label: 'Keşif', icon: MapPin },
-  expertise: { label: 'Uzmanlık', icon: Coffee },
-  rating: { label: 'Puanlama', icon: Star },
-  special: { label: 'Özel', icon: Gift },
-  custom: { label: 'Özel', icon: Gift },
-  general: { label: 'Genel', icon: Medal },
+const categoryConfig: Record<string, { labelKey: string; icon: typeof Trophy }> = {
+  dizi: { labelKey: 'customerBadges.category.dizi', icon: Sparkles },
+  diger: { labelKey: 'customerBadges.category.diger', icon: Gift },
+  etkinlik: { labelKey: 'customerBadges.category.etkinlik', icon: Target },
+  sadakat: { labelKey: 'customerBadges.category.sadakat', icon: Heart },
+  feedback: { labelKey: 'customerBadges.category.feedback', icon: Target },
+  engagement: { labelKey: 'customerBadges.category.engagement', icon: Heart },
+  streak: { labelKey: 'customerBadges.category.streak', icon: Flame },
+  speed: { labelKey: 'customerBadges.category.speed', icon: Clock },
+  exploration: { labelKey: 'customerBadges.category.exploration', icon: MapPin },
+  expertise: { labelKey: 'customerBadges.category.expertise', icon: Coffee },
+  rating: { labelKey: 'customerBadges.category.rating', icon: Star },
+  special: { labelKey: 'customerBadges.category.special', icon: Gift },
+  custom: { labelKey: 'customerBadges.category.custom', icon: Gift },
+  general: { labelKey: 'customerBadges.category.general', icon: Medal },
 };
 
+const CATEGORY_DISPLAY_ORDER = [
+  'feedback', 'engagement', 'speed', 'exploration', 'streak', 'rating', 'expertise', 'special', 'general',
+  'dizi', 'etkinlik', 'sadakat', 'diger', 'custom',
+];
+
 export default function CustomerBadgesPage() {
+  const t = useAppT();
+  const { locale } = useAppLocale();
   const [badges, setBadges] = useState<BadgeType[]>([]);
+  const [userPoints, setUserPoints] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [unlockingId, setUnlockingId] = useState<string | null>(null);
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
   const [filter, setFilter] = useState<'all' | 'earned' | 'locked'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -122,52 +140,15 @@ export default function CustomerBadgesPage() {
       const data = await res.json();
 
       if (data.success) {
-        // Get user's actual progress
-        const progressRes = await fetch('/api/gamification/progress');
-        const progressData = await progressRes.json();
-        
-        const userProgress = progressData.success ? progressData.data : {
-          feedbackCount: 0,
-          totalPoints: 0,
-          currentStreak: 0,
-          level: 1,
-        };
-
-        // Calculate real progress for each badge
+        setUserPoints(typeof data.userPoints === 'number' ? data.userPoints : 0);
         const badgesWithProgress = data.data.map((badge: BadgeType) => {
-          const requirement = badge.requirement as unknown as { type?: string; value?: number };
-          let progress = 0;
-          let currentValue = 0;
-          let targetValue = requirement?.value || 10;
-
-          // Calculate progress based on requirement type
-          switch (requirement?.type) {
-            case 'feedback_count':
-              currentValue = userProgress.feedbackCount || 0;
-              progress = Math.min(100, (currentValue / targetValue) * 100);
-              break;
-            case 'points':
-              currentValue = userProgress.totalPoints || 0;
-              progress = Math.min(100, (currentValue / targetValue) * 100);
-              break;
-            case 'streak':
-              currentValue = userProgress.currentStreak || 0;
-              progress = Math.min(100, (currentValue / targetValue) * 100);
-              break;
-            case 'level':
-              currentValue = userProgress.level || 1;
-              progress = Math.min(100, (currentValue / targetValue) * 100);
-              break;
-            default:
-              progress = badge.earned ? 100 : Math.floor(Math.random() * 70);
-          }
-
+          const normalizedCategory = badge.category || 'general';
           return {
             ...badge,
-            progress: Math.floor(progress),
-            currentValue,
-            targetValue,
-            category: badge.category || 'general',
+            progress: typeof badge.progress === 'number' ? Math.floor(badge.progress) : (badge.earned ? 100 : 0),
+            currentValue: typeof badge.currentValue === 'number' ? badge.currentValue : 0,
+            targetValue: typeof badge.targetValue === 'number' ? badge.targetValue : 10,
+            category: normalizedCategory,
           };
         });
 
@@ -175,7 +156,7 @@ export default function CustomerBadgesPage() {
       }
     } catch (error) {
       console.error('Error fetching badges:', error);
-      toast.error('Rozetler yüklenemedi');
+      toast.error(t('customerBadges.loadError'));
     } finally {
       setLoading(false);
     }
@@ -199,23 +180,65 @@ export default function CustomerBadgesPage() {
   };
 
   const progressToNext = badges.find((b) => !b.earned && b.progress && b.progress > 0);
+  const getCategoryLabel = (category: string) => t((categoryConfig[category] || categoryConfig.general).labelKey);
+  const getRarityLabel = (rarity: BadgeType['rarity']) => t(rarityConfig[rarity].labelKey);
+
+  const handleUnlockWithPoints = async (badge: BadgeType) => {
+    const cost = badge.pointCost ?? 0;
+    if (cost <= 0 || userPoints < cost) return;
+    setUnlockingId(badge.id);
+    try {
+      const res = await fetch(`/api/gamification/badges/${badge.id}/unlock`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setUserPoints(data.data?.newPoints ?? userPoints - cost);
+        await fetchBadges();
+        toast.success(`${badge.name} ${t('customerBadges.unlockSuccessSuffix')}`);
+      } else {
+        toast.error(data.error || t('customerBadges.unlockError'));
+      }
+    } catch {
+      toast.error(t('common.error'));
+    } finally {
+      setUnlockingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <DashboardHeader
-        title="Rozet Koleksiyonu"
-        description="Efsanevi rozetler kazanın ve koleksiyonunuzu genişletin"
+      <DashboardPageHeading
+        title={t('customerBadges.title')}
+        description={t('customerBadges.description')}
       />
 
-      {/* Hero Stats Section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-purple-500/10 to-pink-500/20 p-6 md:p-8 border border-primary/20">
-        <div className="absolute inset-0 bg-grid-white/5" />
-        <div className="relative">
+      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
+        <h1 className="text-xl font-bold tracking-tight text-balance">{t('customerBadges.title')}</h1>
+        <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">
+          {t('customerBadges.description')}
+        </p>
+      </div>
+
+      {/* How to earn badges */}
+      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+        <CardContent className="p-4 sm:p-5">
+          <h3 className="font-semibold text-sm sm:text-base mb-2 flex items-center gap-2 text-balance">
+            <Sparkles className="w-4 h-4 shrink-0 text-primary" />
+            {t('customerBadges.howToEarnTitle')}
+          </h3>
+          <ul className="text-sm text-muted-foreground space-y-1.5">
+            <li><strong className="text-foreground">{t('customerBadges.autoEarnLabel')}:</strong> {t('customerBadges.autoEarnDescription')}</li>
+            <li><strong className="text-foreground">{t('customerBadges.unlockWithPointsLabel')}:</strong> {t('customerBadges.unlockWithPointsDescription')}</li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      <DashboardPageHeroChrome tone="auto" padded={false}>
+        <div className="relative space-y-6 p-6 md:p-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             {/* Left - Main Stats */}
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-xl shadow-primary/30">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 shadow-xl shadow-primary/30 sm:h-28 sm:w-28">
                   <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
                 </div>
                 <div className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-sm font-bold text-black shadow-lg">
@@ -226,16 +249,16 @@ export default function CustomerBadgesPage() {
                 <h3 className="text-2xl sm:text-4xl font-bold">
                   {stats.earned} / {stats.total}
                 </h3>
-                <p className="text-muted-foreground text-sm sm:text-lg">Rozet Kazanıldı</p>
+                <p className="text-muted-foreground text-sm sm:text-lg">{t('customerBadges.badgesEarned')}</p>
                 <div className="flex items-center gap-4 mt-2">
                   {stats.legendary > 0 && (
                     <span className="flex items-center gap-1.5 text-amber-600 dark:text-yellow-500 text-sm font-medium">
-                      <Crown className="w-5 h-5" /> {stats.legendary} Efsanevi
+                      <Crown className="w-5 h-5" /> {stats.legendary} {t('customerBadges.rarity.legendary')}
                     </span>
                   )}
                   {stats.epic > 0 && (
-                    <span className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 text-sm font-medium">
-                      <Zap className="w-5 h-5" /> {stats.epic} Epik
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-primary">
+                      <Zap className="w-5 h-5" /> {stats.epic} {t('customerBadges.rarity.epic')}
                     </span>
                   )}
                 </div>
@@ -247,27 +270,27 @@ export default function CustomerBadgesPage() {
               <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
                 <Star className="w-7 h-7 text-yellow-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{stats.totalPoints}</p>
-                <p className="text-xs text-muted-foreground">Toplam Puan</p>
+                <p className="text-xs text-muted-foreground">{t('customerBadges.totalPoints')}</p>
               </div>
               <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
                 <Target className="w-7 h-7 text-green-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{Math.round((stats.earned / Math.max(stats.total, 1)) * 100)}%</p>
-                <p className="text-xs text-muted-foreground">Tamamlanan</p>
+                <p className="text-xs text-muted-foreground">{t('customerBadges.completed')}</p>
               </div>
               <div className="text-center p-2 sm:p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
                 <Flame className="w-7 h-7 text-orange-500 mx-auto mb-1.5" />
                 <p className="text-2xl font-bold">{progressToNext?.progress || 0}%</p>
-                <p className="text-xs text-muted-foreground">Sıradaki</p>
+                <p className="text-xs text-muted-foreground">{t('customerBadges.next')}</p>
               </div>
             </div>
           </div>
 
           {/* Progress to Next Badge */}
           {progressToNext && (
-            <div className="mt-6 p-4 rounded-xl bg-background/60 backdrop-blur border border-border/50">
+            <div className="rounded-xl border border-border/50 bg-background/60 p-4 backdrop-blur">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Sıradaki Rozet:</span>
+                  <span className="text-sm font-medium">{t('customerBadges.nextBadge')}:</span>
                   <span className={`font-bold ${rarityConfig[progressToNext.rarity].textColor}`}>
                     {progressToNext.name}
                   </span>
@@ -280,7 +303,7 @@ export default function CustomerBadgesPage() {
             </div>
           )}
         </div>
-      </div>
+      </DashboardPageHeroChrome>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -291,11 +314,11 @@ export default function CustomerBadgesPage() {
               variant={filter === f ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilter(f)}
-              className="gap-2"
+              className={`gap-2 ${filter !== f ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-border dark:text-inherit' : ''}`}
             >
-              {f === 'all' && 'Tümü'}
-              {f === 'earned' && <><Trophy className="w-4 h-4" /> Kazanılan</>}
-              {f === 'locked' && <><Lock className="w-4 h-4" /> Kilitli</>}
+              {f === 'all' && t('common.all')}
+              {f === 'earned' && <><Trophy className="w-4 h-4" /> {t('customerBadges.earned')}</>}
+              {f === 'locked' && <><Lock className="w-4 h-4" /> {t('customerBadges.locked')}</>}
             </Button>
           ))}
         </div>
@@ -305,8 +328,9 @@ export default function CustomerBadgesPage() {
             variant={categoryFilter === 'all' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setCategoryFilter('all')}
+            className={categoryFilter === 'all' ? '' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0'}
           >
-            Tüm Kategoriler
+            {t('customerBadges.allCategories')}
           </Button>
           {categories.map((cat) => {
             const config = categoryConfig[cat] || categoryConfig.general;
@@ -317,10 +341,10 @@ export default function CustomerBadgesPage() {
                 variant={categoryFilter === cat ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setCategoryFilter(cat)}
-                className="gap-1.5"
+                className={`gap-1.5 ${categoryFilter !== cat ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0' : ''}`}
               >
                 <Icon className="w-4 h-4" />
-                {config.label}
+                {getCategoryLabel(cat)}
               </Button>
             );
           })}
@@ -342,6 +366,97 @@ export default function CustomerBadgesPage() {
             </Card>
           ))}
         </div>
+      ) : categoryFilter === 'all' ? (
+        /* Kategoriler halinde gruplu liste */
+        <div className="space-y-10">
+          {[
+            ...CATEGORY_DISPLAY_ORDER,
+            ...Array.from(new Set(filteredBadges.map((b) => b.category))).filter((c) => !CATEGORY_DISPLAY_ORDER.includes(c)),
+          ].filter((cat) => filteredBadges.some((b) => b.category === cat)).map((cat) => {
+            const catBadges = filteredBadges.filter((b) => b.category === cat);
+            const config = categoryConfig[cat] || categoryConfig.general;
+            const Icon = config.icon;
+            return (
+              <div key={cat}>
+                <h3 className="flex items-center gap-2 text-lg font-semibold mb-4 text-foreground">
+                  <Icon className="w-5 h-5 text-primary" />
+                  {getCategoryLabel(cat)}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <AnimatePresence mode="popLayout">
+                    {catBadges.map((badge, index) => {
+                      const config = rarityConfig[badge.rarity];
+                      const isEarned = badge.earned;
+                      return (
+                        <motion.div
+                          key={badge.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.8 }}
+                          transition={{ delay: index * 0.04 }}
+                        >
+                          <div
+                            className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${config.cardBg} ${config.neonGlow} ${
+                              isEarned ? `border-2 ${config.borderColor} ${config.glowColor}` : 'border-2 border-slate-300/70 dark:border-white/10 bg-slate-50/80 dark:bg-transparent shadow-sm'
+                            }`}
+                            onClick={() => setSelectedBadge(badge)}
+                          >
+                            <div className="absolute inset-0 hidden dark:block overflow-hidden rounded-2xl">
+                              {[...Array(10)].map((_, i) => (
+                                <div key={i} className="absolute w-[2px] h-[2px] bg-white rounded-full animate-pulse" style={{ left: `${10 + (i * 8.5) % 85}%`, top: `${8 + (i * 12) % 80}%`, animationDelay: `${i * 0.35}s`, animationDuration: `${2 + (i % 3)}s`, opacity: 0.25 + (i % 4) * 0.12 }} />
+                              ))}
+                            </div>
+                            {badge.rarity === 'LEGENDARY' && isEarned && <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 via-orange-500/8 to-red-500/5 dark:from-yellow-500/10 dark:via-orange-500/15 dark:to-red-500/10 animate-pulse rounded-2xl" />}
+                            {badge.rarity === 'EPIC' && isEarned && <div className="absolute inset-0 animate-shimmer rounded-2xl bg-gradient-to-r from-transparent via-primary/5 to-transparent dark:via-primary/[0.08]" />}
+                            <div className={`absolute -top-16 -right-16 w-32 h-32 rounded-full bg-gradient-to-br ${config.color} opacity-[0.06] dark:opacity-[0.12] blur-3xl`} />
+                            <div className={`absolute -bottom-10 -left-10 w-24 h-24 rounded-full bg-gradient-to-br ${config.color} opacity-[0.04] dark:opacity-[0.08] blur-3xl`} />
+                            <div className="p-6 relative">
+                              <div className="flex flex-col items-center text-center space-y-4">
+                                <div className="relative transition-transform group-hover:scale-110">
+                                  <div className={`absolute -inset-3 rounded-full bg-gradient-to-br ${config.color} opacity-0 dark:opacity-15 blur-2xl`} />
+                                  <div className={`relative w-32 h-32 rounded-full bg-slate-100 dark:bg-white overflow-hidden flex items-center justify-center ring-2 ring-slate-200/80 dark:ring-white/15 shadow-[inset_0_2px_10px_rgba(15,23,42,0.08)] ${!isEarned ? 'opacity-80' : ''}`}>
+                                    <Image src={badge.icon} alt={badge.name} width={140} height={140} className={`relative z-10 scale-110 drop-shadow-sm dark:drop-shadow-none ${isEarned ? '' : 'grayscale-[40%] opacity-80'}`} />
+                                  </div>
+                                  {isEarned && badge.rarity === 'LEGENDARY' && <motion.div className="absolute -top-1 -right-1 z-20" animate={{ rotate: 360, scale: [1, 1.2, 1] }} transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}><Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.6)]" /></motion.div>}
+                                  {isEarned && badge.rarity === 'EPIC' && <Zap className="absolute -right-0.5 -top-0.5 z-20 h-6 w-6 animate-pulse text-primary drop-shadow-[0_0_6px_hsl(var(--primary)_/_0.45)]" />}
+                                  {!isEarned && <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-100 dark:bg-black/60 border-2 border-slate-400/60 dark:border-white/20 flex items-center justify-center shadow-md z-20"><Lock className="w-4 h-4 text-muted-foreground" /></div>}
+                                </div>
+                                <div className="space-y-2">
+                                  <h3 className={`font-bold text-base ${isEarned ? 'text-foreground' : 'text-slate-600 dark:text-muted-foreground'}`}>{badge.name}</h3>
+                                  <p className="text-xs text-slate-500 dark:text-muted-foreground line-clamp-2 max-w-[220px] mx-auto leading-relaxed">{badge.description}</p>
+                                  <Badge className={`text-xs px-3 py-0.5 ${isEarned ? `bg-gradient-to-r ${config.color} text-white border-0` : 'bg-muted text-muted-foreground'}`}>{getRarityLabel(badge.rarity)}</Badge>
+                                  <div className="pt-1"><Badge variant="outline" className="text-[10px]">{getCategoryLabel(badge.category)}</Badge></div>
+                                </div>
+                                {isEarned ? (
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-100 text-amber-700 dark:bg-yellow-500/10 dark:text-yellow-500"><Star className="w-4 h-4 fill-current" /><span className="text-sm font-bold">+{badge.points} {t('customerBadges.points')}</span></div>
+                                ) : (
+                                  <div className="w-full space-y-1.5">
+                                    {badge.pointCost != null && badge.pointCost > 0 ? (
+                                      <>
+                                        <Button size="sm" variant="secondary" className="w-full gap-1.5" disabled={userPoints < badge.pointCost || unlockingId === badge.id} onClick={(e) => { e.stopPropagation(); handleUnlockWithPoints(badge); }}><Gift className="w-4 h-4" />{unlockingId === badge.id ? t('customerBadges.unlocking') : `${badge.pointCost} ${t('customerBadges.unlockWithPointsSuffix')}`}</Button>
+                                        {userPoints < badge.pointCost && <p className="text-xs text-muted-foreground">{badge.pointCost - userPoints} {t('customerBadges.pointsMoreNeeded')}</p>}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Progress value={badge.progress} className="h-2.5 bg-slate-300/80 dark:bg-secondary" indicatorClassName="bg-gradient-to-r from-primary to-primary/75" />
+                                        <p className="text-xs text-slate-600 dark:text-muted-foreground font-medium">%{badge.progress} {t('customerBadges.completedLower')}</p>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence mode="popLayout">
@@ -362,7 +477,7 @@ export default function CustomerBadgesPage() {
                     className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${config.cardBg} ${config.neonGlow} ${
                       isEarned
                         ? `border-2 ${config.borderColor} ${config.glowColor}`
-                        : 'border border-border/50 dark:border-white/10 opacity-85 hover:opacity-100'
+                        : 'border-2 border-slate-300/70 dark:border-white/10 bg-slate-50/80 dark:bg-transparent shadow-sm'
                     }`}
                     onClick={() => setSelectedBadge(badge)}
                   >
@@ -390,7 +505,7 @@ export default function CustomerBadgesPage() {
 
                     {/* Epic Shimmer Effect */}
                     {badge.rarity === 'EPIC' && isEarned && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-purple-500/5 to-transparent dark:via-purple-500/8 animate-shimmer rounded-2xl" />
+                      <div className="absolute inset-0 animate-shimmer rounded-2xl bg-gradient-to-r from-transparent via-primary/5 to-transparent dark:via-primary/[0.08]" />
                     )}
 
                     {/* Glow orbs */}
@@ -404,14 +519,14 @@ export default function CustomerBadgesPage() {
                           {/* Subtle glow */}
                           <div className={`absolute -inset-3 rounded-full bg-gradient-to-br ${config.color} opacity-0 dark:opacity-15 blur-2xl`} />
                           
-                          {/* Single white circle */}
-                          <div className={`relative w-32 h-32 rounded-full bg-white overflow-hidden flex items-center justify-center ${!isEarned ? 'opacity-75' : ''}`}>
+                          {/* Light mode: bg-slate-100 + ring so SVG contrasts; dark: white circle */}
+                          <div className={`relative w-32 h-32 rounded-full bg-slate-100 dark:bg-white overflow-hidden flex items-center justify-center ring-2 ring-slate-200/80 dark:ring-white/15 shadow-[inset_0_2px_10px_rgba(15,23,42,0.08)] ${!isEarned ? 'opacity-80' : ''}`}>
                             <Image
                               src={badge.icon}
                               alt={badge.name}
                               width={140}
                               height={140}
-                              className={`relative z-10 scale-110 ${isEarned ? '' : 'grayscale-[40%] opacity-80'}`}
+                              className={`relative z-10 scale-110 drop-shadow-sm dark:drop-shadow-none ${isEarned ? '' : 'grayscale-[40%] opacity-80'}`}
                             />
                           </div>
                           
@@ -427,12 +542,12 @@ export default function CustomerBadgesPage() {
                           )}
 
                           {isEarned && badge.rarity === 'EPIC' && (
-                            <Zap className="absolute -top-0.5 -right-0.5 w-6 h-6 z-20 text-purple-500 dark:text-purple-300 animate-pulse drop-shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
+                            <Zap className="absolute -right-0.5 -top-0.5 z-20 h-6 w-6 animate-pulse text-primary drop-shadow-[0_0_6px_hsl(var(--primary)_/_0.45)]" />
                           )}
 
                           {/* Lock Icon */}
                           {!isEarned && (
-                            <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-background/90 dark:bg-black/60 border-2 border-border dark:border-white/20 flex items-center justify-center shadow-lg z-20">
+                            <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-100 dark:bg-black/60 border-2 border-slate-400/60 dark:border-white/20 flex items-center justify-center shadow-md z-20">
                               <Lock className="w-4 h-4 text-muted-foreground" />
                             </div>
                           )}
@@ -440,29 +555,63 @@ export default function CustomerBadgesPage() {
 
                         {/* Badge Info */}
                         <div className="space-y-2">
-                          <h3 className={`font-bold text-base ${isEarned ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          <h3 className={`font-bold text-base ${isEarned ? 'text-foreground' : 'text-slate-600 dark:text-muted-foreground'}`}>
                             {badge.name}
                           </h3>
-                          <p className="text-xs text-muted-foreground line-clamp-2 max-w-[220px] mx-auto">
+                          <p className="text-xs text-slate-500 dark:text-muted-foreground line-clamp-2 max-w-[220px] mx-auto leading-relaxed">
                             {badge.description}
                           </p>
                           <Badge className={`text-xs px-3 py-0.5 ${isEarned ? `bg-gradient-to-r ${config.color} text-white border-0` : 'bg-muted text-muted-foreground'}`}>
-                            {config.label}
+                            {getRarityLabel(badge.rarity)}
                           </Badge>
+                          <div className="pt-1">
+                            <Badge variant="outline" className="text-[10px]">
+                              {getCategoryLabel(badge.category)}
+                            </Badge>
+                          </div>
                         </div>
 
                         {/* Progress or Points */}
                         {isEarned ? (
-                          <div className="flex items-center gap-1.5 text-yellow-600 dark:text-yellow-500">
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-100 text-amber-700 dark:bg-yellow-500/10 dark:text-yellow-500">
                             <Star className="w-4 h-4 fill-current" />
-                            <span className="text-sm font-bold">+{badge.points} Puan</span>
+                            <span className="text-sm font-bold">+{badge.points} {t('customerBadges.points')}</span>
                           </div>
                         ) : (
                           <div className="w-full space-y-1.5">
-                            <Progress value={badge.progress} className="h-2.5" />
-                            <p className="text-xs text-muted-foreground font-medium">
-                              %{badge.progress} tamamlandı
-                            </p>
+                            {badge.pointCost != null && badge.pointCost > 0 ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="w-full gap-1.5"
+                                  disabled={userPoints < badge.pointCost || unlockingId === badge.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUnlockWithPoints(badge);
+                                  }}
+                                >
+                                  <Gift className="w-4 h-4" />
+                                  {unlockingId === badge.id ? t('customerBadges.unlocking') : `${badge.pointCost} ${t('customerBadges.unlockWithPointsSuffix')}`}
+                                </Button>
+                                {userPoints < badge.pointCost && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {badge.pointCost - userPoints} {t('customerBadges.pointsMoreNeeded')}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <Progress
+                                  value={badge.progress}
+                                  className="h-2.5 bg-slate-300/80 dark:bg-secondary"
+                                  indicatorClassName="bg-gradient-to-r from-primary to-primary/75"
+                                />
+                                <p className="text-xs text-slate-600 dark:text-muted-foreground font-medium">
+                                  %{badge.progress} {t('customerBadges.completedLower')}
+                                </p>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -484,7 +633,7 @@ export default function CustomerBadgesPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg overflow-y-auto"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/85 backdrop-blur-md overflow-y-auto"
             onClick={() => setSelectedBadge(null)}
           >
             <motion.div
@@ -499,7 +648,7 @@ export default function CustomerBadgesPage() {
               <div className={`absolute inset-0 ${modalConfig.cardBg}`} />
               
               {/* Starfield */}
-              <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute inset-0 overflow-hidden hidden dark:block">
                 {[...Array(20)].map((_, i) => (
                   <motion.div
                     key={i}
@@ -535,7 +684,7 @@ export default function CustomerBadgesPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute top-4 right-4 z-20 text-white/60 hover:text-white hover:bg-white/10 rounded-full"
+                className="absolute top-4 right-4 z-20 text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-full"
                 onClick={() => setSelectedBadge(null)}
               >
                 <X className="w-5 h-5" />
@@ -554,14 +703,14 @@ export default function CustomerBadgesPage() {
                     {/* Glow behind */}
                     <div className={`absolute -inset-4 rounded-full bg-gradient-to-br ${modalConfig.color} opacity-20 blur-2xl`} />
                     
-                    {/* White circle icon */}
-                    <div className={`relative w-44 h-44 rounded-full bg-white overflow-hidden flex items-center justify-center ${!selectedBadge.earned ? 'opacity-75' : ''}`}>
+                    {/* Light: slate-100 + ring for contrast; dark: white */}
+                    <div className={`relative w-44 h-44 rounded-full bg-slate-100 dark:bg-white overflow-hidden flex items-center justify-center ring-2 ring-slate-200/80 dark:ring-white/20 ${!selectedBadge.earned ? 'opacity-75' : ''}`}>
                       <Image
                         src={selectedBadge.icon}
                         alt={selectedBadge.name}
                         width={200}
                         height={200}
-                        className={`relative z-10 scale-110 ${!selectedBadge.earned ? 'grayscale-[40%] opacity-80' : ''}`}
+                        className={`relative z-10 scale-110 drop-shadow-sm dark:drop-shadow-none ${!selectedBadge.earned ? 'grayscale-[40%] opacity-80' : ''}`}
                       />
                     </div>
                     
@@ -576,7 +725,7 @@ export default function CustomerBadgesPage() {
                     )}
                     {selectedBadge.earned && selectedBadge.rarity === 'EPIC' && (
                       <motion.div className="absolute -top-1 -right-1 z-20" animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                        <Zap className="w-7 h-7 text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                        <Zap className="h-7 w-7 text-primary drop-shadow-[0_0_8px_hsl(var(--primary)_/_0.4)]" />
                       </motion.div>
                     )}
                   </motion.div>
@@ -584,13 +733,13 @@ export default function CustomerBadgesPage() {
 
                 {/* Name & Rarity */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center mb-5">
-                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">{selectedBadge.name}</h2>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-3">{selectedBadge.name}</h2>
                   <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm ${modalConfig.badgeBg} ${modalConfig.textColor} font-semibold`}>
                     {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-4 h-4" />}
                     {selectedBadge.rarity === 'EPIC' && <Zap className="w-4 h-4" />}
                     {selectedBadge.rarity === 'RARE' && <Shield className="w-4 h-4" />}
                     {selectedBadge.rarity === 'COMMON' && <Medal className="w-4 h-4" />}
-                    {modalConfig.label}
+                    {getRarityLabel(selectedBadge.rarity)}
                   </div>
                 </motion.div>
 
@@ -600,24 +749,24 @@ export default function CustomerBadgesPage() {
                 </motion.p>
 
                 {/* Status */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-black/30 backdrop-blur-sm rounded-2xl p-5 border border-white/10">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white/90 dark:bg-black/30 backdrop-blur-sm rounded-2xl p-5 border border-slate-300/90 dark:border-white/10 shadow-sm">
                   {selectedBadge.earned ? (
                     <div className="text-center space-y-4">
                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.5 }}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30">
                         <Trophy className="w-6 h-6" />
-                        <span className="text-lg font-bold">Kazanıldı!</span>
+                        <span className="text-lg font-bold">{t('customerBadges.earnedStatus')}</span>
                       </motion.div>
                       <div className="flex items-center justify-center gap-4 flex-wrap">
                         {selectedBadge.earnedAt && (
                           <span className="text-muted-foreground text-sm">
-                            {new Date(selectedBadge.earnedAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            {new Date(selectedBadge.earnedAt).toLocaleDateString(locale === 'tr' ? 'tr-TR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
                           </span>
                         )}
                         <div className="flex items-center gap-1.5">
                           <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
                           <span className="text-2xl font-bold text-yellow-400">+{selectedBadge.points}</span>
-                          <span className="text-muted-foreground text-sm">Puan</span>
+                          <span className="text-muted-foreground text-sm">{t('customerBadges.points')}</span>
                         </div>
                       </div>
                     </div>
@@ -625,10 +774,10 @@ export default function CustomerBadgesPage() {
                     <div className="space-y-4">
                       <div>
                         <div className="flex justify-between mb-2 text-sm">
-                          <span className="text-muted-foreground font-medium">İlerleme</span>
-                          <span className="text-white font-bold text-base">%{selectedBadge.progress}</span>
+                          <span className="text-muted-foreground font-medium">{t('customerBadges.progress')}</span>
+                          <span className="text-slate-900 dark:text-white font-bold text-base">%{selectedBadge.progress}</span>
                         </div>
-                        <div className="relative h-3.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="relative h-3.5 bg-slate-300/90 dark:bg-white/10 rounded-full overflow-hidden">
                           <motion.div initial={{ width: 0 }} animate={{ width: `${selectedBadge.progress}%` }} transition={{ duration: 0.8, delay: 0.5 }}
                             className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${modalConfig.color}`} />
                         </div>
@@ -639,13 +788,13 @@ export default function CustomerBadgesPage() {
                       </div>
                       <div className="pt-4 border-t border-white/10 space-y-3">
                         <p className="text-muted-foreground text-sm">
-                          <span className="text-white font-semibold">Nasıl Kazanılır: </span>
+                          <span className="text-slate-900 dark:text-white font-semibold">{t('customerBadges.howToEarn')}:</span>
                           {selectedBadge.requirement}
                         </p>
                         <div className="flex items-center justify-center gap-2 text-sm">
-                          <span className="text-muted-foreground">Ödül:</span>
+                          <span className="text-muted-foreground">{t('customerBadges.reward')}:</span>
                           <Star className="w-5 h-5 text-yellow-400" />
-                          <span className="text-yellow-400 font-bold text-base">+{selectedBadge.points} Puan</span>
+                          <span className="text-yellow-400 font-bold text-base">+{selectedBadge.points} {t('customerBadges.points')}</span>
                         </div>
                       </div>
                     </div>

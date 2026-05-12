@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import { AuroraBackground } from './aurora';
 import { SparklesBackground } from './sparkles';
 import { BackgroundBeams } from './beams';
@@ -60,8 +61,8 @@ export function DynamicBackground({
   className,
   fetchFromApi = true,
 }: DynamicBackgroundProps) {
-  const [variant, setVariant] = useState<BackgroundVariant>(propVariant || 'aurora');
-  const [isLoading, setIsLoading] = useState(fetchFromApi);
+  const [variant, setVariant] = useState<BackgroundVariant>(() => propVariant ?? 'original');
+  const [isLoading, setIsLoading] = useState(() => Boolean(fetchFromApi && !propVariant));
 
   useEffect(() => {
     if (propVariant) {
@@ -85,8 +86,8 @@ export function DynamicBackground({
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.backgroundEffect) {
-            setVariant(data.backgroundEffect as BackgroundVariant);
+          if (data.backgroundEffect != null) {
+            setVariant(parseBackgroundEffectFromDb(data.backgroundEffect));
           }
         }
       } catch (error) {

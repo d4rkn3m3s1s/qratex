@@ -84,10 +84,11 @@ export const AnimatedThemeToggler = ({
   return (
     <button
       ref={buttonRef}
+      type="button"
       onClick={toggleTheme}
       className={cn(
-        "relative flex h-9 w-9 items-center justify-center rounded-full",
-        "hover:bg-accent transition-colors",
+        "relative flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-full sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9",
+        "transition-colors duration-200 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}
       {...props}

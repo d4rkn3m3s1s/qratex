@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
     // Get date ranges
     const now = new Date();
@@ -55,12 +55,12 @@ export async function GET(request: NextRequest) {
         }
       }),
       prisma.user.findMany({
-        take: 5,
+        take: 25,
         orderBy: { createdAt: 'desc' },
         select: { id: true, name: true, email: true, image: true, role: true, createdAt: true }
       }),
       prisma.feedback.findMany({
-        take: 5,
+        take: 25,
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, text: true, rating: true, sentiment: true, createdAt: true,
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.user.findMany({
         where: { role: 'DEALER' },
-        take: 5,
+        take: 10,
         select: {
           id: true, businessName: true, name: true,
           qrCodes: {
@@ -89,18 +89,20 @@ export async function GET(request: NextRequest) {
 
     // Card system queries (with fallback)
     let cardStats = { total: 0, activated: 0, unused: 0, blocked: 0, consumptions: 0, reviews: 0 };
+    let consumptionReviewsThisMonth = 0;
+    let consumptionReviewsLastMonth = 0;
     let recentConsumptionReviews: any[] = [];
     
     try {
-      const [totalCards, activatedCards, unusedCards, blockedCards, totalConsumptions, totalConsumptionReviews, consumptionReviews] = await Promise.all([
-        (prisma as any).physicalCard.count(),
-        (prisma as any).physicalCard.count({ where: { status: 'ACTIVATED' } }),
-        (prisma as any).physicalCard.count({ where: { status: 'UNUSED' } }),
-        (prisma as any).physicalCard.count({ where: { status: 'BLOCKED' } }),
-        (prisma as any).consumption.count(),
-        (prisma as any).consumptionReview.count(),
-        (prisma as any).consumptionReview.findMany({
-          take: 5,
+      const [totalCards, activatedCards, unusedCards, blockedCards, totalConsumptions, totalConsumptionReviews, consumptionReviews, reviewsThisMonth, reviewsLastMonth] = await Promise.all([
+        prisma.physicalCard.count(),
+        prisma.physicalCard.count({ where: { status: 'ACTIVATED' } }),
+        prisma.physicalCard.count({ where: { status: 'UNUSED' } }),
+        prisma.physicalCard.count({ where: { status: 'BLOCKED' } }),
+        prisma.consumption.count(),
+        prisma.consumptionReview.count(),
+        prisma.consumptionReview.findMany({
+          take: 15,
           orderBy: { createdAt: 'desc' },
           select: {
             id: true, text: true, rating: true, createdAt: true,
@@ -113,6 +115,15 @@ export async function GET(request: NextRequest) {
             }
           }
         }),
+        prisma.consumptionReview.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+        prisma.consumptionReview.count({
+          where: {
+            createdAt: {
+              gte: new Date(thirtyDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000),
+              lt: thirtyDaysAgo,
+            },
+          },
+        }),
       ]);
       
       cardStats = {
@@ -123,10 +134,18 @@ export async function GET(request: NextRequest) {
         consumptions: totalConsumptions,
         reviews: totalConsumptionReviews,
       };
+      consumptionReviewsThisMonth = reviewsThisMonth;
+      consumptionReviewsLastMonth = reviewsLastMonth;
       recentConsumptionReviews = consumptionReviews;
     } catch (e) {
-      console.log('Card system not available:', e);
+      console.error('Card system not available:', e);
     }
+
+    const totalCommentsThisMonth = feedbacksThisMonth + consumptionReviewsThisMonth;
+    const totalCommentsLastMonth = feedbacksLastMonth + consumptionReviewsLastMonth;
+    const totalCommentsChange = totalCommentsLastMonth > 0
+      ? Math.round(((totalCommentsThisMonth - totalCommentsLastMonth) / totalCommentsLastMonth) * 100)
+      : totalCommentsThisMonth > 0 ? 100 : 0;
 
     // Calculate percentage changes
     const userChange = usersLastMonth > 0 
@@ -180,13 +199,41 @@ export async function GET(request: NextRequest) {
       type: 'consumption',
     }));
     
-    // Combine and sort all recent reviews
+    // Combine and sort all recent reviews (more for detailed dashboard)
     const allRecentReviews = [...formattedRecentFeedbacks, ...formattedConsumptionReviews]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
+      .slice(0, 35);
 
     // Total all reviews
     const totalAllReviews = totalFeedbacks + cardStats.reviews;
+
+    // Sentiment hesaplamasını tek kaynağa bağla:
+    // - Feedback tablosunda sentiment yoksa rating fallback uygula
+    // - Consumption review'ları rating üzerinden dahil et
+    const [feedbackForSentiment, consumptionForSentiment] = await Promise.all([
+      prisma.feedback.findMany({
+        where: { deletedAt: null },
+        select: { sentiment: true, rating: true },
+      }),
+      prisma.consumptionReview.findMany({
+        select: { rating: true },
+      }),
+    ]);
+    const normalizedFeedbackSentiment = feedbackForSentiment.map((f) => {
+      if (f.sentiment === 'positive' || f.sentiment === 'negative' || f.sentiment === 'neutral') {
+        return f.sentiment;
+      }
+      return f.rating >= 4 ? 'positive' : f.rating >= 3 ? 'neutral' : 'negative';
+    });
+    const normalizedConsumptionSentiment = consumptionForSentiment.map((r) =>
+      r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative'
+    );
+    const combinedSentiment = [...normalizedFeedbackSentiment, ...normalizedConsumptionSentiment];
+    const sentimentSummary = {
+      positive: combinedSentiment.filter((s) => s === 'positive').length,
+      neutral: combinedSentiment.filter((s) => s === 'neutral').length,
+      negative: combinedSentiment.filter((s) => s === 'negative').length,
+    };
 
     // Stats for cards
     const stats = [
@@ -201,7 +248,7 @@ export async function GET(request: NextRequest) {
       {
         title: 'Toplam Yorum',
         value: totalAllReviews,
-        change: feedbackChange,
+        change: totalCommentsChange,
         icon: 'MessageSquare',
         iconColor: 'text-green-500',
         iconBgColor: 'bg-green-500/10',
@@ -231,9 +278,9 @@ export async function GET(request: NextRequest) {
       recentFeedbacks: allRecentReviews,
       topDealers: formattedTopDealers,
       sentiment: {
-        positive: positiveFeedbacks,
-        neutral: neutralFeedbacks,
-        negative: negativeFeedbacks,
+        positive: sentimentSummary.positive,
+        neutral: sentimentSummary.neutral,
+        negative: sentimentSummary.negative,
       },
       totals: {
         users: totalUsers,

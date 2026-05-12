@@ -1,122 +1,194 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider, useTheme } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useEffect, type ReactNode } from 'react';
+import { MotionConfig } from 'framer-motion';
+import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
+import { applyRuntimeThemeToRoot, type RuntimeThemeHex } from '@/lib/apply-runtime-theme';
+import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, type ThemePresetId } from '@/lib/theme-presets';
+import {
+  THEME_SETTINGS_KEYS,
+  THEME_SETTINGS_PUBLIC_API_PATH,
+  type ThemeSettingRow,
+} from '@/lib/theme-settings-keys';
+import { AppLocaleProvider } from '@/lib/app-locale';
 
 interface ProvidersProps {
   children: ReactNode;
+  /** SSR’den gelen satırlar — palet ilk boyamada hazır olur (client fetch gecikmesi olmaz). */
+  initialThemeSettings?: ThemeSettingRow[];
 }
 
-// HEX to HSL conversion
-function hexToHSL(hex: string): string {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!result) return '0 0% 0%';
+function parseThemeRowsToState(settings: ThemeSettingRow[]) {
+  const themeSettings = settings.find((s) => s.key === THEME_SETTINGS_KEYS.activeTheme);
+  const nextThemeId = themeSettings?.value;
+  const customColorsSetting = settings.find((s) => s.key === THEME_SETTINGS_KEYS.customColors);
+  return {
+    activeThemeId: typeof nextThemeId === 'string' ? nextThemeId : null,
+    customColors: customColorsSetting?.value ? (customColorsSetting.value as RuntimeThemeHex) : null,
+  };
+}
 
-  let r = parseInt(result[1], 16) / 255;
-  let g = parseInt(result[2], 16) / 255;
-  let b = parseInt(result[3], 16) / 255;
+function resolveColorMode(root: HTMLElement, resolvedTheme: string | undefined): 'light' | 'dark' {
+  if (resolvedTheme === 'dark') return 'dark';
+  if (resolvedTheme === 'light') return 'light';
+  return root.classList.contains('dark') ? 'dark' : 'light';
+}
 
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h = 0;
-  let s = 0;
-  const l = (max + min) / 2;
+const themePresets = THEME_COLOR_PRESETS;
+const themePresetRows = getAdminThemePresetsBase();
+const themePresetRowMap = new Map(themePresetRows.map((row) => [row.id, row]));
 
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r:
-        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-        break;
-      case g:
-        h = ((b - r) / d + 2) / 6;
-        break;
-      case b:
-        h = ((r - g) / d + 4) / 6;
-        break;
+function getThemeFamilyKey(themeId: string): string {
+  return themeId.replace(/Light$/i, '');
+}
+
+function resolveThemeIdForMode(
+  themeId: string,
+  mode: 'light' | 'dark',
+  presets: Record<string, RuntimeThemeHex>
+): string {
+  const family = getThemeFamilyKey(themeId);
+  const preferred = mode === 'light' ? `${family}Light` : family;
+  if (preferred in presets) return preferred;
+  if (themeId in presets) return themeId;
+  return 'purple';
+}
+
+function ThemeColorsProvider({
+  children,
+  initialThemeSettings,
+}: {
+  children: ReactNode;
+  initialThemeSettings?: ThemeSettingRow[];
+}) {
+  const { resolvedTheme } = useTheme();
+  const boot = useMemo(() => {
+    if (!initialThemeSettings?.length) {
+      return { activeThemeId: null as string | null, customColors: null as RuntimeThemeHex | null };
     }
-  }
+    return parseThemeRowsToState(initialThemeSettings);
+  }, [initialThemeSettings]);
 
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-}
+  const [isThemeInitialized, setIsThemeInitialized] = useState(!!initialThemeSettings?.length);
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(boot.activeThemeId);
+  const [customColors, setCustomColors] = useState<RuntimeThemeHex | null>(boot.customColors);
 
-// Custom colors type
-interface CustomColors {
-  primary?: string;
-  secondary?: string;
-  accent?: string;
-}
+  const loadThemeSettings = async () => {
+    try {
+      const res = await fetch(THEME_SETTINGS_PUBLIC_API_PATH, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
 
-// Theme color presets
-const themePresets: Record<string, { primary: string; secondary: string; accent: string }> = {
-  purple: { primary: '#8B5CF6', secondary: '#A855F7', accent: '#F472B6' },
-  blue: { primary: '#3B82F6', secondary: '#06B6D4', accent: '#22D3EE' },
-  green: { primary: '#22C55E', secondary: '#10B981', accent: '#34D399' },
-  orange: { primary: '#F97316', secondary: '#FB923C', accent: '#FBBF24' },
-  pink: { primary: '#EC4899', secondary: '#F472B6', accent: '#F9A8D4' },
-  light: { primary: '#7C3AED', secondary: '#8B5CF6', accent: '#A78BFA' },
-};
-
-function ThemeColorsProvider({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    const applyThemeColors = async () => {
-      try {
-        // Use public theme endpoint instead of admin endpoint
-        const res = await fetch('/api/settings/theme');
-        if (!res.ok) return;
-        const data = await res.json();
-        
-        if (data.raw && Array.isArray(data.raw)) {
-          const settings = data.raw as Array<{ key: string; value: unknown }>;
-          const root = document.documentElement;
-          
-          // Find active theme
-          const themeSettings = settings.find(s => s.key === 'activeTheme');
-          const activeThemeId = themeSettings?.value as string | undefined;
-          
-          // Apply preset theme first
-          if (activeThemeId && themePresets[activeThemeId]) {
-            const preset = themePresets[activeThemeId];
-            root.style.setProperty('--primary', hexToHSL(preset.primary));
-            root.style.setProperty('--ring', hexToHSL(preset.primary));
-            root.style.setProperty('--gradient-from', hexToHSL(preset.primary));
-            root.style.setProperty('--gradient-to', hexToHSL(preset.secondary));
-            root.style.setProperty('--accent', hexToHSL(preset.accent));
-          }
-          
-          // Find and apply custom colors
-          const customColorsSetting = settings.find(s => s.key === 'customColors');
-          if (customColorsSetting?.value) {
-            const colors = customColorsSetting.value as CustomColors;
-            if (colors.primary) {
-              root.style.setProperty('--primary', hexToHSL(colors.primary));
-              root.style.setProperty('--ring', hexToHSL(colors.primary));
-              root.style.setProperty('--gradient-from', hexToHSL(colors.primary));
-            }
-            if (colors.secondary) {
-              root.style.setProperty('--gradient-to', hexToHSL(colors.secondary));
-            }
-            if (colors.accent) {
-              root.style.setProperty('--accent', hexToHSL(colors.accent));
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load theme:', error);
+      if (data.raw && Array.isArray(data.raw)) {
+        const settings = data.raw as ThemeSettingRow[];
+        const parsed = parseThemeRowsToState(settings);
+        setActiveThemeId(parsed.activeThemeId);
+        setCustomColors(parsed.customColors);
+        setIsThemeInitialized(true);
       }
-    };
-    
-    applyThemeColors();
+    } catch (error) {
+      console.error('Failed to load theme:', error);
+    }
+  };
+
+  // Sunucudan gelen paletle hizalı kalsın diye mount’ta bir kez yenile.
+  useEffect(() => {
+    void loadThemeSettings();
   }, []);
-  
+
+  useEffect(() => {
+    const onPaletteChanged = () => {
+      void loadThemeSettings();
+    };
+    const onPalettePreview = (event: Event) => {
+      const custom = event as CustomEvent<{
+        colors?: RuntimeThemeHex;
+        mode?: 'light' | 'dark';
+        activeThemeId?: string;
+      }>;
+      if (!custom.detail?.colors) return;
+      const root = document.documentElement;
+      const mode: 'light' | 'dark' =
+        custom.detail.mode ?? (root.classList.contains('dark') ? 'dark' : 'light');
+      applyRuntimeThemeToRoot({ ...custom.detail.colors, mode }, root);
+      if (custom.detail.activeThemeId) setActiveThemeId(custom.detail.activeThemeId);
+      if (custom.detail.activeThemeId === 'custom') setCustomColors(custom.detail.colors);
+    };
+    window.addEventListener('qratex:theme-palette-changed', onPaletteChanged as EventListener);
+    window.addEventListener('qratex:theme-palette-preview', onPalettePreview as EventListener);
+    return () => {
+      window.removeEventListener('qratex:theme-palette-changed', onPaletteChanged as EventListener);
+      window.removeEventListener('qratex:theme-palette-preview', onPalettePreview as EventListener);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isThemeInitialized) return;
+    const root = document.documentElement;
+    const mode = resolveColorMode(root, resolvedTheme);
+
+    if (activeThemeId === 'custom' && customColors) {
+      applyRuntimeThemeToRoot(
+        {
+          primary: customColors.primary,
+          secondary: customColors.secondary,
+          accent: customColors.accent,
+          background: customColors.background,
+          foreground: customColors.foreground,
+          mode,
+        },
+        root
+      );
+      return;
+    }
+
+    if (activeThemeId && activeThemeId in themePresets) {
+      const effectiveThemeId = resolveThemeIdForMode(activeThemeId, mode, themePresets);
+      const preset = themePresets[effectiveThemeId as ThemePresetId];
+      const presetRow = themePresetRowMap.get(effectiveThemeId as ThemePresetId);
+      applyRuntimeThemeToRoot(
+        {
+          primary: preset.primary,
+          secondary: preset.secondary,
+          accent: preset.accent,
+          background: presetRow?.colors.background,
+          foreground: presetRow?.colors.foreground,
+          mode,
+        },
+        root
+      );
+    }
+  }, [activeThemeId, customColors, isThemeInitialized, resolvedTheme]);
+
   return <>{children}</>;
 }
 
-export function Providers({ children }: ProvidersProps) {
+function ThemeModeSync() {
+  const { resolvedTheme } = useTheme();
+
+  useLayoutEffect(() => {
+    if (!resolvedTheme) return;
+    const root = document.documentElement;
+    const body = document.body;
+    root.classList.remove('light', 'dark');
+    root.classList.add(resolvedTheme);
+    root.setAttribute('data-theme', resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
+    if (body) {
+      body.classList.remove('light', 'dark');
+      body.classList.add(resolvedTheme);
+      body.setAttribute('data-theme', resolvedTheme);
+      body.style.colorScheme = resolvedTheme;
+    }
+  }, [resolvedTheme]);
+
+  return null;
+}
+
+export function Providers({ children, initialThemeSettings }: ProvidersProps) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -133,19 +205,27 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <SessionProvider>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          storageKey="qratex-theme"
-        >
-          <ThemeColorsProvider>
-            {children}
-            <InstallBanner />
-          </ThemeColorsProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+      <AppLocaleProvider>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            storageKey="qratex-theme"
+            themes={['light', 'dark', 'system']}
+            disableTransitionOnChange
+            enableColorScheme
+          >
+            <MotionConfig reducedMotion="user">
+              <ThemeModeSync />
+              <ThemeColorsProvider initialThemeSettings={initialThemeSettings}>
+                {children}
+                <InstallBanner />
+              </ThemeColorsProvider>
+            </MotionConfig>
+          </ThemeProvider>
+        </QueryClientProvider>
+      </AppLocaleProvider>
     </SessionProvider>
   );
 }

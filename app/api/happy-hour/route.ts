@@ -3,9 +3,25 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-// GET - Get active happy hours
+// GET - List dealer's campaigns (list=1) or active/upcoming for display
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const { searchParams } = new URL(req.url);
+    const list = searchParams.get('list') === '1';
+
+    if (list && session?.user?.id && (session.user.role === 'DEALER' || session.user.role === 'ADMIN')) {
+      const where = session.user.role === 'ADMIN' ? {} : { dealerId: session.user.id };
+      const happyHours = await prisma.happyHour.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      });
+      return NextResponse.json({ success: true, happyHours });
+    }
+
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinutes = now.getMinutes();
@@ -13,7 +29,7 @@ export async function GET(req: NextRequest) {
     const currentDay = now.getDay(); // 0 = Sunday
 
     // Get all active happy hours
-    const happyHours = await (prisma as any).happyHour.findMany({
+    const happyHours = await prisma.happyHour.findMany({
       where: {
         isActive: true,
         OR: [
@@ -104,7 +120,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const happyHour = await (prisma as any).happyHour.create({
+    const happyHour = await prisma.happyHour.create({
       data: {
         dealerId: session.user.role === 'ADMIN' ? null : session.user.id,
         name,

@@ -1,19 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { revalidateTag } from 'next/cache';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { revalidatePublicThemeSettings } from '@/lib/revalidate-public-theme';
+import {
+  THEME_SETTINGS_CATEGORY,
+  THEME_SETTINGS_KEYS,
+} from '@/lib/theme-settings-keys';
 import { updateSettingsSchema } from '@/lib/validations';
+import { adminSettingsBatchSchema } from '@/lib/validations-admin';
 import { Prisma } from '@prisma/client';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { checkAdminRateLimit } from '@/lib/rate-limit';
+import {
+  getDefaultPointsMatrix,
+  normalizePointsMatrix,
+  POINTS_MATRIX_SETTING_KEY,
+} from '@/lib/points-rules';
+
+const THEME_SETTING_KEYS = new Set<string>(Object.values(THEME_SETTINGS_KEYS));
+
+function isThemeSetting(key: string, category: string): boolean {
+  return category === THEME_SETTINGS_CATEGORY || THEME_SETTING_KEYS.has(key);
+}
+
+export const dynamic = 'force-dynamic';
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/admin/settings - Get all settings
 // ─────────────────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
@@ -37,6 +57,16 @@ export async function GET(request: NextRequest) {
     // If specific key requested, return single value
     if (key && settings.length === 1) {
       return NextResponse.json({ setting: settings[0] });
+    }
+
+    if (key === POINTS_MATRIX_SETTING_KEY && settings.length === 0) {
+      return NextResponse.json({
+        setting: {
+          key: POINTS_MATRIX_SETTING_KEY,
+          value: getDefaultPointsMatrix(),
+          category: 'gamification',
+        },
+      });
     }
 
     // Group by category
@@ -63,10 +93,10 @@ export async function GET(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const validatedData = updateSettingsSchema.safeParse(body);
@@ -79,23 +109,29 @@ export async function PUT(request: NextRequest) {
     }
 
     const { key, value, category } = validatedData.data;
+    const normalizedValue =
+      key === POINTS_MATRIX_SETTING_KEY ? normalizePointsMatrix(value) : value;
 
     // Get existing setting for audit
     const existingSetting = await prisma.settings.findUnique({
       where: { key },
     });
+    const resolvedCategory =
+      category ||
+      existingSetting?.category ||
+      (key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general');
 
     // Upsert the setting
     const setting = await prisma.settings.upsert({
       where: { key },
       update: {
-        value: value as Prisma.InputJsonValue,
-        category: category || existingSetting?.category || 'general',
+        value: normalizedValue as Prisma.InputJsonValue,
+        category: resolvedCategory,
       },
       create: {
         key,
-        value: value as Prisma.InputJsonValue,
-        category: category || 'general',
+        value: normalizedValue as Prisma.InputJsonValue,
+        category: resolvedCategory,
       },
     });
 
@@ -110,10 +146,15 @@ export async function PUT(request: NextRequest) {
         oldData: oldDataValue !== null && oldDataValue !== undefined 
           ? oldDataValue as Prisma.InputJsonValue 
           : Prisma.JsonNull,
-        newData: value as Prisma.InputJsonValue,
+        newData: normalizedValue as Prisma.InputJsonValue,
+        ...auditMeta,
       },
     });
 
+    revalidateTag('settings', 'max');
+    if (isThemeSetting(key, resolvedCategory)) {
+      revalidatePublicThemeSettings();
+    }
     return NextResponse.json({ success: true, setting });
   } catch (error) {
     console.error('Error updating setting:', error);
@@ -129,33 +170,65 @@ export async function PUT(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { settings } = await request.json();
-
-    if (!Array.isArray(settings)) {
+    const auditMeta = getAuditRequestMeta(request);
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
+    const rl = checkAdminRateLimit(session.user.id);
+    if (!rl.ok) {
       return NextResponse.json(
-        { error: 'Settings must be an array' },
-        { status: 400 }
+        { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
+        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
       );
     }
 
+    const raw = await request.json();
+    const parsed = adminSettingsBatchSchema.safeParse(raw);
+    if (!parsed.success) {
+      const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
+      return NextResponse.json(
+        { error: msg, details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    const { settings } = parsed.data;
+    const keys = settings.map((s: { key: string }) => s.key);
+    const existing = await prisma.settings.findMany({
+      where: { key: { in: keys } },
+      select: { key: true, value: true },
+    });
+    const oldMap = existing.reduce<Record<string, unknown>>((acc, row) => {
+      acc[row.key] = row.value;
+      return acc;
+    }, {});
+
     const results = await prisma.$transaction(
-      settings.map((s: { key: string; value: unknown; category?: string }) =>
+      settings.map((s: { key: string; value?: unknown; category?: string }) =>
         prisma.settings.upsert({
           where: { key: s.key },
-          update: { value: (s.value ?? {}) as Prisma.InputJsonValue },
+          update: {
+            value:
+              (s.key === POINTS_MATRIX_SETTING_KEY
+                ? normalizePointsMatrix(s.value)
+                : s.value ?? {}) as Prisma.InputJsonValue,
+          },
           create: {
             key: s.key,
-            value: (s.value ?? {}) as Prisma.InputJsonValue,
-            category: s.category || 'general',
+            value:
+              (s.key === POINTS_MATRIX_SETTING_KEY
+                ? normalizePointsMatrix(s.value)
+                : s.value ?? {}) as Prisma.InputJsonValue,
+            category:
+              s.category || (s.key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general'),
           },
         })
       )
     );
+    const newMap = settings.reduce<Record<string, unknown>>((acc, row) => {
+      acc[row.key] =
+        row.key === POINTS_MATRIX_SETTING_KEY ? normalizePointsMatrix(row.value) : row.value ?? {};
+      return acc;
+    }, {});
 
     // Create single audit log for batch update
     await prisma.auditLog.create({
@@ -163,10 +236,16 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         action: 'batch_update',
         entity: 'settings',
-        newData: { keys: settings.map((s: { key: string }) => s.key) } as Prisma.InputJsonValue,
+        oldData: oldMap as Prisma.InputJsonValue,
+        newData: newMap as Prisma.InputJsonValue,
+        ...auditMeta,
       },
     });
 
+    revalidateTag('settings', 'max');
+    if (settings.some((s: { key: string }) => THEME_SETTING_KEYS.has(s.key))) {
+      revalidatePublicThemeSettings();
+    }
     return NextResponse.json({ success: true, count: results.length });
   } catch (error) {
     console.error('Error batch updating settings:', error);

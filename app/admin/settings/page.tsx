@@ -1,6 +1,8 @@
 'use client';
 
+import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NextImage from 'next/image';
 import { motion } from 'framer-motion';
@@ -17,8 +19,17 @@ import {
   User,
   Camera,
   Check,
+  History,
+  AlertTriangle,
+  RotateCcw,
+  FlaskConical,
+  Layers,
+  Trash2,
+  SlidersHorizontal,
+  Search,
+  ExternalLink,
 } from 'lucide-react';
-import { DashboardHeader } from '@/components/dashboard/header';
+import { PageHeader } from '@/components/dashboard/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,82 +58,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { getInitials } from '@/lib/utils';
+import { toast } from '@/lib/admin-toast';
+import { cn, getInitials } from '@/lib/utils';
+import {
+  TW_BRAND_BADGE_SOFT_PILL,
+  TW_BRAND_BG_SOFT_BR,
+  TW_BRAND_BG_SUBTLE_BR,
+  TW_BRAND_GRADIENT_HORIZONTAL_STRONG,
+} from '@/lib/tw-brand-classes';
 import { type BackgroundVariant } from '@/components/ui/backgrounds';
-
-// Avatar listesi
-const avatarList = [
-  { category: 'Erkek', items: [
-    '/images/avatar/AVATAR ERKEK 1.svg',
-    '/images/avatar/AVATAR ERKEK 2.svg',
-    '/images/avatar/AVATAR ERKEK 3.svg',
-    '/images/avatar/AVATAR ERKEK 4.svg',
-    '/images/avatar/AVATAR ERKEK 5.svg',
-    '/images/avatar/AVATAR ERKEK 6.svg',
-    '/images/avatar/AVATAR ERKEK 8.svg',
-    '/images/avatar/AVATAR ERKEK 9.svg',
-    '/images/avatar/AVATAR ERKEK 10.svg',
-    '/images/avatar/AVATAR ERKEK 11.svg',
-    '/images/avatar/AVATAR ERKEK 12.svg',
-  ]},
-  { category: 'Kadın', items: [
-    '/images/avatar/AVATAR KADIN 1.svg',
-    '/images/avatar/AVATAR KADIN 2.svg',
-    '/images/avatar/AVATAR KADIN 3.svg',
-    '/images/avatar/AVATAR KADIN 4.svg',
-    '/images/avatar/AVATAR KADIN 6.svg',
-    '/images/avatar/AVATAR KADIN 7.svg',
-    '/images/avatar/AVATAR KADIN 8.svg',
-    '/images/avatar/AVATAR KADIN 9.svg',
-    '/images/avatar/AVATAR KADIN 10.svg',
-    '/images/avatar/KADIN2.svg',
-  ]},
-  { category: 'Hayvanlar', items: [
-    '/images/avatar/CAT.svg',
-    '/images/avatar/DOG.svg',
-    '/images/avatar/ELEPHANT.svg',
-    '/images/avatar/FROG.svg',
-    '/images/avatar/KOALA.svg',
-    '/images/avatar/LİON.svg',
-    '/images/avatar/MONKEY.svg',
-    '/images/avatar/PANDA.svg',
-    '/images/avatar/SHEEP.svg',
-    '/images/avatar/TİGER.svg',
-    '/images/avatar/ZÜRAFA.svg',
-  ]},
-  { category: 'Meyveler', items: [
-    '/images/avatar/APPLE.svg',
-    '/images/avatar/AVACADO.svg',
-    '/images/avatar/BANANA.svg',
-    '/images/avatar/BLUEBERRY.svg',
-    '/images/avatar/CHERRRY.svg',
-    '/images/avatar/DRAGON FRUİT.svg',
-    '/images/avatar/GRAPE.svg',
-    '/images/avatar/ORANGE.svg',
-    '/images/avatar/STRAWBERRY.svg',
-    '/images/avatar/WATERMELON.svg',
-  ]},
-  { category: 'Yiyecekler', items: [
-    '/images/avatar/COFFFE.svg',
-    '/images/avatar/DONUT.svg',
-    '/images/avatar/DRİNKS.svg',
-    '/images/avatar/FRİES.svg',
-    '/images/avatar/HAMBURGER.svg',
-    '/images/avatar/İCE CREAM.svg',
-    '/images/avatar/PİZZ.svg',
-  ]},
-  { category: 'Emojiler', items: [
-    '/images/avatar/EMOJİ1.svg',
-    '/images/avatar/EMOJİ2.svg',
-    '/images/avatar/EMOJİ3.svg',
-    '/images/avatar/EMOJİ4.svg',
-    '/images/avatar/EMOJİ5.svg',
-    '/images/avatar/EMOJİ6.svg',
-    '/images/avatar/EMOJİ7.svg',
-    '/images/avatar/EMOJİ8.svg',
-  ]},
-];
+import { avatarList } from '@/lib/avatar-options';
+import { BootstrapActionButton } from '@/components/admin/bootstrap-action-button';
+import type { ModuleControlItem, ModuleControlsMap, ModuleScope } from '@/lib/module-controls';
+import type { MenuItemCatalogItem, VisibilityRole, FeatureVisibilityRole, RoleVisibilityMap } from '@/lib/visibility-controls';
 
 interface SiteSettings {
   siteName: string;
@@ -147,6 +95,37 @@ interface SiteSettings {
   pointsPerReferral: number;
   levelUpThreshold: number;
 }
+
+type SettingsAuditEntry = {
+  id: string;
+  action: string;
+  oldData: unknown;
+  newData: unknown;
+  createdAt: string;
+  user?: { email: string | null; name: string | null };
+};
+
+type DemoSummary = {
+  insightsDemoCategories: number;
+  suspiciousDemoLogs: number;
+  aiQualityDemoSamples: number;
+  totalDemoRecords: number;
+};
+
+type ModuleDataResponse = {
+  catalog: ModuleControlItem[];
+  controls: ModuleControlsMap;
+};
+
+type VisibilityDataResponse = {
+  featureVisibility: Record<FeatureVisibilityRole, RoleVisibilityMap>;
+  menuVisibility: Record<VisibilityRole, RoleVisibilityMap>;
+  systemFeatureVisibility: RoleVisibilityMap;
+  catalog: {
+    features: Record<FeatureVisibilityRole, ModuleControlItem[]>;
+    menu: Record<VisibilityRole, MenuItemCatalogItem[]>;
+  };
+};
 
 const backgroundOptions: { id: BackgroundVariant; name: string; description: string; elite?: boolean; special?: boolean; legendary?: boolean }[] = [
   { id: 'original', name: 'Orijinal', description: 'Varsayılan kar ve küre animasyonları' },
@@ -177,12 +156,40 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
   { id: 'none', name: 'Yok', description: 'Arka plan efekti yok' },
 ];
 
+const settingsToasts = {
+  success: (message: string) => toast.success(message),
+  info: (message: string) => toast(message),
+  warn: (message: string) => toast.error(message),
+};
+
 export default function AdminSettingsPage() {
   const { data: session, update } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Erkek');
+  const [auditEntries, setAuditEntries] = useState<SettingsAuditEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [rollbackingId, setRollbackingId] = useState<string | null>(null);
+  const [demoSummary, setDemoSummary] = useState<DemoSummary | null>(null);
+  const [demoSummaryLoading, setDemoSummaryLoading] = useState(false);
+  const [demoBatchLoading, setDemoBatchLoading] = useState<'seed' | 'clear' | null>(null);
+  const [moduleCatalog, setModuleCatalog] = useState<ModuleControlItem[]>([]);
+  const [moduleControls, setModuleControls] = useState<ModuleControlsMap>({});
+  const [moduleLoading, setModuleLoading] = useState(false);
+  const [moduleSaving, setModuleSaving] = useState(false);
+  const [moduleSearch, setModuleSearch] = useState('');
+  const [moduleScope, setModuleScope] = useState<ModuleScope | 'all'>('all');
+  const [visibilityRole, setVisibilityRole] = useState<VisibilityRole>('dealer');
+  const [featureVisibility, setFeatureVisibility] = useState<Record<FeatureVisibilityRole, RoleVisibilityMap>>({
+    dealer: {},
+    customer: {},
+    system: {},
+  });
+  const [menuVisibility, setMenuVisibility] = useState<Record<VisibilityRole, RoleVisibilityMap>>({ dealer: {}, customer: {} });
+  const [visibilityCatalog, setVisibilityCatalog] = useState<VisibilityDataResponse['catalog'] | null>(null);
+  const [visibilityLoading, setVisibilityLoading] = useState(false);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
   
   const [profile, setProfile] = useState({
     name: '',
@@ -202,7 +209,7 @@ export default function AdminSettingsPage() {
     siteUrl: 'https://qratex.com',
     logoUrl: '/logo/icon.png',
     faviconUrl: '/favicon.ico',
-    primaryColor: '#8B5CF6',
+    primaryColor: BRAND_PRIMARY_HEX.toUpperCase(),
     defaultTheme: 'dark',
     backgroundEffect: 'original',
     enableRegistration: true,
@@ -234,6 +241,18 @@ export default function AdminSettingsPage() {
     fetchSettings();
   }, []);
 
+  useEffect(() => {
+    loadDemoSummary();
+  }, []);
+
+  useEffect(() => {
+    loadModuleControls();
+  }, []);
+
+  useEffect(() => {
+    loadVisibilitySettings();
+  }, []);
+
   const fetchSettings = async () => {
     try {
       setLoading(true);
@@ -259,7 +278,7 @@ export default function AdminSettingsPage() {
   const handleSelectAvatar = (avatar: string) => {
     setProfile({ ...profile, avatar });
     setAvatarDialogOpen(false);
-    toast.success('Avatar seçildi! Kaydetmeyi unutmayın.');
+    settingsToasts.info('Avatar secildi. Kaydetmeyi unutmayin.');
   };
 
   const handleSaveProfile = async () => {
@@ -276,12 +295,12 @@ export default function AdminSettingsPage() {
 
       if (res.ok) {
         await update({ name: profile.name, image: profile.avatar });
-        toast.success('Profil güncellendi');
+        settingsToasts.success('Profil guncellendi.');
       } else {
-        toast.error('Profil güncellenemedi');
+        settingsToasts.warn('Profil guncellenemedi.');
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      settingsToasts.warn('Beklenmeyen bir hata olustu.');
     } finally {
       setSaving(false);
     }
@@ -289,11 +308,11 @@ export default function AdminSettingsPage() {
 
   const handleChangePassword = async () => {
     if (security.newPassword !== security.confirmPassword) {
-      toast.error('Şifreler eşleşmiyor');
+      settingsToasts.warn('Sifreler eslesmiyor.');
       return;
     }
     if (security.newPassword.length < 8) {
-      toast.error('Şifre en az 8 karakter olmalıdır');
+      settingsToasts.warn('Sifre en az 8 karakter olmalidir.');
       return;
     }
     setSaving(true);
@@ -309,13 +328,13 @@ export default function AdminSettingsPage() {
 
       if (res.ok) {
         setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        toast.success('Şifre güncellendi');
+        settingsToasts.success('Sifre guncellendi.');
       } else {
         const data = await res.json();
-        toast.error(data.error || 'Şifre güncellenemedi');
+        settingsToasts.warn(data.error || 'Sifre guncellenemedi.');
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      settingsToasts.warn('Beklenmeyen bir hata olustu.');
     } finally {
       setSaving(false);
     }
@@ -339,12 +358,12 @@ export default function AdminSettingsPage() {
       });
       
       if (res.ok) {
-        toast.success('Ayarlar kaydedildi');
+        settingsToasts.success('Ayarlar kaydedildi.');
       } else {
         throw new Error('Save failed');
       }
     } catch (error) {
-      toast.error('Ayarlar kaydedilemedi');
+      settingsToasts.warn('Ayarlar kaydedilemedi.');
     } finally {
       setSaving(false);
     }
@@ -368,21 +387,222 @@ export default function AdminSettingsPage() {
       });
       
       if (res.ok) {
-        toast.success('Arka plan efekti güncellendi');
+        settingsToasts.success('Arka plan efekti guncellendi.');
       } else {
-        toast.error('Arka plan efekti kaydedilemedi');
+        settingsToasts.warn('Arka plan efekti kaydedilemedi.');
       }
     } catch (error) {
-      toast.error('Bir hata oluştu');
+      settingsToasts.warn('Beklenmeyen bir hata olustu.');
     }
   };
 
   const currentCategoryAvatars = avatarList.find(c => c.category === selectedCategory)?.items || [];
 
+  const loadDemoSummary = async () => {
+    try {
+      setDemoSummaryLoading(true);
+      const res = await fetch('/api/admin/bootstrap/summary', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Demo özeti alınamadı');
+      setDemoSummary(data.summary ?? null);
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Demo ozeti alinamadi.');
+    } finally {
+      setDemoSummaryLoading(false);
+    }
+  };
+
+  const runBootstrapBatch = async (mode: 'seed' | 'clear') => {
+    try {
+      setDemoBatchLoading(mode);
+      const actions =
+        mode === 'seed'
+          ? ['seed_insights_categories', 'seed_suspicious_activities', 'seed_ai_quality_samples']
+          : ['clear_insights_categories', 'clear_suspicious_activities', 'clear_ai_quality_samples'];
+      const results = await Promise.all(
+        actions.map(async (action) => {
+          const res = await fetch('/api/admin/bootstrap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.error || `${action} başarısız`);
+          }
+          return data;
+        })
+      );
+      const count =
+        mode === 'seed'
+          ? results.reduce((acc, item) => acc + (Number(item.created) || 0) + (Number(item.updated) || 0), 0)
+          : results.reduce((acc, item) => acc + (Number(item.cleared) || 0), 0);
+      settingsToasts.success(
+        mode === 'seed'
+          ? `Toplu demo uretimi tamamlandi (${count} kayit etkilendi).`
+          : `Toplu demo temizligi tamamlandi (${count} kayit silindi).`
+      );
+      await loadDemoSummary();
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Toplu demo islemi basarisiz oldu.');
+    } finally {
+      setDemoBatchLoading(null);
+    }
+  };
+
+  const loadSettingsAudit = async () => {
+    try {
+      setAuditLoading(true);
+      const res = await fetch('/api/admin/settings/audit');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ayar geçmişi yüklenemedi');
+      setAuditEntries(Array.isArray(data.entries) ? data.entries : []);
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Ayar gecmisi yuklenemedi.');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const loadModuleControls = async () => {
+    try {
+      setModuleLoading(true);
+      const res = await fetch('/api/admin/settings/modules', { cache: 'no-store' });
+      const data = (await res.json()) as ModuleDataResponse & { success?: boolean; error?: string };
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Modül kontrolleri yüklenemedi');
+      setModuleCatalog(Array.isArray(data.catalog) ? data.catalog : []);
+      setModuleControls(data.controls ?? {});
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Modul kontrolleri yuklenemedi.');
+    } finally {
+      setModuleLoading(false);
+    }
+  };
+
+  const saveModuleControls = async () => {
+    try {
+      setModuleSaving(true);
+      const res = await fetch('/api/admin/settings/modules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ controls: moduleControls }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Kaydedilemedi');
+      settingsToasts.success('Modul kontrolleri kaydedildi.');
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Modul kontrolleri kaydedilemedi.');
+    } finally {
+      setModuleSaving(false);
+    }
+  };
+
+  const loadVisibilitySettings = async () => {
+    try {
+      setVisibilityLoading(true);
+      const res = await fetch('/api/admin/settings/visibility', { cache: 'no-store' });
+      const data = (await res.json()) as VisibilityDataResponse & { success?: boolean; error?: string };
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfa ayarları yüklenemedi');
+      setFeatureVisibility(data.featureVisibility);
+      setMenuVisibility(data.menuVisibility);
+      setVisibilityCatalog(data.catalog);
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Sayfa ayarlari yuklenemedi.');
+    } finally {
+      setVisibilityLoading(false);
+    }
+  };
+
+  const saveVisibilitySettings = async () => {
+    try {
+      setVisibilitySaving(true);
+      const res = await fetch('/api/admin/settings/visibility', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          featureVisibility: {
+            dealer: featureVisibility.dealer,
+            customer: featureVisibility.customer,
+          },
+          systemFeatureVisibility: featureVisibility.system,
+          menuVisibility,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Sayfa ayarları kaydedilemedi');
+      settingsToasts.success('Sayfa ayarlari kaydedildi.');
+      await loadSettingsAudit();
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Sayfa ayarlari kaydedilemedi.');
+    } finally {
+      setVisibilitySaving(false);
+    }
+  };
+
+  const setScopeState = (scope: ModuleScope, value: boolean) => {
+    const next = { ...moduleControls };
+    for (const item of moduleCatalog) {
+      if (item.scope === scope) next[item.key] = value;
+    }
+    setModuleControls(next);
+  };
+
+  const setRoleFeatureState = (role: FeatureVisibilityRole, value: boolean) => {
+    const keys = visibilityCatalog?.features?.[role]?.map((item) => item.key) ?? [];
+    setFeatureVisibility((prev) => ({
+      ...prev,
+      [role]: keys.reduce<RoleVisibilityMap>((acc, key) => {
+        acc[key] = value;
+        return acc;
+      }, { ...prev[role] }),
+    }));
+  };
+
+  const setRoleMenuState = (role: VisibilityRole, value: boolean) => {
+    const keys = visibilityCatalog?.menu?.[role]?.map((item) => item.key) ?? [];
+    setMenuVisibility((prev) => ({
+      ...prev,
+      [role]: keys.reduce<RoleVisibilityMap>((acc, key) => {
+        acc[key] = value;
+        return acc;
+      }, { ...prev[role] }),
+    }));
+  };
+
+  const filteredModules = moduleCatalog.filter((item) => {
+    const inScope = moduleScope === 'all' ? true : item.scope === moduleScope;
+    const q = moduleSearch.trim().toLowerCase();
+    if (!q) return inScope;
+    return inScope && (item.label.toLowerCase().includes(q) || item.description.toLowerCase().includes(q) || item.key.toLowerCase().includes(q));
+  });
+
+  const rollbackSettings = async (auditLogId: string) => {
+    try {
+      const ok = window.confirm('Bu sürüme dönmek istediğine emin misin? Mevcut ayarlar üzerine yazılacak.');
+      if (!ok) return;
+      setRollbackingId(auditLogId);
+      const res = await fetch('/api/admin/settings/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditLogId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Rollback başarısız');
+      const restored = Array.isArray(data?.restoredKeys) ? data.restoredKeys.length : 0;
+      settingsToasts.success(`Ayarlar geri alindi${restored > 0 ? ` (${restored} anahtar)` : ''}.`);
+      await fetchSettings();
+      await loadSettingsAudit();
+    } catch (error) {
+      settingsToasts.warn(error instanceof Error ? error.message : 'Rollback basarisiz.');
+    } finally {
+      setRollbackingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
-        <DashboardHeader title="Ayarlar" description="Platform ayarlarını yapılandırın" />
+        <PageHeader title="Ayarlar" description="Platform ayarlarını yapılandırın" />
         <div className="animate-pulse space-y-4">
           <div className="h-10 bg-muted rounded w-full max-w-md" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -397,10 +617,133 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <DashboardHeader title="Ayarlar" description="Platform ve profil ayarlarını yapılandırın" />
+      <PageHeader title="Ayarlar" description="Platform ve profil ayarlarını yapılandırın" />
+
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Hızlı admin başlangıcı</CardTitle>
+          <CardDescription>
+            Boş panelleri tek tıkla doldurup admin modüllerini hemen test edebilirsiniz.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <BootstrapActionButton action="seed_insights_categories" label="Sektör verisi üret" />
+          <BootstrapActionButton action="seed_suspicious_activities" label="Şüpheli aktivite üret" />
+          <BootstrapActionButton action="seed_ai_quality_samples" label="AI kalite örneği üret" />
+          <BootstrapActionButton action="assign_ab_cohorts" label="A/B cohort ata" />
+          <BootstrapActionButton action="clear_insights_categories" label="Demo sektör verisini sil" variant="destructive" />
+          <BootstrapActionButton action="clear_suspicious_activities" label="Demo şüpheli aktiviteleri sil" variant="destructive" />
+          <BootstrapActionButton action="clear_ai_quality_samples" label="Demo AI örneklerini sil" variant="destructive" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-primary" />
+            Demo Durum Merkezi
+          </CardTitle>
+          <CardDescription>
+            Admin demo verilerinin canlı sayacı. Toplu üretim veya toplu temizlik yapabilirsiniz.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={loadDemoSummary} disabled={demoSummaryLoading}>
+              <Layers className={`h-4 w-4 mr-2 ${demoSummaryLoading ? 'animate-spin' : ''}`} />
+              Demo özetini yenile
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => runBootstrapBatch('seed')}
+              disabled={demoBatchLoading !== null}
+            >
+              <FlaskConical className={`h-4 w-4 mr-2 ${demoBatchLoading === 'seed' ? 'animate-spin' : ''}`} />
+              Toplu demo üret
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => runBootstrapBatch('clear')}
+              disabled={demoBatchLoading !== null}
+            >
+              <Trash2 className={`h-4 w-4 mr-2 ${demoBatchLoading === 'clear' ? 'animate-spin' : ''}`} />
+              Toplu demo sil
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Insights demo kategori</p>
+              <p className="text-xl font-semibold">{demoSummary?.insightsDemoCategories ?? 0}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Fraud demo log</p>
+              <p className="text-xl font-semibold">{demoSummary?.suspiciousDemoLogs ?? 0}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">AI quality demo örnek</p>
+              <p className="text-xl font-semibold">{demoSummary?.aiQualityDemoSamples ?? 0}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs text-muted-foreground">Toplam demo iz</p>
+              <p className="text-xl font-semibold">{demoSummary?.totalDemoRecords ?? 0}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4" />
+            Kritik değişiklik geçmişi
+          </CardTitle>
+          <CardDescription>
+            Toplu ayar değişiklikleri burada görünür. Gerekirse tek tıkla önceki sürüme dönebilirsiniz.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" size="sm" onClick={loadSettingsAudit} disabled={auditLoading} className="mb-3 gap-2">
+            <History className={`h-4 w-4 ${auditLoading ? 'animate-spin' : ''}`} />
+            Geçmişi getir
+          </Button>
+          {auditEntries.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Henüz geçmiş kaydı yok.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {auditEntries.map((entry) => (
+                <div key={entry.id} className="rounded-lg border p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm">
+                    <div className="font-medium flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      {entry.action}
+                    </div>
+                    <p className="text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleString('tr-TR')}
+                      {entry.user?.email ? ` • ${entry.user.email}` : ''}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => rollbackSettings(entry.id)}
+                    disabled={rollbackingId === entry.id}
+                  >
+                    <RotateCcw className={`h-4 w-4 ${rollbackingId === entry.id ? 'animate-spin' : ''}`} />
+                    Bu sürüme dön
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 h-auto gap-1 p-1">
           <TabsTrigger value="profile" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
             <User className="h-4 w-4 shrink-0" />
             Profil
@@ -424,6 +767,14 @@ export default function AdminSettingsPage() {
           <TabsTrigger value="gamification" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
             <Database className="h-4 w-4 shrink-0" />
             Oyun
+          </TabsTrigger>
+          <TabsTrigger value="modules" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <SlidersHorizontal className="h-4 w-4 shrink-0" />
+            Modüller
+          </TabsTrigger>
+          <TabsTrigger value="page-settings" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
+            <Layers className="h-4 w-4 shrink-0" />
+            Sayfa Ayarı
           </TabsTrigger>
         </TabsList>
 
@@ -477,7 +828,7 @@ export default function AdminSettingsPage() {
                         </div>
 
                         <div className="flex-1 overflow-y-auto py-4">
-                          <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3">
                             {currentCategoryAvatars.map((avatar) => (
                               <button
                                 key={avatar}
@@ -761,10 +1112,15 @@ export default function AdminSettingsPage() {
                 {/* Elit Efektler */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-sm font-medium bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 bg-clip-text text-transparent">
+                    <h4 className="text-sm font-medium bg-gradient-to-r from-primary via-violet-500 to-orange-500 bg-clip-text text-transparent">
                       ⭐ Elit Efektler
                     </h4>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-400 font-medium">
+                    <span
+                      className={cn(
+                        TW_BRAND_BADGE_SOFT_PILL,
+                        'px-2 py-0.5 text-[10px] font-medium text-primary'
+                      )}
+                    >
                       PREMIUM
                     </span>
                   </div>
@@ -774,16 +1130,25 @@ export default function AdminSettingsPage() {
                         key={option.id}
                         type="button"
                         onClick={() => handleBackgroundChange(option.id)}
-                        className={`relative p-4 rounded-xl border-2 transition-all text-left overflow-hidden ${
+                        className={cn(
+                          'relative overflow-hidden rounded-xl border-2 p-4 text-left transition-all',
                           settings.backgroundEffect === option.id
-                            ? 'border-purple-500 bg-gradient-to-br from-purple-500/20 to-pink-500/20 ring-2 ring-purple-500/30'
-                            : 'border-purple-500/30 hover:border-purple-500/60 hover:bg-purple-500/10 bg-gradient-to-br from-purple-500/5 to-pink-500/5'
-                        }`}
+                            ? cn('border-primary ring-2 ring-primary/30', TW_BRAND_BG_SOFT_BR)
+                            : cn(
+                                'border-primary/30 hover:border-primary/60 hover:bg-primary/10',
+                                TW_BRAND_BG_SUBTLE_BR
+                              )
+                        )}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
                         {settings.backgroundEffect === option.id && (
-                          <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full p-0.5">
+                          <div
+                            className={cn(
+                              'absolute right-2 top-2 rounded-full p-0.5',
+                              TW_BRAND_GRADIENT_HORIZONTAL_STRONG
+                            )}
+                          >
                             <Check className="h-3 w-3 text-white" />
                           </div>
                         )}
@@ -799,10 +1164,10 @@ export default function AdminSettingsPage() {
                 {/* Efsanevi Efektler */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-sm font-medium bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent">
+                    <h4 className="text-sm font-medium bg-gradient-to-r from-cyan-400 via-blue-500 to-primary bg-clip-text text-transparent">
                       👑 Efsanevi Efektler
                     </h4>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 text-cyan-400 font-medium animate-pulse">
+                    <span className="rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-primary/20 px-2 py-0.5 text-[10px] font-medium text-cyan-400 animate-pulse">
                       LEGENDARY
                     </span>
                   </div>
@@ -814,14 +1179,14 @@ export default function AdminSettingsPage() {
                         onClick={() => handleBackgroundChange(option.id)}
                         className={`relative p-4 rounded-xl border-2 transition-all text-left overflow-hidden ${
                           settings.backgroundEffect === option.id
-                            ? 'border-cyan-500 bg-gradient-to-br from-cyan-500/20 via-blue-500/20 to-purple-500/20 ring-2 ring-cyan-500/30'
-                            : 'border-cyan-500/30 hover:border-cyan-500/60 hover:bg-cyan-500/10 bg-gradient-to-br from-cyan-500/5 via-blue-500/5 to-purple-500/5'
+                            ? 'border-cyan-500 bg-gradient-to-br from-cyan-500/20 via-blue-500/20 to-primary/20 ring-2 ring-cyan-500/30'
+                            : 'border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 via-blue-500/5 to-primary/5 hover:border-cyan-500/60 hover:bg-cyan-500/10'
                         }`}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
                         {settings.backgroundEffect === option.id && (
-                          <div className="absolute top-2 right-2 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 rounded-full p-0.5">
+                          <div className="absolute right-2 top-2 rounded-full bg-gradient-to-r from-cyan-500 via-blue-500 to-primary p-0.5">
                             <Check className="h-3 w-3 text-white" />
                           </div>
                         )}
@@ -837,7 +1202,7 @@ export default function AdminSettingsPage() {
                 {/* Özel Gün Efektleri */}
                 <div>
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="text-sm font-medium bg-gradient-to-r from-red-500 via-pink-500 to-amber-500 bg-clip-text text-transparent">
+                    <h4 className="text-sm font-medium bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 bg-clip-text text-transparent">
                       🎉 Özel Gün Efektleri
                     </h4>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-red-500/20 to-amber-500/20 text-red-400 font-medium">
@@ -852,8 +1217,8 @@ export default function AdminSettingsPage() {
                         onClick={() => handleBackgroundChange(option.id)}
                         className={`relative p-4 rounded-xl border-2 transition-all text-left overflow-hidden ${
                           settings.backgroundEffect === option.id
-                            ? 'border-red-500 bg-gradient-to-br from-red-500/20 via-pink-500/20 to-amber-500/20 ring-2 ring-red-500/30'
-                            : 'border-red-500/30 hover:border-red-500/60 hover:bg-red-500/10 bg-gradient-to-br from-red-500/5 via-pink-500/5 to-amber-500/5'
+                            ? 'border-red-500 bg-gradient-to-br from-red-500/20 via-orange-500/20 to-amber-500/20 ring-2 ring-red-500/30'
+                            : 'border-red-500/30 hover:border-red-500/60 hover:bg-red-500/10 bg-gradient-to-br from-red-500/5 via-orange-500/5 to-amber-500/5'
                         }`}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -1039,6 +1404,258 @@ export default function AdminSettingsPage() {
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="modules">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card glass>
+              <CardHeader>
+                <CardTitle>Tüm Modül Kontrol Merkezi</CardTitle>
+                <CardDescription>
+                  Müşteri + bayi + admin tarafındaki tüm ana modülleri buradan açıp kapatabilirsiniz.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                  <div className="relative w-full lg:max-w-sm">
+                    <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Input
+                      value={moduleSearch}
+                      onChange={(e) => setModuleSearch(e.target.value)}
+                      placeholder="Modül ara (bağış, davet, squads...)"
+                      className="pl-9"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Select value={moduleScope} onValueChange={(v) => setModuleScope(v as ModuleScope | 'all')}>
+                      <SelectTrigger className="w-full min-w-0 sm:w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tüm scope</SelectItem>
+                        <SelectItem value="customer">Müşteri</SelectItem>
+                        <SelectItem value="dealer">Bayi</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="platform">Platform</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" onClick={loadModuleControls} disabled={moduleLoading}>
+                      {moduleLoading ? 'Yükleniyor...' : 'Yenile'}
+                    </Button>
+                    <Button onClick={saveModuleControls} disabled={moduleSaving}>
+                      {moduleSaving ? 'Kaydediliyor...' : 'Kaydet'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 rounded-lg border p-3 bg-muted/30">
+                  <Button size="sm" variant="outline" onClick={() => setScopeState('customer', true)}>Müşteri tümünü aç</Button>
+                  <Button size="sm" variant="outline" onClick={() => setScopeState('dealer', true)}>Bayi tümünü aç</Button>
+                  <Button size="sm" variant="outline" onClick={() => setScopeState('admin', true)}>Admin tümünü aç</Button>
+                  <Button size="sm" variant="outline" onClick={() => setScopeState('platform', true)}>Platform tümünü aç</Button>
+                  <Button size="sm" variant="destructive" onClick={() => setScopeState('customer', false)}>Müşteri tümünü kapat</Button>
+                  <Button size="sm" variant="destructive" onClick={() => setScopeState('dealer', false)}>Bayi tümünü kapat</Button>
+                </div>
+
+                {filteredModules.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Filtreye uygun modül bulunamadı.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {filteredModules.map((item) => {
+                      const enabled = moduleControls[item.key] !== false;
+                      return (
+                        <div key={item.key} className="rounded-lg border p-3 flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="font-medium">{item.label}</p>
+                            <p className="text-xs text-muted-foreground">{item.description}</p>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                              <span className="px-2 py-0.5 rounded-full border">{item.scope}</span>
+                              <span className="px-2 py-0.5 rounded-full border">{item.severity}</span>
+                              <span className="px-2 py-0.5 rounded-full border font-mono">{item.key}</span>
+                            </div>
+                            {item.detailHref ? (
+                              <Button asChild variant="link" size="sm" className="h-auto px-0 text-xs">
+                                <Link href={item.detailHref}>
+                                  Detay sayfasına git
+                                  <ExternalLink className="h-3 w-3 ml-1" />
+                                </Link>
+                              </Button>
+                            ) : null}
+                          </div>
+                          <Switch
+                            checked={enabled}
+                            onCheckedChange={(checked) =>
+                              setModuleControls((prev) => ({ ...prev, [item.key]: checked }))
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="page-settings">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card glass>
+              <CardHeader>
+                <CardTitle>Bayi/Müşteri Sayfa Ayar Merkezi</CardTitle>
+                <CardDescription>
+                  Özellik ve menü görünürlüğünü role göre yönetin. Değişiklikler denetime loglanır.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="rounded-xl border bg-muted/20 p-3 md:p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rol seçimi</p>
+                    <span className="text-[11px] text-muted-foreground">Responsive görünüm</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={visibilityRole === 'dealer' ? 'default' : 'outline'}
+                        onClick={() => setVisibilityRole('dealer')}
+                        className="w-full"
+                      >
+                        Bayi
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={visibilityRole === 'customer' ? 'default' : 'outline'}
+                        onClick={() => setVisibilityRole('customer')}
+                        className="w-full"
+                      >
+                        Müşteri
+                      </Button>
+                    </div>
+                    <Button variant="outline" onClick={loadVisibilitySettings} disabled={visibilityLoading} className="w-full sm:w-auto">
+                      {visibilityLoading ? 'Yükleniyor...' : 'Yenile'}
+                    </Button>
+                    <Button onClick={saveVisibilitySettings} disabled={visibilitySaving} className="w-full sm:w-auto">
+                      {visibilitySaving ? 'Kaydediliyor...' : 'Kaydet'}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-muted/20 p-3 md:p-4 space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Toplu işlemler</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="rounded-lg border bg-background/80 p-2 grid grid-cols-2 gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setRoleFeatureState(visibilityRole, true)}>
+                        Özellik aç
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setRoleFeatureState(visibilityRole, false)}>
+                        Özellik kapat
+                      </Button>
+                    </div>
+                    <div className="rounded-lg border bg-background/80 p-2 grid grid-cols-2 gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setRoleMenuState(visibilityRole, true)}>
+                        Menü aç
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setRoleMenuState(visibilityRole, false)}>
+                        Menü kapat
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="rounded-xl border bg-card/60 p-3 md:p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">Özellik görünürlüğü</p>
+                      <span className="text-[11px] px-2 py-1 rounded-full border text-muted-foreground">{visibilityRole}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {(visibilityCatalog?.features?.[visibilityRole] ?? []).map((item) => (
+                        <div key={item.key} className="rounded-lg border bg-background/70 p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm">{item.label}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono mt-1">{item.key}</p>
+                          </div>
+                          <Switch
+                            checked={featureVisibility[visibilityRole]?.[item.key] !== false}
+                            onCheckedChange={(checked) =>
+                              setFeatureVisibility((prev) => ({
+                                ...prev,
+                                [visibilityRole]: { ...prev[visibilityRole], [item.key]: checked },
+                              }))
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-card/60 p-3 md:p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">Menü/sayfa görünürlüğü</p>
+                      <span className="text-[11px] px-2 py-1 rounded-full border text-muted-foreground">{visibilityRole}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {(visibilityCatalog?.menu?.[visibilityRole] ?? []).map((item) => (
+                        <div key={item.key} className="rounded-lg border bg-background/70 p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm">{item.label}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono truncate">{item.href}</p>
+                          </div>
+                          <Switch
+                            checked={menuVisibility[visibilityRole]?.[item.key] !== false}
+                            onCheckedChange={(checked) =>
+                              setMenuVisibility((prev) => ({
+                                ...prev,
+                                [visibilityRole]: { ...prev[visibilityRole], [item.key]: checked },
+                              }))
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-gradient-to-br from-primary/5 via-transparent to-primary/10 p-3 md:p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <p className="text-sm font-semibold">Sistem özellik görünürlüğü (admin/platform)</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setRoleFeatureState('system', true)}>
+                        Tümünü aç
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setRoleFeatureState('system', false)}>
+                        Tümünü kapat
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {(visibilityCatalog?.features?.system ?? []).map((item) => (
+                      <div key={item.key} className="rounded-lg border bg-background/70 p-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{item.label}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono mt-1">{item.key}</p>
+                        </div>
+                        <Switch
+                          checked={featureVisibility.system?.[item.key] !== false}
+                          onCheckedChange={(checked) =>
+                            setFeatureVisibility((prev) => ({
+                              ...prev,
+                              system: { ...prev.system, [item.key]: checked },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </motion.div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
@@ -29,6 +30,7 @@ import {
   Crown,
   Gift,
   Heart,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +43,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { useCustomerT } from '@/lib/use-customer-locale';
 
 interface CustomerAnalytics {
   summary: {
@@ -84,6 +87,13 @@ interface CustomerAnalytics {
     visits: number;
     avgRating: number;
   }>;
+  branchComparison: Array<{
+    dealerId: string;
+    dealerName: string;
+    visits: number;
+    avgRating: number;
+    estimatedWaitMinutes: number;
+  }>;
   monthlyData: Array<{
     month: string;
     consumptions: number;
@@ -103,6 +113,7 @@ interface CustomerAnalytics {
 }
 
 export default function CustomerAnalyticsPage() {
+  const tc = useCustomerT();
   const [analytics, setAnalytics] = useState<CustomerAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
@@ -176,6 +187,11 @@ export default function CustomerAnalyticsPage() {
             { name: 'Kahve Dünyası', visits: 8, avgRating: 4.5 },
             { name: 'Starbucks', visits: 4, avgRating: 4.2 },
           ],
+          branchComparison: [
+            { dealerId: 'd1', dealerName: 'Demo Cafe', visits: 35, avgRating: 4.8, estimatedWaitMinutes: 9 },
+            { dealerId: 'd2', dealerName: 'Kahve Dünyası', visits: 8, avgRating: 4.5, estimatedWaitMinutes: 12 },
+            { dealerId: 'd3', dealerName: 'Starbucks', visits: 4, avgRating: 4.2, estimatedWaitMinutes: 14 },
+          ],
           monthlyData: [
             { month: 'Eyl', consumptions: 8, spent: 420, points: 840 },
             { month: 'Eki', consumptions: 12, spent: 680, points: 1360 },
@@ -200,7 +216,7 @@ export default function CustomerAnalyticsPage() {
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      toast.error('Analitik verileri yüklenemedi');
+      toast.error(tc('customerAnalytics.loadError'));
     } finally {
       setLoading(false);
     }
@@ -208,7 +224,7 @@ export default function CustomerAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[320px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -225,31 +241,69 @@ export default function CustomerAnalyticsPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between"
       >
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-            <BarChart3 className="h-7 w-7 text-primary" />
-            Kişisel Analitiğim
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 text-balance">
+            <BarChart3 className="h-7 w-7 shrink-0 text-primary" />
+            {tc('customerAnalytics.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Tüketim alışkanlıklarınızı ve istatistiklerinizi görün</p>
+          <p className="text-muted-foreground mt-1.5 text-pretty leading-relaxed">{tc('customerAnalytics.description')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto items-stretch sm:items-center gap-2 shrink-0">
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-full min-h-11 sm:min-h-10 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7">Son 7 Gün</SelectItem>
-              <SelectItem value="30">Son 30 Gün</SelectItem>
-              <SelectItem value="90">Son 3 Ay</SelectItem>
-              <SelectItem value="365">Son 1 Yıl</SelectItem>
+              <SelectItem value="7">{tc('customerAnalytics.period7')}</SelectItem>
+              <SelectItem value="30">{tc('customerAnalytics.period30')}</SelectItem>
+              <SelectItem value="90">{tc('customerAnalytics.period90')}</SelectItem>
+              <SelectItem value="365">{tc('customerAnalytics.period365')}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={fetchAnalytics}>
+          <Button variant="outline" size="icon" className="h-11 w-11 min-h-11 min-w-11 shrink-0 touch-manipulation" onClick={fetchAnalytics} aria-label={tc('customerAnalytics.refresh')}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
+      </motion.div>
+
+      {/* Tüketimler & geri bildirimler — kişisel analitik içinde hızlı erişim */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid gap-3 sm:grid-cols-2"
+      >
+        <Link
+          href="/customer/consumptions"
+          className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-card/80"
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <Coffee className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 text-left">
+            <p className="font-semibold">{tc('customerAnalytics.consumptions')}</p>
+            <p className="text-sm text-muted-foreground">{tc('customerAnalytics.consumptionsDesc')}</p>
+            <span className="mt-1 inline-flex items-center text-xs font-medium text-primary group-hover:underline">
+              {tc('customerAnalytics.go')} <ArrowUpRight className="ml-0.5 h-3 w-3" />
+            </span>
+          </div>
+        </Link>
+        <Link
+          href="/customer/feedbacks"
+          className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card/50 p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-card/80"
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <MessageSquare className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 text-left">
+            <p className="font-semibold">{tc('customerAnalytics.feedbacks')}</p>
+            <p className="text-sm text-muted-foreground">{tc('customerAnalytics.feedbacksDesc')}</p>
+            <span className="mt-1 inline-flex items-center text-xs font-medium text-primary group-hover:underline">
+              {tc('customerAnalytics.go')} <ArrowUpRight className="ml-0.5 h-3 w-3" />
+            </span>
+          </div>
+        </Link>
       </motion.div>
 
       {/* Summary Cards */}
@@ -259,7 +313,7 @@ export default function CustomerAnalyticsPage() {
             label: 'Toplam Tüketim',
             value: analytics.summary.totalConsumptions,
             icon: ShoppingBag,
-            color: 'from-violet-500 to-purple-600',
+            color: 'from-primary to-primary/80',
             change: analytics.trends.consumptionGrowth,
           },
           {
@@ -280,7 +334,7 @@ export default function CustomerAnalyticsPage() {
             label: 'Günlük Seri',
             value: `${analytics.summary.currentStreak} gün`,
             icon: Flame,
-            color: 'from-rose-500 to-red-600',
+            color: 'from-red-500 to-red-700',
             change: null,
           },
         ].map((stat, index) => (
@@ -290,7 +344,7 @@ export default function CustomerAnalyticsPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
-            <Card className="border-0 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className={`p-2 rounded-lg bg-gradient-to-br ${stat.color}`}>
@@ -367,7 +421,7 @@ export default function CustomerAnalyticsPage() {
       {/* Category Breakdown & Top Products */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PieChart className="h-5 w-5 text-primary" />
@@ -392,7 +446,7 @@ export default function CustomerAnalyticsPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Star className="h-5 w-5 text-primary" />
@@ -427,7 +481,7 @@ export default function CustomerAnalyticsPage() {
       {/* Weekly & Hourly Patterns */}
       <div className="grid md:grid-cols-2 gap-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
@@ -452,7 +506,7 @@ export default function CustomerAnalyticsPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" />
@@ -488,7 +542,7 @@ export default function CustomerAnalyticsPage() {
 
       {/* Favorite Dealers */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5 text-primary" />
@@ -519,9 +573,53 @@ export default function CustomerAnalyticsPage() {
         </Card>
       </motion.div>
 
+      {/* Şube bazlı deneyim karşılaştırması */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Şube Bazlı Deneyim Karşılaştırması
+            </CardTitle>
+            <CardDescription>
+              Memnuniyet puanınız ve tahmini bekleme süresi karşılaştırması
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {analytics.branchComparison.length > 0 ? (
+              analytics.branchComparison.map((branch) => (
+                <div
+                  key={branch.dealerId}
+                  className="rounded-lg border border-border/60 bg-muted/30 p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium">{branch.dealerName}</p>
+                    <Badge variant="secondary">{branch.visits} ziyaret</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-md bg-background/70 p-2">
+                      <p className="text-xs text-muted-foreground">Ortalama memnuniyet</p>
+                      <p className="font-semibold">{branch.avgRating > 0 ? `${branch.avgRating}/5` : 'Yeterli veri yok'}</p>
+                    </div>
+                    <div className="rounded-md bg-background/70 p-2">
+                      <p className="text-xs text-muted-foreground">Tahmini bekleme</p>
+                      <p className="font-semibold">{branch.estimatedWaitMinutes} dk</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Karşılaştırma için en az iki farklı şube verisi gerekiyor.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Monthly Trends */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
@@ -557,7 +655,7 @@ export default function CustomerAnalyticsPage() {
 
       {/* Achievements */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <Card className="border-0 bg-card/50 backdrop-blur-sm">
+        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="h-5 w-5 text-primary" />
@@ -566,10 +664,10 @@ export default function CustomerAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-lg bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">{analytics.achievements.totalBadges}</span>
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                    {analytics.achievements.totalBadges}
                   </div>
                   <div>
                     <p className="font-semibold">Toplam Rozet</p>
@@ -586,9 +684,9 @@ export default function CustomerAnalyticsPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20">
-                <h4 className="font-semibold mb-2">Sonraki Hedef</h4>
-                <p className="text-lg font-bold text-cyan-500">{analytics.achievements.nextMilestone.name}</p>
+              <div className="rounded-lg border border-border/60 bg-card/60 p-4">
+                <h4 className="mb-2 font-semibold">Sonraki Hedef</h4>
+                <p className="text-lg font-bold text-primary">{analytics.achievements.nextMilestone.name}</p>
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span>{analytics.achievements.nextMilestone.progress}</span>

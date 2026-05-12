@@ -32,7 +32,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/lib/admin-toast';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 
 interface DealerSettings {
   id: string;
@@ -60,14 +61,14 @@ interface DealerSettings {
 
 const MODULES = [
   { key: 'sentimentEnabled', label: 'Duygu Analizi', desc: 'Olumlu/olumsuz/nötr tespit', icon: MessageSquare, color: 'text-emerald-500' },
-  { key: 'emotionEnabled', label: 'Duygu Tespiti', desc: 'Mutlu, kızgın, üzgün vb.', icon: Activity, color: 'text-pink-500' },
+  { key: 'emotionEnabled', label: 'Duygu Tespiti', desc: 'Mutlu, kızgın, üzgün vb.', icon: Activity, color: 'text-primary' },
   { key: 'topicEnabled', label: 'Konu Çıkarma', desc: 'Hizmet, kalite, fiyat vb.', icon: FileText, color: 'text-blue-500' },
   { key: 'intentEnabled', label: 'Niyet Tespiti', desc: 'Şikayet, öneri, övgü', icon: Target, color: 'text-orange-500' },
   { key: 'urgencyEnabled', label: 'Aciliyet Tespiti', desc: 'Düşük-kritik aciliyet', icon: AlertTriangle, color: 'text-red-500' },
-  { key: 'entityEnabled', label: 'Varlık Tanıma', desc: 'Ürün, kişi, mekan, hizmet', icon: Search, color: 'text-violet-500' },
+  { key: 'entityEnabled', label: 'Varlık Tanıma', desc: 'Ürün, kişi, mekan, hizmet', icon: Search, color: 'text-primary' },
   { key: 'toxicityEnabled', label: 'Toksisite Kontrolü', desc: 'Uygunsuz içerik tespiti', icon: Shield, color: 'text-amber-500' },
-  { key: 'churnEnabled', label: 'Churn Tahmini', desc: 'Müşteri kaybı riski', icon: Users, color: 'text-rose-500' },
-  { key: 'themeClusterEnabled', label: 'Tema Kümeleme', desc: 'Otomatik tema keşfi', icon: Layers, color: 'text-indigo-500' },
+  { key: 'churnEnabled', label: 'Churn Tahmini', desc: 'Müşteri kaybı riski', icon: Users, color: 'text-destructive' },
+  { key: 'themeClusterEnabled', label: 'Tema Kümeleme', desc: 'Otomatik tema keşfi', icon: Layers, color: 'text-primary' },
 ] as const;
 
 export default function AdminAISettingsPage() {
@@ -97,6 +98,22 @@ export default function AdminAISettingsPage() {
       toast.error('AI ayarları yüklenemedi');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const bootstrapSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/bootstrap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ensure_ai_settings' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'AI ayarlar? haz?rlanamad?');
+      toast.success(`${data.created ?? 0} dealer i?in varsay?lan AI ayar? olu?turuldu`);
+      fetchAllSettings();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'AI ayarlar? haz?rlanamad?');
     }
   };
 
@@ -138,7 +155,7 @@ export default function AdminAISettingsPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground">AI ayarları yükleniyor...</p>
       </div>
     );
@@ -146,41 +163,36 @@ export default function AdminAISettingsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Hero */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 p-4 sm:p-6 md:p-8"
-      >
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5 text-white/80" />
-              <span className="text-white/80 text-sm font-medium">Sistem Yönetimi</span>
+      <AdminPremiumHero
+        eyebrow="Sistem yönetimi"
+        title={
+          <span className="flex items-center gap-3">
+            <Settings className="w-8 h-8 shrink-0" /> AI Ayarları Yönetimi
+          </span>
+        }
+        description="Tüm dealer'ların AI analiz modüllerini ve ayarlarını yönetin"
+        icon={<Shield className="text-white" />}
+        aside={
+          <div className="flex flex-wrap gap-2 justify-end">
+            <div className="rounded-xl px-4 py-2 text-center border min-w-[6rem] backdrop-blur-sm bg-background/85 border-border/70 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+              <span className="text-xs text-muted-foreground dark:text-white/70">Toplam dealer</span>
+              <p className="text-2xl font-bold tabular-nums">{allDealerSettings.length}</p>
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <Settings className="w-8 h-8" /> AI Ayarları Yönetimi
-            </h1>
-            <p className="text-white/70 mt-1">Tüm dealer&apos;ların AI analiz modüllerini ve ayarlarını yönetin</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">Toplam Dealer</span>
-              <p className="text-2xl font-bold">{allDealerSettings.length}</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 text-white text-center">
-              <span className="text-white/60 text-xs">AI Aktif</span>
-              <p className="text-2xl font-bold">{allDealerSettings.filter(s => s.isEnabled).length}</p>
+            <div className="rounded-xl px-4 py-2 text-center border min-w-[6rem] backdrop-blur-sm bg-background/85 border-border/70 text-foreground dark:bg-white/15 dark:border-white/20 dark:text-white">
+              <span className="text-xs text-muted-foreground dark:text-white/70">AI aktif</span>
+              <p className="text-2xl font-bold tabular-nums">{allDealerSettings.filter((s) => s.isEnabled).length}</p>
             </div>
           </div>
-        </div>
-      </motion.div>
+        }
+      />
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Dealer Listesi */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-0 bg-card/50 backdrop-blur-sm">
+          <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Store className="h-5 w-5 text-violet-500" /> Dealer&apos;lar
+                <Store className="h-5 w-5 text-primary" /> Dealer&apos;lar
               </CardTitle>
               <CardDescription>AI ayarlarını yönetmek için bir dealer seçin</CardDescription>
             </CardHeader>
@@ -192,7 +204,7 @@ export default function AdminAISettingsPage() {
                   <button
                     key={ds.dealerId}
                     onClick={() => selectDealer(ds.dealerId)}
-                    className={`w-full text-left p-3 rounded-xl border transition-all ${selectedDealer === ds.dealerId ? 'bg-violet-500/10 border-violet-500/30' : 'bg-card hover:border-violet-500/20'}`}
+                    className={`w-full rounded-xl border p-3 text-left transition-all ${selectedDealer === ds.dealerId ? 'border-primary/30 bg-primary/10' : 'bg-card hover:border-primary/20'}`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -215,7 +227,7 @@ export default function AdminAISettingsPage() {
         {/* Ayar Detayları */}
         <div className="lg:col-span-2 space-y-6">
           {!selectedDealer ? (
-            <Card className="border-0 bg-card/50 backdrop-blur-sm">
+            <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardContent className="p-12 text-center">
                 <Brain className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
                 <h3 className="text-xl font-bold mb-2">Dealer Seçin</h3>
@@ -226,10 +238,10 @@ export default function AdminAISettingsPage() {
             <>
               {/* Ana Ayarlar */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                <Card className="border-0 bg-card/50 backdrop-blur-sm">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-violet-500" /> Ana Ayarlar
+                      <Zap className="h-5 w-5 text-primary" /> Ana Ayarlar
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -253,10 +265,10 @@ export default function AdminAISettingsPage() {
 
               {/* Analiz Modülleri */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <Card className="border-0 bg-card/50 backdrop-blur-sm">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Brain className="h-5 w-5 text-violet-500" /> Derin Öğrenme Modülleri
+                      <Brain className="h-5 w-5 text-primary" /> Derin Öğrenme Modülleri
                     </CardTitle>
                     <CardDescription>Hangi AI analiz modüllerinin aktif olacağını seçin</CardDescription>
                   </CardHeader>
@@ -287,10 +299,10 @@ export default function AdminAISettingsPage() {
 
               {/* Raporlama & Alertler */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                <Card className="border-0 bg-card/50 backdrop-blur-sm">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Bell className="h-5 w-5 text-violet-500" /> Raporlama & Uyarılar
+                      <Bell className="h-5 w-5 text-primary" /> Raporlama & Uyarılar
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -315,10 +327,10 @@ export default function AdminAISettingsPage() {
 
               {/* Custom Prompt */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <Card className="border-0 bg-card/50 backdrop-blur-sm">
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-violet-500" /> Özel Prompt
+                      <Sparkles className="h-5 w-5 text-primary" /> Özel Prompt
                     </CardTitle>
                     <CardDescription>AI analiz motoruna özel bağlam ekleyin</CardDescription>
                   </CardHeader>

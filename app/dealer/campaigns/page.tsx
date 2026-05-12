@@ -1,280 +1,255 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 import {
-  Megaphone,
-  Plus,
-  Clock,
-  Calendar,
-  Zap,
-  Star,
-  Edit,
-  Trash2,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Timer,
+  Megaphone, Plus, Trash2, Send, Loader2, Users,
+  CheckCircle, Clock, Edit, X, BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { toast } from '@/lib/admin-toast';
+import { useAppT } from '@/lib/app-locale';
 
-interface HappyHour {
+interface CampaignItem {
   id: string;
-  name: string;
-  description: string | null;
-  multiplier: number;
-  startTime: string;
-  endTime: string;
-  daysOfWeek: number[];
-  isActive: boolean;
-  validFrom: string | null;
-  validUntil: string | null;
+  title: string;
+  message: string;
+  targetSegment: string;
+  channel: string;
+  status: string;
+  sentAt: string | null;
+  sentCount: number;
+  createdAt: string;
 }
 
-const dayNames = ['Pzr', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+const SEGMENTS: Record<string, { labelKey: string; color: string }> = {
+  all: { labelKey: 'dealerCampaigns.segmentAll', color: 'bg-blue-500/15 text-blue-600' },
+  vip: { labelKey: 'dealerCampaigns.segmentVip', color: 'bg-amber-500/15 text-amber-600' },
+  loyal: { labelKey: 'dealerCampaigns.segmentLoyal', color: 'bg-emerald-500/15 text-emerald-600' },
+  active: { labelKey: 'dealerCampaigns.segmentActive', color: 'bg-cyan-500/15 text-cyan-600' },
+  risk: { labelKey: 'dealerCampaigns.segmentRisk', color: 'bg-red-500/15 text-red-600' },
+};
+
+const STATUS_BADGES: Record<string, { labelKey: string; variant: 'default' | 'secondary' | 'outline' }> = {
+  draft: { labelKey: 'dealerCampaigns.statusDraft', variant: 'outline' },
+  sent: { labelKey: 'dealerCampaigns.statusSent', variant: 'default' },
+  scheduled: { labelKey: 'dealerCampaigns.statusScheduled', variant: 'secondary' },
+};
 
 export default function DealerCampaignsPage() {
-  const [loading, setLoading] = useState(true);
-  const [campaigns, setCampaigns] = useState<HappyHour[]>([]);
+  const t = useAppT();
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    description: '',
-    multiplier: 2,
-    startTime: '12:00',
-    endTime: '14:00',
-    daysOfWeek: [1, 2, 3, 4, 5] as number[],
-    isActive: true,
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [segment, setSegment] = useState('all');
+  const [channel, setChannel] = useState('notification');
+
+  const { data, isLoading } = useQuery<{ success: boolean; campaigns: CampaignItem[] }>({
+    queryKey: ['dealer', 'campaigns'],
+    queryFn: async () => { const r = await fetch('/api/dealer/campaigns'); return r.json(); },
+    staleTime: 30_000,
   });
 
-  useEffect(() => { fetchCampaigns(); }, []);
-
-  const fetchCampaigns = async () => {
-    try {
-      const res = await fetch('/api/happy-hour');
-      const data = await res.json();
-      if (data.success) setCampaigns(data.happyHours || []);
-    } catch {
-      toast.error('Kampanyalar yüklenemedi');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resetForm = () => {
-    setForm({ name: '', description: '', multiplier: 2, startTime: '12:00', endTime: '14:00', daysOfWeek: [1, 2, 3, 4, 5], isActive: true });
-    setEditId(null);
-  };
-
-  const openCreate = () => { resetForm(); setDialogOpen(true); };
-
-  const openEdit = (c: HappyHour) => {
-    setForm({
-      name: c.name,
-      description: c.description || '',
-      multiplier: c.multiplier,
-      startTime: c.startTime,
-      endTime: c.endTime,
-      daysOfWeek: c.daysOfWeek,
-      isActive: c.isActive,
-    });
-    setEditId(c.id);
-    setDialogOpen(true);
-  };
-
-  const saveCampaign = async () => {
-    if (!form.name.trim()) { toast.error('Kampanya adı gerekli'); return; }
-    setSaving(true);
-    try {
-      const method = editId ? 'PUT' : 'POST';
-      const url = editId ? `/api/happy-hour?id=${editId}` : '/api/happy-hour';
-      const res = await fetch(url, {
-        method,
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch('/api/dealer/campaigns', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ title, message, targetSegment: segment, channel }),
       });
-      const data = await res.json();
-      if (data.success || res.ok) {
-        toast.success(editId ? 'Kampanya güncellendi!' : 'Kampanya oluşturuldu!');
-        setDialogOpen(false);
-        resetForm();
-        fetchCampaigns();
-      } else {
-        toast.error(data.error || 'Kaydedilemedi');
-      }
-    } catch {
-      toast.error('Bağlantı hatası');
-    } finally {
-      setSaving(false);
-    }
-  };
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      return d;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dealer', 'campaigns'] });
+      setDialogOpen(false);
+      resetForm();
+      toast.success(t('dealerCampaigns.toastCreated'));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
-  const deleteCampaign = async (id: string) => {
-    try {
-      const res = await fetch(`/api/happy-hour?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Kampanya silindi');
-        fetchCampaigns();
-      }
-    } catch {
-      toast.error('Silinemedi');
-    }
-  };
+  const sendMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/dealer/campaigns/${id}/send`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      return d as { sentCount: number };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['dealer', 'campaigns'] });
+      toast.success(t('dealerCampaigns.sentToCustomers').replace('{count}', String(data.sentCount)));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
-  const toggleDay = (day: number) => {
-    setForm(prev => ({
-      ...prev,
-      daysOfWeek: prev.daysOfWeek.includes(day)
-        ? prev.daysOfWeek.filter(d => d !== day)
-        : [...prev.daysOfWeek, day].sort(),
-    }));
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/dealer/campaigns/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(t('dealerCampaigns.deleteFailed'));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dealer', 'campaigns'] });
+      toast.success(t('dealerCampaigns.toastDeleted'));
+    },
+  });
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
-        <p className="text-muted-foreground">Kampanyalar yükleniyor...</p>
-      </div>
-    );
+  function resetForm() {
+    setTitle('');
+    setMessage('');
+    setSegment('all');
+    setChannel('notification');
   }
 
-  return (
-    <div className="space-y-6 pb-8">
-      {/* Hero */}
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 p-4 sm:p-6 md:p-8"
-      >
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <Megaphone className="w-8 h-8" /> Kampanya Yönetimi
-            </h1>
-            <p className="text-white/70 mt-1">Happy Hour ve puan çarpanı kampanyaları oluşturun</p>
-          </div>
-          <Button onClick={openCreate} className="bg-white text-orange-600 hover:bg-white/90">
-            <Plus className="w-4 h-4 mr-2" /> Yeni Kampanya
-          </Button>
-        </div>
-      </motion.div>
+  const campaigns = data?.campaigns ?? [];
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="border-0 bg-card/50"><CardContent className="p-4 text-center">
-          <Megaphone className="h-5 w-5 text-orange-500 mx-auto mb-1" />
-          <p className="text-xl font-bold">{campaigns.length}</p>
-          <p className="text-xs text-muted-foreground">Toplam</p>
-        </CardContent></Card>
-        <Card className="border-0 bg-card/50"><CardContent className="p-4 text-center">
-          <CheckCircle2 className="h-5 w-5 text-emerald-500 mx-auto mb-1" />
-          <p className="text-xl font-bold">{campaigns.filter(c => c.isActive).length}</p>
-          <p className="text-xs text-muted-foreground">Aktif</p>
-        </CardContent></Card>
-        <Card className="border-0 bg-card/50"><CardContent className="p-4 text-center">
-          <Zap className="h-5 w-5 text-yellow-500 mx-auto mb-1" />
-          <p className="text-xl font-bold">{campaigns.length > 0 ? Math.max(...campaigns.map(c => c.multiplier)) : 0}x</p>
-          <p className="text-xs text-muted-foreground">Max Çarpan</p>
-        </CardContent></Card>
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-balance">
+            <Megaphone className="h-6 w-6 shrink-0 text-blue-500" />
+            {t('dealerCampaigns.title')}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5 text-pretty leading-relaxed">{t('dealerCampaigns.description')}</p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)} className="gap-2 rounded-xl shrink-0 touch-manipulation w-full sm:w-auto">
+          <Plus className="h-4 w-4 shrink-0" /> {t('dealerCampaigns.newCampaign')}
+        </Button>
       </div>
 
-      {/* Campaign List */}
-      {campaigns.length === 0 ? (
-        <Card className="border-0 bg-card/50"><CardContent className="p-12 text-center">
-          <Megaphone className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-          <h3 className="text-xl font-bold mb-2">Henüz Kampanya Yok</h3>
-          <p className="text-muted-foreground mb-4">İlk kampanyanızı oluşturun ve müşterilerinizi çekin!</p>
-          <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Kampanya Oluştur</Button>
-        </CardContent></Card>
+      {isLoading ? (
+        <InlineLoadingStatus className="py-16" label={t('dealerCampaigns.loading')} />
+      ) : campaigns.length === 0 ? (
+        <Card className="rounded-2xl">
+          <CardContent className="py-16 text-center">
+            <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-lg font-medium text-muted-foreground">{t('dealerCampaigns.emptyTitle')}</p>
+            <Button onClick={() => setDialogOpen(true)} variant="outline" className="mt-4 rounded-xl gap-2">
+              <Plus className="h-4 w-4" /> {t('dealerCampaigns.emptyCta')}
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-4">
-          {campaigns.map((campaign, index) => (
-            <motion.div key={campaign.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
-              <Card className={`border-0 bg-card/50 backdrop-blur-sm ${campaign.isActive ? 'border-l-4 border-l-emerald-500' : 'opacity-70'}`}>
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-bold text-lg">{campaign.name}</h3>
-                        <Badge className={campaign.isActive ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' : 'bg-muted text-muted-foreground'}>
-                          {campaign.isActive ? 'Aktif' : 'Pasif'}
-                        </Badge>
-                        <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/30">
-                          <Zap className="h-3 w-3 mr-1" />{campaign.multiplier}x Puan
-                        </Badge>
-                      </div>
-                      {campaign.description && <p className="text-sm text-muted-foreground mb-3">{campaign.description}</p>}
-                      <div className="flex flex-wrap items-center gap-3 text-sm">
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Clock className="h-4 w-4" /> {campaign.startTime} - {campaign.endTime}
-                        </span>
-                        <div className="flex gap-1">
-                          {[0, 1, 2, 3, 4, 5, 6].map(d => (
-                            <span key={d} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium ${campaign.daysOfWeek.includes(d) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                              {dayNames[d]}
-                            </span>
-                          ))}
+        <div className="space-y-3">
+          <AnimatePresence mode="popLayout">
+            {campaigns.map((c, i) => {
+              const seg = SEGMENTS[c.targetSegment] || SEGMENTS.all;
+              const st = STATUS_BADGES[c.status] || STATUS_BADGES.draft;
+              return (
+                <motion.div key={c.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ delay: i * 0.03 }} layout>
+                  <Card className="rounded-2xl">
+                    <CardContent className="p-4 sm:p-5">
+                      <div className="flex items-start gap-4">
+                        <div className={`p-2.5 rounded-xl shrink-0 ${seg.color.split(' ')[0]}`}>
+                          <Megaphone className={`h-5 w-5 ${seg.color.split(' ')[1]}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold">{c.title}</h3>
+                            <Badge variant={st.variant} className="text-xs">{t(st.labelKey)}</Badge>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${seg.color}`}>{t(seg.labelKey)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.message}</p>
+                          {c.status === 'sent' && (
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                              <CheckCircle className="h-3 w-3 text-emerald-500" />
+                              {t('dealerCampaigns.sentToCustomers').replace('{count}', String(c.sentCount))}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button variant="outline" size="sm" className="rounded-xl gap-1" asChild>
+                            <Link href={`/dealer/campaigns/${c.id}/performance`}>
+                              <BarChart3 className="h-3.5 w-3.5" />
+                              {t('dealerCampaigns.performance')}
+                            </Link>
+                          </Button>
+                          {c.status === 'draft' && (
+                            <Button
+                              size="sm"
+                              className="gap-1.5 rounded-xl"
+                              onClick={() => sendMutation.mutate(c.id)}
+                              disabled={sendMutation.isPending}
+                            >
+                              {sendMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                              {t('dealerCampaigns.send')}
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMutation.mutate(c.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(campaign)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => deleteCampaign(campaign.id)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editId ? 'Kampanya Düzenle' : 'Yeni Kampanya'}</DialogTitle>
-            <DialogDescription>Happy Hour kampanya ayarlarını yapılandırın</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-5 w-5 text-blue-500" /> {t('dealerCampaigns.dialogTitle')}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Kampanya Adı</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ör: Öğle Happy Hour" /></div>
-            <div><Label>Açıklama</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Kampanya detayları..." rows={2} /></div>
-            <div className="grid grid-cols-3 gap-4">
-              <div><Label>Başlangıç</Label><Input type="time" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} /></div>
-              <div><Label>Bitiş</Label><Input type="time" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} /></div>
-              <div><Label>Çarpan</Label><Input type="number" step="0.5" min="1" max="10" value={form.multiplier} onChange={e => setForm(f => ({ ...f, multiplier: parseFloat(e.target.value) || 1 }))} /></div>
+            <div>
+              <Label>{t('dealerCampaigns.labelTitle')}</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('dealerCampaigns.placeholderTitle')} className="mt-1" />
             </div>
             <div>
-              <Label className="mb-2 block">Günler</Label>
-              <div className="flex gap-2">
-                {[0, 1, 2, 3, 4, 5, 6].map(d => (
-                  <button key={d} onClick={() => toggleDay(d)}
-                    className={`w-10 h-10 rounded-lg text-xs font-medium transition-colors ${form.daysOfWeek.includes(d) ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-                  >{dayNames[d]}</button>
-                ))}
-              </div>
+              <Label>{t('dealerCampaigns.labelMessage')}</Label>
+              <Textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t('dealerCampaigns.placeholderMessage')} rows={3} className="mt-1" />
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <Label>Aktif</Label>
-              <Switch checked={form.isActive} onCheckedChange={v => setForm(f => ({ ...f, isActive: v }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>{t('dealerCampaigns.labelSegment')}</Label>
+                <Select value={segment} onValueChange={setSegment}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SEGMENTS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{t(v.labelKey)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{t('dealerCampaigns.labelChannel')}</Label>
+                <Select value={channel} onValueChange={setChannel}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="notification">{t('dealerCampaigns.channelNotification')}</SelectItem>
+                    <SelectItem value="email">{t('dealerCampaigns.channelEmail')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>İptal</Button>
-            <Button onClick={saveCampaign} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {editId ? 'Güncelle' : 'Oluştur'}
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !title.trim() || !message.trim()} className="gap-2">
+              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t('common.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

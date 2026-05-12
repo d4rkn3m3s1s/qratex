@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createConsumptionSchema } from '@/lib/validations';
 
 // Rate limit için basit in-memory cache (production'da Redis kullanılmalı)
+
+export const dynamic = 'force-dynamic';
+
 const rateLimitCache = new Map<string, number>();
 const RATE_LIMIT_WINDOW = 60000; // 1 dakika
 const RATE_LIMIT_MAX = 5; // 1 dakikada max 5 tüketim aynı karta
@@ -15,14 +17,9 @@ const RATE_LIMIT_MAX = 5; // 1 dakikada max 5 tüketim aynı karta
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -101,14 +98,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'DEALER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403 }
-      );
-    }
+    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await request.json();
     const validatedData = createConsumptionSchema.safeParse(body);
@@ -251,7 +243,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: card.customerId,
         title: 'Yeni Tüketim Kaydı',
-        message: product 
+        message: product
           ? `${product.name} tüketiminiz kaydedildi. Yorum bırakmayı unutmayın!`
           : 'Yeni bir tüketim kaydınız oluşturuldu. Yorum bırakmayı unutmayın!',
         type: 'info',
@@ -261,6 +253,37 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // --- SQUAD PASSIVE POINTS LOGIC ---
+    // Calculate an arbitrary base XP for scanning/consuming
+    const baseXP = amount ? Math.floor(amount * 10) : 50;
+    const passivePoints = Math.floor(baseXP * 0.05);
+
+    if (passivePoints > 0) {
+      const squadMembership = await prisma.squadMember.findFirst({
+        where: { userId: card.customerId }
+      });
+
+      if (squadMembership) {
+        await prisma.$transaction([
+          prisma.squad.update({
+            where: { id: squadMembership.squadId },
+            data: { totalPoints: { increment: passivePoints } }
+          }),
+          prisma.user.update({
+            where: { id: card.customerId },
+            data: { points: { increment: baseXP } } // Primary user gets full XP
+          })
+        ]);
+      } else {
+        // Normal XP without squad
+        await prisma.user.update({
+          where: { id: card.customerId },
+          data: { points: { increment: baseXP } }
+        });
+      }
+    }
+    // ----------------------------------
 
     return NextResponse.json({
       success: true,

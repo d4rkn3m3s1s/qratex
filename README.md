@@ -148,7 +148,7 @@ qratex/
 ├── types/
 │   ├── index.ts           # Type definitions
 │   └── next-auth.d.ts     # NextAuth types
-├── middleware.ts          # Auth middleware
+├── proxy.ts               # Auth & CORS proxy (Next.js 16)
 ├── next.config.js         # Next.js config
 ├── tailwind.config.ts     # Tailwind config
 └── tsconfig.json          # TypeScript config

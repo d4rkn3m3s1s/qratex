@@ -1,15 +1,28 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import {
+  DEFAULT_LEAGUE_RULES,
+  getLeagueMetaFromRules,
+  getNextLeagueMetaFromRules,
+  getLeagueProgressFromRules,
+  type LeagueKey,
+  type LeagueRule,
+} from '@/lib/league-rules-core';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(date: Date | string | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+export function formatDate(
+  date: Date | string | null | undefined,
+  options?: Intl.DateTimeFormatOptions,
+  locale: 'tr' | 'en' = 'tr',
+): string {
   if (!date) return '-';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '-';
-  return new Intl.DateTimeFormat('tr-TR', {
+  const localeTag = locale === 'en' ? 'en-US' : 'tr-TR';
+  return new Intl.DateTimeFormat(localeTag, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -17,7 +30,10 @@ export function formatDate(date: Date | string | null | undefined, options?: Int
   }).format(d);
 }
 
-export function formatRelativeTime(date: Date | string | null | undefined): string {
+export function formatRelativeTime(
+  date: Date | string | null | undefined,
+  locale: 'tr' | 'en' = 'tr',
+): string {
   if (!date) return '-';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '-';
@@ -30,6 +46,20 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
   const days = Math.floor(hours / 24);
   const weeks = Math.floor(days / 7);
   const months = Math.floor(days / 30);
+
+  if (locale === 'en') {
+    if (seconds < 60) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    if (hours < 24) return `${hours} hr ago`;
+    if (days < 7) return `${days} days ago`;
+    if (weeks < 4) return `${weeks} wk ago`;
+    if (months < 12) return `${months} mo ago`;
+    return new Intl.DateTimeFormat('en-US', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(d);
+  }
 
   if (seconds < 60) return 'Az önce';
   if (minutes < 60) return `${minutes} dakika önce`;
@@ -104,9 +134,37 @@ export function calculateLevelProgress(xp: number, xpPerLevel: number = 1000, mu
   return (currentLevelXp / requiredXp) * 100;
 }
 
-export function getLeague(level: number, leagues: string[] = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond']): string {
-  const index = Math.min(Math.floor(level / 10), leagues.length - 1);
-  return leagues[index];
+/** Lig: tek kaynak lib/league-rules (DB/Admin). Client fallback: DEFAULT_LEAGUE_RULES. */
+export type { LeagueKey };
+export type LeagueMeta = LeagueRule;
+
+/** Lig ismi; client tarafında varsayılan kurallarla. API'den gelen league kullanıldığında tercih edin. */
+export function getLeague(points: number): string {
+  return getLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES).name;
+}
+
+export function getLeagueMetaByPoints(points: number): LeagueMeta {
+  return getLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES);
+}
+
+export function getLeagueMeta(levelOrPoints: number): LeagueMeta {
+  return getLeagueMetaByPoints(levelOrPoints);
+}
+
+export function getNextLeagueMetaByPoints(points: number): LeagueMeta | null {
+  return getNextLeagueMetaFromRules(points, DEFAULT_LEAGUE_RULES);
+}
+
+export function getNextLeagueMeta(levelOrPoints: number): LeagueMeta | null {
+  return getNextLeagueMetaByPoints(levelOrPoints);
+}
+
+export function getLeagueProgressByPoints(points: number): number {
+  return getLeagueProgressFromRules(points, DEFAULT_LEAGUE_RULES);
+}
+
+export function getLeagueProgress(levelOrPoints: number): number {
+  return getLeagueProgressByPoints(levelOrPoints);
 }
 
 export function generateQRCode(): string {
@@ -212,11 +270,11 @@ export function getRarityColor(rarity: string): string {
   const colors: Record<string, string> = {
     common: 'bg-slate-600 text-slate-100',
     rare: 'bg-blue-600 text-blue-100',
-    epic: 'bg-purple-600 text-purple-100',
+    epic: 'bg-primary text-primary-foreground',
     legendary: 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white',
     COMMON: 'bg-slate-600 text-slate-100',
     RARE: 'bg-blue-600 text-blue-100',
-    EPIC: 'bg-purple-600 text-purple-100',
+    EPIC: 'bg-primary text-primary-foreground',
     LEGENDARY: 'bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 text-white',
   };
   return colors[rarity] || colors.common;
@@ -226,11 +284,11 @@ export function getRarityBgColor(rarity: string): string {
   const colors: Record<string, string> = {
     common: 'bg-slate-500/30',
     rare: 'bg-blue-500/40',
-    epic: 'bg-purple-500/40',
+    epic: 'bg-primary/40',
     legendary: 'bg-gradient-to-br from-yellow-500/50 via-orange-500/50 to-red-500/50',
     COMMON: 'bg-slate-500/30',
     RARE: 'bg-blue-500/40',
-    EPIC: 'bg-purple-500/40',
+    EPIC: 'bg-primary/40',
     LEGENDARY: 'bg-gradient-to-br from-yellow-500/50 via-orange-500/50 to-red-500/50',
   };
   return colors[rarity] || colors.common;

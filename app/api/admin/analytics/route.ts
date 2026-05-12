@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || '30d';
+    const sectionsParam = searchParams.get('sections');
+    const sections = sectionsParam
+      ? sectionsParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+      : null;
 
     // Calculate date ranges
     const now = new Date();
@@ -107,17 +111,17 @@ export async function GET(request: NextRequest) {
     
     try {
       const [totalCards, activatedCards, unusedCards, blockedCards, totalConsumptions, totalConsumptionReviews, recentConsReviews, recentCons] = await Promise.all([
-        (prisma as any).physicalCard.count(),
-        (prisma as any).physicalCard.count({ where: { status: 'ACTIVATED' } }),
-        (prisma as any).physicalCard.count({ where: { status: 'UNUSED' } }),
-        (prisma as any).physicalCard.count({ where: { status: 'BLOCKED' } }),
-        (prisma as any).consumption.count(),
-        (prisma as any).consumptionReview.count(),
-        (prisma as any).consumptionReview.findMany({
+        prisma.physicalCard.count(),
+        prisma.physicalCard.count({ where: { status: 'ACTIVATED' } }),
+        prisma.physicalCard.count({ where: { status: 'UNUSED' } }),
+        prisma.physicalCard.count({ where: { status: 'BLOCKED' } }),
+        prisma.consumption.count(),
+        prisma.consumptionReview.count(),
+        prisma.consumptionReview.findMany({
           where: { createdAt: { gte: startDate } },
           select: { rating: true, createdAt: true },
         }),
-        (prisma as any).consumption.findMany({
+        prisma.consumption.findMany({
           take: 10,
           orderBy: { createdAt: 'desc' },
           select: {
@@ -133,7 +137,7 @@ export async function GET(request: NextRequest) {
       consumptionReviews = recentConsReviews;
       recentConsumptions = recentCons;
     } catch (e) {
-      console.log('Card system not available');
+      console.error('Card system not available:', e);
     }
 
     // Calculate growth rates
@@ -311,59 +315,201 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {});
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        // Main stats
-        totalUsers,
-        totalFeedbacks: totalFeedbacks + cardStats.reviews,
-        totalQRCodes,
-        avgRating: Number(avgRating.toFixed(1)),
-        userGrowth,
-        feedbackGrowth,
-        totalScans: totalScansResult._sum.scanCount || 0,
-        activeQRCodes,
-        
-        // Sentiment
-        sentimentBreakdown: {
-          positive: Math.round((positiveFeedbacks / totalSentiment) * 100),
-          neutral: Math.round((neutralFeedbacks / totalSentiment) * 100),
-          negative: Math.round((negativeFeedbacks / totalSentiment) * 100),
-        },
-        
-        // Rating distribution
-        ratingDistribution,
-        
-        // Trends
-        dailyData,
-        heatmapData,
-        
-        // Dealers
-        topDealers: formattedTopDealers,
-        
-        // Activity
-        recentActivity: formattedActivity,
-        
-        // Card system
-        cardStats,
-        
-        // Comparison
-        comparison,
-        
-        // User distribution
-        roleDistribution,
-        
-        // Totals
-        totals: {
-          users: totalUsers,
-          feedbacks: totalFeedbacks,
-          qrCodes: totalQRCodes,
-          activeQRCodes,
-          scans: totalScansResult._sum.scanCount || 0,
-          ...cardStats,
+    // Root Cause Graph (konu -> bayi -> zaman dilimi -> etki)
+    const rootCauseSource = await prisma.feedback.findMany({
+      where: {
+        createdAt: { gte: startDate },
+        deletedAt: null,
+        OR: [{ sentiment: 'negative' }, { rating: { lte: 2 } }],
+      },
+      select: {
+        id: true,
+        rating: true,
+        sentiment: true,
+        topics: true,
+        createdAt: true,
+        qrCode: {
+          select: {
+            dealer: { select: { id: true, businessName: true, name: true } },
+          },
         },
       },
+      take: 1200,
+      orderBy: { createdAt: 'desc' },
     });
+
+    const rootTopicMap = new Map<
+      string,
+      { count: number; dealers: Map<string, number>; timeBuckets: Map<string, number> }
+    >();
+    for (const fb of rootCauseSource) {
+      const topicsRaw = Array.isArray(fb.topics) ? fb.topics : [];
+      const topics = topicsRaw.length > 0 ? topicsRaw : ['Genel Memnuniyetsizlik'];
+      const dealerName =
+        fb.qrCode?.dealer?.businessName || fb.qrCode?.dealer?.name || 'Bilinmeyen bayi';
+      const hour = new Date(fb.createdAt).getHours();
+      const timeBucket = hour < 12 ? 'Sabah' : hour < 17 ? 'Öğlen' : 'Akşam';
+
+      for (const t of topics.slice(0, 2)) {
+        const topic = String(t || 'Genel Memnuniyetsizlik');
+        const existing = rootTopicMap.get(topic) || {
+          count: 0,
+          dealers: new Map<string, number>(),
+          timeBuckets: new Map<string, number>(),
+        };
+        existing.count += 1;
+        existing.dealers.set(dealerName, (existing.dealers.get(dealerName) || 0) + 1);
+        existing.timeBuckets.set(timeBucket, (existing.timeBuckets.get(timeBucket) || 0) + 1);
+        rootTopicMap.set(topic, existing);
+      }
+    }
+
+    const rootCauseGraph = Array.from(rootTopicMap.entries())
+      .map(([topic, info]) => {
+        const topDealer = Array.from(info.dealers.entries()).sort((a, b) => b[1] - a[1])[0];
+        const topTime = Array.from(info.timeBuckets.entries()).sort((a, b) => b[1] - a[1])[0];
+        const impactScore = Math.min(100, Math.round((info.count / Math.max(1, totalFeedbacks)) * 1000));
+        return {
+          topic,
+          dealer: topDealer?.[0] || 'Bilinmeyen bayi',
+          timeBucket: topTime?.[0] || 'Bilinmiyor',
+          count: info.count,
+          impactScore,
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    // Tenant Benchmark + anomaly
+    const dealerBenchBase = await prisma.user.findMany({
+      where: { role: 'DEALER' },
+      select: {
+        id: true,
+        businessName: true,
+        name: true,
+        businessCategory: true,
+      },
+      take: 250,
+    });
+    const dealerBenchRows = await Promise.all(
+      dealerBenchBase.map(async (dealer) => {
+        const feedbacks = await prisma.feedback.findMany({
+          where: {
+            qrCode: { dealerId: dealer.id },
+            createdAt: { gte: startDate },
+            deletedAt: null,
+          },
+          select: { rating: true },
+          take: 500,
+        });
+        const avgRatingRaw =
+          feedbacks.length > 0 ? feedbacks.reduce((s, f) => s + (f.rating || 0), 0) / feedbacks.length : 0;
+        return {
+          dealerId: dealer.id,
+          dealerName: dealer.businessName || dealer.name || 'İsimsiz işletme',
+          segment: dealer.businessCategory || 'general',
+          feedbackCount: feedbacks.length,
+          avgRating: Number(avgRatingRaw.toFixed(2)),
+        };
+      })
+    );
+
+    const segmentStats = new Map<string, { ratings: number[] }>();
+    for (const row of dealerBenchRows) {
+      const seg = segmentStats.get(row.segment) || { ratings: [] };
+      if (row.feedbackCount >= 3) seg.ratings.push(row.avgRating);
+      segmentStats.set(row.segment, seg);
+    }
+
+    const tenantBenchmark = dealerBenchRows
+      .map((row) => {
+        const ratings = segmentStats.get(row.segment)?.ratings || [];
+        const segmentAvg =
+          ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : row.avgRating;
+        const variance =
+          ratings.length > 1
+            ? ratings.reduce((sum, r) => sum + Math.pow(r - segmentAvg, 2), 0) / ratings.length
+            : 0;
+        const stdDev = Math.sqrt(variance);
+        const zScore = stdDev > 0 ? (row.avgRating - segmentAvg) / stdDev : 0;
+        const deviation = Number((row.avgRating - segmentAvg).toFixed(2));
+        const anomaly =
+          row.feedbackCount >= 5 && (zScore <= -1.2 || zScore >= 1.8)
+            ? zScore <= -1.2
+              ? 'negative'
+              : 'positive'
+            : 'normal';
+        return {
+          dealerId: row.dealerId,
+          dealerName: row.dealerName,
+          segment: row.segment,
+          feedbackCount: row.feedbackCount,
+          avgRating: row.avgRating,
+          segmentAvg: Number(segmentAvg.toFixed(2)),
+          deviation,
+          anomaly,
+        };
+      })
+      .sort((a, b) => {
+        if (a.anomaly === b.anomaly) return Math.abs(b.deviation) - Math.abs(a.deviation);
+        if (a.anomaly === 'negative') return -1;
+        if (b.anomaly === 'negative') return 1;
+        if (a.anomaly === 'positive') return -1;
+        if (b.anomaly === 'positive') return 1;
+        return 0;
+      })
+      .slice(0, 20);
+
+    const fullData: Record<string, unknown> = {
+      totalUsers,
+      totalFeedbacks: totalFeedbacks + cardStats.reviews,
+      totalQRCodes,
+      avgRating: Number(avgRating.toFixed(1)),
+      userGrowth,
+      feedbackGrowth,
+      totalScans: totalScansResult._sum.scanCount || 0,
+      activeQRCodes,
+      sentimentBreakdown: {
+        positive: Math.round((positiveFeedbacks / totalSentiment) * 100),
+        neutral: Math.round((neutralFeedbacks / totalSentiment) * 100),
+        negative: Math.round((negativeFeedbacks / totalSentiment) * 100),
+      },
+      ratingDistribution,
+      dailyData,
+      heatmapData,
+      topDealers: formattedTopDealers,
+      recentActivity: formattedActivity,
+      cardStats,
+      comparison,
+      roleDistribution,
+      rootCauseGraph,
+      tenantBenchmark,
+      totals: {
+        users: totalUsers,
+        feedbacks: totalFeedbacks,
+        qrCodes: totalQRCodes,
+        activeQRCodes,
+        scans: totalScansResult._sum.scanCount || 0,
+        ...cardStats,
+      },
+    };
+
+    const sectionKeys: Record<string, string[]> = {
+      overview: ['totalUsers', 'totalFeedbacks', 'totalQRCodes', 'avgRating', 'userGrowth', 'feedbackGrowth', 'totalScans', 'activeQRCodes', 'sentimentBreakdown', 'ratingDistribution', 'comparison', 'roleDistribution', 'totals'],
+      trends: ['dailyData', 'heatmapData'],
+      dealers: ['topDealers', 'tenantBenchmark'],
+      root: ['rootCauseGraph'],
+      cards: ['cardStats'],
+      activity: ['recentActivity'],
+    };
+
+    let data = fullData;
+    if (sections && sections.length > 0) {
+      const allowed = new Set(sections.flatMap((s) => sectionKeys[s] ?? []));
+      data = Object.fromEntries(Object.entries(fullData).filter(([k]) => allowed.has(k)));
+    }
+
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Admin analytics error:', error);
     return NextResponse.json({ error: 'Analitik verileri getirilemedi' }, { status: 500 });
