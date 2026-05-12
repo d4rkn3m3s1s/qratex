@@ -65,7 +65,7 @@
     "framer-motion": "^11.18.2",
     "geist": "^1.7.0",
     "html5-qrcode": "^2.3.8",
-    "inngest": "^3.52.0",
+    "inngest": "^3.54.2",
     "jsonwebtoken": "^9.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.303.0",

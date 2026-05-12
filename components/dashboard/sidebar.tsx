@@ -265,13 +265,13 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
   const SidebarContent = ({ mobile = false }: { mobile?: boolean }) => (
     <div className={cn(
       'flex flex-col h-full',
-      mobile ? 'w-full' : isCollapsed ? 'w-[72px]' : 'w-64'
+      mobile ? 'w-full' : isCollapsed ? 'w-[72px]' : 'w-72'
     )}>
-      {/* Header — band height + border matches DashboardHeader (min-h-14 / sm h-16) */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 px-4 sm:h-16">
+      {/* Header — üst çizgi yüksekliği DashboardHeader ile aynı: min-h-14 sm:min-h-16 + py-2 sm:py-0 */}
+      <div className="flex min-h-14 shrink-0 items-center justify-between gap-1.5 border-b border-border/60 px-2 py-2 sm:min-h-16 sm:gap-2 sm:px-3 sm:py-0">
         <Link
           href="/"
-          className="flex min-h-0 min-w-0 cursor-pointer items-center gap-2 sm:gap-3 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-12 min-h-0 min-w-0 flex-1 items-center gap-2 sm:h-16 sm:gap-2.5 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
         >
           {mounted && (
             <>
@@ -279,41 +279,43 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
               <Image
                 src="/logo/logo.png"
                 alt={`${siteName} Logo`}
-                width={56}
-                height={56}
+                width={64}
+                height={64}
                 priority
-                className="hidden h-11 w-11 shrink-0 object-contain dark:block sm:h-[3rem] sm:w-[3rem]"
+                className="hidden h-10 w-10 shrink-0 object-contain dark:block sm:h-12 sm:w-12"
               />
               {/* Light theme logo (dark colored) */}
               <Image
                 src="/logo/logo-light.png"
                 alt={`${siteName} Logo`}
-                width={56}
-                height={56}
+                width={64}
+                height={64}
                 priority
-                className="block h-11 w-11 shrink-0 object-contain dark:hidden sm:h-[3rem] sm:w-[3rem]"
+                className="block h-10 w-10 shrink-0 object-contain dark:hidden sm:h-12 sm:w-12"
               />
               {(!isCollapsed || mobile) && (
-                <>
-                  {/* Dark theme font (light/white colored) */}
+                <div className="flex min-h-0 min-w-0 flex-1 items-center self-stretch">
+                  {/* Dark theme font */}
                   <Image
                     src="/logo/font.png"
                     alt={siteName}
                     width={180}
                     height={52}
                     priority
-                    className="hidden max-h-[2.5rem] w-auto shrink object-contain dark:block sm:max-h-[2.875rem]"
+                    sizes="(min-width: 1024px) 240px, 180px"
+                    className="hidden max-h-10 w-auto max-w-full object-contain object-left dark:block sm:max-h-12"
                   />
-                  {/* Light theme font (dark colored) */}
+                  {/* Light theme font */}
                   <Image
                     src="/logo/font-light.png"
                     alt={siteName}
                     width={180}
                     height={52}
                     priority
-                    className="block max-h-[2.5rem] w-auto shrink object-contain dark:hidden sm:max-h-[2.875rem]"
+                    sizes="(min-width: 1024px) 240px, 180px"
+                    className="block max-h-10 w-auto max-w-full object-contain object-left dark:hidden sm:max-h-12"
                   />
-                </>
+                </div>
               )}
             </>
           )}
@@ -324,7 +326,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
             size="icon"
             type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="hidden h-11 min-h-11 w-11 min-w-11 shrink-0 cursor-pointer touch-manipulation transition-colors duration-200 lg:flex"
+            className="hidden h-9 min-h-9 w-9 min-w-9 shrink-0 cursor-pointer touch-manipulation transition-colors duration-200 sm:h-10 sm:min-h-10 sm:w-10 sm:min-w-10 lg:flex"
             aria-label={isCollapsed ? t('appShell.sidebarExpand') : t('appShell.sidebarCollapse')}
           >
             <ChevronLeft
@@ -437,7 +439,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
         aria-label={t('appShell.sidebarPanelMenu')}
         className={cn(
           'app-sidebar-surface hidden lg:flex flex-col border-r border-border/60 backdrop-blur-md transition-all duration-300',
-          isCollapsed ? 'w-[72px]' : 'w-64'
+          isCollapsed ? 'w-[72px]' : 'w-72'
         )}
       >
         <SidebarContent />

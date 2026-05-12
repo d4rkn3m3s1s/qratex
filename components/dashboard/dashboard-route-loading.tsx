@@ -17,7 +17,7 @@ export default async function DashboardRouteLoading() {
       aria-label={ariaLabel}
     >
       <div className="flex min-h-dvh w-full overflow-x-hidden bg-background" aria-hidden>
-        <div className="hidden shrink-0 border-r border-border/40 bg-muted/20 lg:block lg:w-64" />
+        <div className="hidden shrink-0 border-r border-border/40 bg-muted/20 lg:block lg:w-72" />
         <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden px-3 sm:px-4 lg:px-6">
           <div className="-mx-3 mb-3 min-h-14 border-b border-border/60 bg-background/90 px-3 py-2 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 supports-[padding:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)] sm:-mx-4 sm:mb-4 sm:min-h-16 sm:px-4 lg:-mx-6 lg:px-6 sm:py-0">
             <div className="flex h-12 items-center gap-3 sm:h-16">
