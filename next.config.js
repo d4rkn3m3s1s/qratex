@@ -201,6 +201,14 @@ const nextConfig = {
       './generated-prisma-client/**/*darwin*',
       './generated-prisma-client/**/*windows*',
       './generated-prisma-client/**/*musl*',
+      // sharp / @img: Vercel linux-x64 dışındaki önceden derlenmiş ikilileri trace’ten çıkar
+      './node_modules/@img/sharp-darwin*/**/*',
+      './node_modules/@img/sharp-win32*/**/*',
+      './node_modules/@img/sharp-wasm32*/**/*',
+      './node_modules/@img/sharp-linuxmusl*/**/*',
+      './node_modules/@img/sharp-libvips-darwin*/**/*',
+      './node_modules/@img/sharp-libvips-win32*/**/*',
+      './node_modules/@img/sharp-libvips-linuxmusl*/**/*',
     ],
   },
   // Ağır native modüllerin server bundle’a yanlışlıkla tam çekilmesini azaltır (Vercel lambda boyutu).

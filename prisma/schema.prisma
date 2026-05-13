@@ -1,8 +1,9 @@
 generator client {
   provider      = "prisma-client-js"
   output        = "../generated-prisma-client"
-  // Vercel = rhel-openssl-3.0.x; native = yerel geliştirme. linux-musl (Alpine) kaldırıldı — serverless paket boyutu.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // Tek hedef: aynı OS’ta `native` + `rhel` iki Linux motoru üretip her lambda’da ~2× şişiriyordu.
+  // Vercel build Linux’ta çalışır; runtime da Linux — `native` yeterli.
+  binaryTargets = ["native"]
 }
 
 datasource db {
