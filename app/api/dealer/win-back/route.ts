@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getWinBackOfferMessageTr, isWinBackOfferId } from '@/lib/dealer/win-back-offers';

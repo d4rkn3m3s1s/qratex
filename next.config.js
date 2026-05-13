@@ -165,51 +165,97 @@ const withPWA = require('next-pwa')({
   ],
 });
 
+/**
+ * Sunucusuz trace’ten çıkarılacak yollar (Vercel 250MB unzipped).
+ * Hem `./` hem kök-relative: NFT / Turbopack / Linux cwd farkları için çoğaltılır.
+ */
+const OUTPUT_FILE_TRACING_EXCLUDE_GLOBS = [
+  'public/**/*',
+  'playwright-report/**/*',
+  'test-results/**/*',
+  'coverage/**/*',
+  '.jest-cache/**/*',
+  'scripts/**/*',
+  'docs/**/*',
+  '__tests__/**/*',
+  '.git/**/*',
+  'node_modules/.cache/**/*',
+  // Dev / test
+  'node_modules/playwright/**/*',
+  'node_modules/playwright-core/**/*',
+  'node_modules/@playwright/**/*',
+  'node_modules/jest/**/*',
+  'node_modules/@jest/**/*',
+  'node_modules/eslint/**/*',
+  'node_modules/@eslint/**/*',
+  'node_modules/typescript/**/*',
+  'node_modules/prisma/**/*',
+  'node_modules/@next/bundle-analyzer/**/*',
+  'node_modules/webpack/**/*',
+  'node_modules/ts-node/**/*',
+  'node_modules/@gltf-transform/**/*',
+  // esbuild: yalnızca linux-x64 kalır (Vercel)
+  'node_modules/@esbuild/darwin-arm64/**/*',
+  'node_modules/@esbuild/darwin-x64/**/*',
+  'node_modules/@esbuild/win32-arm64/**/*',
+  'node_modules/@esbuild/win32-ia32/**/*',
+  'node_modules/@esbuild/win32-x64/**/*',
+  'node_modules/@esbuild/linux-arm/**/*',
+  'node_modules/@esbuild/linux-arm64/**/*',
+  'node_modules/@esbuild/linux-ia32/**/*',
+  'node_modules/@esbuild/linux-loong64/**/*',
+  'node_modules/@esbuild/linux-mips64el/**/*',
+  'node_modules/@esbuild/linux-ppc64/**/*',
+  'node_modules/@esbuild/linux-riscv64/**/*',
+  'node_modules/@esbuild/linux-s390x/**/*',
+  'node_modules/@esbuild/aix-ppc64/**/*',
+  'node_modules/@esbuild/android-arm/**/*',
+  'node_modules/@esbuild/android-arm64/**/*',
+  'node_modules/@esbuild/android-x64/**/*',
+  'node_modules/@esbuild/freebsd-arm64/**/*',
+  'node_modules/@esbuild/freebsd-x64/**/*',
+  'node_modules/@esbuild/netbsd-x64/**/*',
+  'node_modules/@esbuild/openbsd-arm64/**/*',
+  'node_modules/@esbuild/openbsd-x64/**/*',
+  'node_modules/@esbuild/sunos-x64/**/*',
+  // Next SWC: linux x64 gnu dışı
+  'node_modules/@next/swc-win32-x64-msvc/**/*',
+  'node_modules/@next/swc-win32-arm64-msvc/**/*',
+  'node_modules/@next/swc-darwin-x64/**/*',
+  'node_modules/@next/swc-darwin-arm64/**/*',
+  'node_modules/@next/swc-linux-arm64-gnu/**/*',
+  'node_modules/@next/swc-linux-arm64-musl/**/*',
+  'node_modules/@next/swc-linux-x64-musl/**/*',
+  // Prisma özel çıktı — Linux dışı motorlar
+  'generated-prisma-client/**/*darwin*',
+  'generated-prisma-client/**/*windows*',
+  'generated-prisma-client/**/*musl*',
+  // sharp / @img
+  'node_modules/@img/sharp-darwin*/**/*',
+  'node_modules/@img/sharp-win32*/**/*',
+  'node_modules/@img/sharp-wasm32*/**/*',
+  'node_modules/@img/sharp-linuxmusl*/**/*',
+  'node_modules/@img/sharp-libvips-darwin*/**/*',
+  'node_modules/@img/sharp-libvips-win32*/**/*',
+  'node_modules/@img/sharp-libvips-linuxmusl*/**/*',
+];
+
+function expandOutputFileTracingExcludes(globs) {
+  const out = new Set();
+  for (const g of globs) {
+    out.add(g);
+    if (!g.startsWith('./')) out.add(`./${g}`);
+  }
+  return [...out];
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   // Vercel: `public/` içeriği statik olarak servis edilir; output file tracing bunu her lambda’ya
   // kopyalayınca 250MB+ uyarısı oluşuyordu. public’a sadece URL üzerinden erişilir (fs okuma yok).
   outputFileTracingExcludes: {
-    '*': [
-      './public/**/*',
-      './playwright-report/**/*',
-      './test-results/**/*',
-      './coverage/**/*',
-      './.jest-cache/**/*',
-      // Dev / test tooling — must not ship inside serverless traces (Vercel 250MB unzipped cap).
-      './node_modules/playwright/**/*',
-      './node_modules/playwright-core/**/*',
-      './node_modules/@playwright/**/*',
-      './node_modules/jest/**/*',
-      './node_modules/@jest/**/*',
-      './node_modules/eslint/**/*',
-      './node_modules/@eslint/**/*',
-      './node_modules/typescript/**/*',
-      './node_modules/prisma/**/*',
-      './node_modules/@next/bundle-analyzer/**/*',
-      './node_modules/webpack/**/*',
-      './node_modules/ts-node/**/*',
-      // Next SWC: keep only linux x64 on Vercel; drop other platform binaries if present in the install tree.
-      './node_modules/@next/swc-win32-x64-msvc/**/*',
-      './node_modules/@next/swc-win32-arm64-msvc/**/*',
-      './node_modules/@next/swc-darwin-x64/**/*',
-      './node_modules/@next/swc-darwin-arm64/**/*',
-      './node_modules/@next/swc-linux-arm64-gnu/**/*',
-      './node_modules/@next/swc-linux-arm64-musl/**/*',
-      // Prisma: custom output — drop engines for non-Linux deploy targets (Vercel = glibc linux / rhel).
-      './generated-prisma-client/**/*darwin*',
-      './generated-prisma-client/**/*windows*',
-      './generated-prisma-client/**/*musl*',
-      // sharp / @img: Vercel linux-x64 dışındaki önceden derlenmiş ikilileri trace’ten çıkar
-      './node_modules/@img/sharp-darwin*/**/*',
-      './node_modules/@img/sharp-win32*/**/*',
-      './node_modules/@img/sharp-wasm32*/**/*',
-      './node_modules/@img/sharp-linuxmusl*/**/*',
-      './node_modules/@img/sharp-libvips-darwin*/**/*',
-      './node_modules/@img/sharp-libvips-win32*/**/*',
-      './node_modules/@img/sharp-libvips-linuxmusl*/**/*',
-    ],
+    '*': expandOutputFileTracingExcludes(OUTPUT_FILE_TRACING_EXCLUDE_GLOBS),
   },
   // Ağır native modüllerin server bundle’a yanlışlıkla tam çekilmesini azaltır (Vercel lambda boyutu).
   serverExternalPackages: ['@prisma/client', 'prisma', 'sharp'],

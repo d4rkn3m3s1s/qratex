@@ -19,7 +19,7 @@ const updateSchema = z.object({
         .max(40),
 });
 
-export const DEFAULT_WIDGETS = [
+const DEFAULT_WIDGETS = [
     { id: "kpi-cards", visible: true, order: 1, label: "Özet İstatistik Kartları" },
     { id: "weekly-comparison", visible: true, order: 2, label: "Haftalık Karşılaştırma" },
     { id: "charts-row-1", visible: true, order: 3, label: "Haftalık Bilgi ve Duygu Dağılımı Grafikleri" },
