@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { registerSchema } from '@/lib/validations';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
@@ -16,9 +17,12 @@ export async function POST(request: NextRequest) {
       { error: 'auth.registerRateLimited' },
       {
         status: 429,
-        headers: limit.retryAfterMs
-          ? { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) }
-          : undefined,
+        headers: {
+          ...PRIVATE_NO_STORE_HEADERS,
+          ...(limit.retryAfterMs
+            ? { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) }
+            : {}),
+        },
       }
     );
   }
@@ -30,9 +34,7 @@ export async function POST(request: NextRequest) {
     const validatedData = registerSchema.safeParse(body);
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { name, email, password, role } = validatedData.data;
@@ -45,9 +47,7 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Bu email adresi zaten kayıtlı' },
-        { status: 400 }
-      );
+        { error: 'Bu email adresi zaten kayıtlı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Hash password
@@ -157,15 +157,13 @@ export async function POST(request: NextRequest) {
       message: emailSent
         ? 'Kayıt başarılı. E-postanıza gönderilen doğrulama linkine tıklayıp giriş yapın.'
         : 'Kayıt başarılı. Giriş yapmak için aşağıdaki doğrulama linkine tıklayın.',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const { captureApiError } = await import('@/lib/capture-api-error');
     captureApiError(error, { route: 'POST /api/auth/register', status: 500 });
     console.error('Registration error:', error);
     return NextResponse.json(
-      { error: 'auth.registerServerError' },
-      { status: 500 }
-    );
+      { error: 'auth.registerServerError' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

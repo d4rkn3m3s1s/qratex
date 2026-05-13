@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import {
   analyzeWithFallback,
   analyzeComprehensive,
@@ -23,21 +24,21 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 20; // requests per minute
 const RATE_WINDOW = 60 * 1000; // 1 minute
 
-function checkRateLimit(userId: string): boolean {
+function checkRateLimit(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
   const now = Date.now();
   const userLimit = rateLimitMap.get(userId);
 
   if (!userLimit || now > userLimit.resetAt) {
     rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW });
-    return true;
+    return { ok: true };
   }
 
   if (userLimit.count >= RATE_LIMIT) {
-    return false;
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((userLimit.resetAt - now) / 1000)) };
   }
 
   userLimit.count++;
-  return true;
+  return { ok: true };
 }
 
 function normalizeSentimentPercentages(counts: { positive: number; negative: number; neutral: number }) {
@@ -112,13 +113,20 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    if (!checkRateLimit(session.user.id)) {
+    const rlAnalyze = checkRateLimit(session.user.id);
+    if (!rlAnalyze.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            'Retry-After': String(rlAnalyze.retryAfterSec),
+          },
+        }
       );
     }
 
@@ -132,9 +140,7 @@ export async function POST(request: NextRequest) {
         const validatedData = analyzeSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const { text, feedbackId } = validatedData.data;
@@ -144,7 +150,13 @@ export async function POST(request: NextRequest) {
           analysis = await analyzeWithFallback(text, { dealerId });
         } catch (e) {
           if (e instanceof AiCostLimitExceededError) {
-            return NextResponse.json({ error: e.message }, { status: 429 });
+            return NextResponse.json(
+              { error: e.message },
+              {
+                status: 429,
+                headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': '3600' },
+              }
+            );
           }
           throw e;
         }
@@ -193,21 +205,19 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, analysis });
+        return NextResponse.json({ success: true, analysis }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── Toplu Analiz ──
       case 'bulk_analyze': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const validatedData = bulkAnalyzeSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const { feedbackIds } = validatedData.data;
@@ -227,7 +237,7 @@ export async function POST(request: NextRequest) {
           .map(f => ({ id: f.id, text: f.text! }));
 
         if (textsToAnalyze.length === 0) {
-          return NextResponse.json({ success: true, analyzed: 0 });
+          return NextResponse.json({ success: true, analyzed: 0 }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Bulk analyze
@@ -274,21 +284,19 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, analyzed: updatedCount, total: feedbackIds.length });
+        return NextResponse.json({ success: true, analyzed: updatedCount, total: feedbackIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── Tema Kümeleme ──
       case 'theme_clusters': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const validatedData = themeClusterSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const where: Record<string, unknown> = {};
@@ -323,7 +331,7 @@ export async function POST(request: NextRequest) {
             success: true,
             clusters: [],
             message: 'Yeterli geri bildirim verisi yok (en az 3 gerekli).',
-          });
+          }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const clusters = await clusterThemes(
@@ -375,21 +383,19 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        return NextResponse.json({ success: true, clusters });
+        return NextResponse.json({ success: true, clusters }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── AI İçgörü Raporu ──
       case 'insights': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const validatedData = insightsSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const { qrCodeId, startDate, endDate, period, type } = validatedData.data;
@@ -460,7 +466,7 @@ export async function POST(request: NextRequest) {
             success: true,
             insights: null,
             message: 'Yeterli geri bildirim verisi yok (en az 3 gerekli).',
-          });
+          }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Calculate stats
@@ -633,7 +639,7 @@ export async function POST(request: NextRequest) {
             topTopics,
           },
           themeClusters,
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── Ask AI (Doğal Dil Sorgulama) ── Tüm roller erişebilir
@@ -641,12 +647,25 @@ export async function POST(request: NextRequest) {
         const validatedData = askAISchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const { question, conversationId } = validatedData.data;
+        const conversationUserId = session.user.id;
+
+        let ownedConversation: { messages: unknown } | null = null;
+        if (conversationId) {
+          ownedConversation = await prisma.aIConversation.findUnique({
+            where: { id: conversationId, dealerId: conversationUserId },
+            select: { messages: true },
+          });
+          if (!ownedConversation) {
+            return NextResponse.json(
+              { error: 'Sohbet bulunamadı' },
+              { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+          }
+        }
 
         // Role-based data scoping
         const where: Record<string, unknown> = {};
@@ -741,18 +760,10 @@ export async function POST(request: NextRequest) {
 
         // Previous messages from conversation (son 12 mesaj - çok turlu sohbet)
         let previousMessages: { role: 'user' | 'assistant'; content: string }[] = [];
-        if (conversationId) {
-          try {
-            const conv = await prisma.aIConversation.findUnique({
-              where: { id: conversationId },
-              select: { messages: true },
-            });
-            if (conv?.messages) {
-              previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-12);
-            }
-          } catch {
-            // ignore
-          }
+        if (ownedConversation?.messages) {
+          previousMessages = (
+            ownedConversation.messages as { role: 'user' | 'assistant'; content: string }[]
+          ).slice(-12);
         }
 
         const answer = await askAI(question, {
@@ -780,21 +791,17 @@ export async function POST(request: NextRequest) {
         });
 
         // Save conversation (dealerId alanı tüm roller için userId olarak kullanılır)
-        const conversationUserId = session.user.id;
         let savedConversationId = conversationId;
         try {
-          if (conversationId) {
-            const existing = await prisma.aIConversation.findUnique({
-              where: { id: conversationId },
-              select: { messages: true },
-            });
-            const msgs = (existing?.messages as { role: string; content: string; timestamp: string }[]) || [];
+          if (conversationId && ownedConversation) {
+            const msgs =
+              (ownedConversation.messages as { role: string; content: string; timestamp: string }[]) || [];
             msgs.push(
               { role: 'user', content: question, timestamp: new Date().toISOString() },
               { role: 'assistant', content: answer || '', timestamp: new Date().toISOString() }
             );
-            await prisma.aIConversation.update({
-              where: { id: conversationId },
+            await prisma.aIConversation.updateMany({
+              where: { id: conversationId, dealerId: conversationUserId },
               data: { messages: msgs, updatedAt: new Date() },
             });
           } else {
@@ -818,21 +825,19 @@ export async function POST(request: NextRequest) {
           success: true,
           answer,
           conversationId: savedConversationId,
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── AI Chat (Legacy) ──
       case 'chat': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const validatedData = chatSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
-            { error: validatedData.error.errors[0].message },
-            { status: 400 }
-          );
+            { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const { message } = validatedData.data;
@@ -857,13 +862,13 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, response });
+        return NextResponse.json({ success: true, response }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── AI Settings ──
       case 'get_settings': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // ADMIN: belirli dealer ayarlarını veya tüm ayarları getirebilir
@@ -874,14 +879,14 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({
             success: true,
             settings: settings || getDefaultAISettings(),
-          });
+          }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         if (session.user.role === 'ADMIN' && body?.all) {
           const allSettings = await prisma.aISettings.findMany({
             include: { dealer: { select: { id: true, name: true, businessName: true } } },
           });
-          return NextResponse.json({ success: true, allSettings });
+          return NextResponse.json({ success: true, allSettings }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const settings = await prisma.aISettings.findUnique({
@@ -891,12 +896,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: true,
           settings: settings || getDefaultAISettings(),
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'update_settings': {
         if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const settingsData = body;
@@ -949,13 +954,13 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, settings: updated });
+        return NextResponse.json({ success: true, settings: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // ── AI Usage Stats ──
       case 'usage_stats': {
         if (session.user.role !== 'ADMIN') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const logs = getRecentUsageLogs(100);
@@ -968,18 +973,18 @@ export async function POST(request: NextRequest) {
           success: true,
           recentLogs: logs,
           dbLogs,
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       default:
-        return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 });
+        return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
   } catch (error) {
     console.error('Error in AI endpoint:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { error: 'AI analizi sırasında bir hata oluştu' },
-      { status: 500 }
-    );
+      { error: 'AI analizi sırasında bir hata oluştu' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -1,0 +1,19 @@
+/**
+ * Müşteri paneli mobil cilası — yalnızca customer layout içinde import edilir.
+ * Tüm müşteri sayfalarına ortak davranış (kaydırma, metin boyutu, taşma).
+ */
+.customer-shell {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (max-width: 639px) {
+  .customer-shell #dashboard-main {
+    overscroll-behavior-y: contain;
+  }
+
+  /* Yatay kaydırmalı şeritlerde dikey sayfa kaydırmasını azaltır */
+  .customer-shell #dashboard-main [role='tablist'] {
+    overscroll-behavior-x: contain;
+  }
+}

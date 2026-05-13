@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { adminApiKeyCreateSchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -19,12 +20,13 @@ export async function GET() {
   try {
     const list = await prisma.apiKey.findMany({
       orderBy: { createdAt: 'desc' },
+      take: 500,
       include: { createdBy: { select: { name: true, email: true } } },
     });
-    return NextResponse.json(list.map((k) => ({ ...k, keyHash: undefined })));
+    return NextResponse.json(list.map((k) => ({ ...k, keyHash: undefined })), { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('API keys GET error:', e);
-    return NextResponse.json({ error: 'API anahtarları listelenemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'API anahtarları listelenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -35,7 +37,13 @@ export async function POST(request: NextRequest) {
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-      { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+      {
+        status: 429,
+        headers: {
+          ...PRIVATE_NO_STORE_HEADERS,
+          ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+        },
+      }
     );
   }
   try {
@@ -43,11 +51,11 @@ export async function POST(request: NextRequest) {
     const parsed = adminApiKeyCreateSchema.safeParse(raw);
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
-      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const { name: nameOpt, scope: scopeOpt } = parsed.data;
     const name = (nameOpt?.trim() || 'Yeni anahtar').trim();
-    if (!name) return NextResponse.json({ error: 'İsim gerekli' }, { status: 400 });
+    if (!name) return NextResponse.json({ error: 'İsim gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     const rawKey = `qrx_${randomBytes(24).toString('base64url')}`;
     const keyHash = hashKey(rawKey);
     const keyPrefix = rawKey.slice(0, 8);
@@ -77,10 +85,10 @@ export async function POST(request: NextRequest) {
       ...apiKey,
       keyHash: undefined,
       rawKey, // Sadece bu yanıtta; bir daha gösterilmez
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('API key POST error:', e);
-    return NextResponse.json({ error: 'API anahtarı oluşturulamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'API anahtarı oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -89,11 +97,11 @@ export async function DELETE(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 });
+  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   try {
     const existing = await prisma.apiKey.findUnique({ where: { id }, select: { id: true, name: true, keyPrefix: true } });
     if (!existing) {
-      return NextResponse.json({ error: 'API anahtarı bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'API anahtarı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     await prisma.apiKey.delete({ where: { id } });
     const auditMeta = getAuditRequestMeta(request);
@@ -107,9 +115,9 @@ export async function DELETE(request: NextRequest) {
         ...auditMeta,
       },
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('API key DELETE error:', e);
-    return NextResponse.json({ error: 'Anahtar silinemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Anahtar silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

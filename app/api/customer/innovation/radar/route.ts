@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { coarseLocationBucket, haversineKm } from '@/lib/innovation-geo';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.nearbyRadar) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Özellik devre dışı' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -20,7 +24,10 @@ export async function GET(request: NextRequest) {
   const radiusKm = Math.min(parseFloat(searchParams.get('radiusKm') || '20') || 20, 80);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return NextResponse.json({ error: 'lat ve lng gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'lat ve lng gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const bucket = coarseLocationBucket(lat, lng);
@@ -50,15 +57,18 @@ export async function GET(request: NextRequest) {
   }
 
   if (nearbyDealerIds.size === 0) {
-    return NextResponse.json({
-      regionBucket: bucket,
-      radiusKm,
-      topThemes: [],
-      experienceHints: [],
-      discoveryCards: [],
-      disclaimer:
-        'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
-    });
+    return NextResponse.json(
+      {
+        regionBucket: bucket,
+        radiusKm,
+        topThemes: [],
+        experienceHints: [],
+        discoveryCards: [],
+        disclaimer:
+          'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const dealerIdList = [...nearbyDealerIds];
@@ -89,7 +99,7 @@ export async function GET(request: NextRequest) {
         productId: { not: null },
       },
       select: { product: { select: { name: true } } },
-      take: 2500,
+      take: 1000,
     }),
   ]);
 
@@ -138,13 +148,16 @@ export async function GET(request: NextRequest) {
         }))
       : discoveryCards;
 
-  return NextResponse.json({
-    regionBucket: bucket,
-    radiusKm,
-    topThemes,
-    experienceHints,
-    discoveryCards: discoveryFallback,
-    disclaimer:
-      'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
-  });
+  return NextResponse.json(
+    {
+      regionBucket: bucket,
+      radiusKm,
+      topThemes,
+      experienceHints,
+      discoveryCards: discoveryFallback,
+      disclaimer:
+        'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

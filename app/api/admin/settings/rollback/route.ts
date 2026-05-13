@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     const raw = await request.json();
     const parsed = schema.safeParse(raw);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 });
+      return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const entry = await prisma.auditLog.findUnique({
@@ -30,18 +31,18 @@ export async function POST(request: NextRequest) {
       select: { id: true, entity: true, oldData: true, newData: true },
     });
     if (!entry || entry.entity !== 'settings') {
-      return NextResponse.json({ error: 'Audit kaydı bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'Audit kaydı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const oldData = entry.oldData;
     if (!oldData || typeof oldData !== 'object' || Array.isArray(oldData)) {
-      return NextResponse.json({ error: 'Bu kayıt rollback için uygun değil' }, { status: 400 });
+      return NextResponse.json({ error: 'Bu kayıt rollback için uygun değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const map = oldData as SettingsMap;
     const keys = Object.keys(map);
     if (keys.length === 0) {
-      return NextResponse.json({ error: 'Rollback edilecek ayar bulunamadı' }, { status: 400 });
+      return NextResponse.json({ error: 'Rollback edilecek ayar bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.settings.findMany({
@@ -78,9 +79,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, restoredKeys: keys });
+    return NextResponse.json({ success: true, restoredKeys: keys }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Settings rollback error:', error);
-    return NextResponse.json({ error: 'Rollback başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Rollback başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

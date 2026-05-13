@@ -113,7 +113,7 @@ export default function CustomerNearbyPage() {
         );
         setLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 25000, maximumAge: 120_000 }
     );
   };
 
@@ -143,10 +143,6 @@ export default function CustomerNearbyPage() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    getLocation();
-  }, []);
 
   useEffect(() => {
     fetchNearby();
@@ -191,6 +187,29 @@ export default function CustomerNearbyPage() {
 
   return (
     <div className="space-y-6">
+      {/* Mobil: üstte tek parmakla erişilebilir konum CTA */}
+      <div className="sm:hidden space-y-1.5">
+        <Button
+          type="button"
+          variant={latitude === null && longitude === null ? 'default' : 'outline'}
+          onClick={getLocation}
+          disabled={locating}
+          className="w-full min-h-11 gap-2 touch-manipulation font-medium justify-center"
+        >
+          <Navigation className={`h-4 w-4 shrink-0 ${locating ? 'animate-spin' : ''}`} />
+          {locating
+            ? t('customerNearby.locationFetching')
+            : latitude === null && longitude === null
+              ? t('customerNearby.useMyLocation')
+              : t('customerNearby.refreshLocation')}
+        </Button>
+        {latitude !== null && longitude !== null ? (
+          <p className="text-center text-[11px] text-muted-foreground leading-snug px-1">
+            {t('customerNearby.mobileTopLocationHint')}
+          </p>
+        ) : null}
+      </div>
+
       <DashboardPageHeading
         title={t('customerNearby.title')}
         description={t('customerNearby.description')}
@@ -208,6 +227,27 @@ export default function CustomerNearbyPage() {
           {t('customerNearby.description')}
         </p>
       </div>
+
+      {latitude === null && longitude === null && (
+        <Card className="border-primary/25 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('customerNearby.shareLocationTitle')}</CardTitle>
+            <CardDescription className="text-pretty">{t('customerNearby.shareLocationBody')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">{t('customerNearby.iosLocationNote')}</p>
+            <Button
+              type="button"
+              onClick={getLocation}
+              disabled={locating}
+              className="w-full gap-2 touch-manipulation sm:w-auto max-sm:hidden min-h-10"
+            >
+              <Navigation className={`h-4 w-4 shrink-0 ${locating ? 'animate-spin' : ''}`} />
+              {locating ? t('customerNearby.locationFetching') : t('customerNearby.useMyLocation')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -228,7 +268,7 @@ export default function CustomerNearbyPage() {
           <div className="space-y-2">
             <label className="text-sm text-muted-foreground">{t('customerNearby.filters.category')}</label>
             <select
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              className="h-11 min-h-11 w-full rounded-md border bg-background px-3 text-base sm:text-sm touch-manipulation"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
@@ -240,7 +280,7 @@ export default function CustomerNearbyPage() {
             </select>
           </div>
           <div className="flex items-end">
-            <Button variant="outline" onClick={fetchNearby} className="gap-2 w-full">
+            <Button variant="outline" onClick={fetchNearby} className="gap-2 w-full min-h-10 touch-manipulation">
               <RefreshCw className="h-4 w-4" />
               {t('customerNearby.filters.refreshList')}
             </Button>
@@ -392,7 +432,7 @@ export default function CustomerNearbyPage() {
                       ? t('customerNearby.locationHelpTimeout')
                       : t('customerNearby.locationHelpGeneric')}
                 </p>
-                <Button onClick={getLocation} disabled={locating} className="gap-2">
+                <Button onClick={getLocation} disabled={locating} className="gap-2 max-sm:hidden touch-manipulation min-h-10 w-full sm:w-auto">
                   <Navigation className={`h-4 w-4 ${locating ? 'animate-spin' : ''}`} />
                   {locating ? t('customerNearby.locationFetching') : t('customerNearby.useMyLocation')}
                 </Button>
@@ -455,7 +495,7 @@ export default function CustomerNearbyPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full gap-2"
+                      className="w-full gap-2 min-h-10 touch-manipulation"
                       asChild
                     >
                       <a
@@ -471,7 +511,7 @@ export default function CustomerNearbyPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full gap-2"
+                    className="w-full gap-2 min-h-10 touch-manipulation"
                     asChild={!!venue.phone}
                     disabled={!venue.phone}
                   >

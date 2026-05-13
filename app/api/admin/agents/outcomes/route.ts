@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { memoryAttachOutcome, memoryGetRunById } from '@/lib/agent-run-store';
 import { z } from 'zod';
 
@@ -24,13 +25,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = outcomeSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const db = prisma as any;
     if (typeof db?.agentOutcome?.create !== 'function' || typeof db?.agentDecision?.findUnique !== 'function') {
       const run = memoryGetRunById(parsed.data.decisionId.split('-decision-')[0]);
-      if (!run) return NextResponse.json({ error: 'Decision bulunamadı' }, { status: 404 });
+      if (!run) return NextResponse.json({ error: 'Decision bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       const outcome = {
         id: `${parsed.data.decisionId}-outcome-${Date.now()}`,
         decisionId: parsed.data.decisionId,
@@ -41,11 +42,11 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString(),
       };
       memoryAttachOutcome(parsed.data.decisionId.split('-decision-')[0], outcome);
-      return NextResponse.json({ success: true, outcome, persistence: 'memory' });
+      return NextResponse.json({ success: true, outcome, persistence: 'memory' }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const decision = await db.agentDecision.findUnique({ where: { id: parsed.data.decisionId } });
-    if (!decision) return NextResponse.json({ error: 'Decision bulunamadı' }, { status: 404 });
+    if (!decision) return NextResponse.json({ error: 'Decision bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
 
     const outcome = await db.agentOutcome.create({
       data: {
@@ -57,9 +58,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, outcome });
+    return NextResponse.json({ success: true, outcome }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating outcome:', error);
-    return NextResponse.json({ error: 'Outcome kaydı oluşturulamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Outcome kaydı oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

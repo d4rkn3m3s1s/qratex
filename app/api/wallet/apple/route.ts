@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { createPkPass, generateSerialNumber } from '@/lib/wallet';
 
 
@@ -17,16 +18,12 @@ export async function GET(request: NextRequest) {
     
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Giriş yapmanız gerekiyor' },
-        { status: 401 }
-      );
+        { error: 'Giriş yapmanız gerekiyor' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     
     if (session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
-        { error: 'Sadece müşteriler kart indirebilir' },
-        { status: 403 }
-      );
+        { error: 'Sadece müşteriler kart indirebilir' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { searchParams } = new URL(request.url);
@@ -57,16 +54,12 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       return NextResponse.json(
-        { error: 'Kart sistemi kullanılamıyor' },
-        { status: 500 }
-      );
+        { error: 'Kart sistemi kullanılamıyor' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Aktif kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Aktif kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get user details
@@ -83,9 +76,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Kullanıcı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Generate serial number
@@ -107,17 +98,15 @@ export async function GET(request: NextRequest) {
     return new NextResponse(new Uint8Array(pkpassBuffer), {
       status: 200,
       headers: {
+        ...PRIVATE_NO_STORE_HEADERS,
         'Content-Type': 'application/vnd.apple.pkpass',
         'Content-Disposition': `attachment; filename="qratex-card-${card.id.slice(-8)}.pkpass"`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error) {
     console.error('Error generating Apple Wallet pass:', error);
     return NextResponse.json(
-      { error: 'Kart oluşturulamadı' },
-      { status: 500 }
-    );
+      { error: 'Kart oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -130,7 +119,7 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
     
     if (!session?.user || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json({ available: false, reason: 'unauthorized' });
+      return NextResponse.json({ available: false, reason: 'unauthorized' }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Check if certificates are configured
@@ -158,8 +147,8 @@ export async function POST(request: NextRequest) {
       available: hasCard,
       configured: hasCertificates,
       reason: !hasCard ? 'no_card' : !hasCertificates ? 'not_configured' : 'ready',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
-    return NextResponse.json({ available: false, reason: 'error' });
+    return NextResponse.json({ available: false, reason: 'error' }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

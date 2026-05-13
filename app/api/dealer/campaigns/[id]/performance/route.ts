@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 
@@ -29,10 +30,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     select: { id: true, dealerId: true, title: true, message: true, status: true, sentAt: true, sentCount: true },
   });
   if (!campaign) {
-    return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
   if (session.user.role === 'DEALER' && campaign.dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -82,5 +83,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
     note:
       'utm_campaign değerleri kampanya başlığıyla kısmen eşleşir; kesin ROI için UTM şablonunu standartlaştırın.',
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

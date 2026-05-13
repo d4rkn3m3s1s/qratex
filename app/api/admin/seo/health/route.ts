@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getSeoSettingsFull } from '@/lib/seo-settings';
 
 
@@ -136,5 +137,5 @@ export async function GET() {
     failedCount,
     totalChecks: checks.length,
     checkedAt: new Date().toISOString(),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getSpinRules, pickSpinPrize } from '@/lib/points-rules';
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized', canSpin: false }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized', canSpin: false }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const userId = session.user.id;
@@ -45,17 +46,13 @@ export async function POST(request: NextRequest) {
 
     if (!spinRules.enabled) {
       return NextResponse.json(
-        { error: 'Çark özelliği şu an pasif', canSpin: false },
-        { status: 400 }
-      );
+        { error: 'Çark özelliği şu an pasif', canSpin: false }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const spinCount = await getTodaySpinCount(userId);
     if (spinCount >= spinRules.dailyLimit) {
       return NextResponse.json(
-        { error: 'Bugün zaten çevirdiniz', canSpin: false },
-        { status: 400 }
-      );
+        { error: 'Bugün zaten çevirdiniz', canSpin: false }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const prize = pickSpinPrize(matrix);
@@ -123,9 +120,7 @@ export async function POST(request: NextRequest) {
 
     if (!result) {
       return NextResponse.json(
-        { error: 'Bugün zaten çevirdiniz', canSpin: false },
-        { status: 400 }
-      );
+        { error: 'Bugün zaten çevirdiniz', canSpin: false }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const resBody = {
@@ -142,15 +137,13 @@ export async function POST(request: NextRequest) {
       remainingToday: 0,
     };
     if (idemKey) await storeIdempotency(idemKey, 'spin', 200, resBody);
-    return NextResponse.json(resBody);
+    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const { captureApiError } = await import('@/lib/capture-api-error');
     captureApiError(error, { route: 'POST /api/gamification/spin', status: 500 });
     console.error('Spin error:', error);
     return NextResponse.json(
-      { error: 'Çark çevrilemedi' },
-      { status: 500 }
-    );
+      { error: 'Çark çevrilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -159,7 +152,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ canSpin: false, error: 'Not authenticated' }, { status: 200 });
+      return NextResponse.json({ canSpin: false, error: 'Not authenticated' }, { status: 200 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const userId = session.user.id;
@@ -194,7 +187,7 @@ export async function GET() {
         type: prize.type,
         value: prize.value,
       })),
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const { captureApiError } = await import('@/lib/capture-api-error');
     captureApiError(error, { route: 'GET /api/gamification/spin' });
@@ -202,7 +195,7 @@ export async function GET() {
     return NextResponse.json({
       canSpin: false,
       error: 'Durum kontrol edilemedi',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import {
   deleteAnalyticsEventsOlderThan,
   countAnalyticsEventsOlderThan,
@@ -25,10 +26,10 @@ export async function GET(request: NextRequest) {
       success: true,
       olderThanDays: days,
       deletableCount: count,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('Analytics cleanup count error:', e);
-    return NextResponse.json({ success: false, error: 'Sayılamadı' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Sayılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -47,9 +48,9 @@ export async function POST(request: NextRequest) {
       success: true,
       deletedCount: deleted,
       olderThanDays: days,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('Analytics cleanup delete error:', e);
-    return NextResponse.json({ success: false, error: 'Temizlik yapılamadı' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Temizlik yapılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

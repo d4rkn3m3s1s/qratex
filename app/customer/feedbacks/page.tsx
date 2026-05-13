@@ -138,6 +138,9 @@ function CustomerFeedbacksContent() {
 
       if (reviewData.success && reviewData.reviews) {
         setConsumptionReviews(reviewData.reviews);
+        if (reviewData.truncated && typeof reviewData.count === 'number') {
+          toast.info(`${tc('customerFeedbacks.reviewsListCapped')} ${reviewData.count}`);
+        }
       }
 
       if (remedyData.offers && Array.isArray(remedyData.offers)) {
@@ -296,7 +299,7 @@ function CustomerFeedbacksContent() {
                 </p>
               </div>
             </div>
-            <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Button asChild variant="outline" size="sm" className="w-full shrink-0 min-h-10 touch-manipulation sm:w-auto">
               <Link href="/customer/remedy">
                 {tc('customerFeedbacks.seeAll')}
                 <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -577,7 +580,7 @@ function CustomerFeedbacksContent() {
                           {formatRelativeTime(feedback.createdAt)}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2" asChild>
+                          <Button variant="ghost" size="sm" className="min-h-10 h-auto touch-manipulation gap-1.5 px-3 py-2 text-xs sm:min-h-9" asChild>
                             <Link href={`/customer/feedbacks/${feedback.id}/journey`}>
                               <Footprints className="h-3.5 w-3.5" />
                               Yolculuk

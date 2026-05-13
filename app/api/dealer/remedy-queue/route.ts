@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     take: 100,
     include: {
-      user: { select: { id: true, name: true, email: true } },
+      user: { select: { id: true, name: true } },
       feedback: {
         select: {
           id: true,
@@ -43,5 +44,5 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ success: true, offers });
+  return NextResponse.json({ success: true, offers }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

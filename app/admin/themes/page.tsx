@@ -164,11 +164,11 @@ export default function AdminThemesPage() {
       const res = await fetch(themeAdminSettingsListUrl());
       const data = await res.json();
       
-      if (data.raw) {
+      if (data.entries && Array.isArray(data.entries)) {
         let nextActiveTheme = activeThemeId;
         let nextCustomColors = customColors;
 
-        data.raw.forEach((setting: { key: string; value: unknown }) => {
+        data.entries.forEach((setting: { key: string; value: unknown }) => {
           if (setting.key === THEME_SETTINGS_KEYS.activeTheme && typeof setting.value === 'string') {
             nextActiveTheme = setting.value;
           }

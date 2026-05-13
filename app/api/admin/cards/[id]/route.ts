@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { updateCardStatusSchema } from '@/lib/validations';
 
 
@@ -63,21 +64,17 @@ export async function GET(
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     return NextResponse.json({
       success: true,
       card,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching card:', error);
     return NextResponse.json(
-      { error: 'Kart bilgisi alınamadı' },
-      { status: 500 }
-    );
+      { error: 'Kart bilgisi alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -100,9 +97,7 @@ export async function PATCH(
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { status, blockReason } = validatedData.data;
@@ -113,9 +108,7 @@ export async function PATCH(
 
     if (!existingCard) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Güncelleme verisi
@@ -157,13 +150,11 @@ export async function PATCH(
       success: true,
       message: status === 'BLOCKED' ? 'Kart bloklandı' : 'Kart durumu güncellendi',
       card,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating card:', error);
     return NextResponse.json(
-      { error: 'Kart güncellenemedi' },
-      { status: 500 }
-    );
+      { error: 'Kart güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -192,9 +183,7 @@ export async function DELETE(
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Önce ilişkili kayıtları sil
@@ -246,12 +235,10 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       message: 'Kart ve ilişkili kayıtlar silindi',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting card:', error);
     return NextResponse.json(
-      { error: 'Kart silinemedi' },
-      { status: 500 }
-    );
+      { error: 'Kart silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

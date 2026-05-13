@@ -17,6 +17,15 @@ import {
   normalizePointsMatrix,
   POINTS_MATRIX_SETTING_KEY,
 } from '@/lib/points-rules';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+
+const SETTINGS_LIST_SELECT = {
+  id: true,
+  key: true,
+  category: true,
+  value: true,
+  updatedAt: true,
+} as const;
 
 const THEME_SETTING_KEYS = new Set<string>(Object.values(THEME_SETTINGS_KEYS));
 
@@ -52,21 +61,26 @@ export async function GET(request: NextRequest) {
     const settings = await prisma.settings.findMany({
       where,
       orderBy: { category: 'asc' },
+      select: SETTINGS_LIST_SELECT,
+      take: 5000,
     });
 
     // If specific key requested, return single value
     if (key && settings.length === 1) {
-      return NextResponse.json({ setting: settings[0] });
+      return NextResponse.json({ setting: settings[0] }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (key === POINTS_MATRIX_SETTING_KEY && settings.length === 0) {
-      return NextResponse.json({
-        setting: {
-          key: POINTS_MATRIX_SETTING_KEY,
-          value: getDefaultPointsMatrix(),
-          category: 'gamification',
+      return NextResponse.json(
+        {
+          setting: {
+            key: POINTS_MATRIX_SETTING_KEY,
+            value: getDefaultPointsMatrix(),
+            category: 'gamification',
+          },
         },
-      });
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Group by category
@@ -78,12 +92,27 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<string, Record<string, unknown>>);
 
-    return NextResponse.json({ settings: grouped, raw: settings });
+    const entries = settings.map((s) => ({
+      id: s.id,
+      key: s.key,
+      category: s.category,
+      value: s.value,
+      updatedAt: s.updatedAt,
+    }));
+
+    return NextResponse.json(
+      {
+        settings: grouped,
+        entries,
+        meta: { keysCount: settings.length },
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching settings:', error);
     return NextResponse.json(
       { error: 'Ayarlar getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -104,7 +133,7 @@ export async function PUT(request: NextRequest) {
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -133,6 +162,7 @@ export async function PUT(request: NextRequest) {
         value: normalizedValue as Prisma.InputJsonValue,
         category: resolvedCategory,
       },
+      select: SETTINGS_LIST_SELECT,
     });
 
     // Create audit log - handle null value properly
@@ -155,12 +185,12 @@ export async function PUT(request: NextRequest) {
     if (isThemeSetting(key, resolvedCategory)) {
       revalidatePublicThemeSettings();
     }
-    return NextResponse.json({ success: true, setting });
+    return NextResponse.json({ success: true, setting }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating setting:', error);
     return NextResponse.json(
       { error: 'Ayar güncellenemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -178,7 +208,13 @@ export async function POST(request: NextRequest) {
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
       );
     }
 
@@ -188,7 +224,7 @@ export async function POST(request: NextRequest) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
       return NextResponse.json(
         { error: msg, details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     const { settings } = parsed.data;
@@ -246,12 +282,12 @@ export async function POST(request: NextRequest) {
     if (settings.some((s: { key: string }) => THEME_SETTING_KEYS.has(s.key))) {
       revalidatePublicThemeSettings();
     }
-    return NextResponse.json({ success: true, count: results.length });
+    return NextResponse.json({ success: true, count: results.length }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error batch updating settings:', error);
     return NextResponse.json(
       { error: 'Ayarlar toplu güncellenemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

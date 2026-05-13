@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { SEO_SETTINGS_KEY } from '@/lib/seo-settings';
 
 
@@ -16,7 +17,7 @@ export async function GET() {
       where: { key: SEO_SETTINGS_KEY },
       select: { id: true },
     });
-    if (!seoSetting) return NextResponse.json({ entries: [] });
+    if (!seoSetting) return NextResponse.json({ entries: [] }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     const entries = await prisma.auditLog.findMany({
       where: { entity: 'settings', entityId: seoSetting.id },
@@ -31,9 +32,9 @@ export async function GET() {
         user: { select: { email: true, name: true } },
       },
     });
-    return NextResponse.json({ entries });
+    return NextResponse.json({ entries }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('SEO audit GET error:', e);
-    return NextResponse.json({ error: 'Geçmiş getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Geçmiş getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

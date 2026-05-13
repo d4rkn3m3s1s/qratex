@@ -228,7 +228,7 @@ export default function DealerSettingsPage() {
         setGettingLocation(false);
         toast.error(t('dealerSettings.locationFetchError'));
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 22000, maximumAge: 120_000 }
     );
   };
 

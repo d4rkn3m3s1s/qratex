@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { createProductSchema } from '@/lib/validations';
 
 
@@ -17,7 +18,15 @@ export async function GET(request: NextRequest) {
     const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const categoryId = searchParams.get('categoryId');
+    const categoryIdRaw = searchParams.get('categoryId');
+    const categoryId =
+      categoryIdRaw && categoryIdRaw.length <= 64 ? categoryIdRaw.trim() : null;
+    if (categoryIdRaw && categoryIdRaw.length > 64) {
+      return NextResponse.json(
+        { error: 'Geçersiz kategori' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
     const where: any = {
       OR: [
@@ -34,6 +43,7 @@ export async function GET(request: NextRequest) {
     const products = await prisma.product.findMany({
       where,
       orderBy: { name: 'asc' },
+      take: 500,
       include: {
         category: {
           select: {
@@ -48,13 +58,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       products,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching products:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { error: 'Ürünler getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'Ürünler getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -73,9 +83,7 @@ export async function POST(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { name, description, price, categoryId, image } = validatedData.data;
@@ -87,17 +95,13 @@ export async function POST(request: NextRequest) {
 
     if (!category) {
       return NextResponse.json(
-        { error: 'Kategori bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kategori bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Kategori global veya bayiye ait mi?
     if (category.dealerId && category.dealerId !== session.user.id) {
       return NextResponse.json(
-        { error: 'Bu kategoriye erişim yetkiniz yok' },
-        { status: 403 }
-      );
+        { error: 'Bu kategoriye erişim yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const product = await prisma.product.create({
@@ -123,12 +127,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       product,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating product:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { error: 'Ürün oluşturulamadı' },
-      { status: 500 }
-    );
+      { error: 'Ürün oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

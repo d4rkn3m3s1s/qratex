@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 function toDateOnly(d: Date): Date {
   const copy = new Date(d);
@@ -32,6 +33,8 @@ async function runPreagg(request: NextRequest) {
     const dealers = await prisma.user.findMany({
       where: { role: 'DEALER' },
       select: { id: true },
+      orderBy: { id: 'asc' },
+      take: 8000,
     });
 
     let upserted = 0;
@@ -43,49 +46,90 @@ async function runPreagg(request: NextRequest) {
         const dateEnd = new Date(dateStart);
         dateEnd.setDate(dateEnd.getDate() + 1);
 
-        // QR feedbacks for this dealer on this date
-        const qrFeedbacks = await prisma.feedback.findMany({
-          where: {
-            qrCode: { dealerId: dealer.id },
-            createdAt: { gte: dateStart, lt: dateEnd },
-            deletedAt: null,
-          },
-          select: { rating: true, sentiment: true },
-        });
+        const qrFeedbackWhere = {
+          qrCode: { dealerId: dealer.id },
+          createdAt: { gte: dateStart, lt: dateEnd },
+          deletedAt: null,
+        };
+
+        const [bySentiment, qrAgg] = await Promise.all([
+          prisma.feedback.groupBy({
+            by: ['sentiment'],
+            where: qrFeedbackWhere,
+            _count: { _all: true },
+          }),
+          prisma.feedback.aggregate({
+            where: qrFeedbackWhere,
+            _sum: { rating: true },
+            _count: { _all: true },
+          }),
+        ]);
+
+        let qrPos = 0;
+        let qrNeu = 0;
+        let qrNeg = 0;
+        for (const row of bySentiment) {
+          const c = row._count._all;
+          if (row.sentiment === 'positive') qrPos += c;
+          else if (row.sentiment === 'negative') qrNeg += c;
+          else qrNeu += c;
+        }
+
+        const qrN = qrAgg._count._all;
+        const qrSum = qrAgg._sum.rating ?? 0;
 
         let consumptionCount = 0;
-        let consumptionReviews: { rating: number }[] = [];
+        let consumptionReviewCount = 0;
+        let revSum = 0;
+        let revPos = 0;
+        let revNeu = 0;
+        let revNeg = 0;
         try {
-          const consumptions = await prisma.consumption.findMany({
-            where: {
-              dealerId: dealer.id,
-              createdAt: { gte: dateStart, lt: dateEnd },
-            },
-            include: { review: { select: { rating: true } } },
-          });
-          consumptionCount = consumptions.length;
-          consumptionReviews = consumptions
-            .filter((c: any) => c.review)
-            .map((c: any) => ({ rating: c.review.rating }));
+          const [cc, revAgg, revByRating] = await Promise.all([
+            prisma.consumption.count({
+              where: {
+                dealerId: dealer.id,
+                createdAt: { gte: dateStart, lt: dateEnd },
+              },
+            }),
+            prisma.consumptionReview.aggregate({
+              where: {
+                consumption: {
+                  dealerId: dealer.id,
+                  createdAt: { gte: dateStart, lt: dateEnd },
+                },
+              },
+              _sum: { rating: true },
+              _count: { _all: true },
+            }),
+            prisma.consumptionReview.groupBy({
+              by: ['rating'],
+              where: {
+                consumption: {
+                  dealerId: dealer.id,
+                  createdAt: { gte: dateStart, lt: dateEnd },
+                },
+              },
+              _count: { _all: true },
+            }),
+          ]);
+          consumptionCount = cc;
+          consumptionReviewCount = revAgg._count._all;
+          revSum = revAgg._sum.rating ?? 0;
+          for (const row of revByRating) {
+            const c = row._count._all;
+            if (row.rating >= 4) revPos += c;
+            else if (row.rating === 3) revNeu += c;
+            else revNeg += c;
+          }
         } catch {
-          // Consumption model may not exist
+          // Consumption / review tabloları yoksa veya sorgu hatası
         }
-        const consumptionReviewCount = consumptionReviews.length;
 
-        const feedbackCount = qrFeedbacks.length + consumptionReviewCount;
-        const scanCount = feedbackCount; // proxy: scans that led to feedback
-        const allRatings = [
-          ...qrFeedbacks.map((f) => f.rating),
-          ...consumptionReviews.map((r) => r.rating),
-        ];
-        const avgRating =
-          allRatings.length > 0 ? allRatings.reduce((a, b) => a + b, 0) / allRatings.length : 0;
-        const qrPos = qrFeedbacks.filter((f) => f.sentiment === 'positive').length;
-        const qrNeu = qrFeedbacks.filter((f) => f.sentiment === 'neutral' || !f.sentiment).length;
-        const qrNeg = qrFeedbacks.filter((f) => f.sentiment === 'negative').length;
-        const revPos = consumptionReviews.filter((r) => r.rating >= 4).length;
-        const revNeu = consumptionReviews.filter((r) => r.rating === 3).length;
-        const revNeg = consumptionReviews.filter((r) => r.rating <= 2).length;
+        const feedbackCount = qrN + consumptionReviewCount;
+        const scanCount = feedbackCount;
+        const denom = qrN + consumptionReviewCount;
+        const avgRating = denom > 0 ? (qrSum + revSum) / denom : 0;
         const positiveCount = qrPos + revPos;
         const neutralCount = qrNeu + revNeu;
         const negativeCount = qrNeg + revNeg;
@@ -126,7 +170,7 @@ async function runPreagg(request: NextRequest) {
       dealers: dealers.length,
       days,
       upserted,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function GET(request: NextRequest) {
@@ -135,9 +179,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Preagg error:', error);
     return NextResponse.json(
-      { error: 'Pre-aggregation failed', detail: String(error) },
-      { status: 500 }
-    );
+      { error: 'Pre-aggregation failed', detail: String(error) }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -147,8 +189,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Preagg error:', error);
     return NextResponse.json(
-      { error: 'Pre-aggregation failed', detail: String(error) },
-      { status: 500 }
-    );
+      { error: 'Pre-aggregation failed', detail: String(error) }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

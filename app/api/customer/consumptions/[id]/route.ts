@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export async function GET(
     if (!session?.user || session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
         { error: 'Yetkisiz erişim' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -76,7 +77,7 @@ export async function GET(
     if (!consumption) {
       return NextResponse.json(
         { error: 'Tüketim kaydı bulunamadı' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -84,19 +85,22 @@ export async function GET(
     if (consumption.customerId !== session.user.id) {
       return NextResponse.json(
         { error: 'Bu tüketime erişim yetkiniz yok' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      consumption,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        consumption,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching consumption:', error);
     return NextResponse.json(
       { error: 'Tüketim bilgisi alınamadı' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

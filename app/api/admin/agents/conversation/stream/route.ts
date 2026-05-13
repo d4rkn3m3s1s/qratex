@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { AGENT_PERSONAS } from '@/lib/agent-personas';
 import { generateDialogueRound } from '@/lib/agent-dialogue';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const topic = (searchParams.get('topic') || '').trim();
   if (topic.length < 5) {
-    return new Response('Invalid topic', { status: 400 });
+    return new Response('Invalid topic', {
+      status: 400,
+      headers: { ...PRIVATE_NO_STORE_HEADERS },
+    });
   }
 
   const encoder = new TextEncoder();
@@ -71,7 +75,7 @@ export async function GET(req: NextRequest) {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
+      'Cache-Control': 'private, no-store, max-age=0, no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     },

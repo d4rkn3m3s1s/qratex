@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma'; // Note: Ensure it points to the correct location for your project.
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
 
         if (!session || session.user.role !== 'ADMIN') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Default benchmarks aggregated by businessCategory
@@ -73,13 +74,13 @@ export async function GET(req: Request) {
                     { category: 'retail', dealerCount: 30, avgRating: 4.8, totalScans: 8500 },
                     { category: 'uncategorized', dealerCount: dealers.length, avgRating: 4.0, totalScans: 1200 }
                 ]
-            });
+            }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        return NextResponse.json({ data: categoriesList });
+        return NextResponse.json({ data: categoriesList }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[ADMIN_INSIGHTS_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

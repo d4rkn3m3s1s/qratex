@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,5 +73,5 @@ export async function GET() {
       remedyAcceptRate: Math.round(remedyAcceptRate * 10) / 10,
       negativeRateThisMonth: Math.round(negRateThis * 10) / 10,
     },
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

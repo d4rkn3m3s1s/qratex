@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { authOptions } from '@/lib/auth';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { createRewardSchema } from '@/lib/validations';
@@ -92,23 +93,23 @@ export async function GET(req: Request) {
           },
         },
         orderBy: { redeemedAt: 'desc' },
+        take: 200,
       });
 
-      return NextResponse.json({
-        success: true,
-        data: userRewards.map(ur => ({
-          id: ur.id,
-          code: ur.code,
-          redeemedAt: ur.redeemedAt,
-          claimedAt: ur.claimedAt,
-          isUsed: !!ur.claimedAt,
-          reward: ur.reward,
-        })),
-      }, {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
+      return NextResponse.json(
+        {
+          success: true,
+          data: userRewards.map((ur) => ({
+            id: ur.id,
+            code: ur.code,
+            redeemedAt: ur.redeemedAt,
+            claimedAt: ur.claimedAt,
+            isUsed: !!ur.claimedAt,
+            reward: ur.reward,
+          })),
         },
-      });
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     const isAdmin = session?.user?.role === 'ADMIN';
@@ -129,23 +130,20 @@ export async function GET(req: Request) {
         },
       },
       orderBy: { cost: 'asc' },
+      take: 200,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: rewards,
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      },
-    });
+    return NextResponse.json(
+      { success: true, data: rewards },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     captureApiError(error, { route: 'GET /api/gamification/rewards', status: 500 });
     console.error('Rewards fetch error:', error);
     return NextResponse.json(
-      { success: false, error: 'Ödüller yüklenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödüller yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -158,9 +156,7 @@ export async function POST(req: Request) {
 
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json(
-        { success: false, error: 'Yetkisiz erişim' },
-        { status: 401 }
-      );
+        { success: false, error: 'Yetkisiz erişim' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await req.json();
@@ -194,14 +190,14 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       data: reward,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (err) {
+    const db = responseIfDatabaseUnavailable(err);
+    if (db) return db;
     captureApiError(err, { route: 'POST /api/gamification/rewards', status: 500 });
     console.error('Reward create error:', err);
     return NextResponse.json(
-      { success: false, error: 'Ödül oluşturulamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödül oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -220,18 +216,14 @@ export async function PATCH(req: Request) {
 
     if (!session?.user?.id) {
       return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' },
-        { status: 401 }
-      );
+        { success: false, error: 'Giriş yapmalısınız' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { rewardId } = await req.json();
 
     if (!rewardId) {
       return NextResponse.json(
-        { success: false, error: 'Ödül ID gerekli' },
-        { status: 400 }
-      );
+        { success: false, error: 'Ödül ID gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const [user, reward] = await Promise.all([
@@ -254,14 +246,12 @@ export async function PATCH(req: Request) {
     ]);
 
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!reward || !reward.isActive) {
       return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı veya aktif değil' },
-        { status: 404 }
-      );
+        { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const couponCode = generateCouponCode(reward.type);
@@ -270,16 +260,12 @@ export async function PATCH(req: Request) {
 
     if (poolRules.validFrom && now < poolRules.validFrom) {
       return NextResponse.json(
-        { success: false, error: 'Bu ödül henüz aktif değil' },
-        { status: 400 }
-      );
+        { success: false, error: 'Bu ödül henüz aktif değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (poolRules.validUntil && now > poolRules.validUntil) {
       return NextResponse.json(
-        { success: false, error: 'Bu ödülün süresi doldu' },
-        { status: 400 }
-      );
+        { success: false, error: 'Bu ödülün süresi doldu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const abVariant = await getVariant(session.user.id, 'reward_copy');
@@ -388,35 +374,32 @@ export async function PATCH(req: Request) {
       },
     };
     if (idemKey) await storeIdempotency(idemKey, 'reward-claim', 200, resBody);
-    return NextResponse.json(resBody);
+    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof InsufficientPointsError) {
       return NextResponse.json(
         {
           success: false,
           error: `Yetersiz puan. ${Math.max(0, error.requiredPoints - error.currentPoints)} puan daha gerekiyor.`,
-        },
-        { status: 400 }
-      );
+        }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (error instanceof Error && error.message === 'REWARD_OUT_OF_STOCK') {
-      return NextResponse.json({ success: false, error: 'Bu ödülün stoğu tükendi' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Bu ödülün stoğu tükendi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (error instanceof Error && error.message === 'REWARD_USER_LIMIT_REACHED') {
       return NextResponse.json(
-        { success: false, error: 'Bu ödülü talep etme limitine ulaştınız' },
-        { status: 400 }
-      );
+        { success: false, error: 'Bu ödülü talep etme limitine ulaştınız' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
+
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
 
     captureApiError(error, { route: 'PATCH /api/gamification/rewards', status: 500 });
     console.error('Reward claim error:', error);
     return NextResponse.json(
-      { success: false, error: 'Ödül talep edilemedi. Lütfen tekrar deneyin.' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödül talep edilemedi. Lütfen tekrar deneyin.' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

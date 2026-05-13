@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -20,12 +21,12 @@ export async function DELETE(request: NextRequest) {
         const body = await request.json();
         const parsed = deleteSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: 'E-posta doğrulaması gerekli' }, { status: 400 });
+            return NextResponse.json({ error: 'E-posta doğrulaması gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
         if (!user || user.email !== parsed.data.confirmEmail) {
-            return NextResponse.json({ error: 'E-posta eşleşmiyor' }, { status: 400 });
+            return NextResponse.json({ error: 'E-posta eşleşmiyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Anonymize feedbacks (keep for analytics but remove PII)
@@ -37,9 +38,9 @@ export async function DELETE(request: NextRequest) {
         // Delete user and cascade all related data
         await prisma.user.delete({ where: { id: userId } });
 
-        return NextResponse.json({ success: true, message: 'Hesabınız kalıcı olarak silindi' });
+        return NextResponse.json({ success: true, message: 'Hesabınız kalıcı olarak silindi' }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Account deletion error:', error);
-        return NextResponse.json({ error: 'Hesap silinemedi' }, { status: 500 });
+        return NextResponse.json({ error: 'Hesap silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

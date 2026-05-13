@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -29,33 +30,36 @@ export async function PATCH(
         if ('error' in auth) return auth.error;
         const { id } = await params;
 
-        const existing = await prisma.autoReplyRule.findUnique({ where: { id } });
-        if (!existing || existing.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 });
-        }
-
         const body = await request.json();
         const parsed = updateSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        const rule = await prisma.autoReplyRule.update({
-            where: { id },
-            data: {
-                ...(parsed.data.name !== undefined && { name: parsed.data.name }),
-                ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
-                ...(parsed.data.priority !== undefined && { priority: parsed.data.priority }),
-                ...(parsed.data.condition !== undefined && { condition: parsed.data.condition as object }),
-                ...(parsed.data.action !== undefined && { action: parsed.data.action }),
-                ...(parsed.data.template !== undefined && { template: parsed.data.template }),
-            },
-        });
+        const data = {
+            ...(parsed.data.name !== undefined && { name: parsed.data.name }),
+            ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
+            ...(parsed.data.priority !== undefined && { priority: parsed.data.priority }),
+            ...(parsed.data.condition !== undefined && { condition: parsed.data.condition as object }),
+            ...(parsed.data.action !== undefined && { action: parsed.data.action }),
+            ...(parsed.data.template !== undefined && { template: parsed.data.template }),
+        };
 
-        return NextResponse.json({ success: true, rule });
+        const n = await prisma.autoReplyRule.updateMany({
+            where: { id, dealerId: auth.session.user.id },
+            data,
+        });
+        if (n.count === 0) {
+            return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+
+        const rule = await prisma.autoReplyRule.findUnique({ where: { id } });
+        return NextResponse.json({ success: true, rule }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error updating auto-reply rule:', error);
-        return NextResponse.json({ error: 'Kural güncellenemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Kural güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -69,15 +73,17 @@ export async function DELETE(
         if ('error' in auth) return auth.error;
         const { id } = await params;
 
-        const existing = await prisma.autoReplyRule.findUnique({ where: { id } });
-        if (!existing || existing.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 });
+        const n = await prisma.autoReplyRule.deleteMany({
+            where: { id, dealerId: auth.session.user.id },
+        });
+        if (n.count === 0) {
+            return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
-
-        await prisma.autoReplyRule.delete({ where: { id } });
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error deleting auto-reply rule:', error);
-        return NextResponse.json({ error: 'Kural silinemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Kural silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

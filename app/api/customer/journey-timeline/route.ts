@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,10 @@ export async function GET() {
         });
 
         if (!user) {
-            return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+            return NextResponse.json(
+                { error: 'Kullanıcı bulunamadı' },
+                { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         // Fetch all possible events for the timeline
@@ -145,18 +149,24 @@ export async function GET() {
         // Sort events chronologically (newest first)
         events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        return NextResponse.json({
-            success: true,
-            timeline: events,
-            stats: {
-                totalFeedbacks: feedbacks.length,
-                totalBadges: badges.length,
-                level: user.level ?? 1,
-                points: user.points ?? 0,
+        return NextResponse.json(
+            {
+                success: true,
+                timeline: events,
+                stats: {
+                    totalFeedbacks: feedbacks.length,
+                    totalBadges: badges.length,
+                    level: user.level ?? 1,
+                    points: user.points ?? 0,
+                },
             },
-        });
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
     } catch (error) {
         console.error('Journey timeline error:', error);
-        return NextResponse.json({ error: 'Timeline yüklenemedi' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Timeline yüklenemedi' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }

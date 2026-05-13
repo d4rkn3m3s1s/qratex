@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 const updateProfileSchema = z.object({
   name: z.string().min(2).max(80).optional(),
-  image: z.string().optional(),
+  image: z.string().max(2048).optional(),
   phone: z.string().max(30).optional().nullable(),
   businessName: z.string().max(100).optional().nullable(),
   businessDesc: z.string().max(500).optional().nullable(),
@@ -32,7 +33,10 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const parsed = updateProfileSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.errors[0]?.message || 'Geçersiz veri' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     const { name, image, phone, businessName, businessDesc, address, latitude, longitude, businessHours, defaultReplyTemplate, preferredLanguage, holidayMode } = parsed.data;
 
@@ -83,12 +87,14 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, user: updatedUser });
+    return NextResponse.json({ success: true, user: updatedUser }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating profile:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'Profil güncellenemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -131,15 +137,20 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Kullanıcı bulunamadı' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching profile:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'Profil getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

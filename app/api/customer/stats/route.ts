@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,8 @@ export async function GET() {
         prisma.physicalCard.findMany({
           where: { customerId: userId, status: 'ACTIVATED' },
           select: { id: true, token: true, activatedAt: true, _count: { select: { consumptions: true } } },
+          orderBy: { activatedAt: 'desc' },
+          take: 200,
         }),
         prisma.consumption.count({ where: { customerId: userId } }),
         prisma.consumptionReview.count({ where: { customerId: userId } }),
@@ -73,7 +76,10 @@ export async function GET() {
     }
 
     if (!user) {
-      return NextResponse.json({ success: false, error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'Kullanıcı bulunamadı' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Calculate level progress
@@ -138,38 +144,42 @@ export async function GET() {
     // Pending reviews count
     const pendingReviewCount = cardSystemData.consumptionCount - cardSystemData.consumptionReviewCount;
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        user: { ...user, levelProgress, xpProgress, xpNeeded },
-        stats: {
-          feedbackCount: feedbackCount + cardSystemData.consumptionReviewCount,
-          badgeCount,
-          points: user.points,
-          level: user.level,
-          streak: 0,
-          cardCount: cardSystemData.cards.length,
-          consumptionCount: cardSystemData.consumptionCount,
-          consumptionReviewCount: cardSystemData.consumptionReviewCount,
-          pendingReviewCount,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          user: { ...user, levelProgress, xpProgress, xpNeeded },
+          stats: {
+            feedbackCount: feedbackCount + cardSystemData.consumptionReviewCount,
+            badgeCount,
+            points: user.points,
+            level: user.level,
+            streak: 0,
+            cardCount: cardSystemData.cards.length,
+            consumptionCount: cardSystemData.consumptionCount,
+            consumptionReviewCount: cardSystemData.consumptionReviewCount,
+            pendingReviewCount,
+          },
+          activeQuests,
+          recentFeedbacks: formattedQRFeedbacks,
+          recentActivity: allRecentActivity,
+          badges: formattedBadges,
+          cards: cardSystemData.cards.map((c: any) => ({
+            id: c.id,
+            token: c.token,
+            activatedAt: c.activatedAt,
+            consumptionCount: c._count?.consumptions || 0,
+          })),
+          recentConsumptions: formattedConsumptions,
         },
-        activeQuests,
-        recentFeedbacks: formattedQRFeedbacks,
-        recentActivity: allRecentActivity,
-        badges: formattedBadges,
-        cards: cardSystemData.cards.map((c: any) => ({
-          id: c.id,
-          token: c.token,
-          activatedAt: c.activatedAt,
-          consumptionCount: c._count?.consumptions || 0,
-        })),
-        recentConsumptions: formattedConsumptions,
       },
-    }, {
-      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Customer stats error:', error);
-    return NextResponse.json({ success: false, error: 'İstatistikler yüklenemedi' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: 'İstatistikler yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { creditPointsAndXp } from '@/lib/points-wallet';
@@ -28,9 +29,7 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' },
-        { status: 401 }
-      );
+        { success: false, error: 'Giriş yapmalısınız' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id: questId } = await params;
@@ -168,42 +167,32 @@ export async function POST(
       data: result,
     };
     if (idemKey) await storeIdempotency(idemKey, 'quest-claim', 200, resBody);
-    return NextResponse.json(resBody);
+    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === 'QUEST_NOT_FOUND') {
         return NextResponse.json(
-          { success: false, error: 'Görev bulunamadı veya aktif değil' },
-          { status: 404 }
-        );
+          { success: false, error: 'Görev bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       if (error.message === 'QUEST_EXPIRED') {
         return NextResponse.json(
-          { success: false, error: 'Görevin süresi dolmuş' },
-          { status: 400 }
-        );
+          { success: false, error: 'Görevin süresi dolmuş' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       if (error.message === 'QUEST_PROGRESS_NOT_FOUND') {
         return NextResponse.json(
-          { success: false, error: 'Bu görev için ilerleme kaydınız yok' },
-          { status: 400 }
-        );
+          { success: false, error: 'Bu görev için ilerleme kaydınız yok' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       if (error.message === 'QUEST_NOT_COMPLETED') {
         return NextResponse.json(
-          { success: false, error: 'Görev henüz tamamlanmadı' },
-          { status: 400 }
-        );
+          { success: false, error: 'Görev henüz tamamlanmadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       if (error.message === 'QUEST_ALREADY_CLAIMED') {
         return NextResponse.json(
-          { success: false, error: 'Bu görevin ödülü daha önce alındı' },
-          { status: 400 }
-        );
+          { success: false, error: 'Bu görevin ödülü daha önce alındı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
 
@@ -211,8 +200,6 @@ export async function POST(
     captureApiError(error, { route: 'POST /api/gamification/quests/[id]/claim', status: 500 });
     console.error('Quest claim error:', error);
     return NextResponse.json(
-      { success: false, error: 'Görev ödülü alınamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görev ödülü alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

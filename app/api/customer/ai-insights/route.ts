@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { normalizeSentimentTriplet } from '@/lib/sentiment-percentages';
 
 
@@ -11,7 +12,10 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Get customer's own feedbacks with AI analysis data
@@ -52,19 +56,22 @@ export async function GET() {
     });
 
     if (feedbacks.length === 0) {
-      return NextResponse.json({
-        success: true,
-        totalFeedbacks: 0,
-        avgRating: 0,
-        sentimentDistribution: { positive: 0, negative: 0, neutral: 0 },
-        topEmotions: [],
-        topTopics: [],
-        feedbacks: [],
-        overallSentiment: 'neutral',
-        avgUrgency: 0,
-        avgEffort: 0,
-        avgChurnRisk: 0,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          totalFeedbacks: 0,
+          avgRating: 0,
+          sentimentDistribution: { positive: 0, negative: 0, neutral: 0 },
+          topEmotions: [],
+          topTopics: [],
+          feedbacks: [],
+          overallSentiment: 'neutral',
+          avgUrgency: 0,
+          avgEffort: 0,
+          avgChurnRisk: 0,
+        },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Calculate stats
@@ -166,21 +173,27 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      totalFeedbacks,
-      avgRating,
-      sentimentDistribution,
-      topEmotions,
-      topTopics,
-      feedbacks: formattedFeedbacks,
-      overallSentiment,
-      avgUrgency,
-      avgEffort,
-      avgChurnRisk,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        totalFeedbacks,
+        avgRating,
+        sentimentDistribution,
+        topEmotions,
+        topTopics,
+        feedbacks: formattedFeedbacks,
+        overallSentiment,
+        avgUrgency,
+        avgEffort,
+        avgChurnRisk,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching customer AI insights:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

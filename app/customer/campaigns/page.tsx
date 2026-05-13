@@ -7,16 +7,14 @@ import {
   Megaphone,
   Clock,
   Zap,
-  Star,
   Loader2,
-  Timer,
   Store,
-  Sparkles,
   CalendarDays,
   Heart,
   Share2,
+  Info,
 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/admin-toast';
@@ -35,7 +33,6 @@ interface Campaign {
   dealer?: { id: string; businessName: string | null; image: string | null };
 }
 
-const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 const dayShort = ['Pzr', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
 
 export default function CustomerCampaignsPage() {
@@ -81,6 +78,14 @@ export default function CustomerCampaignsPage() {
           icon={<Megaphone className="h-7 w-7" aria-hidden />}
           tone="auto"
         />
+
+        <div
+          role="note"
+          className="flex gap-2.5 rounded-xl border border-border/70 bg-muted/35 px-3 py-2.5 text-xs leading-snug text-muted-foreground sm:text-sm sm:items-center"
+        >
+          <Info className="h-4 w-4 shrink-0 text-primary mt-0.5 sm:mt-0" aria-hidden />
+          <p className="min-w-0 text-pretty">{t('customerCampaigns.infoStrip')}</p>
+        </div>
 
         {/* Active Now */}
         {activeNow.length > 0 && (
@@ -189,8 +194,8 @@ export default function CustomerCampaignsPage() {
             {t('customerCampaigns.inviteTitle')}
           </h2>
           <Card className="border-0 bg-gradient-to-r from-primary/10 via-violet-500/5 to-primary/10 backdrop-blur-sm">
-            <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-center sm:items-stretch gap-4">
-              <div className="flex-1 space-y-1">
+            <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-stretch gap-4">
+              <div className="flex-1 space-y-1 min-w-0">
                 <p className="text-sm font-medium">
                   {t('customerCampaigns.inviteDescription')}
                 </p>
@@ -198,10 +203,10 @@ export default function CustomerCampaignsPage() {
                   {t('customerCampaigns.inviteSubDescription')}
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <div className="flex w-full sm:w-auto shrink-0">
+                <Button asChild variant="outline" size="sm" className="gap-1.5 w-full touch-manipulation sm:w-auto min-h-10">
                   <Link href="/customer/referral">
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-4 h-4 shrink-0" />
                     {t('customerCampaigns.inviteCta')}
                   </Link>
                 </Button>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { isSuspiciousPoints } from '@/lib/points-velocity';
 import {
   getLeagueRules,
@@ -12,7 +13,6 @@ import {
 import { assertModuleEnabled } from '@/lib/module-gate';
 
 export const dynamic = 'force-dynamic';
-const CACHE_SECONDS = 60;
 /** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
 const MAX_LEADERBOARD_FETCH = 5000;
 
@@ -134,11 +134,7 @@ export async function GET(request: NextRequest) {
             periodLabel: period === 'weekly' ? 'Bu Hafta' : period === 'monthly' ? 'Bu Ay' : 'Tüm Zamanlar',
           },
         },
-        {
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
-        }
+        { headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -221,10 +217,12 @@ export async function GET(request: NextRequest) {
         _count: { id: true },
       });
 
-      // Get user IDs who have feedbacks in period
-      const userIds = feedbackPoints
-        .filter(f => f.userId !== null)
-        .map(f => f.userId as string);
+      // En çok geri bildirim veren müşteriler (bellek / sorgu üst sınırı)
+      const sortedPeriodContributors = [...feedbackPoints]
+        .filter((f) => f.userId != null)
+        .sort((a, b) => (b._count?.id ?? 0) - (a._count?.id ?? 0))
+        .slice(0, MAX_LEADERBOARD_FETCH);
+      const userIds = sortedPeriodContributors.map((f) => f.userId as string);
 
       if (userIds.length === 0) {
         const users = await prisma.user.findMany({
@@ -289,6 +287,7 @@ export async function GET(request: NextRequest) {
               select: { feedbacks: true, badges: true, referralsMade: true },
             },
           },
+          take: MAX_LEADERBOARD_FETCH,
         });
 
         // Calculate period points (each feedback = points based on text length)
@@ -301,6 +300,7 @@ export async function GET(request: NextRequest) {
             userId: true,
             text: true,
           },
+          take: 100000,
         });
 
         const periodPointsMap = new Map<string, number>();
@@ -402,29 +402,28 @@ export async function GET(request: NextRequest) {
 
     const totalUsers = await prisma.user.count({ where: { role: 'CUSTOMER' } });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        leaderboard: leaderboardData,
-        userRank,
-        currentUser: currentUserData,
-        period,
-        category,
-        categoryLabel: getCategoryLabel(),
-        totalUsers,
-        periodLabel: period === 'weekly' ? 'Bu Hafta' : period === 'monthly' ? 'Bu Ay' : 'Tüm Zamanlar',
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          leaderboard: leaderboardData,
+          userRank,
+          currentUser: currentUserData,
+          period,
+          category,
+          categoryLabel: getCategoryLabel(),
+          totalUsers,
+          periodLabel: period === 'weekly' ? 'Bu Hafta' : period === 'monthly' ? 'Bu Ay' : 'Tüm Zamanlar',
+        },
       },
-    }, {
-      headers: {
-        'Cache-Control': `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
-      },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Leaderboard error:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { success: false, error: 'Liderlik tablosu yüklenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Liderlik tablosu yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

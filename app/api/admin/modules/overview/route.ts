@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
 
 
@@ -124,5 +125,5 @@ export async function GET() {
     },
     modules: modulesWithMeta,
     endpointBindings,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

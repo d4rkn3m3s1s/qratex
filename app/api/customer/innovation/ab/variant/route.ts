@@ -5,6 +5,7 @@ import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import { headers } from 'next/headers';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { pickAbVariant, recordInnovationAbEvent } from '@/lib/innovation-ab';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const experimentId = searchParams.get('experimentId') || '';
   if (!experimentId) {
-    return NextResponse.json({ error: 'experimentId gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'experimentId gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const session = await getServerSession(authOptions);
@@ -28,13 +32,16 @@ export async function GET(request: NextRequest) {
 
   const exp = cfg.campaignAb.experiments.find((e) => e.id === experimentId && e.active);
   if (!exp) {
-    return NextResponse.json({
-      experimentId,
-      variant: 'A' as const,
-      active: false,
-      copy: '',
-      message: 'Deney kapalı veya bulunamadı',
-    });
+    return NextResponse.json(
+      {
+        experimentId,
+        variant: 'A' as const,
+        active: false,
+        copy: '',
+        message: 'Deney kapalı veya bulunamadı',
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const { variant } = pickAbVariant(cfg, experimentId, stickySeed);
@@ -51,15 +58,18 @@ export async function GET(request: NextRequest) {
   const bannerImage =
     variant === 'A' ? exp.bannerImageUrlA ?? '' : exp.bannerImageUrlB ?? '';
 
-  return NextResponse.json({
-    experimentId,
-    variant,
-    active: true,
-    name: exp.name,
-    dimension: dim,
-    copy,
-    pushTitle,
-    pushHour,
-    bannerImageUrl: bannerImage,
-  });
+  return NextResponse.json(
+    {
+      experimentId,
+      variant,
+      active: true,
+      name: exp.name,
+      dimension: dim,
+      copy,
+      pushTitle,
+      pushHour,
+      bannerImageUrl: bannerImage,
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

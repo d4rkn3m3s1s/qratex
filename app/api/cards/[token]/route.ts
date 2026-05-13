@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 /**
  * GET /api/cards/[token]
@@ -15,9 +16,7 @@ export async function GET(
 
     if (!token) {
       return NextResponse.json(
-        { error: 'Token gerekli' },
-        { status: 400 }
-      );
+        { error: 'Token gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const card = await prisma.physicalCard.findUnique({
@@ -41,9 +40,7 @@ export async function GET(
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı', code: 'CARD_NOT_FOUND' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı', code: 'CARD_NOT_FOUND' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Bloklu kart kontrolü
@@ -53,9 +50,7 @@ export async function GET(
           error: 'Bu kart bloklanmış', 
           code: 'CARD_BLOCKED',
           reason: card.blockReason 
-        },
-        { status: 403 }
-      );
+        }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     return NextResponse.json({
@@ -72,12 +67,10 @@ export async function GET(
           image: card.customer.image,
         } : null,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching card:', error);
     return NextResponse.json(
-      { error: 'Kart bilgisi alınamadı' },
-      { status: 500 }
-    );
+      { error: 'Kart bilgisi alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

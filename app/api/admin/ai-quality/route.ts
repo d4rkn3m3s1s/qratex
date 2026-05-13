@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     samples,
     stats: { pendingCount, reviewedCount },
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 const patchBodySchema = updateSchema.extend({ id: z.string().min(1) });
@@ -66,16 +67,16 @@ export async function PATCH(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const parsed = patchBodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const sample = await prisma.aIQualitySample.findUnique({ where: { id: parsed.data.id } });
-  if (!sample) return NextResponse.json({ error: 'Örnek bulunamadı' }, { status: 404 });
+  if (!sample) return NextResponse.json({ error: 'Örnek bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
 
   const updated = await prisma.aIQualitySample.update({
     where: { id: parsed.data.id },
@@ -88,5 +89,5 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ sample: updated });
+  return NextResponse.json({ sample: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,56 +60,80 @@ export async function GET(request: NextRequest) {
         prevStartDate.setDate(now.getDate() - 60);
     }
 
-    // Get dealer's QR codes with all feedbacks
-    const qrCodes = await prisma.qRCode.findMany({
-      where: { dealerId },
-      include: {
-        feedbacks: {
-          where: {
-            createdAt: { gte: prevStartDate },
-          },
-          select: {
-            rating: true,
-            sentiment: true,
-            topics: true,
-            createdAt: true,
-          },
+    // Cap in-memory merge (90g yoğun bayilerde DB yükünü sınırlar; sıralama eski→yeni)
+    const ANALYTICS_EVENT_CAP = 20_000;
+
+    const [qrScanAgg, qrCodes, qrFeedbacksFlat] = await Promise.all([
+      prisma.qRCode.aggregate({
+        where: { dealerId },
+        _sum: { scanCount: true },
+      }),
+      prisma.qRCode.findMany({
+        where: { dealerId },
+        select: {
+          id: true,
+          name: true,
+          scanCount: true,
+          _count: { select: { feedbacks: true } },
         },
-        _count: {
-          select: { feedbacks: true },
+        orderBy: { scanCount: 'desc' },
+        take: 200,
+      }),
+      prisma.feedback.findMany({
+        where: {
+          qrCode: { dealerId },
+          deletedAt: null,
+          createdAt: { gte: prevStartDate },
         },
-      },
-    });
+        select: {
+          rating: true,
+          sentiment: true,
+          topics: true,
+          createdAt: true,
+          qrCodeId: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        take: ANALYTICS_EVENT_CAP,
+      }),
+    ]);
+    const totalScansAllQR = Number(qrScanAgg._sum.scanCount ?? 0);
 
     // Get consumption reviews
     let consumptionReviews: any[] = [];
     let consumptionStats = { total: 0, reviewed: 0, customers: 0 };
-    
+
     try {
-      const [consumptions, reviews, uniqueCustomers] = await Promise.all([
-        prisma.consumption.findMany({
-          where: { dealerId, createdAt: { gte: prevStartDate } },
-          include: { review: { select: { rating: true, createdAt: true } } },
-        }),
-        prisma.consumptionReview.findMany({
-          where: { consumption: { dealerId }, createdAt: { gte: prevStartDate } },
-          select: { rating: true, createdAt: true },
-        }),
-        prisma.consumption.groupBy({ by: ['customerId'], where: { dealerId } }),
-      ]);
-      
-      consumptionReviews = reviews;
+      const [reviewRows, consumptionWindowTotal, consumptionWindowReviewed, distinctCustomers] =
+        await Promise.all([
+          prisma.consumptionReview.findMany({
+            where: { consumption: { dealerId }, createdAt: { gte: prevStartDate } },
+            select: { rating: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+            take: ANALYTICS_EVENT_CAP,
+          }),
+          prisma.consumption.count({
+            where: { dealerId, createdAt: { gte: prevStartDate } },
+          }),
+          prisma.consumption.count({
+            where: { dealerId, createdAt: { gte: prevStartDate }, review: { isNot: null } },
+          }),
+          prisma.$queryRaw<[{ n: bigint }]>(
+            Prisma.sql`SELECT COUNT(DISTINCT "customerId")::bigint AS n FROM "Consumption" WHERE "dealerId" = ${dealerId}`
+          ),
+        ]);
+
+      consumptionReviews = reviewRows;
       consumptionStats = {
-        total: consumptions.length,
-        reviewed: consumptions.filter((c: any) => c.review).length,
-        customers: uniqueCustomers.length,
+        total: consumptionWindowTotal,
+        reviewed: consumptionWindowReviewed,
+        customers: Number(distinctCustomers[0]?.n ?? 0),
       };
     } catch (e) {
       console.log('Consumption data not available');
     }
 
     // Separate current and previous period feedbacks (QR + Consumption)
-    const allQRFeedbacks = qrCodes.flatMap(q => q.feedbacks);
+    const allQRFeedbacks = qrFeedbacksFlat;
     const allConsumptionFeedbacks = consumptionReviews.map((r: any) => ({
       rating: r.rating,
       sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
@@ -122,7 +148,7 @@ export async function GET(request: NextRequest) {
     );
     
     const totalFeedbacks = currentFeedbacks.length;
-    const totalScans = qrCodes.reduce((acc, q) => acc + q.scanCount, 0);
+    const totalScans = totalScansAllQR;
 
     // Calculate growth rates
     const feedbackGrowth = prevFeedbacks.length > 0
@@ -231,20 +257,22 @@ export async function GET(request: NextRequest) {
 
     // Top QR codes
     const topQRCodes = qrCodes
-      .map(q => {
-        const qrFeedbacks = q.feedbacks.filter(f => new Date(f.createdAt) >= startDate);
-        const qrAvgRating = qrFeedbacks.length > 0
-          ? qrFeedbacks.reduce((acc, f) => acc + f.rating, 0) / qrFeedbacks.length
-          : 0;
-        const qrPositive = qrFeedbacks.filter(f => f.sentiment === 'positive').length;
+      .map((q) => {
+        const qrFeedbacks = qrFeedbacksFlat.filter(
+          (f) => f.qrCodeId === q.id && new Date(f.createdAt) >= startDate
+        );
+        const qrAvgRating =
+          qrFeedbacks.length > 0
+            ? qrFeedbacks.reduce((acc, f) => acc + f.rating, 0) / qrFeedbacks.length
+            : 0;
+        const qrPositive = qrFeedbacks.filter((f) => f.sentiment === 'positive').length;
         return {
           name: q.name,
           scans: q.scanCount,
           feedbacks: qrFeedbacks.length,
           rating: qrAvgRating.toFixed(1),
-          positiveRate: qrFeedbacks.length > 0 
-            ? Math.round((qrPositive / qrFeedbacks.length) * 100) 
-            : 0,
+          positiveRate:
+            qrFeedbacks.length > 0 ? Math.round((qrPositive / qrFeedbacks.length) * 100) : 0,
         };
       })
       .sort((a, b) => b.scans - a.scans)
@@ -321,44 +349,49 @@ export async function GET(request: NextRequest) {
       negativeCount,
     ]);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        totalFeedbacks,
-        avgRating: avgRating.toFixed(1),
-        totalScans,
-        conversionRate,
-        feedbackGrowth,
-        ratingChange,
-        responseRate,
-        sentimentBreakdown: {
-          positive: positivePct,
-          neutral: neutralPct,
-          negative: negativePct,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          totalFeedbacks,
+          avgRating: avgRating.toFixed(1),
+          totalScans,
+          conversionRate,
+          feedbackGrowth,
+          ratingChange,
+          responseRate,
+          sentimentBreakdown: {
+            positive: positivePct,
+            neutral: neutralPct,
+            negative: negativePct,
+          },
+          ratingDistribution,
+          topQRCodes,
+          topTopics,
+          dailyData,
+          heatmapData,
+          hourlyData,
+          dayOfWeekData,
+          comparison,
+          insights: {
+            peakHour: `${peakHour}:00 - ${peakHour + 1}:00`,
+            peakDay: peakDay.day,
+            bestQR: topQRCodes[0]?.name || null,
+            worstTopic: topTopics.find((t) => t.sentiment === 'negative')?.name || null,
+          },
+          // Consumption stats
+          consumptionStats,
         },
-        ratingDistribution,
-        topQRCodes,
-        topTopics,
-        dailyData,
-        heatmapData,
-        hourlyData,
-        dayOfWeekData,
-        comparison,
-        insights: {
-          peakHour: `${peakHour}:00 - ${peakHour + 1}:00`,
-          peakDay: peakDay.day,
-          bestQR: topQRCodes[0]?.name || null,
-          worstTopic: topTopics.find(t => t.sentiment === 'negative')?.name || null,
-        },
-        // Consumption stats
-        consumptionStats,
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Analytics error:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { success: false, error: 'Analitik verileri yüklenemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

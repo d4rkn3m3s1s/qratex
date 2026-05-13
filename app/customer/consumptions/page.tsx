@@ -203,14 +203,14 @@ export default function CustomerConsumptionsPage() {
                   : t('customerConsumptions.emptyAll')}
             </p>
             {filter === 'all' && (
-              <div className="flex flex-wrap justify-center gap-3">
-                <Button asChild variant="default" className="gap-2">
+              <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 w-full max-w-md mx-auto">
+                <Button asChild variant="default" className="gap-2 w-full min-h-10 touch-manipulation sm:flex-1">
                   <Link href="/customer/scan">
                     <QrCode className="h-4 w-4" />
                     {t('customerConsumptions.scanQr')}
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="gap-2">
+                <Button asChild variant="outline" className="gap-2 w-full min-h-10 touch-manipulation sm:flex-1">
                   <Link href="/customer/my-card">
                     <CreditCard className="h-4 w-4" />
                     {t('customerConsumptions.myCard')}

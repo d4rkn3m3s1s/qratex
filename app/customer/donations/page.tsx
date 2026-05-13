@@ -659,7 +659,7 @@ function FeaturedProjectCard({
 
           {/* Donate Button */}
           <Button
-            className={`w-full gap-2 bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90 text-white shadow-md`}
+            className={`w-full min-h-10 touch-manipulation gap-2 bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90 text-white shadow-md`}
             size="lg"
             onClick={onDonate}
             disabled={progress >= 100}
@@ -753,7 +753,7 @@ function ProjectCard({
 
           {/* Button */}
           <Button
-            className={`w-full gap-2 bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90 text-white`}
+            className={`w-full min-h-10 touch-manipulation gap-2 bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90 text-white`}
             onClick={onDonate}
             disabled={progress >= 100}
           >
@@ -934,6 +934,7 @@ function LeaderboardSection({
           <Button
             variant="outline"
             onClick={() => setVisibleCount((prev) => Math.min(prev + 5, rest.length))}
+            className="w-full max-w-md min-h-10 touch-manipulation sm:w-auto"
           >
             {t('customerDonations.loadMore')} ({rest.length - visibleCount} {t('customerDonations.remaining')})
           </Button>
@@ -1182,14 +1183,14 @@ function DonationDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="gap-2 flex-col-reverse sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onClose} className="w-full min-h-10 touch-manipulation sm:w-auto">
             {t('common.cancel')}
           </Button>
           <Button
             onClick={onDonate}
             disabled={donating || !amount || amount < 1 || amount > userPoints}
-            className={`gap-2 bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90`}
+            className={`w-full min-h-10 touch-manipulation gap-2 sm:w-auto bg-gradient-to-r ${categoryGradients[project.category]} hover:opacity-90`}
           >
             {donating ? (
               t('common.processing')

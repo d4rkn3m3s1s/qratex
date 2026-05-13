@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -32,12 +33,15 @@ export async function GET() {
                 _count: { select: { responses: true, questions: true } },
             },
             orderBy: { createdAt: 'desc' },
+            take: 200,
         });
 
-        return NextResponse.json({ success: true, surveys });
+        return NextResponse.json({ success: true, surveys }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error fetching surveys:', error);
-        return NextResponse.json({ error: 'Anketler yüklenemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Anketler yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -50,12 +54,12 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const parsed = createSurveySchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const count = await prisma.survey.count({ where: { dealerId: auth.session.user.id } });
         if (count >= 50) {
-            return NextResponse.json({ error: 'En fazla 50 anket oluşturabilirsiniz' }, { status: 400 });
+            return NextResponse.json({ error: 'En fazla 50 anket oluşturabilirsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const survey = await prisma.survey.create({
@@ -76,9 +80,11 @@ export async function POST(request: NextRequest) {
             include: { questions: true },
         });
 
-        return NextResponse.json({ success: true, survey }, { status: 201 });
+        return NextResponse.json({ success: true, survey }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error creating survey:', error);
-        return NextResponse.json({ error: 'Anket oluşturulamadı' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Anket oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

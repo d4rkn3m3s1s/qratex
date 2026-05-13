@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
+import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { analyzeWithFallback } from '@/lib/ai-engine';
 import {
   formatAdaptiveProfile,
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
     const qrCodeId = searchParams.get('qrCodeId');
     const sentiment = searchParams.get('sentiment');
     const needsReview = searchParams.get('needsReview') === 'true'; // P2-27: intentScore < 0.7 manuel inceleme
-    const skip = (page - 1) * pageSize;
+    const skip = paginationSkip(page, pageSize);
 
     let where: Record<string, unknown> = { deletedAt: null };
     if (needsReview) (where as any).intentScore = { lt: 0.7 };
@@ -57,76 +58,109 @@ export async function GET(request: NextRequest) {
       where.sentiment = sentiment;
     }
 
+    const feedbackListSelect = {
+      id: true,
+      qrCodeId: true,
+      userId: true,
+      rating: true,
+      text: true,
+      media: true,
+      npsScore: true,
+      sentiment: true,
+      emotions: true,
+      topics: true,
+      isPublic: true,
+      dealerReply: true,
+      dealerRepliedAt: true,
+      createdAt: true,
+      user: {
+        select: { id: true, name: true, email: true, image: true },
+      },
+      qrCode: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          dealer: { select: { businessName: true } },
+        },
+      },
+    } as const;
+
     const [feedbacks, total] = await Promise.all([
       prisma.feedback.findMany({
         where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
-        include: {
-          user: {
-            select: { id: true, name: true, email: true, image: true },
-          },
-          qrCode: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              dealer: {
-                select: { businessName: true },
-              },
-            },
-          },
-        },
+        select: feedbackListSelect,
       }),
       prisma.feedback.count({ where }),
     ]);
 
     // Format response to include businessName and properly format JSON fields
-    const formattedFeedbacks = feedbacks.map(f => {
-      // Parse topics - could be array or JSON string
+    const formattedFeedbacks = feedbacks.map((f) => {
       let topics: string[] = [];
       if (f.topics) {
         if (Array.isArray(f.topics)) {
           topics = f.topics as string[];
         } else if (typeof f.topics === 'object') {
-          topics = Object.keys(f.topics);
+          topics = Object.keys(f.topics as object);
         }
       }
 
-      // Parse emotions - object with emotion keys
       let emotions: string[] = [];
-      if (f.emotions && typeof f.emotions === 'object') {
+      if (f.emotions && typeof f.emotions === 'object' && !Array.isArray(f.emotions)) {
         emotions = Object.keys(f.emotions as Record<string, unknown>);
+      } else if (Array.isArray(f.emotions)) {
+        emotions = (f.emotions as unknown[]).filter((e): e is string => typeof e === 'string');
       }
 
       return {
-        ...f,
+        id: f.id,
+        qrCodeId: f.qrCodeId,
+        userId: f.userId,
+        rating: f.rating,
+        text: f.text,
+        media: f.media,
+        npsScore: f.npsScore,
+        sentiment: f.sentiment,
         topics,
         emotions,
+        isPublic: f.isPublic,
+        dealerReply: f.dealerReply,
+        dealerRepliedAt: f.dealerRepliedAt,
+        createdAt: f.createdAt,
+        user: f.user,
         qrCode: {
-          ...f.qrCode,
+          id: f.qrCode.id,
+          name: f.qrCode.name,
+          code: f.qrCode.code,
           businessName: f.qrCode.dealer?.businessName || f.qrCode.name,
         },
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      data: formattedFeedbacks,
-      items: formattedFeedbacks,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: formattedFeedbacks,
+        items: formattedFeedbacks,
+        total,
+        page,
+        pageSize,
+        totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     const { captureApiError } = await import('@/lib/capture-api-error');
     captureApiError(error, { route: 'GET /api/feedbacks', status: 500 });
     console.error('Error fetching feedbacks:', error);
     return NextResponse.json(
       { error: 'Geri bildirimler getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -139,9 +173,10 @@ export async function POST(request: NextRequest) {
       { error: 'Çok fazla geri bildirim gönderdiniz. Lütfen biraz bekleyip tekrar deneyin.' },
       {
         status: 429,
-        headers: limit.retryAfterMs
-          ? { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) }
-          : undefined,
+        headers: {
+          ...PRIVATE_NO_STORE_HEADERS,
+          ...(limit.retryAfterMs ? { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) } : {}),
+        },
       }
     );
   }
@@ -155,7 +190,7 @@ export async function POST(request: NextRequest) {
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -169,7 +204,7 @@ export async function POST(request: NextRequest) {
     if (!qrCode) {
       return NextResponse.json(
         { error: 'QR kod bulunamadı' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     const now = new Date();
@@ -178,7 +213,7 @@ export async function POST(request: NextRequest) {
     if (!qrCode.isActive || expired || revoked) {
       return NextResponse.json(
         { error: 'QR kod aktif değil, süresi dolmuş veya iptal edilmiş' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -188,9 +223,12 @@ export async function POST(request: NextRequest) {
         { error: 'Bu QR kod için çok fazla gönderim. Lütfen kısa süre sonra tekrar deneyin.' },
         {
           status: 429,
-          headers: qrLimit.retryAfterMs
-            ? { 'Retry-After': String(Math.ceil(qrLimit.retryAfterMs / 1000)) }
-            : undefined,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(qrLimit.retryAfterMs
+              ? { 'Retry-After': String(Math.ceil(qrLimit.retryAfterMs / 1000)) }
+              : {}),
+          },
         }
       );
     }
@@ -405,14 +443,16 @@ export async function POST(request: NextRequest) {
 
     const resBody = { success: true, feedback };
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
-    return NextResponse.json(resBody);
+    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     const { captureApiError } = await import('@/lib/capture-api-error');
     captureApiError(error, { route: 'POST /api/feedbacks', status: 500 });
     console.error('Error creating feedback:', error);
     return NextResponse.json(
       { error: 'Geri bildirim gönderilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

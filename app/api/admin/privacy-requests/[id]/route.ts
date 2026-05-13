@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +20,7 @@ export async function PATCH(
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'status gerekli' }, { status: 400 });
+    return NextResponse.json({ error: 'status gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const row = await prisma.dataSubjectRequest.update({
@@ -33,5 +34,5 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json({ success: true, request: row });
+  return NextResponse.json({ success: true, request: row }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

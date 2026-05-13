@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,10 @@ export async function GET() {
   });
 
   if (!member) {
-    return NextResponse.json({ success: true, squad: null });
+    return NextResponse.json(
+      { success: true, squad: null },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const squad = member.squad;
@@ -56,16 +60,19 @@ export async function GET() {
   const target = Math.max(1, squad.weeklyTeamTarget);
   const progress = Math.min(target, feedbacksThisWeek);
 
-  return NextResponse.json({
-    success: true,
-    squad: {
-      id: squad.id,
-      name: squad.name,
-      weekStart: weekStart.toISOString(),
-      target,
-      progress,
-      percent: Math.round((progress / target) * 100),
-      memberCount: memberIds.length,
+  return NextResponse.json(
+    {
+      success: true,
+      squad: {
+        id: squad.id,
+        name: squad.name,
+        weekStart: weekStart.toISOString(),
+        target,
+        progress,
+        percent: Math.round((progress / target) * 100),
+        memberCount: memberIds.length,
+      },
     },
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

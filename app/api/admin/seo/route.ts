@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { checkAdminSeoRateLimit } from '@/lib/rate-limit';
 import {
@@ -101,14 +102,20 @@ export async function GET() {
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
       );
     }
     const payload = await getSeoSettingsFull();
-    return NextResponse.json(payload);
+    return NextResponse.json(payload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('SEO GET error:', e);
-    return NextResponse.json({ error: 'SEO ayarları getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'SEO ayarları getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -120,14 +127,20 @@ export async function PUT(request: NextRequest) {
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
       );
     }
     const raw = await request.json();
     const parsed = adminSeoPutSchema.safeParse(raw);
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
-      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const body = parsed.data as Record<string, unknown>;
     const global = body.global ? sanitizeGlobal(body.global as Record<string, unknown>) : undefined;
@@ -135,7 +148,7 @@ export async function PUT(request: NextRequest) {
     const current = await getSeoSettingsFull();
     const nextGlobal = global ? { ...current.global, ...global } : current.global;
     const urlErr = validateGlobalUrls(nextGlobal);
-    if (urlErr) return NextResponse.json({ error: urlErr }, { status: 400 });
+    if (urlErr) return NextResponse.json({ error: urlErr }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     const nextOverrides =
       pageOverrides && Array.isArray(pageOverrides)
         ? pageOverrides.filter(
@@ -169,9 +182,9 @@ export async function PUT(request: NextRequest) {
     });
 
     revalidateTag(SEO_CACHE_TAG, 'max');
-    return NextResponse.json({ ok: true, settings: value });
+    return NextResponse.json({ ok: true, settings: value }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('SEO PUT error:', e);
-    return NextResponse.json({ error: 'SEO ayarları kaydedilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'SEO ayarları kaydedilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

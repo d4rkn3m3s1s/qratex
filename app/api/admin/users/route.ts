@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { parseCursor, encodeCursor } from '@/lib/cursor-pagination';
 import { requireAuth } from '@/lib/api-auth';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -201,13 +202,11 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: useCursor ? undefined : Math.ceil(total / pageSize),
       ...(nextCursor && { nextCursor }),
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { error: 'Kullanıcılar getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'Kullanıcılar getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -226,9 +225,7 @@ export async function POST(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { name, email, password, role, businessName } = validatedData.data;
@@ -240,9 +237,7 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       return NextResponse.json(
-        { error: 'Bu email adresi zaten kayıtlı' },
-        { status: 400 }
-      );
+        { error: 'Bu email adresi zaten kayıtlı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -277,13 +272,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json(
-      { error: 'Kullanıcı oluşturulamadı' },
-      { status: 500 }
-    );
+      { error: 'Kullanıcı oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -302,9 +295,7 @@ export async function PUT(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID parametresi gerekli' },
-        { status: 400 }
-      );
+        { error: 'User ID parametresi gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await request.json();
@@ -312,9 +303,7 @@ export async function PUT(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.user.findUnique({
@@ -323,9 +312,7 @@ export async function PUT(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: 'Kullanıcı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Check email uniqueness if changing
@@ -335,9 +322,7 @@ export async function PUT(request: NextRequest) {
       });
       if (emailExists) {
         return NextResponse.json(
-          { error: 'Bu email adresi zaten kullanılıyor' },
-          { status: 400 }
-        );
+          { error: 'Bu email adresi zaten kullanılıyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
 
@@ -379,13 +364,11 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(
-      { error: 'Kullanıcı güncellenemedi' },
-      { status: 500 }
-    );
+      { error: 'Kullanıcı güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -435,7 +418,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, user });
+        return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'add_xp': {
@@ -448,7 +431,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (!currentUser) {
-          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Calculate new level (1000 XP per level)
@@ -477,7 +460,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, user, leveledUp, newXp, newLevel });
+        return NextResponse.json({ success: true, user, leveledUp, newXp, newLevel }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'set_level': {
@@ -500,7 +483,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, user });
+        return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'grant_badge': {
@@ -517,7 +500,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (existing) {
-          return NextResponse.json({ error: 'Kullanıcı bu rozete zaten sahip' }, { status: 400 });
+          return NextResponse.json({ error: 'Kullanıcı bu rozete zaten sahip' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const userBadge = await prisma.userBadge.create({
@@ -551,7 +534,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, userBadge });
+        return NextResponse.json({ success: true, userBadge }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'revoke_badge': {
@@ -568,7 +551,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (!existing) {
-          return NextResponse.json({ error: 'Kullanıcı bu rozete sahip değil' }, { status: 400 });
+          return NextResponse.json({ error: 'Kullanıcı bu rozete sahip değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         await prisma.userBadge.delete({
@@ -584,7 +567,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'grant_reward': {
@@ -595,7 +578,7 @@ export async function PATCH(request: NextRequest) {
         });
 
         if (!reward) {
-          return NextResponse.json({ error: 'Ödül bulunamadı' }, { status: 404 });
+          return NextResponse.json({ error: 'Ödül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Generate unique code for coupon
@@ -620,7 +603,7 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, userReward });
+        return NextResponse.json({ success: true, userReward }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       case 'send_notification': {
@@ -635,18 +618,18 @@ export async function PATCH(request: NextRequest) {
           },
         });
 
-        return NextResponse.json({ success: true, notification });
+        return NextResponse.json({ success: true, notification }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       default:
-        return NextResponse.json({ error: 'Geçersiz işlem' }, { status: 400 });
+        return NextResponse.json({ error: 'Geçersiz işlem' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
   } catch (error) {
     console.error('Error in user action:', error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
-    return NextResponse.json({ error: 'İşlem başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'İşlem başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -665,17 +648,13 @@ export async function DELETE(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json(
-        { error: 'User ID parametresi gerekli' },
-        { status: 400 }
-      );
+        { error: 'User ID parametresi gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Prevent self-deletion
     if (userId === session.user.id) {
       return NextResponse.json(
-        { error: 'Kendi hesabınızı silemezsiniz' },
-        { status: 400 }
-      );
+        { error: 'Kendi hesabınızı silemezsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.user.findUnique({
@@ -684,9 +663,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: 'Kullanıcı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     await prisma.user.delete({
@@ -709,13 +686,11 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
-      { error: 'Kullanıcı silinemedi' },
-      { status: 500 }
-    );
+      { error: 'Kullanıcı silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -8,6 +8,7 @@ import { createConsumptionReviewSchema } from '@/lib/validations';
 import { getConsumptionReviewReward, getPointsMatrix } from '@/lib/points-rules';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { analyzeWithFallback } from '@/lib/ai-engine';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -83,7 +84,7 @@ export async function POST(
     if (!session?.user || session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
         { error: 'Yetkisiz erişim' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -93,7 +94,7 @@ export async function POST(
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -123,7 +124,7 @@ export async function POST(
     if (!consumption) {
       return NextResponse.json(
         { error: 'Tüketim kaydı bulunamadı' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -131,7 +132,7 @@ export async function POST(
     if (consumption.customerId !== session.user.id) {
       return NextResponse.json(
         { error: 'Bu tüketime yorum yapma yetkiniz yok' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -139,7 +140,7 @@ export async function POST(
     if (consumption.review) {
       return NextResponse.json(
         { error: 'Bu tüketim için zaten yorum yapılmış' },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -214,13 +215,13 @@ export async function POST(
       rewards: { points: pointsEarned, xp: xpEarned },
     };
     if (idemKey) await storeIdempotency(idemKey, 'consumption-review', 200, resBody);
-    return NextResponse.json(resBody);
+    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating review:', error);
     return NextResponse.json(
       { error: 'Yorum kaydedilemedi' },
-      { status: 500 }
-    );
+        { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+      );
   }
 }
 
@@ -239,7 +240,7 @@ export async function PUT(
     if (!session?.user || session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
         { error: 'Yetkisiz erişim' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -249,7 +250,7 @@ export async function PUT(
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -273,7 +274,7 @@ export async function PUT(
     if (!existingReview) {
       return NextResponse.json(
         { error: 'Yorum bulunamadı' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -298,16 +299,19 @@ export async function PUT(
       console.error('Consumption review re-analysis failed:', err);
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Yorumunuz güncellendi',
-      review,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Yorumunuz güncellendi',
+        review,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error updating review:', error);
     return NextResponse.json(
       { error: 'Yorum güncellenemedi' },
-      { status: 500 }
-    );
+        { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+      );
   }
 }

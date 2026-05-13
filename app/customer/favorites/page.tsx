@@ -155,7 +155,7 @@ export default function FavoritesPage() {
                                                 <Button
                                                     variant="secondary"
                                                     size="sm"
-                                                    className="h-8 rounded-lg text-xs"
+                                                    className="min-h-10 touch-manipulation rounded-lg text-xs w-full sm:w-auto"
                                                     asChild
                                                 >
                                                     <Link href={`/customer/nearby?dealerId=${fav.dealerId}`}>
@@ -169,7 +169,7 @@ export default function FavoritesPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                className="h-10 w-10 min-h-10 min-w-10 touch-manipulation rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10"
                                                 onClick={() => removeMutation.mutate(fav.dealerId)}
                                                 disabled={removeMutation.isPending}
                                             >

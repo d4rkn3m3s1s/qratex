@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { utcMondayWeekStart } from '@/lib/innovation-week';
 import { dealerFlashGeoKey } from '@/lib/innovation-geo';
 import { computeWeeklyBriefForDealer } from '@/lib/innovation-weekly-brief';
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const { dealerId, runSeed } = parsed.data;
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     select: { id: true, latitude: true, longitude: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const scenario = buildInnovationDemoScenario(dealerId);
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       ...scenario,
       seeded: null,
       note: 'runSeed: true ile veritabanına demo paketi yazılır.',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const now = new Date();
@@ -113,5 +114,5 @@ export async function POST(request: NextRequest) {
       weeklyBriefId: brief.id,
       segmentProposalId: proposal.id,
     },
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

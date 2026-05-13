@@ -305,7 +305,7 @@ export default function CustomerReferralPage() {
                 <Users className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="font-medium text-foreground mb-1">{t('customerReferral.emptyTitle')}</p>
                 <p className="text-sm text-muted-foreground mb-4">{t('customerReferral.emptyDescription')}</p>
-                <Button onClick={shareCode} size="sm" className={TW_BRAND_CTA_BUTTON}>
+                <Button onClick={shareCode} size="sm" className={`${TW_BRAND_CTA_BUTTON} min-h-10 touch-manipulation w-full max-w-xs mx-auto`}>
                   <Share2 className="h-4 w-4 mr-2" /> {t('customerReferral.shareCode')}
                 </Button>
               </div>

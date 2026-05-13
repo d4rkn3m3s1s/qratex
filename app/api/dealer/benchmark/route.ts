@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -26,10 +27,10 @@ export async function GET(request: NextRequest) {
 
   const dealerId = session.user.role === 'ADMIN' ? request.nextUrl.searchParams.get('dealerId') : session.user.id;
   if (!dealerId) {
-    return NextResponse.json({ error: 'dealerId gerekli (admin için query)' }, { status: 400 });
+    return NextResponse.json({ error: 'dealerId gerekli (admin için query)' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
   if (session.user.role === 'DEALER' && dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const now = new Date();
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
     const allFeedbacks = await prisma.feedback.findMany({
       where: baseWhere,
       select: { rating: true, qrCodeId: true },
+      take: 25000,
     });
     const qrIds = Array.from(new Set(allFeedbacks.map((f) => f.qrCodeId)));
     const qrCodes = await prisma.qRCode.findMany({
@@ -262,5 +264,5 @@ export async function GET(request: NextRequest) {
     },
     weeklyTrend: weeklyData,
     dailyTrend: dailyData,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

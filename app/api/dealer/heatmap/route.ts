@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session || session.user.role !== 'DEALER') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const dealerId = session.user.id;
@@ -76,13 +77,13 @@ export async function GET(req: Request) {
           { dayIndex: 6, dayName: 'Paz', hour: 15, count: 15 },
           { dayIndex: 6, dayName: 'Paz', hour: 20, count: 25 },
         ]
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ data: heatmapData });
+    return NextResponse.json({ data: heatmapData }, { headers: PRIVATE_NO_STORE_HEADERS });
 
   } catch (error) {
     console.error('[HEATMAP_API_ERROR]', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

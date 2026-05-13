@@ -15,13 +15,16 @@ export function useThemeColors() {
 
   const fetchAndApplyTheme = async () => {
     try {
-      const res = await fetch(THEME_SETTINGS_PUBLIC_API_PATH);
+      const res = await fetch(THEME_SETTINGS_PUBLIC_API_PATH, { next: { revalidate: 60 } });
       if (!res.ok) return;
       const data = await res.json();
       
-      if (data.raw && Array.isArray(data.raw)) {
-        const settings = data.raw as Array<{ key: string; value: unknown }>;
-        
+      const settings = Array.isArray(data.entries)
+        ? (data.entries as Array<{ key: string; value: unknown }>)
+        : Array.isArray(data.raw)
+          ? (data.raw as Array<{ key: string; value: unknown }>)
+          : [];
+      if (settings.length > 0) {
         // Find theme settings
         const themeSetting = settings.find((s) => s.key === THEME_SETTINGS_KEYS.activeTheme);
         const colorsSetting = settings.find((s) => s.key === THEME_SETTINGS_KEYS.customColors);

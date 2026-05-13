@@ -2093,18 +2093,20 @@ model SurveyResponse {
 // ─────────────────────────────────────────────────────────────
 
 model Campaign {
-  id            String    @id @default(cuid())
-  dealerId      String
-  dealer        User      @relation("DealerCampaigns", fields: [dealerId], references: [id], onDelete: Cascade)
-  title         String
-  message       String    @db.Text
-  targetSegment String // "vip" | "loyal" | "active" | "risk" | "all"
-  channel       String    @default("notification") // "notification" | "email"
-  status        String    @default("draft") // "draft" | "sent" | "scheduled"
-  sentAt        DateTime?
-  sentCount     Int       @default(0)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  dealerId         String
+  dealer           User      @relation("DealerCampaigns", fields: [dealerId], references: [id], onDelete: Cascade)
+  title            String
+  message          String    @db.Text
+  targetSegment    String // "vip" | "loyal" | "active" | "risk" | "all"
+  channel          String    @default("notification") // "notification" | "email"
+  status           String    @default("draft") // "draft" | "sent" | "scheduled"
+  /// Admin playbook kütüphanesinden uygulandıysa playbook id (örn. low_nps_churn)
+  playbookSourceId String?
+  sentAt           DateTime?
+  sentCount        Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([dealerId, status])
 }

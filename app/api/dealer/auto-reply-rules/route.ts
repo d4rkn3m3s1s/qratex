@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -30,12 +31,13 @@ export async function GET() {
         const rules = await prisma.autoReplyRule.findMany({
             where: { dealerId: auth.session.user.id },
             orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+            take: 300,
         });
 
-        return NextResponse.json({ success: true, rules });
+        return NextResponse.json({ success: true, rules }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error fetching auto-reply rules:', error);
-        return NextResponse.json({ error: 'Kurallar yüklenemedi' }, { status: 500 });
+        return NextResponse.json({ error: 'Kurallar yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -48,14 +50,14 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const parsed = createRuleSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const count = await prisma.autoReplyRule.count({
             where: { dealerId: auth.session.user.id },
         });
         if (count >= 20) {
-            return NextResponse.json({ error: 'En fazla 20 kural oluşturabilirsiniz' }, { status: 400 });
+            return NextResponse.json({ error: 'En fazla 20 kural oluşturabilirsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const rule = await prisma.autoReplyRule.create({
@@ -70,9 +72,9 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        return NextResponse.json({ success: true, rule }, { status: 201 });
+        return NextResponse.json({ success: true, rule }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error creating auto-reply rule:', error);
-        return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 });
+        return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

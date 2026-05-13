@@ -20,6 +20,7 @@ import {
   Database,
   FileDown,
   Trash2,
+  Cake,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
@@ -113,6 +114,14 @@ export default function CustomerSettingsPage() {
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  const [birthdayDate, setBirthdayDate] = useState('');
+  const [birthdayBonusHint, setBirthdayBonusHint] = useState<number | null>(null);
+  const [birthdayLoading, setBirthdayLoading] = useState(true);
+  const [birthdaySaving, setBirthdaySaving] = useState(false);
+  const [birthdayIsToday, setBirthdayIsToday] = useState(false);
+  const [birthdayCanClaim, setBirthdayCanClaim] = useState(false);
+  const [birthdayClaiming, setBirthdayClaiming] = useState(false);
+
   // Fetch settings on mount
   useEffect(() => {
     const fetchSettings = async () => {
@@ -132,6 +141,35 @@ export default function CustomerSettingsPage() {
       }
     };
     fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/birthday');
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          setBirthdayBonusHint(typeof data.bonusAmount === 'number' ? data.bonusAmount : null);
+          setBirthdayIsToday(!!data.isBirthdayToday);
+          setBirthdayCanClaim(!!data.canClaimBonus);
+          const iso = data.birthday?.birthDate;
+          if (iso) {
+            const d = new Date(iso);
+            if (!Number.isNaN(d.getTime())) {
+              setBirthdayDate(d.toISOString().slice(0, 10));
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setBirthdayLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSelectAvatar = (avatar: string) => {
@@ -162,6 +200,55 @@ export default function CustomerSettingsPage() {
       toast.error('Bir hata oluştu');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveBirthday = async () => {
+    if (!birthdayDate) {
+      toast.error(tp('settingsBirthday.errorSelectDate'));
+      return;
+    }
+    setBirthdaySaving(true);
+    try {
+      const res = await fetch('/api/birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set', birthDate: birthdayDate }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || tp('settingsBirthday.errorSave'));
+      toast.success(data.message || 'Doğum tarihi kaydedildi');
+      const r2 = await fetch('/api/birthday');
+      const d2 = await r2.json();
+      if (r2.ok && d2.success) {
+        setBirthdayIsToday(!!d2.isBirthdayToday);
+        setBirthdayCanClaim(!!d2.canClaimBonus);
+        setBirthdayBonusHint(typeof d2.bonusAmount === 'number' ? d2.bonusAmount : null);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Bir hata oluştu');
+    } finally {
+      setBirthdaySaving(false);
+    }
+  };
+
+  const handleClaimBirthdayBonus = async () => {
+    setBirthdayClaiming(true);
+    try {
+      const res = await fetch('/api/birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || tp('settingsBirthday.errorClaim'));
+      toast.success(data.message || 'Bonus hesabınıza eklendi!');
+      setBirthdayCanClaim(false);
+      setBirthdayIsToday(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Bir hata oluştu');
+    } finally {
+      setBirthdayClaiming(false);
     }
   };
 
@@ -385,6 +472,7 @@ export default function CustomerSettingsPage() {
                               variant={effectiveCategory === category.category ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setSelectedCategory(category.category)}
+                              className="touch-manipulation min-h-10"
                             >
                               {category.category}
                             </Button>
@@ -428,7 +516,7 @@ export default function CustomerSettingsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-3 gap-2"
+                      className="mt-3 gap-2 w-full touch-manipulation sm:w-auto min-h-10 justify-center"
                       onClick={() => setAvatarDialogOpen(true)}
                     >
                       <Camera className="h-4 w-4" />
@@ -457,10 +545,68 @@ export default function CustomerSettingsPage() {
                   <Input value={profile.email} disabled />
                   <p className="text-xs text-muted-foreground">Email değiştirmek için destek ile iletişime geçin</p>
                 </div>
-                <Button onClick={handleSaveProfile} disabled={saving} className="gap-2">
+                <Button onClick={handleSaveProfile} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto min-h-10">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card glass>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Cake className="h-5 w-5 text-primary shrink-0" />
+                  {tp('settingsBirthday.cardTitle')}
+                </CardTitle>
+                <CardDescription>{tp('settingsBirthday.cardDescription')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {birthdayLoading ? (
+                  <p className="text-sm text-muted-foreground">{tp('settingsBirthday.loading')}</p>
+                ) : (
+                  <>
+                    {birthdayIsToday && birthdayCanClaim && birthdayBonusHint != null && (
+                      <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 space-y-3">
+                        <p className="text-sm font-medium text-foreground">{tp('settingsBirthday.todayBonusReady')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {tp('settingsBirthday.todayBonusBody').replace('{n}', String(birthdayBonusHint))}
+                        </p>
+                        <Button
+                          type="button"
+                          className="w-full touch-manipulation gap-2 min-h-10 justify-center"
+                          disabled={birthdayClaiming}
+                          onClick={() => void handleClaimBirthdayBonus()}
+                        >
+                          {birthdayClaiming ? tp('settingsBirthday.claiming') : tp('settingsBirthday.claimCta')}
+                        </Button>
+                      </div>
+                    )}
+                    {birthdayIsToday && !birthdayCanClaim && (
+                      <p className="text-xs text-muted-foreground rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                        {tp('settingsBirthday.alreadyClaimed')}
+                      </p>
+                    )}
+                    {birthdayBonusHint != null && (
+                      <p className="text-xs text-muted-foreground">
+                        {tp('settingsBirthday.annualHint').replace('{n}', String(birthdayBonusHint))}
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="birthday-date">{tp('settingsBirthday.labelBirthDate')}</Label>
+                      <Input
+                        id="birthday-date"
+                        type="date"
+                        className="max-w-xs touch-manipulation"
+                        value={birthdayDate}
+                        onChange={(e) => setBirthdayDate(e.target.value)}
+                      />
+                    </div>
+                    <Button type="button" onClick={() => void handleSaveBirthday()} disabled={birthdaySaving} className="gap-2 touch-manipulation w-full sm:w-auto min-h-10">
+                      <Save className="h-4 w-4" />
+                      {birthdaySaving ? tp('settingsBirthday.saving') : tp('settingsBirthday.saveCta')}
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -540,7 +686,7 @@ export default function CustomerSettingsPage() {
                   </div>
                 </div>
 
-                <Button onClick={handleSaveNotifications} disabled={saving} className="gap-2">
+                <Button onClick={handleSaveNotifications} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto min-h-10">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
@@ -585,7 +731,7 @@ export default function CustomerSettingsPage() {
                     onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
                   />
                 </div>
-                <Button onClick={handleChangePassword} disabled={saving} className="gap-2">
+                <Button onClick={handleChangePassword} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto min-h-10">
                   <Shield className="h-4 w-4" />
                   {saving ? 'Güncelleniyor...' : 'Şifreyi Güncelle'}
                 </Button>
@@ -701,7 +847,7 @@ export default function CustomerSettingsPage() {
                   </div>
                 </div>
 
-                <Button onClick={handleSavePreferences} disabled={saving} className="gap-2 w-full sm:w-auto mt-4">
+                <Button onClick={handleSavePreferences} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto mt-4 min-h-10">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Tercihleri Kaydet'}
                 </Button>
@@ -733,7 +879,7 @@ export default function CustomerSettingsPage() {
                   <Button
                     type="button"
                     variant="secondary"
-                    className="gap-2"
+                    className="gap-2 w-full touch-manipulation sm:w-auto min-h-10"
                     disabled={exportingData}
                     onClick={handleExportPersonalData}
                   >
@@ -753,7 +899,7 @@ export default function CustomerSettingsPage() {
                   <Button
                     type="button"
                     variant="destructive"
-                    className="gap-2"
+                    className="gap-2 w-full touch-manipulation sm:w-auto min-h-10"
                     onClick={() => {
                       setDeleteConfirmEmail('');
                       setDeleteDialogOpen(true);
@@ -786,12 +932,15 @@ export default function CustomerSettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingAccount}>{tp('customerPrivacy.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingAccount} className="w-full touch-manipulation min-h-10 sm:w-auto mt-0">
+              {tp('customerPrivacy.cancel')}
+            </AlertDialogCancel>
             <Button
               type="button"
               variant="destructive"
               disabled={deletingAccount || !deleteConfirmEmail.trim()}
               onClick={() => void handleDeleteAccount()}
+              className="w-full touch-manipulation min-h-10 sm:w-auto"
             >
               {deletingAccount ? '…' : tp('customerPrivacy.confirmDelete')}
             </Button>

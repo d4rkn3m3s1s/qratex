@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getStreakMilestoneBonus, getStreakMilestones } from '@/lib/points-rules';
+import { z } from 'zod';
 
 // GET - Get user's streak info
 
@@ -14,7 +16,7 @@ export async function GET(req: NextRequest) {
     const matrix = await getPointsMatrix();
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get or create streak record
@@ -65,12 +67,16 @@ export async function GET(req: NextRequest) {
       nextMilestone,
       daysUntilNextMilestone,
       streakBonuses,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error fetching streak:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
+
+const streakPostBodySchema = z.object({ action: z.enum(['freeze']).optional() }).strict();
 
 // POST - Check in for the day (update streak)
 export async function POST(req: NextRequest) {
@@ -78,10 +84,18 @@ export async function POST(req: NextRequest) {
     const matrix = await getPointsMatrix();
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const { action } = await req.json();
+    const rawBody = await req.json().catch(() => ({}));
+    const bodyParsed = streakPostBodySchema.safeParse(rawBody);
+    if (!bodyParsed.success) {
+      return NextResponse.json(
+        { error: 'Geçersiz istek gövdesi' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const { action } = bodyParsed.data;
 
     // Get current streak
     let streak = await prisma.userStreak.findUnique({
@@ -111,7 +125,7 @@ export async function POST(req: NextRequest) {
         success: true,
         message: 'Streak donduruldu! 24 saat boyunca seri korunacak.',
         streak,
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const now = new Date();
@@ -132,7 +146,7 @@ export async function POST(req: NextRequest) {
           message: 'Bugün zaten check-in yaptın!',
           streak,
           alreadyCheckedIn: true,
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
 
@@ -187,9 +201,11 @@ export async function POST(req: NextRequest) {
       streak,
       bonusEarned,
       milestoneReached,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error updating streak:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

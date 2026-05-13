@@ -314,7 +314,7 @@ export default function CustomerBadgesPage() {
               variant={filter === f ? 'default' : 'outline'}
               size="sm"
               onClick={() => setFilter(f)}
-              className={`gap-2 ${filter !== f ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-border dark:text-inherit' : ''}`}
+              className={`gap-2 min-h-10 touch-manipulation ${filter !== f ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-border dark:text-inherit' : ''}`}
             >
               {f === 'all' && t('common.all')}
               {f === 'earned' && <><Trophy className="w-4 h-4" /> {t('customerBadges.earned')}</>}
@@ -328,7 +328,7 @@ export default function CustomerBadgesPage() {
             variant={categoryFilter === 'all' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setCategoryFilter('all')}
-            className={categoryFilter === 'all' ? '' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0'}
+            className={categoryFilter === 'all' ? 'min-h-10 touch-manipulation' : 'min-h-10 touch-manipulation bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0'}
           >
             {t('customerBadges.allCategories')}
           </Button>
@@ -341,7 +341,7 @@ export default function CustomerBadgesPage() {
                 variant={categoryFilter === cat ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setCategoryFilter(cat)}
-                className={`gap-1.5 ${categoryFilter !== cat ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0' : ''}`}
+                className={`gap-1.5 min-h-10 touch-manipulation ${categoryFilter !== cat ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400 dark:bg-transparent dark:border-0' : ''}`}
               >
                 <Icon className="w-4 h-4" />
                 {getCategoryLabel(cat)}
@@ -434,7 +434,7 @@ export default function CustomerBadgesPage() {
                                   <div className="w-full space-y-1.5">
                                     {badge.pointCost != null && badge.pointCost > 0 ? (
                                       <>
-                                        <Button size="sm" variant="secondary" className="w-full gap-1.5" disabled={userPoints < badge.pointCost || unlockingId === badge.id} onClick={(e) => { e.stopPropagation(); handleUnlockWithPoints(badge); }}><Gift className="w-4 h-4" />{unlockingId === badge.id ? t('customerBadges.unlocking') : `${badge.pointCost} ${t('customerBadges.unlockWithPointsSuffix')}`}</Button>
+                                        <Button size="sm" variant="secondary" className="w-full gap-1.5 min-h-10 touch-manipulation" disabled={userPoints < badge.pointCost || unlockingId === badge.id} onClick={(e) => { e.stopPropagation(); handleUnlockWithPoints(badge); }}><Gift className="w-4 h-4" />{unlockingId === badge.id ? t('customerBadges.unlocking') : `${badge.pointCost} ${t('customerBadges.unlockWithPointsSuffix')}`}</Button>
                                         {userPoints < badge.pointCost && <p className="text-xs text-muted-foreground">{badge.pointCost - userPoints} {t('customerBadges.pointsMoreNeeded')}</p>}
                                       </>
                                     ) : (
@@ -584,7 +584,7 @@ export default function CustomerBadgesPage() {
                                 <Button
                                   size="sm"
                                   variant="secondary"
-                                  className="w-full gap-1.5"
+                                  className="w-full gap-1.5 min-h-10 touch-manipulation"
                                   disabled={userPoints < badge.pointCost || unlockingId === badge.id}
                                   onClick={(e) => {
                                     e.stopPropagation();

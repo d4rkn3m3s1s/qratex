@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
@@ -22,16 +23,14 @@ const postSchema = z.object({
 export async function POST(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.tablePulse) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const body = await request.json().catch(() => ({}));
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? 'Geçersiz istek' },
-      { status: 400 }
-    );
+      { error: parsed.error.errors[0]?.message ?? 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const { dealerId, qrCodeId, tableCode, mood, note } = parsed.data;
@@ -41,7 +40,7 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (qrCodeId) {
@@ -50,7 +49,7 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
     if (!qr) {
-      return NextResponse.json({ error: 'QR kod bu işletmeye ait değil' }, { status: 400 });
+      return NextResponse.json({ error: 'QR kod bu işletmeye ait değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
   }
 
@@ -69,5 +68,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, pulse });
+  return NextResponse.json({ success: true, pulse }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { DEFAULT_BADGE_ALGORITHM_CONFIG } from '@/lib/badge-algorithm';
 import { z } from 'zod';
@@ -47,7 +48,7 @@ export async function GET() {
     success: true,
     config: row?.value ?? DEFAULT_BADGE_ALGORITHM_CONFIG,
     source: row ? 'settings' : 'default',
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(req: NextRequest) {
@@ -60,7 +61,7 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const parsed = configSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const config = parsed.data;
@@ -74,9 +75,7 @@ export async function PUT(req: NextRequest) {
 
     if (Math.abs(sum - 1) > 0.01) {
       return NextResponse.json(
-        { success: false, error: 'Ağırlıkların toplamı 1 olmalı (±0.01).' },
-        { status: 400 }
-      );
+        { success: false, error: 'Ağırlıkların toplamı 1 olmalı (±0.01).' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.settings.findUnique({ where: { key: KEY } });
@@ -98,10 +97,10 @@ export async function PUT(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, config: saved.value });
+    return NextResponse.json({ success: true, config: saved.value }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Badge algorithm save error:', error);
-    return NextResponse.json({ success: false, error: 'Konfigürasyon kaydedilemedi' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Konfigürasyon kaydedilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,8 @@ export async function GET() {
     // Get all customers with their stats
     const customers = await prisma.user.findMany({
       where: { role: 'CUSTOMER' },
+      take: 10_000,
+      orderBy: { id: 'asc' },
       select: {
         id: true,
         name: true,
@@ -106,9 +109,9 @@ export async function GET() {
       success: true,
       segments: segmentSummary,
       totalCustomers: customers.length,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching segments:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

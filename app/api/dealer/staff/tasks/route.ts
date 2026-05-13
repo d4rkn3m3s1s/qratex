@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -30,9 +31,10 @@ export async function GET(request: NextRequest) {
       user: { select: { id: true, name: true, email: true } },
     },
     orderBy: [{ status: 'asc' }, { dueAt: 'asc' }],
+    take: 500,
   });
 
-  return NextResponse.json({ success: true, tasks });
+  return NextResponse.json({ success: true, tasks }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -44,9 +46,7 @@ export async function POST(request: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' },
-      { status: 400 }
-    );
+      { error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const staff = await prisma.dealerStaff.findFirst({
@@ -54,9 +54,7 @@ export async function POST(request: NextRequest) {
   });
   if (!staff) {
     return NextResponse.json(
-      { error: 'Bu personel bu işletmeye bağlı değil' },
-      { status: 400 }
-    );
+      { error: 'Bu personel bu işletmeye bağlı değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const task = await prisma.staffTask.create({
@@ -72,5 +70,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, task });
+  return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

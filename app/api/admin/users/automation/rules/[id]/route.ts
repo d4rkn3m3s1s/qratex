@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 
@@ -34,10 +35,10 @@ export async function GET(_: NextRequest, context: { params: Promise<{ id: strin
         approvedBy: { select: { id: true, name: true, email: true } },
       },
     });
-    if (!item) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 });
-    return NextResponse.json({ success: true, item });
+    if (!item) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: true, item }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Kural getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Kural getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -51,11 +52,11 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     const body = await request.json();
     const parsed = updateRuleSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.userAutomationRule.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 });
+    if (!existing) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
 
     const data = parsed.data;
     const { approved, triggerConfig, condition, actions, ...scalarFields } = data;
@@ -89,9 +90,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       },
     });
 
-    return NextResponse.json({ success: true, item });
+    return NextResponse.json({ success: true, item }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Kural güncellenemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Kural güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -103,7 +104,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const { session } = auth;
     const { id } = await context.params;
     const existing = await prisma.userAutomationRule.findUnique({ where: { id } });
-    if (!existing) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 });
+    if (!existing) return NextResponse.json({ error: 'Kural bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     await prisma.userAutomationRule.delete({ where: { id } });
     await prisma.auditLog.create({
       data: {
@@ -115,8 +116,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
         ...auditMeta,
       },
     });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Kural silinemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Kural silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

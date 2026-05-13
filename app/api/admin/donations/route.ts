@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
       target: p.goal,
     })),
     recent,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -99,7 +100,7 @@ export async function PATCH(request: NextRequest) {
   const projectId = String(body?.projectId || '');
   const action = String(body?.action || '');
   if (!projectId || (action !== 'activate' && action !== 'deactivate' && action !== 'freeze')) {
-    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const isActive = action === 'activate';
@@ -109,7 +110,7 @@ export async function PATCH(request: NextRequest) {
     select: { id: true, name: true, isActive: true },
   });
 
-  return NextResponse.json({ success: true, project: updated });
+  return NextResponse.json({ success: true, project: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -119,7 +120,7 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const projectId = String(body?.projectId || '');
   if (!projectId) {
-    return NextResponse.json({ success: false, error: 'projectId gerekli' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'projectId gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const updated = await prisma.donationProject.update({
@@ -148,5 +149,5 @@ export async function PUT(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, project: updated });
+  return NextResponse.json({ success: true, project: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

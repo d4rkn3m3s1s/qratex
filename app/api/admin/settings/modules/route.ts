@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
 import { Prisma } from '@prisma/client';
 
@@ -21,7 +22,7 @@ export async function GET() {
     success: true,
     catalog: MODULE_CATALOG,
     controls,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -60,5 +61,5 @@ export async function PUT(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, controls });
+  return NextResponse.json({ success: true, controls }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

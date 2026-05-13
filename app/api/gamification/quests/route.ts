@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { authOptions } from '@/lib/auth';
 import { createQuestSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -21,9 +22,7 @@ export async function GET(req: Request) {
 
     if (userIdParam === 'me' && !userId) {
       return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' },
-        { status: 401 }
-      );
+        { success: false, error: 'Giriş yapmalısınız' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const quests = await prisma.quest.findMany({
@@ -44,13 +43,14 @@ export async function GET(req: Request) {
         }),
       },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     });
 
     if (!userId) {
       return NextResponse.json({
         success: true,
         data: quests,
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const matrix = await getPointsMatrix();
@@ -67,6 +67,7 @@ export async function GET(req: Request) {
             entityId: { in: userQuestIds },
           },
           select: { entityId: true },
+          take: 200,
         })
       : [];
 
@@ -93,13 +94,13 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       data: normalized,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Quests fetch error:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { success: false, error: 'Görevler yüklenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görevler yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -112,9 +113,7 @@ export async function POST(req: Request) {
 
     if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json(
-        { success: false, error: 'Yetkisiz erişim' },
-        { status: 401 }
-      );
+        { success: false, error: 'Yetkisiz erişim' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await req.json();
@@ -148,13 +147,13 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       data: quest,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Quest create error:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { success: false, error: 'Görev oluşturulamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görev oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

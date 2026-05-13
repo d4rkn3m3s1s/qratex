@@ -2,18 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, clampTakeParam, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
+
+const ANALYTICS_PERIOD_DEFAULT = 30;
+const ANALYTICS_PERIOD_MAX = 366;
+/** Güvenlik / bellek: tek istekte işlenecek tüketim üst sınırı (istatistikler bu örneklem üzerinden). */
+const ANALYTICS_MAX_CONSUMPTION_ROWS = 8_000;
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     const { searchParams } = new URL(req.url);
-    const period = parseInt(searchParams.get('period') || '30');
+    const period = clampTakeParam(
+      searchParams.get('period'),
+      ANALYTICS_PERIOD_DEFAULT,
+      ANALYTICS_PERIOD_MAX
+    );
     
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - period);
@@ -30,26 +43,45 @@ export async function GET(req: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
-    // Get consumptions
-    const consumptions = await prisma.consumption.findMany({
-      where: {
-        customerId: session.user.id,
-        createdAt: { gte: startDate },
-      },
-      include: {
-        product: {
-          include: { category: true },
-        },
-        dealer: {
-          select: { id: true, businessName: true, name: true },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const periodWhere = {
+      customerId: session.user.id,
+      createdAt: { gte: startDate },
+    };
 
+    const [consumptions, periodTotalCount, spentAgg] = await Promise.all([
+      prisma.consumption.findMany({
+        where: periodWhere,
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              category: {
+                select: { id: true, name: true, icon: true },
+              },
+            },
+          },
+          dealer: {
+            select: { id: true, businessName: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: ANALYTICS_MAX_CONSUMPTION_ROWS,
+      }),
+      prisma.consumption.count({ where: periodWhere }),
+      prisma.consumption.aggregate({
+        where: periodWhere,
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const sampledCount = consumptions.length;
     const consumptionIds = consumptions.map((c) => c.id);
     const reviews = consumptionIds.length
       ? await prisma.consumptionReview.findMany({
@@ -76,9 +108,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Calculate stats
-    const totalConsumptions = consumptions.length;
-    const totalSpent = consumptions.reduce((sum, c) => sum + (c.amount || 0), 0);
+    // Calculate stats (özet: dönem toplamları DB aggregate; dağılımlar en güncel örneklem üzerinden)
+    const totalConsumptions = periodTotalCount;
+    const totalSpent = spentAgg._sum.amount ?? 0;
     const avgSpentPerVisit = totalConsumptions > 0 ? totalSpent / totalConsumptions : 0;
 
     // Growth calculations
@@ -100,7 +132,8 @@ export async function GET(req: NextRequest) {
         name,
         count: data.count,
         icon: data.icon,
-        percentage: Math.round((data.count / totalConsumptions) * 100) || 0,
+        percentage:
+          sampledCount > 0 ? Math.round((data.count / sampledCount) * 100) : 0,
       }))
       .sort((a, b) => b.count - a.count);
 
@@ -305,9 +338,14 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    return NextResponse.json({ success: true, analytics });
+    return NextResponse.json({ success: true, analytics }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching customer analytics:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

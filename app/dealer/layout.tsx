@@ -26,12 +26,12 @@ export default async function DealerLayout({
     <div className="flex min-h-dvh overflow-x-hidden">
       <SkipToMainContent />
       <Sidebar role="DEALER" siteName={seo.siteName} />
-      <div className="flex-1 flex flex-col min-w-0 px-3 sm:px-4 lg:px-6 overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-4 sm:pr-4 lg:pl-6 lg:pr-6">
         <DashboardHeader showSearch={true} />
         <main
           id="dashboard-main"
           tabIndex={-1}
-          className="flex-1 min-w-0 w-full max-w-[100vw] break-words py-3 sm:py-5 lg:py-6 overflow-x-hidden overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-6 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex-1 min-w-0 w-full max-w-[100vw] break-words py-3 sm:py-5 lg:py-6 overflow-x-hidden overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {children}
         </main>

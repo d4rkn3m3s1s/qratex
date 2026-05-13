@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { getActionCompletionAggregate } from '@/lib/kpis/action-completion';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -12,9 +13,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const period = (searchParams.get('period') || '30d') as '7d' | '30d' | '90d';
   if (!['7d', '30d', '90d'].includes(period)) {
-    return NextResponse.json({ error: 'Geçersiz period' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Geçersiz period' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const result = await getActionCompletionAggregate(period);
-  return NextResponse.json(result);
+  return NextResponse.json(result, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { assertModuleEnabled } from '@/lib/module-gate';
 
@@ -24,18 +25,14 @@ export async function GET(
 
     if (!reward) {
       return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Ödül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ success: true, data: reward });
+    return NextResponse.json({ success: true, data: reward }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching reward:', error);
     return NextResponse.json(
-      { success: false, error: 'Ödül getirilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödül getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -50,7 +47,7 @@ export async function PATCH(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -59,9 +56,7 @@ export async function PATCH(
     const oldReward = await prisma.reward.findUnique({ where: { id } });
     if (!oldReward) {
       return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Ödül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const reward = await prisma.reward.update({
@@ -90,13 +85,11 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ success: true, data: reward });
+    return NextResponse.json({ success: true, data: reward }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating reward:', error);
     return NextResponse.json(
-      { success: false, error: 'Ödül güncellenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödül güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -111,7 +104,7 @@ export async function DELETE(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -119,9 +112,7 @@ export async function DELETE(
     const reward = await prisma.reward.findUnique({ where: { id } });
     if (!reward) {
       return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Ödül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     await prisma.reward.delete({ where: { id } });
@@ -137,13 +128,11 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true, message: 'Ödül silindi' });
+    return NextResponse.json({ success: true, message: 'Ödül silindi' }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting reward:', error);
     return NextResponse.json(
-      { success: false, error: 'Ödül silinemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Ödül silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

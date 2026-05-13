@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import {
   DISCOVERY_CONFIG_SETTING_KEY,
@@ -19,10 +20,10 @@ export async function GET() {
     if ('error' in auth) return auth.error;
 
     const config = await getDiscoveryConfig();
-    return NextResponse.json({ success: true, config });
+    return NextResponse.json({ success: true, config }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin discovery config fetch error:', error);
-    return NextResponse.json({ success: false, error: 'Discovery ayarları alınamadı' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Discovery ayarları alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -38,9 +39,7 @@ export async function PUT(request: NextRequest) {
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
       return NextResponse.json(
-        { success: false, error: msg, details: parsed.error.flatten() },
-        { status: 400 }
-      );
+        { success: false, error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const normalized = normalizeDiscoveryConfig(parsed.data.config);
 
@@ -63,9 +62,9 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, config: normalized });
+    return NextResponse.json({ success: true, config: normalized }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin discovery config update error:', error);
-    return NextResponse.json({ success: false, error: 'Discovery ayarları güncellenemedi' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Discovery ayarları güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

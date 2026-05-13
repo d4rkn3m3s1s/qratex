@@ -306,7 +306,7 @@ export default function CustomerQuestsPage() {
   const dailyProgress = dailyQuests.length > 0 ? (dailyCompleted / dailyQuests.length) * 100 : 0;
 
   return (
-    <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
+    <div className="space-y-4 md:space-y-6 pb-6 md:pb-6">
       <DashboardPageHeading
         title={t('customerQuests.title')}
         description={t('customerQuests.description')}
@@ -316,7 +316,7 @@ export default function CustomerQuestsPage() {
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="gap-1.5 sm:gap-2 h-9 touch-manipulation shrink-0"
+            className="gap-1.5 sm:gap-2 min-h-10 touch-manipulation shrink-0"
           >
             <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{t('common.refresh')}</span>
@@ -730,15 +730,15 @@ export default function CustomerQuestsPage() {
                     : t('customerQuests.noActiveHint')}
                 </p>
                 {filter !== 'all' ? (
-                  <Button variant="outline" onClick={() => setFilter('all')} className="h-9 sm:h-10 text-xs sm:text-sm">
+                  <Button variant="outline" onClick={() => setFilter('all')} className="min-h-10 touch-manipulation w-full sm:w-auto text-xs sm:text-sm">
                     {t('customerQuests.showAll')}
                   </Button>
                 ) : (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                  <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 w-full">
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 w-full min-h-10 touch-manipulation text-xs sm:text-sm sm:flex-1">
                       <Link href="/customer/consumptions">{t('customerQuests.myConsumptions')}</Link>
                     </Button>
-                    <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs sm:text-sm">
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 w-full min-h-10 touch-manipulation text-xs sm:text-sm sm:flex-1">
                       <Link href="/customer/feedbacks">{t('customerQuests.myFeedbacks')}</Link>
                     </Button>
                   </div>

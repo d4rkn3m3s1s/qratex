@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth, requireDealerResource } from '@/lib/api-auth';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import { PRIVATE_NO_STORE_HEADERS, clampTakeParam } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
+
+const TABLE_PULSE_MAX = 100;
 
 export async function GET(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.tablePulse) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Özellik devre dışı' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
   const forbidden = requireDealerResource(session, targetDealerId);
   if (forbidden) return forbidden;
 
-  const take = Math.min(parseInt(searchParams.get('take') || '50', 10) || 50, 200);
+  const take = clampTakeParam(searchParams.get('take'), 50, TABLE_PULSE_MAX);
 
   const pulses = await prisma.tablePulse.findMany({
     where: { dealerId: targetDealerId },
@@ -39,5 +45,5 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ pulses });
+  return NextResponse.json({ pulses }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

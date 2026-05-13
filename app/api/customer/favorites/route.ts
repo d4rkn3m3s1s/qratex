@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+
+const favoritePostSchema = z.object({
+  dealerId: z.string().min(1).max(64).transform((s) => s.trim()),
+});
 
 /** GET: Müşterinin favori işletme id listesi ve özet bilgileri */
 export async function GET() {
@@ -10,7 +16,7 @@ export async function GET() {
   if ('error' in auth) return auth.error;
   const { session } = auth;
   if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   try {
@@ -29,6 +35,7 @@ export async function GET() {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     const favorites = list.map((f) => ({
@@ -41,14 +48,22 @@ export async function GET() {
       longitude: f.dealer.longitude,
     }));
 
-    return NextResponse.json({
-      success: true,
-      data: favorites,
-      dealerIds: favorites.map((f) => f.dealerId),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: favorites,
+        dealerIds: favorites.map((f) => f.dealerId),
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Customer favorites GET error:', error);
-    return NextResponse.json({ error: 'Favoriler alınamadı' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Favoriler alınamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }
 
@@ -58,21 +73,28 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session } = auth;
   if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   try {
-    const body = await request.json();
-    const dealerId = typeof body.dealerId === 'string' ? body.dealerId.trim() : null;
-    if (!dealerId) {
-      return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+    const raw = await request.json().catch(() => ({}));
+    const parsed = favoritePostSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Geçersiz dealerId' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
+    const dealerId = parsed.data.dealerId;
 
     const dealer = await prisma.user.findFirst({
       where: { id: dealerId, role: 'DEALER' },
     });
     if (!dealer) {
-      return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'İşletme bulunamadı' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     await prisma.customerFavoriteDealer.upsert({
@@ -83,10 +105,15 @@ export async function POST(request: NextRequest) {
       update: {},
     });
 
-    return NextResponse.json({ success: true, added: true });
+    return NextResponse.json({ success: true, added: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Customer favorites POST error:', error);
-    return NextResponse.json({ error: 'Favorilere eklenemedi' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Favorilere eklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }
 
@@ -96,21 +123,29 @@ export async function DELETE(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session } = auth;
   if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const dealerId = request.nextUrl.searchParams.get('dealerId');
   if (!dealerId) {
-    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'dealerId gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   try {
     await prisma.customerFavoriteDealer.deleteMany({
       where: { userId: session.user.id, dealerId },
     });
-    return NextResponse.json({ success: true, removed: true });
+    return NextResponse.json({ success: true, removed: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Customer favorites DELETE error:', error);
-    return NextResponse.json({ error: 'Favorilerden çıkarılamadı' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Favorilerden çıkarılamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

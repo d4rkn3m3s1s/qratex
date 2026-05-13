@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -20,9 +21,10 @@ export async function GET() {
   const templates = await prisma.checklistTemplate.findMany({
     where: { dealerId, isActive: true },
     orderBy: { type: 'asc' },
+    take: 100,
   });
 
-  return NextResponse.json({ success: true, templates });
+  return NextResponse.json({ success: true, templates }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const template = await prisma.checklistTemplate.create({
@@ -45,5 +47,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, template });
+  return NextResponse.json({ success: true, template }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

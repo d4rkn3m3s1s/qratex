@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
       totalPages: Math.max(1, Math.ceil(totalSquads / pageSize)),
     },
     squads: squads.map((s) => ({ ...s, isFrozen: frozenIds.includes(s.id) })),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -99,12 +100,12 @@ export async function PATCH(request: NextRequest) {
   const squadId = String(body?.squadId || '');
   const action = String(body?.action || '');
   if (!squadId || (action !== 'freeze' && action !== 'unfreeze')) {
-    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const ids = await getFrozenSquadIds();
   const next =
     action === 'freeze' ? Array.from(new Set([...ids, squadId])) : ids.filter((id) => id !== squadId);
   await saveFrozenSquadIds(next);
-  return NextResponse.json({ success: true, frozenSquadIds: next });
+  return NextResponse.json({ success: true, frozenSquadIds: next }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

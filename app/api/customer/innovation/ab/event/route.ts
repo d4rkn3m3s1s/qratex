@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { recordInnovationAbEvent } from '@/lib/innovation-ab';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'experimentId ve variant gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'experimentId ve variant gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const session = await getServerSession(authOptions);
@@ -28,5 +32,5 @@ export async function POST(request: NextRequest) {
     'conversion'
   );
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

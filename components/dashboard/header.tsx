@@ -259,13 +259,13 @@ export function DashboardHeader({ title, description, showSearch = true, actions
   };
 
   return (
-    <header className="sticky top-0 z-40 -mx-3 sm:-mx-4 lg:-mx-6 px-3 sm:px-4 lg:px-6 py-2 sm:py-0 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 supports-[padding:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)] mb-3 sm:mb-4 min-h-14 sm:min-h-16">
+    <header className="sticky top-0 z-40 -ml-[max(0.75rem,env(safe-area-inset-left,0px))] -mr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:-mx-4 lg:-mx-6 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-4 sm:pr-4 lg:pl-6 lg:pr-6 py-2 sm:py-0 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 supports-[padding:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)] mb-3 sm:mb-4 min-h-14 sm:min-h-16">
       {showSearch ? (
         <p id="dashboard-global-search-status" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {searchStatusAnnouncement}
         </p>
       ) : null}
-      <div className="flex h-12 sm:h-16 items-center justify-between gap-2">
+      <div className="flex min-h-[3.25rem] sm:h-16 items-center justify-between gap-2">
         {/* Left - Title & Search */}
         <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
           {title && (
@@ -333,7 +333,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Page Actions */}
           {actions}
-          <LanguageSwitcher className="h-9 min-h-9 min-w-9 w-9 rounded-full" />
+          <LanguageSwitcher className="h-10 w-10 min-h-10 min-w-10 rounded-full sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9" />
 
           {showSearch && (
             <Sheet open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
@@ -406,7 +406,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 min-h-9 min-w-9 w-9 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                className="h-10 w-10 min-h-10 min-w-10 sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
                 aria-label={t('appShell.themeSelect')}
               >
                 {mounted && (theme === 'system' || !theme) ? (
@@ -444,10 +444,10 @@ export function DashboardHeader({ title, description, showSearch = true, actions
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-9 min-h-9 min-w-9 w-9 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
+                className="relative h-10 w-10 min-h-10 min-w-10 sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
                 aria-label={t('appShell.accountMenu')}
               >
-                <Avatar className="h-9 w-9">
+                <Avatar className="h-10 w-10 sm:h-9 sm:w-9">
                   <AvatarImage src={session?.user?.image || ''} />
                   <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-sm text-primary-foreground">
                     {getInitials(session?.user?.name)}

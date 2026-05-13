@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { computeCouncil } from '@/lib/agent-council';
 import { AGENT_PERSONAS } from '@/lib/agent-personas';
 import { memoryAddRun } from '@/lib/agent-run-store';
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = runSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { goal, context } = parsed.data;
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
 
     if (!supportsPersistentRun) {
       memoryAddRun(fallbackRun);
-      return NextResponse.json({ success: true, run: fallbackRun, warning: 'AgentRun tablolari bulunamadi, memory fallback kullanildi.' });
+      return NextResponse.json({ success: true, run: fallbackRun, warning: 'AgentRun tablolari bulunamadi, memory fallback kullanildi.' }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const run = await db.agentRun.create({
@@ -140,9 +141,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, run: { ...run, personas: AGENT_PERSONAS, persistence: 'database' } });
+    return NextResponse.json({ success: true, run: { ...run, personas: AGENT_PERSONAS, persistence: 'database' } }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating agent run:', error);
-    return NextResponse.json({ error: 'Ajan koşusu oluşturulamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Ajan koşusu oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

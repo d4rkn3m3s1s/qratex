@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 
 // Force dynamic rendering - disable caching
@@ -15,26 +16,22 @@ export async function GET() {
       select: { value: true },
     });
 
-    return NextResponse.json({
-      backgroundEffect: parseBackgroundEffectFromDb(setting?.value),
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+    return NextResponse.json(
+      {
+        backgroundEffect: parseBackgroundEffectFromDb(setting?.value),
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error fetching background setting:', error);
-    return NextResponse.json({
-      backgroundEffect: 'original',
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+    return NextResponse.json(
+      {
+        backgroundEffect: 'original',
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }
 

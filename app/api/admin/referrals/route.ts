@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
       total: totalCount,
       totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
     },
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -82,7 +83,7 @@ export async function PATCH(request: NextRequest) {
   const codeId = String(body?.referralCodeId || '');
   const isActive = Boolean(body?.isActive);
   if (!codeId) {
-    return NextResponse.json({ success: false, error: 'Kod ID gerekli' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Kod ID gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const code = await prisma.referralCode.update({
@@ -91,5 +92,5 @@ export async function PATCH(request: NextRequest) {
     select: { id: true, code: true, isActive: true },
   });
 
-  return NextResponse.json({ success: true, code });
+  return NextResponse.json({ success: true, code }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

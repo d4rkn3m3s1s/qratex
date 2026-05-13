@@ -6,6 +6,7 @@ import {
   loyaltyMilestones,
 } from '@/lib/customer-dealer-experiences';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const dealerId = new URL(request.url).searchParams.get('dealerId');
   if (!dealerId) {
-    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const dealer = await prisma.user.findFirst({
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest) {
     select: { businessName: true, name: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'İşletme bulunamadı' },
+      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const uid = session.user.id;
@@ -35,11 +39,14 @@ export async function GET(request: NextRequest) {
 
   const loyalty = loyaltyMilestones(visits);
 
-  return NextResponse.json({
-    dealerId,
-    dealerLabel: dealer.businessName || dealer.name || 'İşletme',
-    visitCount: visits,
-    loyalty,
-    experiences,
-  });
+  return NextResponse.json(
+    {
+      dealerId,
+      dealerLabel: dealer.businessName || dealer.name || 'İşletme',
+      visitCount: visits,
+      loyalty,
+      experiences,
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

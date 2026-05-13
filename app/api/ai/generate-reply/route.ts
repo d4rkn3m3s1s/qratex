@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getMockReplyBucket } from '@/lib/ai-reply-tone';
 
 
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
         const session = await getServerSession(authOptions);
 
         if (!session || session.user.role !== 'DEALER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const dealerId = session.user.id;
@@ -80,9 +81,7 @@ export async function POST(req: Request) {
             });
             if (!review) {
                 return NextResponse.json(
-                    { error: 'Consumption review not found or unauthorized' },
-                    { status: 404 }
-                );
+                    { error: 'Consumption review not found or unauthorized' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
             }
             rating = review.rating;
             reviewText = review.text;
@@ -106,27 +105,23 @@ export async function POST(req: Request) {
                 });
                 if (!review) {
                     return NextResponse.json(
-                        { error: 'Feedback not found or unauthorized' },
-                        { status: 404 }
-                    );
+                        { error: 'Feedback not found or unauthorized' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
                 }
                 rating = review.rating;
                 reviewText = review.text;
             }
         } else {
             return NextResponse.json(
-                { error: 'feedbackId or consumptionReviewId is required' },
-                { status: 400 }
-            );
+                { error: 'feedbackId or consumptionReviewId is required' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const mockReplies = buildMockReplies(rating!, reviewText, feedbackSentiment, feedbackIntent);
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
-        return NextResponse.json({ replies: mockReplies });
+        return NextResponse.json({ replies: mockReplies }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('[AI_GENERATE_REPLY_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

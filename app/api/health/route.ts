@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+
+const HEALTH_DB_ERROR_HEADERS: Record<string, string> = {
+  ...PRIVATE_NO_STORE_HEADERS,
+  'Retry-After': '10',
+};
 
 /**
  * Sağlık kontrolü: DB bağlantısı ve uygulama durumu.
@@ -16,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (light) {
       return NextResponse.json(
         { status: 'ok', latencyMs },
-        { status: 200, headers: { 'Cache-Control': 'no-store' } }
+        { status: 200, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
     return NextResponse.json(
@@ -30,14 +36,14 @@ export async function GET(request: NextRequest) {
           uptimeSeconds: Math.round(process.uptime()),
         },
       },
-      { status: 200, headers: { 'Cache-Control': 'no-store' } }
+      { status: 200, headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (e) {
     const error = e instanceof Error ? e.message : 'Database unreachable';
     if (light) {
       return NextResponse.json(
         { status: 'error', error },
-        { status: 503, headers: { 'Cache-Control': 'no-store' } }
+        { status: 503, headers: HEALTH_DB_ERROR_HEADERS }
       );
     }
     return NextResponse.json(
@@ -51,7 +57,7 @@ export async function GET(request: NextRequest) {
           uptimeSeconds: Math.round(process.uptime()),
         },
       },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      { status: 503, headers: HEALTH_DB_ERROR_HEADERS }
     );
   }
 }

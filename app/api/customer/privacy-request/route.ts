@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { sendKvkkReceiptEmail } from '@/lib/email';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,10 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz talep türü' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Geçersiz talep türü' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const cfg = await getInnovationPlatformConfig();
@@ -29,7 +33,10 @@ export async function POST(request: NextRequest) {
   });
   const email = parsed.data.email?.trim() || user?.email;
   if (!email) {
-    return NextResponse.json({ error: 'E-posta gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'E-posta gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const row = await prisma.dataSubjectRequest.create({
@@ -65,13 +72,16 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    success: true,
-    requestId: row.id,
-    receiptSent: mail.ok,
-    complianceContact: cfg.compliance.deletionRequestContactEmail,
-    note: mail.ok
-      ? 'Makbuz e-postanıza gönderildi.'
-      : 'Kayıt alındı; e-posta sunucusu yapılandırılmadıysa makbuz iletilemedi.',
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      requestId: row.id,
+      receiptSent: mail.ok,
+      complianceContact: cfg.compliance.deletionRequestContactEmail,
+      note: mail.ok
+        ? 'Makbuz e-postanıza gönderildi.'
+        : 'Kayıt alındı; e-posta sunucusu yapılandırılmadıysa makbuz iletilemedi.',
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

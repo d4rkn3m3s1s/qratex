@@ -236,7 +236,7 @@ export default function AdminPlaybooksPage() {
                   const j = await r.json();
                   if (!r.ok) throw new Error(j.error || 'Uygulanamadı');
                   toast.success(
-                    `Kampanya taslağı${j.questId ? ' ve görev' : ''} oluşturuldu. Kampanya ID: ${j.campaignId ?? '—'}`
+                    `Kampanya taslağı${j.questId ? ' ve görev' : ''} oluşturuldu. Bayi: Kampanyalar sayfasında \"Taslak\" olarak görünür (Kampanya ID: ${j.campaignId ?? '—'}).`
                   );
                   setApplyOpen(false);
                 } catch (e) {

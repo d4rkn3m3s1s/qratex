@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export async function GET(
   });
 
   if (!row || row.expiresAt < new Date()) {
-    return NextResponse.json({ error: 'Link süresi dolmuş veya geçersiz' }, { status: 404 });
+    return NextResponse.json({ error: 'Link süresi dolmuş veya geçersiz' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const viewed = await prisma.experienceShareToken.update({
@@ -34,5 +35,5 @@ export async function GET(
     viewCount: viewed.viewCount,
     disclaimer:
       'Bu kart anonimdir; arkadaşınızın kişisel bilgisi paylaşılmaz.',
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

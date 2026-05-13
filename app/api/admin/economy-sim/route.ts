@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getPointsMatrix } from '@/lib/points-rules';
 
 
@@ -74,5 +75,5 @@ export async function GET(req: NextRequest) {
       totalXp,
     },
     note: 'Tahmindir; gerçek dağılım kullanıcı davranışına bağlıdır.',
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

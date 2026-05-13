@@ -1,37 +1,44 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { buildNextBestActions } from '@/lib/next-best-action';
 
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  try {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const dealerId = auth.session.user.role === 'DEALER' ? auth.session.user.id : undefined;
   if (!dealerId && auth.session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 });
+    return NextResponse.json({ error: 'Yetkisiz' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const targetDealerId = dealerId ?? (await prisma.user.findFirst({ where: { role: 'DEALER' }, select: { id: true } }))?.id;
   if (!targetDealerId) {
-    return NextResponse.json({ actions: [] });
+    return NextResponse.json({ actions: [] }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  const [qrCodes, feedbacks, actionItems, churnFeedbacks] = await Promise.all([
-    prisma.qRCode.findMany({
-      where: { dealerId: targetDealerId },
-      select: {
-        id: true,
-        feedbacks: {
-          select: { rating: true, sentiment: true },
-        },
-      },
-    }),
-    prisma.feedback.findMany({
+  const [
+    totalQRCodes,
+    totalFeedbacks,
+    negativeCount,
+    actionItems,
+    churnFeedbacks,
+    worstQrRow,
+  ] = await Promise.all([
+    prisma.qRCode.count({ where: { dealerId: targetDealerId } }),
+    prisma.feedback.count({
       where: { deletedAt: null, qrCode: { dealerId: targetDealerId } },
-      select: { id: true, rating: true, sentiment: true },
+    }),
+    prisma.feedback.count({
+      where: {
+        deletedAt: null,
+        qrCode: { dealerId: targetDealerId },
+        OR: [{ rating: { lte: 2 } }, { sentiment: 'negative' }],
+      },
     }),
     prisma.actionItem.count({
       where: { dealerId: targetDealerId, status: { in: ['pending', 'assigned', 'in_progress'] } },
@@ -43,32 +50,42 @@ export async function GET() {
         churnRisk: { gte: 0.7 },
       },
     }),
+    prisma.feedback.groupBy({
+      by: ['qrCodeId'],
+      where: { deletedAt: null, qrCode: { dealerId: targetDealerId } },
+      _avg: { rating: true },
+      _count: { _all: true },
+      orderBy: { _avg: { rating: 'asc' } },
+      take: 1,
+    }),
   ]);
 
-  const negativeCount = feedbacks.filter(
-    (f) => f.rating <= 2 || f.sentiment === 'negative'
-  ).length;
-
-  let lowestRatedQrId: string | undefined;
-  if (qrCodes.length > 0) {
-    const withAvg = qrCodes.map((q) => ({
-      id: q.id,
-      avg: q.feedbacks.length > 0
-        ? q.feedbacks.reduce((s, f) => s + f.rating, 0) / q.feedbacks.length
-        : 5,
-    }));
-    const min = withAvg.reduce((a, b) => (a.avg < b.avg ? a : b));
-    if (min.avg < 4) lowestRatedQrId = min.id;
-  }
+  const worstAvg = worstQrRow[0]?._avg.rating;
+  const lowestRatedQrId =
+    worstQrRow[0] &&
+    (worstQrRow[0]._count._all ?? 0) > 0 &&
+    worstAvg != null &&
+    worstAvg < 4
+      ? worstQrRow[0].qrCodeId
+      : undefined;
 
   const actions = buildNextBestActions({
-    totalQRCodes: qrCodes.length,
-    totalFeedbacks: feedbacks.length,
+    totalQRCodes,
+    totalFeedbacks,
     negativeCount,
     pendingActionCount: actionItems,
     highChurnCount: churnFeedbacks,
     lowestRatedQrId,
   });
 
-  return NextResponse.json({ actions });
+  return NextResponse.json({ actions }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('Next-best-actions error:', error);
+    return NextResponse.json(
+      { error: 'Öneriler yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

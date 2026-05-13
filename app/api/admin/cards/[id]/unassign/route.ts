@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -39,16 +40,12 @@ export async function POST(
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!card.customerId || !card.customer) {
       return NextResponse.json(
-        { error: 'Bu kart zaten bir müşteriye atanmamış' },
-        { status: 400 }
-      );
+        { error: 'Bu kart zaten bir müşteriye atanmamış' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const previousCustomer = card.customer;
@@ -99,12 +96,10 @@ export async function POST(
         id: previousCustomer.id,
         name: previousCustomer.name,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error unassigning card:', error);
     return NextResponse.json(
-      { error: 'Kart kaldırılamadı' },
-      { status: 500 }
-    );
+      { error: 'Kart kaldırılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

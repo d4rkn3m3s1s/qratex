@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { sendPushNotification } from '@/lib/push';
 import { assertModuleEnabled } from '@/lib/module-gate';
 
 // POST — send campaign to target segment via notifications
 
 export const dynamic = 'force-dynamic';
+
+const MAX_CAMPAIGN_RECIPIENTS = 500;
 
 export async function POST(
     _request: NextRequest,
@@ -17,18 +20,21 @@ export async function POST(
         if (gate) return gate;
         const auth = await requireAuth(['DEALER', 'ADMIN']);
         if ('error' in auth) return auth.error;
+        const { session } = auth;
         const { id } = await params;
 
         const campaign = await prisma.campaign.findUnique({ where: { id } });
-        if (!campaign || campaign.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 });
+        if (!campaign) {
+            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+        if (session.user.role !== 'ADMIN' && campaign.dealerId !== session.user.id) {
+            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
         if (campaign.status === 'sent') {
-            return NextResponse.json({ error: 'Bu kampanya zaten gönderildi' }, { status: 400 });
+            return NextResponse.json({ error: 'Bu kampanya zaten gönderildi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        // Get target customers based on segment
-        const dealerId = auth.session.user.id;
+        const dealerId = campaign.dealerId;
         let customerIds: string[] = [];
 
         if (campaign.targetSegment === 'all') {
@@ -36,16 +42,22 @@ export async function POST(
                 where: { qrCode: { dealerId } },
                 select: { userId: true },
                 distinct: ['userId'],
+                take: MAX_CAMPAIGN_RECIPIENTS,
             });
             customerIds = feedbacks.filter((f) => f.userId).map((f) => f.userId!);
         } else if (campaign.targetSegment === 'vip') {
-            const vips = await prisma.userVIPStatus.findMany({
+            const feedbacks = await prisma.feedback.findMany({
+                where: {
+                    qrCode: { dealerId },
+                    userId: { not: null },
+                    user: { vipStatus: { isNot: null } },
+                },
                 select: { userId: true },
-                take: 500,
+                distinct: ['userId'],
+                take: MAX_CAMPAIGN_RECIPIENTS,
             });
-            customerIds = vips.map((v) => v.userId);
+            customerIds = feedbacks.map((f) => f.userId!);
         } else if (campaign.targetSegment === 'risk') {
-            // Customers with avg rating <= 2 in last 30 days
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             const risky = await prisma.feedback.groupBy({
                 by: ['userId'],
@@ -53,23 +65,45 @@ export async function POST(
                 _avg: { rating: true },
                 having: { rating: { _avg: { lte: 2 } } },
             });
-            customerIds = risky.filter((r) => r.userId).map((r) => r.userId!);
+            customerIds = risky
+                .filter((r) => r.userId)
+                .map((r) => r.userId!)
+                .slice(0, MAX_CAMPAIGN_RECIPIENTS);
         } else {
-            // loyal/active: customers with 3+ feedbacks
             const active = await prisma.feedback.groupBy({
                 by: ['userId'],
                 where: { qrCode: { dealerId }, userId: { not: null } },
                 _count: true,
                 having: { userId: { _count: { gte: 3 } } },
             });
-            customerIds = active.filter((a) => a.userId).map((a) => a.userId!);
+            customerIds = active
+                .filter((a) => a.userId)
+                .map((a) => a.userId!)
+                .slice(0, MAX_CAMPAIGN_RECIPIENTS);
         }
+
+        customerIds = [...new Set(customerIds)].slice(0, MAX_CAMPAIGN_RECIPIENTS);
 
         if (customerIds.length === 0) {
-            return NextResponse.json({ error: 'Hedef segmentte müşteri bulunamadı' }, { status: 400 });
+            return NextResponse.json({ error: 'Hedef segmentte müşteri bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        // Create notifications for all target customers
+        const markSentWhere =
+            session.user.role === 'ADMIN'
+                ? { id, status: { not: 'sent' as const } }
+                : { id, dealerId: session.user.id, status: { not: 'sent' as const } };
+
+        const claimed = await prisma.campaign.updateMany({
+            where: markSentWhere,
+            data: { status: 'sent', sentAt: new Date(), sentCount: customerIds.length },
+        });
+        if (claimed.count === 0) {
+            return NextResponse.json(
+                { error: 'Kampanya durumu değişti veya gönderilemedi' },
+                { status: 409 , headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
+
         await prisma.notification.createMany({
             data: customerIds.map((userId) => ({
                 userId,
@@ -79,9 +113,8 @@ export async function POST(
             })),
         });
 
-        // Send actual Web Push notifications if channel is notification
         if (campaign.channel === 'notification') {
-            const pushPromises = customerIds.map(userId =>
+            const pushPromises = customerIds.map((userId) =>
                 sendPushNotification(
                     userId,
                     campaign.title,
@@ -90,19 +123,14 @@ export async function POST(
                     '/icon512_rounded.png'
                 )
             );
-            // Execute all pushes without waiting for each one sequentially
             await Promise.allSettled(pushPromises);
         }
 
-        // Mark campaign as sent
-        await prisma.campaign.update({
-            where: { id },
-            data: { status: 'sent', sentAt: new Date(), sentCount: customerIds.length },
-        });
-
-        return NextResponse.json({ success: true, sentCount: customerIds.length });
+        return NextResponse.json({ success: true, sentCount: customerIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error sending campaign:', error);
-        return NextResponse.json({ error: 'Kampanya gönderilemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Kampanya gönderilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

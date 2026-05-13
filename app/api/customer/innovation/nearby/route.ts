@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { haversineKm } from '@/lib/innovation-geo';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.flashOffers) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Özellik devre dışı' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const { searchParams } = new URL(request.url);
@@ -20,7 +24,10 @@ export async function GET(request: NextRequest) {
   const radiusKm = Math.min(parseFloat(searchParams.get('radiusKm') || '15') || 15, 50);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return NextResponse.json({ error: 'lat ve lng gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'lat ve lng gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const now = new Date();
@@ -80,8 +87,11 @@ export async function GET(request: NextRequest) {
 
   items.sort((a, b) => a.distanceKm - b.distanceKm);
 
-  return NextResponse.json({
-    items: items.slice(0, 50),
-    meta: { radiusKm, generatedAt: now.toISOString() },
-  });
+  return NextResponse.json(
+    {
+      items: items.slice(0, 50),
+      meta: { radiusKm, generatedAt: now.toISOString() },
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

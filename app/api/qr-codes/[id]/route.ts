@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { updateQRCodeSchema } from '@/lib/validations';
 
 
@@ -21,15 +22,17 @@ export async function GET(
       include: { dealer: { select: { id: true, name: true, businessName: true } } },
     });
     if (!qr) {
-      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (session.user.role !== 'ADMIN' && qr.dealerId !== session.user.id) {
-      return NextResponse.json({ error: 'Bu QR kodu görüntüleme yetkiniz yok' }, { status: 403 });
+      return NextResponse.json({ error: 'Bu QR kodu görüntüleme yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
-    return NextResponse.json(qr);
+    return NextResponse.json(qr, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching QR code:', error);
-    return NextResponse.json({ error: 'QR kod getirilemedi' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'QR kod getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -47,15 +50,15 @@ export async function PATCH(
       select: { id: true, dealerId: true },
     });
     if (!existing) {
-      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (session.user.role !== 'ADMIN' && existing.dealerId !== session.user.id) {
-      return NextResponse.json({ error: 'Bu QR kodu güncelleme yetkiniz yok' }, { status: 403 });
+      return NextResponse.json({ error: 'Bu QR kodu güncelleme yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const body = await request.json();
     const validated = updateQRCodeSchema.safeParse(body);
     if (!validated.success) {
-      return NextResponse.json({ error: validated.error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: validated.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const data: Prisma.QRCodeUpdateInput = {};
     if (validated.data.name !== undefined) data.name = validated.data.name;
@@ -68,14 +71,27 @@ export async function PATCH(
       data.revokedAt = validated.data.revoke ? new Date() : null;
     }
     if (validated.data.segmentConfig !== undefined) data.segmentConfig = validated.data.segmentConfig === null ? Prisma.JsonNull : (validated.data.segmentConfig as Prisma.InputJsonValue);
-    const updated = await prisma.qRCode.update({
-      where: { id },
+    if (session.user.role === 'ADMIN') {
+      const updated = await prisma.qRCode.update({
+        where: { id },
+        data,
+      });
+      return NextResponse.json(updated, { headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const write = await prisma.qRCode.updateMany({
+      where: { id, dealerId: session.user.id },
       data,
     });
-    return NextResponse.json(updated);
+    if (write.count === 0) {
+      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const updated = await prisma.qRCode.findUnique({ where: { id } });
+    return NextResponse.json(updated, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating QR code:', error);
-    return NextResponse.json({ error: 'QR kod güncellenemedi' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'QR kod güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -95,15 +111,24 @@ export async function DELETE(
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const canDelete = session.user.role === 'ADMIN' || existing.dealerId === session.user.id;
     if (!canDelete) {
-      return NextResponse.json({ error: 'Bu QR kodu silme yetkiniz yok' }, { status: 403 });
+      return NextResponse.json({ error: 'Bu QR kodu silme yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    await prisma.qRCode.delete({ where: { id } });
+    if (session.user.role === 'ADMIN') {
+      await prisma.qRCode.delete({ where: { id } });
+    } else {
+      const del = await prisma.qRCode.deleteMany({
+        where: { id, dealerId: session.user.id },
+      });
+      if (del.count === 0) {
+        return NextResponse.json({ error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+      }
+    }
 
     await prisma.analyticsEvent.create({
       data: {
@@ -114,9 +139,11 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting QR code:', error);
-    return NextResponse.json({ error: 'QR kod silinemedi' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'QR kod silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

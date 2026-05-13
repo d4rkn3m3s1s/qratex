@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import {
@@ -36,31 +37,31 @@ export async function POST(req: Request) {
     const file = formData.get('file');
 
     if (folder !== 'badges' && folder !== 'rewards') {
-      return NextResponse.json({ success: false, error: 'Geçersiz hedef klasör' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Geçersiz hedef klasör' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ success: false, error: 'Dosya bulunamadı' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Dosya bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!ALLOWED_MIME.has(file.type)) {
-      return NextResponse.json({ success: false, error: 'Sadece SVG veya PNG yüklenebilir' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Sadece SVG veya PNG yüklenebilir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ success: false, error: 'Dosya boyutu 2MB altında olmalıdır' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Dosya boyutu 2MB altında olmalıdır' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     let bytes = Buffer.from(await file.arrayBuffer());
 
     // Magic bytes ile MIME doğrula (Content-Type'a güvenme)
     if (!validateMimeMagic(bytes, file.type)) {
-      return NextResponse.json({ success: false, error: 'Dosya tipi içerikle eşleşmiyor' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Dosya tipi içerikle eşleşmiyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // SVG: script / XSS kontrolü
     if (file.type === 'image/svg+xml' && svgContainsScript(bytes)) {
-      return NextResponse.json({ success: false, error: 'SVG güvenlik nedeniyle reddedildi (script)' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'SVG güvenlik nedeniyle reddedildi (script)' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // PNG: EXIF temizle
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
         const stripped = await stripExifPng(bytes);
         bytes = Buffer.from(stripped);
       } catch {
-        return NextResponse.json({ success: false, error: 'Geçersiz PNG dosyası' }, { status: 400 });
+        return NextResponse.json({ success: false, error: 'Geçersiz PNG dosyası' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
 
@@ -84,10 +85,10 @@ export async function POST(req: Request) {
     await writeFile(absolutePath, bytes);
 
     const publicPath = `/images/uploads/${folder}/${filename}`;
-    return NextResponse.json({ success: true, path: publicPath });
+    return NextResponse.json({ success: true, path: publicPath }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Asset upload error:', error);
-    return NextResponse.json({ success: false, error: 'Dosya yüklenemedi' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Dosya yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -27,7 +27,7 @@ const buttonVariants = cva(
           'bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20',
       },
       size: {
-        default: 'h-11 px-4 py-2',
+        default: 'h-11 min-h-11 px-4 py-2 text-base sm:text-sm',
         sm: 'h-9 rounded-md px-3',
         lg: 'h-12 rounded-lg px-8 text-base',
         xl: 'h-14 rounded-xl px-10 text-lg',

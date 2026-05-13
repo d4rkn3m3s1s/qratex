@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json({ success: false, error: 'Oturum gerekli' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Oturum gerekli' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id: badgeId } = await params;
@@ -27,15 +28,13 @@ export async function POST(
     });
 
     if (!badge) {
-      return NextResponse.json({ success: false, error: 'Rozet bulunamadı' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Rozet bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const pointCost = badge.pointCost ?? 0;
     if (pointCost <= 0) {
       return NextResponse.json(
-        { success: false, error: 'Bu rozet puanla açılamaz' },
-        { status: 400 }
-      );
+        { success: false, error: 'Bu rozet puanla açılamaz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.userBadge.findUnique({
@@ -45,9 +44,7 @@ export async function POST(
     });
     if (existing) {
       return NextResponse.json(
-        { success: false, error: 'Bu rozete zaten sahipsiniz' },
-        { status: 400 }
-      );
+        { success: false, error: 'Bu rozete zaten sahipsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const user = await prisma.user.findUnique({
@@ -57,9 +54,7 @@ export async function POST(
 
     if (!user || (user.points ?? 0) < pointCost) {
       return NextResponse.json(
-        { success: false, error: `Yeterli puanınız yok. Gerekli: ${pointCost} puan` },
-        { status: 400 }
-      );
+        { success: false, error: `Yeterli puanınız yok. Gerekli: ${pointCost} puan` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     await prisma.$transaction([
@@ -86,12 +81,10 @@ export async function POST(
         badgeId,
         newPoints: updatedUser?.points ?? user.points - pointCost,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Badge unlock error:', error);
     return NextResponse.json(
-      { success: false, error: 'Rozet açılamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozet açılamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

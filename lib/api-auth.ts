@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkTokenReplay } from '@/lib/token-replay';
 import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import type { Session } from 'next-auth';
@@ -19,7 +20,10 @@ type AllowedRole = 'ADMIN' | 'DEALER' | 'CUSTOMER' | 'STAFF';
 export async function getSessionOr401(): Promise<Session | NextResponse> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
   return session;
 }
@@ -33,7 +37,10 @@ export function requireRole(
 ): NextResponse | null {
   const role = session.user?.role as string | undefined;
   if (!role || !allowedRoles.includes(role as AllowedRole)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
   return null;
 }
@@ -64,7 +71,7 @@ export async function requireAuth(
       return {
         error: NextResponse.json(
           { error: 'Session güvenlik ihlali tespit edildi. Lütfen tekrar giriş yapın.' },
-          { status: 403 }
+          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
         ),
       };
     }
@@ -81,10 +88,17 @@ export function requireDealerResource(
 ): NextResponse | null {
   const role = session.user?.role as string | undefined;
   const userId = session.user?.id;
-  if (!userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!userId)
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   if (role === 'ADMIN') return null;
   if (role === 'DEALER' && resourceDealerId === userId) return null;
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return NextResponse.json(
+    { error: 'Forbidden' },
+    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 /**
@@ -96,10 +110,17 @@ export function requireUserResource(
 ): NextResponse | null {
   const role = session.user?.role as string | undefined;
   const userId = session.user?.id;
-  if (!userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!userId)
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   if (role === 'ADMIN') return null;
   if (resourceUserId === userId) return null;
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return NextResponse.json(
+    { error: 'Forbidden' },
+    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 /**
@@ -140,7 +161,7 @@ export function getStaffDealerId(session: Session): string | NextResponse {
   if (role !== 'STAFF' || !dealerId) {
     return NextResponse.json(
       { error: role === 'STAFF' ? 'Personel bu işletmeye bağlı değil' : 'Forbidden' },
-      { status: 403 }
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
   return dealerId;

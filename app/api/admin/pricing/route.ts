@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { Prisma } from '@prisma/client';
 
@@ -35,8 +36,9 @@ export async function GET() {
 
   const plans = await prisma.pricingPlan.findMany({
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    take: 200,
   });
-  return NextResponse.json({ success: true, plans });
+  return NextResponse.json({ success: true, plans }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const maxOrder = await prisma.pricingPlan.aggregate({ _max: { order: true } });
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, plan: created });
+  return NextResponse.json({ success: true, plan: created }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -93,13 +95,13 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const { id, ...fields } = parsed.data;
   const existing = await prisma.pricingPlan.findUnique({ where: { id } });
   if (!existing) {
-    return NextResponse.json({ error: 'Plan bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Plan bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const updated = await prisma.pricingPlan.update({
@@ -136,7 +138,7 @@ export async function PUT(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, plan: updated });
+  return NextResponse.json({ success: true, plan: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -145,10 +147,10 @@ export async function DELETE(request: NextRequest) {
   const { session } = auth;
 
   const id = new URL(request.url).searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 });
+  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
 
   const existing = await prisma.pricingPlan.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Plan bulunamadı' }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: 'Plan bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
 
   await prisma.pricingPlan.delete({ where: { id } });
   await prisma.auditLog.create({
@@ -161,5 +163,5 @@ export async function DELETE(request: NextRequest) {
       ...getAuditRequestMeta(request),
     },
   });
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

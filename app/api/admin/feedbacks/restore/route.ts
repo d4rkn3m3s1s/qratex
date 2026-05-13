@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { adminFeedbacksRestoreSchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
@@ -19,7 +20,13 @@ export async function POST(request: NextRequest) {
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
       );
     }
 
@@ -27,7 +34,7 @@ export async function POST(request: NextRequest) {
     const parsed = adminFeedbacksRestoreSchema.safeParse(raw);
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
-      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const { feedbackIds } = parsed.data;
 
@@ -47,9 +54,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, restored: result.count });
+    return NextResponse.json({ success: true, restored: result.count }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Restore feedbacks error:', error);
-    return NextResponse.json({ error: 'Geri alma işlemi başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Geri alma işlemi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

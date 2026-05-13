@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 // GET - Get VIP info for current user
 
@@ -11,13 +12,14 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get all VIP tiers
     const tiers = await prisma.vIPTier.findMany({
       where: { isActive: true },
       orderBy: { order: 'asc' },
+      take: 100,
     });
 
     // Get user's current VIP status
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
     if (tiers.length > 0) {
       const eligibleTier = [...tiers]
         .reverse()
-        .find((t: any) => (user?.points || 0) >= t.minPoints);
+        .find((t) => (user?.points || 0) >= t.minPoints);
 
       if (eligibleTier) {
         if (!vipStatus || vipStatus.tierId !== eligibleTier.id) {
@@ -72,7 +74,7 @@ export async function GET(req: NextRequest) {
     let nextTier = null;
     let progressToNext = 0;
     if (vipStatus?.tier) {
-      const currentTierIndex = tiers.findIndex((t: any) => t.id === vipStatus.tier.id);
+      const currentTierIndex = tiers.findIndex((t) => t.id === vipStatus.tier.id);
       if (currentTierIndex < tiers.length - 1) {
         nextTier = tiers[currentTierIndex + 1];
         const currentMin = vipStatus.tier.minPoints;
@@ -90,9 +92,11 @@ export async function GET(req: NextRequest) {
       nextTier,
       progressToNext,
       currentPoints: user?.points || 0,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error fetching VIP info:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

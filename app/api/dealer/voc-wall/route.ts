@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS, clampTakeParam } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +17,19 @@ export async function GET(request: NextRequest) {
 
   const dealerId = session.user.role === 'ADMIN' ? request.nextUrl.searchParams.get('dealerId') : session.user.id;
   if (!dealerId) {
-    return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'dealerId gerekli' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
   if (session.user.role === 'DEALER' && dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Sadece kendi VoC panonuzu görüntüleyebilirsiniz' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Sadece kendi VoC panonuzu görüntüleyebilirsiniz' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
-  const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') || '50') || 50, 100);
+  const limit = clampTakeParam(request.nextUrl.searchParams.get('limit'), 50, 100);
 
   const baseWhere = { qrCode: { dealerId }, deletedAt: null };
   const publicWhere = { ...baseWhere, isPublic: true };
@@ -70,6 +77,8 @@ export async function GET(request: NextRequest) {
     prisma.feedback.findMany({
       where: { ...baseWhere, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
     }),
     prisma.feedback.count({ where: publicWhere }),
   ]);
@@ -77,13 +86,15 @@ export async function GET(request: NextRequest) {
   const sentimentMap: Record<string, number> = { positive: 0, negative: 0, neutral: 0 };
   for (const s of sentimentAgg) {
     const key = (s.sentiment || 'neutral').toLowerCase();
+    const c = typeof s._count === 'number' ? s._count : (s._count as { _all?: number })?._all ?? 0;
     sentimentMap[key] = sentimentMap[key] ?? 0;
-    sentimentMap[key] += s._count;
+    sentimentMap[key] += c;
   }
 
   const ratingMap: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   for (const r of ratingAgg) {
-    ratingMap[r.rating] = r._count;
+    const c = typeof r._count === 'number' ? r._count : (r._count as { _all?: number })?._all ?? 0;
+    ratingMap[r.rating] = c;
   }
 
   // Son 7 günlük sayıları hesapla
@@ -102,29 +113,32 @@ export async function GET(request: NextRequest) {
     dailyTrendFull.push({ date: dateStr, label, count: dayCounts[dateStr] ?? 0 });
   }
 
-  return NextResponse.json({
-    voc: {
-      recent: recent.map((f) => ({
-        id: f.id,
-        rating: f.rating,
-        text: f.text ? f.text.slice(0, 300) + (f.text.length > 300 ? '…' : '') : null,
-        sentiment: f.sentiment,
-        intent: f.intent,
-        topics: f.topics,
-        themes: f.themes,
-        createdAt: f.createdAt,
-        userName: f.user?.name ?? 'Anonim',
-        locationName: f.qrCode?.name ?? '—',
-      })),
-      stats: {
-        avgRating: stats._avg.rating ?? 0,
-        totalFeedback: stats._count,
-        totalPublic,
-        last24hCount: countLast24h,
+  return NextResponse.json(
+    {
+      voc: {
+        recent: recent.map((f) => ({
+          id: f.id,
+          rating: f.rating,
+          text: f.text ? f.text.slice(0, 300) + (f.text.length > 300 ? '…' : '') : null,
+          sentiment: f.sentiment,
+          intent: f.intent,
+          topics: f.topics,
+          themes: f.themes,
+          createdAt: f.createdAt,
+          userName: f.user?.name ?? 'Anonim',
+          locationName: f.qrCode?.name ?? '—',
+        })),
+        stats: {
+          avgRating: stats._avg.rating ?? 0,
+          totalFeedback: stats._count,
+          totalPublic,
+          last24hCount: countLast24h,
+        },
+        sentiment: sentimentMap,
+        ratingDistribution: [ratingMap[1], ratingMap[2], ratingMap[3], ratingMap[4], ratingMap[5]],
+        dailyTrend: dailyTrendFull,
       },
-      sentiment: sentimentMap,
-      ratingDistribution: [ratingMap[1], ratingMap[2], ratingMap[3], ratingMap[4], ratingMap[5]],
-      dailyTrend: dailyTrendFull,
     },
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

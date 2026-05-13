@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth, requireDealerResource } from '@/lib/api-auth';
 import { computeWeeklyBriefForDealer } from '@/lib/innovation-weekly-brief';
 import { utcMondayWeekStart } from '@/lib/innovation-week';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.weeklyBrief) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -36,13 +37,13 @@ export async function GET(request: NextRequest) {
     weekStart: weekStart.toISOString(),
     brief,
     empty: !brief,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.weeklyBrief) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -81,5 +82,5 @@ export async function POST(request: NextRequest) {
     success: true,
     brief,
     computed,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

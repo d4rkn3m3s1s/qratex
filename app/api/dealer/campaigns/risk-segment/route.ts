@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   const dealerId = session.user.role === 'ADMIN' ? undefined : session.user.id;
   if (session.user.role === 'ADMIN') {
-    return NextResponse.json({ error: 'Admin için dealerId body\'de gönderin' }, { status: 400 });
+    return NextResponse.json({ error: 'Admin için dealerId body\'de gönderin' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -83,5 +84,5 @@ export async function POST(request: NextRequest) {
     sent,
     eligibleCount: highRisk.length,
     uniqueCustomersNotified: sent,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

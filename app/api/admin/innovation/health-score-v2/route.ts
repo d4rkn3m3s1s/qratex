@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { computeDealerHealthV2 } from '@/lib/dealer-health-v2';
 
@@ -33,5 +34,5 @@ export async function GET() {
     generatedAt: new Date().toISOString(),
     dealers: ranked,
     earlyWarnings: warnings,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

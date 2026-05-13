@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 
@@ -49,7 +50,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     automation: parseAutomation(user?.dealerRemedyAutomation),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -60,7 +61,7 @@ export async function PATCH(req: NextRequest) {
   const json = await req.json().catch(() => null);
   const parsed = patchSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const user = await prisma.user.findUnique({
@@ -75,5 +76,5 @@ export async function PATCH(req: NextRequest) {
     data: { dealerRemedyAutomation: next as object },
   });
 
-  return NextResponse.json({ success: true, automation: next });
+  return NextResponse.json({ success: true, automation: next }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

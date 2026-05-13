@@ -5,6 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 const TTL_HOURS = 24;
 
@@ -39,10 +40,10 @@ export async function checkIdempotency(
   if (existing && existing.route === route && existing.expiresAt > now) {
     return {
       cached: true,
-      response: NextResponse.json(
-        JSON.parse(existing.responseBody),
-        { status: existing.statusCode as 200 | 201 }
-      ),
+      response: NextResponse.json(JSON.parse(existing.responseBody), {
+        status: existing.statusCode as 200 | 201,
+        headers: PRIVATE_NO_STORE_HEADERS,
+      }),
     };
   }
 
@@ -92,9 +93,15 @@ export async function withIdempotency<T>(
   if (check.cached) return check.response;
   if (!check.key) {
     const result = await handler();
-    return NextResponse.json(result.body, { status: result.statusCode });
+    return NextResponse.json(result.body, {
+      status: result.statusCode,
+      headers: PRIVATE_NO_STORE_HEADERS,
+    });
   }
   const result = await handler();
   await storeIdempotency(check.key, route, result.statusCode, result.body);
-  return NextResponse.json(result.body, { status: result.statusCode });
+  return NextResponse.json(result.body, {
+    status: result.statusCode,
+    headers: PRIVATE_NO_STORE_HEADERS,
+  });
 }

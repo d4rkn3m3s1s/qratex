@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -19,26 +20,20 @@ export async function POST(
     
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Giriş yapmanız gerekiyor', code: 'UNAUTHORIZED' },
-        { status: 401 }
-      );
+        { error: 'Giriş yapmanız gerekiyor', code: 'UNAUTHORIZED' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Sadece CUSTOMER rolü kart aktive edebilir
     if (session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
-        { error: 'Sadece müşteriler kart aktive edebilir', code: 'FORBIDDEN' },
-        { status: 403 }
-      );
+        { error: 'Sadece müşteriler kart aktive edebilir', code: 'FORBIDDEN' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { token } = await params;
 
     if (!token) {
       return NextResponse.json(
-        { error: 'Token gerekli' },
-        { status: 400 }
-      );
+        { error: 'Token gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Transaction ile atomik işlem
@@ -117,7 +112,7 @@ export async function POST(
         status: result.status,
         activatedAt: result.activatedAt,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error activating card:', error);
     
@@ -134,14 +129,10 @@ export async function POST(
     const errorResponse = errorResponses[errorMessage];
     if (errorResponse) {
       return NextResponse.json(
-        { error: errorResponse.message, code: errorMessage },
-        { status: errorResponse.status }
-      );
+        { error: errorResponse.message, code: errorMessage }, { status: errorResponse.status , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     return NextResponse.json(
-      { error: 'Kart aktive edilemedi' },
-      { status: 500 }
-    );
+      { error: 'Kart aktive edilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

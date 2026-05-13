@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, clampTakeParam } from '@/lib/api-http';
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/ai/detailed - Detaylı AI Feedback Verileri
@@ -9,18 +10,26 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+const AI_DETAILED_AGG_SAMPLE_MAX = 6_000;
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     if (session.user.role === 'CUSTOMER') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
+    const limit = clampTakeParam(searchParams.get('limit'), 50, 100);
 
     const where: Record<string, unknown> = { text: { not: null } };
     if (session.user.role === 'DEALER') {
@@ -53,6 +62,8 @@ export async function GET(request: NextRequest) {
         entities: true, themes: true, actionSuggestions: true,
         sentiment: true, emotions: true, rating: true,
       },
+      orderBy: { createdAt: 'desc' },
+      take: AI_DETAILED_AGG_SAMPLE_MAX,
     });
 
     // ── Intent Distribution ──
@@ -188,28 +199,34 @@ export async function GET(request: NextRequest) {
 
     const totalAnalyzed = allFeedbacks.filter(f => f.intent || f.urgency != null).length;
 
-    return NextResponse.json({
-      success: true,
-      feedbacks: detailedFeedbacks,
-      signals: {
-        intentDist,
-        urgencyBuckets,
-        churnBuckets,
-        avgEffort,
-        avgUrgency,
-        avgChurnRisk,
-        topEntities,
-        topEmotions,
-        topActions,
-        topThemes,
-        ratingDist,
-        sentimentByRating,
-        totalAnalyzed,
-        totalFeedbacks: allFeedbacks.length,
+    return NextResponse.json(
+      {
+        success: true,
+        feedbacks: detailedFeedbacks,
+        signals: {
+          intentDist,
+          urgencyBuckets,
+          churnBuckets,
+          avgEffort,
+          avgUrgency,
+          avgChurnRisk,
+          topEntities,
+          topEmotions,
+          topActions,
+          topThemes,
+          ratingDist,
+          sentimentByRating,
+          totalAnalyzed,
+          totalFeedbacks: allFeedbacks.length,
+        },
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error in detailed AI endpoint:', error);
-    return NextResponse.json({ error: 'Detaylı AI verileri alınamadı' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Detaylı AI verileri alınamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

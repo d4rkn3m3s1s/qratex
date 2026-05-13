@@ -1,14 +1,13 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Müşteri: bekleyen ve kabul edilmiş telafi tekliflerini listele.
  */
-
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
   if ('error' in auth) return auth.error;
@@ -17,10 +16,10 @@ export async function GET(request: NextRequest) {
   const status = request.nextUrl.searchParams.get('status'); // pending | accepted | all
   const userId = session.user.role === 'ADMIN' ? request.nextUrl.searchParams.get('userId') : session.user.id;
   if (session.user.role === 'CUSTOMER' && userId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
   if (!userId) {
-    return NextResponse.json({ error: 'userId gerekli' }, { status: 400 });
+    return NextResponse.json({ error: 'userId gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const hiddenStatuses = ['awaiting_dealer_approval', 'rejected'] as const;
@@ -47,19 +46,22 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    offers: offers.map((o) => ({
-      id: o.id,
-      message: o.message,
-      status: o.status,
-      options: o.options,
-      selectedType: o.selectedType,
-      selectedValue: o.selectedValue,
-      acceptedAt: o.acceptedAt,
-      createdAt: o.createdAt,
-      dealer: o.dealer,
-      feedback: o.feedback,
-      consumptionReview: o.consumptionReview,
-    })),
-  });
+  return NextResponse.json(
+    {
+      offers: offers.map((o) => ({
+        id: o.id,
+        message: o.message,
+        status: o.status,
+        options: o.options,
+        selectedType: o.selectedType,
+        selectedValue: o.selectedValue,
+        acceptedAt: o.acceptedAt,
+        createdAt: o.createdAt,
+        dealer: o.dealer,
+        feedback: o.feedback,
+        consumptionReview: o.consumptionReview,
+      })),
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
 
 
@@ -13,6 +14,7 @@ const postSchema = z.object({
 });
 
 export async function GET() {
+  try {
   const auth = await requireAuth(['STAFF']);
   if ('error' in auth) return auth.error;
   const dealerId = getStaffDealerId(auth.session);
@@ -30,10 +32,20 @@ export async function GET() {
     select: { id: true, userId: true, data: true, createdAt: true },
   });
 
-  return NextResponse.json({ success: true, pings: rows });
+  return NextResponse.json({ success: true, pings: rows }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('staff/field-ping GET:', error);
+    return NextResponse.json(
+      { error: 'Kayıtlar yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const auth = await requireAuth(['STAFF']);
   if ('error' in auth) return auth.error;
   const dealerId = getStaffDealerId(auth.session);
@@ -42,7 +54,7 @@ export async function POST(req: NextRequest) {
   const json = await req.json().catch(() => ({}));
   const parsed = postSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   await prisma.analyticsEvent.create({
@@ -59,5 +71,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('staff/field-ping POST:', error);
+    return NextResponse.json(
+      { error: 'Kayıt oluşturulamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

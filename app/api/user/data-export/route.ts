@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 // GET — export all personal data as JSON
 
@@ -31,10 +32,12 @@ export async function GET() {
             prisma.userBadge.findMany({
                 where: { userId },
                 select: { earnedAt: true, badge: { select: { name: true, description: true } } },
+                take: 300,
             }),
             prisma.userReward.findMany({
                 where: { userId },
                 select: { claimedAt: true, reward: { select: { name: true, description: true } } },
+                take: 300,
             }),
             prisma.notification.findMany({
                 where: { userId },
@@ -62,12 +65,13 @@ export async function GET() {
 
         return new NextResponse(JSON.stringify(exportData, null, 2), {
             headers: {
+                ...PRIVATE_NO_STORE_HEADERS,
                 'Content-Type': 'application/json',
                 'Content-Disposition': `attachment; filename="qratex-data-export-${userId}.json"`,
             },
         });
     } catch (error) {
         console.error('Data export error:', error);
-        return NextResponse.json({ error: 'Veri dışa aktarma başarısız' }, { status: 500 });
+        return NextResponse.json({ error: 'Veri dışa aktarma başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

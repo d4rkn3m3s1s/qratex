@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 
@@ -26,13 +27,14 @@ export async function GET() {
 
         const rules = await prisma.autoReplyRule.findMany({
             where: { dealerId: auth.session.user.id },
-            orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }]
+            orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+            take: 300,
         });
 
-        return NextResponse.json({ success: true, rules });
+        return NextResponse.json({ success: true, rules }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Auto replies GET error:', error);
-        return NextResponse.json({ error: 'Kurallar alınamadı' }, { status: 500 });
+        return NextResponse.json({ error: 'Kurallar alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const result = createSchema.safeParse(body);
         if (!result.success) {
-            return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const rule = await prisma.autoReplyRule.create({
@@ -59,9 +61,9 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        return NextResponse.json({ success: true, rule });
+        return NextResponse.json({ success: true, rule }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Auto replies POST error:', error);
-        return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 });
+        return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

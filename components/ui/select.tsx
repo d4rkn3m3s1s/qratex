@@ -18,7 +18,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-10 min-h-10 w-full min-w-0 max-w-full cursor-pointer touch-manipulation items-center justify-between rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      'flex h-11 min-h-11 w-full min-w-0 max-w-full cursor-pointer touch-manipulation items-center justify-between rounded-md border border-border/80 bg-background px-3 py-2 text-base sm:text-sm text-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
       /* Koyu yüzeylerde / gradient hero üzerinde sınır-zemin ayrımı */
       'dark:border-white/25 dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]',
       className

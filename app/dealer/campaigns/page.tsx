@@ -32,6 +32,7 @@ interface CampaignItem {
   sentAt: string | null;
   sentCount: number;
   createdAt: string;
+  playbookSourceId?: string | null;
 }
 
 const SEGMENTS: Record<string, { labelKey: string; color: string }> = {
@@ -126,6 +127,9 @@ export default function DealerCampaignsPage() {
             {t('dealerCampaigns.title')}
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5 text-pretty leading-relaxed">{t('dealerCampaigns.description')}</p>
+          <p className="text-xs text-muted-foreground/90 mt-2 text-pretty leading-relaxed border-l-2 border-primary/30 pl-3">
+            {t('dealerCampaigns.playbookWhereHint')}
+          </p>
         </div>
         <Button onClick={() => setDialogOpen(true)} className="gap-2 rounded-xl shrink-0 touch-manipulation w-full sm:w-auto">
           <Plus className="h-4 w-4 shrink-0" /> {t('dealerCampaigns.newCampaign')}
@@ -161,6 +165,11 @@ export default function DealerCampaignsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold">{c.title}</h3>
+                            {c.playbookSourceId ? (
+                              <Badge variant="secondary" className="text-[10px] font-medium uppercase tracking-wide">
+                                {t('dealerCampaigns.badgeFromPlaybook')}
+                              </Badge>
+                            ) : null}
                             <Badge variant={st.variant} className="text-xs">{t(st.labelKey)}</Badge>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${seg.color}`}>{t(seg.labelKey)}</span>
                           </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 // GET - List dealer's campaigns (list=1) or active/upcoming for display
 
@@ -18,8 +19,9 @@ export async function GET(req: NextRequest) {
       const happyHours = await prisma.happyHour.findMany({
         where,
         orderBy: { createdAt: 'desc' },
+        take: 500,
       });
-      return NextResponse.json({ success: true, happyHours });
+      return NextResponse.json({ success: true, happyHours }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const now = new Date();
@@ -45,6 +47,8 @@ export async function GET(req: NextRequest) {
           },
         ],
       },
+      take: 400,
+      orderBy: { createdAt: 'desc' },
       include: {
         dealer: {
           select: { id: true, businessName: true, image: true },
@@ -94,10 +98,10 @@ export async function GET(req: NextRequest) {
       bestMultiplier,
       currentTime,
       currentDay,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching happy hours:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -106,18 +110,18 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (session.user.role !== 'DEALER' && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Only dealers can create happy hours' }, { status: 403 });
+      return NextResponse.json({ error: 'Only dealers can create happy hours' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await req.json();
     const { name, description, multiplier, startTime, endTime, daysOfWeek, validFrom, validUntil } = body;
 
     if (!name || !startTime || !endTime || !daysOfWeek || !Array.isArray(daysOfWeek)) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const happyHour = await prisma.happyHour.create({
@@ -137,9 +141,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       happyHour,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating happy hour:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

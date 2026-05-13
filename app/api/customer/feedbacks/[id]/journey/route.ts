@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export async function GET(
           status: { in: ['pending', 'accepted', 'expired'] },
         },
         orderBy: { createdAt: 'asc' },
+        take: 30,
         select: {
           id: true,
           status: true,
@@ -46,11 +48,17 @@ export async function GET(
   });
 
   if (!feedback) {
-    return NextResponse.json({ error: 'Geri bildirim bulunamadı' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'Geri bildirim bulunamadı' },
+      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   if (session.user.role === 'CUSTOMER' && feedback.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Bu geri bildirimi görüntüleyemezsiniz' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Bu geri bildirimi görüntüleyemezsiniz' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const steps: JourneyStep[] = [
@@ -93,16 +101,19 @@ export async function GET(
     });
   }
 
-  return NextResponse.json({
-    success: true,
-    feedback: {
-      id: feedback.id,
-      rating: feedback.rating,
-      text: feedback.text,
-      createdAt: feedback.createdAt.toISOString(),
-      qrName: feedback.qrCode.name,
-      businessName: feedback.qrCode.dealer?.businessName ?? feedback.qrCode.name,
+  return NextResponse.json(
+    {
+      success: true,
+      feedback: {
+        id: feedback.id,
+        rating: feedback.rating,
+        text: feedback.text,
+        createdAt: feedback.createdAt.toISOString(),
+        qrName: feedback.qrCode.name,
+        businessName: feedback.qrCode.dealer?.businessName ?? feedback.qrCode.name,
+      },
+      steps,
     },
-    steps,
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

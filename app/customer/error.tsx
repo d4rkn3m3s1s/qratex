@@ -40,11 +40,11 @@ export default function CustomerError({
           {t('customerError.description')}
         </p>
         <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
-          <Button type="button" onClick={reset} size="sm" className="gap-2">
+          <Button type="button" onClick={reset} size="sm" className="gap-2 min-h-10 touch-manipulation w-full sm:w-auto">
             <RefreshCw className="h-4 w-4 shrink-0" aria-hidden />
             {t('common.retry')}
           </Button>
-          <Button asChild variant="outline" size="sm" className="gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2 min-h-10 touch-manipulation w-full sm:w-auto">
             <Link href="/customer">
               <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden />
               {t('customerError.backToDashboard')}

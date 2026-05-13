@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import bcrypt from 'bcryptjs';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
@@ -13,7 +14,7 @@ export async function PATCH(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await request.json();
@@ -21,16 +22,12 @@ export async function PATCH(request: NextRequest) {
 
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
-        { error: 'Mevcut şifre ve yeni şifre gereklidir' },
-        { status: 400 }
-      );
+        { error: 'Mevcut şifre ve yeni şifre gereklidir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (newPassword.length < 8) {
       return NextResponse.json(
-        { error: 'Yeni şifre en az 8 karakter olmalıdır' },
-        { status: 400 }
-      );
+        { error: 'Yeni şifre en az 8 karakter olmalıdır' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get user with password
@@ -41,18 +38,14 @@ export async function PATCH(request: NextRequest) {
 
     if (!user || !user.password) {
       return NextResponse.json(
-        { error: 'Kullanıcı bulunamadı veya şifre ayarlı değil' },
-        { status: 400 }
-      );
+        { error: 'Kullanıcı bulunamadı veya şifre ayarlı değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Verify current password
     const isValidPassword = await bcrypt.compare(currentPassword, user.password);
     if (!isValidPassword) {
       return NextResponse.json(
-        { error: 'Mevcut şifre hatalı' },
-        { status: 400 }
-      );
+        { error: 'Mevcut şifre hatalı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Hash new password
@@ -75,13 +68,11 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, message: 'Şifre güncellendi' });
+    return NextResponse.json({ success: true, message: 'Şifre güncellendi' }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error changing password:', error);
     return NextResponse.json(
-      { error: 'Şifre güncellenemedi' },
-      { status: 500 }
-    );
+      { error: 'Şifre güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

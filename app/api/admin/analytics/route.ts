@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -509,10 +510,10 @@ export async function GET(request: NextRequest) {
       data = Object.fromEntries(Object.entries(fullData).filter(([k]) => allowed.has(k)));
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin analytics error:', error);
-    return NextResponse.json({ error: 'Analitik verileri getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Analitik verileri getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

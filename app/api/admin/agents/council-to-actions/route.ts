@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   const json = await req.json().catch(() => null);
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const dealer = await prisma.user.findFirst({
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const { dealerId, topic, actions } = parsed.data;
@@ -69,5 +70,5 @@ export async function POST(req: NextRequest) {
     success: true,
     count: created.length,
     ids: created.map((c) => c.id),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

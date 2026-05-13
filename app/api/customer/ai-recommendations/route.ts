@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { askAI } from '@/lib/ai-engine';
 
 
@@ -11,7 +12,10 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     const userId = session.user.id;
@@ -42,12 +46,15 @@ export async function GET() {
     });
 
     if (feedbacks.length < 2) {
-      return NextResponse.json({
-        success: true,
-        recommendations: null,
-        message: 'Kişiselleştirilmiş öneriler için en az 2 geri bildirim gerekli.',
-        stats: { totalFeedbacks: feedbacks.length },
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          recommendations: null,
+          message: 'Kişiselleştirilmiş öneriler için en az 2 geri bildirim gerekli.',
+          stats: { totalFeedbacks: feedbacks.length },
+        },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // İstatistikleri hesapla
@@ -138,24 +145,30 @@ Müşteri Profili:
       })),
     });
 
-    return NextResponse.json({
-      success: true,
-      recommendations: aiRecommendations,
-      stats: {
-        totalFeedbacks,
-        avgRating,
-        sentimentDist,
-        ratingTrend: ratingTrend > 0.1 ? 'up' : ratingTrend < -0.1 ? 'down' : 'stable',
-        ratingTrendValue: Number(ratingTrend.toFixed(2)),
-        avgUrgency,
-        avgEffort,
-        avgChurnRisk,
-        topTopics,
-        topBusinesses,
+    return NextResponse.json(
+      {
+        success: true,
+        recommendations: aiRecommendations,
+        stats: {
+          totalFeedbacks,
+          avgRating,
+          sentimentDist,
+          ratingTrend: ratingTrend > 0.1 ? 'up' : ratingTrend < -0.1 ? 'down' : 'stable',
+          ratingTrendValue: Number(ratingTrend.toFixed(2)),
+          avgUrgency,
+          avgEffort,
+          avgChurnRisk,
+          topTopics,
+          topBusinesses,
+        },
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Customer AI recommendations error:', error);
-    return NextResponse.json({ error: 'AI önerileri oluşturulamadı' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'AI önerileri oluşturulamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

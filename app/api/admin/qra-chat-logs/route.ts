@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,9 +56,9 @@ export async function GET(request: NextRequest) {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('qra-chat-logs GET:', error);
-    return NextResponse.json({ error: 'Kayıtlar alınamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Kayıtlar alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { updateSystemLearningProfile, getSystemLearningProfile, updateSystemLearningPrompts } from '@/lib/ai-learning';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,10 +35,10 @@ export async function GET() {
         dealerCount,
         embeddingCount,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('System learning GET error:', error);
-    return NextResponse.json({ error: 'Profil yüklenemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Profil yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -48,17 +49,17 @@ export async function POST() {
   try {
     const result = await updateSystemLearningProfile();
     if (!result) {
-      return NextResponse.json({ error: 'AI client kullanılamıyor veya eğitim başarısız' }, { status: 500 });
+      return NextResponse.json({ error: 'AI client kullanılamıyor veya eğitim başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     return NextResponse.json({
       success: true,
       version: result.version,
       profile: result.profile,
       trainingDataStats: result.trainingDataStats,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('System learning POST error:', error);
-    return NextResponse.json({ error: 'Sistem eğitimi başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Sistem eğitimi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -72,17 +73,17 @@ export async function PATCH(request: NextRequest) {
     const chatSystemPrompt = body.chatSystemPrompt as string | null | undefined;
 
     if (systemPrompt === undefined && chatSystemPrompt === undefined) {
-      return NextResponse.json({ error: 'systemPrompt veya chatSystemPrompt gerekli' }, { status: 400 });
+      return NextResponse.json({ error: 'systemPrompt veya chatSystemPrompt gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const ok = await updateSystemLearningPrompts({ systemPrompt, chatSystemPrompt });
     if (!ok) {
-      return NextResponse.json({ error: 'Profil bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'Profil bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const profile = await getSystemLearningProfile();
-    return NextResponse.json({ success: true, profile });
+    return NextResponse.json({ success: true, profile }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('System learning PATCH error:', error);
-    return NextResponse.json({ error: 'Güncelleme başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Güncelleme başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

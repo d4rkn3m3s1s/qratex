@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 import { recordFeedbackCorrection, updateAdaptiveProfile, getLearningRetrainSuggestion } from '@/lib/ai-learning';
 
@@ -19,8 +20,8 @@ const correctionSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role === 'CUSTOMER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+    if (session.user.role === 'CUSTOMER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
 
     const { searchParams } = new URL(request.url);
     const dealerId = session.user.role === 'ADMIN' ? searchParams.get('dealerId') || undefined : session.user.id;
@@ -54,18 +55,18 @@ export async function GET(request: NextRequest) {
       correctionsCount,
       corrections,
       retrainSuggestion,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Learning status error:', error);
-    return NextResponse.json({ error: 'Learning status alınamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Learning status alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role === 'CUSTOMER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+    if (session.user.role === 'CUSTOMER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'record_correction';
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (action === 'record_correction') {
       const validated = correctionSchema.safeParse(body);
       if (!validated.success) {
-        return NextResponse.json({ error: validated.error.errors[0].message }, { status: 400 });
+        return NextResponse.json({ error: validated.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       const { feedbackId, field, newValue, oldValue, note } = validated.data;
@@ -82,9 +83,9 @@ export async function POST(request: NextRequest) {
         where: { id: feedbackId },
         select: { qrCode: { select: { dealerId: true } } },
       });
-      if (!fb) return NextResponse.json({ error: 'Feedback bulunamadı' }, { status: 404 });
+      if (!fb) return NextResponse.json({ error: 'Feedback bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       if (session.user.role === 'DEALER' && fb.qrCode.dealerId !== session.user.id) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       const correction = await recordFeedbackCorrection({
@@ -96,20 +97,20 @@ export async function POST(request: NextRequest) {
         note,
       });
 
-      return NextResponse.json({ success: true, correction });
+      return NextResponse.json({ success: true, correction }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (action === 'update_profile') {
       const dealerId = session.user.role === 'ADMIN' ? body?.dealerId : session.user.id;
-      if (!dealerId) return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 });
+      if (!dealerId) return NextResponse.json({ error: 'dealerId gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
 
       const profile = await updateAdaptiveProfile(dealerId);
-      return NextResponse.json({ success: true, profile });
+      return NextResponse.json({ success: true, profile }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Learning action error:', error);
-    return NextResponse.json({ error: 'Learning işlemi başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Learning işlemi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

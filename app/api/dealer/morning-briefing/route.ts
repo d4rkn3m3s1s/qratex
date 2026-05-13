@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -22,17 +23,17 @@ export async function GET() {
     createdAt: { gte: since },
   };
 
-  const customerIds = await prisma.feedback.findMany({
+  const distinctUsers = await prisma.feedback.groupBy({
+    by: ['userId'],
     where: {
       qrCode: { dealerId },
       deletedAt: null,
       createdAt: { gte: since },
       userId: { not: null },
     },
-    select: { userId: true },
-    distinct: ['userId'],
+    _count: { _all: true },
   });
-  const distinctCustomerIds = customerIds.map((c) => c.userId).filter(Boolean) as string[];
+  const distinctCustomerIds = distinctUsers.map((c) => c.userId).filter(Boolean) as string[];
 
   const [lowRating24h, newFeedback24h, openIncidents, remedyQueueCount, vocSnippetCount, pushReach] =
     await Promise.all([
@@ -82,7 +83,7 @@ export async function GET() {
       rating: true,
       text: true,
       createdAt: true,
-      user: { select: { name: true, email: true } },
+      user: { select: { name: true } },
     },
   });
 
@@ -120,24 +121,27 @@ export async function GET() {
           }
         : null;
 
-  return NextResponse.json({
-    success: true,
-    last24h: {
-      lowRatingFeedbackCount: lowRating24h,
-      newFeedbackCount: newFeedback24h,
-      openIncidents,
-      remedyQueueCount,
-      vocTextFeedbackCount: vocSnippetCount,
-      pushSubscribersAmongActiveCustomers: pushReach,
+  return NextResponse.json(
+    {
+      success: true,
+      last24h: {
+        lowRatingFeedbackCount: lowRating24h,
+        newFeedbackCount: newFeedback24h,
+        openIncidents,
+        remedyQueueCount,
+        vocTextFeedbackCount: vocSnippetCount,
+        pushSubscribersAmongActiveCustomers: pushReach,
+      },
+      highlights,
+      urgentFeedbacks: urgentFeedbacks.map((f) => ({
+        id: f.id,
+        rating: f.rating,
+        excerpt: (f.text || '').slice(0, 140) + ((f.text?.length ?? 0) > 140 ? '…' : ''),
+        createdAt: f.createdAt.toISOString(),
+        customerLabel: f.user?.name || 'Anonim',
+      })),
+      suggestedPlaybook,
     },
-    highlights,
-    urgentFeedbacks: urgentFeedbacks.map((f) => ({
-      id: f.id,
-      rating: f.rating,
-      excerpt: (f.text || '').slice(0, 140) + ((f.text?.length ?? 0) > 140 ? '…' : ''),
-      createdAt: f.createdAt.toISOString(),
-      customerLabel: f.user?.name || f.user?.email || 'Anonim',
-    })),
-    suggestedPlaybook,
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

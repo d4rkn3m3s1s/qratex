@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { processNextAutomationJob } from '@/lib/users-automation/queue';
 
 
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const parsed = processSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const processed: Array<{ jobId: string; status: string }> = [];
@@ -28,8 +29,8 @@ export async function POST(request: NextRequest) {
       processed.push({ jobId: result.jobId, status: result.status });
     }
 
-    return NextResponse.json({ success: true, processedCount: processed.length, processed });
+    return NextResponse.json({ success: true, processedCount: processed.length, processed }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Job işleme başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Job işleme başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

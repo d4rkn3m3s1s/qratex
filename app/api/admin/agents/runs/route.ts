@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { memoryGetRuns } from '@/lib/agent-run-store';
 
 // GET /api/admin/agents/runs
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const db = prisma as any;
     if (typeof db?.agentRun?.findMany !== 'function') {
-      return NextResponse.json({ success: true, runs: memoryGetRuns(take), persistence: 'memory' });
+      return NextResponse.json({ success: true, runs: memoryGetRuns(take), persistence: 'memory' }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
     const runs = await db.agentRun.findMany({
       take,
@@ -28,9 +29,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, runs, persistence: 'database' });
+    return NextResponse.json({ success: true, runs, persistence: 'database' }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching runs:', error);
-    return NextResponse.json({ error: 'Run listesi getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Run listesi getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

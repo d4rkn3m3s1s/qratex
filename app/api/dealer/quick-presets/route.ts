@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 // GET - Get dealer's quick scan presets
 
@@ -20,15 +21,18 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: [{ isDefault: 'desc' }, { order: 'asc' }],
+      take: 200,
     });
 
     return NextResponse.json({
       success: true,
       presets,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching quick presets:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { name, productId, amount, note, isDefault } = body;
 
     if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // If setting as default, unset other defaults
@@ -80,10 +84,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       preset,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating quick preset:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -98,7 +104,7 @@ export async function PATCH(req: NextRequest) {
     const { id, name, productId, amount, note, isDefault, order } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'Preset ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Preset ID is required' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Verify ownership
@@ -107,7 +113,7 @@ export async function PATCH(req: NextRequest) {
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'Preset not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Preset not found' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // If setting as default, unset other defaults
@@ -118,8 +124,8 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    const preset = await prisma.quickScanPreset.update({
-      where: { id },
+    const presetRows = await prisma.quickScanPreset.updateMany({
+      where: { id, dealerId: session.user.id },
       data: {
         name: name !== undefined ? name : existing.name,
         productId: productId !== undefined ? productId : existing.productId,
@@ -128,6 +134,13 @@ export async function PATCH(req: NextRequest) {
         isDefault: isDefault !== undefined ? isDefault : existing.isDefault,
         order: order !== undefined ? order : existing.order,
       },
+    });
+    if (presetRows.count === 0) {
+      return NextResponse.json({ error: 'Preset not found' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    const preset = await prisma.quickScanPreset.findFirst({
+      where: { id, dealerId: session.user.id },
       include: {
         product: {
           select: { id: true, name: true, price: true, image: true },
@@ -138,10 +151,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({
       success: true,
       preset,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating quick preset:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -156,7 +171,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'Preset ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Preset ID is required' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Verify ownership
@@ -165,19 +180,25 @@ export async function DELETE(req: NextRequest) {
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'Preset not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Preset not found' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    await prisma.quickScanPreset.delete({
-      where: { id },
+    const del = await prisma.quickScanPreset.deleteMany({
+      where: { id, dealerId: session.user.id },
     });
+
+    if (del.count === 0) {
+      return NextResponse.json({ error: 'Preset not found' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Preset deleted',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting quick preset:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

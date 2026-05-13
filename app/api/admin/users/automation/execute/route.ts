@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { withIdempotency } from '@/lib/idempotency';
 import { enqueueAutomationJob, processNextAutomationJob } from '@/lib/users-automation/queue';
 import { getAuditRequestMeta } from '@/lib/request-metadata';

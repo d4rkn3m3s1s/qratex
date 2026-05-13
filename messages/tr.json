@@ -901,7 +901,9 @@
         "segmentRisk": "Kayıp riski",
         "statusDraft": "Taslak",
         "statusSent": "Gönderildi",
-        "statusScheduled": "Zamanlandı"
+        "statusScheduled": "Zamanlandı",
+        "playbookWhereHint": "Admin panelinden uygulanan playbook’lar bayi hesabınızda ayrı bir menüde değil; burada \"Taslak\" kampanya olarak oluşur. İnceleyip Gönder ile yayınlayın.",
+        "badgeFromPlaybook": "Playbook"
     },
     "dealerAiSettings": {
         "eyebrow": "Bayi paneli · AI",
@@ -1520,7 +1522,8 @@
         "seeAll": "Tümünü gör",
         "noRemedy": "Henüz telafi teklifi yok. Geri bildirim veya tüketim yorumunuza işletme telafi gönderdiğinde burada listelenir.",
         "open": "Aç",
-        "moreOffers": "teklif daha"
+        "moreOffers": "teklif daha",
+        "reviewsListCapped": "En fazla 200 tüketim yorumu gösteriliyor; toplam:"
     },
     "customerRewards": {
         "title": "Ödül Mağazası",
@@ -1612,7 +1615,9 @@
         "extraDataTitle": "Ek bilgiler",
         "ctaChooseRemedy": "Telafiyi seç",
         "deleteOne": "Bildirimi sil",
-        "closeOk": "Tamam"
+        "closeOk": "Tamam",
+        "ctaClaimBirthdayBonus": "Bonusu talep et",
+        "birthdayClaimSuccessToast": "Doğum günü bonusu hesabına eklendi!"
     },
     "adminInlineLoading": {
         "pricingPlans": "Fiyat planları yükleniyor…",
@@ -2307,6 +2312,7 @@
         "locationHelpGeneric": "Konum şu an alınamadı. Tarayıcı konum desteğini açıp tekrar deneyin.",
         "locationFetching": "Konum alınıyor...",
         "useMyLocation": "Konumumu Kullan",
+        "mobileTopLocationHint": "Liste ve mesafeler konumunuza göre güncellenir.",
         "emptyNoLocation": "Konum izni vererek veya yukarıdaki butonu kullanarak yakındaki mekanları görebilirsiniz.",
         "emptyFiltered": "Seçilen filtrede yakın mekan bulunamadı.",
         "noAddress": "Adres bilgisi yok",
@@ -2334,7 +2340,10 @@
         "liveBoosts": {
             "title": "Canlı puan çarpanları (Happy Hour)",
             "description": "Şu an aktif mutlu saat / kampanya çarpanları — yakınınızdaki işletmeler"
-        }
+        },
+        "iosLocationNote": "iPhone / Safari: Bu site için konuma izin verin (adres çubuğundaki aA → Web Sitesi Ayarları veya Ayarlar → Safari → Konum). Konumu aşağıdaki düğmeyle isteyin; sayfa açılır açılmaz otomatik istemiyoruz (iOS uyumluluğu).",
+        "shareLocationTitle": "Konumu paylaşın",
+        "shareLocationBody": "Yakın mekanlar ve mesafeye göre sıralama için konum gerekir. Devam etmek için düğmeye dokunun."
     },
     "customerLounge": {
         "loadError": "Yüklenemedi",
@@ -2356,8 +2365,43 @@
         "nextCelebrationIn": "Sonraki kutlama yaklaşık",
         "dayLater": "gün sonra.",
         "bonusUsed": "Bu yıl bonus kullanıldı",
-        "noBirthday": "Doğum günü eklenmemiş. Ayarlardan ekleyerek sürpriz tekliflerden yararlanabilirsiniz.",
-        "surpriseBoxes": "Sürpriz kutular"
+        "noBirthday": "Doğum tarihi eklenmemiş. Ayarlar → Profil sekmesinden ekleyebilirsiniz; doğum gününüzde lounge’dan bonus talep edebilirsiniz.",
+        "surpriseBoxes": "Sürpriz kutular",
+        "birthdayToday": "Bugün doğum gününüz!",
+        "birthdayBonusHint": "Doğum günü bonusu (yılda bir): +{n} puan.",
+        "birthdayBonusHintUnset": "Tarihi kaydettiğinizde doğum gününüzde +{n} puan bonus talep edebilirsiniz.",
+        "claimBirthdayBonus": "Doğum günü bonusunu talep et",
+        "claimingBirthday": "İşleniyor…",
+        "claimBirthdaySuccess": "Bonus hesabınıza eklendi!",
+        "birthdayEditInSettings": "Doğum tarihini ayarlarda düzenle",
+        "birthdayAddInSettings": "Profil ayarlarına git",
+        "birthdayBonusClaimedThisYear": "Bu yıl doğum günü bonusu zaten alındı"
+    },
+    "customerBirthdayPopup": {
+        "title": "İyi ki doğdun!",
+        "description": "Bugün talep edebileceğin +{n} bonus puanın hazır.",
+        "hint": "Bunu buradan, Ayarlar → Profil veya üstteki bildirimlerden de talep edebilirsin.",
+        "claimCta": "Bonusu talep et",
+        "claiming": "Ekleniyor…",
+        "claimSuccess": "Bonus hesabına eklendi!",
+        "later": "Daha sonra"
+    },
+    "settingsBirthday": {
+        "cardTitle": "Doğum günü",
+        "cardDescription": "Lounge ve doğum günü bonusu için gün/ay yeterli. Doğum gününüzde bonusu buradan, açılan kutuda veya üst menüdeki bildirimlerden talep edebilirsiniz.",
+        "loading": "Yükleniyor…",
+        "todayBonusReady": "Bugün doğum gününüz — bonus hazır.",
+        "todayBonusBody": "+{n} puanı tek tıkla ekleyebilirsiniz (yılda bir).",
+        "claimCta": "Doğum günü bonusunu talep et",
+        "claiming": "Ekleniyor…",
+        "alreadyClaimed": "Bu yıllık doğum günü bonusu zaten alındı. Nice senelere!",
+        "annualHint": "Doğum günü bonusu (yılda bir, yaklaşık): +{n} puan",
+        "labelBirthDate": "Doğum tarihi",
+        "saveCta": "Doğum tarihini kaydet",
+        "saving": "Kaydediliyor...",
+        "errorSelectDate": "Lütfen doğum tarihi seçin",
+        "errorSave": "Kaydedilemedi",
+        "errorClaim": "Talep edilemedi"
     },
     "customerShop": {
         "title": "Rozet & Avatar Dükkanı",
@@ -2392,7 +2436,8 @@
         "inviteTitle": "Arkadaşını Davet Et & Kazan",
         "inviteDescription": "Davet kodunu paylaş, hem sen hem arkadaşın ekstra puan kazanın.",
         "inviteSubDescription": "Detaylı davet geçmişi ve kodunu görmek için davet sayfasına gidebilirsin.",
-        "inviteCta": "Davet Et"
+        "inviteCta": "Davet Et",
+        "infoStrip": "Mutlu saat ve çarpanlar işletme saatlerine göre değişebilir; liste yaklaşık bilgi sunar. Güncel koşullar için işletmeyi doğrulayın."
     },
     "customerReferral": {
         "eyebrow": "Müşteri alanı",
@@ -2687,6 +2732,7 @@
         "nearbyTitle": "Yakın Mekanlar",
         "nearbyDescription": "Konum izni ile yakınındaki kahve, tatlı ve yemek mekanlarını mesafeleriyle keşfet.",
         "nearbyCta": "Yakınımdakileri Gör",
+        "nearbyIosHint": "iPhone’da mesafe ve harita için Yakınımdaki Mekanlar sayfasında konumu düğmeyle paylaşın.",
         "weeklyBestTitle": "Haftanın Enleri",
         "emptyWeeklyBest": "Haftalık listeler için veri bekleniyor.",
         "emptySponsored": "Aktif duyuru bulunmuyor.",
@@ -2696,6 +2742,7 @@
         "score": "Skor",
         "discount": "indirim",
         "trendingVenueTitle": "Trend Mekanlar Puanı",
+        "trendingIosNote": "iOS Safari’de konum için Yakınımdaki Mekanlar sayfasından izin verin.",
         "cards": {
             "totalPoints": "Toplam Puan",
             "rewardsReceived": "ödül alındı",

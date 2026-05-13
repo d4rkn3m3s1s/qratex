@@ -315,12 +315,14 @@ async function main() {
   const rewards = await Promise.all([
     prisma.reward.upsert({
       where: { id: 'reward-coffee-coupon' },
-      update: {},
+      update: {
+        icon: '/images/rewards/reward-coffee.webp',
+      },
       create: {
         id: 'reward-coffee-coupon',
         name: 'Ücretsiz Kahve',
         description: 'Anlaşmalı kafelerde ücretsiz kahve kuponu',
-        icon: '/images/avatar/COFFFE.svg',
+        icon: '/images/rewards/reward-coffee.webp',
         cost: 500,
         type: 'coupon',
         stock: 100,
@@ -328,12 +330,14 @@ async function main() {
     }),
     prisma.reward.upsert({
       where: { id: 'reward-discount-10' },
-      update: {},
+      update: {
+        icon: '/images/rewards/reward-discount.webp',
+      },
       create: {
         id: 'reward-discount-10',
         name: '%10 İndirim',
         description: 'Bir sonraki alışverişinizde %10 indirim',
-        icon: '/images/badges/sürpriz kutusu.svg',
+        icon: '/images/rewards/reward-discount.webp',
         cost: 300,
         type: 'coupon',
         stock: -1,
@@ -341,12 +345,14 @@ async function main() {
     }),
     prisma.reward.upsert({
       where: { id: 'reward-vip-badge' },
-      update: {},
+      update: {
+        icon: '/images/rewards/reward-vip.webp',
+      },
       create: {
         id: 'reward-vip-badge',
         name: 'VIP Rozet',
         description: 'Profilinizde VIP rozeti kazanın',
-        icon: '/images/badges/TAHT SAHİBİ.svg',
+        icon: '/images/rewards/reward-vip.webp',
         cost: 1000,
         type: 'digital',
         stock: -1,
@@ -354,12 +360,14 @@ async function main() {
     }),
     prisma.reward.upsert({
       where: { id: 'reward-donut' },
-      update: {},
+      update: {
+        icon: '/images/rewards/reward-donut.webp',
+      },
       create: {
         id: 'reward-donut',
         name: 'Ücretsiz Tatlı',
         description: 'Anlaşmalı pastanelerde ücretsiz tatlı',
-        icon: '/images/avatar/DONUT.svg',
+        icon: '/images/rewards/reward-donut.webp',
         cost: 400,
         type: 'coupon',
         stock: 50,

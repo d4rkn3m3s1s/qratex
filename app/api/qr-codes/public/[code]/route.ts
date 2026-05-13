@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkScanRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 
 // ─────────────────────────────────────────────────────────────
@@ -17,9 +18,12 @@ export async function GET(
         { error: 'Çok fazla QR taraması. Lütfen biraz bekleyip tekrar deneyin.' },
         {
           status: 429,
-          headers: scanLimit.retryAfterMs
-            ? { 'Retry-After': String(Math.ceil(scanLimit.retryAfterMs / 1000)) }
-            : undefined,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(scanLimit.retryAfterMs
+              ? { 'Retry-After': String(Math.ceil(scanLimit.retryAfterMs / 1000)) }
+              : {}),
+          },
         }
       );
     }
@@ -28,9 +32,7 @@ export async function GET(
 
     if (!code) {
       return NextResponse.json(
-        { error: 'QR kod gerekli' },
-        { status: 400 }
-      );
+        { error: 'QR kod gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const segment = request.nextUrl.searchParams.get('segment') ?? undefined;
@@ -69,29 +71,21 @@ export async function GET(
 
     if (!qrCode) {
       return NextResponse.json(
-        { error: 'QR kod bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'QR kod bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const now = new Date();
     if (!qrCode.isActive) {
       return NextResponse.json(
-        { error: 'Bu QR kod aktif değil' },
-        { status: 404 }
-      );
+        { error: 'Bu QR kod aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (qrCode.expiresAt && now > qrCode.expiresAt) {
       return NextResponse.json(
-        { error: 'Bu QR kodun süresi dolmuş' },
-        { status: 404 }
-      );
+        { error: 'Bu QR kodun süresi dolmuş' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (qrCode.revokedAt) {
       return NextResponse.json(
-        { error: 'Bu QR kod iptal edilmiş' },
-        { status: 404 }
-      );
+        { error: 'Bu QR kod iptal edilmiş' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const config = qrCode.segmentConfig as Record<string, { welcomeText?: string }> | null;
@@ -122,13 +116,11 @@ export async function GET(
         ...rest,
         segmentExperience,
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching QR code:', error);
     return NextResponse.json(
-      { error: 'QR kod getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'QR kod getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

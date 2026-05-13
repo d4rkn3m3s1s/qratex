@@ -901,7 +901,9 @@
         "segmentRisk": "Churn risk",
         "statusDraft": "Draft",
         "statusSent": "Sent",
-        "statusScheduled": "Scheduled"
+        "statusScheduled": "Scheduled",
+        "playbookWhereHint": "Playbooks applied from the admin panel do not appear as a separate dealer menu item; they are created here as Draft campaigns. Review and tap Send to publish.",
+        "badgeFromPlaybook": "Playbook"
     },
     "dealerAiSettings": {
         "eyebrow": "Dealer · AI",
@@ -1520,7 +1522,8 @@
         "seeAll": "See all",
         "noRemedy": "No remedy offer yet. It will appear here when a business sends one for your feedback or consumption review.",
         "open": "Open",
-        "moreOffers": "more offers"
+        "moreOffers": "more offers",
+        "reviewsListCapped": "Showing up to 200 consumption reviews; total:"
     },
     "customerRewards": {
         "title": "Reward Store",
@@ -1612,7 +1615,9 @@
         "extraDataTitle": "Additional details",
         "ctaChooseRemedy": "Choose remedy",
         "deleteOne": "Delete notification",
-        "closeOk": "OK"
+        "closeOk": "OK",
+        "ctaClaimBirthdayBonus": "Claim birthday bonus",
+        "birthdayClaimSuccessToast": "Birthday bonus added to your account!"
     },
     "adminInlineLoading": {
         "pricingPlans": "Loading pricing plans…",
@@ -2307,6 +2312,7 @@
         "locationHelpGeneric": "Location is unavailable right now. Enable browser location support and try again.",
         "locationFetching": "Getting location...",
         "useMyLocation": "Use My Location",
+        "mobileTopLocationHint": "List and distances update from your location.",
         "emptyNoLocation": "Allow location or use the button above to see nearby venues.",
         "emptyFiltered": "No nearby venues found for the selected filter.",
         "noAddress": "No address information",
@@ -2334,7 +2340,10 @@
         "liveBoosts": {
             "title": "Live point multipliers (Happy Hour)",
             "description": "Currently active happy hour / campaign multipliers — nearby businesses"
-        }
+        },
+        "iosLocationNote": "iPhone / Safari: allow location for this site (aA → Website Settings, or Settings → Safari → Location). Use the button below first — automatic requests on page load are often blocked.",
+        "shareLocationTitle": "Share your location",
+        "shareLocationBody": "Nearby venues and distance sorting need your location. Tap the button to continue."
     },
     "customerLounge": {
         "loadError": "Could not load",
@@ -2356,8 +2365,43 @@
         "nextCelebrationIn": "Next celebration is in about",
         "dayLater": "days.",
         "bonusUsed": "Bonus used this year",
-        "noBirthday": "Birthday is not set. Add it in settings to benefit from surprise offers.",
-        "surpriseBoxes": "Surprise boxes"
+        "noBirthday": "No birth date yet. Add it under Settings → Profile; on your birthday you can claim your bonus from the lounge.",
+        "surpriseBoxes": "Surprise boxes",
+        "birthdayToday": "It's your birthday today!",
+        "birthdayBonusHint": "Birthday bonus (once per year): +{n} points.",
+        "birthdayBonusHintUnset": "After you save your date, you can claim +{n} points on your birthday from the lounge.",
+        "claimBirthdayBonus": "Claim birthday bonus",
+        "claimingBirthday": "Processing…",
+        "claimBirthdaySuccess": "Bonus added to your account!",
+        "birthdayEditInSettings": "Edit birth date in settings",
+        "birthdayAddInSettings": "Go to profile settings",
+        "birthdayBonusClaimedThisYear": "Birthday bonus already claimed this year"
+    },
+    "customerBirthdayPopup": {
+        "title": "Happy birthday!",
+        "description": "You have +{n} bonus points ready to claim today.",
+        "hint": "Claim here, under Settings → Profile, or from the bell notifications menu.",
+        "claimCta": "Claim bonus",
+        "claiming": "Adding…",
+        "claimSuccess": "Bonus added to your account!",
+        "later": "Maybe later"
+    },
+    "settingsBirthday": {
+        "cardTitle": "Birthday",
+        "cardDescription": "Day and month are enough for lounge and the birthday bonus. On your birthday you can claim from here, the popup, or notifications in the top menu.",
+        "loading": "Loading…",
+        "todayBonusReady": "It's your birthday today — your bonus is ready.",
+        "todayBonusBody": "Add +{n} points in one tap (once per year).",
+        "claimCta": "Claim birthday bonus",
+        "claiming": "Adding…",
+        "alreadyClaimed": "This year's birthday bonus has already been claimed. Cheers!",
+        "annualHint": "Birthday bonus (once per year, approx.): +{n} points",
+        "labelBirthDate": "Birth date",
+        "saveCta": "Save birth date",
+        "saving": "Saving...",
+        "errorSelectDate": "Please select a birth date",
+        "errorSave": "Could not save",
+        "errorClaim": "Could not claim"
     },
     "customerShop": {
         "title": "Badge & Avatar Shop",
@@ -2392,7 +2436,8 @@
         "inviteTitle": "Invite Friends & Earn",
         "inviteDescription": "Share your invite code and both you and your friend earn extra points.",
         "inviteSubDescription": "Go to invite page to see detailed invite history and your code.",
-        "inviteCta": "Invite"
+        "inviteCta": "Invite",
+        "infoStrip": "Happy hours and multipliers can change by venue hours; this list is indicative. Confirm details with the business."
     },
     "customerReferral": {
         "eyebrow": "Customer area",
@@ -2687,6 +2732,7 @@
         "nearbyTitle": "Nearby Venues",
         "nearbyDescription": "With location access, discover nearby coffee, dessert, and food venues with distance.",
         "nearbyCta": "See Nearby",
+        "nearbyIosHint": "On iPhone, open Nearby and share location with the button for distances and maps.",
         "weeklyBestTitle": "Best of the Week",
         "emptyWeeklyBest": "Waiting for data for weekly lists.",
         "emptySponsored": "No active announcements.",
@@ -2696,6 +2742,7 @@
         "score": "Score",
         "discount": "discount",
         "trendingVenueTitle": "Trending Venue Score",
+        "trendingIosNote": "On iOS Safari, allow location from the Nearby Venues page.",
         "cards": {
             "totalPoints": "Total Points",
             "rewardsReceived": "rewards received",

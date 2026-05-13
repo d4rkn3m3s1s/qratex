@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +17,14 @@ export async function GET(request: NextRequest) {
     if (!session?.user || session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
         { error: 'Yetkisiz erişim' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
     const cards = await prisma.physicalCard.findMany({
       where: { customerId: session.user.id },
       orderBy: { activatedAt: 'desc' },
+      take: 200,
       include: {
         _count: {
           select: { consumptions: true },
@@ -61,20 +63,23 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      cards,
-      stats: {
-        totalCards: cards.length,
-        totalConsumptions: stats._count,
-        reviewPending,
+    return NextResponse.json(
+      {
+        success: true,
+        cards,
+        stats: {
+          totalCards: cards.length,
+          totalConsumptions: stats._count,
+          reviewPending,
+        },
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching cards:', error);
     return NextResponse.json(
       { error: 'Kartlar getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

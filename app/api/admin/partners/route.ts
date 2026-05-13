@@ -9,6 +9,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 
@@ -37,7 +38,7 @@ export async function GET() {
     isActive: p.isActive,
     createdAt: p.createdAt,
   }));
-  return NextResponse.json({ partners: safe });
+  return NextResponse.json({ partners: safe }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 // POST /api/admin/partners
@@ -49,12 +50,12 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz JSON' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const parsed = createPartnerSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const rawKey = `qrk_${randomBytes(24).toString('hex')}`;
@@ -82,5 +83,5 @@ export async function POST(req: NextRequest) {
     },
     apiKey: rawKey,
     message: 'API anahtarını güvenli saklayın; tekrar görüntülenemez.',
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

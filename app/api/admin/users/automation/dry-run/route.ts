@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { runAutomationActions } from '@/lib/users-automation/engine';
 
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = dryRunSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const result = await runAutomationActions({
       condition: parsed.data.condition,
@@ -27,8 +28,8 @@ export async function POST(request: NextRequest) {
       dryRun: true,
       limit: parsed.data.limit,
     });
-    return NextResponse.json({ success: true, result });
+    return NextResponse.json({ success: true, result }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Dry-run başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Dry-run başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

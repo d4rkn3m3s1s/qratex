@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { buildNextBestActions } from '@/lib/next-best-action';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,16 +18,20 @@ function startOfDay(d: Date): Date {
 }
 
 export async function GET() {
+  try {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
 
   const dealerId = session.user.role === 'ADMIN' ? undefined : session.user.id;
   if (session.user.role === 'ADMIN') {
-    return NextResponse.json({
-      message: 'Copilot özeti için dealerId query ile belirtin: ?dealerId=xxx',
-      summary: null,
-    });
+    return NextResponse.json(
+      {
+        message: 'Copilot özeti için dealerId query ile belirtin: ?dealerId=xxx',
+        summary: null,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const now = new Date();
@@ -44,7 +49,8 @@ export async function GET() {
     negativeCount,
     repliedCount,
     avgRatingAgg,
-    qrCodes,
+    totalQRCodes,
+    worstQrRow,
     actionItemsPending,
     churnCount,
     incidentCount,
@@ -67,12 +73,14 @@ export async function GET() {
     prisma.feedback.count({ where: negativeWhere }),
     prisma.feedback.count({ where: { ...baseWhere, dealerRepliedAt: { not: null } } }),
     prisma.feedback.aggregate({ where: baseWhere, _avg: { rating: true }, _count: true }),
-    prisma.qRCode.findMany({
-      where: { dealerId },
-      select: {
-        id: true,
-        feedbacks: { select: { rating: true } },
-      },
+    prisma.qRCode.count({ where: { dealerId } }),
+    prisma.feedback.groupBy({
+      by: ['qrCodeId'],
+      where: { deletedAt: null, qrCode: { dealerId }, createdAt: { gte: since } },
+      _avg: { rating: true },
+      _count: { _all: true },
+      orderBy: { _avg: { rating: 'asc' } },
+      take: 1,
     }),
     prisma.actionItem.count({
       where: { dealerId, status: { in: ['pending', 'assigned', 'in_progress'] } },
@@ -108,20 +116,17 @@ export async function GET() {
   }
   const topActions = allSuggestions.slice(0, 6);
 
-  let lowestRatedQrId: string | undefined;
-  if (qrCodes.length > 0) {
-    const withAvg = qrCodes.map((q) => ({
-      id: q.id,
-      avg: q.feedbacks.length > 0
-        ? q.feedbacks.reduce((s, f) => s + f.rating, 0) / q.feedbacks.length
-        : 5,
-    }));
-    const min = withAvg.reduce((a, b) => (a.avg < b.avg ? a : b));
-    if (min.avg < 4) lowestRatedQrId = min.id;
-  }
+  const worstAvg7d = worstQrRow[0]?._avg.rating;
+  const lowestRatedQrId =
+    worstQrRow[0] &&
+    (worstQrRow[0]._count._all ?? 0) > 0 &&
+    worstAvg7d != null &&
+    worstAvg7d < 4
+      ? worstQrRow[0].qrCodeId
+      : undefined;
 
   const nextBestActions = buildNextBestActions({
-    totalQRCodes: qrCodes.length,
+    totalQRCodes,
     totalFeedbacks: totalCount,
     negativeCount,
     pendingActionCount: actionItemsPending,
@@ -214,8 +219,9 @@ export async function GET() {
     })
   );
 
-  return NextResponse.json({
-    summary: {
+  return NextResponse.json(
+    {
+      summary: {
       period: 'last_7_days',
       criticalIssues,
       topActions,
@@ -235,5 +241,16 @@ export async function GET() {
       campaignRoiHints,
     },
     dailyTrend,
-  });
+  },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('Copilot summary error:', error);
+    return NextResponse.json(
+      { error: 'Özet yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

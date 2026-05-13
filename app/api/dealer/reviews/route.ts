@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-
+import { PRIVATE_NO_STORE_HEADERS, clampTakeParam, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
+
+const REVIEW_LIST_MAX = 100;
+const REVIEW_LIST_DEFAULT = 50;
 
 /**
  * GET /api/dealer/reviews
@@ -17,9 +20,12 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const ratingFilter = searchParams.get('rating');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = clampTakeParam(searchParams.get('limit'), REVIEW_LIST_DEFAULT, REVIEW_LIST_MAX);
 
-    const where: any = {
+    const where: {
+      consumption: { dealerId: string };
+      rating?: number;
+    } = {
       consumption: {
         dealerId: session.user.id,
       },
@@ -32,84 +38,107 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const reviews = await prisma.consumptionReview.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
+    const statsWhere = {
+      consumption: { dealerId: session.user.id },
+    };
+
+    const [reviews, groupedRatings, avgRow] = await Promise.all([
+      prisma.consumptionReview.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+            },
           },
-        },
-        consumption: {
-          select: {
-            id: true,
-            amount: true,
-            createdAt: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                category: {
-                  select: {
-                    name: true,
-                    icon: true,
+          consumption: {
+            select: {
+              id: true,
+              amount: true,
+              createdAt: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  category: {
+                    select: {
+                      name: true,
+                      icon: true,
+                    },
                   },
                 },
               },
-            },
-            card: {
-              select: {
-                id: true,
-                token: true,
+              card: {
+                select: {
+                  id: true,
+                  token: true,
+                },
               },
             },
           },
         },
-      },
+      }),
+      prisma.consumptionReview.groupBy({
+        by: ['rating'],
+        where: statsWhere,
+        _count: { _all: true },
+      }),
+      prisma.consumptionReview.aggregate({
+        where: statsWhere,
+        _avg: { rating: true },
+        _count: true,
+      }),
+    ]);
+
+    const totalReviews = avgRow._count;
+    const avgNum = avgRow._avg.rating ?? 0;
+    const ratingDistribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    for (const row of groupedRatings) {
+      const r = row.rating;
+      if (r >= 1 && r <= 5) {
+        ratingDistribution[r as keyof typeof ratingDistribution] = row._count._all;
+      }
+    }
+
+    const reviewsPublic = reviews.map((r) => {
+      const token = r.consumption.card?.token;
+      const tokenPublic =
+        typeof token === 'string' && token.length > 0 ? token.slice(-4) : '';
+      return {
+        ...r,
+        consumption: {
+          ...r.consumption,
+          card: r.consumption.card
+            ? { id: r.consumption.card.id, token: tokenPublic }
+            : r.consumption.card,
+        },
+      };
     });
 
-    // Calculate stats
-    const allReviews = await prisma.consumptionReview.findMany({
-      where: {
-        consumption: {
-          dealerId: session.user.id,
+    return NextResponse.json(
+      {
+        success: true,
+        reviews: reviewsPublic,
+        stats: {
+          totalReviews,
+          avgRating: totalReviews > 0 ? avgNum.toFixed(1) : '0.0',
+          ratingDistribution,
         },
       },
-      select: { rating: true },
-    });
-
-    const totalReviews = allReviews.length;
-    const avgRating = totalReviews > 0
-      ? allReviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews
-      : 0;
-
-    const ratingDistribution = {
-      5: allReviews.filter(r => r.rating === 5).length,
-      4: allReviews.filter(r => r.rating === 4).length,
-      3: allReviews.filter(r => r.rating === 3).length,
-      2: allReviews.filter(r => r.rating === 2).length,
-      1: allReviews.filter(r => r.rating === 1).length,
-    };
-
-    return NextResponse.json({
-      success: true,
-      reviews,
-      stats: {
-        totalReviews,
-        avgRating: avgRating.toFixed(1),
-        ratingDistribution,
-      },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching dealer reviews:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { success: false, error: 'Yorumlar getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

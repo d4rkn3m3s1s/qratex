@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 // GET — public: get survey for filling
@@ -19,7 +20,7 @@ export async function GET(
         });
 
         if (!survey) {
-            return NextResponse.json({ error: 'Anket bulunamadı veya aktif değil' }, { status: 404 });
+            return NextResponse.json({ error: 'Anket bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         return NextResponse.json({
@@ -38,10 +39,10 @@ export async function GET(
                     required: q.required,
                 })),
             },
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error fetching survey:', error);
-        return NextResponse.json({ error: 'Anket yüklenemedi' }, { status: 500 });
+        return NextResponse.json({ error: 'Anket yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -65,7 +66,7 @@ export async function POST(
         const body = await request.json();
         const parsed = submitSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const survey = await prisma.survey.findUnique({
@@ -74,7 +75,7 @@ export async function POST(
         });
 
         if (!survey) {
-            return NextResponse.json({ error: 'Anket bulunamadı veya aktif değil' }, { status: 404 });
+            return NextResponse.json({ error: 'Anket bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Validate required questions
@@ -82,7 +83,7 @@ export async function POST(
         const answeredIds = new Set(parsed.data.answers.map((a) => a.questionId));
         const missing = requiredIds.filter((id) => !answeredIds.has(id));
         if (missing.length > 0) {
-            return NextResponse.json({ error: `Zorunlu soruları yanıtlayın` }, { status: 400 });
+            return NextResponse.json({ error: `Zorunlu soruları yanıtlayın` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const response = await prisma.surveyResponse.create({
@@ -93,9 +94,9 @@ export async function POST(
             },
         });
 
-        return NextResponse.json({ success: true, responseId: response.id }, { status: 201 });
+        return NextResponse.json({ success: true, responseId: response.id }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error submitting survey response:', error);
-        return NextResponse.json({ error: 'Yanıt gönderilemedi' }, { status: 500 });
+        return NextResponse.json({ error: 'Yanıt gönderilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

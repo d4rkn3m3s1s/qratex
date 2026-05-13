@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,13 +35,16 @@ export async function GET() {
   const raw = avgRating * 20 + positiveRate * 30 + Math.min(1, count / 10) * 20 + recentAvg * 15;
   const journeyScore = count === 0 ? 0 : Math.round((raw / 225) * 100);
 
-  return NextResponse.json({
-    journeyScore: Math.min(100, Math.max(0, journeyScore)),
-    metrics: {
-      totalFeedbackCount: count,
-      avgRating: Math.round(avgRating * 100) / 100,
-      positiveRate: Math.round(positiveRate * 100) / 100,
-      recentAvgRating: Math.round(recentAvg * 100) / 100,
+  return NextResponse.json(
+    {
+      journeyScore: Math.min(100, Math.max(0, journeyScore)),
+      metrics: {
+        totalFeedbackCount: count,
+        avgRating: Math.round(avgRating * 100) / 100,
+        positiveRate: Math.round(positiveRate * 100) / 100,
+        recentAvgRating: Math.round(recentAvg * 100) / 100,
+      },
     },
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

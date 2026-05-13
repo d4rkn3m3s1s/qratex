@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { getSnapshot, trackRequest } from '@/lib/metrics';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,7 @@ export async function GET() {
       metrics,
     };
 
-    return NextResponse.json(body);
+    return NextResponse.json(body, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (err) {
     const latencyMs = Date.now() - start;
     trackRequest('/api/admin/health', false, latencyMs);
@@ -58,8 +59,6 @@ export async function GET() {
         latencyMs,
         metrics: getSnapshot(),
         error: err instanceof Error ? err.message : 'Health check failed',
-      } as HealthResponse & { error?: string },
-      { status: 500 }
-    );
+      } as HealthResponse & { error?: string }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

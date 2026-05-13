@@ -138,7 +138,7 @@ export default function CustomerJourneyScorePage() {
           <p className="text-sm text-muted-foreground">
             {tc('journeyScore.feedbackJourneyDesc')}
           </p>
-          <Button asChild size="sm" variant="secondary" className="shrink-0">
+          <Button asChild size="sm" variant="secondary" className="shrink-0 w-full min-h-10 touch-manipulation sm:w-auto">
             <Link href="/customer/feedbacks">{tc('journeyScore.feedbackJourneyBtn')}</Link>
           </Button>
         </CardContent>

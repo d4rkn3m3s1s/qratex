@@ -3,8 +3,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +37,48 @@ export async function GET() {
   const { session } = auth;
 
   const dealerId = session.user.id;
+  const since7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [settings, learningProfile, embeddingsCount, correctionsCount, analyzedCount, analyzedLast24h, usageLogs7d, dailyAnalyzed] = await Promise.all([
+  let useSoftDelete = true;
+  try {
+    await prisma.feedback.count({ where: { qrCode: { dealerId }, deletedAt: null }, take: 1 });
+  } catch {
+    useSoftDelete = false;
+  }
+
+  const dailySql = useSoftDelete
+    ? Prisma.sql`
+        SELECT (date_trunc('day', f."aiProcessedAt"))::date AS d, COUNT(*)::bigint AS c
+        FROM "Feedback" f
+        INNER JOIN "QRCode" q ON q.id = f."qrCodeId"
+        WHERE q."dealerId" = ${dealerId}
+          AND f."deletedAt" IS NULL
+          AND f."aiProcessedAt" IS NOT NULL
+          AND f."aiProcessedAt" >= ${since7}
+        GROUP BY 1
+        ORDER BY 1
+      `
+    : Prisma.sql`
+        SELECT (date_trunc('day', f."aiProcessedAt"))::date AS d, COUNT(*)::bigint AS c
+        FROM "Feedback" f
+        INNER JOIN "QRCode" q ON q.id = f."qrCodeId"
+        WHERE q."dealerId" = ${dealerId}
+          AND f."aiProcessedAt" IS NOT NULL
+          AND f."aiProcessedAt" >= ${since7}
+        GROUP BY 1
+        ORDER BY 1
+      `;
+
+  const [
+    settings,
+    learningProfile,
+    embeddingsCount,
+    correctionsCount,
+    analyzedCount,
+    analyzedLast24h,
+    usageLogs7d,
+    dailyRows,
+  ] = await Promise.all([
     prisma.aISettings.findUnique({ where: { dealerId } }),
     prisma.aIDealerLearningProfile.findUnique({ where: { dealerId } }),
     prisma.aIEmbedding.count({ where: { dealerId } }),
@@ -52,35 +94,26 @@ export async function GET() {
       },
     }),
     prisma.aIUsageLog.count({
-      where: { dealerId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      where: { dealerId, createdAt: { gte: since7 } },
     }),
-    // Son 7 gün günlük analiz sayısı (Feedback.aiProcessedAt bazlı)
-    (async () => {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const feedbacks = await prisma.feedback.findMany({
-        where: { qrCode: { dealerId }, deletedAt: null, aiProcessedAt: { gte: since, not: null } },
-        select: { aiProcessedAt: true },
-      });
-      const dayCounts: Record<string, number> = {};
-      for (const f of feedbacks) {
-        const d = f.aiProcessedAt!;
-        const key = new Date(d).toISOString().slice(0, 10);
-        dayCounts[key] = (dayCounts[key] ?? 0) + 1;
-      }
-      const result: { date: string; label: string; count: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().slice(0, 10);
-        result.push({
-          date: dateStr,
-          label: new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(d),
-          count: dayCounts[dateStr] ?? 0,
-        });
-      }
-      return result;
-    })(),
+    prisma.$queryRaw<Array<{ d: Date; c: bigint }>>(dailySql),
   ]);
+
+  const dayCounts: Record<string, number> = {};
+  for (const row of dailyRows) {
+    dayCounts[row.d.toISOString().slice(0, 10)] = Number(row.c);
+  }
+  const dailyAnalyzed: { date: string; label: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    dailyAnalyzed.push({
+      date: dateStr,
+      label: new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(d),
+      count: dayCounts[dateStr] ?? 0,
+    });
+  }
 
   const merged = settings
     ? {
@@ -105,25 +138,28 @@ export async function GET() {
       }
     : DEFAULT_SETTINGS;
 
-  return NextResponse.json({
-    settings: merged,
-    stats: {
-      analyzedFeedbackCount: analyzedCount,
-      analyzedLast24h,
-      usageLogsLast7d: usageLogs7d,
-      embeddingsCount,
-      correctionsCount,
-      learningProfile: learningProfile
-        ? {
-            status: learningProfile.status,
-            trainingFeedbackCount: learningProfile.trainingFeedbackCount,
-            correctionsUsed: learningProfile.correctionsUsed,
-            lastTrainedAt: learningProfile.lastTrainedAt,
-          }
-        : null,
+  return NextResponse.json(
+    {
+      settings: merged,
+      stats: {
+        analyzedFeedbackCount: analyzedCount,
+        analyzedLast24h,
+        usageLogsLast7d: usageLogs7d,
+        embeddingsCount,
+        correctionsCount,
+        learningProfile: learningProfile
+          ? {
+              status: learningProfile.status,
+              trainingFeedbackCount: learningProfile.trainingFeedbackCount,
+              correctionsUsed: learningProfile.correctionsUsed,
+              lastTrainedAt: learningProfile.lastTrainedAt,
+            }
+          : null,
+      },
+      dailyAnalyzed,
     },
-    dailyAnalyzed,
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 export async function PATCH(request: NextRequest) {
@@ -171,5 +207,5 @@ export async function PATCH(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, settings: updated });
+  return NextResponse.json({ success: true, settings: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

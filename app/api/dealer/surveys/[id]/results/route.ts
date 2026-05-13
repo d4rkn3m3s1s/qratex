@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 // GET — survey results with aggregated answers
 
@@ -24,7 +25,7 @@ export async function GET(
         });
 
         if (!survey || survey.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Anket bulunamadı' }, { status: 404 });
+            return NextResponse.json({ error: 'Anket bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Aggregate answers per question
@@ -68,9 +69,9 @@ export async function GET(
             survey: { id: survey.id, title: survey.title, description: survey.description, isActive: survey.isActive, createdAt: survey.createdAt },
             totalResponses: survey.responses.length,
             questionResults,
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error fetching survey results:', error);
-        return NextResponse.json({ error: 'Sonuçlar yüklenemedi' }, { status: 500 });
+        return NextResponse.json({ error: 'Sonuçlar yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

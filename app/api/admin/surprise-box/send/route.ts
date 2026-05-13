@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { assertModuleEnabled } from '@/lib/module-gate';
 
@@ -36,9 +37,7 @@ export async function POST(req: NextRequest) {
     const parsed = sendSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Geçersiz istek', details: parsed.error.flatten() },
-        { status: 400 }
-      );
+        { success: false, error: 'Geçersiz istek', details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { title, message, couponCode, points, rewardType, userId, email, randomCount } =
@@ -50,9 +49,7 @@ export async function POST(req: NextRequest) {
       const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
       if (!u) {
         return NextResponse.json(
-          { success: false, error: 'Belirtilen kullanıcı bulunamadı' },
-          { status: 404 }
-        );
+          { success: false, error: 'Belirtilen kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       }
       targetUserIds = [u.id];
     } else if (email) {
@@ -62,9 +59,7 @@ export async function POST(req: NextRequest) {
       });
       if (!u) {
         return NextResponse.json(
-          { success: false, error: 'Belirtilen e-posta ile kullanıcı bulunamadı' },
-          { status: 404 }
-        );
+          { success: false, error: 'Belirtilen e-posta ile kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       }
       targetUserIds = [u.id];
     } else if (randomCount) {
@@ -80,16 +75,12 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error: 'Hedef belirtin: userId, email veya randomCount (1–500)',
-        },
-        { status: 400 }
-      );
+        }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (targetUserIds.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Gönderilecek kullanıcı bulunamadı' },
-        { status: 400 }
-      );
+        { success: false, error: 'Gönderilecek kullanıcı bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const created = await prisma.userSurpriseBox.createMany({
@@ -107,12 +98,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: { count: created.count, userIds: targetUserIds },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('Admin surprise-box send error:', e);
     return NextResponse.json(
-      { success: false, error: 'Kutu gönderilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Kutu gönderilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

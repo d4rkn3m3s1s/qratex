@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 // GET /api/gamification/quests/[id]
@@ -21,18 +22,14 @@ export async function GET(
 
     if (!quest) {
       return NextResponse.json(
-        { success: false, error: 'Görev bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Görev bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ success: true, data: quest });
+    return NextResponse.json({ success: true, data: quest }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching quest:', error);
     return NextResponse.json(
-      { success: false, error: 'Görev getirilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görev getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -45,7 +42,7 @@ export async function PATCH(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -54,9 +51,7 @@ export async function PATCH(
     const oldQuest = await prisma.quest.findUnique({ where: { id } });
     if (!oldQuest) {
       return NextResponse.json(
-        { success: false, error: 'Görev bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Görev bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const quest = await prisma.quest.update({
@@ -85,13 +80,11 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ success: true, data: quest });
+    return NextResponse.json({ success: true, data: quest }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating quest:', error);
     return NextResponse.json(
-      { success: false, error: 'Görev güncellenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görev güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -104,7 +97,7 @@ export async function DELETE(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -112,9 +105,7 @@ export async function DELETE(
     const quest = await prisma.quest.findUnique({ where: { id } });
     if (!quest) {
       return NextResponse.json(
-        { success: false, error: 'Görev bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Görev bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     await prisma.quest.delete({ where: { id } });
@@ -130,13 +121,11 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true, message: 'Görev silindi' });
+    return NextResponse.json({ success: true, message: 'Görev silindi' }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting quest:', error);
     return NextResponse.json(
-      { success: false, error: 'Görev silinemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Görev silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +17,13 @@ export async function GET(request: NextRequest) {
 
   const dealerId = session.user.role === 'ADMIN' ? request.nextUrl.searchParams.get('dealerId') : session.user.id;
   if (!dealerId) {
-    return NextResponse.json({ error: 'dealerId gerekli (admin için query)' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'dealerId gerekli (admin için query)' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
   if (session.user.role === 'DEALER' && dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const since = new Date();
@@ -88,27 +92,30 @@ export async function GET(request: NextRequest) {
 
   const [lowRisk, mediumRisk, highRiskCount] = riskBuckets;
 
-  return NextResponse.json({
-    churnRisk: {
-      dealerId,
-      period: 'last_30_days',
-      avgChurnRisk: aggregate._avg.churnRisk ?? null,
-      feedbackCountWithRisk: aggregate._count,
-      highRiskCount: highRiskCount,
-      riskDistribution: { low: lowRisk, medium: mediumRisk, high: highRiskCount },
-      highRiskFeedbacks: highRiskFeedbacks.map((f) => ({
-        id: f.id,
-        rating: f.rating,
-        text: f.text,
-        churnRisk: f.churnRisk,
-        sentiment: f.sentiment,
-        urgency: f.urgency,
-        intent: f.intent,
-        createdAt: f.createdAt,
-        userId: f.user?.id,
-        userName: f.user?.name,
-        userImage: f.user?.image,
-      })),
+  return NextResponse.json(
+    {
+      churnRisk: {
+        dealerId,
+        period: 'last_30_days',
+        avgChurnRisk: aggregate._avg.churnRisk ?? null,
+        feedbackCountWithRisk: aggregate._count,
+        highRiskCount: highRiskCount,
+        riskDistribution: { low: lowRisk, medium: mediumRisk, high: highRiskCount },
+        highRiskFeedbacks: highRiskFeedbacks.map((f) => ({
+          id: f.id,
+          rating: f.rating,
+          text: f.text,
+          churnRisk: f.churnRisk,
+          sentiment: f.sentiment,
+          urgency: f.urgency,
+          intent: f.intent,
+          createdAt: f.createdAt,
+          userId: f.user?.id,
+          userName: f.user?.name,
+          userImage: f.user?.image,
+        })),
+      },
     },
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

@@ -137,8 +137,15 @@ export default function AdminDashboard() {
       }
       if (settingsRes?.settings && typeof settingsRes.settings === 'object') {
         const cats = Object.keys(settingsRes.settings).length;
-        const raw = settingsRes.raw;
-        setSettingsSummary({ categoriesCount: cats, keysCount: Array.isArray(raw) ? raw.length : 0 });
+        const raw = settingsRes.meta?.keysCount;
+        const keysCount =
+          typeof raw === 'number'
+            ? raw
+            : Object.values(settingsRes.settings as Record<string, Record<string, unknown>>).reduce(
+                (n, cat) => n + (cat && typeof cat === 'object' ? Object.keys(cat).length : 0),
+                0
+              );
+        setSettingsSummary({ categoriesCount: cats, keysCount });
       }
     } catch { /* ignore */ }
   };

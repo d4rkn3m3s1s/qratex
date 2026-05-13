@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, requireDealerResource } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getDealerInnovationPrefs, saveDealerInnovationPrefs } from '@/lib/innovation-dealer-prefs';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
   if (forbidden) return forbidden;
 
   const prefs = await getDealerInnovationPrefs(dealerId);
-  return NextResponse.json({ prefs });
+  return NextResponse.json({ prefs }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -35,7 +36,7 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const dealerId =
@@ -47,5 +48,5 @@ export async function PUT(request: NextRequest) {
   if (forbidden) return forbidden;
 
   const prefs = await saveDealerInnovationPrefs(dealerId, parsed.data);
-  return NextResponse.json({ success: true, prefs });
+  return NextResponse.json({ success: true, prefs }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

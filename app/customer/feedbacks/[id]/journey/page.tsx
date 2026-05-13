@@ -54,7 +54,7 @@ export default function CustomerFeedbackJourneyPage() {
 
   return (
     <div className="space-y-6 pb-10 max-w-lg mx-auto">
-      <Button variant="ghost" size="sm" asChild className="w-fit -mb-2 touch-manipulation">
+      <Button variant="ghost" size="sm" asChild className="w-full sm:w-fit -mb-2 min-h-10 touch-manipulation justify-center sm:justify-start">
         <Link href="/customer/feedbacks">
           <ArrowLeft className="h-4 w-4 shrink-0 mr-2" />
           Geri bildirimlerim

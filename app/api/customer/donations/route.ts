@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 // Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,10 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     const menuGate = await assertMenuItemVisible('donations', 'customer', {
       request,
@@ -48,6 +52,7 @@ export async function GET(request: NextRequest) {
         { isFeatured: 'desc' },
         { createdAt: 'desc' },
       ],
+      take: 150,
     });
 
     // Fetch user's total donations
@@ -111,47 +116,46 @@ export async function GET(request: NextRequest) {
       take: 10,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        projects: projects.map(p => ({
-          ...p,
-          userDonation: userDonationsByProject.find(d => d.projectId === p.id)?._sum.points || 0,
-        })),
-        userStats: {
-          totalDonated: userDonations._sum.points || 0,
-          donationCount: userDonations._count || 0,
-          rank: userRank || null,
-          availablePoints: currentUser?.points || 0,
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          projects: projects.map(p => ({
+            ...p,
+            userDonation: userDonationsByProject.find(d => d.projectId === p.id)?._sum.points || 0,
+          })),
+          userStats: {
+            totalDonated: userDonations._sum.points || 0,
+            donationCount: userDonations._count || 0,
+            rank: userRank || null,
+            availablePoints: currentUser?.points || 0,
+          },
+          leaderboard,
+          platformStats: {
+            totalDonated: totalDonations._sum.points || 0,
+            totalProjects: projects.length,
+          },
+          recentDonations: recentDonations.map(d => ({
+            id: d.id,
+            userName: d.user.name,
+            userImage: d.user.image,
+            projectName: d.project.name,
+            projectIcon: d.project.icon,
+            points: d.points,
+            createdAt: d.createdAt,
+          })),
         },
-        leaderboard,
-        platformStats: {
-          totalDonated: totalDonations._sum.points || 0,
-          totalProjects: projects.length,
-        },
-        recentDonations: recentDonations.map(d => ({
-          id: d.id,
-          userName: d.user.name,
-          userImage: d.user.image,
-          projectName: d.project.name,
-          projectIcon: d.project.icon,
-          points: d.points,
-          createdAt: d.createdAt,
-        })),
       },
-    }, {
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Donations GET error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { 
-      status: 500,
-      headers: {
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
-      },
-    });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }
 
@@ -160,7 +164,10 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     const menuGate = await assertMenuItemVisible('donations', 'customer', {
       request,
@@ -180,7 +187,10 @@ export async function POST(request: NextRequest) {
     const { projectId, points, message, isPublic = true } = body;
 
     if (!projectId || !points || points < 1) {
-      return NextResponse.json({ error: 'Geçersiz bağış bilgisi' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Geçersiz bağış bilgisi' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Check project exists and is active
@@ -189,7 +199,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!project || !project.isActive) {
-      return NextResponse.json({ error: 'Proje bulunamadı' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Proje bulunamadı' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Create donation and update points in a transaction
@@ -230,23 +243,34 @@ export async function POST(request: NextRequest) {
     const impact = project.impact as { unit: string; perPoint: number; label: string };
     const impactValue = Math.floor(points * (impact?.perPoint || 1));
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        donation,
-        impact: {
-          value: impactValue,
-          unit: impact?.unit || 'birim',
-          label: impact?.label || 'Etki',
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          donation,
+          impact: {
+            value: impactValue,
+            unit: impact?.unit || 'birim',
+            label: impact?.label || 'Etki',
+          },
+          newBalance: updatedWallet.points,
         },
-        newBalance: updatedWallet.points,
       },
-    });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     if (error instanceof InsufficientPointsError) {
-      return NextResponse.json({ error: 'Yetersiz puan' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Yetersiz puan' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Donations POST error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

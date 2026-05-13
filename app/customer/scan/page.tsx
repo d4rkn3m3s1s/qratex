@@ -167,7 +167,7 @@ export default function CustomerScanPage() {
                   {cameraError && (
                     <p className="text-sm text-destructive">{cameraError}</p>
                   )}
-                  <Button type="button" variant="outline" className="w-full" onClick={stopCamera}>
+                  <Button type="button" variant="outline" className="w-full min-h-10 touch-manipulation" onClick={stopCamera}>
                     {t('customerScan.closeCamera')}
                   </Button>
                 </div>

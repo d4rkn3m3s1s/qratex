@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { toast } from '@/lib/admin-toast';
 
 type LoungePayload = {
   perks?: string[];
@@ -22,7 +23,11 @@ type LoungePayload = {
     birthDate: string;
     bonusGiven: boolean;
     daysUntilBirthday: number | null;
+    isBirthdayToday: boolean;
+    canClaimBirthdayBonus: boolean;
+    bonusAmount: number;
   } | null;
+  birthdayBonusAmount: number;
   points: number;
   level: number;
 };
@@ -34,6 +39,7 @@ export default function CustomerLoungePage() {
   const [data, setData] = useState<LoungePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,9 +60,35 @@ export default function CustomerLoungePage() {
     };
   }, []);
 
+  const reloadLounge = async () => {
+    const res = await fetch('/api/customer/lounge');
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || t('customerLounge.loadError'));
+    setData(json.lounge);
+  };
+
+  const handleClaimBirthday = async () => {
+    setClaiming(true);
+    try {
+      const res = await fetch('/api/birthday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim' }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || t('common.error'));
+      await reloadLounge();
+      toast.success(json.message || t('customerLounge.claimBirthdaySuccess'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('common.error'));
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-12 max-w-lg mx-auto">
-      <Button variant="ghost" size="sm" asChild className="-mb-2 w-fit touch-manipulation">
+    <div className="space-y-6 pb-6 max-w-lg mx-auto">
+      <Button variant="ghost" size="sm" asChild className="-mb-2 w-full sm:w-fit min-h-10 touch-manipulation justify-center sm:justify-start">
         <Link href="/customer">
           <ArrowLeft className="h-4 w-4 shrink-0 mr-2" />
           {t('customerLounge.backToDashboard')}
@@ -143,7 +175,7 @@ export default function CustomerLoungePage() {
                 {t('customerLounge.birthdayTitle')}
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-2">
+            <CardContent className="text-sm space-y-3">
               {data.birthday ? (
                 <>
                   <p>
@@ -155,24 +187,51 @@ export default function CustomerLoungePage() {
                       })}
                     </span>
                   </p>
-                  {data.birthday.daysUntilBirthday != null && (
+                  {data.birthday.daysUntilBirthday != null && !data.birthday.isBirthdayToday && (
                     <p className="text-muted-foreground">
                       {t('customerLounge.nextCelebrationIn')} {data.birthday.daysUntilBirthday} {t('customerLounge.dayLater')}
                     </p>
                   )}
-                  {data.birthday.bonusGiven && (
-                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">{t('customerLounge.bonusUsed')}</Badge>
+                  {data.birthday.isBirthdayToday && (
+                    <p className="text-primary font-medium">{t('customerLounge.birthdayToday')}</p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    {t('customerLounge.birthdayBonusHint').replace('{n}', String(data.birthday.bonusAmount))}
+                  </p>
+                  {data.birthday.canClaimBirthdayBonus && (
+                    <Button
+                      type="button"
+                      disabled={claiming}
+                      className="w-full touch-manipulation min-h-10"
+                      onClick={() => void handleClaimBirthday()}
+                    >
+                      {claiming ? t('customerLounge.claimingBirthday') : t('customerLounge.claimBirthdayBonus')}
+                    </Button>
+                  )}
+                  {data.birthday.isBirthdayToday && !data.birthday.canClaimBirthdayBonus && (
+                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                      {t('customerLounge.birthdayBonusClaimedThisYear')}
+                    </Badge>
+                  )}
+                  <Button asChild variant="outline" size="sm" className="w-full touch-manipulation min-h-10">
+                    <Link href="/customer/settings">{t('customerLounge.birthdayEditInSettings')}</Link>
+                  </Button>
                 </>
               ) : (
-                <p className="text-muted-foreground">
-                  {t('customerLounge.noBirthday')}
-                </p>
+                <>
+                  <p className="text-muted-foreground">{t('customerLounge.noBirthday')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('customerLounge.birthdayBonusHintUnset').replace('{n}', String(data.birthdayBonusAmount))}
+                  </p>
+                  <Button asChild variant="default" className="w-full touch-manipulation min-h-10">
+                    <Link href="/customer/settings">{t('customerLounge.birthdayAddInSettings')}</Link>
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
 
-          <Button asChild variant="outline" className="w-full">
+          <Button asChild variant="outline" className="w-full touch-manipulation min-h-10 gap-2 justify-center">
             <Link href="/customer/surprise-boxes">
               <Gift className="h-4 w-4 mr-2" />
               {t('customerLounge.surpriseBoxes')}

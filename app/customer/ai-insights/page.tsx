@@ -294,9 +294,9 @@ export default function CustomerAIInsightsPage() {
                   <div className="text-center py-8 text-muted-foreground">
                     <Bot className="h-10 w-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">Geri bildirimleriniz hakkında AI&apos;a soru sorun.</p>
-                    <div className="flex flex-wrap gap-2 justify-center mt-4">
+                    <div className="flex flex-col sm:flex-wrap gap-2 justify-center mt-4 max-w-lg mx-auto">
                       {['En çok hangi konuda yorum yaptım?', 'Memnuniyet trendim nasıl?', 'Hangi işletmelere olumlu feedback verdim?', 'Geri bildirimlerimde en sık hangi duygu var?'].map(q => (
-                        <Button key={q} variant="outline" size="sm" className="text-xs" onClick={() => sendChatMessage(q)}>
+                        <Button key={q} variant="outline" size="sm" className="text-xs min-h-10 touch-manipulation h-auto py-2.5 text-left justify-start whitespace-normal" onClick={() => sendChatMessage(q)}>
                           {q}
                         </Button>
                       ))}

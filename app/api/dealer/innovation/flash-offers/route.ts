@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth, requireDealerResource } from '@/lib/api-auth';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { dealerFlashGeoKey } from '@/lib/innovation-geo';
@@ -22,7 +23,7 @@ const upsertSchema = z.object({
 export async function GET(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.flashOffers) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -43,13 +44,13 @@ export async function GET(request: NextRequest) {
     take: 100,
   });
 
-  return NextResponse.json({ offers });
+  return NextResponse.json({ offers }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.flashOffers) {
-    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 });
+    return NextResponse.json({ error: 'Özellik devre dışı' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const parsed = upsertSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'Geçersiz' }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'Geçersiz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const dealerId =
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
       : session.user.id;
 
   if (session.user.role === 'ADMIN' && !dealerId) {
-    return NextResponse.json({ error: 'Admin için dealerId gerekli' }, { status: 400 });
+    return NextResponse.json({ error: 'Admin için dealerId gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const forbidden = requireDealerResource(session, dealerId);
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     select: { latitude: true, longitude: true, role: true },
   });
   if (!dealer || dealer.role !== 'DEALER') {
-    return NextResponse.json({ error: 'Geçersiz bayi' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz bayi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   let geohash5: string | null = null;
@@ -103,5 +104,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, offer });
+  return NextResponse.json({ success: true, offer }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

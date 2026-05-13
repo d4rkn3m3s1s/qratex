@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -17,13 +18,19 @@ export async function POST(req: Request) {
         const session = await getServerSession(authOptions);
 
         if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const { name } = await req.json();
 
         if (!name || name.length < 3) {
-            return NextResponse.json({ error: 'Squad name must be at least 3 characters' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'Squad name must be at least 3 characters' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const [existingOwnedSquad, existingMembership, frozenRow] = await Promise.all([
@@ -45,14 +52,23 @@ export async function POST(req: Request) {
             : [];
 
         if (existingOwnedSquad) {
-            return NextResponse.json({ error: 'You already own a squad' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'You already own a squad' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         if (existingMembership) {
             if (frozenIds.includes(existingMembership.squadId)) {
-                return NextResponse.json({ error: 'Dondurulmuş bir squad üyesiyken yeni squad oluşturamazsınız' }, { status: 403 });
+                return NextResponse.json(
+                    { error: 'Dondurulmuş bir squad üyesiyken yeni squad oluşturamazsınız' },
+                    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+                );
             }
-            return NextResponse.json({ error: 'You must leave your current squad first' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'You must leave your current squad first' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -73,11 +89,17 @@ export async function POST(req: Request) {
             }
         });
 
-        return NextResponse.json({ success: true, squad: newSquad });
+        return NextResponse.json(
+            { success: true, squad: newSquad },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
 
     } catch (error) {
         console.error('[SQUAD_CREATE_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }
 
@@ -88,7 +110,10 @@ export async function GET(req: Request) {
         if (gate) return gate;
         const session = await getServerSession(authOptions);
         if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         // Find the squad the user is a member of
@@ -109,13 +134,16 @@ export async function GET(req: Request) {
         });
 
         if (!member) {
-            return NextResponse.json({ squad: null });
+            return NextResponse.json({ squad: null }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        return NextResponse.json({ squad: member.squad });
+        return NextResponse.json({ squad: member.squad }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[SQUAD_GET_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }

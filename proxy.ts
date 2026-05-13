@@ -1,5 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextRequest, NextResponse } from 'next/server';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 const CORS_ALLOWLIST = (
   process.env.NEXT_PUBLIC_ALLOWED_ORIGINS ||
@@ -80,7 +81,10 @@ export function proxy(req: NextRequest): ReturnType<typeof authMiddleware> | Nex
   const pathname = req.nextUrl.pathname;
   if (pathname.startsWith('/api/')) {
     if (req.method === 'OPTIONS') {
-      const res = new NextResponse(null, { status: 204 });
+      const res = new NextResponse(null, {
+        status: 204,
+        headers: { ...PRIVATE_NO_STORE_HEADERS },
+      });
       addSecurityHeaders(res);
       addCorsHeaders(res, req);
       return res;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { AGENT_PERSONAS } from '@/lib/agent-personas';
 import { generateDialogueRound, type DialogueMessage } from '@/lib/agent-dialogue';
 import { z } from 'zod';
@@ -30,10 +31,10 @@ export async function POST(req: NextRequest) {
     const nextRound = payload.round + 1;
     const priorMessages = (payload.messages ?? []) as DialogueMessage[];
     const state = generateDialogueRound(payload.topic, priorMessages, nextRound);
-    return NextResponse.json({ success: true, state, personas: AGENT_PERSONAS });
+    return NextResponse.json({ success: true, state, personas: AGENT_PERSONAS }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Conversation error:', error);
-    return NextResponse.json({ success: false, error: 'Ajanlar konusmasi baslatilamadi' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Ajanlar konusmasi baslatilamadi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

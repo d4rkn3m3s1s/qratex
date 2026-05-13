@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { DEFAULT_BADGE_ALGORITHM_CONFIG, simulateBadgeScore } from '@/lib/badge-algorithm';
 
 
@@ -54,6 +55,6 @@ export async function GET() {
     sampleSize: users.length,
     averageScore: Number((avgScore / total).toFixed(2)),
     distribution: buckets,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 

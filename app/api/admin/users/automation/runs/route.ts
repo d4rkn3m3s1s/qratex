@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -49,8 +50,8 @@ export async function GET(request: NextRequest) {
           return acc;
         }, {}),
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch {
-    return NextResponse.json({ error: 'Run geçmişi alınamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Run geçmişi alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

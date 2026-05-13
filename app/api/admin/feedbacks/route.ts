@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getSamplingConfig } from '@/lib/analytics-sampling';
 import { adminFeedbacksDeleteSchema, adminFeedbacksQuerySchema } from '@/lib/validations-admin';
@@ -98,33 +99,37 @@ export async function GET(request: NextRequest) {
       qrTotal = total;
     }
 
+    // Tüketim yorumları filtreleri (liste + istatistik için ortak)
+    let consumptionWhere: any = null;
+    if (type === 'all' || type === 'consumption' || !type) {
+      const cw: any = {};
+      if (minRating) cw.rating = { ...cw.rating, gte: parseInt(minRating) };
+      if (maxRating) cw.rating = { ...cw.rating, lte: parseInt(maxRating) };
+      if (startDate) cw.createdAt = { ...cw.createdAt, gte: new Date(startDate) };
+      if (endDate) cw.createdAt = { ...cw.createdAt, lte: new Date(endDate) };
+      if (searchTrim) {
+        cw.OR = [
+          { text: { contains: searchTrim, mode: 'insensitive' } },
+          { customer: { name: { contains: searchTrim, mode: 'insensitive' } } },
+        ];
+      }
+      if (dealerId && dealerId !== 'all') {
+        cw.consumption = { dealerId };
+      }
+      if (sentiment && sentiment !== 'all') {
+        if (sentiment === 'positive') cw.rating = { gte: 4 };
+        else if (sentiment === 'negative') cw.rating = { lte: 2 };
+        else if (sentiment === 'neutral') cw.rating = { gte: 3, lte: 3 };
+      }
+      consumptionWhere = cw;
+    }
+
     // Fetch consumption reviews
     let consumptionReviews: any[] = [];
     let consumptionTotal = 0;
-    
-    if (type === 'all' || type === 'consumption' || !type) {
-      try {
-        const consumptionWhere: any = {};
-        if (minRating) consumptionWhere.rating = { ...consumptionWhere.rating, gte: parseInt(minRating) };
-        if (maxRating) consumptionWhere.rating = { ...consumptionWhere.rating, lte: parseInt(maxRating) };
-        if (startDate) consumptionWhere.createdAt = { ...consumptionWhere.createdAt, gte: new Date(startDate) };
-        if (endDate) consumptionWhere.createdAt = { ...consumptionWhere.createdAt, lte: new Date(endDate) };
-        if (searchTrim) {
-          consumptionWhere.OR = [
-            { text: { contains: searchTrim, mode: 'insensitive' } },
-            { customer: { name: { contains: searchTrim, mode: 'insensitive' } } },
-          ];
-        }
-        if (dealerId && dealerId !== 'all') {
-          consumptionWhere.consumption = { dealerId };
-        }
-        // Map sentiment to rating for consumption reviews
-        if (sentiment && sentiment !== 'all') {
-          if (sentiment === 'positive') consumptionWhere.rating = { gte: 4 };
-          else if (sentiment === 'negative') consumptionWhere.rating = { lte: 2 };
-          else if (sentiment === 'neutral') consumptionWhere.rating = { gte: 3, lte: 3 };
-        }
 
+    if (consumptionWhere) {
+      try {
         const [reviews, total] = await Promise.all([
           prisma.consumptionReview.findMany({
             where: consumptionWhere,
@@ -143,7 +148,7 @@ export async function GET(request: NextRequest) {
           }),
           prisma.consumptionReview.count({ where: consumptionWhere }),
         ]);
-        
+
         consumptionReviews = reviews.map((r: any) => ({
           id: r.id,
           rating: r.rating,
@@ -176,54 +181,119 @@ export async function GET(request: NextRequest) {
       allFeedbacks = allFeedbacks.slice(skip, skip + pageSize);
     }
 
-    // Calculate statistics
-    const allQRFeedbacks = await prisma.feedback.findMany({
-      where: qrWhere,
-      select: { rating: true, sentiment: true, npsScore: true },
-    });
-    
-    let allConsumptionReviews: any[] = [];
-    try {
-      allConsumptionReviews = await prisma.consumptionReview.findMany({
-        select: { rating: true },
-      });
-    } catch (e) {
-      console.error('Consumption stats not available:', e);
+    // İstatistikler: bellek dostu aggregate / groupBy (tüm satırları çekme)
+    const includeQrInStats = type === 'all' || type === 'qr' || !type;
+    const includeConsumptionInStats = type === 'all' || type === 'consumption' || !type;
+
+    let qrPos = 0;
+    let qrNeu = 0;
+    let qrNeg = 0;
+    let qrSum = 0;
+    let qrN = 0;
+    const qrDist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    if (includeQrInStats) {
+      const [qrAgg, qrSentimentRows, qrRatingRows] = await Promise.all([
+        prisma.feedback.aggregate({
+          where: qrWhere,
+          _sum: { rating: true },
+          _count: { _all: true },
+        }),
+        prisma.feedback.groupBy({
+          by: ['sentiment'],
+          where: qrWhere,
+          _count: { _all: true },
+        }),
+        prisma.feedback.groupBy({
+          by: ['rating'],
+          where: qrWhere,
+          _count: { _all: true },
+        }),
+      ]);
+      qrSum = qrAgg._sum.rating ?? 0;
+      qrN = qrAgg._count._all;
+      for (const row of qrSentimentRows) {
+        const c = row._count._all;
+        if (row.sentiment === 'positive') qrPos += c;
+        else if (row.sentiment === 'negative') qrNeg += c;
+        else qrNeu += c;
+      }
+      for (const row of qrRatingRows) {
+        const r = row.rating;
+        if (r >= 1 && r <= 5) qrDist[r] = (qrDist[r] || 0) + row._count._all;
+      }
     }
 
-    const combinedForStats = [
-      ...allQRFeedbacks.map(f => ({ rating: f.rating, sentiment: f.sentiment })),
-      ...allConsumptionReviews.map((r: any) => ({
-        rating: r.rating,
-        sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
-      })),
-    ];
+    const [npsPromoters, npsPassives, npsDetractors] = await Promise.all([
+      prisma.feedback.count({
+        where: { ...qrWhere, npsScore: { not: null, gte: 9 } },
+      }),
+      prisma.feedback.count({
+        where: { ...qrWhere, npsScore: { not: null, gte: 7, lte: 8 } },
+      }),
+      prisma.feedback.count({
+        where: { ...qrWhere, npsScore: { not: null, lte: 6 } },
+      }),
+    ]);
+    const npsTotal = npsPromoters + npsPassives + npsDetractors;
+    const npsValue =
+      npsTotal > 0 ? Math.round((npsPromoters / npsTotal) * 100 - (npsDetractors / npsTotal) * 100) : null;
 
-    const npsScores = allQRFeedbacks.map(f => f.npsScore).filter((n): n is number => n != null && n >= 0 && n <= 10);
-    const npsTotal = npsScores.length;
-    const npsPromoters = npsScores.filter(n => n >= 9).length;
-    const npsPassives = npsScores.filter(n => n >= 7 && n <= 8).length;
-    const npsDetractors = npsScores.filter(n => n <= 6).length;
-    const npsValue = npsTotal > 0
-      ? Math.round((npsPromoters / npsTotal) * 100 - (npsDetractors / npsTotal) * 100)
-      : null;
+    let revSum = 0;
+    let revN = 0;
+    const revDist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let revPos = 0;
+    let revNeu = 0;
+    let revNeg = 0;
+
+    if (includeConsumptionInStats && consumptionWhere) {
+      try {
+        const [revAgg, revRatingRows] = await Promise.all([
+          prisma.consumptionReview.aggregate({
+            where: consumptionWhere,
+            _sum: { rating: true },
+            _count: { _all: true },
+          }),
+          prisma.consumptionReview.groupBy({
+            by: ['rating'],
+            where: consumptionWhere,
+            _count: { _all: true },
+          }),
+        ]);
+        revSum = revAgg._sum.rating ?? 0;
+        revN = revAgg._count._all;
+        for (const row of revRatingRows) {
+          const r = row.rating;
+          const c = row._count._all;
+          if (r >= 1 && r <= 5) revDist[r] = (revDist[r] || 0) + c;
+          if (r >= 4) revPos += c;
+          else if (r === 3) revNeu += c;
+          else revNeg += c;
+        }
+      } catch (e) {
+        console.error('Consumption stats not available:', e);
+      }
+    }
+
+    const statQrN = includeQrInStats ? qrN : 0;
+    const statRevN = includeConsumptionInStats ? revN : 0;
+    const statDenom = statQrN + statRevN;
+    const statSum = (includeQrInStats ? qrSum : 0) + (includeConsumptionInStats ? revSum : 0);
 
     const stats = {
       total: qrTotal + consumptionTotal,
       qrFeedbacks: qrTotal,
       consumptionReviews: consumptionTotal,
-      avgRating: combinedForStats.length > 0
-        ? (combinedForStats.reduce((sum, f) => sum + f.rating, 0) / combinedForStats.length).toFixed(1)
-        : '0',
-      positive: combinedForStats.filter(f => f.sentiment === 'positive').length,
-      neutral: combinedForStats.filter(f => f.sentiment === 'neutral' || !f.sentiment).length,
-      negative: combinedForStats.filter(f => f.sentiment === 'negative').length,
+      avgRating: statDenom > 0 ? (statSum / statDenom).toFixed(1) : '0',
+      positive: (includeQrInStats ? qrPos : 0) + (includeConsumptionInStats ? revPos : 0),
+      neutral: (includeQrInStats ? qrNeu : 0) + (includeConsumptionInStats ? revNeu : 0),
+      negative: (includeQrInStats ? qrNeg : 0) + (includeConsumptionInStats ? revNeg : 0),
       ratingDistribution: {
-        5: combinedForStats.filter(f => f.rating === 5).length,
-        4: combinedForStats.filter(f => f.rating === 4).length,
-        3: combinedForStats.filter(f => f.rating === 3).length,
-        2: combinedForStats.filter(f => f.rating === 2).length,
-        1: combinedForStats.filter(f => f.rating === 1).length,
+        5: (includeQrInStats ? qrDist[5] : 0) + (includeConsumptionInStats ? revDist[5] : 0),
+        4: (includeQrInStats ? qrDist[4] : 0) + (includeConsumptionInStats ? revDist[4] : 0),
+        3: (includeQrInStats ? qrDist[3] : 0) + (includeConsumptionInStats ? revDist[3] : 0),
+        2: (includeQrInStats ? qrDist[2] : 0) + (includeConsumptionInStats ? revDist[2] : 0),
+        1: (includeQrInStats ? qrDist[1] : 0) + (includeConsumptionInStats ? revDist[1] : 0),
       },
       nps: npsValue,
       npsTotal,
@@ -236,6 +306,8 @@ export async function GET(request: NextRequest) {
     const dealers = await prisma.user.findMany({
       where: { role: 'DEALER' },
       select: { id: true, businessName: true, name: true },
+      take: 5000,
+      orderBy: { id: 'asc' },
     });
 
     return NextResponse.json({
@@ -250,10 +322,10 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(totalItems / pageSize),
       },
       ...(sampling.note && { samplingNote: sampling.note }),
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin feedbacks error:', error);
-    return NextResponse.json({ error: 'Geri bildirimler getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Geri bildirimler getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -268,7 +340,13 @@ export async function DELETE(request: NextRequest) {
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
-        { status: 429, headers: rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : undefined }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
       );
     }
 
@@ -276,7 +354,7 @@ export async function DELETE(request: NextRequest) {
     const parsed = adminFeedbacksDeleteSchema.safeParse(raw);
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
-      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const { feedbackIds, type } = parsed.data;
 
@@ -302,9 +380,9 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, deleted: feedbackIds.length });
+    return NextResponse.json({ success: true, deleted: feedbackIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Delete feedbacks error:', error);
-    return NextResponse.json({ error: 'Silme işlemi başarısız' }, { status: 500 });
+    return NextResponse.json({ error: 'Silme işlemi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

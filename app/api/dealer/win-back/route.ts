@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getWinBackOfferMessageTr, isWinBackOfferId } from '@/lib/dealer/win-back-offers';
 
 
 export const dynamic = 'force-dynamic';
+
+/** Win-back listesi: tüm müşteri groupBy belleğe sığmasın */
+const WIN_BACK_RADAR_LIMIT = 500;
+/** POST ile tek seferde en fazla bildirim */
+const WIN_BACK_POST_MAX = 100;
 
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
 
         if (!session || session.user.role !== 'DEALER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const dealerId = session.user.id;
@@ -21,48 +28,50 @@ export async function GET(req: Request) {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Get all unique customers who visited this dealer
-        const allCustomers = await prisma.consumption.groupBy({
-            by: ['customerId'],
-            where: { dealerId: dealerId },
-            _max: { createdAt: true }
-        });
-
-        const sleepingCustomers = allCustomers.filter(c =>
-            c._max.createdAt && c._max.createdAt < thirtyDaysAgo
+        const sleepingRows = await prisma.$queryRaw<Array<{ customerId: string; lastVisit: Date }>>(
+            Prisma.sql`
+                SELECT c."customerId", MAX(c."createdAt") AS "lastVisit"
+                FROM "Consumption" c
+                WHERE c."dealerId" = ${dealerId}
+                GROUP BY c."customerId"
+                HAVING MAX(c."createdAt") < ${thirtyDaysAgo}
+                ORDER BY MAX(c."createdAt") ASC
+                LIMIT ${WIN_BACK_RADAR_LIMIT}
+            `
         );
 
-        // Fetch details for these sleeping customers
-        const customerDetails = await prisma.user.findMany({
-            where: {
-                id: { in: sleepingCustomers.map(sc => sc.customerId) }
-            },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                image: true,
-            }
-        });
+        const customerIds = sleepingRows.map((r) => r.customerId);
+        const customerDetails =
+            customerIds.length === 0
+                ? []
+                : await prisma.user.findMany({
+                      where: { id: { in: customerIds } },
+                      select: {
+                          id: true,
+                          name: true,
+                          email: true,
+                          image: true,
+                      },
+                  });
 
-        // Merge last visit date
-        const radarData = customerDetails.map(user => {
-            const stats = sleepingCustomers.find(sc => sc.customerId === user.id);
-            return {
-                ...user,
-                lastVisit: stats?._max.createdAt
-            };
-        });
+        const lastByCustomer = new Map(sleepingRows.map((r) => [r.customerId, r.lastVisit]));
+
+        const radarData = customerDetails.map((user) => ({
+            ...user,
+            lastVisit: lastByCustomer.get(user.id) ?? null,
+        }));
 
         return NextResponse.json({
             data: radarData,
             count: radarData.length,
             potentialRevenue: radarData.length * 250 // Mock estimation
-        });
+        }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[WINBACK_API_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -70,7 +79,7 @@ export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session || session.user.role !== 'DEALER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const body = await req.json();
@@ -81,11 +90,36 @@ export async function POST(req: Request) {
             typeof personalNoteRaw === 'string' ? personalNoteRaw.trim().slice(0, 500) : '';
 
         if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-            return NextResponse.json({ error: 'No users selected' }, { status: 400 });
+            return NextResponse.json({ error: 'No users selected' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+
+        const sanitized = [
+            ...new Set(
+                userIds
+                    .filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 64)
+                    .slice(0, WIN_BACK_POST_MAX)
+            ),
+        ];
+        if (sanitized.length === 0) {
+            return NextResponse.json({ error: 'Geçersiz kullanıcı listesi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+
+        const eligibleRows = await prisma.consumption.findMany({
+            where: { dealerId: session.user.id, customerId: { in: sanitized } },
+            select: { customerId: true },
+            distinct: ['customerId'],
+        });
+        const eligible = new Set(eligibleRows.map((r) => r.customerId));
+        const targetIds = sanitized.filter((id) => eligible.has(id));
+        if (targetIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Seçilen kullanıcılar bu işletmede tüketim kaydına sahip değil.' },
+                { status: 400 , headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         if (!offerType || typeof offerType !== 'string' || !isWinBackOfferId(offerType)) {
-            return NextResponse.json({ error: 'Invalid offer type' }, { status: 400 });
+            return NextResponse.json({ error: 'Invalid offer type' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const offerLine = getWinBackOfferMessageTr(offerType);
@@ -96,7 +130,7 @@ export async function POST(req: Request) {
         // E.g., await pushService.sendPromotion(userIds, `Sizi özledik! Bugün gelirseniz ${offerType} kazanacaksınız.`);
 
         // We simulate creating a targeted notification in the database
-        const notifications = userIds.map(userId => ({
+        const notifications = targetIds.map(userId => ({
             userId: userId,
             title: 'Sizi Özledik! 🎁',
             message,
@@ -108,10 +142,12 @@ export async function POST(req: Request) {
             data: notifications
         });
 
-        return NextResponse.json({ success: true, message: `${userIds.length} kullanıcıya win-back kampanyası gönderildi.` });
+        return NextResponse.json({ success: true, message: `${targetIds.length} kullanıcıya win-back kampanyası gönderildi.` }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[WINBACK_SEND_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import crypto from 'crypto';
 
 
@@ -59,8 +60,8 @@ export async function POST(request: NextRequest) {
                 where: { id: auth.session.user.id },
                 select: { email: true, twoFactorEnabled: true },
             });
-            if (!user) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
-            if (user.twoFactorEnabled) return NextResponse.json({ error: '2FA zaten aktif' }, { status: 400 });
+            if (!user) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+            if (user.twoFactorEnabled) return NextResponse.json({ error: '2FA zaten aktif' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
 
             // Store secret temporarily (not enabled yet)
             await prisma.user.update({
@@ -69,25 +70,25 @@ export async function POST(request: NextRequest) {
             });
 
             const otpauthUri = `otpauth://totp/QRATEX:${encodeURIComponent(user.email || '')}?secret=${secret}&issuer=QRATEX&digits=6&period=30`;
-            return NextResponse.json({ success: true, secret, otpauthUri });
+            return NextResponse.json({ success: true, secret, otpauthUri }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Verify: validate TOTP code and enable 2FA
         if (body.action === 'verify') {
             const { code } = body;
             if (!code || typeof code !== 'string' || code.length !== 6) {
-                return NextResponse.json({ error: 'Geçersiz doğrulama kodu' }, { status: 400 });
+                return NextResponse.json({ error: 'Geçersiz doğrulama kodu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
             }
 
             const user = await prisma.user.findUnique({
                 where: { id: auth.session.user.id },
                 select: { twoFactorSecret: true, twoFactorEnabled: true },
             });
-            if (!user?.twoFactorSecret) return NextResponse.json({ error: 'Önce kurulum yapın' }, { status: 400 });
-            if (user.twoFactorEnabled) return NextResponse.json({ error: '2FA zaten aktif' }, { status: 400 });
+            if (!user?.twoFactorSecret) return NextResponse.json({ error: 'Önce kurulum yapın' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+            if (user.twoFactorEnabled) return NextResponse.json({ error: '2FA zaten aktif' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
 
             if (!verifyTOTP(user.twoFactorSecret, code)) {
-                return NextResponse.json({ error: 'Yanlış kod, tekrar deneyin' }, { status: 400 });
+                return NextResponse.json({ error: 'Yanlış kod, tekrar deneyin' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
             }
 
             await prisma.user.update({
@@ -95,14 +96,14 @@ export async function POST(request: NextRequest) {
                 data: { twoFactorEnabled: true },
             });
 
-            return NextResponse.json({ success: true, message: '2FA başarıyla etkinleştirildi' });
+            return NextResponse.json({ success: true, message: '2FA başarıyla etkinleştirildi' }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         // Disable: validate code and disable 2FA
         if (body.action === 'disable') {
             const { code } = body;
             if (!code || typeof code !== 'string' || code.length !== 6) {
-                return NextResponse.json({ error: 'Geçersiz doğrulama kodu' }, { status: 400 });
+                return NextResponse.json({ error: 'Geçersiz doğrulama kodu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
             }
 
             const user = await prisma.user.findUnique({
@@ -110,11 +111,11 @@ export async function POST(request: NextRequest) {
                 select: { twoFactorSecret: true, twoFactorEnabled: true },
             });
             if (!user?.twoFactorEnabled || !user.twoFactorSecret) {
-                return NextResponse.json({ error: '2FA aktif değil' }, { status: 400 });
+                return NextResponse.json({ error: '2FA aktif değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
             }
 
             if (!verifyTOTP(user.twoFactorSecret, code)) {
-                return NextResponse.json({ error: 'Yanlış kod' }, { status: 400 });
+                return NextResponse.json({ error: 'Yanlış kod' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
             }
 
             await prisma.user.update({
@@ -122,12 +123,12 @@ export async function POST(request: NextRequest) {
                 data: { twoFactorEnabled: false, twoFactorSecret: null },
             });
 
-            return NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' });
+            return NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 });
+        return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('2FA error:', error);
-        return NextResponse.json({ error: '2FA işlemi başarısız' }, { status: 500 });
+        return NextResponse.json({ error: '2FA işlemi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

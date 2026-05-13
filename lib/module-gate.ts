@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
 import {
   FEATURE_VISIBILITY_SETTINGS_KEY,
@@ -84,7 +85,7 @@ export async function assertModuleEnabled(moduleKey: string, options: ModuleGate
         moduleKey,
         reason,
       },
-      { status: 403 }
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
   return null;
@@ -118,7 +119,7 @@ export async function assertMenuItemVisible(
         menuKey,
         reason: 'menu_hidden_for_role',
       },
-      { status: 403 }
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
   return null;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,10 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Geçersiz' }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? 'Geçersiz' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const dealer = await prisma.user.findFirst({
@@ -35,7 +39,10 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'İşletme bulunamadı' },
+      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const hours = parsed.data.expectedHours ?? 48;
@@ -63,10 +70,13 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    success: true,
-    id: req.id,
-    expectedResponseBy: new Date(Date.now() + hours * 3600 * 1000).toISOString(),
-    templateLabel: TEMPLATES[parsed.data.templateKey],
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      id: req.id,
+      expectedResponseBy: new Date(Date.now() + hours * 3600 * 1000).toISOString(),
+      templateLabel: TEMPLATES[parsed.data.templateKey],
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

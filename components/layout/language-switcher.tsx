@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { type Locale } from '@/i18n/request';
+import { cn } from '@/lib/utils';
 
 const LANGS: Array<{ key: Locale }> = [{ key: 'tr' }, { key: 'en' }];
 
@@ -54,7 +55,7 @@ export function LanguageSwitcher({ className, compact = true }: LanguageSwitcher
           type="button"
           variant="ghost"
           size={compact ? 'icon' : 'sm'}
-          className={className}
+          className={cn('touch-manipulation', className)}
           aria-label={t('appShell.languageSelect')}
           disabled={saving}
         >

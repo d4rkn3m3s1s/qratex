@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -62,12 +63,10 @@ export async function GET() {
             : 'Development',
       },
       dbLatencyMs: checks.database?.latencyMs ?? null,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('System status error:', error);
     return NextResponse.json(
-      { success: false, status: 'error', error: 'Durum alınamadı' },
-      { status: 500 }
-    );
+      { success: false, status: 'error', error: 'Durum alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

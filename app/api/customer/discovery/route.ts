@@ -5,9 +5,32 @@ import { prisma } from '@/lib/prisma';
 import { getDiscoveryConfig } from '@/lib/discovery-config';
 import { isHappyHourLive } from '@/lib/happy-hour-live';
 import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 /** getServerSession / gates — not compatible with static rendering during build. */
 export const dynamic = 'force-dynamic';
+
+/** Son N kayıt üzerinden trend; tüm tabloyu RAM’e çekmeyi önler */
+const DISCOVERY_FEEDBACK_CAP = 25_000;
+const DISCOVERY_REVIEW_CAP = 20_000;
+const DISCOVERY_NEARBY_DEALER_CAP = 2_000;
+const DISCOVERY_FAVORITES_CAP = 500;
+const DISCOVERY_HAPPY_HOUR_CAP = 200;
+
+async function fetchQRCodesByIds(ids: string[]) {
+  const unique = [...new Set(ids)].filter(Boolean);
+  const chunkSize = 8_000;
+  const rows: { id: string; dealerId: string; scanCount: number | null }[] = [];
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const slice = unique.slice(i, i + chunkSize);
+    const part = await prisma.qRCode.findMany({
+      where: { id: { in: slice } },
+      select: { id: true, dealerId: true, scanCount: true },
+    });
+    rows.push(...part);
+  }
+  return rows;
+}
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -68,7 +91,10 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     const menuGate = await assertMenuItemVisible('nearby', 'customer', {
       request,
@@ -105,6 +131,8 @@ export async function GET(request: NextRequest) {
           rating: true,
           qrCodeId: true,
         },
+        orderBy: { createdAt: 'desc' },
+        take: DISCOVERY_FEEDBACK_CAP,
       }),
       prisma.consumptionReview.findMany({
         where: { createdAt: { gte: sevenDaysAgo } },
@@ -118,22 +146,28 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        orderBy: { createdAt: 'desc' },
+        take: DISCOVERY_REVIEW_CAP,
       }),
     ]);
 
+    const qrIds = recentFeedbacks.map((f) => f.qrCodeId);
+    const qrCodes = await fetchQRCodesByIds(qrIds);
+
     const qrMap = new Map<string, { dealerId: string; scanCount: number }>();
     const dealerIds = new Set<string>();
-    const qrCodes = await prisma.qRCode.findMany({
-      select: { id: true, dealerId: true, scanCount: true },
-    });
     qrCodes.forEach((row) => {
-      qrMap.set(row.id, { dealerId: row.dealerId, scanCount: row.scanCount });
+      qrMap.set(row.id, { dealerId: row.dealerId, scanCount: row.scanCount ?? 0 });
       dealerIds.add(row.dealerId);
     });
-    const dealers = await prisma.user.findMany({
-      where: { id: { in: Array.from(dealerIds) } },
-      select: { id: true, businessName: true, image: true },
-    });
+    const dealers =
+      dealerIds.size === 0
+        ? []
+        : await prisma.user.findMany({
+            where: { id: { in: Array.from(dealerIds) } },
+            select: { id: true, businessName: true, image: true },
+            take: 5_000,
+          });
     const dealerMap = new Map(dealers.map((dealer) => [dealer.id, dealer]));
 
     const venueMap = new Map<
@@ -286,43 +320,54 @@ export async function GET(request: NextRequest) {
         trendingVenues.map((item) => [item.dealerId, { avgRating: item.avgRating, trendScore: item.score, feedbackCount: item.feedbackCount }])
       );
 
-      const [dealers, dealerCategories] = await Promise.all([
-        prisma.user.findMany({
-          where: {
-            role: 'DEALER',
-            OR: [
-              {
-                AND: [
-                  { latitude: { not: null } },
-                  { longitude: { not: null } },
-                ],
+      const configDealerIds = config.locations.map((entry) => entry.dealerId);
+      const padLat = Math.max(0.05, (radiusKm / 111) * 1.35);
+      const cosLat = Math.cos(toRadians(lat));
+      const padLng =
+        Math.abs(cosLat) > 0.02 ? Math.max(0.05, ((radiusKm / 111) * 1.35) / cosLat) : 180;
+
+      const dealers = await prisma.user.findMany({
+        where: {
+          role: 'DEALER',
+          OR: [
+            {
+              AND: [
+                { latitude: { not: null } },
+                { longitude: { not: null } },
+                { latitude: { gte: lat - padLat, lte: lat + padLat } },
+                { longitude: { gte: lng - padLng, lte: lng + padLng } },
+              ],
+            },
+            { id: { in: configDealerIds } },
+          ],
+        },
+        select: {
+          id: true,
+          businessName: true,
+          image: true,
+          phone: true,
+          address: true,
+          latitude: true,
+          longitude: true,
+        },
+        take: DISCOVERY_NEARBY_DEALER_CAP,
+      });
+
+      const categoryScope = [...new Set([...dealers.map((d) => d.id), ...configDealerIds])];
+      const dealerCategories =
+        categoryScope.length === 0
+          ? []
+          : await prisma.productCategory.findMany({
+              where: {
+                dealerId: { in: categoryScope },
+                isActive: true,
               },
-              {
-                id: { in: config.locations.map((entry) => entry.dealerId) },
+              select: {
+                dealerId: true,
+                name: true,
               },
-            ],
-          },
-          select: {
-            id: true,
-            businessName: true,
-            image: true,
-            phone: true,
-            address: true,
-            latitude: true,
-            longitude: true,
-          },
-        }),
-        prisma.productCategory.findMany({
-          where: {
-            dealerId: { not: null },
-            isActive: true,
-          },
-          select: {
-            dealerId: true,
-            name: true,
-          },
-        }),
-      ]);
+              take: 8_000,
+            });
 
       dealerCategories.forEach((row) => {
         if (!row.dealerId) return;
@@ -381,6 +426,7 @@ export async function GET(request: NextRequest) {
           isActive: true,
           dealer: { select: { id: true, businessName: true, latitude: true, longitude: true } },
         },
+        take: DISCOVERY_HAPPY_HOUR_CAP,
       });
 
       const seenGlobalHappyHour = new Set<string>();
@@ -428,26 +474,33 @@ export async function GET(request: NextRequest) {
       const favs = await prisma.customerFavoriteDealer.findMany({
         where: { userId: session.user.id },
         select: { dealerId: true },
+        take: DISCOVERY_FAVORITES_CAP,
       });
       favoriteDealerIds = favs.map((f) => f.dealerId);
     }
 
-    const res = NextResponse.json({
-      success: true,
-      data: {
-        trendingVenues,
-        weeklyBest,
-        sponsored,
-        nearby,
-        liveBoosts,
-        favoriteDealerIds,
+    const res = NextResponse.json(
+      {
+        success: true,
+        data: {
+          trendingVenues,
+          weeklyBest,
+          sponsored,
+          nearby,
+          liveBoosts,
+          favoriteDealerIds,
+        },
       },
-    });
-    // P2-24: hot endpoint cache (discovery config + trend aggregates)
-    res.headers.set('Cache-Control', 'private, s-maxage=60, stale-while-revalidate=120');
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
     return res;
   } catch (error) {
     console.error('Customer discovery error:', error);
-    return NextResponse.json({ success: false, error: 'Keşif verileri alınamadı' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json(
+      { success: false, error: 'Keşif verileri alınamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

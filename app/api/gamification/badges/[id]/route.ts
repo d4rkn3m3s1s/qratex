@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 // GET /api/gamification/badges/[id] - Get single badge
@@ -26,18 +27,14 @@ export async function GET(
 
     if (!badge) {
       return NextResponse.json(
-        { success: false, error: 'Rozet bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Rozet bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ success: true, data: badge });
+    return NextResponse.json({ success: true, data: badge }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching badge:', error);
     return NextResponse.json(
-      { success: false, error: 'Rozet getirilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozet getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -50,7 +47,7 @@ export async function PATCH(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -60,9 +57,7 @@ export async function PATCH(
     const oldBadge = await prisma.badge.findUnique({ where: { id } });
     if (!oldBadge) {
       return NextResponse.json(
-        { success: false, error: 'Rozet bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Rozet bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const badge = await prisma.badge.update({
@@ -94,13 +89,11 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ success: true, data: badge });
+    return NextResponse.json({ success: true, data: badge }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating badge:', error);
     return NextResponse.json(
-      { success: false, error: 'Rozet güncellenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozet güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -113,7 +106,7 @@ export async function DELETE(
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { id } = await params;
@@ -122,9 +115,7 @@ export async function DELETE(
     const badge = await prisma.badge.findUnique({ where: { id } });
     if (!badge) {
       return NextResponse.json(
-        { success: false, error: 'Rozet bulunamadı' },
-        { status: 404 }
-      );
+        { success: false, error: 'Rozet bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Delete badge
@@ -142,13 +133,11 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({ success: true, message: 'Rozet silindi' });
+    return NextResponse.json({ success: true, message: 'Rozet silindi' }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting badge:', error);
     return NextResponse.json(
-      { success: false, error: 'Rozet silinemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozet silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

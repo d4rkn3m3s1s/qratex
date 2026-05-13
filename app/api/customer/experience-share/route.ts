@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,10 @@ export async function POST(request: NextRequest) {
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Geçersiz istek' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const dealer = await prisma.user.findFirst({
@@ -27,7 +31,10 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
   if (!dealer) {
-    return NextResponse.json({ error: 'İşletme bulunamadı' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'İşletme bulunamadı' },
+      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const token = randomBytes(18).toString('base64url');
@@ -48,10 +55,13 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
     new URL(request.url).origin;
 
-  return NextResponse.json({
-    success: true,
-    token,
-    shareUrl: `${base}/experience/${token}`,
-    expiresAt: expiresAt.toISOString(),
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      token,
+      shareUrl: `${base}/experience/${token}`,
+      expiresAt: expiresAt.toISOString(),
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

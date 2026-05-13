@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -97,5 +98,5 @@ export async function GET() {
       remedyQueueApproval > 0 ? `Onay kuyruğu: ${remedyQueueApproval} telafi bekliyor.` : null,
       flashExpiring24h > 0 ? `${flashExpiring24h} flash teklif 24 saat içinde bitiyor.` : null,
     ].filter(Boolean),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -220,7 +220,7 @@ export default function CustomerTrendsPage() {
   const memberDays = Math.floor((Date.now() - new Date(data.summary.memberSince).getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
+    <div className="space-y-4 md:space-y-6 pb-6 md:pb-6">
       <DashboardPageHeading
         title={t('customerTrends.title')}
         description={t('customerTrends.description')}
@@ -230,7 +230,7 @@ export default function CustomerTrendsPage() {
             size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="gap-1.5 sm:gap-2 h-9 touch-manipulation shrink-0"
+            className="gap-1.5 sm:gap-2 min-h-10 touch-manipulation shrink-0"
           >
             <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 ${refreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{t('common.refresh')}</span>
@@ -407,6 +407,9 @@ export default function CustomerTrendsPage() {
               <Building2 className="h-5 w-5 text-primary" />
               {t('customerTrends.trendingVenueTitle')}
             </CardTitle>
+            <p className="sm:hidden text-[11px] text-muted-foreground leading-snug mt-1 pl-0.5">
+              {t('customerTrends.trendingIosNote')}
+            </p>
           </CardHeader>
           <CardContent className="space-y-2">
             {discovery.trendingVenues.length === 0 ? (
@@ -436,7 +439,8 @@ export default function CustomerTrendsPage() {
             <p className="text-sm text-muted-foreground">
               {t('customerTrends.nearbyDescription')}
             </p>
-            <Button asChild className="w-full">
+            <p className="text-xs text-muted-foreground leading-relaxed">{t('customerTrends.nearbyIosHint')}</p>
+            <Button asChild className="w-full touch-manipulation">
               <Link href="/customer/nearby">{t('customerTrends.nearbyCta')}</Link>
             </Button>
           </CardContent>
@@ -488,23 +492,23 @@ export default function CustomerTrendsPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="activity" className="space-y-4 md:space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto min-h-10 sm:min-h-12 gap-1 p-1">
-          <TabsTrigger value="activity" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto min-h-10 sm:min-h-12 gap-1 p-1 touch-manipulation">
+          <TabsTrigger value="activity" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 touch-manipulation min-h-10">
             <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
             <span className="hidden sm:inline">{t('customerTrends.tabs.activity')}</span>
             <span className="sm:hidden sr-only">{t('customerTrends.tabs.activity')}</span>
           </TabsTrigger>
-          <TabsTrigger value="sentiment" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2">
+          <TabsTrigger value="sentiment" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 touch-manipulation min-h-10">
             <PieChart className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
             <span className="hidden sm:inline">{t('customerTrends.tabs.sentiment')}</span>
             <span className="sm:hidden sr-only">{t('customerTrends.tabs.sentiment')}</span>
           </TabsTrigger>
-          <TabsTrigger value="insights" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2">
+          <TabsTrigger value="insights" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 touch-manipulation min-h-10">
             <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
             <span className="hidden sm:inline">{t('customerTrends.tabs.insights')}</span>
             <span className="sm:hidden sr-only">{t('customerTrends.tabs.insights')}</span>
           </TabsTrigger>
-          <TabsTrigger value="achievements" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2">
+          <TabsTrigger value="achievements" className="gap-1.5 sm:gap-2 text-xs sm:text-sm py-2 touch-manipulation min-h-10">
             <Award className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
             <span className="hidden sm:inline">{t('customerTrends.tabs.achievements')}</span>
             <span className="sm:hidden sr-only">{t('customerTrends.tabs.achievements')}</span>

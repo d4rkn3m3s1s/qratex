@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +34,6 @@ export async function GET() {
   } catch (error) {
     console.error('Public stats error:', error);
     return NextResponse.json(
-      { users: 0, businesses: 0, feedbacks: 0, rating: 4.9 },
-      { status: 200 }
-    );
+      { users: 0, businesses: 0, feedbacks: 0, rating: 4.9 }, { status: 200 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

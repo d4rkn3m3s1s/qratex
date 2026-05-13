@@ -45,13 +45,16 @@ export const adminFeedbacksRestoreSchema = z.object({
 
 /** POST /api/admin/settings - batch update */
 export const adminSettingsBatchSchema = z.object({
-  settings: z.array(
-    z.object({
-      key: z.string().min(1, 'key gerekli'),
-      value: z.unknown(),
-      category: z.string().optional(),
-    })
-  ).min(1, 'En az bir ayar gerekli'),
+  settings: z
+    .array(
+      z.object({
+        key: z.string().min(1, 'key gerekli'),
+        value: z.unknown(),
+        category: z.string().optional(),
+      })
+    )
+    .min(1, 'En az bir ayar gerekli')
+    .max(200, 'Tek istekte en fazla 200 ayar güncellenebilir'),
 });
 
 /** PUT /api/admin/seo - global + pageOverrides (loose; sanitize does the rest) */

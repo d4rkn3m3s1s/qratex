@@ -37,6 +37,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { enUS, tr } from 'date-fns/locale';
 import { getLeagueMeta, type LeagueKey } from '@/lib/utils';
 import { useCustomerLocale, useCustomerT } from '@/lib/use-customer-locale';
+import { resolveRewardDisplayImage } from '@/lib/reward-display-image';
 
 const SurpriseEggThreeModal = dynamic(
   () => import('@/components/rewards/surprise-egg-three-modal').then((m) => m.SurpriseEggThreeModal),
@@ -65,9 +66,32 @@ interface MyReward {
     name: string;
     description: string;
     icon: string | null;
+    image?: string | null;
     type: string;
     cost: number;
   };
+}
+
+function RewardTilePreview(props: {
+  id: string;
+  icon: string | null;
+  image?: string | null;
+  label?: string;
+}) {
+  const src = resolveRewardDisplayImage(props);
+  const alt = props.label ?? '';
+  if (src) {
+    return (
+      <div className="shrink-0 rounded-xl bg-background p-2 ring-1 ring-border/70 shadow-sm">
+        <Image src={src} alt={alt} width={72} height={72} className="h-[72px] w-[72px] object-contain" />
+      </div>
+    );
+  }
+  return (
+    <div className="shrink-0 rounded-lg bg-primary/10 p-3">
+      <Gift className="h-8 w-8 text-primary" />
+    </div>
+  );
 }
 
 const typeLabels: Record<string, string> = {
@@ -230,7 +254,7 @@ export default function CustomerRewardsPage() {
   const canAfford = (reward: Reward) => userPoints >= (reward.cost || 0);
 
   return (
-    <div className="space-y-4 md:space-y-6 pb-20 md:pb-6">
+    <div className="space-y-4 md:space-y-6 pb-6 md:pb-6">
       <DashboardPageHeading
         title={tc('customerRewards.title')}
         description={tc('customerRewards.description')}
@@ -313,11 +337,11 @@ export default function CustomerRewardsPage() {
             <p className="text-muted-foreground text-xs sm:text-sm mb-4">
               Mağazaya yeni ödüller eklendiğinde burada listelenecek. Puan biriktirmek için tüketim yapıp geri bildirim verebilirsiniz.
             </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 w-full max-w-md mx-auto">
+              <Button asChild variant="outline" size="sm" className="gap-1.5 w-full min-h-10 touch-manipulation sm:flex-1">
                 <Link href="/customer/consumptions">Tüketimlerim</Link>
               </Button>
-              <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Button asChild variant="outline" size="sm" className="gap-1.5 w-full min-h-10 touch-manipulation sm:flex-1">
                 <Link href="/customer/feedbacks">Geri Bildirimlerim</Link>
               </Button>
             </div>
@@ -327,6 +351,11 @@ export default function CustomerRewardsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
           {rewards.map((reward, index) => {
             const affordable = canAfford(reward);
+            const displayImage = resolveRewardDisplayImage({
+              id: reward.id,
+              icon: reward.icon,
+              image: reward.image,
+            });
             const gradients = [
               'from-primary/20 via-primary/10 to-primary/15',
               'from-blue-500/20 via-cyan-500/10 to-teal-500/20',
@@ -351,22 +380,23 @@ export default function CustomerRewardsPage() {
                   onClick={() => setSelectedReward(reward)}
                 >
                   {/* Image Section */}
-                  <div className={`relative h-28 sm:h-36 bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden`}>
+                  <div className={`relative h-32 sm:h-40 bg-gradient-to-br ${gradient} flex items-center justify-center overflow-hidden ring-1 ring-inset ring-white/10`}>
                     {/* Decorative circles */}
                     <div className="absolute top-0 right-0 w-16 sm:w-20 h-16 sm:h-20 bg-white/5 rounded-full blur-xl" />
                     <div className="absolute bottom-0 left-0 w-12 sm:w-16 h-12 sm:h-16 bg-white/5 rounded-full blur-xl" />
                     
-                    {(reward.icon || reward.image) ? (
+                    {displayImage ? (
                       <motion.div
-                        whileHover={{ scale: 1.1, rotate: 5 }}
+                        className="relative z-[1] rounded-2xl bg-black/10 p-2 shadow-lg ring-1 ring-white/15 backdrop-blur-[2px]"
+                        whileHover={{ scale: 1.06, rotate: 2 }}
                         transition={{ type: 'spring', stiffness: 300 }}
                       >
                         <Image
-                          src={reward.icon || reward.image || ''}
+                          src={displayImage}
                           alt={reward.name}
-                          width={90}
-                          height={90}
-                          className="object-contain drop-shadow-lg w-16 h-16 sm:w-[90px] sm:h-[90px]"
+                          width={112}
+                          height={112}
+                          className="object-contain drop-shadow-xl w-[72px] h-[72px] sm:w-[100px] sm:h-[100px] rounded-xl"
                         />
                       </motion.div>
                     ) : (
@@ -417,7 +447,7 @@ export default function CustomerRewardsPage() {
 
                     {/* Action Button */}
                     <Button
-                      className={`h-9 w-full gap-1.5 text-xs sm:h-10 sm:gap-2 sm:text-sm ${affordable ? 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70' : ''}`}
+                      className={`min-h-10 h-auto w-full gap-1.5 touch-manipulation text-xs sm:text-sm ${affordable ? 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70' : ''}`}
                       variant={affordable ? 'default' : 'outline'}
                       disabled={!affordable || reward.stock === 0}
                     >
@@ -465,7 +495,7 @@ export default function CustomerRewardsPage() {
                 <Ticket className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/30 mx-auto mb-3 sm:mb-4" />
                 <h3 className="text-base sm:text-lg font-semibold mb-2">Henüz ödül almadınız</h3>
                 <p className="text-sm text-muted-foreground mb-4">Mağazadan ödül talep ederek kupon kazanın!</p>
-                <Button onClick={() => setActiveTab('store')} className="gap-2 h-10">
+                <Button onClick={() => setActiveTab('store')} className="gap-2 min-h-10 touch-manipulation w-full sm:w-auto">
                   <Store className="h-4 w-4" />
                   Mağazaya Git
                 </Button>
@@ -474,7 +504,13 @@ export default function CustomerRewardsPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
               <AnimatePresence>
-                {myRewards.map((myReward, index) => (
+                {myRewards.map((myReward, index) => {
+                  const myThumb = resolveRewardDisplayImage({
+                    id: myReward.reward.id,
+                    icon: myReward.reward.icon,
+                    image: myReward.reward.image,
+                  });
+                  return (
                   <motion.div
                     key={myReward.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -489,24 +525,39 @@ export default function CustomerRewardsPage() {
                       <CardContent className="p-0">
                         {/* Header */}
                         <div className={`p-3 sm:p-4 ${myReward.isUsed ? 'bg-muted/50' : 'bg-gradient-to-r from-green-500/20 to-emerald-500/10'}`}>
-                          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                            <Badge className={`text-[10px] sm:text-xs ${typeColors[myReward.reward.type]}`}>
-                              {typeLabels[myReward.reward.type]}
-                            </Badge>
-                            {myReward.isUsed ? (
-                              <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs">
-                                <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                Kullanıldı
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-green-500 gap-1 text-[10px] sm:text-xs">
-                                <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                                Aktif
-                              </Badge>
-                            )}
+                          <div className="flex items-start gap-3">
+                            {myThumb ? (
+                              <div className="shrink-0 rounded-xl bg-background/80 p-1.5 ring-1 ring-border/60 shadow-sm">
+                                <Image
+                                  src={myThumb}
+                                  alt={myReward.reward.name}
+                                  width={48}
+                                  height={48}
+                                  className="h-11 w-11 sm:h-12 sm:w-12 object-contain rounded-lg"
+                                />
+                              </div>
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                                <Badge className={`text-[10px] sm:text-xs ${typeColors[myReward.reward.type]}`}>
+                                  {typeLabels[myReward.reward.type]}
+                                </Badge>
+                                {myReward.isUsed ? (
+                                  <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs">
+                                    <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                    Kullanıldı
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-green-500 gap-1 text-[10px] sm:text-xs">
+                                    <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                                    Aktif
+                                  </Badge>
+                                )}
+                              </div>
+                              <h3 className="font-bold text-sm sm:text-base">{myReward.reward.name}</h3>
+                              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{myReward.reward.description}</p>
+                            </div>
                           </div>
-                          <h3 className="font-bold text-sm sm:text-base">{myReward.reward.name}</h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{myReward.reward.description}</p>
                         </div>
 
                         {/* Coupon Code */}
@@ -521,7 +572,7 @@ export default function CustomerRewardsPage() {
                                 <Button 
                                   size="icon" 
                                   variant="outline" 
-                                  className="h-8 w-8 sm:h-9 sm:w-9 shrink-0"
+                                  className="h-10 w-10 min-h-10 min-w-10 sm:h-9 sm:w-9 sm:min-h-9 sm:min-w-9 shrink-0 touch-manipulation"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     copyToClipboard(myReward.code!);
@@ -548,7 +599,8 @@ export default function CustomerRewardsPage() {
                       </CardContent>
                     </Card>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
@@ -567,9 +619,12 @@ export default function CustomerRewardsPage() {
           {selectedReward && (
             <div className="space-y-4">
               <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <Gift className="h-8 w-8 text-primary" />
-                </div>
+                <RewardTilePreview
+                  id={selectedReward.id}
+                  icon={selectedReward.icon}
+                  image={selectedReward.image}
+                  label={selectedReward.name}
+                />
                 <div className="flex-1">
                   <h3 className="font-semibold">{selectedReward.name}</h3>
                   <p className="text-sm text-muted-foreground">{selectedReward.description}</p>
@@ -599,14 +654,14 @@ export default function CustomerRewardsPage() {
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedReward(null)}>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => setSelectedReward(null)} className="w-full min-h-10 touch-manipulation sm:w-auto">
               İptal
             </Button>
             <Button
               onClick={handleClaimReward}
               disabled={claiming || (selectedReward ? !canAfford(selectedReward) : false)}
-              className="gap-2"
+              className="gap-2 w-full min-h-10 touch-manipulation sm:w-auto"
             >
               {claiming ? (
                 'İşleniyor...'
@@ -634,18 +689,28 @@ export default function CustomerRewardsPage() {
             <div className="space-y-4">
               {/* Reward Info */}
               <div className="rounded-lg border border-primary/20 bg-gradient-to-br from-primary/10 to-primary/15 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge className={typeColors[selectedMyReward.reward.type]}>
-                    {typeLabels[selectedMyReward.reward.type]}
-                  </Badge>
-                  {selectedMyReward.isUsed ? (
-                    <Badge variant="secondary">Kullanıldı</Badge>
-                  ) : (
-                    <Badge className="bg-green-500">Aktif</Badge>
-                  )}
+                <div className="flex items-start gap-3">
+                  <RewardTilePreview
+                    id={selectedMyReward.reward.id}
+                    icon={selectedMyReward.reward.icon}
+                    image={selectedMyReward.reward.image}
+                    label={selectedMyReward.reward.name}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge className={typeColors[selectedMyReward.reward.type]}>
+                        {typeLabels[selectedMyReward.reward.type]}
+                      </Badge>
+                      {selectedMyReward.isUsed ? (
+                        <Badge variant="secondary">Kullanıldı</Badge>
+                      ) : (
+                        <Badge className="bg-green-500">Aktif</Badge>
+                      )}
+                    </div>
+                    <h3 className="font-bold text-lg">{selectedMyReward.reward.name}</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{selectedMyReward.reward.description}</p>
+                  </div>
                 </div>
-                <h3 className="font-bold text-lg">{selectedMyReward.reward.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{selectedMyReward.reward.description}</p>
               </div>
 
               {/* Coupon Code */}
@@ -659,7 +724,7 @@ export default function CustomerRewardsPage() {
                   </div>
                   {!selectedMyReward.isUsed && (
                     <Button 
-                      className="w-full gap-2" 
+                      className="w-full gap-2 min-h-10 touch-manipulation" 
                       variant="outline"
                       onClick={() => copyToClipboard(selectedMyReward.code!)}
                     >
@@ -702,7 +767,7 @@ export default function CustomerRewardsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setSelectedMyReward(null)} className="w-full">
+            <Button onClick={() => setSelectedMyReward(null)} className="w-full min-h-10 touch-manipulation">
               Tamam
             </Button>
           </DialogFooter>

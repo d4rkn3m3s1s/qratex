@@ -1,14 +1,14 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
+import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { INPUT_LIMITS } from '@/lib/input-limits';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Global search API - tüm varlıklarda arama (kullanıcılar, geri bildirimler, ürünler, QR kodları)
  */
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { INPUT_LIMITS } from '@/lib/input-limits';
-
 const LIMIT_PER_TYPE = 5;
 
 export async function GET(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const raw = (searchParams.get('q') || '').trim();
   const q = raw.slice(0, INPUT_LIMITS.searchQuery);
   if (q.length < 2) {
-    return NextResponse.json({ success: true, results: { users: [], feedbacks: [], products: [], qrCodes: [] } });
+    return NextResponse.json({ success: true, results: { users: [], feedbacks: [], products: [], qrCodes: [] } }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const role = session.user?.role as string;
@@ -169,8 +169,10 @@ export async function GET(request: NextRequest) {
     results.qrCodes = qrCodesResult;
   } catch (err) {
     console.error('Global search error:', err);
-    return NextResponse.json({ error: 'Arama hatası' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(err);
+    if (db) return db;
+    return NextResponse.json({ error: 'Arama hatası' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  return NextResponse.json({ success: true, results });
+  return NextResponse.json({ success: true, results }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

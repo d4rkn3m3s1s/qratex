@@ -463,6 +463,7 @@ export default function ConsumptionDetailPage() {
                     type="button"
                     size="sm"
                     variant="outline"
+                    className="w-full min-h-10 touch-manipulation sm:w-auto"
                     onClick={() => setReviewText(feedbackQuality.suggestedVersion || reviewText)}
                   >
                     {t('customerConsumptionDetail.applySuggestion')}

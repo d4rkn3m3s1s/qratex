@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -29,9 +30,7 @@ export async function POST(
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { customerId } = validatedData.data;
@@ -43,23 +42,17 @@ export async function POST(
 
     if (!card) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (card.status !== 'UNUSED') {
       return NextResponse.json(
-        { error: 'Sadece aktive edilmemiş kartlar atanabilir' },
-        { status: 400 }
-      );
+        { error: 'Sadece aktive edilmemiş kartlar atanabilir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (card.customerId) {
       return NextResponse.json(
-        { error: 'Bu kart zaten bir müşteriye atanmış' },
-        { status: 400 }
-      );
+        { error: 'Bu kart zaten bir müşteriye atanmış' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Müşteriyi kontrol et
@@ -69,16 +62,12 @@ export async function POST(
 
     if (!customer) {
       return NextResponse.json(
-        { error: 'Müşteri bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Müşteri bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (customer.role !== 'CUSTOMER') {
       return NextResponse.json(
-        { error: 'Sadece müşteri rolündeki kullanıcılara kart atanabilir' },
-        { status: 400 }
-      );
+        { error: 'Sadece müşteri rolündeki kullanıcılara kart atanabilir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Müşterinin zaten aktif kartı var mı kontrol et
@@ -91,9 +80,7 @@ export async function POST(
 
     if (existingCard) {
       return NextResponse.json(
-        { error: 'Bu müşterinin zaten aktif bir kartı var' },
-        { status: 400 }
-      );
+        { error: 'Bu müşterinin zaten aktif bir kartı var' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Kartı müşteriye ata
@@ -138,12 +125,10 @@ export async function POST(
       success: true,
       message: 'Kart müşteriye atandı',
       card: updatedCard,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error assigning card:', error);
     return NextResponse.json(
-      { error: 'Kart atanamadı' },
-      { status: 500 }
-    );
+      { error: 'Kart atanamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

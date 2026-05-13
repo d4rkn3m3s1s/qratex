@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { assertModuleEnabled } from '@/lib/module-gate';
 
@@ -30,12 +31,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: boxes,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {
     console.error('Admin surprise-box list error:', e);
     return NextResponse.json(
-      { success: false, error: 'Liste alınamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Liste alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

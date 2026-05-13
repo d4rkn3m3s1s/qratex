@@ -76,15 +76,24 @@ function ThemeColorsProvider({
   const [activeThemeId, setActiveThemeId] = useState<string | null>(boot.activeThemeId);
   const [customColors, setCustomColors] = useState<RuntimeThemeHex | null>(boot.customColors);
 
-  const loadThemeSettings = async () => {
+  const loadThemeSettings = async (opts?: { bypassCache?: boolean }) => {
     try {
-      const res = await fetch(THEME_SETTINGS_PUBLIC_API_PATH, { cache: 'no-store' });
+      const res = await fetch(
+        THEME_SETTINGS_PUBLIC_API_PATH,
+        opts?.bypassCache
+          ? { cache: 'no-store' }
+          : { next: { revalidate: 60 } }
+      );
       if (!res.ok) return;
       const data = await res.json();
 
-      if (data.raw && Array.isArray(data.raw)) {
-        const settings = data.raw as ThemeSettingRow[];
-        const parsed = parseThemeRowsToState(settings);
+      const themeRows = Array.isArray(data.entries)
+        ? (data.entries as ThemeSettingRow[])
+        : Array.isArray(data.raw)
+          ? (data.raw as ThemeSettingRow[])
+          : [];
+      if (themeRows.length > 0) {
+        const parsed = parseThemeRowsToState(themeRows);
         setActiveThemeId(parsed.activeThemeId);
         setCustomColors(parsed.customColors);
         setIsThemeInitialized(true);
@@ -101,7 +110,7 @@ function ThemeColorsProvider({
 
   useEffect(() => {
     const onPaletteChanged = () => {
-      void loadThemeSettings();
+      void loadThemeSettings({ bypassCache: true });
     };
     const onPalettePreview = (event: Event) => {
       const custom = event as CustomEvent<{

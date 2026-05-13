@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 
@@ -57,7 +58,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     pages: pages.map(toResponse),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -68,12 +69,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const existing = await prisma.page.findUnique({ where: { slug: parsed.data.slug } });
   if (existing) {
-    return NextResponse.json({ error: 'Bu slug zaten kullanılıyor' }, { status: 400 });
+    return NextResponse.json({ error: 'Bu slug zaten kullanılıyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const created = await prisma.page.create({
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, page: toResponse(created) });
+  return NextResponse.json({ success: true, page: toResponse(created) }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -107,19 +108,19 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const { id, ...fields } = parsed.data;
   const existing = await prisma.page.findUnique({ where: { id } });
   if (!existing) {
-    return NextResponse.json({ error: 'Sayfa bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Sayfa bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (fields.slug && fields.slug !== existing.slug) {
     const slugExists = await prisma.page.findUnique({ where: { slug: fields.slug } });
     if (slugExists) {
-      return NextResponse.json({ error: 'Bu slug zaten kullanılıyor' }, { status: 400 });
+      return NextResponse.json({ error: 'Bu slug zaten kullanılıyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
   }
 
@@ -150,7 +151,7 @@ export async function PUT(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, page: toResponse(updated) });
+  return NextResponse.json({ success: true, page: toResponse(updated) }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -159,10 +160,10 @@ export async function DELETE(request: NextRequest) {
   const { session } = auth;
 
   const id = new URL(request.url).searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 });
+  if (!id) return NextResponse.json({ error: 'id gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
 
   const existing = await prisma.page.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: 'Sayfa bulunamadı' }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: 'Sayfa bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
 
   await prisma.page.delete({ where: { id } });
   await prisma.auditLog.create({
@@ -175,5 +176,5 @@ export async function DELETE(request: NextRequest) {
       ...getAuditRequestMeta(request),
     },
   });
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

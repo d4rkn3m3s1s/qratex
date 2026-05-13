@@ -259,9 +259,9 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/settings');
       const data = await res.json();
       
-      if (data.raw && Array.isArray(data.raw)) {
+      if (data.entries && Array.isArray(data.entries)) {
         const merged = { ...settings };
-        data.raw.forEach((setting: { key: string; value: unknown }) => {
+        data.entries.forEach((setting: { key: string; value: unknown }) => {
           if (setting.key in merged) {
             (merged as Record<string, unknown>)[setting.key] = setting.value;
           }

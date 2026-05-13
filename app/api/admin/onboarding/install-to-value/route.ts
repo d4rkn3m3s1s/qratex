@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getInstallToValue, getInstallToValueStats } from '@/lib/install-to-value';
 
 
@@ -19,5 +20,5 @@ export async function GET() {
     p95Minutes: stats.p95Minutes,
     sampleSize: stats.sampleSize,
     cappedOutliers: stats.cappedOutliers,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
 
 
 export const dynamic = 'force-dynamic';
 
 const updateSchema = z.object({
-    widgets: z.array(z.object({
-        id: z.string(),
-        visible: z.boolean(),
-        order: z.number()
-    }))
+    widgets: z
+        .array(
+            z.object({
+                id: z.string().min(1).max(64),
+                visible: z.boolean(),
+                order: z.number().int().min(0).max(999),
+            })
+        )
+        .max(40),
 });
 
 export const DEFAULT_WIDGETS = [
@@ -44,10 +49,12 @@ export async function GET() {
             return dw;
         }).sort((a, b) => a.order - b.order);
 
-        return NextResponse.json({ success: true, widgets: mergedWidgets });
+        return NextResponse.json({ success: true, widgets: mergedWidgets }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error fetching dashboard layout:', error);
-        return NextResponse.json({ error: 'Düzen yüklenemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Düzen yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }
 
@@ -59,7 +66,7 @@ export async function PUT(request: NextRequest) {
         const body = await request.json();
         const parsed = updateSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: 'Geçersiz veri formatı' }, { status: 400 });
+            return NextResponse.json({ error: 'Geçersiz veri formatı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const layout = await prisma.dashboardLayout.upsert({
@@ -71,9 +78,11 @@ export async function PUT(request: NextRequest) {
             }
         });
 
-        return NextResponse.json({ success: true, widgets: layout.widgets });
+        return NextResponse.json({ success: true, widgets: layout.widgets }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Error updating dashboard layout:', error);
-        return NextResponse.json({ error: 'Düzen güncellenemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json({ error: 'Düzen güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 }

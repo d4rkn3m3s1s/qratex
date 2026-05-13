@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { askAI } from '@/lib/ai-engine';
 import { z } from 'zod';
 
@@ -14,13 +15,18 @@ const chatSchema = z.object({
 
 // Rate limiter: 20 req/min for dealers
 const rateMap = new Map<string, { count: number; resetAt: number }>();
-function checkRate(userId: string): boolean {
+function checkRate(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
     const now = Date.now();
     const e = rateMap.get(userId);
-    if (!e || now > e.resetAt) { rateMap.set(userId, { count: 1, resetAt: now + 60000 }); return true; }
-    if (e.count >= 20) return false;
+    if (!e || now > e.resetAt) {
+        rateMap.set(userId, { count: 1, resetAt: now + 60000 });
+        return { ok: true };
+    }
+    if (e.count >= 20) {
+        return { ok: false, retryAfterSec: Math.max(1, Math.ceil((e.resetAt - now) / 1000)) };
+    }
     e.count++;
-    return true;
+    return { ok: true };
 }
 
 // GET — list dealer's conversations
@@ -36,10 +42,18 @@ export async function GET() {
             take: 50,
         });
 
-        return NextResponse.json({ success: true, conversations });
+        return NextResponse.json(
+            { success: true, conversations },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
     } catch (error) {
         console.error('AI chat list error:', error);
-        return NextResponse.json({ error: 'Sohbetler yüklenemedi' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json(
+            { error: 'Sohbetler yüklenemedi' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }
 
@@ -50,17 +64,44 @@ export async function POST(request: NextRequest) {
         if ('error' in auth) return auth.error;
         const userId = auth.session.user.id;
 
-        if (!checkRate(userId)) {
-            return NextResponse.json({ error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' }, { status: 429 });
+        const rate = checkRate(userId);
+        if (!rate.ok) {
+            return NextResponse.json(
+                { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
+                {
+                    status: 429,
+                    headers: {
+                        ...PRIVATE_NO_STORE_HEADERS,
+                        'Retry-After': String(rate.retryAfterSec),
+                    },
+                }
+            );
         }
 
         const body = await request.json();
         const parsed = chatSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+            return NextResponse.json(
+                { error: parsed.error.errors[0].message },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const { question, conversationId } = parsed.data;
+
+        let ownedConversation: { messages: unknown } | null = null;
+        if (conversationId) {
+            ownedConversation = await prisma.aIConversation.findUnique({
+                where: { id: conversationId, dealerId: userId },
+                select: { messages: true },
+            });
+            if (!ownedConversation) {
+                return NextResponse.json(
+                    { error: 'Sohbet bulunamadı' },
+                    { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+                );
+            }
+        }
 
         // Gather dealer context
         const [feedbacks, stats] = await Promise.all([
@@ -102,16 +143,11 @@ export async function POST(request: NextRequest) {
         });
         const topTopics = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([topic, count]) => ({ topic, count }));
 
-        // Previous messages
         let previousMessages: { role: 'user' | 'assistant'; content: string }[] = [];
-        if (conversationId) {
-            const conv = await prisma.aIConversation.findUnique({
-                where: { id: conversationId, dealerId: userId },
-                select: { messages: true },
-            });
-            if (conv?.messages) {
-                previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-12);
-            }
+        if (ownedConversation?.messages) {
+            previousMessages = (
+                ownedConversation.messages as { role: 'user' | 'assistant'; content: string }[]
+            ).slice(-12);
         }
 
         const recentFeedbacks = feedbacks.slice(0, 15).map((f) => ({
@@ -130,21 +166,16 @@ export async function POST(request: NextRequest) {
             previousMessages,
         });
 
-        // Save conversation
         let savedId = conversationId;
         const ts = new Date().toISOString();
-        if (conversationId) {
-            const existing = await prisma.aIConversation.findUnique({
-                where: { id: conversationId, dealerId: userId },
-                select: { messages: true },
-            });
-            const msgs = (existing?.messages as object[]) || [];
+        if (conversationId && ownedConversation) {
+            const msgs = (ownedConversation.messages as object[]) || [];
             msgs.push(
                 { role: 'user', content: question, timestamp: ts },
                 { role: 'assistant', content: answer || '', timestamp: ts }
             );
-            await prisma.aIConversation.update({
-                where: { id: conversationId },
+            await prisma.aIConversation.updateMany({
+                where: { id: conversationId, dealerId: userId },
                 data: { messages: msgs, updatedAt: new Date() },
             });
         } else {
@@ -161,9 +192,17 @@ export async function POST(request: NextRequest) {
             savedId = conv.id;
         }
 
-        return NextResponse.json({ success: true, answer, conversationId: savedId });
+        return NextResponse.json(
+            { success: true, answer, conversationId: savedId },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
     } catch (error) {
         console.error('Dealer AI chat error:', error);
-        return NextResponse.json({ error: 'AI sohbeti başarısız' }, { status: 500 });
+        const db = responseIfDatabaseUnavailable(error);
+        if (db) return db;
+        return NextResponse.json(
+            { error: 'AI sohbeti başarısız' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }

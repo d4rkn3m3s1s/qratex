@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +32,13 @@ export async function GET() {
 
   const dealerId = session.user.role === 'ADMIN' ? undefined : session.user.id;
   if (session.user.role === 'ADMIN') {
-    return NextResponse.json({
-      message: 'ROI paneli için dealerId query ile belirtin: ?dealerId=xxx',
-      metrics: null,
-    });
+    return NextResponse.json(
+      {
+        message: 'ROI paneli için dealerId query ile belirtin: ?dealerId=xxx',
+        metrics: null,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const now = new Date();
@@ -131,32 +135,35 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json({
-    metrics: {
-      period: 'this_month',
-      feedbackTotal,
-      feedbackReplied,
-      replyRate: Math.round(replyRate * 10) / 10,
-      actionItemsTotal,
-      actionItemsDone,
-      actionCompletionRate: Math.round(actionCompletionRate * 10) / 10,
-      avgRating,
-      feedbackCount: avgRatingAgg._count,
-      comparison: {
-        feedbackTotalPrev: prevFeedbackTotal,
-        feedbackRepliedPrev: prevFeedbackReplied,
-        replyRatePrev: Math.round(prevReplyRate * 10) / 10,
-        actionItemsTotalPrev: prevActionTotal,
-        actionItemsDonePrev: prevActionDone,
-        actionCompletionRatePrev: Math.round(prevActionRate * 10) / 10,
-        avgRatingPrev: prevAvgRating,
-        replyRateChange: replyRateChange != null ? Math.round(replyRateChange * 10) / 10 : null,
-        actionRateChange: actionRateChange != null ? Math.round(actionRateChange * 10) / 10 : null,
-        ratingChange,
-        feedbackChange,
+  return NextResponse.json(
+    {
+      metrics: {
+        period: 'this_month',
+        feedbackTotal,
+        feedbackReplied,
+        replyRate: Math.round(replyRate * 10) / 10,
+        actionItemsTotal,
+        actionItemsDone,
+        actionCompletionRate: Math.round(actionCompletionRate * 10) / 10,
+        avgRating,
+        feedbackCount: avgRatingAgg._count,
+        comparison: {
+          feedbackTotalPrev: prevFeedbackTotal,
+          feedbackRepliedPrev: prevFeedbackReplied,
+          replyRatePrev: Math.round(prevReplyRate * 10) / 10,
+          actionItemsTotalPrev: prevActionTotal,
+          actionItemsDonePrev: prevActionDone,
+          actionCompletionRatePrev: Math.round(prevActionRate * 10) / 10,
+          avgRatingPrev: prevAvgRating,
+          replyRateChange: replyRateChange != null ? Math.round(replyRateChange * 10) / 10 : null,
+          actionRateChange: actionRateChange != null ? Math.round(actionRateChange * 10) / 10 : null,
+          ratingChange,
+          feedbackChange,
+        },
       },
+      weeklyTrend: weeklyData,
+      dailyTrend: dailyData,
     },
-    weeklyTrend: weeklyData,
-    dailyTrend: dailyData,
-  });
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

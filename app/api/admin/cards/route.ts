@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { adminCardsQuerySchema } from '@/lib/validations-admin';
 
 
@@ -99,12 +100,10 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / pageSize),
       },
       stats: statusCounts,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching cards:', error);
     return NextResponse.json(
-      { error: 'Kartlar getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'Kartlar getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

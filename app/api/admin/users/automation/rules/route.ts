@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
 
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
     const rules = await prisma.userAutomationRule.findMany({
       where: isActive === null ? {} : { isActive: isActive === 'true' },
       orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
         approvedBy: { select: { id: true, name: true, email: true } },
@@ -50,9 +52,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, items: rules });
+    return NextResponse.json({ success: true, items: rules }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
-    return NextResponse.json({ error: 'Kurallar getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Kurallar getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -63,12 +65,23 @@ export async function POST(request: NextRequest) {
     if ('error' in auth) return auth.error;
     const { session } = auth;
     const rl = checkAdminRateLimit(session.user.id);
-    if (!rl.ok) return NextResponse.json({ error: 'Çok fazla istek' }, { status: 429 });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Çok fazla istek' },
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}),
+          },
+        }
+      );
+    }
 
     const body = await request.json();
     const parsed = createRuleSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const data = parsed.data;
@@ -99,8 +112,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, item: rule }, { status: 201 });
+    return NextResponse.json({ success: true, item: rule }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
-    return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 });
+    return NextResponse.json({ error: 'Kural oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { askAI } from '@/lib/ai-engine';
 import { z } from 'zod';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -15,37 +16,69 @@ const chatSchema = z.object({
 
 // Rate limiting
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-function checkRateLimit(userId: string): boolean {
+function checkRateLimit(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
   const now = Date.now();
   const entry = rateLimitMap.get(userId);
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 });
-    return true;
+    return { ok: true };
   }
-  if (entry.count >= 10) return false; // 10 per minute for customers
+  if (entry.count >= 10) {
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
+  }
   entry.count++;
-  return true;
+  return { ok: true };
 }
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
-    if (!checkRateLimit(session.user.id)) {
-      return NextResponse.json({ error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' }, { status: 429 });
+    const rlChat = checkRateLimit(session.user.id);
+    if (!rlChat.ok) {
+      return NextResponse.json(
+        { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            'Retry-After': String(rlChat.retryAfterSec),
+          },
+        }
+      );
     }
 
     const body = await request.json();
     const validated = chatSchema.safeParse(body);
     if (!validated.success) {
-      return NextResponse.json({ error: validated.error.errors[0].message }, { status: 400 });
+      return NextResponse.json(
+        { error: validated.error.errors[0].message },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     const { question, conversationId } = validated.data;
     const userId = session.user.id;
+
+    let ownedConversation: { messages: unknown } | null = null;
+    if (conversationId) {
+      ownedConversation = await prisma.aIConversation.findUnique({
+        where: { id: conversationId, dealerId: userId },
+        select: { messages: true },
+      });
+      if (!ownedConversation) {
+        return NextResponse.json(
+          { error: 'Sohbet bulunamadı' },
+          { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+    }
 
     // Müşterinin kendi feedback verilerini topla
     const feedbacks = await prisma.feedback.findMany({
@@ -107,20 +140,11 @@ export async function POST(request: NextRequest) {
       .slice(0, 8)
       .map(([topic, count]) => ({ topic, count }));
 
-    // Önceki konuşma mesajları
     let previousMessages: { role: 'user' | 'assistant'; content: string }[] = [];
-    if (conversationId) {
-      try {
-        const conv = await prisma.aIConversation.findUnique({
-          where: { id: conversationId },
-          select: { messages: true },
-        });
-        if (conv?.messages) {
-          previousMessages = (conv.messages as { role: 'user' | 'assistant'; content: string }[]).slice(-12);
-        }
-      } catch {
-        // ignore
-      }
+    if (ownedConversation?.messages) {
+      previousMessages = (
+        ownedConversation.messages as { role: 'user' | 'assistant'; content: string }[]
+      ).slice(-12);
     }
 
     // En son feedbacklar (zenginleştirilmiş bağlam)
@@ -144,18 +168,15 @@ export async function POST(request: NextRequest) {
     // Konuşmayı kaydet
     let savedConversationId = conversationId;
     try {
-      if (conversationId) {
-        const existing = await prisma.aIConversation.findUnique({
-          where: { id: conversationId },
-          select: { messages: true },
-        });
-        const msgs = (existing?.messages as { role: string; content: string; timestamp: string }[]) || [];
+      if (conversationId && ownedConversation) {
+        const msgs =
+          (ownedConversation.messages as { role: string; content: string; timestamp: string }[]) || [];
         msgs.push(
           { role: 'user', content: question, timestamp: new Date().toISOString() },
           { role: 'assistant', content: answer || '', timestamp: new Date().toISOString() }
         );
-        await prisma.aIConversation.update({
-          where: { id: conversationId },
+        await prisma.aIConversation.updateMany({
+          where: { id: conversationId, dealerId: userId },
           data: { messages: msgs, updatedAt: new Date() },
         });
       } else {
@@ -175,13 +196,21 @@ export async function POST(request: NextRequest) {
       console.error('Failed to save customer conversation:', err);
     }
 
-    return NextResponse.json({
-      success: true,
-      answer,
-      conversationId: savedConversationId,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        answer,
+        conversationId: savedConversationId,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Customer AI chat error:', error);
-    return NextResponse.json({ error: 'AI sohbeti sırasında bir hata oluştu' }, { status: 500 });
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json(
+      { error: 'AI sohbeti sırasında bir hata oluştu' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

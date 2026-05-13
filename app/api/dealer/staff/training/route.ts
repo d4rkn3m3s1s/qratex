@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -21,9 +22,10 @@ export async function GET() {
   const modules = await prisma.trainingModule.findMany({
     where: { OR: [{ dealerId }, { dealerId: null }], isActive: true },
     orderBy: { orderIndex: 'asc' },
+    take: 200,
   });
 
-  return NextResponse.json({ success: true, modules });
+  return NextResponse.json({ success: true, modules }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const maxOrder = await prisma.trainingModule
@@ -54,5 +56,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, module: trainingModule });
+  return NextResponse.json({ success: true, module: trainingModule }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

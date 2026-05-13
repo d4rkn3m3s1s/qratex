@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 // GET all available cosmetic items and the user's inventory
 
@@ -12,15 +13,26 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
 
         if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const userId = session.user.id;
 
         const [items, userInventory, user] = await Promise.all([
-            prisma.cosmeticItem.findMany(),
-            prisma.userCosmetic.findMany({ where: { userId } }),
-            prisma.user.findUnique({ where: { id: userId }, select: { points: true } })
+            prisma.cosmeticItem.findMany({
+                where: { isActive: true },
+                orderBy: { createdAt: 'desc' },
+                take: 200,
+            }),
+            prisma.userCosmetic.findMany({
+                where: { userId },
+                orderBy: { acquiredAt: 'desc' },
+                take: 300,
+            }),
+            prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
         ]);
 
         // Format items with ownership status
@@ -33,14 +45,20 @@ export async function GET(req: Request) {
             };
         });
 
-        return NextResponse.json({
-            items: shopItems,
-            userPoints: user?.points || 0
-        });
+        return NextResponse.json(
+            {
+                items: shopItems,
+                userPoints: user?.points || 0,
+            },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
 
     } catch (error) {
         console.error('[SHOP_GET_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }
 
@@ -49,13 +67,19 @@ export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const { itemId } = await req.json();
 
         if (!itemId) {
-            return NextResponse.json({ error: 'Item ID required' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'Item ID required' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const userId = session.user.id;
@@ -66,9 +90,24 @@ export async function POST(req: Request) {
             prisma.userCosmetic.findFirst({ where: { userId, cosmeticId: itemId } })
         ]);
 
-        if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 });
-        if (alreadyOwned) return NextResponse.json({ error: 'Already own this item' }, { status: 400 });
-        if ((user?.points || 0) < item.price) return NextResponse.json({ error: 'Not enough points' }, { status: 400 });
+        if (!item) {
+            return NextResponse.json(
+                { error: 'Item not found' },
+                { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
+        if (alreadyOwned) {
+            return NextResponse.json(
+                { error: 'Already own this item' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
+        if ((user?.points || 0) < item.price) {
+            return NextResponse.json(
+                { error: 'Not enough points' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
 
         // Deduct points and grant item
         await prisma.$transaction([
@@ -85,10 +124,16 @@ export async function POST(req: Request) {
             })
         ]);
 
-        return NextResponse.json({ success: true, message: `Successfully purchased ${item.name}` });
+        return NextResponse.json(
+            { success: true, message: `Successfully purchased ${item.name}` },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
 
     } catch (error) {
         console.error('[SHOP_BUY_ERROR]', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+        );
     }
 }

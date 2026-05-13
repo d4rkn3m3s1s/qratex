@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -291,12 +292,10 @@ export async function GET(request: NextRequest) {
         ...cardStats,
       },
       cardStats,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching admin dashboard:', error);
     return NextResponse.json(
-      { error: 'Dashboard verileri getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'Dashboard verileri getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

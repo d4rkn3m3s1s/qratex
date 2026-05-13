@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { Prisma } from '@prisma/client';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
@@ -100,6 +101,7 @@ export async function GET(request: NextRequest) {
         { rarity: 'desc' }, // legendary first
         { createdAt: 'desc' },
       ],
+      take: 500,
     });
 
     // Get user's progress data for calculating badge progress
@@ -119,6 +121,7 @@ export async function GET(request: NextRequest) {
       // Get user's earned badges
       const userBadgesData = await prisma.userBadge.findMany({
         where: { userId },
+        take: 500,
       });
       userBadgeMap = new Map(userBadgesData.map((ub) => [ub.badgeId, ub.earnedAt]));
 
@@ -232,13 +235,13 @@ export async function GET(request: NextRequest) {
       data: transformedBadges,
       userProgress,
       userPoints,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching badges:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { success: false, error: 'Rozetler getirilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozetler getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -247,7 +250,7 @@ export async function POST(request: NextRequest) {
     const auditMeta = getAuditRequestMeta(request);
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await request.json();
@@ -279,13 +282,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, data: badge });
+    return NextResponse.json({ success: true, data: badge }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating badge:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
-      { success: false, error: 'Rozet oluşturulamadı' },
-      { status: 500 }
-    );
+      { success: false, error: 'Rozet oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

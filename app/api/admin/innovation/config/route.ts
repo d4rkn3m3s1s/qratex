@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import {
   getInnovationPlatformConfig,
@@ -28,7 +29,7 @@ export async function GET() {
       auditLogPath: config.compliance.auditLogUrl ?? '/admin/audit',
       recentAuditEntries: auditSample,
     },
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -37,5 +38,5 @@ export async function PUT(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Partial<InnovationPlatformConfig>;
   const next = await saveInnovationPlatformConfig(body);
-  return NextResponse.json({ success: true, config: next });
+  return NextResponse.json({ success: true, config: next }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

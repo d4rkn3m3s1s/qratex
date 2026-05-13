@@ -12,6 +12,12 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { runIncidentDetection, ensureDemoIncidentIfEmpty } from '@/lib/incident-detection';
 import { z } from 'zod';
+import {
+  PRIVATE_NO_STORE_HEADERS,
+  clampPageParam,
+  clampPageSizeParam,
+  paginationSkip,
+} from '@/lib/api-http';
 
 const createIncidentSchema = z.object({
   type: z.string().min(1),
@@ -30,9 +36,9 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status');
-  const page = parseInt(searchParams.get('page') || '1');
-  const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '20') || 20, 100);
-  const skip = (page - 1) * pageSize;
+  const page = clampPageParam(searchParams.get('page'));
+  const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
+  const skip = paginationSkip(page, pageSize);
 
   const dealerId = session.user.role === 'DEALER' ? session.user.id : null;
   const where =
@@ -64,13 +70,16 @@ export async function GET(request: NextRequest) {
     prisma.incident.count({ where }),
   ]);
 
-  return NextResponse.json({
-    items,
-    total,
-    page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  });
+  return NextResponse.json(
+    {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -79,13 +88,19 @@ export async function POST(request: NextRequest) {
   const { session } = auth;
 
   if (session.user.role !== 'DEALER' && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const body = await request.json();
   const parsed = createIncidentSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.errors[0].message },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   const dealerId = (body.dealerId && session.user.role === 'ADMIN') ? body.dealerId : session.user.id;
@@ -101,5 +116,5 @@ export async function POST(request: NextRequest) {
   };
 
   const incident = await prisma.incident.create({ data });
-  return NextResponse.json(incident, { status: 201 });
+  return NextResponse.json(incident, { status: 201, headers: PRIVATE_NO_STORE_HEADERS });
 }

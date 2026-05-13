@@ -228,13 +228,13 @@ export default function CustomerExperiencesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button onClick={() => void createShare()} disabled={shareBusy} className="gap-2">
+              <Button onClick={() => void createShare()} disabled={shareBusy} className="gap-2 w-full min-h-10 touch-manipulation sm:w-auto">
                 Deneyim kartı oluştur (7 gün)
               </Button>
               {shareUrl && (
-                <div className="flex flex-wrap gap-2 items-center">
-                  <code className="text-xs bg-muted px-2 py-1 rounded max-w-full truncate flex-1">{shareUrl}</code>
-                  <Button type="button" variant="outline" size="sm" onClick={copyShare} className="gap-1">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">
+                  <code className="text-xs bg-muted px-2 py-2 rounded max-w-full truncate flex-1 min-h-10 flex items-center">{shareUrl}</code>
+                  <Button type="button" variant="outline" size="sm" onClick={copyShare} className="gap-1 min-h-10 touch-manipulation w-full sm:w-auto shrink-0">
                     <Copy className="h-4 w-4" />
                     Kopyala
                   </Button>

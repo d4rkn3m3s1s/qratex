@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 
@@ -43,13 +44,11 @@ export async function GET() {
       orderBy: { key: 'asc' },
     });
 
-    return NextResponse.json({ features });
+    return NextResponse.json({ features }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching feature flags:', error);
     return NextResponse.json(
-      { error: 'Özellik bayrakları getirilemedi' },
-      { status: 500 }
-    );
+      { error: 'Özellik bayrakları getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -68,9 +67,7 @@ export async function POST(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Check if key already exists
@@ -80,9 +77,7 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       return NextResponse.json(
-        { error: 'Bu key zaten kullanılıyor' },
-        { status: 400 }
-      );
+        { error: 'Bu key zaten kullanılıyor' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const feature = await prisma.featureFlag.create({
@@ -109,13 +104,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, feature });
+    return NextResponse.json({ success: true, feature }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating feature flag:', error);
     return NextResponse.json(
-      { error: 'Özellik bayrağı oluşturulamadı' },
-      { status: 500 }
-    );
+      { error: 'Özellik bayrağı oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -134,9 +127,7 @@ export async function PUT(request: NextRequest) {
 
     if (!key) {
       return NextResponse.json(
-        { error: 'Key parametresi gerekli' },
-        { status: 400 }
-      );
+        { error: 'Key parametresi gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const body = await request.json();
@@ -144,9 +135,7 @@ export async function PUT(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.featureFlag.findUnique({
@@ -155,9 +144,7 @@ export async function PUT(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: 'Özellik bayrağı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Özellik bayrağı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -186,13 +173,11 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, feature });
+    return NextResponse.json({ success: true, feature }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error updating feature flag:', error);
     return NextResponse.json(
-      { error: 'Özellik bayrağı güncellenemedi' },
-      { status: 500 }
-    );
+      { error: 'Özellik bayrağı güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -210,9 +195,7 @@ export async function PATCH(request: NextRequest) {
     const validated = patchFeatureFlagSchema.safeParse(body);
     if (!validated.success) {
       return NextResponse.json(
-        { error: validated.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validated.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.featureFlag.findUnique({
@@ -220,9 +203,7 @@ export async function PATCH(request: NextRequest) {
     });
     if (!existing) {
       return NextResponse.json(
-        { error: 'Özellik bayrağı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Özellik bayrağı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const feature = await prisma.featureFlag.update({
@@ -242,13 +223,11 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, feature });
+    return NextResponse.json({ success: true, feature }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error PATCH feature flag:', error);
     return NextResponse.json(
-      { error: 'Özellik bayrağı güncellenemedi' },
-      { status: 500 }
-    );
+      { error: 'Özellik bayrağı güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -267,9 +246,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!key) {
       return NextResponse.json(
-        { error: 'Key parametresi gerekli' },
-        { status: 400 }
-      );
+        { error: 'Key parametresi gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const existing = await prisma.featureFlag.findUnique({
@@ -278,9 +255,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!existing) {
       return NextResponse.json(
-        { error: 'Özellik bayrağı bulunamadı' },
-        { status: 404 }
-      );
+        { error: 'Özellik bayrağı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     await prisma.featureFlag.delete({
@@ -299,13 +274,11 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error deleting feature flag:', error);
     return NextResponse.json(
-      { error: 'Özellik bayrağı silinemedi' },
-      { status: 500 }
-    );
+      { error: 'Özellik bayrağı silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

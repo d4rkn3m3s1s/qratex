@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import QRCode from 'qrcode';
 import {
   CreditCard,
@@ -15,33 +15,34 @@ import {
   Loader2,
   QrCode,
   Sparkles,
-  CheckCircle2,
   Copy,
   Share2,
   Eye,
   EyeOff,
-  ExternalLink,
   Smartphone,
   Download,
-  Crown,
   Shield,
   Zap,
-  Wifi,
-  Fingerprint,
   Award,
-  Info,
+  ChevronRight,
+  Wifi,
+  Crown,
 } from 'lucide-react';
-import { BRAND_CARD_QR_DARK_HEX, BRAND_PRIMARY_HEX, HEX_WHITE } from '@/lib/brand-colors';
-import { CHART_HEX } from '@/lib/chart-palette';
+import { BRAND_CARD_QR_DARK_HEX, HEX_WHITE } from '@/lib/brand-colors';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { toast } from '@/lib/admin-toast';
-import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor } from '@/lib/utils';
+import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor, cn } from '@/lib/utils';
 
-// QR Code domain - production URL
 const QR_DOMAIN = 'https://demoqratex.vercel.app';
+
+/** İnce gürültü — kart yüzeyine derinlik */
+const NOISE_SVG =
+  "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E\")";
 
 interface UserCard {
   id: string;
@@ -65,8 +66,255 @@ interface UserCard {
   }[];
 }
 
+function StatTile({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: typeof CreditCard;
+  tone: 'primary' | 'cyan' | 'amber';
+}) {
+  const toneCls =
+    tone === 'primary'
+      ? 'border-primary/20 bg-primary/[0.06]'
+      : tone === 'cyan'
+        ? 'border-cyan-500/20 bg-cyan-500/[0.06]'
+        : 'border-amber-500/25 bg-amber-500/[0.07]';
+  return (
+    <div className={cn('rounded-2xl border px-3 py-3 text-center shadow-sm sm:px-4 sm:py-3.5', toneCls)}>
+      <Icon className="mx-auto mb-1 h-4 w-4 text-muted-foreground sm:mb-1.5 sm:h-5 sm:w-5" aria-hidden />
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">{label}</p>
+      <p className="mt-0.5 font-mono text-xl font-bold tabular-nums sm:text-2xl">{value}</p>
+    </div>
+  );
+}
+
+function EmvChip() {
+  return (
+    <div
+      className="relative h-10 w-[2.65rem] shrink-0 overflow-hidden rounded-md shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_8px_rgba(0,0,0,0.35)] ring-1 ring-amber-950/40 sm:h-11 sm:w-12"
+      aria-hidden
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-100 via-amber-500 to-amber-900" />
+      <div className="absolute inset-[3px] rounded-sm bg-gradient-to-b from-amber-950/25 to-transparent" />
+      <div className="absolute inset-x-1 top-1/2 h-px -translate-y-1/2 bg-amber-950/20" />
+      <div className="absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-amber-950/15" />
+    </div>
+  );
+}
+
+type LegendCardProps = {
+  card: UserCard;
+  qrSrc?: string;
+  holderName: string;
+  showFullToken: boolean;
+  onToggleToken: () => void;
+  onOpenQr: () => void;
+  reduceMotion: boolean;
+};
+
+function LegendDigitalCard({
+  card,
+  qrSrc,
+  holderName,
+  showFullToken,
+  onToggleToken,
+  onOpenQr,
+  reduceMotion,
+}: LegendCardProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [glare, setGlare] = useState({ x: 50, y: 40 });
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+
+  const onMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const el = wrapRef.current;
+      if (!el || reduceMotion) return;
+      const r = el.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * 100;
+      const y = ((e.clientY - r.top) / r.height) * 100;
+      setGlare({ x, y });
+      const ry = ((e.clientX - r.left) / r.width - 0.5) * -6;
+      const rx = ((e.clientY - r.top) / r.height - 0.5) * 6;
+      setTilt({ rx, ry });
+    },
+    [reduceMotion]
+  );
+
+  const onLeave = useCallback(() => {
+    setGlare({ x: 50, y: 40 });
+    setTilt({ rx: 0, ry: 0 });
+  }, []);
+
+  const last8 = card.token.slice(-8).toUpperCase();
+  const tokenDisplay = showFullToken ? `${card.token.slice(0, 12)}…` : `•••• •••• ${last8}`;
+
+  return (
+    <div className="mx-auto w-full max-w-lg perspective-[1400px] sm:max-w-xl">
+      <motion.div
+        ref={wrapRef}
+        initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+        onMouseMove={onMove}
+        onMouseLeave={onLeave}
+        style={{
+          transform: reduceMotion ? undefined : `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+          transformStyle: 'preserve-3d',
+        }}
+        className="motion-reduce:transform-none"
+      >
+        {/* Dış: metalik gradient çerçeve */}
+        <div className="rounded-[1.45rem] bg-gradient-to-br from-white/35 via-primary/50 to-cyan-400/35 p-[1.5px] shadow-[0_32px_64px_-28px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.06)_inset] dark:shadow-[0_36px_80px_-32px_rgba(0,0,0,0.85)]">
+          <div
+            className="relative aspect-[1.586/1] w-full overflow-hidden rounded-[1.35rem] bg-[#07070f]"
+            style={{ backgroundImage: NOISE_SVG }}
+          >
+            {/* Derinlik katmanları */}
+            <div className="absolute inset-0 bg-gradient-to-br from-violet-950/80 via-[#0a0a14] to-cyan-950/50" />
+            <div
+              className="pointer-events-none absolute inset-0 opacity-90 mix-blend-screen"
+              style={{
+                background:
+                  'radial-gradient(ellipse 90% 70% at 10% -10%, hsl(var(--primary) / 0.45), transparent 52%), radial-gradient(ellipse 70% 60% at 100% 100%, rgba(34,211,238,0.22), transparent 48%), radial-gradient(ellipse 50% 40% at 80% 10%, rgba(167,139,250,0.18), transparent 45%)',
+              }}
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-white/[0.07]" />
+
+            {/* Yavaş ışık bandı */}
+            {!reduceMotion && (
+              <motion.div
+                className="pointer-events-none absolute -inset-full z-[1] rotate-[18deg] bg-gradient-to-r from-transparent via-white/12 to-transparent"
+                animate={{ x: ['-30%', '130%'] }}
+                transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
+              />
+            )}
+
+            {/* Fare parlaması */}
+            <div
+              className="pointer-events-none absolute inset-0 z-[2] opacity-70 mix-blend-overlay transition-opacity duration-300"
+              style={{
+                background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.28), transparent 42%)`,
+              }}
+            />
+
+            {/* Filigran */}
+            <Crown className="pointer-events-none absolute -bottom-6 -right-2 z-[1] h-36 w-36 text-white/[0.06] sm:h-44 sm:w-44" aria-hidden />
+
+            <div className="relative z-[3] flex h-full flex-col p-4 sm:p-6">
+              {/* Üst şerit */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                  <EmvChip />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/45 sm:text-[11px]">QRateX</p>
+                    <p className="truncate bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-lg font-semibold tracking-tight text-transparent sm:text-xl">
+                      Signature Member
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+                  <Wifi className="h-5 w-5 text-white/35 sm:h-6 sm:w-6" strokeWidth={1.5} aria-hidden />
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'border bg-black/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm sm:text-xs',
+                      getCardStatusColor(card.status)
+                    )}
+                  >
+                    {getCardStatusLabel(card.status)}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Orta: istatistik + QR */}
+              <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 sm:mt-5 sm:flex-row sm:items-stretch sm:gap-5">
+                <div className="flex flex-1 flex-col justify-center gap-3 sm:gap-4">
+                  <div>
+                    <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/40">Tüketim</p>
+                    <p className="mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight text-white drop-shadow-sm sm:text-4xl">
+                      {card._count.consumptions}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 backdrop-blur-md sm:px-4 sm:py-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-white/40">Aktivasyon</p>
+                    <p className="mt-0.5 text-sm font-medium text-white/95 sm:text-base">
+                      {card.activatedAt ? formatDate(card.activatedAt) : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 justify-center sm:items-center sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={onOpenQr}
+                    className="group relative touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                    aria-label="Büyük QR kodu göster"
+                  >
+                    <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-white/40 via-primary/30 to-cyan-400/40 opacity-70 blur-md transition-opacity group-hover:opacity-100" />
+                    <div className="relative rounded-2xl bg-gradient-to-b from-white to-zinc-100 p-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] ring-2 ring-white/80 sm:p-2.5">
+                      <div className="absolute left-2 top-2 h-3 w-3 rounded-sm border border-zinc-300/80 sm:left-2.5 sm:top-2.5" />
+                      <div className="absolute bottom-2 right-2 h-3 w-3 rounded-sm border border-zinc-300/80 sm:bottom-2.5 sm:right-2.5" />
+                      {qrSrc ? (
+                        <img
+                          src={qrSrc}
+                          alt="QR önizleme"
+                          className="relative z-[1] h-[6.5rem] w-[6.5rem] rounded-lg object-cover sm:h-[7.25rem] sm:w-[7.25rem]"
+                        />
+                      ) : (
+                        <QrCode className="relative z-[1] h-[6.5rem] w-[6.5rem] text-zinc-900 sm:h-[7.25rem] sm:w-[7.25rem]" />
+                      )}
+                    </div>
+                    <p className="mt-2 text-center text-[10px] font-medium uppercase tracking-wider text-white/40 sm:text-xs">
+                      Dokun — büyüt
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Alt: PAN satırı */}
+              <div className="mt-auto border-t border-white/10 pt-3 sm:pt-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/38">Kart sahibi</p>
+                    <p className="mt-0.5 truncate text-base font-semibold tracking-tight text-white sm:text-lg">{holderName}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <code className="font-mono text-sm tracking-[0.12em] text-white/85 sm:text-base">{tokenDisplay}</code>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-10 w-10 shrink-0 touch-manipulation rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleToken();
+                        }}
+                        aria-label={showFullToken ? 'Gizle' : 'Göster'}
+                      >
+                        {showFullToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="hidden items-center gap-1.5 text-white/25 sm:flex" aria-hidden>
+                    <Sparkles className="h-4 w-4" />
+                    <span className="text-[10px] uppercase tracking-widest">Digital</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function CustomerMyCardPage() {
   const { data: session } = useSession();
+  const reduceMotion = useReducedMotion() === true;
   const [cards, setCards] = useState<UserCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -78,13 +326,8 @@ export default function CustomerMyCardPage() {
   const [showToken, setShowToken] = useState<{ [key: string]: boolean }>({});
   const [selectedCard, setSelectedCard] = useState<UserCard | null>(null);
   const [showQrDialog, setShowQrDialog] = useState(false);
-  const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 });
-  const [particlesMounted, setParticlesMounted] = useState(false);
-  const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [walletLoading, setWalletLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    setParticlesMounted(true);
-  }, []);
   useEffect(() => {
     fetchCards();
   }, []);
@@ -98,8 +341,7 @@ export default function CustomerMyCardPage() {
       if (data.success) {
         setCards(data.cards);
         setStats(data.stats);
-        
-        // Generate QR codes for each card - REAL URLs
+
         const qrPromises = data.cards.map(async (card: UserCard) => {
           const url = `${QR_DOMAIN}/c/${card.token}`;
           const qrDataUrl = await QRCode.toDataURL(url, {
@@ -113,7 +355,7 @@ export default function CustomerMyCardPage() {
           });
           return { token: card.token, qrDataUrl };
         });
-        
+
         const qrResults = await Promise.all(qrPromises);
         const qrMap: { [key: string]: string } = {};
         qrResults.forEach((result) => {
@@ -126,19 +368,6 @@ export default function CustomerMyCardPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, cardId: string) => {
-    const cardRef = cardRefs.current[cardId];
-    if (!cardRef) return;
-    const rect = cardRef.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setMousePosition({ x, y });
-  };
-
-  const handleMouseLeave = () => {
-    setMousePosition({ x: 0.5, y: 0.5 });
   };
 
   const copyToken = (token: string) => {
@@ -161,7 +390,7 @@ export default function CustomerMyCardPage() {
           text: 'QRateX dijital kartımı inceleyin!',
           url,
         });
-      } catch (err) {
+      } catch {
         copyUrl(token);
       }
     } else {
@@ -170,26 +399,23 @@ export default function CustomerMyCardPage() {
   };
 
   const toggleShowToken = (cardId: string) => {
-    setShowToken(prev => ({
+    setShowToken((prev) => ({
       ...prev,
       [cardId]: !prev[cardId],
     }));
   };
 
-  // Wallet functions
-  const [walletLoading, setWalletLoading] = useState<string | null>(null);
-
   const addToAppleWallet = async (cardId: string) => {
     setWalletLoading('apple');
     try {
       const response = await fetch(`/api/wallet/apple?cardId=${cardId}`);
-      
+
       if (!response.ok) {
         const data = await response.json();
         toast.error(data.error || 'Kart oluşturulamadı');
         return;
       }
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -199,9 +425,9 @@ export default function CustomerMyCardPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
-      toast.success('Kart indirildi! Apple Wallet\'a ekleyebilirsiniz.');
-    } catch (error) {
+
+      toast.success("Kart indirildi! Apple Wallet'a ekleyebilirsiniz.");
+    } catch {
       toast.error('Kart indirilemedi');
     } finally {
       setWalletLoading(null);
@@ -213,652 +439,298 @@ export default function CustomerMyCardPage() {
     try {
       const response = await fetch(`/api/wallet/google?cardId=${cardId}`);
       const data = await response.json();
-      
+
       if (!response.ok) {
         toast.error(data.error || 'Kart oluşturulamadı');
         return;
       }
-      
+
       if (data.saveUrl) {
         window.open(data.saveUrl, '_blank');
         toast.success('Google Wallet sayfası açıldı');
       } else if (data.fallbackUrl) {
         toast.info('Google Wallet henüz yapılandırılmamış');
       }
-    } catch (error) {
+    } catch {
       toast.error('Kart eklenemedi');
     } finally {
       setWalletLoading(null);
     }
   };
 
+  const openQr = (card: UserCard) => {
+    setSelectedCard(card);
+    setShowQrDialog(true);
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[320px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="space-y-6 pb-8">
+        <div className="h-10 w-48 animate-pulse rounded-lg bg-muted md:h-12 md:w-64" />
+        <div className="h-36 animate-pulse rounded-2xl bg-muted sm:h-40" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted sm:h-28" />
+          ))}
+        </div>
+        <div className="mx-auto max-w-lg p-[2px]">
+          <div className="aspect-[1.586/1] animate-pulse rounded-[1.35rem] bg-muted" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 pb-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-slate-900 via-primary/35 to-slate-900 p-4 shadow-lg ring-1 ring-black/20 sm:rounded-2xl sm:p-6 md:p-8 dark:ring-white/10"
-      >
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -right-1/2 -top-1/2 h-full w-full rounded-full bg-primary/20 blur-3xl" />
-          <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-cyan-500/20 rounded-full blur-3xl" />
-        </div>
-        
-        {/* Animated particles (client-only to avoid hydration mismatch) */}
-        {particlesMounted && (
-          <div className="absolute inset-0 overflow-hidden">
-            {[...Array(20)].map((_, i) => (
-              <motion.div
-                key={i}
-                className="absolute w-1 h-1 bg-white/30 rounded-full"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-                animate={{
-                  y: [-20, 20],
-                  opacity: [0, 1, 0],
-                }}
-                transition={{
-                  duration: 3 + Math.random() * 2,
-                  repeat: Infinity,
-                  delay: Math.random() * 2,
-                }}
-              />
-            ))}
-          </div>
-        )}
-        
-        <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3 text-balance">
-            <Crown className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 text-amber-400" />
-            Dijital Kartlarım
-          </h1>
-          <p className="text-white/70 mt-1 text-sm sm:text-base max-w-2xl text-pretty leading-relaxed">Efsanevi QRateX kartınız ve ayrıcalıklarınız</p>
-        </div>
-      </motion.div>
+    <div className="space-y-5 pb-8 md:space-y-6">
+      <DashboardPageHeading
+        title="Dijital Kartlarım"
+        description="Kartını işletmede göster, tüketim ve puanların tek hesapta toplansın."
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {[
-          { label: 'Aktif Kart', value: stats.totalCards, icon: CreditCard, color: 'from-primary to-primary/80' },
-          { label: 'Toplam Tüketim', value: stats.totalConsumptions, icon: Zap, color: 'from-cyan-500 to-blue-600' },
-          { label: 'Yorum Bekliyor', value: stats.reviewPending, icon: Star, color: 'from-amber-500 to-orange-600' },
-        ].map((stat, index) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden group hover:scale-105 transition-transform">
-              <CardContent className="p-2 sm:p-4 relative">
-                <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
-                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 relative z-10">
-                  <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br ${stat.color}`}>
-                    <stat.icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-                  </div>
-                  <div className="text-center sm:text-left">
-                    <p className="text-lg sm:text-2xl font-bold">{stat.value}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">{stat.label}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+      <div className="rounded-2xl border border-border/60 bg-card/40 p-4 shadow-sm backdrop-blur-sm sm:hidden dark:bg-card/30">
+        <h1 className="text-balance text-xl font-bold tracking-tight">Dijital Kartlarım</h1>
+        <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
+          Kartını işletmede göster, tüketim ve puanların tek hesapta toplansın.
+        </p>
       </div>
 
-      {/* Digital card sharing explanation - redesigned */}
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-primary/5 via-background to-cyan-500/5 shadow-sm dark:from-primary/10 dark:to-cyan-500/10">
-        <CardContent className="p-0">
-          {/* Header */}
-          <div className="p-5 sm:p-6 flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20">
-              <CreditCard className="h-5 w-5 text-white" />
+      <DashboardPageHeroChrome tone="auto" padded={false}>
+        <div className="space-y-4 p-4 sm:p-6 md:p-8">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/25 to-violet-500/20 ring-1 ring-primary/20">
+              <CreditCard className="h-6 w-6 text-primary" aria-hidden />
             </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-foreground mb-1">Dijital Kart Paylaşımı Nedir?</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-                Fiziksel kart taşımadan, kartının linki veya QR kodu ile işletmenin seni tanımasını sağlarsın.
-                Böylece tüketim kaydı açılır, puan ve rozet akışı başlar; geçmiş işlemler tek hesapta birikir.
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Üyelik</p>
+              <h2 className="mt-0.5 text-balance text-lg font-semibold tracking-tight sm:text-xl">Tek kart, tüm işletmeler</h2>
+              <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
+                QR veya link ile tanın; yorum ve ödüller hesabına işlenir.
               </p>
             </div>
           </div>
-
-          {/* 3 steps */}
-          <div className="grid sm:grid-cols-3 gap-3 px-5 sm:px-6 pb-5 sm:pb-6">
-            <div className="group rounded-xl border border-primary/20 bg-card/80 p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md dark:border-primary/25 dark:bg-card/50 dark:hover:border-primary/35">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 dark:bg-primary/20">
-                  <Share2 className="h-4 w-4 text-primary" />
-                </div>
-                <span className="font-semibold text-sm text-foreground">1) Nasıl Paylaşılır?</span>
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Kart üzerindeki <span className="font-medium text-foreground">Paylaş</span> veya <span className="font-medium text-foreground">Kopyala</span> butonunu kullan.
-              </p>
-            </div>
-            <div className="group rounded-xl border border-cyan-200/60 dark:border-cyan-500/20 bg-card/80 dark:bg-card/50 p-4 shadow-sm hover:shadow-md hover:border-cyan-300/50 dark:hover:border-cyan-500/30 transition-all">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg bg-cyan-500/10 dark:bg-cyan-500/20 flex items-center justify-center">
-                  <QrCode className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                </div>
-                <span className="font-semibold text-sm text-foreground">2) Nerede Kullanılır?</span>
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                İşletmede QR okutulduğunda veya link açıldığında hesabınla eşleşir.
-              </p>
-            </div>
-            <div className="group rounded-xl border border-emerald-200/60 dark:border-emerald-500/20 bg-card/80 dark:bg-card/50 p-4 shadow-sm hover:shadow-md hover:border-emerald-300/50 dark:hover:border-emerald-500/30 transition-all">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <span className="font-semibold text-sm text-foreground">3) Güvenlik</span>
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                Link sadece kart kimliğini içerir; parola veya özel kişisel veri içermez.
-              </p>
-            </div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <StatTile label="Kart" value={stats.totalCards} icon={CreditCard} tone="primary" />
+            <StatTile label="Tüketim" value={stats.totalConsumptions} icon={Zap} tone="cyan" />
+            <StatTile label="Yorum" value={stats.reviewPending} icon={Star} tone="amber" />
           </div>
+        </div>
+      </DashboardPageHeroChrome>
 
-          {/* Tip */}
-          <div className="mx-5 sm:mx-6 mb-5 sm:mb-6 flex items-start gap-3 rounded-xl bg-amber-500/10 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/20 p-4">
-            <Zap className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-0.5">İpucu</p>
-              <p className="text-sm text-amber-700/90 dark:text-amber-300/90">
-                Yoğun saatlerde kasada hızlı işlem için QR ekranını önceden açman deneyimi hızlandırır.
-              </p>
+      <Card className="overflow-hidden border-border/70">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+              <Shield className="h-5 w-5 text-muted-foreground" aria-hidden />
+            </div>
+            <div className="min-w-0 space-y-3">
+              <div>
+                <h3 className="font-semibold text-foreground">Paylaşım nasıl çalışır?</h3>
+                <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
+                  Link veya QR kodu işletmede okutulduğunda veya paylaşıldığında hesabınla eşleşir; kişisel parola içermez.
+                </p>
+              </div>
+              <ol className="grid gap-2 text-sm sm:grid-cols-3 sm:gap-3">
+                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                  <span className="font-medium text-foreground">1.</span> Paylaş veya kopyala
+                </li>
+                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                  <span className="font-medium text-foreground">2.</span> İşletmede göster
+                </li>
+                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                  <span className="font-medium text-foreground">3.</span> Puan & geçmiş
+                </li>
+              </ol>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Cards */}
       {cards.length === 0 ? (
-        <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
-          <CardContent className="p-8 sm:p-12 text-center">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-            >
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-cyan-500/20 sm:mb-6 sm:h-24 sm:w-24">
-                <CreditCard className="h-10 w-10 text-primary sm:h-12 sm:w-12" />
-              </div>
-              <h3 className="text-lg sm:text-xl font-semibold mb-2">Henüz kartınız yok</h3>
-              <p className="text-muted-foreground mb-4 sm:mb-6 text-sm sm:text-base">
-                Restoran veya kafeden aldığınız QR kartı tarayarak aktive edin
-              </p>
-              <Button asChild className="bg-gradient-to-r from-primary to-cyan-600">
-                <Link href="/customer/scan">
-                  <QrCode className="w-4 h-4 mr-2" />
-                  QR Tara
-                </Link>
-              </Button>
-            </motion.div>
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center px-4 py-12 text-center sm:py-14">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+              <CreditCard className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold">Henüz kartın yok</h3>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+              İşletmedeki QR ile kartını etkinleştirerek başla.
+            </p>
+            <Button asChild className="mt-6 min-h-11 w-full max-w-xs touch-manipulation sm:w-auto">
+              <Link href="/customer/scan" className="gap-2">
+                <QrCode className="h-4 w-4" />
+                QR tara
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6 sm:space-y-8">
+        <div className="space-y-10">
           {cards.map((card, index) => (
-            <motion.div
+            <motion.article
               key={card.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: reduceMotion ? 0 : index * 0.08, type: 'spring', stiffness: 320, damping: 28 }}
+              className="space-y-5"
             >
-              {/* LEGENDARY CARD DESIGN - Full animations */}
-              <div className="perspective-1000">
-                <motion.div
-                  ref={(el) => { cardRefs.current[card.id] = el; }}
-                  className="relative w-full max-w-lg mx-auto cursor-pointer group"
-                  style={{ 
-                    aspectRatio: '1.586/1',
-                    transformStyle: 'preserve-3d',
-                  }}
-                  onMouseMove={(e) => handleMouseMove(e, card.id)}
-                  onMouseLeave={handleMouseLeave}
-                  whileHover={{
-                    rotateY: (mousePosition.x - 0.5) * 15,
-                    rotateX: (mousePosition.y - 0.5) * -15,
-                    scale: 1.02,
-                  }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  onClick={() => { setSelectedCard(card); setShowQrDialog(true); }}
-                >
-                  {/* Card Background */}
-                  <div className="absolute inset-0 rounded-xl sm:rounded-2xl overflow-hidden">
-                    {/* Animated gradient background */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-primary/35 to-slate-900" />
-                    
-                    {/* Holographic effect - animates with mouse */}
-                    <motion.div
-                      className="absolute inset-0 opacity-60"
-                      style={{
-                        background: `linear-gradient(${mousePosition.x * 360}deg, 
-                          rgba(147, 51, 234, 0.4), 
-                          rgba(34, 211, 238, 0.4), 
-                          rgba(236, 72, 153, 0.4), 
-                          rgba(147, 51, 234, 0.4))`,
-                      }}
-                    />
-                    
-                    {/* Moving shine effect */}
-                    <motion.div
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                      style={{
-                        background: `radial-gradient(circle at ${mousePosition.x * 100}% ${mousePosition.y * 100}%, 
-                          rgba(255,255,255,0.4) 0%, 
-                          transparent 50%)`,
-                      }}
-                    />
-                    
-                    {/* Animated rainbow border */}
-                    <motion.div
-                      className="absolute inset-0 rounded-xl sm:rounded-2xl"
-                      style={{
-                        background: `linear-gradient(${mousePosition.x * 360}deg, ${BRAND_PRIMARY_HEX}, ${CHART_HEX.skyLight}, ${CHART_HEX.pink}, ${BRAND_PRIMARY_HEX})`,
-                        padding: '2px',
-                        WebkitMask: `linear-gradient(${HEX_WHITE} 0 0) content-box, linear-gradient(${HEX_WHITE} 0 0)`,
-                        WebkitMaskComposite: 'xor',
-                        maskComposite: 'exclude',
-                      }}
-                      animate={{
-                        opacity: [0.5, 1, 0.5],
-                      }}
-                      transition={{
-                        duration: 2,
-                        repeat: Infinity,
-                      }}
-                    />
-                    
-                    {/* Subtle pattern */}
-                    <div 
-                      className="absolute inset-0 opacity-10"
-                      style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                      }}
-                    />
-                    
-                    {/* Inner glow */}
-                    <div className="absolute inset-[1px] rounded-xl sm:rounded-2xl border border-white/10" />
-                  </div>
+              <LegendDigitalCard
+                card={card}
+                qrSrc={qrCodes[card.token]}
+                holderName={session?.user?.name || 'Üye'}
+                showFullToken={!!showToken[card.id]}
+                onToggleToken={() => toggleShowToken(card.id)}
+                onOpenQr={() => openQr(card)}
+                reduceMotion={reduceMotion}
+              />
 
-                  {/* Card Content */}
-                  <div className="absolute inset-0 p-3 sm:p-4 md:p-6 flex flex-col justify-between text-white">
-                    {/* Top Row */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        {/* Logo & Title */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
-                          <motion.div 
-                            className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-primary to-cyan-500 sm:h-8 sm:w-8 sm:rounded-lg"
-                            animate={{ 
-                              boxShadow: ['0 0 20px rgba(147, 51, 234, 0.5)', '0 0 30px rgba(34, 211, 238, 0.5)', '0 0 20px rgba(147, 51, 234, 0.5)']
-                            }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                          >
-                            <Sparkles className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-                          </motion.div>
-                          <span className="text-sm sm:text-lg font-bold tracking-wider bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-                            QRateX
-                          </span>
-                        </div>
-                        <p className="text-[8px] sm:text-xs text-white/50 tracking-widest uppercase">Premium Member Card</p>
-                      </div>
-                      
-                      {/* Status Badge */}
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <motion.div
-                          animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        >
-                          <Wifi className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-400" />
-                        </motion.div>
-                        <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[9px] sm:text-xs px-1.5 sm:px-2 py-0.5">
-                          <CheckCircle2 className="w-2 h-2 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
-                          Aktif
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Middle - QR Code Preview */}
-                    <div className="flex items-center justify-center flex-1 py-2 sm:py-4">
-                      <motion.div 
-                        className="relative"
-                        whileHover={{ scale: 1.1 }}
-                        transition={{ type: 'spring', stiffness: 300 }}
-                      >
-                        {/* QR Animated Glow */}
-                        <motion.div 
-                          className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary to-cyan-500 blur-lg sm:rounded-xl sm:blur-xl"
-                          animate={{ 
-                            opacity: [0.4, 0.7, 0.4],
-                            scale: [1, 1.1, 1],
-                          }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        />
-                        
-                        {/* QR Container */}
-                        <div className="relative bg-white p-1.5 sm:p-2 rounded-lg sm:rounded-xl shadow-2xl">
-                          {qrCodes[card.token] ? (
-                            <img 
-                              src={qrCodes[card.token]} 
-                              alt="QR Code" 
-                              className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-md sm:rounded-lg"
-                            />
-                          ) : (
-                            <QrCode className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 text-slate-900" />
-                          )}
-                        </div>
-                        
-                        {/* Scan hint */}
-                        <motion.p 
-                          className="absolute -bottom-5 sm:-bottom-6 left-1/2 -translate-x-1/2 text-[8px] sm:text-xs text-white/50 whitespace-nowrap"
-                          animate={{ opacity: [0.3, 0.8, 0.3] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        >
-                          Büyütmek için dokun
-                        </motion.p>
-                      </motion.div>
-                    </div>
-
-                    {/* Bottom Row */}
-                    <div className="flex items-end justify-between">
-                      {/* Card ID & User */}
-                      <div className="space-y-1 sm:space-y-2 min-w-0 flex-1">
-                        <div>
-                          <p className="text-[7px] sm:text-[10px] text-white/40 uppercase tracking-wider">Card ID</p>
-                          <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
-                            <code className="text-[9px] sm:text-sm font-mono text-white/80 truncate max-w-[80px] sm:max-w-[150px]">
-                              {showToken[card.id] ? card.token.slice(0, 16) + '...' : `•••• •••• ${card.token.slice(-8)}`}
-                            </code>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-4 w-4 sm:h-5 sm:w-5 text-white/40 hover:text-white hover:bg-white/10"
-                              onClick={(e) => { e.stopPropagation(); toggleShowToken(card.id); }}
-                            >
-                              {showToken[card.id] ? <EyeOff className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> : <Eye className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
-                            </Button>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-[7px] sm:text-[10px] text-white/40 uppercase tracking-wider">Kart Sahibi</p>
-                          <p className="text-[10px] sm:text-sm font-medium truncate max-w-[100px] sm:max-w-[180px]">{session?.user?.name || 'Premium Üye'}</p>
-                        </div>
-                      </div>
-
-                      {/* Stats & Actions */}
-                      <div className="text-right space-y-1 sm:space-y-2 flex-shrink-0">
-                        <div className="flex items-center justify-end gap-2 sm:gap-4">
-                          <div>
-                            <p className="text-[7px] sm:text-[10px] text-white/40 uppercase">Tüketim</p>
-                            <p className="text-base sm:text-lg font-bold">{card._count.consumptions}</p>
-                          </div>
-                          <div className="w-px h-6 sm:h-8 bg-white/20" />
-                          <div>
-                            <p className="text-[7px] sm:text-[10px] text-white/40 uppercase">Seviye</p>
-                            <div className="flex items-center gap-0.5 sm:gap-1">
-                              <Crown className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400" />
-                              <p className="text-base sm:text-lg font-bold">VIP</p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Quick Actions */}
-                        <div className="flex items-center gap-0.5 sm:gap-1 justify-end">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 sm:h-7 sm:w-7 text-white/50 hover:text-white hover:bg-white/10"
-                            onClick={(e) => { e.stopPropagation(); copyToken(card.token); }}
-                          >
-                            <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 sm:h-7 sm:w-7 text-white/50 hover:text-white hover:bg-white/10"
-                            onClick={(e) => { e.stopPropagation(); shareCard(card.token); }}
-                          >
-                            <Share2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Decorative Elements */}
-                    <motion.div 
-                      className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-20"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                    >
-                      <Shield className="w-10 h-10 sm:w-16 sm:h-16" />
-                    </motion.div>
-                    <div className="absolute bottom-3 left-3 sm:bottom-4 sm:left-4 opacity-10">
-                      <Fingerprint className="w-8 h-8 sm:w-12 sm:h-12" />
-                    </div>
-                  </div>
-                </motion.div>
+              <div className="mx-auto max-w-lg sm:max-w-xl">
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-3">
+                  <Button type="button" variant="secondary" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => copyToken(card.token)}>
+                    <Copy className="mr-1.5 h-4 w-4" />
+                    ID
+                  </Button>
+                  <Button type="button" variant="secondary" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => copyUrl(card.token)}>
+                    <Copy className="mr-1.5 h-4 w-4" />
+                    URL
+                  </Button>
+                  <Button type="button" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => shareCard(card.token)}>
+                    <Share2 className="mr-1.5 h-4 w-4" />
+                    Paylaş
+                  </Button>
+                </div>
+                <Button type="button" variant="default" className="mt-3 w-full min-h-11 touch-manipulation gap-2 sm:mt-4" onClick={() => openQr(card)}>
+                  <QrCode className="h-4 w-4" />
+                  Büyük QR göster
+                  <ChevronRight className="ml-auto h-4 w-4 opacity-80" />
+                </Button>
               </div>
 
-              {/* Card Info Below */}
-              <Card className="border-border/60 bg-card/50 backdrop-blur-sm mt-3 sm:mt-4">
-                <CardContent className="p-3 sm:p-4 md:p-6">
-                  {/* Stats */}
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-6 mb-3 sm:mb-4">
-                    <div className="flex items-center gap-2">
-                      <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
-                      <span className="text-xs sm:text-sm">
-                        <span className="font-medium">{card._count.consumptions}</span> tüketim
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
-                      <span className="text-xs sm:text-sm text-muted-foreground">
-                        Aktive: {formatDate(card.activatedAt || '')}
-                      </span>
-                    </div>
+              <Card className="border-border/70">
+                <CardContent className="space-y-4 p-4 sm:p-5">
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                    <span className="inline-flex items-center gap-2">
+                      <History className="h-4 w-4 shrink-0" />
+                      <span className="font-medium text-foreground">{card._count.consumptions}</span> tüketim
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="h-4 w-4 shrink-0" />
+                      {card.activatedAt ? formatDate(card.activatedAt) : '—'}
+                    </span>
                   </div>
 
-                  {/* Recent Consumptions */}
                   {card.consumptions.length > 0 && (
-                    <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
-                      <p className="text-[10px] sm:text-xs text-muted-foreground">Son Tüketimler</p>
-                      {card.consumptions.slice(0, 3).map((consumption) => (
-                        <div 
-                          key={consumption.id} 
-                          className="flex items-center justify-between p-1.5 sm:p-2 rounded-md sm:rounded-lg bg-muted/50"
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-xs sm:text-sm truncate">
-                              {consumption.dealer.businessName || 'İşletme'}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Son işlemler</p>
+                      <ul className="space-y-2">
+                        {card.consumptions.slice(0, 4).map((c) => (
+                          <li
+                            key={c.id}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="truncate text-sm font-medium">{c.dealer.businessName || 'İşletme'}</span>
                             </span>
-                            {consumption.product && (
-                              <span className="text-[10px] sm:text-xs text-muted-foreground truncate hidden sm:inline">
-                                - {consumption.product.name}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] sm:text-xs text-muted-foreground flex-shrink-0 ml-2">
-                            {formatRelativeTime(consumption.createdAt)}
-                          </span>
-                        </div>
-                      ))}
+                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatRelativeTime(c.createdAt)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button asChild className="flex-1 h-9 bg-gradient-to-r from-primary to-cyan-600 text-xs sm:h-10 sm:text-sm">
-                      <Link href="/customer/consumptions">
-                        Tüm Tüketimlerimi Gör
-                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1.5 sm:ml-2" />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button asChild className="min-h-11 flex-1 touch-manipulation">
+                      <Link href="/customer/consumptions" className="gap-2">
+                        Tüm tüketimler
+                        <ArrowRight className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="icon"
-                      className="h-9 w-9 sm:h-10 sm:w-10"
-                      onClick={() => shareCard(card.token)}
-                    >
-                      <Share2 className="w-4 h-4" />
+                    <Button type="button" variant="outline" className="min-h-11 touch-manipulation sm:shrink-0" onClick={() => shareCard(card.token)}>
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Paylaş
                     </Button>
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </motion.article>
           ))}
         </div>
       )}
 
-      {/* QR Code Dialog - Legendary Design */}
       <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] border-primary/20 bg-gradient-to-br from-slate-900 via-primary/25 to-slate-900 p-4 sm:max-w-md sm:p-6">
-          <DialogHeader>
-            <DialogTitle className="text-center text-white flex items-center justify-center gap-2 text-base sm:text-lg">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-              >
-                <Sparkles className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
-              </motion.div>
-              QRateX Dijital Kart
+        <DialogContent className="max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom)))] gap-0 overflow-y-auto border-border/80 bg-card p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-border/60 bg-gradient-to-r from-primary/5 to-transparent px-4 pb-4 pt-6 text-left sm:px-6">
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+              Dijital kart
             </DialogTitle>
           </DialogHeader>
           {selectedCard && (
-            <div className="flex flex-col items-center space-y-4 sm:space-y-6">
-              {/* Giant QR Code with animations */}
-              <motion.div 
-                className="relative"
-                initial={{ scale: 0.8, opacity: 0, rotateY: -180 }}
-                animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-                transition={{ type: 'spring', duration: 0.8 }}
+            <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
+              <motion.div
+                className="relative mx-auto w-fit"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
               >
-                {/* Animated glow effect */}
-                <motion.div 
-                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary to-cyan-500 blur-xl sm:rounded-2xl sm:blur-2xl"
-                  animate={{ 
-                    opacity: [0.3, 0.6, 0.3],
-                    scale: [1, 1.1, 1],
-                  }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-                
-                {/* QR Container */}
-                <div className="relative bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-2xl">
+                {!reduceMotion && (
+                  <motion.div
+                    className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-tr from-primary/35 via-violet-500/20 to-cyan-500/25 blur-2xl"
+                    animate={{ opacity: [0.4, 0.75, 0.4] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+                <div className="relative rounded-2xl bg-gradient-to-b from-white to-zinc-100 p-4 shadow-2xl ring-2 ring-white/90 sm:p-5">
+                  <div className="absolute left-3 top-3 h-4 w-4 rounded border border-zinc-300/90 sm:left-4 sm:top-4" />
+                  <div className="absolute bottom-3 right-3 h-4 w-4 rounded border border-zinc-300/90 sm:bottom-4 sm:right-4" />
                   {qrCodes[selectedCard.token] && (
-                    <img 
-                      src={qrCodes[selectedCard.token]} 
-                      alt="QR Code" 
-                      className="w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-lg sm:rounded-xl"
+                    <img
+                      src={qrCodes[selectedCard.token]}
+                      alt="Kart QR kodu"
+                      className="mx-auto h-52 w-52 rounded-xl sm:h-60 sm:w-60"
                     />
                   )}
                 </div>
-                
-                {/* Animated corners */}
-                <motion.div 
-                  className="absolute -left-1 -top-1 h-4 w-4 rounded-tl-lg border-l-2 border-t-2 border-primary sm:h-6 sm:w-6"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-                <motion.div 
-                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-6 sm:h-6 border-t-2 border-r-2 border-cyan-500 rounded-tr-lg"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }}
-                />
-                <motion.div 
-                  className="absolute -bottom-1 -left-1 w-4 h-4 sm:w-6 sm:h-6 border-b-2 border-l-2 border-cyan-500 rounded-bl-lg"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }}
-                />
-                <motion.div 
-                  className="absolute -bottom-1 -right-1 h-4 w-4 rounded-br-lg border-b-2 border-r-2 border-primary sm:h-6 sm:w-6"
-                  animate={{ opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity, delay: 0.9 }}
-                />
               </motion.div>
 
-              {/* Info */}
-              <div className="text-center space-y-1">
-                <p className="text-xs sm:text-sm text-white/70">
-                  Bu QR kodu bayiye göstererek tüketim kaydı oluşturun
-                </p>
-                <p className="text-[10px] sm:text-xs text-white/40 break-all px-4">
-                  {QR_DOMAIN}/c/{selectedCard.token}
-                </p>
+              <p className="text-center text-sm text-muted-foreground">Bu kodu kasada göstererek tüketim kaydı oluşturabilirsin.</p>
+              <code className="block break-all rounded-xl bg-muted/60 px-3 py-2 text-center text-[11px] text-muted-foreground">
+                {QR_DOMAIN}/c/{selectedCard.token}
+              </code>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" className="min-h-11 touch-manipulation" onClick={() => copyUrl(selectedCard.token)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Kopyala
+                </Button>
+                <Button type="button" className="min-h-11 touch-manipulation" onClick={() => shareCard(selectedCard.token)}>
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Paylaş
+                </Button>
               </div>
 
-              {/* Actions */}
-              <div className="w-full space-y-2">
-                {/* Quick actions */}
-                <div className="flex gap-2">
-                  <Button 
-                    className="flex-1 h-10 text-xs sm:text-sm bg-white/10 hover:bg-white/20 text-white border-0" 
+              <div className="space-y-2 border-t border-border/60 pt-4">
+                <p className="text-center text-xs font-medium text-muted-foreground">Cüzdana ekle</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Button
+                    type="button"
                     variant="outline"
-                    onClick={() => copyUrl(selectedCard.token)}
+                    className="min-h-11 touch-manipulation bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white dark:bg-zinc-900"
+                    onClick={() => addToAppleWallet(selectedCard.id)}
+                    disabled={walletLoading === 'apple'}
                   >
-                    <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Kopyala
+                    {walletLoading === 'apple' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Apple Wallet
                   </Button>
-                  <Button 
-                    className="flex-1 h-10 bg-gradient-to-r from-primary to-cyan-600 text-xs sm:text-sm"
-                    onClick={() => shareCard(selectedCard.token)}
+                  <Button
+                    type="button"
+                    className="min-h-11 touch-manipulation bg-blue-600 text-white hover:bg-blue-700"
+                    onClick={() => addToGoogleWallet(selectedCard.id)}
+                    disabled={walletLoading === 'google'}
                   >
-                    <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Paylaş
+                    {walletLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="mr-2 h-4 w-4" />}
+                    Google Wallet
                   </Button>
-                </div>
-                
-                {/* Wallet Buttons */}
-                <div className="pt-3 sm:pt-4 border-t border-white/10">
-                  <p className="text-[10px] sm:text-xs text-white/40 text-center mb-2 sm:mb-3">
-                    Dijital Cüzdana Ekle
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 h-10 text-xs sm:text-sm bg-black hover:bg-gray-900 text-white border border-white/20"
-                      onClick={() => addToAppleWallet(selectedCard.id)}
-                      disabled={walletLoading === 'apple'}
-                    >
-                      {walletLoading === 'apple' ? (
-                        <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
-                          Apple
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      className="flex-1 h-10 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={() => addToGoogleWallet(selectedCard.id)}
-                      disabled={walletLoading === 'google'}
-                    >
-                      {walletLoading === 'google' ? (
-                        <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Smartphone className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
-                          Google
-                        </>
-                      )}
-                    </Button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -866,39 +738,28 @@ export default function CustomerMyCardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Review Pending Alert */}
       {stats.reviewPending > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
         >
-          <Card className="border-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-            <CardContent className="p-3 sm:p-4 md:p-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                  <motion.div 
-                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0"
-                    animate={{ scale: [1, 1.1, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <Award className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" />
-                  </motion.div>
-                  <div>
-                    <h3 className="font-semibold text-sm sm:text-base">Yorum Bekleyen Tüketimler</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground">
-                      {stats.reviewPending} tüketim için yorum yaparak puan kazanın!
-                    </p>
+          <Card className="border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-orange-500/5">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex flex-1 items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
+                    <Award className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold">Yorum bekleyen tüketimler</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{stats.reviewPending} kayıt için yorum yazarak puan kazan.</p>
                   </div>
                 </div>
-                <Button 
-                  asChild 
-                  size="sm"
-                  className="w-full sm:w-auto border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
-                  variant="outline"
-                >
-                  <Link href="/customer/consumptions?hasReview=false">
-                    Yorum Yap
-                    <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1.5 sm:ml-2" />
+                <Button asChild variant="outline" className="w-full min-h-11 shrink-0 touch-manipulation sm:w-auto">
+                  <Link href="/customer/consumptions?hasReview=false" className="gap-2">
+                    Yorum yap
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
               </div>

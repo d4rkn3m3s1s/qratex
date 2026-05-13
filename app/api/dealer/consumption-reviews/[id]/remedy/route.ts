@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { z } from 'zod';
@@ -58,10 +59,10 @@ export async function POST(
   });
 
   if (!review) {
-    return NextResponse.json({ error: 'Tüketim yorumu bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Tüketim yorumu bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
   if (session.user.role === 'DEALER' && review.consumption.dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Bu yoruma telafi başlatma yetkiniz yok' }, { status: 403 });
+    return NextResponse.json({ error: 'Bu yoruma telafi başlatma yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -141,5 +142,5 @@ export async function POST(
       : 'Telafi teklifi gönderildi. Müşteri tür ve miktar seçecek.',
   };
   if (idemKey) await storeIdempotency(idemKey, 'remedy-consumption', 200, resBody);
-  return NextResponse.json(resBody);
+  return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
 }

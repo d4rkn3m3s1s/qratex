@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -112,10 +113,10 @@ export async function GET() {
           '5651 log bütünlüğü, erişim kontrolü ve saklama süreci',
         ],
       },
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Compliance overview error:', error);
-    return NextResponse.json({ error: 'Uyum özeti getirilemedi' }, { status: 500 });
+    return NextResponse.json({ error: 'Uyum özeti getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 

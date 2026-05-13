@@ -3,6 +3,13 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
+import {
+  PRIVATE_NO_STORE_HEADERS,
+  clampPageParam,
+  clampPageSizeParam,
+  paginationSkip,
+  responseIfDatabaseUnavailable,
+} from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -14,9 +21,9 @@ export async function GET(request: NextRequest) {
     const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '10');
-    const skip = (page - 1) * pageSize;
+    const page = clampPageParam(searchParams.get('page'));
+    const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 10, 100);
+    const skip = paginationSkip(page, pageSize);
 
     // Filter by dealer if not admin
     const where = session.user.role === 'ADMIN' 
@@ -41,18 +48,23 @@ export async function GET(request: NextRequest) {
       prisma.qRCode.count({ where }),
     ]);
 
-    return NextResponse.json({
-      items: qrCodes,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    });
+    return NextResponse.json(
+      {
+        items: qrCodes,
+        total,
+        page,
+        pageSize,
+        totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching QR codes:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'QR kodları getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -66,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (session.user.role !== 'DEALER' && session.user.role !== 'ADMIN') {
       return NextResponse.json(
         { error: 'Sadece işletmeler QR kod oluşturabilir' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest) {
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -109,12 +121,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, qrCode });
+    return NextResponse.json({ success: true, qrCode }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating QR code:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'QR kod oluşturulamadı' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import {
   getLeagueRules,
@@ -24,13 +25,11 @@ export async function GET() {
       success: true,
       key: LEAGUE_RULES_SETTING_KEY,
       rules,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('League rules fetch error:', error);
     return NextResponse.json(
-      { success: false, error: 'Lig ayarları getirilemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Lig ayarları getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -46,9 +45,7 @@ export async function PUT(request: NextRequest) {
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
       return NextResponse.json(
-        { success: false, error: msg, details: parsed.error.flatten() },
-        { status: 400 }
-      );
+        { success: false, error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const rules = normalizeLeagueRules(parsed.data.rules);
 
@@ -86,12 +83,10 @@ export async function PUT(request: NextRequest) {
       success: true,
       key: saved.key,
       rules,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('League rules update error:', error);
     return NextResponse.json(
-      { success: false, error: 'Lig ayarları güncellenemedi' },
-      { status: 500 }
-    );
+      { success: false, error: 'Lig ayarları güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

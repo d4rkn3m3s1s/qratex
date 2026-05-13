@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -137,15 +138,18 @@ export async function GET(request: NextRequest) {
         : false,
     };
 
-    return NextResponse.json({
-      success: true,
-      data: progressData,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: progressData,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching user progress:', error);
     return NextResponse.json(
       { success: false, error: 'İlerleme bilgisi alınamadı' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -158,7 +162,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -173,7 +177,7 @@ export async function POST(request: NextRequest) {
     if (!badge) {
       return NextResponse.json(
         { success: false, error: 'Badge not found' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -190,7 +194,7 @@ export async function POST(request: NextRequest) {
     if (existingBadge) {
       return NextResponse.json(
         { success: false, error: 'Badge already earned' },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -231,16 +235,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: userBadge,
-      pointsEarned: badgePoints,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: userBadge,
+        pointsEarned: badgePoints,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error awarding badge:', error);
     return NextResponse.json(
       { success: false, error: 'Rozet verilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

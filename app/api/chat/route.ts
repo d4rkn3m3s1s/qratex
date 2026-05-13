@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { chatWithQRA, MODELS } from '@/lib/groq';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { INPUT_LIMITS } from '@/lib/input-limits';
 import {
   checkQraChatRateLimit,
@@ -55,14 +56,12 @@ export async function POST(request: NextRequest) {
     const { message, conversationHistory } = body;
 
     if (!message || typeof message !== 'string') {
-      return NextResponse.json({ error: 'Mesaj gerekli' }, { status: 400 });
+      return NextResponse.json({ error: 'Mesaj gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (message.length > INPUT_LIMITS.messageText) {
       return NextResponse.json(
-        { error: `Mesaj çok uzun (max ${INPUT_LIMITS.messageText} karakter)` },
-        { status: 400 }
-      );
+        { error: `Mesaj çok uzun (max ${INPUT_LIMITS.messageText} karakter)` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const session = await getServerSession(authOptions);
@@ -83,9 +82,7 @@ export async function POST(request: NextRequest) {
               : 'Çok hızlı yazıyorsun. Bir dakika sonra tekrar dene.',
           retryAfterMs,
           code: 'RATE_LIMIT',
-        },
-        { status: 429 }
-      );
+        }, { status: 429 , headers: PRIVATE_NO_STORE_HEADERS });
       res.headers.set('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
       return res;
     }
@@ -148,9 +145,9 @@ export async function POST(request: NextRequest) {
       message: responseText,
       timestamp: new Date().toISOString(),
       remaining: rl.remaining,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Chat API error:', error);
-    return NextResponse.json({ error: 'Bir hata oluştu' }, { status: 500 });
+    return NextResponse.json({ error: 'Bir hata oluştu' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

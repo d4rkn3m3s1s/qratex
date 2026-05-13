@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { nanoid } from 'nanoid';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import { z } from 'zod';
 
 // GET - Get user's referral info
 
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get or create referral code
@@ -60,8 +62,8 @@ export async function GET(req: NextRequest) {
     // Stats
     const stats = {
       totalReferrals: referrals.length,
-      completedReferrals: referrals.filter((r: any) => r.status === 'COMPLETED').length,
-      totalPointsEarned: referrals.reduce((sum: number, r: any) => sum + r.pointsEarned, 0),
+      completedReferrals: referrals.filter((r) => r.status === 'COMPLETED').length,
+      totalPointsEarned: referrals.reduce((sum, r) => sum + r.pointsEarned, 0),
     };
 
     return NextResponse.json({
@@ -70,12 +72,16 @@ export async function GET(req: NextRequest) {
       referrals,
       referredBy,
       stats,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error fetching referral info:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
+
+const applyReferralSchema = z.object({ code: z.string().min(1).max(32).transform((s) => s.trim().toUpperCase()) });
 
 // POST - Apply referral code
 export async function POST(req: NextRequest) {
@@ -84,14 +90,18 @@ export async function POST(req: NextRequest) {
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const { code } = await req.json();
-
-    if (!code) {
-      return NextResponse.json({ error: 'Referral code is required' }, { status: 400 });
+    const raw = await req.json().catch(() => ({}));
+    const parsed = applyReferralSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Referral code is required' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
+    const code = parsed.data.code;
 
     // Check if user already has a referral
     const existingReferral = await prisma.referral.findUnique({
@@ -99,25 +109,25 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingReferral) {
-      return NextResponse.json({ error: 'You have already used a referral code' }, { status: 400 });
+      return NextResponse.json({ error: 'You have already used a referral code' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Find the referral code
     const referralCode = await prisma.referralCode.findUnique({
-      where: { code: code.toUpperCase() },
-      include: { user: true },
+      where: { code },
+      select: { id: true, userId: true, code: true, isActive: true, maxUsage: true, usageCount: true },
     });
 
     if (!referralCode) {
-      return NextResponse.json({ error: 'Invalid referral code' }, { status: 404 });
+      return NextResponse.json({ error: 'Invalid referral code' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (!referralCode.isActive) {
-      return NextResponse.json({ error: 'This referral code is no longer active' }, { status: 400 });
+      return NextResponse.json({ error: 'This referral code is no longer active' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (referralCode.userId === session.user.id) {
-      return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 });
+      return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const innov = await getInnovationPlatformConfig();
@@ -126,9 +136,7 @@ export async function POST(req: NextRequest) {
     });
     if (lifetimeAsReferrer >= innov.referral.maxInvitesPerReferrerLifetime) {
       return NextResponse.json(
-        { error: 'Bu davet zinciri platform davet limitine ulaştı' },
-        { status: 400 }
-      );
+        { error: 'Bu davet zinciri platform davet limitine ulaştı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const monthStart = new Date();
@@ -142,14 +150,12 @@ export async function POST(req: NextRequest) {
     });
     if (monthlyWithCode >= innov.referral.maxRedemptionsPerReferralCodePerMonth) {
       return NextResponse.json(
-        { error: 'Bu referans kodu için aylık kullanım limiti doldu' },
-        { status: 400 }
-      );
+        { error: 'Bu referans kodu için aylık kullanım limiti doldu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Check max usage
     if (referralCode.maxUsage && referralCode.usageCount >= referralCode.maxUsage) {
-      return NextResponse.json({ error: 'This referral code has reached its usage limit' }, { status: 400 });
+      return NextResponse.json({ error: 'This referral code has reached its usage limit' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const pointsMatrix = await getPointsMatrix();
@@ -157,9 +163,9 @@ export async function POST(req: NextRequest) {
       getReferralRewards(pointsMatrix);
 
     // Create referral and update points in transaction
-    const result = await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx: any) => {
       // Create referral
-      const referral = await tx.referral.create({
+      await tx.referral.create({
         data: {
           referrerId: referralCode.userId,
           referredId: session.user.id,
@@ -206,17 +212,17 @@ export async function POST(req: NextRequest) {
           },
         ],
       });
-
-      return referral;
     });
 
     return NextResponse.json({
       success: true,
       message: `Tebrikler! ${REFERRAL_BONUS} puan kazandın!`,
       pointsEarned: REFERRAL_BONUS,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error applying referral code:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

@@ -231,8 +231,9 @@ export function SurpriseBoxModal({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-white"
+                      className="h-10 w-10 min-h-10 min-w-10 shrink-0 touch-manipulation text-slate-400 hover:text-white"
                       onClick={copyCode}
+                      aria-label="Kupon kodunu kopyala"
                     >
                       <Copy className="w-4 h-4" />
                     </Button>
@@ -241,7 +242,7 @@ export function SurpriseBoxModal({
               )}
               {phase === 'done' && (
                 <Button
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
+                  className="h-12 w-full min-h-12 touch-manipulation bg-amber-500 font-semibold text-slate-900 hover:bg-amber-600"
                   onClick={onClose}
                 >
                   Harika!
@@ -253,10 +254,11 @@ export function SurpriseBoxModal({
           <Button
             variant="ghost"
             size="icon"
-            className="absolute -top-2 -right-2 rounded-full bg-slate-800 hover:bg-slate-700 text-white h-9 w-9 z-10"
+            className="absolute -right-1 -top-1 z-10 h-11 w-11 min-h-11 min-w-11 touch-manipulation rounded-full bg-slate-800 text-white hover:bg-slate-700 sm:-right-2 sm:-top-2"
             onClick={onClose}
+            aria-label="Kapat"
           >
-            <X className="w-4 h-4" />
+            <X className="h-5 w-5" />
           </Button>
         </motion.div>
       </motion.div>

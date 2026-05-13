@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle,
-    XCircle, ExternalLink, Filter, BellOff,
+    XCircle, ExternalLink, Filter, BellOff, Gift,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ export interface Notification {
     id: string;
     title: string;
     message: string;
-    type: 'info' | 'success' | 'warning' | 'error';
+    type: string;
     isRead: boolean;
     createdAt: string;
     data?: Record<string, unknown>;
@@ -57,9 +57,18 @@ const NOTIFICATION_BG: Record<string, string> = {
     error: 'bg-red-500/10',
 };
 
-const getIcon = (type: string) => NOTIFICATION_ICONS[type] || Info;
-const getColor = (type: string) => NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info;
-const getBg = (type: string) => NOTIFICATION_BG[type] || NOTIFICATION_BG.info;
+const getIcon = (type: string) => {
+    if (type === 'BIRTHDAY_CLAIM') return Gift;
+    return NOTIFICATION_ICONS[type] || Info;
+};
+const getColor = (type: string) => {
+    if (type === 'BIRTHDAY_CLAIM') return 'text-pink-500';
+    return NOTIFICATION_COLORS[type] || NOTIFICATION_COLORS.info;
+};
+const getBg = (type: string) => {
+    if (type === 'BIRTHDAY_CLAIM') return 'bg-pink-500/10';
+    return NOTIFICATION_BG[type] || NOTIFICATION_BG.info;
+};
 
 // ─── Component ──────────────────────────────────────────────
 export function NotificationCenter() {
@@ -88,6 +97,7 @@ export function NotificationCenter() {
     const [filter, setFilter] = useState<TabFilter>('all');
     const [detailOpen, setDetailOpen] = useState(false);
     const [selected, setSelected] = useState<Notification | null>(null);
+    const [birthdayClaiming, setBirthdayClaiming] = useState(false);
 
     const prevIdsRef = useRef<Set<string>>(new Set());
     const firstLoadRef = useRef(true);
@@ -168,6 +178,51 @@ export function NotificationCenter() {
         } catch { /* silent */ }
     };
 
+    const claimBirthdayBonus = async () => {
+        if (birthdayClaiming) return;
+        setBirthdayClaiming(true);
+        try {
+            const res = await fetch('/api/birthday', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'claim' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : t('common.error'));
+            toast.success(t('notificationCenter.birthdayClaimSuccessToast'));
+            if (selected?.id) await markAsRead(selected.id);
+            setDetailOpen(false);
+            setSelected(null);
+            await fetchNotifications();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : t('common.error'));
+        } finally {
+            setBirthdayClaiming(false);
+        }
+    };
+
+    const claimBirthdayBonusFromList = async (n: Notification, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (birthdayClaiming) return;
+        setBirthdayClaiming(true);
+        try {
+            const res = await fetch('/api/birthday', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'claim' }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : t('common.error'));
+            toast.success(t('notificationCenter.birthdayClaimSuccessToast'));
+            await markAsRead(n.id);
+            await fetchNotifications();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : t('common.error'));
+        } finally {
+            setBirthdayClaiming(false);
+        }
+    };
+
     const openDetail = (n: Notification) => {
         setSelected(n);
         setDetailOpen(true);
@@ -211,7 +266,7 @@ export function NotificationCenter() {
                     </Button>
                 </SheetTrigger>
 
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
                     {/* Header */}
                     <SheetHeader className="px-5 pt-5 pb-3 border-b space-y-3">
                         <div className="flex items-center justify-between">
@@ -316,7 +371,20 @@ export function NotificationCenter() {
                                                         </div>
                                                     </div>
                                                 </button>
-                                                <div className="flex shrink-0 items-start py-4 pr-3 pl-0">
+                                                <div className="flex shrink-0 flex-col items-end gap-1.5 py-4 pr-3 pl-0 sm:flex-row sm:items-start">
+                                                    {session?.user?.role === 'CUSTOMER' &&
+                                                        (n.type === 'BIRTHDAY_CLAIM' || n.data?.cta === 'birthday_claim') && (
+                                                        <Button
+                                                            variant="default"
+                                                            size="sm"
+                                                            className="h-8 touch-manipulation px-2.5 text-xs gap-1"
+                                                            disabled={birthdayClaiming}
+                                                            onClick={(e) => void claimBirthdayBonusFromList(n, e)}
+                                                        >
+                                                            <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                                            {t('notificationCenter.ctaClaimBirthdayBonus')}
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -360,16 +428,20 @@ export function NotificationCenter() {
                                         variant={
                                             selected.type === 'success' ? 'default' :
                                                 selected.type === 'warning' ? 'secondary' :
-                                                    selected.type === 'error' ? 'destructive' : 'outline'
+                                                    selected.type === 'error' ? 'destructive' :
+                                                        selected.type === 'BIRTHDAY_CLAIM' ? 'secondary' : 'outline'
                                         }
                                         className="shrink-0"
                                     >
-                                        {{
-                                            success: t('notificationCenter.typeSuccess'),
-                                            warning: t('notificationCenter.typeWarning'),
-                                            error: t('notificationCenter.typeError'),
-                                            info: t('notificationCenter.typeInfo'),
-                                        }[selected.type]}
+                                        {selected.type === 'success'
+                                            ? t('notificationCenter.typeSuccess')
+                                            : selected.type === 'warning'
+                                              ? t('notificationCenter.typeWarning')
+                                              : selected.type === 'error'
+                                                ? t('notificationCenter.typeError')
+                                                : selected.type === 'info'
+                                                  ? t('notificationCenter.typeInfo')
+                                                  : t('notificationCenter.typeInfo')}
                                     </Badge>
                                 </div>
                             </DialogHeader>
@@ -398,6 +470,18 @@ export function NotificationCenter() {
                                 )}
 
                                 <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+                                    {session?.user?.role === 'CUSTOMER' &&
+                                        (selected.type === 'BIRTHDAY_CLAIM' || selected.data?.cta === 'birthday_claim') ? (
+                                        <Button
+                                            size="sm"
+                                            className="bg-primary"
+                                            disabled={birthdayClaiming}
+                                            onClick={() => void claimBirthdayBonus()}
+                                        >
+                                            <Gift className="h-4 w-4 mr-2" aria-hidden />
+                                            {birthdayClaiming ? t('customerBirthdayPopup.claiming') : t('notificationCenter.ctaClaimBirthdayBonus')}
+                                        </Button>
+                                    ) : null}
                                     {session?.user?.role === 'CUSTOMER' &&
                                         selected.data?.type === 'remedy_campaign' &&
                                         typeof selected.data?.remedyOfferId === 'string' ? (

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 
@@ -233,5 +234,5 @@ export async function GET() {
     success: true,
     windowHours: WINDOW_MS / 3600000,
     items: items.slice(0, 120),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

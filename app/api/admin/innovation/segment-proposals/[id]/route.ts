@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export async function PATCH(
   const body = await request.json().catch(() => ({}));
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'status: APPROVED | REJECTED | SENT' }, { status: 400 });
+    return NextResponse.json({ error: 'status: APPROVED | REJECTED | SENT' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const existing = await prisma.segmentCampaignProposal.findUnique({
@@ -29,7 +30,7 @@ export async function PATCH(
     select: { id: true, status: true },
   });
   if (!existing) {
-    return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 });
+    return NextResponse.json({ error: 'Bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const proposal = await prisma.segmentCampaignProposal.update({
@@ -41,5 +42,5 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json({ success: true, proposal });
+  return NextResponse.json({ success: true, proposal }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

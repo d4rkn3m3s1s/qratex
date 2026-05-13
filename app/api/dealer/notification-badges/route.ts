@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -35,17 +36,22 @@ export async function GET() {
     ]);
 
     const badgeCount = unreadCount + (toxicCount > 0 ? toxicCount : 0); // show unread + toxic as badge
-    const res = NextResponse.json({
-      unreadCount,
-      negativeCount,
-      toxicCount,
-      badgeCount: Math.min(badgeCount, 99),
-    });
-    // P2-24: hot endpoint cache
-    res.headers.set('Cache-Control', 'private, s-maxage=20, stale-while-revalidate=40');
-    return res;
+    return NextResponse.json(
+      {
+        unreadCount,
+        negativeCount,
+        toxicCount,
+        badgeCount: Math.min(badgeCount, 99),
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (e) {
     console.error('Dealer notification-badges error:', e);
-    return NextResponse.json({ unreadCount: 0, negativeCount: 0, toxicCount: 0, badgeCount: 0 });
+    const db = responseIfDatabaseUnavailable(e);
+    if (db) return db;
+    return NextResponse.json(
+      { unreadCount: 0, negativeCount: 0, toxicCount: 0, badgeCount: 0 },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }

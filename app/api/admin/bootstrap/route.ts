@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
     action !== 'clear_suspicious_activities' &&
     action !== 'clear_ai_quality_samples'
   ) {
-    return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 });
+    return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'quests_defaults') {
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
         action,
         created: 0,
         message: 'Aktif görevler zaten mevcut.',
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const created = [];
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
       action,
       created: created.length,
       ids: created,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'assign_ab_cohorts') {
@@ -179,7 +180,7 @@ export async function POST(request: NextRequest) {
       action,
       assigned,
       totalDealers: dealers.length,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'ensure_ai_settings') {
@@ -206,7 +207,7 @@ export async function POST(request: NextRequest) {
       action,
       created,
       totalDealers: dealers.length,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'seed_insights_categories') {
@@ -237,7 +238,7 @@ export async function POST(request: NextRequest) {
       action,
       updated,
       totalDealers: dealers.length,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'clear_insights_categories') {
@@ -250,7 +251,7 @@ export async function POST(request: NextRequest) {
       data: { businessCategory: null },
     });
     await saveTracker({ ...tracker, insightsDealerIds: [] });
-    return NextResponse.json({ success: true, action, cleared: result.count });
+    return NextResponse.json({ success: true, action, cleared: result.count }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'seed_suspicious_activities') {
@@ -273,7 +274,7 @@ export async function POST(request: NextRequest) {
         action,
         created: 0,
         message: 'Şüpheli aktivite için en az bir bayi ve müşteri gerekiyor.',
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     let created = 0;
@@ -319,7 +320,7 @@ export async function POST(request: NextRequest) {
       success: true,
       action,
       created,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'clear_suspicious_activities') {
@@ -354,7 +355,7 @@ export async function POST(request: NextRequest) {
       action,
       cleared: deleteResult.count,
       usersReset: resetUsers.count,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'seed_ai_quality_samples') {
@@ -377,7 +378,7 @@ export async function POST(request: NextRequest) {
         action,
         created: 0,
         message: 'Yeni örnek için uygun AI işlenmiş geri bildirim bulunamadı.',
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const createdRows = await prisma.$transaction(
@@ -401,7 +402,7 @@ export async function POST(request: NextRequest) {
       success: true,
       action,
       created: createdRows.length,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'clear_ai_quality_samples') {
@@ -418,7 +419,7 @@ export async function POST(request: NextRequest) {
       ...tracker,
       aiQualitySampleIds: [],
     });
-    return NextResponse.json({ success: true, action, cleared: result.count });
+    return NextResponse.json({ success: true, action, cleared: result.count }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const candidates = await prisma.feedback.findMany({
@@ -467,5 +468,5 @@ export async function POST(request: NextRequest) {
     action,
     scanned: candidates.length,
     updated,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

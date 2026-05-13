@@ -151,7 +151,7 @@ export default function CustomerRemedyOfferPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
+        <Button asChild variant="ghost" size="sm" className="min-h-10 touch-manipulation w-full sm:w-fit">
           <Link href="/customer/remedy">
             <ArrowLeft className="h-4 w-4 mr-1" />
             {t('common.back')}

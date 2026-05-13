@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
-  MessageCircle,
   X,
   Send,
   Bot,
@@ -13,7 +12,6 @@ import {
   Maximize2,
   Zap,
   Star,
-  Wand2,
   Brain,
   Rocket,
   Heart,
@@ -26,19 +24,7 @@ import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { floatingZTw } from '@/lib/ui-z';
-import {
-  TW_BRAND_AURA_LINEAR,
-  TW_BRAND_AVATAR_HALO,
-  TW_BRAND_CHAT_HEADER_BG,
-  TW_BRAND_DOT,
-  TW_BRAND_FACE_GRADIENT,
-  TW_BRAND_GRADIENT_STOPS_SOFT,
-  TW_BRAND_HEADLINE_GRADIENT,
-  TW_BRAND_ORB_FILL,
-  TW_BRAND_PANEL_SHELL_SOFT,
-  TW_BRAND_SEND_BTN,
-  TW_BRAND_USER_BUBBLE,
-} from '@/lib/tw-brand-classes';
+import { TW_BRAND_HEADLINE_GRADIENT } from '@/lib/tw-brand-classes';
 
 interface Message {
   id: string;
@@ -56,10 +42,10 @@ const WELCOME_MESSAGE: Message = {
 };
 
 const QUICK_ACTIONS = [
-  { label: 'QRATEX nedir?', message: 'QRATEX nedir ve nasıl çalışır?', icon: Rocket, color: 'from-primary to-primary/80' },
-  { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star, color: 'from-amber-500 to-orange-500' },
-  { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?', icon: Zap, color: 'from-cyan-500 to-blue-500' },
-  { label: 'Yardım iste', message: 'Bana yardım eder misin?', icon: Heart, color: TW_BRAND_GRADIENT_STOPS_SOFT },
+  { label: 'QRATEX nedir?', message: 'QRATEX nedir ve nasıl çalışır?', icon: Rocket },
+  { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star },
+  { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?', icon: Zap },
+  { label: 'Yardım iste', message: 'Bana yardım eder misin?', icon: Heart },
 ];
 
 const TYPING_MESSAGES = [
@@ -69,73 +55,64 @@ const TYPING_MESSAGES = [
   'Son dokunuşlar…',
 ];
 
-// Floating particles component
-const FloatingParticles = ({ enabled }: { enabled: boolean }) => {
+/** Sohbet gövdesinde çok hafif sıvı-cam ışık lekeleri (yeşil / nabız yok) */
+function LiquidGlassWash({ enabled }: { enabled: boolean }) {
   if (!enabled) return null;
   return (
-  <div className="pointer-events-none absolute inset-0 overflow-hidden">
-    {[...Array(6)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute w-1 h-1 bg-primary/40 rounded-full"
-        initial={{ 
-          x: Math.random() * 100, 
-          y: Math.random() * 100,
-          opacity: 0 
-        }}
-        animate={{
-          x: [null, Math.random() * 100 - 50],
-          y: [null, Math.random() * 100 - 50],
-          opacity: [0, 1, 0],
-        }}
-        transition={{
-          duration: 3 + Math.random() * 2,
-          repeat: Infinity,
-          delay: i * 0.5,
-        }}
-        style={{
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-        }}
-      />
-    ))}
-  </div>
-  );
-};
-
-// Glowing orb for FAB
-function GlowingOrb({ isHovered, reducedMotion }: { isHovered: boolean; reducedMotion: boolean }) {
-  if (reducedMotion) {
-    return (
-      <div
-        className={cn('absolute inset-0 rounded-full opacity-40', TW_BRAND_AURA_LINEAR)}
-        aria-hidden
-      />
-    );
-  }
-  return (
-    <>
-      <motion.div
-        className={cn('absolute inset-0 rounded-full', TW_BRAND_AURA_LINEAR)}
-        animate={{
-          scale: isHovered ? [1, 1.2, 1] : 1,
-          opacity: isHovered ? [0.5, 0.8, 0.5] : 0.5,
-        }}
-        transition={{ duration: 1.5, repeat: Infinity }}
-        aria-hidden
-      />
-      <motion.div
-        className={cn('absolute -inset-1 rounded-full blur-lg', TW_BRAND_AURA_LINEAR)}
-        animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.3, 0.5, 0.3],
-        }}
-        transition={{ duration: 2, repeat: Infinity }}
-        aria-hidden
-      />
-    </>
+    <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.55] dark:opacity-40" aria-hidden>
+      <div className="absolute -left-[20%] top-0 h-[75%] w-[65%] rounded-full bg-gradient-to-br from-sky-200/30 via-transparent to-transparent blur-3xl dark:from-sky-500/[0.12]" />
+      <div className="absolute -right-[18%] bottom-0 h-[65%] w-[55%] rounded-full bg-gradient-to-tl from-violet-200/25 via-transparent to-transparent blur-3xl dark:from-violet-500/[0.1]" />
+    </div>
   );
 }
+
+/** iOS benzeri buzlu cam kabuk — panel & FAB */
+const glassShell = cn(
+  'border border-white/40 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18),inset_0_1px_0_0_rgba(255,255,255,0.55)]',
+  'bg-white/[0.72] backdrop-blur-2xl backdrop-saturate-150',
+  'dark:border-white/[0.08] dark:bg-zinc-950/45 dark:shadow-[0_24px_56px_-14px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+);
+
+const glassBubbleAssistant = cn(
+  'border border-white/45 bg-white/50 text-foreground shadow-sm backdrop-blur-md',
+  'dark:border-white/[0.07] dark:bg-white/[0.06]'
+);
+
+const glassBubbleUser = cn(
+  'border border-sky-400/35 bg-sky-500/[0.42] text-white shadow-sm backdrop-blur-md',
+  'dark:border-sky-400/25 dark:bg-sky-600/45'
+);
+
+const glassAvatarFrame = cn(
+  'rounded-full bg-gradient-to-b from-white/60 to-white/15 p-[2px] shadow-sm ring-1 ring-white/35 backdrop-blur-sm',
+  'dark:from-white/25 dark:to-white/[0.04] dark:ring-white/10'
+);
+
+/** QRA maskot PNG — doygunluk / kontrast / primary glow (cam altında renkler belirgin) */
+const qraMascotImgFilter = cn(
+  'object-cover saturate-[1.22] contrast-[1.08] brightness-[1.05]',
+  'drop-shadow-[0_2px_12px_hsl(var(--primary)/0.42)]',
+  'dark:saturate-[1.34] dark:brightness-[1.1] dark:drop-shadow-[0_2px_16px_hsl(var(--primary)/0.48)]',
+  'transition-[filter,transform] duration-300 ease-out',
+  'group-hover:saturate-[1.38] group-hover:brightness-[1.08] group-hover:drop-shadow-[0_3px_16px_hsl(var(--primary)/0.52)]'
+);
+
+const qraMascotImgFilterStatic = cn(
+  'object-cover saturate-[1.2] contrast-[1.06] brightness-[1.04]',
+  'drop-shadow-[0_2px_10px_hsl(var(--primary)/0.38)]',
+  'dark:saturate-[1.28] dark:brightness-[1.08] dark:drop-shadow-[0_2px_14px_hsl(var(--primary)/0.44)]'
+);
+
+/** FAB hover — küçük sıvı cam baloncukları (yalnızca fine pointer / fare) */
+const FAB_LIQUID_BUBBLES = [
+  { id: 'a', left: '6%', top: '78%', size: 7, rise: 20, drift: 5, delay: 0 },
+  { id: 'b', left: '88%', top: '70%', size: 5, rise: 26, drift: -4, delay: 0.15 },
+  { id: 'c', left: '18%', top: '8%', size: 6, rise: 22, drift: -3, delay: 0.08 },
+  { id: 'd', left: '72%', top: '4%', size: 5, rise: 24, drift: 4, delay: 0.22 },
+  { id: 'e', left: '2%', top: '38%', size: 4, rise: 18, drift: 3, delay: 0.28 },
+  { id: 'f', left: '92%', top: '32%', size: 6, rise: 21, drift: -5, delay: 0.12 },
+  { id: 'g', left: '48%', top: '0%', size: 4, rise: 19, drift: 2, delay: 0.35 },
+] as const;
 
 export function Chatbot() {
   const { data: session } = useSession();
@@ -147,17 +124,20 @@ export function Chatbot() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [finePointer, setFinePointer] = useState(false);
   const [typingMessage, setTypingMessage] = useState(TYPING_MESSAGES[0]);
+  const [botImageOk, setBotImageOk] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Mouse tracking for FAB
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-100, 100], [10, -10]);
-  const rotateY = useTransform(mouseX, [-100, 100], [-10, 10]);
-  const springRotateX = useSpring(rotateX, { stiffness: 150, damping: 20 });
-  const springRotateY = useSpring(rotateY, { stiffness: 150, damping: 20 });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(pointer: fine)');
+    const sync = () => setFinePointer(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -189,7 +169,6 @@ export function Chatbot() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isOpen, closePanel]);
 
-  /** Arkaplan kaydırmasını tam genişlikte panel açıkken kapatır; scrollbar payı için padding telafisi */
   useEffect(() => {
     if (!isOpen || isMinimized) return;
     const previousOverflow = document.body.style.overflow;
@@ -205,7 +184,6 @@ export function Chatbot() {
     };
   }, [isOpen, isMinimized]);
 
-  // Rotate typing message
   useEffect(() => {
     if (isLoading) {
       const interval = setInterval(() => {
@@ -214,14 +192,6 @@ export function Chatbot() {
       return () => clearInterval(interval);
     }
   }, [isLoading]);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    mouseX.set(e.clientX - centerX);
-    mouseY.set(e.clientY - centerY);
-  };
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
@@ -304,19 +274,21 @@ export function Chatbot() {
     }
   };
 
+  const fabSpring = { type: 'spring' as const, stiffness: 260, damping: 22 };
+  const panelSpring = { type: 'spring' as const, stiffness: 380, damping: 34 };
+
   return (
     <>
-      {/* Epic Floating Action Button */}
       <AnimatePresence>
         {!isOpen && (
           <motion.div
-            initial={{ scale: 0, opacity: 0, rotate: -180 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            exit={{ scale: 0, opacity: 0, rotate: 180 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.85, opacity: 0 }}
+            transition={fabSpring}
             className={cn(
-              'fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))]',
-              floatingZTw.assistant
+              floatingZTw.assistant,
+              'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[45] flex flex-col items-end gap-2 sm:bottom-8 sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-10 md:right-10'
             )}
           >
             <motion.button
@@ -324,510 +296,499 @@ export function Chatbot() {
               aria-haspopup="dialog"
               aria-expanded={false}
               aria-controls="qratex-chatbot-panel"
-              aria-label="QRA sohbetini aç — yardıma hazırım"
+              aria-label="QRA sohbetini aç"
               onClick={() => setIsOpen(true)}
               onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => {
-                setIsHovered(false);
-                mouseX.set(0);
-                mouseY.set(0);
-              }}
-              onMouseMove={handleMouseMove}
-              style={{
-                rotateX: springRotateX,
-                rotateY: springRotateY,
-                transformStyle: 'preserve-3d',
-              }}
-              className="group relative flex h-16 w-16 touch-manipulation cursor-pointer items-center justify-center rounded-full shadow-2xl outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onMouseLeave={() => setIsHovered(false)}
+              animate={
+                motionLite
+                  ? undefined
+                  : {
+                      y: [0, -3, 0],
+                    }
+              }
+              transition={
+                motionLite
+                  ? undefined
+                  : {
+                      y: { duration: 2.8, repeat: Infinity, ease: 'easeInOut' },
+                    }
+              }
+              className="group relative isolate flex h-[3.75rem] w-[3.75rem] shrink-0 touch-manipulation cursor-pointer items-center justify-center overflow-visible rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-16 sm:w-16"
             >
-              <GlowingOrb isHovered={isHovered} reducedMotion={motionLite} />
-              
-              {/* Main button */}
-              <motion.div
-                className={cn(
-                  'relative z-10 h-14 w-14 rounded-full flex items-center justify-center overflow-hidden shadow-inner',
-                  TW_BRAND_ORB_FILL
-                )}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {/* Animated background */}
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                  animate={{ x: ['-100%', '100%'] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                />
-                
-                {/* Bot icon or image */}
-                <motion.div
-                  animate={isHovered ? { rotate: [0, -10, 10, 0] } : {}}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Image
-                    src="/logo/chatbot.png"
-                    alt="QRA Chatbot"
-                    width={48}
-                    height={48}
-                    priority
-                    className="object-cover rounded-full"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                  <Bot className="h-7 w-7 text-white hidden first:block" />
-                </motion.div>
-              </motion.div>
+              <div
+                className="pointer-events-none absolute -inset-2 rounded-full bg-gradient-to-b from-white/80 via-white/25 to-transparent opacity-90 blur-xl dark:from-white/25 dark:via-white/10 dark:opacity-60"
+                aria-hidden
+              />
 
-              {/* Notification badge with pulse */}
-              <motion.span 
-                className="absolute -top-1 -right-1 flex h-5 w-5"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.3, type: 'spring' }}
-              >
-                <motion.span 
-                  className="absolute inline-flex h-full w-full rounded-full bg-green-400"
-                  animate={{ scale: [1, 1.5, 1], opacity: [1, 0, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                />
-                <span className="relative inline-flex rounded-full h-5 w-5 bg-green-500 items-center justify-center">
-                  <Sparkles className="h-3 w-3 text-white" />
-                </span>
-              </motion.span>
-
-              {/* Hover tooltip */}
               <AnimatePresence>
-                {isHovered && (
+                {isHovered && finePointer && !motionLite && (
                   <motion.div
-                    initial={{ opacity: 0, x: 10, scale: 0.8 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 10, scale: 0.8 }}
-                    className="absolute right-full mr-3 max-w-[200px] rounded-2xl border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-xl shadow-primary/10 backdrop-blur-md"
+                    key="fab-liquid-bubbles"
+                    className="pointer-events-none absolute inset-0 z-[5]"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    <p className="text-sm font-bold leading-tight text-foreground">QRA burada</p>
-                    <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                      Soru sor, birlikte çözelim — tek dokunuş yeter.
-                    </p>
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                      <Wand2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Hazırım, bekliyorum
-                    </div>
+                    {FAB_LIQUID_BUBBLES.map((b) => (
+                      <motion.span
+                        key={b.id}
+                        className={cn(
+                          'pointer-events-none absolute rounded-full border border-white/55',
+                          'bg-gradient-to-br from-white/75 via-white/25 to-primary/20',
+                          'shadow-[inset_0_1px_3px_rgba(255,255,255,0.95),0_2px_6px_-1px_rgba(0,0,0,0.12)]',
+                          'backdrop-blur-sm dark:border-white/20 dark:from-white/40 dark:via-white/12 dark:to-primary/15',
+                          'dark:shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_2px_8px_-2px_rgba(0,0,0,0.35)]'
+                        )}
+                        style={{
+                          left: b.left,
+                          top: b.top,
+                          width: b.size,
+                          height: b.size,
+                        }}
+                        initial={{ opacity: 0, scale: 0.4, y: 0, x: 0 }}
+                        animate={{
+                          opacity: [0, 0.92, 0.75, 0],
+                          y: [0, -8 - b.rise, -14 - b.rise],
+                          x: [0, b.drift * 0.6, b.drift],
+                          scale: [0.5, 1, 0.85, 0.45],
+                        }}
+                        exit={{ opacity: 0, scale: 0.3, transition: { duration: 0.2 } }}
+                        transition={{
+                          duration: 2.35,
+                          repeat: Infinity,
+                          delay: b.delay,
+                          ease: [0.22, 1, 0.36, 1],
+                          repeatDelay: 0.35,
+                        }}
+                        aria-hidden
+                      />
+                    ))}
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.button>
 
-            {/* Orbiting particles */}
-            {isHovered && !motionLite && (
-              <>
-                {[...Array(3)].map((_, i) => (
+              <motion.div
+                className={cn(
+                  'relative z-10 flex h-[3.35rem] w-[3.35rem] items-center justify-center overflow-hidden rounded-full',
+                  'border-[1.5px] border-white/65 bg-gradient-to-b from-white/55 via-white/30 to-white/[0.14]',
+                  'shadow-[0_14px_36px_-10px_rgba(0,0,0,0.22),inset_0_2px_0_0_rgba(255,255,255,0.85),inset_0_-14px_28px_-6px_rgba(255,255,255,0.18)]',
+                  'backdrop-blur-2xl backdrop-saturate-150',
+                  'dark:border-white/22 dark:from-white/22 dark:via-white/12 dark:to-white/[0.05]',
+                  'dark:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_-12px_24px_-8px_rgba(0,0,0,0.25)]',
+                  'sm:h-14 sm:w-14'
+                )}
+                whileHover={motionLite ? undefined : { scale: 1.04 }}
+                whileTap={{ scale: 0.92 }}
+              >
+                {!motionLite && (
                   <motion.div
-                    key={i}
-                    className={cn('absolute h-2 w-2 rounded-full', TW_BRAND_DOT)}
-                    style={{
-                      top: '50%',
-                      left: '50%',
-                    }}
-                    animate={{
-                      x: [0, Math.cos(i * 120 * (Math.PI / 180)) * 40],
-                      y: [0, Math.sin(i * 120 * (Math.PI / 180)) * 40],
-                      scale: [0, 1, 0],
-                    }}
-                    transition={{
-                      duration: 1,
-                      repeat: Infinity,
-                      delay: i * 0.2,
-                    }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/[0.08]"
+                    animate={{ x: ['-120%', '120%'] }}
+                    transition={{ duration: 3.6, repeat: Infinity, ease: 'linear' }}
+                    aria-hidden
                   />
-                ))}
-              </>
-            )}
+                )}
+                <motion.span
+                  className="relative z-[1] flex items-center justify-center"
+                  animate={isHovered && !motionLite ? { rotate: [0, -10, 10, 0] } : { rotate: 0 }}
+                  transition={{ duration: 0.55 }}
+                >
+                  {botImageOk ? (
+                    <Image
+                      src="/logo/chatbot.png"
+                      alt=""
+                      width={56}
+                      height={56}
+                      priority
+                      className={cn(
+                        'h-[2.6rem] w-[2.6rem] rounded-full ring-1 ring-white/35 sm:h-12 sm:w-12 dark:ring-white/15',
+                        qraMascotImgFilter
+                      )}
+                      onError={() => setBotImageOk(false)}
+                    />
+                  ) : (
+                    <Bot className="h-7 w-7 text-primary sm:h-8 sm:w-8" aria-hidden />
+                  )}
+                </motion.span>
+              </motion.div>
+            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Epic Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.8 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            id="qratex-chatbot-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="QRA ile sohbet"
-            className={cn(
-              'fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] flex max-h-[calc(100dvh-6rem)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden',
-              floatingZTw.assistant,
-              isMinimized
-                ? 'h-16 w-[min(22rem,calc(100vw-2rem))] sm:w-80'
-                : 'h-[min(550px,calc(100dvh-5rem))] w-[min(400px,calc(100vw-2rem))] sm:h-[min(600px,calc(100dvh-4rem))] sm:w-[420px]'
-            )}
+            key="qra-open-layer"
+            className="pointer-events-none fixed inset-0 z-[44]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
           >
-            {/* Glassmorphism container */}
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl" />
-            
-            {/* Animated gradient border */}
-            <div className="absolute inset-0 overflow-hidden rounded-3xl p-[1px]">
-              {!motionLite ? (
-                <motion.div
-                  className="absolute inset-[-50%] bg-gradient-conic from-primary via-primary/80 via-violet-500 via-orange-500 via-yellow-500 via-green-500 via-cyan-500 to-primary"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
-                  style={{ opacity: 0.3 }}
+            <motion.button
+              type="button"
+              aria-label="Sohbet panelini kapat"
+              className="pointer-events-auto absolute inset-0 bg-black/45 backdrop-blur-md sm:bg-black/35"
+              onClick={closePanel}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, y: 36, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 24, scale: 0.98 }}
+              transition={panelSpring}
+              id="qratex-chatbot-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label={isMinimized ? 'QRA sohbet — küçük görünüm' : 'QRA ile sohbet'}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                floatingZTw.assistant,
+                'pointer-events-auto fixed flex flex-col overflow-hidden',
+                glassShell,
+                'max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom,0px)))] max-sm:w-full max-sm:rounded-t-[1.75rem] max-sm:rounded-b-none',
+                'sm:bottom-[max(1rem,env(safe-area-inset-bottom,0px))] sm:right-[max(1rem,env(safe-area-inset-right,0px))] sm:left-auto sm:top-auto sm:max-h-[min(600px,calc(100dvh-5rem))] sm:w-[min(24rem,calc(100vw-2rem))] sm:rounded-[1.75rem]',
+                'md:bottom-6 md:right-6 md:max-h-[min(640px,calc(100dvh-4rem))] md:w-[min(26rem,calc(100vw-3rem))]',
+                isMinimized
+                  ? cn(
+                      'max-sm:inset-x-auto max-sm:left-auto max-sm:right-[max(0.75rem,env(safe-area-inset-right,0px))]',
+                      'max-sm:bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] max-sm:top-auto max-sm:h-auto max-sm:max-h-none',
+                      'max-sm:w-auto max-sm:max-w-[min(20rem,calc(100vw-1.5rem))] max-sm:rounded-2xl max-sm:shadow-2xl',
+                      'max-sm:ring-1 max-sm:ring-white/30 dark:max-sm:ring-white/10',
+                      'h-auto sm:h-auto sm:min-h-0 sm:w-max sm:max-w-[min(21rem,calc(100vw-2rem))] md:w-max'
+                    )
+                  : 'max-sm:h-[min(88dvh,calc(100dvh-1rem))] sm:h-[min(560px,calc(100dvh-5rem))] md:h-[min(580px,calc(100dvh-4.5rem))]'
+              )}
+            >
+              <div
+                className={cn(
+                  'pointer-events-none absolute inset-x-0 top-0 z-[1]',
+                  isMinimized
+                    ? 'h-px rounded-t-2xl bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/15'
+                    : 'h-px rounded-t-[1.75rem] bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/12 md:h-[2px]'
+                )}
+                aria-hidden
+              />
+
+              <header
+                className={cn(
+                  'relative flex shrink-0 items-center justify-between gap-2 sm:gap-3',
+                  isMinimized
+                    ? 'border-b-0 px-2.5 py-2 sm:px-3 sm:py-2'
+                    : 'border-b border-white/20 px-3 py-3 dark:border-white/[0.06] sm:px-4 sm:py-3.5'
+                )}
+              >
+                <div
+                  className="absolute inset-0 -z-0 bg-gradient-to-b from-white/40 to-transparent opacity-90 dark:from-white/[0.05] dark:to-transparent dark:opacity-100"
                   aria-hidden
                 />
-              ) : (
-                <div className={cn('absolute inset-0 rounded-3xl', TW_BRAND_PANEL_SHELL_SOFT)} aria-hidden />
-              )}
-            </div>
+                {!motionLite && !isMinimized && (
+                  <motion.div
+                    className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent dark:via-white/5"
+                    animate={{ x: ['-100%', '100%'] }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                    aria-hidden
+                  />
+                )}
 
-            {/* Content wrapper */}
-            <div className="relative flex flex-col h-full rounded-3xl overflow-hidden">
-              {/* Epic Header */}
-              <motion.div 
-                className="relative flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4"
-                initial={false}
-              >
-                {/* Header background with animated gradient */}
-                <div className={cn('absolute inset-0', TW_BRAND_CHAT_HEADER_BG)} />
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"
-                  animate={{ x: ['-100%', '100%'] }}
-                  transition={{ duration: 3, repeat: Infinity }}
-                />
-                
-                <div className="relative flex items-center gap-3">
-                  {/* Animated avatar */}
-                  <motion.div 
-                    className="relative"
-                    whileHover={{ scale: 1.1 }}
+                <div className="relative z-[1] flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+                  <motion.div
+                    className="relative shrink-0"
+                    animate={motionLite || isMinimized ? undefined : { y: [0, -2, 0] }}
+                    transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                   >
-                    <motion.div
-                      className={cn('absolute -inset-1 rounded-full blur-sm', TW_BRAND_AVATAR_HALO)}
-                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
                     <div
                       className={cn(
-                        'relative h-11 w-11 overflow-hidden rounded-full p-0.5',
-                        TW_BRAND_FACE_GRADIENT
+                        glassAvatarFrame,
+                        isMinimized ? 'h-9 w-9' : 'h-10 w-10 sm:h-11 sm:w-11'
                       )}
                     >
-                      <div className="h-full w-full rounded-full overflow-hidden bg-background flex items-center justify-center">
-                        <Image
-                          src="/logo/chatbot.png"
-                          alt="QRA"
-                          width={44}
-                          height={44}
-                          className="object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        <Brain className="h-6 w-6 text-primary hidden first:block" />
+                      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-white/50 backdrop-blur-sm dark:bg-zinc-900/55">
+                        {botImageOk ? (
+                          <Image
+                            src="/logo/chatbot.png"
+                            alt=""
+                            width={48}
+                            height={48}
+                            className={cn('h-full w-full', qraMascotImgFilterStatic)}
+                            onError={() => setBotImageOk(false)}
+                          />
+                        ) : (
+                          <Brain
+                            className={cn('text-primary', isMinimized ? 'h-5 w-5' : 'h-6 w-6 sm:h-7 sm:w-7')}
+                            aria-hidden
+                          />
+                        )}
                       </div>
                     </div>
-                    <motion.span 
-                      className="absolute bottom-0 right-0 h-3.5 w-3.5 bg-green-500 rounded-full border-2 border-background"
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
                   </motion.div>
-                  
-                  <div>
-                    <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-bold sm:text-base">
-                      <span className={cn('truncate', TW_BRAND_HEADLINE_GRADIENT)}>
-                        QRA
-                      </span>
+
+                  <div className="min-w-0">
+                    <h3 className="flex min-w-0 flex-wrap items-center gap-2 truncate text-sm font-semibold tracking-tight sm:text-base">
+                      <span className={cn('truncate', TW_BRAND_HEADLINE_GRADIENT)}>QRA</span>
                       {!isMinimized && (
-                        <Sparkles className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+                        <>
+                          <span className="hidden rounded-full border border-white/40 bg-white/35 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06] sm:inline">
+                            Asistan
+                          </span>
+                          <Sparkles className="h-3.5 w-3.5 shrink-0 text-foreground/50 motion-reduce:hidden sm:h-4 sm:w-4" aria-hidden />
+                        </>
                       )}
                     </h3>
-                    <motion.p
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground sm:text-xs"
-                      key={isMinimized ? 'mini' : isLoading ? typingMessage : 'online'}
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      {isMinimized ? (
-                        <span className="truncate text-primary/90">
-                          Küçük mod — genişlet, devam edelim
-                        </span>
-                      ) : isLoading ? (
-                        <>
-                          <motion.span
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                          >
-                            <Zap className="h-3 w-3 text-amber-400" />
-                          </motion.span>
-                          <span className="text-foreground/80">{typingMessage}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                          <span>Tatlı ama hızlı · Hazırım</span>
-                        </>
-                      )}
-                    </motion.p>
+                    {!isMinimized && (
+                      <>
+                        <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">QRATEX için yapay zeka yardımcısı</p>
+                        <motion.p
+                          className="mt-1 flex min-h-[1.125rem] items-center gap-1.5 truncate text-[11px] text-muted-foreground sm:mt-1.5 sm:text-xs"
+                          key={isLoading ? typingMessage : 'idle'}
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Zap className="h-3.5 w-3.5 shrink-0 text-foreground/45 motion-reduce:animate-none animate-pulse sm:h-4 sm:w-4" />
+                              <span className="truncate text-foreground/90">{typingMessage}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/30" aria-hidden />
+                              <span className="truncate">Çevrimiçi · Hazırım</span>
+                            </>
+                          )}
+                        </motion.p>
+                      </>
+                    )}
                   </div>
                 </div>
-                
-                <div className="relative flex items-center gap-1">
+
+                <div className="relative z-[1] flex shrink-0 items-center gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={isMinimized ? 'Sohbeti genişlet — hadi devam' : 'Sohbeti küçült — minik mod'}
-                    title={isMinimized ? 'Genişlet, konuşalım' : 'Küçült — kenarda dursun'}
+                    aria-label={isMinimized ? 'Sohbeti genişlet' : 'Küçült'}
                     type="button"
-                    className="h-11 w-11 touch-manipulation rounded-xl transition-colors duration-200 hover:bg-white/10 sm:h-9 sm:w-9"
+                    className={cn(
+                      'touch-manipulation rounded-xl border border-transparent hover:border-white/25 hover:bg-white/25 dark:hover:bg-white/[0.06]',
+                      isMinimized ? 'h-8 w-8 sm:h-9 sm:w-9' : 'h-9 w-9 sm:h-10 sm:w-10'
+                    )}
                     onClick={() => setIsMinimized(!isMinimized)}
                   >
                     {isMinimized ? (
-                      <Maximize2 className="h-4 w-4 text-primary" />
+                      <Maximize2 className="h-4 w-4 text-foreground sm:h-[1.125rem] sm:w-[1.125rem]" />
                     ) : (
-                      <Minimize2 className="h-4 w-4" />
+                      <Minimize2 className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                     )}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     type="button"
-                    aria-label="Sohbeti kapat — görüşürüz"
-                    title="Kapat"
-                    className="h-11 w-11 touch-manipulation rounded-xl transition-colors duration-200 hover:bg-red-500/20 hover:text-red-500 sm:h-9 sm:w-9"
+                    aria-label="Kapat"
+                    className={cn(
+                      'touch-manipulation rounded-xl border border-transparent hover:border-white/20 hover:bg-red-500/10 hover:text-destructive dark:hover:bg-red-950/30',
+                      isMinimized ? 'h-8 w-8 sm:h-9 sm:w-9' : 'h-9 w-9 sm:h-10 sm:w-10'
+                    )}
                     onClick={closePanel}
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                   </Button>
                 </div>
-              </motion.div>
+              </header>
 
-              {/* Messages Area */}
               {!isMinimized && (
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-                  {/* Floating particles in chat */}
-                  <FloatingParticles enabled={!motionLite} />
-                  
-                  {/* Messages container - scrollable */}
-                  <div
-                    className="flex-1 space-y-4 overflow-y-auto overscroll-contain touch-pan-y p-4"
-                    style={{ overflowY: 'auto' }}
-                  >
-                    {messages.map((message, index) => (
-                        <motion.div
+                <div className="relative flex min-h-0 flex-1 flex-col">
+                  <LiquidGlassWash enabled={!motionLite} />
+
+                  <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-3 py-3 sm:px-4 sm:py-4">
+                    <ul className="mx-auto max-w-none space-y-3 sm:space-y-3.5">
+                      {messages.map((message, index) => (
+                        <motion.li
                           key={message.id}
-                          initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          transition={{ 
+                          initial={{ opacity: 0, y: 12, filter: motionLite ? undefined : 'blur(3px)' }}
+                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                          transition={{
                             type: 'spring',
-                            stiffness: 300,
-                            damping: 25,
-                            delay: index === messages.length - 1 ? 0 : 0 
+                            stiffness: 400,
+                            damping: 30,
+                            delay: index === messages.length - 1 ? 0 : 0,
                           }}
-                          className={`flex gap-3 ${
-                            message.role === 'user' ? 'flex-row-reverse' : ''
-                          }`}
+                          className={cn('flex gap-2 sm:gap-2.5', message.role === 'user' ? 'flex-row-reverse' : '')}
                         >
-                          {/* Avatar */}
-                          <motion.div whileHover={{ scale: 1.1 }}>
-                            <Avatar className="h-9 w-9 shrink-0 ring-2 ring-offset-2 ring-offset-background ring-primary/20">
-                              {message.role === 'assistant' ? (
-                                <AvatarImage src="/logo/chatbot.png" alt="QRA" />
-                              ) : (
-                                <>
-                                  <AvatarImage src={session?.user?.image || ''} />
-                                  <AvatarFallback className={cn(TW_BRAND_FACE_GRADIENT, 'text-white')}>
-                                    <User className="h-4 w-4" />
-                                  </AvatarFallback>
-                                </>
-                              )}
-                            </Avatar>
-                          </motion.div>
-                          
-                          {/* Message bubble */}
-                          <motion.div
-                            whileHover={{ scale: 1.02 }}
-                            className={`relative max-w-[80%] ${
-                              message.role === 'user'
-                                ? cn(TW_BRAND_USER_BUBBLE, 'rounded-2xl rounded-tr-sm')
-                                : 'rounded-2xl rounded-tl-sm border border-border/50 bg-muted/80 backdrop-blur-sm'
-                            } px-4 py-3 shadow-lg`}
-                          >
-                            {/* Shine effect for user messages */}
-                            {message.role === 'user' && (
-                              <motion.div
-                                className="absolute inset-0 rounded-2xl rounded-tr-sm bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                                initial={{ x: '-100%' }}
-                                animate={{ x: '100%' }}
-                                transition={{ duration: 1, delay: 0.5 }}
-                              />
+                          <Avatar className="mt-0.5 h-8 w-8 shrink-0 ring-1 ring-white/35 ring-offset-1 ring-offset-transparent dark:ring-white/10 sm:h-9 sm:w-9">
+                            {message.role === 'assistant' ? (
+                              <>
+                                {botImageOk ? <AvatarImage src="/logo/chatbot.png" alt="" className={qraMascotImgFilterStatic} /> : null}
+                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                                  <Bot className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+                                </AvatarFallback>
+                              </>
+                            ) : (
+                              <>
+                                <AvatarImage src={session?.user?.image || ''} alt="" />
+                                <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                                  <User className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+                                </AvatarFallback>
+                              </>
                             )}
-                            
-                            <p className="text-sm whitespace-pre-wrap relative">{message.content}</p>
-                            <span className={`text-[10px] mt-1.5 block ${
-                              message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
-                            }`}>
-                              {message.timestamp.toLocaleTimeString('tr-TR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          </motion.div>
-                        </motion.div>
-                      ))}
-                      
-                      {/* Loading indicator */}
-                      {isLoading && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="flex gap-3"
-                        >
-                          <Avatar className="h-9 w-9 ring-2 ring-offset-2 ring-offset-background ring-primary/20">
-                            <AvatarImage src="/logo/chatbot.png" alt="QRA" />
                           </Avatar>
-                          <div className="bg-muted/80 backdrop-blur-sm rounded-2xl rounded-tl-sm px-4 py-3 border border-border/50">
-                            <div className="flex items-center gap-2">
-                              <motion.div className="flex gap-1">
-                                {[0, 1, 2].map((i) => (
-                                  <motion.span
-                                    key={i}
-                                    className={cn('h-2 w-2 rounded-full', TW_BRAND_DOT)}
-                                    animate={{
-                                      y: [0, -8, 0],
-                                      scale: [1, 1.2, 1],
-                                    }}
-                                    transition={{
-                                      duration: 0.6,
-                                      repeat: Infinity,
-                                      delay: i * 0.1,
-                                    }}
-                                  />
-                                ))}
-                              </motion.div>
-                              <motion.span
-                                className="text-xs text-muted-foreground"
-                                animate={{ opacity: [0.5, 1, 0.5] }}
-                                transition={{ duration: 1.5, repeat: Infinity }}
-                              >
-                                Hmm, düşünüyorum…
-                              </motion.span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
 
-                    {/* Quick Actions - Epic Cards */}
-                    <AnimatePresence>
-                      {messages.length <= 2 && !isLoading && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 20 }}
-                          className="px-4 pb-3 shrink-0"
-                        >
-                          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                            <Lightbulb className="h-3.5 w-3.5 text-amber-400" aria-hidden />
-                            Hadi başlayalım
-                          </p>
-                          <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
-                            Aşağıdan birini seç veya aklına geleni yaz.
-                          </p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {QUICK_ACTIONS.map((action, i) => (
-                              <motion.button
-                                key={action.label}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: i * 0.1 }}
-                                whileHover={motionLite ? undefined : { scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                type="button"
-                                onClick={() => sendMessage(action.message)}
-                                className={`group relative overflow-hidden rounded-xl bg-gradient-to-br p-3 text-left text-white touch-manipulation transition-transform duration-200 ${action.color}`}
-                              >
-                                <motion.div
-                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                                  initial={{ x: '-100%' }}
-                                  whileHover={{ x: '100%' }}
-                                  transition={{ duration: 0.5 }}
-                                />
-                                <action.icon className="h-4 w-4 mb-1 group-hover:scale-110 transition-transform" />
-                                <span className="text-xs font-medium block">{action.label}</span>
-                              </motion.button>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Epic Input Area */}
-                    <div className="relative p-4 border-t border-border/30 shrink-0 bg-background/50 backdrop-blur-sm">
-                      <div className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-                      
-                      <div className="relative flex gap-2">
-                        <div className="flex-1 relative group">
-                          <motion.div
+                          <div
                             className={cn(
-                              'absolute -inset-0.5 rounded-xl opacity-0 blur transition-opacity group-focus-within:opacity-100',
-                              TW_BRAND_AURA_LINEAR
-                            )}
-                          />
-                          <textarea
-                            ref={inputRef}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Merhaba de… ya da merak ettiğini yaz"
-                            disabled={isLoading}
-                            rows={1}
-                            className="relative min-h-[44px] w-full resize-none touch-manipulation rounded-xl border border-border/50 bg-muted/50 px-4 py-3 text-sm backdrop-blur-sm transition-[border-color,background-color] duration-200 focus:border-primary/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
-                            style={{ maxHeight: '120px' }}
-                          />
-                        </div>
-                        
-                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                          <Button
-                            type="button"
-                            aria-label="Gönder"
-                            onClick={() => sendMessage(input)}
-                            disabled={!input.trim() || isLoading}
-                            size="icon"
-                            className={cn(
-                              'h-11 w-11 touch-manipulation rounded-xl transition-[opacity,box-shadow] duration-200 disabled:opacity-50 disabled:shadow-none',
-                              TW_BRAND_SEND_BTN
+                              'max-w-[min(100%,17.5rem)] px-3 py-2 text-sm leading-relaxed sm:max-w-[min(100%,19rem)] sm:rounded-2xl sm:px-3.5 sm:py-2.5',
+                              message.role === 'user'
+                                ? cn(glassBubbleUser, 'rounded-2xl rounded-tr-md')
+                                : cn(glassBubbleAssistant, 'rounded-2xl rounded-tl-md')
                             )}
                           >
-                            <motion.div
-                              animate={input.trim() ? { rotate: [0, -10, 10, 0] } : {}}
-                              transition={{ duration: 0.3 }}
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p>
+                            <time
+                              className={cn(
+                                'mt-1.5 block text-[10px] tabular-nums sm:text-[11px]',
+                                message.role === 'user' ? 'text-white/70' : 'text-muted-foreground'
+                              )}
+                              dateTime={message.timestamp.toISOString()}
                             >
-                              <Send className="h-4 w-4" />
-                            </motion.div>
-                          </Button>
-                        </motion.div>
-                      </div>
-                      
-                      <motion.p
-                        className="mt-3 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.5 }}
+                              {message.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                            </time>
+                          </div>
+                        </motion.li>
+                      ))}
+                    </ul>
+
+                    {isLoading && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mx-auto mt-3 flex gap-2 sm:mt-4 sm:gap-2.5"
+                        aria-live="polite"
                       >
-                        <Zap className="h-3 w-3 text-amber-400" aria-hidden />
-                        Groq ile güçlü · Seni dinliyorum
-                        <Coffee className="h-3 w-3 text-orange-400" aria-hidden />
-                      </motion.p>
-                    </div>
+                        <Avatar className="h-8 w-8 shrink-0 ring-1 ring-white/35 ring-offset-1 ring-offset-transparent dark:ring-white/10 sm:h-9 sm:w-9">
+                          {botImageOk ? <AvatarImage src="/logo/chatbot.png" alt="" className={qraMascotImgFilterStatic} /> : null}
+                          <AvatarFallback className="border border-white/30 bg-white/55 text-primary backdrop-blur-md dark:border-white/10 dark:bg-zinc-800/70 dark:text-zinc-100">
+                            <Bot className="h-4 w-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div
+                          className={cn(
+                            glassBubbleAssistant,
+                            'rounded-2xl rounded-tl-md px-3 py-2 sm:px-3.5 sm:py-2.5'
+                          )}
+                        >
+                          <div className="flex items-center gap-2 sm:gap-2.5">
+                            <div className="flex gap-1.5">
+                              {[0, 1, 2].map((i) => (
+                                <motion.span
+                                  key={i}
+                                  className="h-2 w-2 rounded-full bg-foreground/20 dark:bg-white/25"
+                                  animate={
+                                    motionLite
+                                      ? undefined
+                                      : {
+                                          y: [0, -6, 0],
+                                          opacity: [0.45, 1, 0.45],
+                                        }
+                                  }
+                                  transition={
+                                    motionLite
+                                      ? undefined
+                                      : { duration: 0.55, repeat: Infinity, delay: i * 0.12 }
+                                  }
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-muted-foreground">Yazıyorum…</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                    <div ref={messagesEndRef} className="h-px w-full shrink-0" />
                   </div>
-                )}
-            </div>
+
+                  <AnimatePresence>
+                    {messages.length <= 2 && !isLoading && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="shrink-0 border-t border-white/25 bg-white/25 px-3 pb-2 pt-3 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.04] sm:px-4 sm:pb-3 sm:pt-3.5"
+                      >
+                        <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-foreground">
+                          <Lightbulb className="h-4 w-4 text-foreground/50" aria-hidden />
+                          Hızlı başlangıç
+                        </p>
+                        <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground sm:mb-3 sm:text-xs">
+                          Aşağıdan seç veya yaz; masaüstünde <span className="font-medium text-foreground">Enter</span> gönderir,{' '}
+                          <span className="font-medium text-foreground">Shift+Enter</span> satır kırar.
+                        </p>
+                        <div className="mx-auto grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
+                          {QUICK_ACTIONS.map((action, i) => (
+                            <motion.button
+                              key={action.label}
+                              type="button"
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.04 * i, type: 'spring', stiffness: 400, damping: 34 }}
+                              whileHover={motionLite ? undefined : { y: -1 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => sendMessage(action.message)}
+                              className="flex min-h-11 touch-manipulation items-center gap-2.5 rounded-2xl border border-white/40 bg-white/45 p-2.5 text-left text-foreground shadow-sm backdrop-blur-md transition-[transform,box-shadow] hover:bg-white/55 hover:shadow-md dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/[0.1] sm:min-h-12 sm:gap-3 sm:p-3"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/35 bg-white/40 backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.06] sm:h-9 sm:w-9">
+                                <action.icon className="h-3.5 w-3.5 text-primary sm:h-4 sm:w-4" aria-hidden />
+                              </span>
+                              <span className="text-[11px] font-semibold leading-snug sm:text-xs">{action.label}</span>
+                            </motion.button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="shrink-0 border-t border-white/30 bg-white/30 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] pt-3 backdrop-blur-2xl dark:border-white/[0.07] dark:bg-zinc-950/40 sm:px-4 sm:pb-3.5 sm:pt-3.5">
+                    <div className="mx-auto flex gap-2 sm:gap-2.5">
+                      <div className="relative min-w-0 flex-1">
+                        <textarea
+                          ref={inputRef}
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Merhaba… veya sorunu yaz"
+                          disabled={isLoading}
+                          rows={1}
+                          className={cn(
+                            'min-h-[2.75rem] w-full resize-none touch-manipulation rounded-2xl border border-white/45 bg-white/50 px-3 py-2.5 text-sm leading-snug text-foreground placeholder:text-muted-foreground/75 backdrop-blur-md',
+                            'focus:border-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent',
+                            'disabled:opacity-50 dark:border-white/10 dark:bg-zinc-900/45 sm:min-h-11 sm:px-3.5 sm:py-3'
+                          )}
+                          style={{ maxHeight: 140 }}
+                        />
+                      </div>
+                      <motion.div whileTap={{ scale: 0.94 }} className="shrink-0 self-end">
+                        <Button
+                          type="button"
+                          aria-label="Gönder"
+                          onClick={() => sendMessage(input)}
+                          disabled={!input.trim() || isLoading}
+                          size="icon"
+                          className="h-11 w-11 touch-manipulation rounded-2xl border border-white/45 bg-gradient-to-b from-white/90 to-white/55 text-primary shadow-md backdrop-blur-md hover:from-white hover:to-white/70 disabled:opacity-50 dark:border-white/12 dark:from-zinc-700/95 dark:to-zinc-800/90 dark:text-white sm:h-12 sm:w-12"
+                        >
+                          <Send className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
+                        </Button>
+                      </motion.div>
+                    </div>
+                    <p className="mx-auto mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:mt-2.5 sm:text-[11px]">
+                      <Zap className="h-3 w-3 shrink-0 text-foreground/35 sm:h-3.5 sm:w-3.5" aria-hidden />
+                      Groq ile hızlı yanıt
+                      <Coffee className="h-3 w-3 shrink-0 text-foreground/35 sm:h-3.5 sm:w-3.5" aria-hidden />
+                    </p>
+                  </div>
+                </div>
+              )}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

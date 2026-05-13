@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { trackRequest } from '@/lib/metrics';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -46,7 +47,7 @@ export async function GET() {
       trackRequest('/api/admin/vercel-status', false, latencyMs);
       return NextResponse.json(
         { error: true, message: `Vercel Status API returned ${res.status}` },
-        { status: 502 }
+        { status: 502, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -85,18 +86,14 @@ export async function GET() {
 
     trackRequest('/api/admin/vercel-status', true, latencyMs);
 
-    return NextResponse.json(body, {
-      headers: {
-        'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
-      },
-    });
+    return NextResponse.json(body, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (err) {
     const latencyMs = Date.now() - start;
     trackRequest('/api/admin/vercel-status', false, latencyMs);
     const message = err instanceof Error ? err.message : 'Vercel Status fetch failed';
     return NextResponse.json(
       { error: true, message },
-      { status: 502 }
+      { status: 502, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

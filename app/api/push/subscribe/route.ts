@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 // POST - Subscribe to push notifications
 
@@ -11,14 +12,25 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const subscription = await req.json();
     const { endpoint, keys } = subscription;
 
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
-      return NextResponse.json({ error: 'Invalid subscription data' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid subscription data' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    const existing = await prisma.pushSubscription.findUnique({
+      where: { endpoint },
+      select: { userId: true },
+    });
+    if (existing && existing.userId !== session.user.id) {
+      return NextResponse.json(
+        { error: 'This push endpoint is already linked to another account' },
+        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Upsert subscription
@@ -45,10 +57,12 @@ export async function POST(req: NextRequest) {
       success: true,
       message: 'Push notifications enabled',
       subscriptionId: pushSubscription.id,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error subscribing to push:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -57,7 +71,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { endpoint } = await req.json();
@@ -81,9 +95,11 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Push notifications disabled',
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error unsubscribing from push:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

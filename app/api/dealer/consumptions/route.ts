@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createConsumptionSchema } from '@/lib/validations';
+import {
+  PRIVATE_NO_STORE_HEADERS,
+  clampPageParam,
+  clampPageSizeParam,
+  paginationSkip,
+  responseIfDatabaseUnavailable,
+} from '@/lib/api-http';
 
 // Rate limit için basit in-memory cache (production'da Redis kullanılmalı)
 
@@ -22,9 +29,9 @@ export async function GET(request: NextRequest) {
     const { session } = auth;
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
-    const skip = (page - 1) * pageSize;
+    const page = clampPageParam(searchParams.get('page'));
+    const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
+    const skip = paginationSkip(page, pageSize);
 
     const [consumptions, total] = await Promise.all([
       prisma.consumption.findMany({
@@ -73,21 +80,36 @@ export async function GET(request: NextRequest) {
       prisma.consumption.count({ where: { dealerId: session.user.id } }),
     ]);
 
-    return NextResponse.json({
-      success: true,
-      items: consumptions,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
+    const items = consumptions.map((row) => {
+      const token = row.card?.token;
+      const tokenPublic =
+        typeof token === 'string' && token.length > 0 ? token.slice(-4) : '';
+      return {
+        ...row,
+        card: row.card ? { id: row.card.id, token: tokenPublic } : row.card,
+      };
     });
+
+    return NextResponse.json(
+      {
+        success: true,
+        items,
+        pagination: {
+          total,
+          page,
+          pageSize,
+          totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
+        },
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching consumptions:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'Tüketimler getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }
@@ -108,7 +130,7 @@ export async function POST(request: NextRequest) {
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -133,21 +155,21 @@ export async function POST(request: NextRequest) {
     if (!card) {
       return NextResponse.json(
         { error: 'Kart bulunamadı' },
-        { status: 404 }
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
     if (card.status === 'BLOCKED') {
       return NextResponse.json(
         { error: 'Bu kart bloklanmış' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
     if (card.status === 'UNUSED' || !card.customerId) {
       return NextResponse.json(
         { error: 'Bu kart henüz aktive edilmemiş' },
-        { status: 400 }
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
@@ -157,9 +179,17 @@ export async function POST(request: NextRequest) {
     const now = Date.now();
 
     if (now - lastRequest < RATE_LIMIT_WINDOW / RATE_LIMIT_MAX) {
+      const minGapMs = RATE_LIMIT_WINDOW / RATE_LIMIT_MAX;
+      const retryAfterSec = Math.max(1, Math.ceil((lastRequest + minGapMs - now) / 1000));
       return NextResponse.json(
         { error: 'Çok hızlı! Lütfen biraz bekleyin.' },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            'Retry-After': String(retryAfterSec),
+          },
+        }
       );
     }
 
@@ -181,7 +211,7 @@ export async function POST(request: NextRequest) {
       if (!product) {
         return NextResponse.json(
           { error: 'Ürün bulunamadı' },
-          { status: 404 }
+          { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
 
@@ -189,7 +219,7 @@ export async function POST(request: NextRequest) {
       if (product.dealerId && product.dealerId !== session.user.id) {
         return NextResponse.json(
           { error: 'Bu ürüne erişim yetkiniz yok' },
-          { status: 403 }
+          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
     }
@@ -285,16 +315,21 @@ export async function POST(request: NextRequest) {
     }
     // ----------------------------------
 
-    return NextResponse.json({
-      success: true,
-      message: 'Tüketim kaydı oluşturuldu',
-      consumption,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Tüketim kaydı oluşturuldu',
+        consumption,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error creating consumption:', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     return NextResponse.json(
       { error: 'Tüketim kaydı oluşturulamadı' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

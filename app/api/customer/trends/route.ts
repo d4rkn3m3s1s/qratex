@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { getPointsMatrix } from '@/lib/points-rules';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,43 +39,70 @@ export async function GET() {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: 'User not found' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const [matrix, feedbacks] = await Promise.all([
+    const lastWeekStart = new Date(sevenDaysAgo);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const TRENDS_ROW_CAP = 5000;
+
+    const [
+      matrix,
+      feedbacks,
+      fbThisWeek,
+      fbLastWeek,
+      fbCount30d,
+    ] = await Promise.all([
       getPointsMatrix(),
       prisma.feedback.findMany({
         where: {
           userId,
-          createdAt: { gte: thirtyDaysAgo }
+          createdAt: { gte: thirtyDaysAgo },
         },
         select: {
           createdAt: true,
           rating: true,
           sentiment: true,
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: { createdAt: 'asc' },
+        take: TRENDS_ROW_CAP,
+      }),
+      prisma.feedback.count({
+        where: { userId, createdAt: { gte: sevenDaysAgo } },
+      }),
+      prisma.feedback.count({
+        where: { userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
+      }),
+      prisma.feedback.count({
+        where: { userId, createdAt: { gte: thirtyDaysAgo } },
       }),
     ]);
     
-    // Tüketim yorumlarını da al
-    let consumptionReviews: any[] = [];
-    let consumptionCount = 0;
-    
-    try {
-      const [reviews, consCount] = await Promise.all([
-        prisma.consumptionReview.findMany({
-          where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
-          select: { createdAt: true, rating: true },
-          orderBy: { createdAt: 'asc' },
-        }),
-        prisma.consumption.count({ where: { customerId: userId } }),
-      ]);
-      consumptionReviews = reviews;
-      consumptionCount = consCount;
-    } catch (e) {
-      // Card system not available
-    }
+    const [
+      consumptionReviews,
+      consumptionCount,
+      thisWeekConsumption,
+      lastWeekConsumption,
+      consumptionReviewCount30d,
+    ] = await Promise.all([
+      prisma.consumptionReview.findMany({
+        where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
+        select: { createdAt: true, rating: true },
+        orderBy: { createdAt: 'asc' },
+        take: TRENDS_ROW_CAP,
+      }),
+      prisma.consumption.count({ where: { customerId: userId } }),
+      prisma.consumptionReview.count({
+        where: { customerId: userId, createdAt: { gte: sevenDaysAgo } },
+      }),
+      prisma.consumptionReview.count({
+        where: { customerId: userId, createdAt: { gte: lastWeekStart, lt: sevenDaysAgo } },
+      }),
+      prisma.consumptionReview.count({
+        where: { customerId: userId, createdAt: { gte: thirtyDaysAgo } },
+      }),
+    ]);
     
     // Tüm yorumları birleştir (QR + Consumption)
     const allFeedbacks: Array<{
@@ -89,12 +117,15 @@ export async function GET() {
         sentiment: f.sentiment,
         type: 'qr' as const,
       })),
-      ...consumptionReviews.map((r: any) => ({
-        createdAt: new Date(r.createdAt),
-        rating: r.rating,
-        sentiment: r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative',
-        type: 'consumption' as const,
-      })),
+      ...consumptionReviews.map((r) => {
+        const rating = r.rating ?? 0;
+        return {
+          createdAt: new Date(r.createdAt),
+          rating: r.rating,
+          sentiment: rating >= 4 ? 'positive' : rating >= 3 ? 'neutral' : 'negative',
+          type: 'consumption' as const,
+        };
+      }),
     ];
 
     // Günlük feedback sayıları (QR + Consumption birleşik)
@@ -164,7 +195,7 @@ export async function GET() {
     // Rozet kazanımları
     const badges = await prisma.badge.findMany({
       where: {
-        users: { some: { id: userId } }
+        users: { some: { id: userId } },
       },
       select: {
         id: true,
@@ -172,16 +203,14 @@ export async function GET() {
         icon: true,
         rarity: true,
         createdAt: true,
-      }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
     });
 
-    // Haftalık karşılaştırma (QR + Consumption birleşik)
-    const thisWeekFeedbacks = allFeedbacks.filter(f => f.createdAt >= sevenDaysAgo).length;
-    const lastWeekStart = new Date(sevenDaysAgo);
-    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-    const lastWeekFeedbacks = allFeedbacks.filter(f => 
-      f.createdAt >= lastWeekStart && f.createdAt < sevenDaysAgo
-    ).length;
+    // Haftalık karşılaştırma (QR + Consumption, tam sayım)
+    const thisWeekFeedbacks = fbThisWeek + thisWeekConsumption;
+    const lastWeekFeedbacks = fbLastWeek + lastWeekConsumption;
 
     const feedbackChange = lastWeekFeedbacks > 0 
       ? ((thisWeekFeedbacks - lastWeekFeedbacks) / lastWeekFeedbacks * 100).toFixed(1)
@@ -226,7 +255,8 @@ export async function GET() {
     const currentXP = Number(user.xp) || 0;
     const xpPerLevel = 1000;
     const xpToNextLevel = xpPerLevel - (currentXP % xpPerLevel);
-    const avgDailyXP = allFeedbacks.length > 0 ? (currentXP / 30) : 0;
+    const combined30d = fbCount30d + consumptionReviewCount30d;
+    const avgDailyXP = combined30d > 0 ? currentXP / 30 : 0;
     const daysToNextLevel = avgDailyXP > 0 ? Math.ceil(xpToNextLevel / avgDailyXP) : null;
 
     // Streak hesaplama (ardışık gün sayısı)
@@ -251,7 +281,7 @@ export async function GET() {
 
     return NextResponse.json({
       summary: {
-        totalFeedbacks: user._count.feedbacks + consumptionReviews.length,
+        totalFeedbacks: user._count.feedbacks + consumptionReviewCount30d,
         totalBadges: user._count.badges,
         totalRewards: user._count.rewards,
         currentPoints: Number(user.points) || 0,
@@ -260,7 +290,7 @@ export async function GET() {
         memberSince: user.createdAt,
         // Additional consumption stats
         totalConsumptions: consumptionCount,
-        totalConsumptionReviews: consumptionReviews.length,
+        totalConsumptionReviews: consumptionReviewCount30d,
       },
       trends: {
         feedbackTrend,
@@ -283,15 +313,20 @@ export async function GET() {
         maxStreak,
         daysToNextLevel,
         xpToNextLevel,
-        avgDailyFeedbacks: (allFeedbacks.length / 30).toFixed(1),
+        avgDailyFeedbacks: (combined30d / 30).toFixed(1),
       },
       badges: badges.slice(0, 5),
     }, {
-      headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' },
+      headers: PRIVATE_NO_STORE_HEADERS,
     });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Trends API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 }
 

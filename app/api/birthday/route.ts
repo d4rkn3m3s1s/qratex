@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getBirthdayBonusPoints, getPointsMatrix } from '@/lib/points-rules';
+import { z } from 'zod';
 
 // GET - Get birthday info
 
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
     const birthdayBonus = getBirthdayBonusPoints(matrix);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const birthday = await prisma.userBirthday.findUnique({
@@ -42,18 +44,54 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    if (isBirthdayToday && canClaimBonus) {
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const existingReminder = await prisma.notification.findFirst({
+        where: {
+          userId: session.user.id,
+          type: 'BIRTHDAY_CLAIM',
+          createdAt: { gte: dayStart, lt: dayEnd },
+        },
+        select: { id: true },
+      });
+
+      if (!existingReminder) {
+        await prisma.notification.create({
+          data: {
+            userId: session.user.id,
+            type: 'BIRTHDAY_CLAIM',
+            title: '🎂 Doğum günün kutlu olsun!',
+            message: `Bugün +${birthdayBonus} bonus puanını talep edebilirsin. Bildirimler veya Ayarlar → Profil üzerinden de alabilirsin.`,
+            isRead: false,
+            data: { cta: 'birthday_claim', bonusAmount: birthdayBonus } as object,
+          },
+        });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       birthday,
       isBirthdayToday,
       canClaimBonus,
       bonusAmount: birthdayBonus,
-    });
+    }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error fetching birthday:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
+
+const birthdayPostSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('set'), birthDate: z.string().min(8).max(32) }),
+  z.object({ action: z.literal('claim') }),
+]);
 
 // POST - Set or claim birthday bonus
 export async function POST(req: NextRequest) {
@@ -62,20 +100,32 @@ export async function POST(req: NextRequest) {
     const birthdayBonus = getBirthdayBonusPoints(matrix);
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const body = await req.json();
-    const { action, birthDate } = body;
+    const raw = await req.json().catch(() => ({}));
+    const parsed = birthdayPostSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Geçersiz istek (action: set|claim)' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
-    if (action === 'set' && birthDate) {
-      // Set birthday
+    if (parsed.data.action === 'set') {
+      const birthDate = new Date(parsed.data.birthDate);
+      if (Number.isNaN(birthDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Geçersiz doğum tarihi' },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
       const birthday = await prisma.userBirthday.upsert({
         where: { userId: session.user.id },
-        update: { birthDate: new Date(birthDate) },
+        update: { birthDate },
         create: {
           userId: session.user.id,
-          birthDate: new Date(birthDate),
+          birthDate,
         },
       });
 
@@ -83,17 +133,17 @@ export async function POST(req: NextRequest) {
         success: true,
         message: 'Doğum günü kaydedildi!',
         birthday,
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    if (action === 'claim') {
+    if (parsed.data.action === 'claim') {
       // Claim birthday bonus
       const birthday = await prisma.userBirthday.findUnique({
         where: { userId: session.user.id },
       });
 
       if (!birthday) {
-        return NextResponse.json({ error: 'Birthday not set' }, { status: 400 });
+        return NextResponse.json({ error: 'Birthday not set' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       const today = new Date();
@@ -104,7 +154,7 @@ export async function POST(req: NextRequest) {
         today.getDate() === birth.getDate();
 
       if (!isBirthdayToday) {
-        return NextResponse.json({ error: 'Today is not your birthday' }, { status: 400 });
+        return NextResponse.json({ error: 'Today is not your birthday' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // Check if already claimed this year
@@ -112,17 +162,21 @@ export async function POST(req: NextRequest) {
       const lastBonus = birthday.lastBonusAt ? new Date(birthday.lastBonusAt) : null;
       
       if (lastBonus && lastBonus.getFullYear() >= thisYear) {
-        return NextResponse.json({ error: 'Already claimed this year' }, { status: 400 });
+        return NextResponse.json({ error: 'Already claimed this year' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
       // Claim bonus
       await prisma.$transaction(async (tx) => {
+        await tx.notification.deleteMany({
+          where: { userId: session.user.id, type: 'BIRTHDAY_CLAIM' },
+        });
+
         await creditPointsAndXp(tx, {
           userId: session.user.id,
           points: birthdayBonus,
         });
 
-        await (tx as any).userBirthday.update({
+        await tx.userBirthday.update({
           where: { userId: session.user.id },
           data: {
             bonusGiven: true,
@@ -144,12 +198,12 @@ export async function POST(req: NextRequest) {
         success: true,
         message: `🎂 Doğum günün kutlu olsun! ${birthdayBonus} puan kazandın!`,
         pointsEarned: birthdayBonus,
-      });
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
-
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
     console.error('Error processing birthday:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

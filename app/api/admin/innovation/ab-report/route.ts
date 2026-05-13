@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
@@ -64,5 +65,5 @@ export async function GET() {
   return NextResponse.json({
     windowDays: 30,
     experiments: experiments.sort((a, b) => b.impressions - a.impressions),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

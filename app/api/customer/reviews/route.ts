@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -17,53 +18,62 @@ export async function GET(request: NextRequest) {
     if (!session?.user || session.user.role !== 'CUSTOMER') {
       return NextResponse.json(
         { error: 'Yetkisiz erişim' },
-        { status: 403 }
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
-    const reviews = await prisma.consumptionReview.findMany({
-      where: {
-        customerId: session.user.id,
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        consumption: {
-          include: {
-            dealer: {
-              select: {
-                id: true,
-                name: true,
-                businessName: true,
-                businessLogo: true,
+    const customerId = session.user.id;
+    const LIST_CAP = 200;
+
+    const [reviews, totalCount] = await Promise.all([
+      prisma.consumptionReview.findMany({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+        take: LIST_CAP,
+        include: {
+          consumption: {
+            include: {
+              dealer: {
+                select: {
+                  id: true,
+                  name: true,
+                  businessName: true,
+                  businessLogo: true,
+                },
               },
-            },
-            product: {
-              select: {
-                id: true,
-                name: true,
-                category: {
-                  select: {
-                    name: true,
-                    icon: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  category: {
+                    select: {
+                      name: true,
+                      icon: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.consumptionReview.count({ where: { customerId } }),
+    ]);
 
-    return NextResponse.json({
-      success: true,
-      reviews,
-      count: reviews.length,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        reviews,
+        count: totalCount,
+        truncated: totalCount > LIST_CAP,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching customer reviews:', error);
     return NextResponse.json(
       { error: 'Yorumlar getirilemedi' },
-      { status: 500 }
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 }

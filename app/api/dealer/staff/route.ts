@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
 
 
@@ -16,6 +17,7 @@ const addStaffSchema = z.object({
 });
 
 export async function GET() {
+  try {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
   const dealerId = auth.session.user.id;
@@ -34,6 +36,7 @@ export async function GET() {
       },
     },
     orderBy: { createdAt: 'desc' },
+    take: 200,
   });
 
   return NextResponse.json({
@@ -47,10 +50,20 @@ export async function GET() {
       createdAt: s.createdAt,
       user: s.user,
     })),
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('Dealer staff GET:', error);
+    return NextResponse.json(
+      { error: 'Personel listesi yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
+  try {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
   const dealerId = auth.session.user.id;
@@ -59,9 +72,7 @@ export async function POST(request: NextRequest) {
   const parsed = addStaffSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' },
-      { status: 400 }
-    );
+      { error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -75,15 +86,11 @@ export async function POST(request: NextRequest) {
     });
     if (existingLink && existingLink.dealerId === dealerId) {
       return NextResponse.json(
-        { error: 'Bu e-posta adresi zaten ekli' },
-        { status: 400 }
-      );
+        { error: 'Bu e-posta adresi zaten ekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     if (existingLink) {
       return NextResponse.json(
-        { error: 'Bu e-posta adresi başka bir işletmeye kayıtlı' },
-        { status: 400 }
-      );
+        { error: 'Bu e-posta adresi başka bir işletmeye kayıtlı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
     await prisma.user.update({
@@ -107,7 +114,7 @@ export async function POST(request: NextRequest) {
         },
       },
     });
-    return NextResponse.json({ success: true, staff });
+    return NextResponse.json({ success: true, staff }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
@@ -136,5 +143,14 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ success: true, staff });
+  return NextResponse.json({ success: true, staff }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('Dealer staff POST:', error);
+    return NextResponse.json(
+      { error: 'Personel eklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

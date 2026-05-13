@@ -14,7 +14,7 @@ export const THEME_SETTINGS_KEYS = {
   defaultMode: 'defaultMode',
 } as const;
 
-/** Açık tema ayarları (GET) — `Providers` / `useThemeColors` */
+/** Açık tema ayarları (GET) — `{ entries: ThemeSettingRow[] }`; eski istemciler için `raw` yedek okunur. */
 export const THEME_SETTINGS_PUBLIC_API_PATH = '/api/settings/theme' as const;
 
 /** Admin tema listesi / kayıt */

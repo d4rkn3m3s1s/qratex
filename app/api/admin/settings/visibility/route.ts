@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import {
   FEATURE_VISIBILITY_SETTINGS_KEY,
@@ -112,7 +113,7 @@ export async function GET() {
       menu: MENU_CATALOG_BY_ROLE,
     },
     ...normalized,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 export async function PUT(request: NextRequest) {
@@ -123,14 +124,12 @@ export async function PUT(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const parsed = payloadSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz görünürlük payload' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Geçersiz görünürlük payload' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
   const invalidKeys = validateVisibilityKeys(parsed.data);
   if (invalidKeys.length > 0) {
     return NextResponse.json(
-      { success: false, error: 'Bilinmeyen görünürlük anahtarı', invalidKeys },
-      { status: 400 }
-    );
+      { success: false, error: 'Bilinmeyen görünürlük anahtarı', invalidKeys }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const normalized = normalizeVisibilitySettingsWithSystem(
@@ -234,5 +233,5 @@ export async function PUT(request: NextRequest) {
     featureVisibility: normalized.featureVisibility,
     systemFeatureVisibility: normalized.featureVisibility.system,
     menuVisibility: normalized.menuVisibility,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

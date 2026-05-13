@@ -3,9 +3,9 @@
  * POST: export isteği; response CSV veya signed download URL.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAuth, dealerScopeWhere } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { dealerScopeWhere } from '@/lib/api-auth';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { EXPORT_ROW_LIMIT, feedbackCSVColumns } from '@/lib/export-utils';
 import { formatDateUTC } from '@/lib/timezone';
 
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
 
   return new NextResponse(BOM + csv, {
     headers: {
+      ...PRIVATE_NO_STORE_HEADERS,
       'Content-Type': 'text/csv;charset=utf-8',
       'Content-Disposition': `attachment; filename="geri_bildirimler_${formatDateUTC(new Date())}.csv"`,
     },

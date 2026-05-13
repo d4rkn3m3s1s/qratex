@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { getPointsMatrix, getQuestReward } from '@/lib/points-rules';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
@@ -61,12 +62,15 @@ export async function GET() {
         }
       : null;
 
-  return NextResponse.json({
-    success: true,
-    weekLabel: `Hafta ${getIsoWeek(new Date())}`,
-    quests: normalized,
-    weeklyVictory,
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      weekLabel: `Hafta ${getIsoWeek(new Date())}`,
+      quests: normalized,
+      weeklyVictory,
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
 function getIsoWeek(d: Date): number {

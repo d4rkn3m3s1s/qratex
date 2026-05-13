@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
 
@@ -45,7 +46,7 @@ export async function POST() {
   });
   const cfg = parseAutomation(user?.dealerRemedyAutomation);
   if (!cfg.enabled) {
-    return NextResponse.json({ error: 'Otomasyon kapalı. Ayarlardan açın.' }, { status: 400 });
+    return NextResponse.json({ error: 'Otomasyon kapalı. Ayarlardan açın.' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const monthStart = new Date();
@@ -60,9 +61,17 @@ export async function POST() {
     },
   });
   if (monthCount >= cfg.maxMonthlyAuto) {
+    const endOfMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 23, 59, 59, 999);
+    const retryAfterSec = Math.max(3600, Math.ceil((endOfMonth.getTime() - Date.now()) / 1000));
     return NextResponse.json(
       { error: `Aylık otomatik telafi limiti (${cfg.maxMonthlyAuto}) dolu.` },
-      { status: 429 }
+      {
+        status: 429,
+        headers: {
+          ...PRIVATE_NO_STORE_HEADERS,
+          'Retry-After': String(retryAfterSec),
+        },
+      }
     );
   }
 
@@ -137,5 +146,5 @@ export async function POST() {
     queued: createdIds.length,
     offerIds: createdIds,
     skipped,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

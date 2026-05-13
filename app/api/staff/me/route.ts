@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  try {
   const auth = await requireAuth(['STAFF']);
   if ('error' in auth) return auth.error;
   const session = auth.session;
@@ -37,14 +39,17 @@ export async function GET() {
       where: { OR: [{ dealerId }, { dealerId: null }], isActive: true },
       orderBy: { orderIndex: 'asc' },
       select: { id: true, title: true, description: true, orderIndex: true },
+      take: 80,
     }),
     prisma.staffTrainingCompletion.findMany({
       where: { userId },
       select: { moduleId: true },
+      take: 200,
     }),
     prisma.checklistTemplate.findMany({
       where: { dealerId, isActive: true },
       select: { id: true, type: true, title: true },
+      take: 60,
     }),
   ]);
 
@@ -61,5 +66,14 @@ export async function GET() {
       completed: completedModuleIds.has(m.id),
     })),
     checklistTemplates: checklists,
-  });
+  }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('staff/me GET:', error);
+    return NextResponse.json(
+      { error: 'Profil yüklenemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

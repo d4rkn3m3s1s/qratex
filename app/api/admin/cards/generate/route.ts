@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { generateCardsSchema } from '@/lib/validations';
 import { generateCardToken, generateBatchId } from '@/lib/utils';
 
@@ -23,9 +24,7 @@ export async function POST(request: NextRequest) {
 
     if (!validatedData.success) {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400 }
-      );
+        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const { quantity, batchName, prefix } = validatedData.data;
@@ -120,8 +119,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error generating cards:', error);
     return NextResponse.json(
-      { error: 'Kartlar oluşturulamadı' },
-      { status: 500 }
-    );
+      { error: 'Kartlar oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
