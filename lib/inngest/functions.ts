@@ -1,27 +1,36 @@
 /**
  * Inngest functions (P2-20).
- * feedback/analyze: AI analysis for feedback; retries and DLQ via Inngest.
+ * feedback/analyze: AI ağır işi `/api/internal/inngest/feedback-analyze` üzerinde ayrı lambda’da
+ * (Vercel 250MB sunucusuz paket sınırı — Inngest handler’ı inceltmek için).
  */
 import { inngest } from './client';
 import { prisma } from '@/lib/prisma';
 import { processOutbox } from '@/lib/outbox';
-import { analyzeWithFallback } from '@/lib/ai-engine';
 import { getTenantHealth } from '@/lib/tenant-health';
 import {
   deleteAnalyticsEventsOlderThan,
   DEFAULT_RETENTION_DAYS,
 } from '@/lib/analytics-event-retention';
-import {
-  formatAdaptiveProfile,
-  getAdaptiveProfileForDealer,
-  maybeTriggerAdaptiveUpdate,
-  storeFeedbackEmbedding,
-} from '@/lib/ai-learning';
-import { processAutoReplies } from '@/lib/auto-reply-engine';
 import { runCustomerReminderNudges } from '@/lib/customer-reminders';
 import { createHmac } from 'crypto';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { buildPartnerDigestPayload } from '@/lib/partner-digest-core';
+
+function internalAppBaseUrl(): string {
+  const fromNextAuth = process.env.NEXTAUTH_URL?.trim().replace(/\/$/, '');
+  if (fromNextAuth) return fromNextAuth;
+  const v = process.env.VERCEL_URL?.trim();
+  if (v) return /^https?:\/\//i.test(v) ? v.replace(/\/$/, '') : `https://${v.replace(/\/$/, '')}`;
+  return 'http://127.0.0.1:3000';
+}
+
+function internalJobBearer(): string {
+  const secret = process.env.INNGEST_INTERNAL_JOB_SECRET || process.env.CRON_SECRET;
+  if (!secret) {
+    throw new Error('INNGEST_INTERNAL_JOB_SECRET veya CRON_SECRET tanımlı olmalı (feedback/created işleri için).');
+  }
+  return `Bearer ${secret}`;
+}
 
 export const analyzeFeedbackFn = inngest.createFunction(
   {
@@ -32,112 +41,23 @@ export const analyzeFeedbackFn = inngest.createFunction(
   { event: 'feedback/created' },
   async ({ event, step }) => {
     const { feedbackId } = event.data;
-
-    const feedback = await step.run('fetch-feedback', async () => {
-      const f = await prisma.feedback.findUnique({
-        where: { id: feedbackId },
-        include: { qrCode: { select: { dealerId: true } } },
-      });
-      if (!f || !f.text || f.text.trim().length < 5) return null;
-      return { id: f.id, text: f.text, dealerId: f.qrCode.dealerId };
-    });
-
-    if (!feedback) return { skipped: true, reason: 'no-text' };
-
-    let aiSettings: { customPrompt: string | null } | null = null;
-    try {
-      aiSettings = await prisma.aISettings.findUnique({
-        where: { dealerId: feedback.dealerId },
-        select: { customPrompt: true },
-      });
-    } catch {
-      /* ignore */
-    }
-
-    let adaptiveProfileText: string | undefined;
-    try {
-      const adaptiveProfile = await getAdaptiveProfileForDealer(feedback.dealerId);
-      adaptiveProfileText = adaptiveProfile?.profile ? formatAdaptiveProfile(adaptiveProfile.profile) : undefined;
-    } catch {
-      adaptiveProfileText = undefined;
-    }
-
-    const analysis = await step.run('run-ai-analysis', async () => {
-      return analyzeWithFallback(feedback.text, {
-        customPrompt: aiSettings?.customPrompt || undefined,
-        adaptiveProfile: adaptiveProfileText,
-        dealerId: feedback.dealerId,
-      });
-    });
-
-    await step.run('save-analysis', async () => {
-      await prisma.feedback.update({
-        where: { id: feedbackId },
-        data: {
-          sentiment: analysis.sentiment.label,
-          emotions: analysis.emotions.map((e) => e.label),
-          topics: analysis.topics,
-          isToxic: analysis.toxicity.isToxic,
-          aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-          intent: analysis.intent?.label || null,
-          intentScore: analysis.intent?.score || null,
-          urgency: analysis.urgency || null,
-          effortScore: analysis.effortScore || null,
-          churnRisk: analysis.churnRisk || null,
-          entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-          themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-          statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
-          actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-          aiProcessedAt: new Date(),
-          aiModelUsed: analysis.modelUsed || null,
-          aiVersion: analysis.version || null,
+    return step.run('delegate-feedback-analyze', async () => {
+      const base = internalAppBaseUrl();
+      const res = await fetch(`${base}/api/internal/inngest/feedback-analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: internalJobBearer(),
         },
+        body: JSON.stringify({ feedbackId }),
+        signal: AbortSignal.timeout(300_000),
       });
-    });
-
-    await step.run('notifications', async () => {
-      if (analysis.toxicity.isToxic) {
-        await prisma.notification.create({
-          data: {
-            userId: feedback.dealerId,
-            title: '⚠️ Toksik İçerik Tespit Edildi',
-            message: 'Bir geri bildirimde uygunsuz içerik tespit edildi. Lütfen inceleyin.',
-            type: 'warning',
-          },
-        });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`feedback-analyze HTTP ${res.status}: ${text.slice(0, 2000)}`);
       }
-      if (analysis.urgency && analysis.urgency > 0.7) {
-        await prisma.notification.create({
-          data: {
-            userId: feedback.dealerId,
-            title: '🔴 Acil Geri Bildirim',
-            message: 'Yüksek aciliyetli bir geri bildirim alındı. Hemen aksiyon gerekebilir.',
-            type: 'warning',
-          },
-        });
-      }
-      if (analysis.churnRisk && analysis.churnRisk > 0.7) {
-        await prisma.notification.create({
-          data: {
-            userId: feedback.dealerId,
-            title: '⚡ Müşteri Kaybı Riski',
-            message: 'Bir müşterinin kaybedilme riski yüksek. Geri bildirimi inceleyin.',
-            type: 'warning',
-          },
-        });
-      }
+      return JSON.parse(text) as { skipped?: boolean; reason?: string; success?: boolean; sentiment?: string };
     });
-
-    await step.run('post-analysis', async () => {
-      await storeFeedbackEmbedding({ feedbackId, dealerId: feedback.dealerId, text: feedback.text });
-      await maybeTriggerAdaptiveUpdate(feedback.dealerId);
-    });
-
-    await step.run('auto-replies', async () => {
-      await processAutoReplies(feedbackId);
-    });
-
-    return { success: true, sentiment: analysis.sentiment.label };
   }
 );
 
