@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { buildAdminComposeEmail } from '@/lib/email';
 import { isMailConfigured, sendTransactionalEmail } from '@/lib/mail-sender';
-import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { getPublicAppOriginFromRequest } from '@/lib/public-app-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const siteUrl = getPublicAppOrigin();
+  const siteUrl = getPublicAppOriginFromRequest(request);
   const { html, text } = buildAdminComposeEmail({
     siteUrl,
     subjectHeading: parsed.data.subject,

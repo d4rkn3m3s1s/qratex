@@ -22,8 +22,8 @@ import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { useAppT } from '@/lib/app-locale';
 
+/** Logo zaten `/` — tekrar “Ana Sayfa” linki yok. */
 const navigation = [
-  { labelKey: 'appShell.navHome', href: '/' },
   { labelKey: 'appShell.navFeatures', href: '/#features' },
   { labelKey: 'appShell.navPricing', href: '/#pricing' },
   { labelKey: 'appShell.navBlog', href: '/blog' },
@@ -132,8 +132,8 @@ export function Header() {
       className={cn(
         'safe-top fixed left-0 right-0 top-0 z-50 transition-all duration-300',
         isScrolled
-          ? 'border-b border-border/50 bg-background/80 shadow-sm backdrop-blur-xl'
-          : 'bg-transparent'
+          ? 'border-b border-border/50 bg-background/85 shadow-sm backdrop-blur-xl'
+          : 'border-b border-transparent bg-background/50 backdrop-blur-md supports-[backdrop-filter]:bg-background/35'
       )}
     >
       <nav className="container mx-auto flex h-20 items-center justify-between px-4" aria-label={t('appShell.siteMenu')}>
@@ -199,13 +199,13 @@ export function Header() {
         </Link>
 
         {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-6 lg:gap-8">
           {navigation.map((item) => (
             <Link prefetch={false}
               key={item.href}
               href={item.href}
               className={cn(
-                'group relative rounded-md px-1 py-0.5 text-base font-medium outline-none ring-offset-background transition-colors duration-200 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                'group relative rounded-md px-1 py-1 text-sm font-semibold tracking-tight outline-none ring-offset-background transition-colors duration-200 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 pathname === item.href
                   ? 'text-primary'
                   : 'text-muted-foreground'

@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { buildAdminTestEmail } from '@/lib/email';
 import { isMailConfigured, sendTransactionalEmail } from '@/lib/mail-sender';
-import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { getPublicAppOriginFromRequest } from '@/lib/public-app-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Alıcı e-posta yok' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  const base = getPublicAppOrigin();
+  const base = getPublicAppOriginFromRequest(request);
   const { html, text } = buildAdminTestEmail(base);
   const result = await sendTransactionalEmail({
     to,

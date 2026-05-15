@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { type BackgroundVariant } from '@/components/ui/backgrounds';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
-import { useAppT } from '@/lib/app-locale';
 import HeroSection from '@/components/landing/HeroSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import CTASection from '@/components/landing/CTASection';
@@ -20,7 +19,6 @@ const FAQSection = dynamic(() => import('@/components/landing/FAQSection'), { ss
 type HomeClientProps = { initialBackgroundEffect?: BackgroundVariant };
 
 export default function HomeClient({ initialBackgroundEffect }: HomeClientProps) {
-  const t = useAppT();
   const { data: session, status } = useSession();
   const router = useRouter();
   const [backgroundEffect, setBackgroundEffect] = useState<BackgroundVariant>(
@@ -66,16 +64,7 @@ export default function HomeClient({ initialBackgroundEffect }: HomeClientProps)
     }
   }, [session, status, router]);
 
-  // Show loading while checking session
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent" />
-        <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-      </div>
-    );
-  }
-
+  // Oturum kontrolü arka planda; misafirleri tam sayfa "Yükleniyor"da tutmayız (SEO / algılanan hız).
   return (
     <div className="relative">
       <HeroSection backgroundEffect={backgroundEffect} reducedMotion={reducedMotion} />

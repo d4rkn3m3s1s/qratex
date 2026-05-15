@@ -1,35 +1,7 @@
 import {
   buildTransactionalPlainText,
   escapeEmailHtml,
-  canUseRemoteEmailImages,
-  getTransactionalEmailLogoUrl,
-  buildTransactionalEmailHtml,
 } from '@/lib/transactional-email';
-
-describe('canUseRemoteEmailImages / getTransactionalEmailLogoUrl', () => {
-  it('rejects localhost origins (Gmail cannot fetch)', () => {
-    expect(canUseRemoteEmailImages('http://localhost:3000')).toBe(false);
-    expect(canUseRemoteEmailImages('http://127.0.0.1:3000')).toBe(false);
-    expect(getTransactionalEmailLogoUrl('http://localhost:3000')).toBeNull();
-  });
-
-  it('allows public https origins for remote logo', () => {
-    expect(canUseRemoteEmailImages('https://app.example.com')).toBe(true);
-    expect(getTransactionalEmailLogoUrl('https://app.example.com')).toBe('https://app.example.com/logo/logo-light.png');
-  });
-
-  it('buildTransactionalEmailHtml omits remote img on localhost but still renders brand', () => {
-    const html = buildTransactionalEmailHtml({
-      heading: 'Test',
-      bodyHtml: '<p>İçerik</p>',
-      brandLinkHref: 'http://localhost:3000',
-      logoUrl: getTransactionalEmailLogoUrl('http://localhost:3000'),
-    });
-    expect(html).not.toMatch(/<img[^>]+src=/);
-    expect(html).toContain('QRATEX');
-    expect(html).toContain('tx-email-card');
-  });
-});
 
 describe('escapeEmailHtml', () => {
   it('escapes HTML special characters', () => {

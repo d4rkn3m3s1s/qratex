@@ -97,8 +97,8 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden pt-16">
         {(backgroundEffect === 'original' || backgroundEffect === 'none') && (
           <>
-            <div className="absolute inset-0 gradient-mesh opacity-50" />
-            <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/50 to-background" />
+            <div className="absolute inset-0 gradient-mesh opacity-[0.38]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/45 to-background" />
           </>
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/30 to-background z-[1]" aria-hidden="true" />
@@ -129,7 +129,7 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
               />
             ))}
 
-          {backgroundEffect === 'original' && !reducedMotion && [...Array(40)].map((_, i) => {
+          {backgroundEffect === 'original' && !reducedMotion && [...Array(22)].map((_, i) => {
             const startX = seeded(i * 10) * 100;
             const size = 3 + seeded(i * 10 + 1) * 6;
             const duration = 8 + seeded(i * 10 + 2) * 8;
@@ -160,7 +160,7 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
             );
           })}
 
-          {backgroundEffect === 'original' && !reducedMotion && [...Array(15)].map((_, i) => {
+          {backgroundEffect === 'original' && !reducedMotion && [...Array(7)].map((_, i) => {
             const startX = 5 + seeded(1000 + i * 10) * 90;
             const size = 8 + seeded(1000 + i * 10 + 1) * 8;
             const duration = 12 + seeded(1000 + i * 10 + 2) * 8;
@@ -183,7 +183,7 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
             );
           })}
 
-          {backgroundEffect === 'original' && !reducedMotion && [...Array(12)].map((_, i) => (
+          {backgroundEffect === 'original' && !reducedMotion && [...Array(5)].map((_, i) => (
             <motion.div key={`sparkle-${i}`} className="absolute" style={{ left: `${5 + seeded(2000 + i * 5) * 90}%`, top: `${5 + seeded(2000 + i * 5 + 1) * 90}%` }}>
               <motion.div
                 className="w-1 h-1 bg-white rounded-full"
@@ -201,14 +201,14 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
               <Sparkles className="w-3 h-3 mr-1" />
               {t('landing.hero.badge')}
             </Badge>
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-balance leading-[1.05]">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[4.25rem] font-semibold tracking-tight mb-6 text-balance leading-[1.08] sm:leading-[1.06]">
               {t('landing.hero.headlineLine1')}
               <br />
               <AuroraText colors={[...BRAND_AURORA_HEX_STOPS]} speed={0.8}>
                 {t('landing.hero.headlineAccent')}
               </AuroraText>
             </h1>
-            <p className="text-lg sm:text-xl text-muted-foreground/90 max-w-2xl mx-auto mb-10 text-balance leading-relaxed">
+            <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto mb-10 text-balance leading-relaxed">
               {t('landing.hero.sub')}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -226,7 +226,7 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
               </Button>
             </div>
             <motion.div
-              className="mt-20 max-w-3xl mx-auto rounded-2xl border border-border/50 bg-card/35 backdrop-blur-md px-4 py-8 sm:px-8 shadow-glass"
+              className="mt-16 sm:mt-20 max-w-3xl mx-auto rounded-2xl border border-border/40 bg-card/25 backdrop-blur-md px-4 py-7 sm:px-8 sm:py-8 shadow-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
