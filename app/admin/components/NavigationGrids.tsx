@@ -9,7 +9,7 @@ export function MainFeaturesGrid({ items }: { items: FeatureNavItem[] }) {
     return (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-5">
             {items.map((item) => (
-                <Link key={item.href} href={item.href}>
+                <Link key={`${item.href}::${item.label}`} href={item.href}>
                     <Card className="h-full border border-border bg-card/80 dark:bg-card/90 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-300 group overflow-hidden">
                         <div className={`absolute inset-0 bg-gradient-to-br ${item.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
                         <CardContent className="relative p-3 sm:p-4 md:p-6 flex items-start gap-3 sm:gap-5">
@@ -33,7 +33,7 @@ export function QuickAccessGrid({ items }: { items: QuickAccessItem[] }) {
     return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {items.map((item) => (
-                <Link key={item.href} href={item.href}>
+                <Link key={`${item.href}::${item.label}`} href={item.href}>
                     <Card className="h-full border border-border bg-card/80 dark:bg-card/90 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-primary/10 hover:border-primary/40 hover:-translate-y-0.5 transition-all duration-300 group">
                         <CardContent className="p-4 flex flex-col items-center justify-center gap-2 text-center min-h-[92px]">
                             <div className="w-12 h-12 rounded-xl bg-muted/80 flex items-center justify-center group-hover:bg-primary/15 group-hover:scale-110 transition-all duration-300">

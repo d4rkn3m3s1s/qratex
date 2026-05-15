@@ -80,6 +80,8 @@ export default function DealerSettingsPage() {
     defaultReplyTemplate: '',
     preferredLanguage: 'tr',
     holidayMode: false,
+    /** Google/OAuth ile gelenlerde false; şifre oluşturma formu gösterilir */
+    hasPassword: true,
   });
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export default function DealerSettingsPage() {
           defaultReplyTemplate: user.defaultReplyTemplate || '',
           preferredLanguage: user.preferredLanguage || 'tr',
           holidayMode: user.holidayMode || false,
+          hasPassword: typeof user.hasPassword === 'boolean' ? user.hasPassword : true,
         }));
       } catch {
         // keep current values
@@ -189,6 +192,24 @@ export default function DealerSettingsPage() {
     }
   };
 
+  /** GPS sonrası sadece koordinat (ve varsa adres) sunucuya yazar; diğer profil alanlarına dokunmaz. */
+  const persistGpsToProfile = async (lat: number, lng: number, address?: string) => {
+    try {
+      const payload: Record<string, unknown> = { latitude: lat, longitude: lng };
+      if (typeof address === 'string' && address.trim().length > 0) {
+        payload.address = address.trim();
+      }
+      const res = await fetch('/api/user/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
       toast.error(t('dealerSettings.noLocationSupport'));
@@ -199,6 +220,7 @@ export default function DealerSettingsPage() {
       async (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
+        let resolvedAddress: string | undefined;
         setProfile((prev) => ({
           ...prev,
           latitude: lat.toFixed(6),
@@ -209,26 +231,34 @@ export default function DealerSettingsPage() {
           const res = await fetch(`/api/location/reverse?lat=${lat}&lng=${lng}`, { cache: 'no-store' });
           const data = await res.json();
           if (res.ok && data?.success && data?.data?.compactAddress) {
+            resolvedAddress = data.data.compactAddress;
             setProfile((prev) => ({
               ...prev,
-              address: data.data.compactAddress,
+              address: resolvedAddress!,
             }));
-            toast.success(t('dealerSettings.locationAndAddressFetched'));
-          } else {
-            toast.success(t('dealerSettings.locationFetchedManualAddress'));
           }
         } catch {
-          toast.success(t('dealerSettings.locationFetchedManualAddress'));
+          // Adres çözümlenemezse koordinatlar yine de kaydedilir
         } finally {
           setResolvingAddress(false);
-          setGettingLocation(false);
         }
+        const saved = await persistGpsToProfile(lat, lng, resolvedAddress);
+        if (saved) {
+          toast.success(
+            resolvedAddress
+              ? t('dealerSettings.locationPersistedWithAddress')
+              : t('dealerSettings.locationPersistedCoordsOnly')
+          );
+        } else {
+          toast.error(t('dealerSettings.locationPersistError'));
+        }
+        setGettingLocation(false);
       },
       () => {
         setGettingLocation(false);
         toast.error(t('dealerSettings.locationFetchError'));
       },
-      { enableHighAccuracy: false, timeout: 22000, maximumAge: 120_000 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }
     );
   };
 
@@ -286,12 +316,44 @@ export default function DealerSettingsPage() {
 
       if (res.ok) {
         setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setProfile((p) => ({ ...p, hasPassword: true }));
         toast.success(t('dealerSettings.passwordUpdated'));
       } else {
         const data = await res.json();
         toast.error(data.error || t('dealerSettings.passwordUpdateError'));
       }
     } catch (error) {
+      toast.error(t('common.error'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSetInitialPassword = async () => {
+    if (security.newPassword !== security.confirmPassword) {
+      toast.error(t('dealerSettings.passwordsDoNotMatch'));
+      return;
+    }
+    if (security.newPassword.length < 8) {
+      toast.error(t('dealerSettings.passwordMinLength'));
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/user/initial-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: security.newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setProfile((p) => ({ ...p, hasPassword: true }));
+        toast.success(t('dealerSettings.oauthPasswordCreated'));
+      } else {
+        toast.error(data.error || t('dealerSettings.passwordUpdateError'));
+      }
+    } catch {
       toast.error(t('common.error'));
     } finally {
       setSaving(false);
@@ -715,9 +777,14 @@ export default function DealerSettingsPage() {
                   </div>
                   {t('dealerSettings.changePassword')}
                 </CardTitle>
-                <CardDescription>{t('dealerSettings.changePasswordDescription')}</CardDescription>
+                <CardDescription>
+                  {profile.hasPassword
+                    ? t('dealerSettings.changePasswordDescription')
+                    : t('dealerSettings.oauthPasswordHint')}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {profile.hasPassword ? (
                 <div className="space-y-2">
                   <Label htmlFor="dealer-current-password">{t('dealerSettings.currentPassword')}</Label>
                   <div className="relative">
@@ -738,6 +805,7 @@ export default function DealerSettingsPage() {
                     </button>
                   </div>
                 </div>
+                ) : null}
                 <div className="space-y-2">
                   <Label htmlFor="dealer-new-password">{t('dealerSettings.newPassword')}</Label>
                   <div className="relative">
@@ -800,13 +868,22 @@ export default function DealerSettingsPage() {
                 </div>
                 <Button
                   type="button"
-                  onClick={handleChangePassword}
-                  disabled={saving || !security.currentPassword || !security.newPassword || security.newPassword !== security.confirmPassword}
+                  onClick={profile.hasPassword ? handleChangePassword : handleSetInitialPassword}
+                  disabled={
+                    saving ||
+                    !security.newPassword ||
+                    security.newPassword !== security.confirmPassword ||
+                    (profile.hasPassword && !security.currentPassword)
+                  }
                   className="gap-2 bg-gradient-to-r from-red-500 to-red-700"
                   aria-label={saving ? t('dealerSettings.passwordUpdating') : t('dealerSettings.updatePassword')}
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Shield className="h-4 w-4" aria-hidden />}
-                  {saving ? t('dealerSettings.updating') : t('dealerSettings.updatePassword')}
+                  {saving
+                    ? t('dealerSettings.updating')
+                    : profile.hasPassword
+                      ? t('dealerSettings.updatePassword')
+                      : t('dealerSettings.createPassword')}
                 </Button>
               </CardContent>
             </Card>

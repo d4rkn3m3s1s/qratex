@@ -51,8 +51,7 @@ public/workbox-*.js.map
 .vscode
 
 # Prisma
-prisma/migrations/migration_lock.toml
-
+# migration_lock.toml is committed (required by Prisma Migrate).
 
 # Local Netlify folder
 .netlify

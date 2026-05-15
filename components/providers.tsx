@@ -213,7 +213,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
   );
 
   return (
-    <SessionProvider>
+    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <AppLocaleProvider>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider

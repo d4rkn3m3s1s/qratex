@@ -1,25 +1,8 @@
 import type { Metadata } from 'next';
-import { cache } from 'react';
-import { getSeoSettings } from '@/lib/seo-settings';
-
-const getSeoSettingsOnce = cache(getSeoSettings);
+import { adminLayoutSectionMetadataNoindex } from '@/lib/admin-route-metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeoSettingsOnce();
-  const ogLocale = seo.locale.replace('_', '-');
-  return {
-    title: 'Ajan profilleri',
-    description:
-      'Konseydeki uzman ajanların etki ağırlıklarını yapılandırın (Harper, Benjamin, Lucas, Grok).',
-    robots: { index: false, follow: false },
-    openGraph: {
-      title: `Ajan profilleri · ${seo.siteName}`,
-      description: 'Çoklu ajan konseyi ağırlık ayarları.',
-      siteName: seo.siteName,
-      locale: ogLocale,
-      type: 'website',
-    },
-  };
+  return adminLayoutSectionMetadataNoindex('layoutMetadata.adminAgentCouncilAgents', 'layoutMetadata.adminAgentCouncilAgentsDescription');
 }
 
 export default function AgentCouncilAgentsLayout({ children }: { children: React.ReactNode }) {

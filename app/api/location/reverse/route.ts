@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { getPublicAppOrigin } from '@/lib/public-app-origin';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -35,12 +36,23 @@ export async function GET(request: NextRequest) {
     endpoint.searchParams.set('addressdetails', '1');
     endpoint.searchParams.set('accept-language', 'tr');
 
+    const appOrigin = getPublicAppOrigin();
+
     const response = await fetch(endpoint.toString(), {
       headers: {
-        'User-Agent': 'QRATEX/1.0 (location reverse geocoding)',
+        'User-Agent': `QRATEX/1.0 (reverse geocode; +${appOrigin})`,
+        Referer: `${appOrigin}/`,
+        'Accept-Language': 'tr,en;q=0.8',
       },
       cache: 'no-store',
     });
+
+    if (response.status === 429) {
+      return NextResponse.json(
+        { error: 'Adres servisi şu an meşgul. Bir süre sonra tekrar deneyin.' },
+        { status: 503, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
     if (!response.ok) {
       return NextResponse.json({ error: 'Adres çözümlenemedi' }, { status: 502 , headers: PRIVATE_NO_STORE_HEADERS });

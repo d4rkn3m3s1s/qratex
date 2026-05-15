@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -145,6 +145,8 @@ export default function AdminFeedbacksPage() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const feedbacksFetchRef = useRef<AbortController | null>(null);
   const [sentimentFilter, setSentimentFilter] = useState<string>('all');
   const [dealerFilter, setDealerFilter] = useState<string>('all');
   const [needsReview, setNeedsReview] = useState(false); // P2-27: intentScore < 0.7 manuel inceleme
@@ -163,15 +165,20 @@ export default function AdminFeedbacksPage() {
   const pageSize = 20;
 
   useEffect(() => {
-    const q = searchParams?.get('search') ?? '';
-    setSearchQuery(q);
-  }, [searchParams]);
+    const id = setTimeout(() => setSearchDebounced(searchQuery.trim()), 400);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
 
   useEffect(() => {
-    fetchFeedbacks();
-  }, [sentimentFilter, dealerFilter, typeFilter, minRating, maxRating, startDate, endDate, page, needsReview, searchQuery]);
+    const q = searchParams?.get('search') ?? '';
+    setSearchQuery(q);
+    setSearchDebounced(q.trim());
+  }, [searchParams]);
 
-  const fetchFeedbacks = async () => {
+  const fetchFeedbacks = useCallback(async () => {
+    feedbacksFetchRef.current?.abort();
+    const ac = new AbortController();
+    feedbacksFetchRef.current = ac;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -184,12 +191,13 @@ export default function AdminFeedbacksPage() {
       if (maxRating) params.append('maxRating', maxRating);
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      if (searchQuery) params.append('search', searchQuery);
+      if (searchDebounced) params.append('search', searchDebounced);
       if (needsReview) params.append('needsReview', 'true');
-      
-      const res = await fetch(`/api/admin/feedbacks?${params}`);
+
+      const res = await fetch(`/api/admin/feedbacks?${params}`, { signal: ac.signal });
       const data = await res.json();
-      
+
+      if (feedbacksFetchRef.current !== ac) return;
       if (data.success) {
         setFeedbacks(data.data);
         setStats(data.stats);
@@ -198,15 +206,38 @@ export default function AdminFeedbacksPage() {
         setTotal(data.pagination.total);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (feedbacksFetchRef.current !== ac) return;
       toast.error('Geri bildirimler yüklenemedi');
     } finally {
-      setLoading(false);
+      if (feedbacksFetchRef.current === ac) {
+        feedbacksFetchRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, [
+    sentimentFilter,
+    dealerFilter,
+    typeFilter,
+    minRating,
+    maxRating,
+    startDate,
+    endDate,
+    page,
+    needsReview,
+    searchDebounced,
+  ]);
+
+  useEffect(() => {
+    void fetchFeedbacks();
+    return () => {
+      feedbacksFetchRef.current?.abort();
+    };
+  }, [fetchFeedbacks]);
 
   const handleSearch = () => {
     setPage(1);
-    fetchFeedbacks();
+    setSearchDebounced(searchQuery.trim());
   };
 
   const handleDelete = async () => {
@@ -270,6 +301,7 @@ export default function AdminFeedbacksPage() {
     setStartDate('');
     setEndDate('');
     setSearchQuery('');
+    setSearchDebounced('');
     setPage(1);
   };
 
@@ -513,7 +545,15 @@ export default function AdminFeedbacksPage() {
                       </label>
                     </div>
                     <div className="flex gap-2">
-                      <Button onClick={() => { setPage(1); fetchFeedbacks(); }} className="flex-1">Uygula</Button>
+                      <Button
+                        onClick={() => {
+                          setPage(1);
+                          setSearchDebounced(searchQuery.trim());
+                        }}
+                        className="flex-1"
+                      >
+                        Uygula
+                      </Button>
                       <Button variant="outline" onClick={clearFilters}>Temizle</Button>
                     </div>
                   </div>

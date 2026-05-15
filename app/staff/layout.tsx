@@ -6,11 +6,18 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import { getSeoSettings } from '@/lib/seo-settings';
+import { getServerLocale } from '@/lib/server-locale';
+import { t } from '@/i18n/request';
+import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeoSettings();
+  const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
+  const panelLabel = t(locale, 'layoutMetadata.staff');
   return {
-    title: 'Personel Paneli',
+    title: {
+      default: panelLabel,
+      template: `%s | ${panelLabel}`,
+    },
     applicationName: seo.siteName,
   };
 }
@@ -52,6 +59,7 @@ export default async function StaffLayout({
       >
         {children}
       </main>
+      <WebVitalsReporter />
     </div>
   );
 }

@@ -16,19 +16,18 @@ jest.mock('@/lib/auth', () => ({
 
 const mockFindMany = jest.fn();
 const mockCount = jest.fn();
-const mockUpdate = jest.fn();
 const mockUpdateMany = jest.fn();
-const mockDelete = jest.fn();
+const mockDeleteMany = jest.fn();
 jest.mock('@/lib/prisma', () => ({
     prisma: {
         notification: {
             findMany: (...args: unknown[]) => mockFindMany(...args),
             count: (...args: unknown[]) => mockCount(...args),
-            update: (...args: unknown[]) => mockUpdate(...args),
             updateMany: (...args: unknown[]) => mockUpdateMany(...args),
-            delete: (...args: unknown[]) => mockDelete(...args),
+            deleteMany: (...args: unknown[]) => mockDeleteMany(...args),
         },
     },
+    isPrismaConnectivityError: () => false,
 }));
 
 const SESSION = { user: { id: 'user-1', role: 'CUSTOMER' } };
@@ -142,7 +141,7 @@ describe('PATCH /api/notifications', () => {
 
     it('marks single notification as read', async () => {
         mockGetServerSession.mockResolvedValueOnce(SESSION);
-        mockUpdate.mockResolvedValueOnce({ id: 'n1', isRead: true });
+        mockUpdateMany.mockResolvedValueOnce({ count: 1 });
         const res = await patchNotification({ notificationId: 'n1' });
         expect(res.status).toBe(200);
     });
@@ -168,7 +167,7 @@ describe('DELETE /api/notifications', () => {
 
     it('deletes notification successfully', async () => {
         mockGetServerSession.mockResolvedValueOnce(SESSION);
-        mockDelete.mockResolvedValueOnce({ id: 'n1' });
+        mockDeleteMany.mockResolvedValueOnce({ count: 1 });
         const res = await deleteNotification('n1');
         expect(res.status).toBe(200);
     });

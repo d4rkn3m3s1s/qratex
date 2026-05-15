@@ -1,20 +1,21 @@
 import type { Metadata } from 'next';
-import { cache } from 'react';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
+import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
 
-const getSeoSettingsOnce = cache(getSeoSettings);
-
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeoSettingsOnce();
-  const locale = await getServerLocale();
+  const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
+  const adminLabel = t(locale, 'layoutMetadata.admin');
   return {
-    title: t(locale, 'layoutMetadata.admin'),
+    title: {
+      default: adminLabel,
+      template: `%s | ${adminLabel}`,
+    },
     applicationName: seo.siteName,
   };
 }
@@ -24,7 +25,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const seo = await getSeoSettingsOnce();
+  const seo = await getSeoSettings();
   return (
     <div className="flex min-h-dvh overflow-x-hidden">
       <SkipToMainContent />
@@ -40,6 +41,7 @@ export default async function AdminLayout({
         </main>
       </div>
       <OnboardingSheet />
+      <WebVitalsReporter />
     </div>
   );
 }

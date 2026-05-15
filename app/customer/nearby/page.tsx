@@ -65,6 +65,9 @@ function formatDistance(distanceKm: number): string {
   return `${distanceKm.toFixed(2)} km`;
 }
 
+const NEARBY_LOC_STORAGE_KEY = 'qratex-customer-nearby-loc';
+const NEARBY_LOC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export default function CustomerNearbyPage() {
   const t = useAppT();
   const [loading, setLoading] = useState(true);
@@ -99,10 +102,20 @@ export default function CustomerNearbyPage() {
     setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLatitude(position.coords.latitude);
-        setLongitude(position.coords.longitude);
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setLatitude(lat);
+        setLongitude(lng);
         setLocationError(null);
         setLocating(false);
+        try {
+          localStorage.setItem(
+            NEARBY_LOC_STORAGE_KEY,
+            JSON.stringify({ lat, lng, ts: Date.now() })
+          );
+        } catch {
+          // private mode / quota
+        }
       },
       (err: GeolocationPositionError) => {
         setLocationError(err.code);
@@ -113,9 +126,40 @@ export default function CustomerNearbyPage() {
         );
         setLocating(false);
       },
-      { enableHighAccuracy: false, timeout: 25000, maximumAge: 120_000 }
+      {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 120000,
+      }
     );
   };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(NEARBY_LOC_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { lat?: unknown; lng?: unknown; ts?: unknown };
+      const lat = typeof parsed.lat === 'number' ? parsed.lat : Number(parsed.lat);
+      const lng = typeof parsed.lng === 'number' ? parsed.lng : Number(parsed.lng);
+      const ts = typeof parsed.ts === 'number' ? parsed.ts : Number(parsed.ts);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(ts)) {
+        localStorage.removeItem(NEARBY_LOC_STORAGE_KEY);
+        return;
+      }
+      if (Date.now() - ts > NEARBY_LOC_MAX_AGE_MS) {
+        localStorage.removeItem(NEARBY_LOC_STORAGE_KEY);
+        return;
+      }
+      setLatitude(lat);
+      setLongitude(lng);
+    } catch {
+      try {
+        localStorage.removeItem(NEARBY_LOC_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   const fetchNearby = async () => {
     if (latitude === null || longitude === null) {

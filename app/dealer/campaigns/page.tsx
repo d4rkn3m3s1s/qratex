@@ -58,9 +58,19 @@ export default function DealerCampaignsPage() {
   const [segment, setSegment] = useState('all');
   const [channel, setChannel] = useState('notification');
 
-  const { data, isLoading } = useQuery<{ success: boolean; campaigns: CampaignItem[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ success: boolean; campaigns: CampaignItem[] }>({
     queryKey: ['dealer', 'campaigns'],
-    queryFn: async () => { const r = await fetch('/api/dealer/campaigns'); return r.json(); },
+    queryFn: async () => {
+      const r = await fetch('/api/dealer/campaigns');
+      const j = (await r.json().catch(() => ({}))) as { success?: boolean; campaigns?: CampaignItem[]; error?: string };
+      if (!r.ok) {
+        throw new Error(typeof j.error === 'string' ? j.error : t('dealerCampaigns.loadError'));
+      }
+      if (!j.success) {
+        throw new Error(typeof j.error === 'string' ? j.error : t('dealerCampaigns.loadError'));
+      }
+      return j as { success: boolean; campaigns: CampaignItem[] };
+    },
     staleTime: 30_000,
   });
 
@@ -138,6 +148,15 @@ export default function DealerCampaignsPage() {
 
       {isLoading ? (
         <InlineLoadingStatus className="py-16" label={t('dealerCampaigns.loading')} />
+      ) : isError ? (
+        <Card className="rounded-2xl border-destructive/40 bg-destructive/5">
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="text-sm text-destructive font-medium">{error instanceof Error ? error.message : t('dealerCampaigns.loadError')}</p>
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => void refetch()}>
+              {t('dealerCampaigns.retry')}
+            </Button>
+          </CardContent>
+        </Card>
       ) : campaigns.length === 0 ? (
         <Card className="rounded-2xl">
           <CardContent className="py-16 text-center">

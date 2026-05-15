@@ -67,6 +67,14 @@ import {
   BookOpen,
   Star,
   Zap,
+  Code,
+  LayoutGrid,
+  Wallet,
+  GitBranch,
+  Gauge,
+  Sprout,
+  LayoutTemplate,
+  Accessibility,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -83,6 +91,10 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badge?: number;
+  /** `featureVisibility` / MODULE_CATALOG anahtarı — menü `key` ile aynı değilse (ör. nearby → discovery) */
+  featureKey?: string;
+  /** Küresel `moduleControls` anahtarı — genelde `featureKey` veya modül anahtarı */
+  moduleKey?: string;
 }
 
 interface SidebarProps {
@@ -93,6 +105,9 @@ interface SidebarProps {
 
 const adminNavItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'dashboard', href: '/admin', icon: LayoutDashboard },
+  { key: 'ecosystem', labelKey: 'ecosystem', href: '/admin/ecosystem', icon: LayoutGrid },
+  { key: 'platform_pulse', labelKey: 'platform_pulse', href: '/admin/platform-pulse', icon: Activity },
+  { key: 'roadmap', labelKey: 'roadmap', href: '/admin/roadmap', icon: GitBranch },
   { labelKey: 'cards', href: '/admin/cards', icon: CreditCard },
   { labelKey: 'users', href: '/admin/users', icon: Users },
   { labelKey: 'feedbacks', href: '/admin/feedbacks', icon: MessageSquare },
@@ -124,6 +139,8 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'partners', href: '/admin/partners', icon: Share2 },
   { labelKey: 'pages', href: '/admin/pages', icon: FileText },
   { labelKey: 'themes', href: '/admin/themes', icon: Palette },
+  { labelKey: 'design_language', href: '/admin/design-language', icon: LayoutTemplate },
+  { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
   { labelKey: 'compliance', href: '/admin/compliance', icon: Shield },
   { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
@@ -133,6 +150,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'audit', href: '/admin/audit', icon: History },
   { labelKey: 'webhooks', href: '/admin/webhooks', icon: Link2 },
   { labelKey: 'api_keys', href: '/admin/api-keys', icon: Key },
+  { labelKey: 'admin_api_catalog', href: '/admin/api-catalog', icon: Code },
   { labelKey: 'modules', href: '/admin/modules', icon: Layers },
   { labelKey: 'tech_add', href: '/admin/tech/add', icon: Plus },
   { labelKey: 'observability', href: '/admin/observability', icon: Activity },
@@ -142,56 +160,64 @@ const adminNavItems: NavItem[] = [
 const dealerNavItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'dashboard', href: '/dealer', icon: LayoutDashboard },
   { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target },
+  { key: 'growth_hub', labelKey: 'growth_hub', href: '/dealer/growth-hub', icon: Sprout },
   { key: 'scan', labelKey: 'scan_card', href: '/dealer/scan', icon: ScanLine },
   { key: 'products', labelKey: 'products', href: '/dealer/products', icon: Package },
   { key: 'qr_codes', labelKey: 'qr_codes', href: '/dealer/qr-codes', icon: QrCode },
   { key: 'consumptions', labelKey: 'consumptions', href: '/dealer/consumptions', icon: History },
   { key: 'feedbacks', labelKey: 'feedbacks', href: '/dealer/feedbacks', icon: MessageSquare },
   { key: 'reviews', labelKey: 'reviews', href: '/dealer/reviews', icon: Star },
-  { key: 'remedy_queue', labelKey: 'remedy_queue', href: '/dealer/remedy-queue', icon: ClipboardList },
-  { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap },
+  { key: 'remedy_queue', labelKey: 'remedy_queue', href: '/dealer/remedy-queue', icon: ClipboardList, featureKey: 'remedy_offers', moduleKey: 'remedy_offers' },
+  { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap, featureKey: 'remedy_offers', moduleKey: 'remedy_offers' },
   { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3 },
+  { key: 'operations_brief', labelKey: 'operations_brief', href: '/dealer/operations-brief', icon: ClipboardList },
   { key: 'campaigns', labelKey: 'campaigns', href: '/dealer/campaigns', icon: Megaphone },
-  { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles },
-  { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText },
+  { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles, featureKey: 'dealer_innovation', moduleKey: 'dealer_innovation' },
+  { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText, featureKey: 'dealer_surveys', moduleKey: 'dealer_surveys' },
   { key: 'incidents', labelKey: 'incidents', href: '/dealer/incidents', icon: AlertTriangle },
   { key: 'action_items', labelKey: 'action_items', href: '/dealer/action-items', icon: ListChecks },
   { key: 'churn_risk', labelKey: 'churn_risk', href: '/dealer/churn-risk', icon: TrendingDown },
   { key: 'roi', labelKey: 'roi', href: '/dealer/roi', icon: PieChart },
   { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3 },
   { key: 'copilot', labelKey: 'copilot', href: '/dealer/copilot', icon: Bot },
-  { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle },
+  { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features' },
   { key: 'voc_wall', labelKey: 'voc_wall', href: '/dealer/voc-wall', icon: MessageSquare },
   { key: 'heatmap', labelKey: 'heatmap', href: '/dealer/heatmap', icon: MapPin },
   { key: 'radar', labelKey: 'radar', href: '/dealer/radar', icon: Radar },
-  { key: 'ai_insights', labelKey: 'ai_insights', href: '/dealer/ai-insights', icon: Sparkles },
-  { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain },
-  { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users },
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/dealer/ai-insights', icon: Sparkles, featureKey: 'ai_features', moduleKey: 'ai_features' },
+  { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain, featureKey: 'ai_features', moduleKey: 'ai_features' },
+  { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users, featureKey: 'staff_management', moduleKey: 'staff_management' },
+  { key: 'discover', labelKey: 'discover', href: '/dealer/discover', icon: LayoutGrid },
+  { key: 'experience_guide', labelKey: 'experience_guide', href: '/dealer/experience-guide', icon: BookOpen },
   { key: 'settings', labelKey: 'settings', href: '/dealer/settings', icon: Settings },
 ];
 
 const customerNavItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'dashboard', href: '/customer', icon: LayoutDashboard },
+  { key: 'progress_hub', labelKey: 'progress_hub', href: '/customer/progress-hub', icon: Gauge },
   { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard },
   { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History },
   { key: 'scan', labelKey: 'scan', href: '/customer/scan', icon: QrCode },
   { key: 'feedbacks', labelKey: 'feedbacks', href: '/customer/feedbacks', icon: MessageSquare },
   { key: 'remedy', labelKey: 'remedy', href: '/customer/remedy', icon: Gift },
-  { key: 'ai_insights', labelKey: 'ai_insights', href: '/customer/ai-insights', icon: Sparkles },
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/customer/ai-insights', icon: Sparkles, featureKey: 'customer_ai_insights', moduleKey: 'customer_ai_insights' },
   { key: 'trends', labelKey: 'trends', href: '/customer/trends', icon: TrendingUp },
   { key: 'journey_score', labelKey: 'journey_score', href: '/customer/journey-score', icon: Compass },
-  { key: 'nearby', labelKey: 'nearby', href: '/customer/nearby', icon: MapPin },
+  { key: 'nearby', labelKey: 'nearby', href: '/customer/nearby', icon: MapPin, featureKey: 'discovery', moduleKey: 'discovery' },
   { key: 'experiences', labelKey: 'experiences', href: '/customer/experiences', icon: Share2 },
   { key: 'analytics', labelKey: 'analytics', href: '/customer/analytics', icon: BarChart3 },
+  { key: 'spending_overview', labelKey: 'spending_overview', href: '/customer/spending-overview', icon: Wallet },
   { key: 'badges', labelKey: 'badges', href: '/customer/badges', icon: Trophy },
   { key: 'shop', labelKey: 'shop', href: '/customer/shop', icon: ShoppingBag },
   { key: 'squads', labelKey: 'squads', href: '/customer/squads', icon: Users2 },
   { key: 'quests', labelKey: 'quests', href: '/customer/quests', icon: Target },
   { key: 'rewards', labelKey: 'rewards', href: '/customer/rewards', icon: Gift },
   { key: 'surprise_boxes', labelKey: 'surprise_boxes', href: '/customer/surprise-boxes', icon: Box },
-  { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone },
+  { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone, featureKey: 'customer_campaigns', moduleKey: 'customer_campaigns' },
   { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart },
   { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy },
+  { key: 'discover', labelKey: 'discover', href: '/customer/discover', icon: LayoutGrid, featureKey: 'discovery', moduleKey: 'discovery' },
+  { key: 'experience_guide', labelKey: 'experience_guide', href: '/customer/experience-guide', icon: BookOpen },
   { key: 'settings', labelKey: 'settings', href: '/customer/settings', icon: Settings },
 ];
 
@@ -213,20 +239,23 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
   }, []);
 
   useEffect(() => {
-    if (role !== 'DEALER') return;
-    fetch('/api/dealer/notification-badges')
-      .then((res) => res.json())
-      .then((data) => {
-        if (typeof data?.badgeCount === 'number') setFeedbackBadge(data.badgeCount);
-      })
-      .catch(() => { });
-  }, [role]);
+    if (role === 'ADMIN') return undefined;
 
-  useEffect(() => {
-    if (role === 'ADMIN') return;
-    fetch('/api/settings/visibility', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
+    if (role !== 'DEALER') {
+      setFeedbackBadge(null);
+    }
+
+    let cancelled = false;
+
+    const visibilityPromise = fetch('/api/settings/visibility', { cache: 'no-store' }).then((res) => res.json());
+    const badgePromise =
+      role === 'DEALER'
+        ? fetch('/api/dealer/notification-badges').then((res) => res.json())
+        : Promise.resolve(null);
+
+    Promise.all([visibilityPromise, badgePromise])
+      .then(([data, badgeData]) => {
+        if (cancelled) return;
         if (data?.success && data?.menuVisibility && typeof data.menuVisibility === 'object') {
           setMenuVisibility(data.menuVisibility as Record<string, boolean>);
         }
@@ -236,8 +265,19 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
         if (data?.success && data?.moduleControls && typeof data.moduleControls === 'object') {
           setModuleControls(data.moduleControls as Record<string, boolean>);
         }
+        if (
+          role === 'DEALER' &&
+          badgeData &&
+          typeof (badgeData as { badgeCount?: unknown }).badgeCount === 'number'
+        ) {
+          setFeedbackBadge((badgeData as { badgeCount: number }).badgeCount);
+        }
       })
       .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [role]);
 
   const navItems = role === 'ADMIN'
@@ -248,10 +288,18 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
   const filteredNavItems = role === 'ADMIN'
     ? navItems
     : navItems.filter((item) => {
-      const key = item.key ?? item.href;
-      const menuEnabled = menuVisibility[key] !== false;
-      const featureEnabled = featureVisibility[key] !== false;
-      const moduleEnabled = moduleControls[key] !== false;
+      const menuKey = item.key ?? item.href;
+      const menuEnabled = menuVisibility[menuKey] !== false;
+      const fk = item.featureKey ?? item.key;
+      const featureEnabled =
+        fk == null ||
+        !Object.prototype.hasOwnProperty.call(featureVisibility, fk) ||
+        featureVisibility[fk] !== false;
+      const mk = item.moduleKey ?? item.featureKey ?? item.key;
+      const moduleEnabled =
+        mk == null ||
+        !Object.prototype.hasOwnProperty.call(moduleControls, mk) ||
+        moduleControls[mk] !== false;
       return menuEnabled && featureEnabled && moduleEnabled;
     });
   const navNs = role === 'ADMIN' ? 'admin' : role === 'DEALER' ? 'dealer' : 'customer';
@@ -270,6 +318,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
       {/* Header — üst çizgi yüksekliği DashboardHeader ile aynı: min-h-14 sm:min-h-16 + py-2 sm:py-0 */}
       <div className="flex min-h-14 shrink-0 items-center justify-between gap-1.5 border-b border-border/60 px-2 py-2 sm:min-h-16 sm:gap-2 sm:px-3 sm:py-0">
         <Link
+          prefetch={false}
           href="/"
           className="flex h-12 min-h-0 min-w-0 flex-1 items-center gap-2 sm:h-16 sm:gap-2.5 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -351,6 +400,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
           const showBadge = typeof badgeNum === 'number' && badgeNum > 0;
           return (
             <Link
+              prefetch={false}
               key={item.href}
               href={item.href}
               onClick={() => mobile && setIsMobileOpen(false)}

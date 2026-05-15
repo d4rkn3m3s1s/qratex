@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatRelativeTime, formatCurrency } from '@/lib/utils';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { useAppT } from '@/lib/app-locale';
+import { toast } from '@/lib/admin-toast';
 
 interface Consumption {
   id: string;
@@ -71,29 +72,61 @@ export default function CustomerConsumptionsPage() {
     reviewed: 0,
   });
 
-  useEffect(() => {
-    fetchConsumptions();
-  }, [filter]);
+  const fetchConsumptions = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        setLoading(true);
+        const hasReviewParam = filter === 'pending' ? 'false' : filter === 'reviewed' ? 'true' : '';
+        const url = `/api/customer/consumptions${hasReviewParam ? `?hasReview=${hasReviewParam}` : ''}`;
 
-  const fetchConsumptions = async () => {
-    try {
-      setLoading(true);
-      const hasReviewParam = filter === 'pending' ? 'false' : filter === 'reviewed' ? 'true' : '';
-      const url = `/api/customer/consumptions${hasReviewParam ? `?hasReview=${hasReviewParam}` : ''}`;
-      
-      const res = await fetch(url);
-      const data = await res.json();
+        const res = await fetch(url, { signal });
+        const data = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          items?: Consumption[];
+          stats?: { total: number; reviewPending: number; reviewed: number };
+          error?: string;
+        };
 
-      if (data.success) {
-        setConsumptions(data.items);
-        setStats(data.stats);
+        if (!res.ok) {
+          toast.error(typeof data.error === 'string' ? data.error : t('customerConsumptions.loadError'));
+          setConsumptions([]);
+          setStats({ total: 0, reviewPending: 0, reviewed: 0 });
+          return;
+        }
+
+        if (data.success && Array.isArray(data.items)) {
+          setConsumptions(data.items);
+          setStats(
+            data.stats ?? {
+              total: 0,
+              reviewPending: 0,
+              reviewed: 0,
+            }
+          );
+        } else {
+          toast.error(typeof data.error === 'string' ? data.error : t('customerConsumptions.loadError'));
+          setConsumptions([]);
+          setStats({ total: 0, reviewPending: 0, reviewed: 0 });
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === 'AbortError') return;
+        console.error('Error fetching consumptions:', err);
+        toast.error(t('customerConsumptions.loadError'));
+        setConsumptions([]);
+        setStats({ total: 0, reviewPending: 0, reviewed: 0 });
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error fetching consumptions:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [filter, t]
+  );
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchConsumptions(ac.signal);
+    return () => ac.abort();
+  }, [fetchConsumptions]);
 
   const filteredConsumptions = consumptions.filter((c) => {
     if (!searchQuery) return true;

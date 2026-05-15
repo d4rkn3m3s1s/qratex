@@ -147,8 +147,6 @@ export default async function RootLayout({
     >
       <head>
         <Script id="qratex-theme-class" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: THEME_CLASS_INIT_SCRIPT }} />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preload" href="/logo/logo.png" as="image" />
         <link rel="icon" type="image/png" href="/logo/logo.png" />
         <link rel="alternate" type="application/rss+xml" title="RSS" href="/feed.xml" />

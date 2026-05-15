@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import {
@@ -30,10 +31,13 @@ const getCachedThemeRows = unstable_cache(
   },
 );
 
+async function getPublicThemeSettingsImpl(): Promise<ThemeSettingRow[]> {
+  return getCachedThemeRows();
+}
+
 /**
  * Server-side theme rows for SSR (avoids palette flash before client fetch).
  * Kısa süreli önbellek; admin tema kaydında `revalidatePublicThemeSettings()` ile yenilenir.
+ * Aynı RSC isteğinde tek `unstable_cache` çağrısı.
  */
-export async function getPublicThemeSettings(): Promise<ThemeSettingRow[]> {
-  return getCachedThemeRows();
-}
+export const getPublicThemeSettings = cache(getPublicThemeSettingsImpl);

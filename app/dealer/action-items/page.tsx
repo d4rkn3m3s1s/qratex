@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -54,39 +54,61 @@ export default function DealerActionItemsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [queryFilter, setQueryFilter] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const itemsFetchRef = useRef<AbortController | null>(null);
 
-  const fetchItems = async () => {
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(queryFilter.trim()), 300);
+    return () => clearTimeout(id);
+  }, [queryFilter]);
+
+  const loadItems = useCallback(async () => {
+    itemsFetchRef.current?.abort();
+    const ac = new AbortController();
+    itemsFetchRef.current = ac;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (queryFilter.trim()) params.set('q', queryFilter.trim());
+      if (debouncedQuery) params.set('q', debouncedQuery);
       params.set('page', String(page));
       params.set('pageSize', '20');
-      const res = await fetch(`/api/dealer/action-items?${params}`);
+      const res = await fetch(`/api/dealer/action-items?${params}`, { signal: ac.signal });
       const data = await res.json();
+      if (itemsFetchRef.current !== ac) return;
       if (data.items) {
         setItems(data.items);
         setTotal(data.total ?? 0);
         setTotalPages(data.totalPages ?? 1);
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (itemsFetchRef.current !== ac) return;
       toast.error(t('dealerActionItems.toastLoadFailed'));
     } finally {
-      setLoading(false);
+      if (itemsFetchRef.current === ac) {
+        itemsFetchRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, [page, statusFilter, debouncedQuery, t]);
 
   useEffect(() => {
-    fetchItems();
-  }, [page, statusFilter, queryFilter, t]);
+    void loadItems();
+    return () => {
+      itemsFetchRef.current?.abort();
+    };
+  }, [loadItems]);
 
   useEffect(() => {
     const q = searchParams.get('q');
     if (q && q !== queryFilter) {
       setQueryFilter(q);
+      setDebouncedQuery(q.trim());
       setPage(1);
     }
+    // Yalnızca URL değişiminde senkron; queryFilter bağımlılıkta olursa yazarken ?q= eski değere geri sarar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- searchParams kaynaklı tek yönlü senkron
   }, [searchParams]);
 
   const updateStatus = async (id: string, status: string) => {
@@ -101,7 +123,7 @@ export default function DealerActionItemsPage() {
       });
       if (res.ok) {
         toast.success(t('dealerActionItems.toastUpdated'));
-        fetchItems();
+        void loadItems();
       } else {
         const data = await res.json();
         toast.error(data.error || t('dealerActionItems.toastUpdateFailed'));
@@ -155,7 +177,13 @@ export default function DealerActionItemsPage() {
                 placeholder={t('dealerActionItems.searchPlaceholder')}
                 className="sm:w-[240px]"
               />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => {
+                  setStatusFilter(v);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full sm:w-[160px] border-border/70 bg-background/80 text-foreground dark:bg-white/15 dark:border-white/30 dark:text-white">
                   <Filter className="h-4 w-4 mr-2" />
                   <SelectValue />

@@ -49,24 +49,45 @@ export default function CustomerRemedyOfferPage() {
 
   useEffect(() => {
     if (!offerId) return;
-    fetch(`/api/customer/remedy/${offerId}`)
-      .then((r) => r.json())
-      .then((j) => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/customer/remedy/${offerId}`);
+        const j = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!r.ok) {
+          toast.error(typeof j.error === 'string' ? j.error : t('customerRemedyOffer.loadError'));
+          return;
+        }
         if (j.offer) setData(j);
         if (j.error) toast.error(j.error);
-      })
-      .catch(() => toast.error(t('customerRemedyOffer.loadError')))
-      .finally(() => setLoading(false));
+      } catch {
+        if (!cancelled) toast.error(t('customerRemedyOffer.loadError'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [offerId, t]);
 
   useEffect(() => {
     if (!offerId) return;
-    fetch(`/api/customer/remedy/${offerId}/timeline`, { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (Array.isArray(j.timeline)) setTimeline(j.timeline);
-      })
-      .catch(() => setTimeline([]));
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/customer/remedy/${offerId}/timeline`, { cache: 'no-store' });
+        const j = await r.json().catch(() => ({}));
+        if (!cancelled && r.ok && Array.isArray(j.timeline)) setTimeline(j.timeline);
+        else if (!cancelled && !r.ok) setTimeline([]);
+      } catch {
+        if (!cancelled) setTimeline([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [offerId, data?.offer?.status]);
 
   const offer = data?.offer;

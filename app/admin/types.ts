@@ -119,6 +119,7 @@ export type SystemStatus = {
     checks: Record<string, { status: string; latencyMs?: number; message?: string }>;
     environment: { label: string; nodeEnv: string; isVercel: boolean; vercelEnv: string | null; region: string | null };
     dbLatencyMs: number | null;
+    mail?: { configured: boolean; smtp: boolean; resend: boolean };
 };
 
 // ─── Settings ───────────────────────────────────────────────

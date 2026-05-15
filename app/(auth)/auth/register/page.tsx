@@ -417,8 +417,8 @@ function RegisterContent() {
             {t('auth.termsAfter')}
           </p>
         </CardContent>
-        <CardFooter className="justify-center">
-          <p className="text-sm text-muted-foreground">
+        <CardFooter className="justify-center flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground text-center">
             {t('auth.haveAccount')}{' '}
             <Link
               href="/auth/login"
@@ -427,6 +427,12 @@ function RegisterContent() {
               {t('auth.loginLinkCapitalized')}
             </Link>
           </p>
+          <Link
+            href="/auth/forgot-password"
+            className="text-center text-sm text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            {t('auth.registerForgotPassword')}
+          </Link>
         </CardFooter>
       </Card>
     </motion.div>

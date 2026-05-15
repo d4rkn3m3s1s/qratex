@@ -98,15 +98,32 @@ export default function DealerROIPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/dealer/roi')
-      .then((r) => r.json())
-      .then((j) => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/dealer/roi');
+        const j = (await r.json().catch(() => ({}))) as {
+          metrics?: ROIMetrics;
+          weeklyTrend?: RoiWeeklyPoint[];
+          dailyTrend?: RoiDailyPoint[];
+        };
+        if (cancelled) return;
+        if (!r.ok) {
+          toast.error(t('dealerRoi.toastLoadFailed'));
+          return;
+        }
         if (j.metrics) setMetrics(j.metrics);
         if (Array.isArray(j.weeklyTrend)) setWeeklyTrend(j.weeklyTrend);
         if (Array.isArray(j.dailyTrend)) setDailyTrend(j.dailyTrend);
-      })
-      .catch(() => toast.error(t('dealerRoi.toastLoadFailed')))
-      .finally(() => setLoading(false));
+      } catch {
+        if (!cancelled) toast.error(t('dealerRoi.toastLoadFailed'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [t]);
 
   if (loading) {

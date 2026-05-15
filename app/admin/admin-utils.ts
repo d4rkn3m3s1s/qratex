@@ -27,6 +27,14 @@ import {
     Cpu,
     Shield,
     Target,
+    Code,
+    LayoutGrid,
+    Activity,
+    GitBranch,
+    LayoutTemplate,
+    Accessibility,
+    Radio,
+    Mail,
     type LucideIcon,
 } from 'lucide-react';
 import type { FeatureNavItem, QuickAccessItem } from './types';
@@ -72,6 +80,7 @@ export const getRoleLabel = (role: string) => {
 export const ANA_OZELLIKLER: FeatureNavItem[] = [
     { href: '/admin/ai-dashboard', label: 'AI Kontrol Merkezi', description: 'Yapay zeka analizleri ve insight merkezi', icon: Brain, color: 'from-primary to-primary/80' },
     { href: '/admin/analytics', label: 'Analitik', description: 'Raporlar, trendler ve performans metrikleri', icon: BarChart3, color: 'from-blue-500 to-cyan-500' },
+    { href: '/admin/observability', label: 'Gözlemlenebilirlik', description: 'Vercel durumu, uygulama sağlığı, RUM ve trafik özeti', icon: Radio, color: 'from-violet-500 to-purple-600' },
     { href: '/admin/badges', label: 'Gamification', description: 'Rozetler, görevler ve ödüller', icon: Trophy, color: 'from-amber-500 to-orange-500' },
     { href: '/admin/feedbacks', label: 'Geri Bildirimler & VOC', description: 'Müşteri sesi ve geri bildirim yönetimi', icon: MessageSquare, color: 'from-emerald-500 to-teal-500' },
     { href: '/admin/compliance', label: 'KVKK & Denetim', description: 'Uyumluluk ve denetim günlüğü', icon: Shield, color: 'from-slate-500 to-zinc-600' },
@@ -79,6 +88,13 @@ export const ANA_OZELLIKLER: FeatureNavItem[] = [
 ];
 
 export const HIZLI_ERISIM: QuickAccessItem[] = [
+    { href: '/admin/ecosystem', label: 'Ekosistem özeti', icon: LayoutGrid },
+    { href: '/admin/platform-pulse', label: 'Platform nabzı', icon: Activity },
+    { href: '/admin/roadmap', label: 'Ürün yol haritası', icon: GitBranch },
+    { href: '/admin/design-language', label: 'Tasarım dili', icon: LayoutTemplate },
+    { href: '/admin/observability', label: 'Gözlemlenebilirlik', icon: Radio },
+    { href: '/admin/accessibility', label: 'Erişilebilirlik', icon: Accessibility },
+    { href: '/admin/settings?tab=auth', label: 'E-posta (SMTP/Resend)', icon: Mail },
     { href: '/admin/users', label: 'Kullanıcılar', icon: Users },
     { href: '/admin/feedbacks', label: 'Geri Bildirimler', icon: MessageSquare },
     { href: '/admin/cards', label: 'Kartlar', icon: CreditCard },
@@ -95,6 +111,7 @@ export const HIZLI_ERISIM: QuickAccessItem[] = [
     { href: '/admin/audit', label: 'Denetim Günlüğü', icon: History },
     { href: '/admin/webhooks', label: "Webhook'lar", icon: Link2 },
     { href: '/admin/api-keys', label: 'API Anahtarları', icon: Key },
+    { href: '/admin/api-catalog', label: 'Admin API kataloğu', icon: Code },
     { href: '/admin/ai-dashboard', label: 'AI Kontrol', icon: Brain },
     { href: '/admin/ai-detailed', label: 'AI Detaylı', icon: Eye },
     { href: '/admin/ai-learning', label: 'AI Öğrenme', icon: Database },

@@ -126,6 +126,7 @@ export async function GET(request: NextRequest) {
         points: true,
         level: true,
         createdAt: true,
+        password: true,
         _count: {
           select: {
             feedbacks: true,
@@ -143,7 +144,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
+    const { password: _pw, ...rest } = user;
+
+    return NextResponse.json(
+      {
+        success: true,
+        user: {
+          ...rest,
+          hasPassword: Boolean(_pw),
+        },
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error fetching profile:', error);
     const db = responseIfDatabaseUnavailable(error);

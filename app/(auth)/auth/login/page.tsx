@@ -18,6 +18,7 @@ import { loginSchema, type LoginInput } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
 import { translateKnownMessageKey } from '@/lib/translate-known-message';
+import { safePostLoginRedirect } from '@/lib/safe-callback-url';
 
 type DemoRole = 'ADMIN' | 'DEALER' | 'CUSTOMER';
 type DemoAccountKey = 'admin' | 'dealer' | 'customer';
@@ -66,6 +67,34 @@ function LoginPageContent() {
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [authFeatures, setAuthFeatures] = useState<{ magicLink: boolean; mailConfigured: boolean } | null>(null);
+  const [magicEmail, setMagicEmail] = useState('');
+  const [magicSending, setMagicSending] = useState(false);
+
+  const forgotPasswordHref =
+    callbackUrl && callbackUrl !== '/'
+      ? `/auth/forgot-password?callbackUrl=${encodeURIComponent(callbackUrl)}`
+      : '/auth/forgot-password';
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/public/auth-features', { cache: 'no-store' });
+        const data = (await res.json()) as { magicLink?: boolean; mailConfigured?: boolean };
+        if (cancelled || !res.ok) return;
+        setAuthFeatures({
+          magicLink: Boolean(data.magicLink),
+          mailConfigured: Boolean(data.mailConfigured),
+        });
+      } catch {
+        if (!cancelled) setAuthFeatures({ magicLink: false, mailConfigured: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (searchParams.get('registered') === 'true') {
@@ -156,6 +185,45 @@ function LoginPageContent() {
     } catch {
       toast.error(t('auth.errorOccurred'));
       setIsLoading(false);
+    }
+  };
+
+  const sendMagicLink = async () => {
+    const email = magicEmail.trim().toLowerCase();
+    if (!email) {
+      toast.error(t('validation.login.emailRequired'));
+      return;
+    }
+    setMagicSending(true);
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const safeCb = safePostLoginRedirect(
+        callbackUrl && callbackUrl !== '/' ? callbackUrl : undefined,
+        origin
+      );
+      const payload: { email: string; callbackUrl?: string } = { email };
+      if (safeCb) payload.callbackUrl = safeCb;
+
+      const res = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (res.status === 403) {
+        toast.error(t('auth.magicLinkDisabled'));
+      } else if (res.status === 503) {
+        toast.error(data.error || t('auth.loginMagicLinkNeedMail'));
+      } else if (!res.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : t('common.error'));
+      } else {
+        toast.success(t('auth.magicLinkSent'));
+        setMagicEmail('');
+      }
+    } catch {
+      toast.error(t('common.error'));
+    } finally {
+      setMagicSending(false);
     }
   };
 
@@ -279,14 +347,19 @@ function LoginPageContent() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
-                <span
-                  className="text-sm text-muted-foreground cursor-not-allowed"
-                  title={t('auth.forgotPasswordSoonTitle')}
+                <Link
+                  href={forgotPasswordHref}
+                  className="text-sm text-primary hover:underline shrink-0"
+                  title={
+                    authFeatures && !authFeatures.mailConfigured
+                      ? t('auth.forgotPasswordMailNotConfigured')
+                      : undefined
+                  }
                 >
                   {t('auth.forgotPassword')}
-                </span>
+                </Link>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden />
@@ -319,6 +392,47 @@ function LoginPageContent() {
               {t('auth.loginButton')}
             </Button>
           </form>
+
+          {authFeatures?.magicLink ? (
+            <div className="space-y-3 pt-1">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">{t('auth.loginMagicLinkSection')}</span>
+                </div>
+              </div>
+              {authFeatures.mailConfigured ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">{t('auth.magicLinkDesc')}</p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                    <Input
+                      type="email"
+                      autoComplete="email"
+                      placeholder={t('auth.emailPlaceholder')}
+                      className="sm:flex-1"
+                      value={magicEmail}
+                      onChange={(e) => setMagicEmail(e.target.value)}
+                      disabled={magicSending || isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="sm:shrink-0"
+                      loading={magicSending}
+                      disabled={isLoading}
+                      onClick={() => void sendMagicLink()}
+                    >
+                      {t('auth.magicLinkSubmit')}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t('auth.loginMagicLinkNeedMail')}</p>
+              )}
+            </div>
+          ) : null}
 
           <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
             <p className="text-xs text-muted-foreground text-center">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
@@ -58,6 +58,7 @@ export default function DealerReviewsPage() {
     const [generatingId, setGeneratingId] = useState<string | null>(null);
     const [savingReplyForId, setSavingReplyForId] = useState<string | null>(null);
     const [aiReplies, setAiReplies] = useState<Record<string, string[]>>({});
+    const reviewsFetchRef = useRef<AbortController | null>(null);
 
     const handleUseAiReply = async (reviewId: string, replyText: string) => {
         const trimmed = replyText.trim();
@@ -128,12 +129,17 @@ export default function DealerReviewsPage() {
     useEffect(() => {
         async function fetchReviews() {
             if (!session?.user?.id) return;
+            reviewsFetchRef.current?.abort();
+            const ac = new AbortController();
+            reviewsFetchRef.current = ac;
             try {
                 setLoading(true);
                 const res = await fetch(`/api/dealer/reviews?rating=${filterRating}`, {
                     credentials: 'same-origin',
+                    signal: ac.signal,
                 });
                 const data = await res.json().catch(() => ({}));
+                if (reviewsFetchRef.current !== ac) return;
                 if (!res.ok || !data.success) {
                     toast.error(
                         typeof data.error === 'string' ? data.error : t('dealerReviews.loadError')
@@ -145,16 +151,24 @@ export default function DealerReviewsPage() {
                 setReviews(data.reviews);
                 setStats(data.stats);
             } catch (err) {
+                if (err instanceof DOMException && err.name === 'AbortError') return;
+                if (reviewsFetchRef.current !== ac) return;
                 console.error('Failed to fetch reviews', err);
                 toast.error(t('dealerReviews.loadError'));
                 setReviews([]);
                 setStats(null);
             } finally {
-                setLoading(false);
+                if (reviewsFetchRef.current === ac) {
+                    reviewsFetchRef.current = null;
+                    setLoading(false);
+                }
             }
         }
-        fetchReviews();
-    }, [session, filterRating]);
+        void fetchReviews();
+        return () => {
+            reviewsFetchRef.current?.abort();
+        };
+    }, [session, filterRating, t]);
 
     return (
         <LazyMotion features={domAnimation} strict>

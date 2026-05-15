@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback, useRef, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -18,11 +19,42 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { getInitials } from '@/lib/utils';
 import { signOut } from 'next-auth/react';
-import { NotificationCenter } from './notification-center';
+import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { GlobalSearchResults } from './global-search-results';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { useAppT } from '@/lib/app-locale';
+
+const GlobalSearchResults = dynamic(
+  () => import('./global-search-results').then((m) => m.GlobalSearchResults),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground" role="status">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+      </div>
+    ),
+  },
+);
+
+function NotificationCenterSkeleton() {
+  const t = useAppT();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      type="button"
+      className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+      disabled
+      aria-label={t('notificationCenter.trigger')}
+    >
+      <Loader2 className="h-[18px] w-[18px] shrink-0 animate-spin opacity-50" aria-hidden />
+    </Button>
+  );
+}
+
+const NotificationCenter = dynamic(
+  () => import('./notification-center').then((m) => m.NotificationCenter),
+  { loading: () => <NotificationCenterSkeleton /> },
+);
 
 interface DashboardHeaderProps {
   title?: string;
@@ -64,8 +96,8 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     }
   };
   const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
-    localStorage.setItem('qratex-theme', mode);
-    localStorage.setItem('theme', mode);
+    safeLocalStorageSetItem('qratex-theme', mode);
+    safeLocalStorageSetItem('theme', mode);
     forceModeDom(mode);
     setTheme(mode);
   };
@@ -79,6 +111,7 @@ export function DashboardHeader({ title, description, showSearch = true, actions
   const desktopSearchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
   const desktopResultsRegionId = useId();
   const mobileResultsRegionId = useId();
 
@@ -106,23 +139,34 @@ export function DashboardHeader({ title, description, showSearch = true, actions
 
   const fetchGlobalSearch = useCallback(async (q: string) => {
     if (q.length < 2) {
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
       setSearchResults(null);
       return;
     }
+    searchAbortRef.current?.abort();
+    const ac = new AbortController();
+    searchAbortRef.current = ac;
     setSearchLoading(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ac.signal });
       const data = await res.json();
+      if (searchAbortRef.current !== ac) return;
       if (data.success && data.results) {
         setSearchResults(data.results);
         setSearchOpen(true);
       } else {
         setSearchResults(null);
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (searchAbortRef.current !== ac) return;
       setSearchResults(null);
     } finally {
-      setSearchLoading(false);
+      if (searchAbortRef.current === ac) {
+        searchAbortRef.current = null;
+        setSearchLoading(false);
+      }
     }
   }, []);
 
@@ -130,13 +174,19 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     const q = searchQuery.trim();
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     if (q.length < 2) {
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
       setSearchResults(null);
       setSearchOpen(false);
+      setSearchLoading(false);
       return;
     }
-    searchDebounceRef.current = setTimeout(() => fetchGlobalSearch(q), 300);
+    searchDebounceRef.current = setTimeout(() => {
+      void fetchGlobalSearch(q);
+    }, 300);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchAbortRef.current?.abort();
     };
   }, [searchQuery, fetchGlobalSearch]);
 

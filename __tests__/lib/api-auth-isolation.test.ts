@@ -1,3 +1,12 @@
+jest.mock('@/lib/auth', () => ({
+  authOptions: { session: { strategy: 'jwt' as const, maxAge: 259200 } },
+}));
+
+jest.mock('@/lib/prisma', () => ({
+  prisma: {},
+  isPrismaConnectivityError: () => false,
+}));
+
 import {
   requireRole,
   requireDealerResource,

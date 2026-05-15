@@ -645,6 +645,26 @@ async function main() {
         category: 'avatars',
       },
     }),
+    prisma.settings.upsert({
+      where: { key: 'enableRegistration' },
+      update: {},
+      create: { key: 'enableRegistration', value: true, category: 'general' },
+    }),
+    prisma.settings.upsert({
+      where: { key: 'enableGoogleAuth' },
+      update: {},
+      create: { key: 'enableGoogleAuth', value: true, category: 'general' },
+    }),
+    prisma.settings.upsert({
+      where: { key: 'enableMagicLink' },
+      update: {},
+      create: { key: 'enableMagicLink', value: true, category: 'general' },
+    }),
+    prisma.settings.upsert({
+      where: { key: 'maintenanceMode' },
+      update: {},
+      create: { key: 'maintenanceMode', value: false, category: 'general' },
+    }),
   ]);
 
   console.log('✅ Settings created:', settings.length);

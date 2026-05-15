@@ -1,7 +1,7 @@
 'use client';
 
 import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NextImage from 'next/image';
@@ -28,11 +28,13 @@ import {
   SlidersHorizontal,
   Search,
   ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -157,10 +159,18 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
 ];
 
 const settingsToasts = {
-  success: (message: string) => toast.success(message),
+  success: (message: string, options?: Parameters<typeof toast.success>[1]) =>
+    toast.success(message, options),
   info: (message: string) => toast(message),
   warn: (message: string) => toast.error(message),
 };
+
+const SETTINGS_TAB_IDS = ['profile', 'general', 'appearance', 'auth', 'ai', 'gamification', 'modules', 'page-settings'] as const;
+type SettingsTabId = (typeof SETTINGS_TAB_IDS)[number];
+
+function isSettingsTabId(v: string): v is SettingsTabId {
+  return (SETTINGS_TAB_IDS as readonly string[]).includes(v);
+}
 
 export default function AdminSettingsPage() {
   const { data: session, update } = useSession();
@@ -190,7 +200,42 @@ export default function AdminSettingsPage() {
   const [visibilityCatalog, setVisibilityCatalog] = useState<VisibilityDataResponse['catalog'] | null>(null);
   const [visibilityLoading, setVisibilityLoading] = useState(false);
   const [visibilitySaving, setVisibilitySaving] = useState(false);
-  
+  const [emailTestTo, setEmailTestTo] = useState('');
+  const [emailTestSending, setEmailTestSending] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState<
+    | null
+    | {
+        kind: 'success';
+        delivery: {
+          channel: 'smtp' | 'resend';
+          effectiveFrom: string;
+          usedResendAfterSmtpFailure: boolean;
+        };
+      }
+    | { kind: 'error'; message: string }
+  >(null);
+  const [composeTo, setComposeTo] = useState('');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeMessage, setComposeMessage] = useState('');
+  const [composeSending, setComposeSending] = useState(false);
+  const [composeResult, setComposeResult] = useState<
+    | null
+    | {
+        kind: 'success';
+        delivery: {
+          channel: 'smtp' | 'resend';
+          effectiveFrom: string;
+          usedResendAfterSmtpFailure: boolean;
+        };
+      }
+    | { kind: 'error'; message: string }
+  >(null);
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId>('profile');
+  const [serverMailEnv, setServerMailEnv] = useState<{
+    configured: boolean;
+    smtp: boolean;
+    resend: boolean;
+  } | null>(null);
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -227,6 +272,27 @@ export default function AdminSettingsPage() {
     levelUpThreshold: 100,
   });
 
+  useLayoutEffect(() => {
+    try {
+      const q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null;
+      if (q && isSettingsTabId(q)) setSettingsTab(q);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleSettingsTabChange = (v: string) => {
+    if (!isSettingsTabId(v)) return;
+    setSettingsTab(v);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', v);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
     if (session?.user) {
       setProfile({
@@ -251,6 +317,25 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     loadVisibilitySettings();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/system-status', { cache: 'no-store' });
+        const data = (await res.json()) as {
+          success?: boolean;
+          mail?: { configured: boolean; smtp: boolean; resend: boolean };
+        };
+        if (!cancelled && data.success && data.mail) setServerMailEnv(data.mail);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchSettings = async () => {
@@ -337,6 +422,123 @@ export default function AdminSettingsPage() {
       settingsToasts.warn('Beklenmeyen bir hata olustu.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setEmailTestSending(true);
+    setEmailTestResult(null);
+    try {
+      const trimmed = emailTestTo.trim();
+      const res = await fetch('/api/admin/email-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(trimmed ? { to: trimmed } : {}),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+        delivery?: {
+          channel: 'smtp' | 'resend';
+          effectiveFrom: string;
+          usedResendAfterSmtpFailure?: boolean;
+        };
+      };
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || 'Test e-postası gönderilemedi';
+        setEmailTestResult({ kind: 'error', message: errMsg });
+        settingsToasts.warn(errMsg);
+        return;
+      }
+      if (data.delivery) {
+        setEmailTestResult({
+          kind: 'success',
+          delivery: {
+            channel: data.delivery.channel,
+            effectiveFrom: data.delivery.effectiveFrom,
+            usedResendAfterSmtpFailure: Boolean(data.delivery.usedResendAfterSmtpFailure),
+          },
+        });
+      }
+      const channelLabel = data.delivery?.channel === 'smtp' ? 'SMTP' : 'Resend';
+      const descParts: string[] = [`Kanal: ${channelLabel}`];
+      if (data.delivery?.effectiveFrom) {
+        descParts.push(`Gönderen: ${data.delivery.effectiveFrom}`);
+      }
+      if (data.delivery?.usedResendAfterSmtpFailure) {
+        descParts.push('SMTP kimlik doğrulaması başarısız; Resend yedeği kullanıldı.');
+      }
+      settingsToasts.success(data.message || 'Test gönderildi.', {
+        description: descParts.join(' · '),
+        duration: 9000,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Test e-postası gönderilemedi.';
+      setEmailTestResult({ kind: 'error', message: msg });
+      settingsToasts.warn(msg);
+    } finally {
+      setEmailTestSending(false);
+    }
+  };
+
+  const handleSendComposeMail = async () => {
+    setComposeSending(true);
+    setComposeResult(null);
+    try {
+      const res = await fetch('/api/admin/compose-mail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: composeTo.trim(),
+          subject: composeSubject.trim(),
+          message: composeMessage.trim(),
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+        delivery?: {
+          channel: 'smtp' | 'resend';
+          effectiveFrom: string;
+          usedResendAfterSmtpFailure?: boolean;
+        };
+      };
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || 'E-posta gönderilemedi';
+        setComposeResult({ kind: 'error', message: errMsg });
+        settingsToasts.warn(errMsg);
+        return;
+      }
+      if (data.delivery) {
+        setComposeResult({
+          kind: 'success',
+          delivery: {
+            channel: data.delivery.channel,
+            effectiveFrom: data.delivery.effectiveFrom,
+            usedResendAfterSmtpFailure: Boolean(data.delivery.usedResendAfterSmtpFailure),
+          },
+        });
+      }
+      const channelLabel = data.delivery?.channel === 'smtp' ? 'SMTP' : 'Resend';
+      const descParts: string[] = [`Kanal: ${channelLabel}`];
+      if (data.delivery?.effectiveFrom) {
+        descParts.push(`Gönderen: ${data.delivery.effectiveFrom}`);
+      }
+      if (data.delivery?.usedResendAfterSmtpFailure) {
+        descParts.push('SMTP kimlik doğrulaması başarısız; Resend yedeği kullanıldı.');
+      }
+      settingsToasts.success(data.message || 'E-posta gönderildi.', {
+        description: descParts.join(' · '),
+        duration: 9000,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'E-posta gönderilemedi.';
+      setComposeResult({ kind: 'error', message: msg });
+      settingsToasts.warn(msg);
+    } finally {
+      setComposeSending(false);
     }
   };
 
@@ -742,7 +944,7 @@ export default function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs value={settingsTab} onValueChange={handleSettingsTabChange} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 h-auto gap-1 p-1">
           <TabsTrigger value="profile" className="flex flex-col sm:flex-row gap-0.5 sm:gap-1.5 py-2 sm:py-1.5 text-[10px] sm:text-sm">
             <User className="h-4 w-4 shrink-0" />
@@ -1296,6 +1498,205 @@ export default function AdminSettingsPage() {
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card glass className="mt-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Mail className="h-4 w-4" />
+                  E-posta gönderimi (.env)
+                </CardTitle>
+                <CardDescription>
+                  Şifre sıfırlama ve magic link mesajları sunucudaki ortam değişkenleriyle gönderilir (veritabanındaki SMTP alanları
+                  gönderimi doğrudan etkilemez). Gmail için hesapta 2 adımlı doğrulama ve uygulama şifresi kullanın.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {serverMailEnv && (
+                  <p
+                    className={`text-xs rounded-md border px-3 py-2 ${
+                      serverMailEnv.configured
+                        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-900 dark:text-emerald-100'
+                        : 'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-50'
+                    }`}
+                  >
+                    <span className="font-medium">Sunucu (.env) özeti:</span>{' '}
+                    {serverMailEnv.configured
+                      ? [serverMailEnv.smtp && 'SMTP', serverMailEnv.resend && 'Resend'].filter(Boolean).join(' · ') || '—'
+                      : 'SMTP veya RESEND_API_KEY tanımlı değil — şifre sıfırlama / doğrulama e-postaları gönderilemez.'}
+                  </p>
+                )}
+                <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1.5">
+                  <li>
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_HOST</code>,{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_PORT</code> (587 veya 465),{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_USER</code>,{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_PASS</code> veya{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_PASSWORD</code>
+                  </li>
+                  <li>
+                    İsteğe bağlı: <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_SECURE=true</code> veya
+                    port 465 ile TLS
+                  </li>
+                  <li>
+                    Gönderen başlığı: <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">EMAIL_FROM</code> (örn.{' '}
+                    <span className="font-mono text-xs">QRATEX &lt;noreply@alanadiniz.com&gt;</span>)
+                  </li>
+                  <li>
+                    Alternatif: <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">RESEND_API_KEY</code> (SMTP yoksa
+                    Resend kullanılır)
+                  </li>
+                  <li>
+                    SMTP 535 (kimlik) hatasında otomatik Resend denemesi:{' '}
+                    <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">SMTP_FALLBACK_RESEND</code> (varsayılan açık;
+                    kapatmak için <span className="font-mono text-xs">false</span>)
+                  </li>
+                </ul>
+                <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <Label htmlFor="admin-email-test-to">Test e-postası alıcısı</Label>
+                  <p className="text-xs text-muted-foreground">Boş bırakılırsa oturum açtığınız admin e-postasına gönderilir.</p>
+                  <Input
+                    id="admin-email-test-to"
+                    type="email"
+                    placeholder={profile.email || 'ornek@alanadiniz.com'}
+                    value={emailTestTo}
+                    onChange={(e) => setEmailTestTo(e.target.value)}
+                    autoComplete="email"
+                  />
+                  <Button type="button" variant="secondary" className="gap-2" onClick={handleSendTestEmail} disabled={emailTestSending || !serverMailEnv?.configured}>
+                    <Mail className={`h-4 w-4 ${emailTestSending ? 'animate-pulse' : ''}`} />
+                    {emailTestSending ? 'Gönderiliyor...' : 'Test e-postası gönder'}
+                  </Button>
+                  {!serverMailEnv?.configured && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">E-posta sunucusu tanımlı değilken test gönderilemez.</p>
+                  )}
+                  {emailTestResult?.kind === 'success' && (
+                    <Alert className="border-emerald-500/30 bg-emerald-500/5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <AlertTitle>Gönderim özeti</AlertTitle>
+                      <AlertDescription className="space-y-1 text-muted-foreground">
+                        <p>
+                          <span className="font-medium text-foreground">Kanal:</span>{' '}
+                          {emailTestResult.delivery.channel === 'smtp' ? 'SMTP' : 'Resend API'}
+                        </p>
+                        <p className="break-all">
+                          <span className="font-medium text-foreground">Gönderen:</span>{' '}
+                          {emailTestResult.delivery.effectiveFrom}
+                        </p>
+                        {emailTestResult.delivery.usedResendAfterSmtpFailure && (
+                          <p className="text-amber-700 dark:text-amber-400">
+                            SMTP girişi reddedildi; mesaj Resend ile iletildi. Kalıcı çözüm için Gmail uygulama şifresi veya yalnızca
+                            Resend kullanın.
+                          </p>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {emailTestResult?.kind === 'error' && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Gönderilemedi</AlertTitle>
+                      <AlertDescription className="break-words">{emailTestResult.message}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-border/60 bg-muted/15 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Özel e-posta (logo şablonu)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Konu ve düz metin mesaj girin; HTML otomatik üretilir. Üstte marka logosu{' '}
+                      <code className="rounded bg-muted px-1 py-0.5 text-[11px] font-mono">/logo/logo-light.png</code> kullanılır
+                      (mutlak adres için <code className="rounded bg-muted px-1 py-0.5 text-[11px] font-mono">NEXT_PUBLIC_APP_URL</code>{' '}
+                      veya <code className="rounded bg-muted px-1 py-0.5 text-[11px] font-mono">NEXTAUTH_URL</code>).
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-compose-to">Alıcı</Label>
+                    <Input
+                      id="admin-compose-to"
+                      type="email"
+                      placeholder="alici@ornek.com"
+                      value={composeTo}
+                      onChange={(e) => setComposeTo(e.target.value)}
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="admin-compose-subject">Konu</Label>
+                      <span className="text-xs tabular-nums text-muted-foreground">{composeSubject.length}/200</span>
+                    </div>
+                    <Input
+                      id="admin-compose-subject"
+                      type="text"
+                      placeholder="Örn. Duyuru: bakım penceresi"
+                      value={composeSubject}
+                      onChange={(e) => setComposeSubject(e.target.value)}
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="admin-compose-message">Mesaj</Label>
+                      <span className="text-xs tabular-nums text-muted-foreground">{composeMessage.length}/12000</span>
+                    </div>
+                    <Textarea
+                      id="admin-compose-message"
+                      placeholder="Paragraflar için çift satır sonu kullanın. HTML yazmayın; metin kaçışlı gönderilir."
+                      value={composeMessage}
+                      onChange={(e) => setComposeMessage(e.target.value)}
+                      rows={8}
+                      className="min-h-[140px] resize-y"
+                      maxLength={12000}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    onClick={handleSendComposeMail}
+                    disabled={
+                      composeSending || !composeTo.trim() || !composeSubject.trim() || !composeMessage.trim() || !serverMailEnv?.configured
+                    }
+                  >
+                    <Mail className={`h-4 w-4 ${composeSending ? 'animate-pulse' : ''}`} />
+                    {composeSending ? 'Gönderiliyor...' : 'Özel şablonla gönder'}
+                  </Button>
+                  {!serverMailEnv?.configured && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      E-posta sunucusu tanımlı değilken gönderim yapılamaz; önce SMTP veya Resend yapılandırın.
+                    </p>
+                  )}
+                  {composeResult?.kind === 'success' && (
+                    <Alert className="border-emerald-500/30 bg-emerald-500/5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <AlertTitle>Gönderim özeti</AlertTitle>
+                      <AlertDescription className="space-y-1 text-muted-foreground">
+                        <p>
+                          <span className="font-medium text-foreground">Kanal:</span>{' '}
+                          {composeResult.delivery.channel === 'smtp' ? 'SMTP' : 'Resend API'}
+                        </p>
+                        <p className="break-all">
+                          <span className="font-medium text-foreground">Gönderen:</span>{' '}
+                          {composeResult.delivery.effectiveFrom}
+                        </p>
+                        {composeResult.delivery.usedResendAfterSmtpFailure && (
+                          <p className="text-amber-700 dark:text-amber-400">
+                            SMTP girişi reddedildi; mesaj Resend ile iletildi.
+                          </p>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {composeResult?.kind === 'error' && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Gönderilemedi</AlertTitle>
+                      <AlertDescription className="break-words">{composeResult.message}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </motion.div>

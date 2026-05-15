@@ -3,8 +3,12 @@
  * Dealer/tenant başına günlük token limiti; limit aşımında 429.
  */
 import { prisma } from '@/lib/prisma';
+import { parsePositiveIntEnv } from '@/lib/safe-env-number';
 
-const DEFAULT_DAILY_LIMIT = parseInt(process.env.AI_DAILY_TOKEN_LIMIT_PER_DEALER || '100000', 10);
+const DEFAULT_DAILY_LIMIT = parsePositiveIntEnv(
+  process.env.AI_DAILY_TOKEN_LIMIT_PER_DEALER,
+  100_000
+);
 
 export class AiCostLimitExceededError extends Error {
   readonly statusCode = 429;

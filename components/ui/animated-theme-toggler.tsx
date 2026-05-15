@@ -5,6 +5,7 @@ import { Moon, Sun } from "lucide-react"
 import { flushSync } from "react-dom"
 
 import { cn } from "@/lib/utils"
+import { safeLocalStorageSetItem } from "@/lib/safe-web-storage"
 
 interface AnimatedThemeTogglerProps
   extends React.ComponentPropsWithoutRef<"button"> {
@@ -44,7 +45,8 @@ export const AnimatedThemeToggler = ({
       const newTheme = !isDark
       setIsDark(newTheme)
       document.documentElement.classList.toggle("dark")
-      localStorage.setItem("theme", newTheme ? "dark" : "light")
+      safeLocalStorageSetItem("theme", newTheme ? "dark" : "light")
+      safeLocalStorageSetItem("qratex-theme", newTheme ? "dark" : "light")
       return
     }
 
@@ -53,7 +55,8 @@ export const AnimatedThemeToggler = ({
         const newTheme = !isDark
         setIsDark(newTheme)
         document.documentElement.classList.toggle("dark")
-        localStorage.setItem("theme", newTheme ? "dark" : "light")
+        safeLocalStorageSetItem("theme", newTheme ? "dark" : "light")
+        safeLocalStorageSetItem("qratex-theme", newTheme ? "dark" : "light")
       })
     }).ready
 

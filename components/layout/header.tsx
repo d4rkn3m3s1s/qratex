@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn, getInitials } from '@/lib/utils';
+import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { useAppT } from '@/lib/app-locale';
 
@@ -58,8 +59,8 @@ export function Header() {
     }
   };
   const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
-    localStorage.setItem('qratex-theme', mode);
-    localStorage.setItem('theme', mode);
+    safeLocalStorageSetItem('qratex-theme', mode);
+    safeLocalStorageSetItem('theme', mode);
     forceModeDom(mode);
     setTheme(mode);
   };
@@ -137,7 +138,7 @@ export function Header() {
     >
       <nav className="container mx-auto flex h-20 items-center justify-between px-4" aria-label={t('appShell.siteMenu')}>
         {/* Logo */}
-        <Link
+        <Link prefetch={false}
           href="/"
           className="group flex cursor-pointer items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -200,7 +201,7 @@ export function Header() {
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-8">
           {navigation.map((item) => (
-            <Link
+            <Link prefetch={false}
               key={item.href}
               href={item.href}
               className={cn(
@@ -230,7 +231,7 @@ export function Header() {
                 </Avatar>
               </span>
               <Button asChild variant="gradient" size="lg">
-                <Link href={getDashboardLink()} className="min-h-11">
+                <Link prefetch={false} href={getDashboardLink()} className="min-h-11">
                   {t('appShell.dashboard')}
                   <ChevronRight className="h-4 w-4" aria-hidden />
                 </Link>
@@ -239,13 +240,13 @@ export function Header() {
           ) : (
             <>
               <Button asChild variant="ghost" size="lg">
-                <Link href="/auth/login" className="min-h-11">
+                <Link prefetch={false} href="/auth/login" className="min-h-11">
                   <LogIn className="mr-2 h-4 w-4 shrink-0" aria-hidden />
                   {t('appShell.login')}
                 </Link>
               </Button>
               <Button asChild variant="gradient" size="lg">
-                <Link href="/auth/register" className="min-h-11">
+                <Link prefetch={false} href="/auth/register" className="min-h-11">
                   {t('appShell.getStartedFree')}
                 </Link>
               </Button>
@@ -330,7 +331,7 @@ export function Header() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
                     >
-                      <Link
+                      <Link prefetch={false}
                         href={item.href}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={cn(
@@ -360,7 +361,7 @@ export function Header() {
                         </div>
                       </div>
                       <Button asChild variant="gradient" className="w-full" size="lg">
-                        <Link href={getDashboardLink()} onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link prefetch={false} href={getDashboardLink()} onClick={() => setIsMobileMenuOpen(false)}>
                           {t('appShell.dashboard')}
                         </Link>
                       </Button>
@@ -368,12 +369,12 @@ export function Header() {
                   ) : (
                     <>
                       <Button asChild variant="outline" className="w-full" size="lg">
-                        <Link href="/auth/login" onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link prefetch={false} href="/auth/login" onClick={() => setIsMobileMenuOpen(false)}>
                           {t('appShell.login')}
                         </Link>
                       </Button>
                       <Button asChild variant="gradient" className="w-full" size="lg">
-                        <Link href="/auth/register" onClick={() => setIsMobileMenuOpen(false)}>
+                        <Link prefetch={false} href="/auth/register" onClick={() => setIsMobileMenuOpen(false)}>
                           {t('appShell.getStartedFree')}
                         </Link>
                       </Button>

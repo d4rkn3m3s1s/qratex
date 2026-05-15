@@ -3,15 +3,19 @@ import { Sidebar } from '@/components/dashboard/sidebar';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
+import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getSeoSettings();
-  const locale = await getServerLocale();
+  const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
+  const panelLabel = t(locale, 'layoutMetadata.dealer');
   return {
-    title: t(locale, 'layoutMetadata.dealer'),
+    title: {
+      default: panelLabel,
+      template: `%s | ${panelLabel}`,
+    },
     applicationName: seo.siteName,
   };
 }
@@ -37,6 +41,7 @@ export default async function DealerLayout({
         </main>
       </div>
       <OnboardingSheet />
+      <WebVitalsReporter />
     </div>
   );
 }

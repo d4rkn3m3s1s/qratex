@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { getMailDeliverySummary } from '@/lib/mail-sender';
 
 
 export const dynamic = 'force-dynamic';
@@ -46,11 +47,14 @@ export async function GET() {
     const vercelEnv = process.env.VERCEL_ENV as string | undefined; // production | preview | development
     const region = process.env.VERCEL_REGION as string | undefined;
 
+    const mail = getMailDeliverySummary();
+
     return NextResponse.json({
       success: true,
       status: degraded ? 'error' : healthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       checks,
+      mail,
       environment: {
         nodeEnv: env,
         isVercel: vercel,

@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "updated": "2026-05-12",
+  "pillars": [
+    {
+      "id": "ops_trust",
+      "title": {
+        "tr": "Operasyon ve güven",
+        "en": "Operations & trust"
+      },
+      "items": [
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Canlı platform nabzı (7 gün UTC serileri, CSV)",
+            "en": "Live platform pulse (7-day UTC series, CSV)"
+          },
+          "href": "/admin/platform-pulse"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Ekosistem özeti ve rol dağılımı",
+            "en": "Ecosystem snapshot & role distribution"
+          },
+          "href": "/admin/ecosystem"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Admin REST API kataloğu",
+            "en": "Admin REST API catalog"
+          },
+          "href": "/admin/api-catalog"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Ürün yol haritası (JSON kaynaklı admin sayfası)",
+            "en": "Product roadmap (JSON-backed admin page)"
+          },
+          "href": "/admin/roadmap"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Markalı işlem e-postası ve yönetici özel gönderim",
+            "en": "Branded transactional email & admin compose"
+          },
+          "href": "/admin/settings?tab=auth"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Admin gözlemlenebilirlik panosu (Vercel, sağlık, trafik, JSON dışa aktarım)",
+            "en": "Admin observability hub (Vercel, health, traffic, JSON export)"
+          },
+          "href": "/admin/observability"
+        }
+      ]
+    },
+    {
+      "id": "experience",
+      "title": {
+        "tr": "Müşteri ve bayi deneyimi",
+        "en": "Customer & dealer experience"
+      },
+      "items": [
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Müşteri harcama ve ziyaret özeti",
+            "en": "Customer spending & visit overview"
+          },
+          "href": "/customer/spending-overview"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Bayi operasyon özeti ve günlük trend",
+            "en": "Dealer operations brief & daily trend"
+          },
+          "href": "/dealer/operations-brief"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Müşteri gelişim merkezi (seviye, görevler, rozetler)",
+            "en": "Customer progress hub (level, quests, badges)"
+          },
+          "href": "/customer/progress-hub"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Bayi büyüme merkezi (kampanya, ROI, churn kısayolları)",
+            "en": "Dealer growth hub (campaign, ROI, churn shortcuts)"
+          },
+          "href": "/dealer/growth-hub"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Keşfet hub (müşteri)",
+            "en": "Discover hub (customer)"
+          },
+          "href": "/customer/discover"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Keşfet hub (bayi)",
+            "en": "Discover hub (dealer)"
+          },
+          "href": "/dealer/discover"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Müşteri deneyim rehberi (okunabilirlik ve kısayollar)",
+            "en": "Customer experience guide (readability & shortcuts)"
+          },
+          "href": "/customer/experience-guide"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Bayi deneyim rehberi (operasyon ve güvenlik ipuçları)",
+            "en": "Dealer experience guide (ops & device tips)"
+          },
+          "href": "/dealer/experience-guide"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Panel Web Vitals RUM (tüm paneller → admin özet)",
+            "en": "Panel Web Vitals RUM (all panels → admin summary)"
+          },
+          "href": "/admin/observability#rum-web-vitals"
+        }
+      ]
+    },
+    {
+      "id": "design_system",
+      "title": {
+        "tr": "Tasarım ve tutarlılık",
+        "en": "Design & consistency"
+      },
+      "items": [
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Ortak premium hero ve kart dili (admin / paneller)",
+            "en": "Shared premium hero & card language across panels"
+          },
+          "href": "/admin/design-language"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Erişilebilirlik merkezi (WCAG kontrol listesi)",
+            "en": "Accessibility hub (WCAG checklist)"
+          },
+          "href": "/admin/accessibility"
+        },
+        {
+          "status": "shipped",
+          "title": {
+            "tr": "Performans bütçesi (Core Web Vitals izleme)",
+            "en": "Performance budget & Core Web Vitals monitoring"
+          },
+          "href": "/admin/observability#core-web-vitals"
+        }
+      ]
+    }
+  ]
+}

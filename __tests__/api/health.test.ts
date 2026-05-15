@@ -57,6 +57,11 @@ describe('GET /api/health', () => {
       expect(body.checks).toHaveProperty('database');
       expect(body.checks.database).toMatchObject({ status: 'ok' });
       expect(body.checks.database).toHaveProperty('latencyMs');
+      expect(body.checks).toHaveProperty('transactionalEmail');
+      expect(body.checks.transactionalEmail).toMatchObject({
+        status: expect.stringMatching(/^(ok|warn)$/),
+        message: expect.any(String),
+      });
       expect(body).toHaveProperty('runtime');
       expect(body.runtime).toMatchObject({
         nodeEnv: expect.any(String),
@@ -72,6 +77,11 @@ describe('GET /api/health', () => {
       expect(body).toHaveProperty('status', 'degraded');
       expect(body.checks.database).toMatchObject({ status: 'error' });
       expect(body.checks.database).toHaveProperty('error');
+      expect(body.checks).toHaveProperty('transactionalEmail');
+      expect(body.checks.transactionalEmail).toMatchObject({
+        status: expect.stringMatching(/^(ok|warn)$/),
+        message: expect.any(String),
+      });
       expect(body.runtime?.uptimeSeconds).toEqual(expect.any(Number));
     });
   });

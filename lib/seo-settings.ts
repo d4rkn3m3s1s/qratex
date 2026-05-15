@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { siteUrl } from '@/lib/site-config';
@@ -79,47 +80,59 @@ export interface SeoSettingsPayload {
   pageOverrides?: SeoPageOverride[];
 }
 
-async function getSeoSettingsUncached(): Promise<SeoGlobalSettings> {
+type SeoRowPayload = {
+  global: SeoGlobalSettings;
+  pageOverrides: SeoPageOverride[];
+};
+
+async function loadSeoSettingsRow(): Promise<SeoRowPayload> {
   try {
     const row = await prisma.settings.findUnique({
       where: { key: SEO_SETTINGS_KEY },
       select: { value: true },
     });
     const raw = row?.value as SeoSettingsPayload | Partial<SeoGlobalSettings> | null;
-    if (!raw || typeof raw !== 'object') return defaults;
-    const global = 'global' in raw && raw.global ? raw.global : (raw as Partial<SeoGlobalSettings>);
-    return {
+    if (!raw || typeof raw !== 'object') {
+      return { global: defaults, pageOverrides: [] };
+    }
+    const globalSource = 'global' in raw && raw.global ? raw.global : (raw as Partial<SeoGlobalSettings>);
+    const global: SeoGlobalSettings = {
       ...defaults,
-      ...global,
-      siteUrl: global.siteUrl ?? defaults.siteUrl,
-      keywords: Array.isArray(global.keywords) ? global.keywords : defaults.keywords,
-      robotsDisallow: Array.isArray(global.robotsDisallow) ? global.robotsDisallow : defaults.robotsDisallow,
-      extraSitemapUrls: Array.isArray(global.extraSitemapUrls) ? global.extraSitemapUrls : [],
+      ...globalSource,
+      siteUrl: globalSource.siteUrl ?? defaults.siteUrl,
+      keywords: Array.isArray(globalSource.keywords) ? globalSource.keywords : defaults.keywords,
+      robotsDisallow: Array.isArray(globalSource.robotsDisallow) ? globalSource.robotsDisallow : defaults.robotsDisallow,
+      extraSitemapUrls: Array.isArray(globalSource.extraSitemapUrls) ? globalSource.extraSitemapUrls : [],
     };
-  } catch {
-    return defaults;
-  }
-}
-
-/** Get merged SEO settings from DB + defaults (cached 60s, tag: seo) */
-export async function getSeoSettings(): Promise<SeoGlobalSettings> {
-  return unstable_cache(getSeoSettingsUncached, ['seo-settings'], { revalidate: 60, tags: [SEO_CACHE_TAG] })();
-}
-
-/** Get full SEO payload (global + page overrides) for admin */
-export async function getSeoSettingsFull(): Promise<SeoSettingsPayload> {
-  const global = await getSeoSettings();
-  try {
-    const row = await prisma.settings.findUnique({
-      where: { key: SEO_SETTINGS_KEY },
-      select: { value: true },
-    });
-    const raw = row?.value as SeoSettingsPayload | null;
-    const pageOverrides = raw && 'pageOverrides' in raw && Array.isArray(raw.pageOverrides) ? raw.pageOverrides : [];
+    const pageOverrides =
+      'pageOverrides' in raw && Array.isArray((raw as SeoSettingsPayload).pageOverrides)
+        ? ((raw as SeoSettingsPayload).pageOverrides as SeoPageOverride[])
+        : [];
     return { global, pageOverrides };
   } catch {
-    return { global, pageOverrides: [] };
+    return { global: defaults, pageOverrides: [] };
   }
+}
+
+async function getSeoRowPayloadFromDataCache(): Promise<SeoRowPayload> {
+  return unstable_cache(loadSeoSettingsRow, ['seo-settings'], { revalidate: 60, tags: [SEO_CACHE_TAG] })();
+}
+
+/** Tek satır: unstable_cache + istek başına tek Prisma. */
+const getSeoRowPayload = cache(getSeoRowPayloadFromDataCache);
+
+async function getSeoSettingsFromRow(): Promise<SeoGlobalSettings> {
+  const { global } = await getSeoRowPayload();
+  return global;
+}
+
+/** Get merged SEO settings from DB + defaults (cached 60s, tag: seo). Aynı RSC isteğinde tek Prisma yolu. */
+export const getSeoSettings = cache(getSeoSettingsFromRow);
+
+/** Get full SEO payload (global + page overrides) for admin — ekstra Prisma yok. */
+export async function getSeoSettingsFull(): Promise<SeoSettingsPayload> {
+  const { global, pageOverrides } = await getSeoRowPayload();
+  return { global, pageOverrides };
 }
 
 /** Path'e göre sayfa override döner (public sayfa metadata için) */

@@ -1,0 +1,742 @@
+{
+  "generatedAt": "2026-05-15T04:14:04.640Z",
+  "routes": [
+    {
+      "path": "/api/admin/ab-testing/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ab-testing/overview/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/conversation",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/agents/conversation/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/conversation/stream",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/agents/conversation/stream/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/council-to-actions",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/agents/council-to-actions/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/outcomes",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/agents/outcomes/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/run/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/agents/run/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/run",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/agents/run/route.ts"
+    },
+    {
+      "path": "/api/admin/agents/runs",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/agents/runs/route.ts"
+    },
+    {
+      "path": "/api/admin/ai-learning/system",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "app/api/admin/ai-learning/system/route.ts"
+    },
+    {
+      "path": "/api/admin/ai-quality",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/ai-quality/route.ts"
+    },
+    {
+      "path": "/api/admin/analytics/cleanup-events",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/analytics/cleanup-events/route.ts"
+    },
+    {
+      "path": "/api/admin/analytics",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/analytics/route.ts"
+    },
+    {
+      "path": "/api/admin/api-catalog",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/api-catalog/route.ts"
+    },
+    {
+      "path": "/api/admin/api-keys",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/api-keys/route.ts"
+    },
+    {
+      "path": "/api/admin/assets/upload",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/assets/upload/route.ts"
+    },
+    {
+      "path": "/api/admin/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/audit/route.ts"
+    },
+    {
+      "path": "/api/admin/badges/algorithm/history",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/algorithm/history/route.ts"
+    },
+    {
+      "path": "/api/admin/badges/algorithm/impact",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/badges/algorithm/impact/route.ts"
+    },
+    {
+      "path": "/api/admin/badges/algorithm",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/badges/algorithm/route.ts"
+    },
+    {
+      "path": "/api/admin/badges/algorithm/simulate",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/badges/algorithm/simulate/route.ts"
+    },
+    {
+      "path": "/api/admin/bootstrap",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/bootstrap/route.ts"
+    },
+    {
+      "path": "/api/admin/bootstrap/summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/bootstrap/summary/route.ts"
+    },
+    {
+      "path": "/api/admin/cards/[id]/assign",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/cards/[id]/assign/route.ts"
+    },
+    {
+      "path": "/api/admin/cards/[id]",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/cards/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/cards/[id]/unassign",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/cards/[id]/unassign/route.ts"
+    },
+    {
+      "path": "/api/admin/cards/batches",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/batches/route.ts"
+    },
+    {
+      "path": "/api/admin/cards/generate",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/cards/generate/route.ts"
+    },
+    {
+      "path": "/api/admin/cards",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/cards/route.ts"
+    },
+    {
+      "path": "/api/admin/compliance/logs",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/compliance/logs/route.ts"
+    },
+    {
+      "path": "/api/admin/compliance/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/compliance/overview/route.ts"
+    },
+    {
+      "path": "/api/admin/compose-mail",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/compose-mail/route.ts"
+    },
+    {
+      "path": "/api/admin/dashboard",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/dashboard/route.ts"
+    },
+    {
+      "path": "/api/admin/dealers-ai-stats",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/dealers-ai-stats/route.ts"
+    },
+    {
+      "path": "/api/admin/dealers-health",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/dealers-health/route.ts"
+    },
+    {
+      "path": "/api/admin/discovery",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/discovery/route.ts"
+    },
+    {
+      "path": "/api/admin/donations",
+      "methods": [
+        "GET",
+        "PUT",
+        "PATCH"
+      ],
+      "file": "app/api/admin/donations/route.ts"
+    },
+    {
+      "path": "/api/admin/economy-sim",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/economy-sim/route.ts"
+    },
+    {
+      "path": "/api/admin/ecosystem-summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/ecosystem-summary/route.ts"
+    },
+    {
+      "path": "/api/admin/email-test",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/email-test/route.ts"
+    },
+    {
+      "path": "/api/admin/features",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/features/route.ts"
+    },
+    {
+      "path": "/api/admin/feedbacks/restore",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/feedbacks/restore/route.ts"
+    },
+    {
+      "path": "/api/admin/feedbacks",
+      "methods": [
+        "GET",
+        "DELETE"
+      ],
+      "file": "app/api/admin/feedbacks/route.ts"
+    },
+    {
+      "path": "/api/admin/health",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/health/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/ab-report",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/innovation/ab-report/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/config",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/innovation/config/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/demo-package",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/innovation/demo-package/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/demo-scenario",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/innovation/demo-scenario/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/flash-offers",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/innovation/flash-offers/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/health-score-v2",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/innovation/health-score-v2/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/risk-dashboard",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/innovation/risk-dashboard/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/segment-proposals/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/innovation/segment-proposals/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/innovation/segment-proposals",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/innovation/segment-proposals/route.ts"
+    },
+    {
+      "path": "/api/admin/insights",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/insights/route.ts"
+    },
+    {
+      "path": "/api/admin/kpis/action-completion",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/kpis/action-completion/route.ts"
+    },
+    {
+      "path": "/api/admin/modules/overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/modules/overview/route.ts"
+    },
+    {
+      "path": "/api/admin/onboarding/install-to-value",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/onboarding/install-to-value/route.ts"
+    },
+    {
+      "path": "/api/admin/pages",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/pages/route.ts"
+    },
+    {
+      "path": "/api/admin/partners",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/partners/route.ts"
+    },
+    {
+      "path": "/api/admin/platform-pulse",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/platform-pulse/route.ts"
+    },
+    {
+      "path": "/api/admin/playbooks/apply",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/playbooks/apply/route.ts"
+    },
+    {
+      "path": "/api/admin/playbooks",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/playbooks/route.ts"
+    },
+    {
+      "path": "/api/admin/preagg",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/preagg/route.ts"
+    },
+    {
+      "path": "/api/admin/pricing",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/pricing/route.ts"
+    },
+    {
+      "path": "/api/admin/privacy-requests/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/privacy-requests/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/privacy-requests",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/privacy-requests/route.ts"
+    },
+    {
+      "path": "/api/admin/product-roadmap",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/product-roadmap/route.ts"
+    },
+    {
+      "path": "/api/admin/qra-chat-logs",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/qra-chat-logs/route.ts"
+    },
+    {
+      "path": "/api/admin/referrals",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/referrals/route.ts"
+    },
+    {
+      "path": "/api/admin/segments",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/segments/route.ts"
+    },
+    {
+      "path": "/api/admin/seo/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/seo/audit/route.ts"
+    },
+    {
+      "path": "/api/admin/seo/health",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/seo/health/route.ts"
+    },
+    {
+      "path": "/api/admin/seo/rollback",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/seo/rollback/route.ts"
+    },
+    {
+      "path": "/api/admin/seo",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/seo/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/audit",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/settings/audit/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/leagues",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/leagues/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/modules",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/modules/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/points-matrix",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/points-matrix/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/rollback",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/settings/rollback/route.ts"
+    },
+    {
+      "path": "/api/admin/settings",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/visibility",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/visibility/route.ts"
+    },
+    {
+      "path": "/api/admin/squads",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/squads/route.ts"
+    },
+    {
+      "path": "/api/admin/surprise-box",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/surprise-box/route.ts"
+    },
+    {
+      "path": "/api/admin/surprise-box/send",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/surprise-box/send/route.ts"
+    },
+    {
+      "path": "/api/admin/system-status",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/system-status/route.ts"
+    },
+    {
+      "path": "/api/admin/tech-summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/tech-summary/route.ts"
+    },
+    {
+      "path": "/api/admin/tenant-health",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/tenant-health/route.ts"
+    },
+    {
+      "path": "/api/admin/trust-overview",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust-overview/route.ts"
+    },
+    {
+      "path": "/api/admin/trust-timeline",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/trust-timeline/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/dry-run",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/automation/dry-run/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/execute",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/automation/execute/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/jobs/process",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/automation/jobs/process/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/rules/[id]",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/users/automation/rules/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/rules",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/users/automation/rules/route.ts"
+    },
+    {
+      "path": "/api/admin/users/automation/runs",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/users/automation/runs/route.ts"
+    },
+    {
+      "path": "/api/admin/users/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/users/bulk/route.ts"
+    },
+    {
+      "path": "/api/admin/users",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/users/route.ts"
+    },
+    {
+      "path": "/api/admin/vercel-status",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/vercel-status/route.ts"
+    },
+    {
+      "path": "/api/admin/web-vitals-summary",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/web-vitals-summary/route.ts"
+    },
+    {
+      "path": "/api/admin/webhooks",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/webhooks/route.ts"
+    }
+  ]
+}

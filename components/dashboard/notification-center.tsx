@@ -138,7 +138,7 @@ export function NotificationCenter() {
     useEffect(() => {
         if (!session?.user?.id) return;
         fetchNotifications();
-        const poll = setInterval(fetchNotifications, 10_000);
+        const poll = setInterval(fetchNotifications, 20_000);
         return () => clearInterval(poll);
     }, [session?.user?.id, fetchNotifications]);
 

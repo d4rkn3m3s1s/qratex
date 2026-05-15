@@ -18,7 +18,16 @@ import {
   logLoginSuccess,
   logRateLimit,
 } from '@/lib/auth-events';
+import { consumeMagicLoginToken } from '@/lib/auth-email-token';
 import type { Adapter } from 'next-auth/adapters';
+
+function resolveSessionMaxAgeSeconds(): number {
+  const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
+  const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
+  const fallback = 3 * 24 * 60 * 60;
+  const base = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  return Math.max(300, base);
+}
 
 const providers = [
   GoogleProvider({
@@ -41,7 +50,7 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: resolveSessionMaxAgeSeconds(),
   },
   pages: {
     signIn: '/auth/login',
@@ -55,22 +64,49 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        magicToken: { label: 'Magic', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials || !credentials.email || !credentials.password) {
+        const cred = credentials as Record<string, string | undefined> | undefined;
+        if (!cred) {
           throw new Error('Email ve şifre gerekli');
         }
 
         const headersList = await headers();
         const forwarded = headersList.get('x-forwarded-for');
         const ip = forwarded ? forwarded.split(',')[0].trim() : headersList.get('x-real-ip') || 'unknown';
-        const identifier = `${ip}:${credentials.email}`;
+
+        const magicToken = typeof cred.magicToken === 'string' ? cred.magicToken.trim() : '';
+        if (magicToken) {
+          const user = await consumeMagicLoginToken(magicToken);
+          if (!user) {
+            throw new Error('Geçersiz veya süresi dolmuş bağlantı');
+          }
+          clearFailedLoginAttempts(`${ip}:${user.email}`);
+          logLoginSuccess(ip, user.email);
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role as 'ADMIN' | 'DEALER' | 'CUSTOMER' | 'STAFF',
+            image: user.image,
+            points: user.points,
+            level: user.level,
+            preferredLanguage: (user.preferredLanguage as 'tr' | 'en' | null) ?? 'tr',
+          };
+        }
+
+        if (!cred.email || !cred.password) {
+          throw new Error('Email ve şifre gerekli');
+        }
+
+        const identifier = `${ip}:${cred.email}`;
         const lockout = getLoginLockout(identifier);
         if (lockout.locked) {
           const sec = lockout.retryAfterMs
             ? Math.ceil(lockout.retryAfterMs / 1000)
             : 900;
-          logLockout(ip, credentials.email, sec);
+          logLockout(ip, cred.email, sec);
           throw new Error(`Çok fazla başarısız deneme. ${sec} saniye sonra tekrar deneyin.`);
         }
 
@@ -78,7 +114,7 @@ export const authOptions: NextAuthOptions = {
         if (!limit.ok) {
           logRateLimit(
             ip,
-            credentials.email,
+            cred.email,
             limit.retryAfterMs ? Math.ceil(limit.retryAfterMs / 1000) : undefined
           );
           const msg = limit.retryAfterMs
@@ -88,7 +124,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: cred.email },
           select: {
             id: true,
             email: true,
@@ -105,29 +141,26 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || !user.password) {
           recordFailedLoginAttempt(identifier);
-          logLoginFailed(ip, credentials.email, 'user_not_found');
+          logLoginFailed(ip, cred.email, 'user_not_found');
           throw new Error('Kullanıcı bulunamadı');
         }
 
         if (!user.emailVerified) {
           recordFailedLoginAttempt(identifier);
-          logLoginFailed(ip, credentials.email, 'email_not_verified');
+          logLoginFailed(ip, cred.email, 'email_not_verified');
           throw new Error('E-posta adresinizi doğrulayın. Kayıt sonrası size gönderilen linke tıklayın.');
         }
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
+        const isPasswordValid = await bcrypt.compare(cred.password, user.password);
 
         if (!isPasswordValid) {
           recordFailedLoginAttempt(identifier);
-          logLoginFailed(ip, credentials.email, 'invalid_password');
+          logLoginFailed(ip, cred.email, 'invalid_password');
           throw new Error('Şifre hatalı');
         }
 
         clearFailedLoginAttempts(identifier);
-        logLoginSuccess(ip, credentials.email);
+        logLoginSuccess(ip, cred.email);
         return {
           id: user.id,
           email: user.email,

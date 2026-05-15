@@ -38,8 +38,9 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  accounts      Account[]
-  sessions      Session[]
+  accounts         Account[]
+  sessions         Session[]
+  authEmailTokens  AuthEmailToken[]
   badges        UserBadge[]
   quests        UserQuest[]
   rewards       UserReward[]
@@ -282,6 +283,21 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/// Şifre sıfırlama ve magic link (tek kullanımlık, hash saklanır)
+model AuthEmailToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  purpose    String // password_reset | magic_login
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
 }
 
 // ─────────────────────────────────────────────────────────────

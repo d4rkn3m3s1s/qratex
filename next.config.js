@@ -252,6 +252,9 @@ function expandOutputFileTracingExcludes(globs) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
   // Vercel: `public/` içeriği statik olarak servis edilir; output file tracing bunu her lambda’ya
   // kopyalayınca 250MB+ uyarısı oluşuyordu. public’a sadece URL üzerinden erişilir (fs okuma yok).
   outputFileTracingExcludes: {
@@ -279,6 +282,16 @@ const nextConfig = {
     ],
   },
   experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      'date-fns',
+      '@tanstack/react-query',
+      '@tanstack/react-table',
+      'recharts',
+      'framer-motion',
+      'zod',
+      'sonner',
+    ],
     serverActions: {
       allowedOrigins: [
         'localhost:3000',

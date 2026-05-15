@@ -230,3 +230,28 @@ export function checkQraChatRateLimit(
   entry.count += 1;
   return { ok: true, remaining: max - entry.count };
 }
+
+const emailActionStore = new Map<string, { count: number; resetAt: number }>();
+const AUTH_EMAIL_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FORGOT_PASSWORD_PER_IP = 8;
+const MAX_MAGIC_LINK_PER_IP = 8;
+
+/** Şifre sıfırlama / magic link — IP başına 15 dk penceresi */
+export function checkAuthEmailActionLimit(
+  action: 'forgot_password' | 'magic_link',
+  clientId: string
+): { ok: boolean; retryAfterMs?: number } {
+  const key = `email_${action}:${clientId}`;
+  const max = action === 'forgot_password' ? MAX_FORGOT_PASSWORD_PER_IP : MAX_MAGIC_LINK_PER_IP;
+  const now = Date.now();
+  const existing = emailActionStore.get(key);
+  if (!existing || now > existing.resetAt) {
+    emailActionStore.set(key, { count: 1, resetAt: now + AUTH_EMAIL_WINDOW_MS });
+    return { ok: true };
+  }
+  if (existing.count >= max) {
+    return { ok: false, retryAfterMs: Math.max(0, existing.resetAt - now) };
+  }
+  existing.count += 1;
+  return { ok: true };
+}

@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
+import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
 
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 const LEARNING_MODEL =
@@ -370,8 +371,8 @@ const SYSTEM_LEARNING_MODEL =
   process.env.OPENAI_LEARNING_MODEL ||
   (process.env.GROQ_API_KEY ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini');
 
-const MAX_FEEDBACKS = parseInt(process.env.AI_SYSTEM_LEARNING_MAX_FEEDBACKS || '0', 10);
-const MAX_CORRECTIONS = parseInt(process.env.AI_SYSTEM_LEARNING_MAX_CORRECTIONS || '0', 10);
+const MAX_FEEDBACKS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_FEEDBACKS, 0);
+const MAX_CORRECTIONS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_CORRECTIONS, 0);
 // 0 = sınırsız (tüm Neon DB verisi), aksi halde belirtilen limit
 
 /** Tüm veritabanı verilerini topla (Neon DB'deki tüm veriler - derin öğrenme için) */

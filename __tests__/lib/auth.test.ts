@@ -3,12 +3,20 @@ import bcrypt from 'bcryptjs';
 
 // Mock prisma
 const mockFindUnique = jest.fn();
+const mockConsumeMagicLoginToken = jest.fn();
+jest.mock('@/lib/auth-email-token', () => ({
+  consumeMagicLoginToken: (...args: unknown[]) => mockConsumeMagicLoginToken(...args),
+}));
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
     },
   },
+}));
+
+jest.mock('next/headers', () => ({
+  headers: jest.fn(() => Promise.resolve(new Headers({ 'x-forwarded-for': '127.0.0.1' }))),
 }));
 
 // Mock bcrypt
@@ -50,8 +58,12 @@ describe('auth.ts', () => {
       expect(authOptions.session?.strategy).toBe('jwt');
     });
 
-    it('should have 30 days session maxAge', () => {
-      expect(authOptions.session?.maxAge).toBe(30 * 24 * 60 * 60);
+    it('should resolve session maxAge (default 3 days, min 300s; mirrors lib/auth)', () => {
+      const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
+      const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
+      const fallback = 3 * 24 * 60 * 60;
+      const expected = Math.max(300, Number.isFinite(parsed) && parsed > 0 ? parsed : fallback);
+      expect(authOptions.session?.maxAge).toBe(expected);
     });
 
     it('should have correct pages configured', () => {
@@ -87,9 +99,44 @@ describe('auth.ts', () => {
     const getAuthorize = () => {
       const credentialsProvider = authOptions.providers.find(
         (p) => p.type === 'credentials'
-      ) as { authorize: (credentials: { email?: string; password?: string } | undefined) => Promise<unknown> };
+      ) as { authorize: (credentials: { email?: string; password?: string; magicToken?: string } | undefined) => Promise<unknown> };
       return credentialsProvider.authorize;
     };
+
+    it('should return user when magic token is valid', async () => {
+      const authorize = getAuthorize();
+      mockConsumeMagicLoginToken.mockResolvedValue({
+        id: 'm1',
+        email: 'magic@test.com',
+        name: 'Magic User',
+        role: 'CUSTOMER',
+        image: null,
+        points: 10,
+        level: 2,
+        preferredLanguage: 'tr',
+      });
+
+      const result = await authorize({ magicToken: 'plain-token', email: '', password: '' });
+
+      expect(result).toEqual({
+        id: 'm1',
+        email: 'magic@test.com',
+        name: 'Magic User',
+        role: 'CUSTOMER',
+        image: null,
+        points: 10,
+        level: 2,
+        preferredLanguage: 'tr',
+      });
+      expect(mockConsumeMagicLoginToken).toHaveBeenCalledWith('plain-token');
+    });
+
+    it('should throw when magic token is invalid', async () => {
+      const authorize = getAuthorize();
+      mockConsumeMagicLoginToken.mockResolvedValue(null);
+
+      await expect(authorize({ magicToken: 'bad-token' })).rejects.toThrow('Geçersiz veya süresi dolmuş bağlantı');
+    });
 
     it('should throw error when email is missing', async () => {
       const authorize = getAuthorize();
@@ -171,6 +218,8 @@ describe('auth.ts', () => {
         image: null,
         points: 100,
         level: 5,
+        preferredLanguage: 'tr',
+        emailVerified: new Date(),
       });
       mockBcryptCompare.mockResolvedValue(false);
 
@@ -190,6 +239,8 @@ describe('auth.ts', () => {
         image: 'https://example.com/image.jpg',
         points: 500,
         level: 10,
+        preferredLanguage: 'en',
+        emailVerified: new Date(),
       };
       mockFindUnique.mockResolvedValue(mockUser);
       mockBcryptCompare.mockResolvedValue(true);
@@ -204,6 +255,7 @@ describe('auth.ts', () => {
         image: 'https://example.com/image.jpg',
         points: 500,
         level: 10,
+        preferredLanguage: 'en',
       });
     });
 
@@ -218,6 +270,8 @@ describe('auth.ts', () => {
         image: null,
         points: 0,
         level: 1,
+        preferredLanguage: 'tr',
+        emailVerified: new Date(),
       });
       mockBcryptCompare.mockResolvedValue(true);
 
@@ -234,6 +288,8 @@ describe('auth.ts', () => {
           image: true,
           points: true,
           level: true,
+          preferredLanguage: true,
+          emailVerified: true,
         },
       });
     });
@@ -249,6 +305,8 @@ describe('auth.ts', () => {
         image: null,
         points: 0,
         level: 1,
+        preferredLanguage: 'tr',
+        emailVerified: new Date(),
       });
       mockBcryptCompare.mockResolvedValue(true);
 
@@ -418,6 +476,9 @@ describe('auth.ts', () => {
           role: true,
           points: true,
           level: true,
+          image: true,
+          preferredLanguage: true,
+          staffProfile: { select: { dealerId: true } },
         },
       });
     });
@@ -487,6 +548,7 @@ describe('auth.ts', () => {
           points: 100,
           level: 5,
           sub: 'sub-1',
+          image: 'https://example.com/avatar.jpg',
         },
       } as Parameters<typeof sessionCallback>[0]);
 
@@ -579,44 +641,60 @@ describe('auth.ts', () => {
       consoleSpy.mockRestore();
     });
 
-    it('should log sign in event', async () => {
+    it('should log sign in event in development only', async () => {
       const signInEvent = authOptions.events!.signIn!;
 
       await signInEvent({
         user: { id: 'user-1', email: 'test@test.com', name: 'Test' },
       } as Parameters<typeof signInEvent>[0]);
 
-      expect(consoleSpy).toHaveBeenCalledWith('User signed in: test@test.com');
+      if (process.env.NODE_ENV === 'development') {
+        expect(consoleSpy).toHaveBeenCalledWith('User signed in: test@test.com');
+      } else {
+        expect(consoleSpy).not.toHaveBeenCalled();
+      }
     });
 
-    it('should log sign out event', async () => {
+    it('should log sign out event in development only', async () => {
       const signOutEvent = authOptions.events!.signOut!;
 
       await signOutEvent({
         token: { email: 'test@test.com', sub: 'sub-1' },
       } as Parameters<typeof signOutEvent>[0]);
 
-      expect(consoleSpy).toHaveBeenCalledWith('User signed out: test@test.com');
+      if (process.env.NODE_ENV === 'development') {
+        expect(consoleSpy).toHaveBeenCalledWith('User signed out: test@test.com');
+      } else {
+        expect(consoleSpy).not.toHaveBeenCalled();
+      }
     });
 
-    it('should handle undefined email in sign in', async () => {
+    it('should handle undefined email in sign in (development only)', async () => {
       const signInEvent = authOptions.events!.signIn!;
 
       await signInEvent({
         user: { id: 'user-1' },
       } as Parameters<typeof signInEvent>[0]);
 
-      expect(consoleSpy).toHaveBeenCalledWith('User signed in: undefined');
+      if (process.env.NODE_ENV === 'development') {
+        expect(consoleSpy).toHaveBeenCalledWith('User signed in: undefined');
+      } else {
+        expect(consoleSpy).not.toHaveBeenCalled();
+      }
     });
 
-    it('should handle undefined email in sign out', async () => {
+    it('should handle undefined email in sign out (development only)', async () => {
       const signOutEvent = authOptions.events!.signOut!;
 
       await signOutEvent({
         token: { sub: 'sub-1' },
       } as Parameters<typeof signOutEvent>[0]);
 
-      expect(consoleSpy).toHaveBeenCalledWith('User signed out: undefined');
+      if (process.env.NODE_ENV === 'development') {
+        expect(consoleSpy).toHaveBeenCalledWith('User signed out: undefined');
+      } else {
+        expect(consoleSpy).not.toHaveBeenCalled();
+      }
     });
   });
 
@@ -757,7 +835,14 @@ describe('auth.ts', () => {
     it('should have correct credentials fields configured', () => {
       const credentialsProvider = authOptions.providers.find(
         (p) => p.type === 'credentials'
-      ) as { credentials: { email: { label: string; type: string }; password: { label: string; type: string } }; name: string };
+      ) as {
+        credentials: {
+          email: { label: string; type: string };
+          password: { label: string; type: string };
+          magicToken: { label: string; type: string };
+        };
+        name: string;
+      };
       
       expect(credentialsProvider.name).toBe('credentials');
       expect(credentialsProvider.credentials.email).toEqual({
@@ -767,6 +852,10 @@ describe('auth.ts', () => {
       expect(credentialsProvider.credentials.password).toEqual({
         label: 'Password',
         type: 'password',
+      });
+      expect(credentialsProvider.credentials.magicToken).toEqual({
+        label: 'Magic',
+        type: 'text',
       });
     });
   });

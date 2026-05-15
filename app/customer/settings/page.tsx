@@ -73,16 +73,31 @@ export default function CustomerSettingsPage() {
     name: '',
     email: '',
     avatar: '',
+    hasPassword: true,
   });
 
   useEffect(() => {
-    if (session?.user) {
-      setProfile({
-        name: session.user.name || '',
-        email: session.user.email || '',
-        avatar: session.user.image || '/images/avatar/AVATAR ERKEK 1.svg',
-      });
-    }
+    if (!session?.user) return;
+    setProfile((prev) => ({
+      ...prev,
+      name: session.user.name || '',
+      email: session.user.email || '',
+      avatar: session.user.image || '/images/avatar/AVATAR ERKEK 1.svg',
+    }));
+    void (async () => {
+      try {
+        const res = await fetch('/api/user/profile', { cache: 'no-store' });
+        const data = await res.json();
+        if (res.ok && data?.success && data.user) {
+          setProfile((p) => ({
+            ...p,
+            hasPassword: typeof data.user.hasPassword === 'boolean' ? data.user.hasPassword : true,
+          }));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
   }, [session]);
 
   const [notifications, setNotifications] = useState({
@@ -295,12 +310,44 @@ export default function CustomerSettingsPage() {
 
       if (res.ok) {
         setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setProfile((p) => ({ ...p, hasPassword: true }));
         toast.success('Şifre güncellendi');
       } else {
         const data = await res.json();
         toast.error(data.error || 'Şifre güncellenemedi');
       }
     } catch (error) {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSetInitialPassword = async () => {
+    if (security.newPassword !== security.confirmPassword) {
+      toast.error('Şifreler eşleşmiyor');
+      return;
+    }
+    if (security.newPassword.length < 8) {
+      toast.error('Şifre en az 8 karakter olmalıdır');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/user/initial-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: security.newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setProfile((p) => ({ ...p, hasPassword: true }));
+        toast.success('Şifre oluşturuldu. Artık e-posta ile de giriş yapabilirsiniz.');
+      } else {
+        toast.error(data.error || 'İşlem başarısız');
+      }
+    } catch {
       toast.error('Bir hata oluştu');
     } finally {
       setSaving(false);
@@ -703,10 +750,15 @@ export default function CustomerSettingsPage() {
           >
             <Card glass>
               <CardHeader>
-                <CardTitle>Şifre Değiştir</CardTitle>
-                <CardDescription>Güvenliğiniz için güçlü bir şifre kullanın</CardDescription>
+                <CardTitle>Şifre {profile.hasPassword ? 'Değiştir' : 'Oluştur'}</CardTitle>
+                <CardDescription>
+                  {profile.hasPassword
+                    ? 'Güvenliğiniz için güçlü bir şifre kullanın'
+                    : 'Google ile giriş yaptıysanız buradan hesaba şifre ekleyebilirsiniz; böylece e-posta + şifre ile de giriş yapabilirsiniz.'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {profile.hasPassword ? (
                 <div className="space-y-2">
                   <Label>Mevcut Şifre</Label>
                   <Input
@@ -715,6 +767,7 @@ export default function CustomerSettingsPage() {
                     onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
                   />
                 </div>
+                ) : null}
                 <div className="space-y-2">
                   <Label>Yeni Şifre</Label>
                   <Input
@@ -731,9 +784,18 @@ export default function CustomerSettingsPage() {
                     onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
                   />
                 </div>
-                <Button onClick={handleChangePassword} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto min-h-10">
+                <Button
+                  onClick={profile.hasPassword ? handleChangePassword : handleSetInitialPassword}
+                  disabled={
+                    saving ||
+                    !security.newPassword ||
+                    security.newPassword !== security.confirmPassword ||
+                    (profile.hasPassword && !security.currentPassword)
+                  }
+                  className="gap-2 w-full touch-manipulation sm:w-auto min-h-10"
+                >
                   <Shield className="h-4 w-4" />
-                  {saving ? 'Güncelleniyor...' : 'Şifreyi Güncelle'}
+                  {saving ? 'Güncelleniyor...' : profile.hasPassword ? 'Şifreyi Güncelle' : 'Şifre oluştur'}
                 </Button>
               </CardContent>
             </Card>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import QRCode from 'qrcode';
@@ -149,6 +149,8 @@ export default function AdminCardsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [batchFilter, setBatchFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const cardsFetchRef = useRef<AbortController | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -185,12 +187,23 @@ export default function AdminCardsPage() {
   const [unassigning, setUnassigning] = useState(false);
 
   useEffect(() => {
-    fetchCards();
-    fetchBatches();
-    fetchCustomers();
-  }, [statusFilter, batchFilter, page]);
+    const id = setTimeout(() => setSearchDebounced(searchQuery.trim()), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
 
-  const fetchCards = async () => {
+  useEffect(() => {
+    setPage(1);
+  }, [searchDebounced]);
+
+  useEffect(() => {
+    void fetchBatches();
+    void fetchCustomers();
+  }, []);
+
+  const fetchCards = useCallback(async () => {
+    cardsFetchRef.current?.abort();
+    const ac = new AbortController();
+    cardsFetchRef.current = ac;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -198,11 +211,12 @@ export default function AdminCardsPage() {
       params.set('pageSize', '20');
       if (statusFilter) params.set('status', statusFilter);
       if (batchFilter) params.set('batchId', batchFilter);
-      if (searchQuery) params.set('search', searchQuery);
+      if (searchDebounced) params.set('search', searchDebounced);
 
-      const res = await fetch(`/api/admin/cards?${params}`);
+      const res = await fetch(`/api/admin/cards?${params}`, { signal: ac.signal });
       const data = await res.json();
 
+      if (cardsFetchRef.current !== ac) return;
       if (data.success) {
         setCards(data.items);
         setStats(data.stats);
@@ -210,11 +224,23 @@ export default function AdminCardsPage() {
         setTotalItems(data.pagination?.total ?? data.items?.length ?? 0);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (cardsFetchRef.current !== ac) return;
       cardToasts.warn('Kart listesi getirilemedi.');
     } finally {
-      setLoading(false);
+      if (cardsFetchRef.current === ac) {
+        cardsFetchRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, [statusFilter, batchFilter, page, searchDebounced]);
+
+  useEffect(() => {
+    void fetchCards();
+    return () => {
+      cardsFetchRef.current?.abort();
+    };
+  }, [fetchCards]);
 
   const fetchBatches = async () => {
     try {
@@ -596,7 +622,15 @@ export default function AdminCardsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={() => { setStatusFilter(''); setBatchFilter(''); setSearchQuery(''); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStatusFilter('');
+                setBatchFilter('');
+                setSearchQuery('');
+                setSearchDebounced('');
+              }}
+            >
               <RefreshCw className="w-4 h-4 mr-2" />
               Sıfırla
             </Button>

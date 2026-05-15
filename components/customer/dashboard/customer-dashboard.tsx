@@ -28,6 +28,8 @@ import {
   BarChart3,
   ListChecks,
   ArrowRight,
+  Gauge,
+  BookOpen,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 
@@ -408,7 +410,7 @@ export default function CustomerDashboard() {
                   variant="secondary"
                   className="pointer-events-none group-hover:pointer-events-auto absolute -bottom-10 left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 rounded-full px-3 h-7 text-[11px] font-medium shadow-lg bg-background/95 text-foreground border border-border/70 transition-all"
                 >
-                  <Link href="/customer/settings">{tc('customerDashboard.editProfile')}</Link>
+                  <Link prefetch={false} href="/customer/settings">{tc('customerDashboard.editProfile')}</Link>
                 </Button>
               </div>
               <div className="space-y-2 md:space-y-3 flex-1 min-w-0">
@@ -461,7 +463,7 @@ export default function CustomerDashboard() {
                         variant="secondary"
                         className="h-6 rounded-full border-none px-2 text-[10px] font-semibold"
                       >
-                        <Link href="/customer/quests">{tc('customerDashboard.firstQuest')}</Link>
+                        <Link prefetch={false} href="/customer/quests">{tc('customerDashboard.firstQuest')}</Link>
                       </Button>
                     </div>
                   </div>
@@ -497,7 +499,7 @@ export default function CustomerDashboard() {
                       )}
                     </div>
                     <Button asChild size="lg" className="min-h-12 w-full gap-2 rounded-2xl text-base touch-manipulation">
-                      <Link href="/customer/scan">
+                      <Link prefetch={false} href="/customer/scan">
                         <QrCode className="h-5 w-5 shrink-0" />
                         {tc('customerDashboard.scanQrCta')}
                       </Link>
@@ -527,7 +529,7 @@ export default function CustomerDashboard() {
                 </div>
               </div>
               <Button asChild size="sm" variant="outline" className="h-8 text-xs shrink-0">
-                <Link href="/customer/quests">{tc('customerDashboard.allQuests')}</Link>
+                <Link prefetch={false} href="/customer/quests">{tc('customerDashboard.allQuests')}</Link>
               </Button>
             </div>
             {(weeklyCardData as { weeklyVictory?: { eligible?: boolean; message?: string; ctaHref?: string; ctaLabel?: string } })
@@ -537,7 +539,7 @@ export default function CustomerDashboard() {
                   {(weeklyCardData as { weeklyVictory?: { message?: string } }).weeklyVictory?.message}
                 </span>
                 <Button asChild size="sm" variant="secondary" className="h-8 text-xs shrink-0">
-                  <Link href={(weeklyCardData as { weeklyVictory?: { ctaHref?: string } }).weeklyVictory?.ctaHref || '/customer/surprise-boxes'}>
+                  <Link prefetch={false} href={(weeklyCardData as { weeklyVictory?: { ctaHref?: string } }).weeklyVictory?.ctaHref || '/customer/surprise-boxes'}>
                     {(weeklyCardData as { weeklyVictory?: { ctaLabel?: string } }).weeklyVictory?.ctaLabel || 'Sürpriz kutular'}
                   </Link>
                 </Button>
@@ -591,13 +593,13 @@ export default function CustomerDashboard() {
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Button asChild className="h-10 rounded-xl px-4">
-                    <Link href="/customer/donations">
+                    <Link prefetch={false} href="/customer/donations">
                       Sosyal sorumluluk
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="h-10 rounded-xl px-4">
-                    <Link href="/customer/donations?tab=leaderboard">Liderlik</Link>
+                    <Link prefetch={false} href="/customer/donations?tab=leaderboard">Liderlik</Link>
                   </Button>
                 </div>
               </div>
@@ -639,7 +641,7 @@ export default function CustomerDashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4"
         >
           {/* Spin Wheel Card Yeri */}
           <div className="col-span-2 sm:col-span-3 lg:col-span-1 border border-border/50 rounded-2xl overflow-hidden bg-card hover:border-primary/30 transition-all flex flex-col items-center justify-center p-4">
@@ -655,11 +657,13 @@ export default function CustomerDashboard() {
 
           {[
             { href: '/customer/scan', icon: QrCode, label: tc('customerDashboard.quickScan'), bg: 'bg-primary/10', color: 'text-primary' },
+            { href: '/customer/progress-hub', icon: Gauge, label: tc('customerDashboard.quickProgress'), bg: 'bg-sky-500/10', color: 'text-sky-500' },
             { href: '/customer/quests', icon: Target, label: tc('customerDashboard.quickQuests'), bg: 'bg-emerald-500/10', color: 'text-emerald-500' },
             { href: '/customer/badges', icon: Trophy, label: tc('customerDashboard.quickBadges'), bg: 'bg-amber-500/10', color: 'text-amber-500' },
             { href: '/customer/rewards', icon: Gift, label: tc('customerDashboard.quickRewards'), bg: 'bg-primary/10', color: 'text-primary' },
+            { href: '/customer/experience-guide', icon: BookOpen, label: tc('customerDashboard.quickGuide'), bg: 'bg-violet-500/10', color: 'text-violet-600 dark:text-violet-400' },
           ].map((action, i) => (
-            <Link key={i} href={action.href} className="group flex flex-col items-center justify-center p-4 sm:p-6 min-h-[100px] sm:min-h-0 rounded-2xl bg-card border border-border/50 hover:bg-muted/50 active:bg-muted/70 transition-colors touch-manipulation">
+            <Link prefetch={false} key={i} href={action.href} className="group flex flex-col items-center justify-center p-4 sm:p-6 min-h-[100px] sm:min-h-0 rounded-2xl bg-card border border-border/50 hover:bg-muted/50 active:bg-muted/70 transition-colors touch-manipulation">
               <div className={`p-3 sm:p-4 rounded-full ${action.bg} mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300 shadow-inner`}>
                 <action.icon className={`w-7 h-7 sm:w-8 sm:h-8 ${action.color}`} />
               </div>
@@ -696,7 +700,7 @@ export default function CustomerDashboard() {
                     </div>
                   </div>
                   <Button asChild variant="outline" size="sm" className="w-full rounded-xl mt-2 h-8 text-xs">
-                    <Link href={`/customer/nearby?focus=${fav.dealerId}`}>Sayfasına Git</Link>
+                    <Link prefetch={false} href={`/customer/nearby?focus=${fav.dealerId}`}>Sayfasına Git</Link>
                   </Button>
                 </div>
               ))}
@@ -728,7 +732,7 @@ export default function CustomerDashboard() {
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
                       <span className="font-bold text-2xl tracking-tighter">+{mysteryQuest.reward.points} <span className="text-sm text-foreground/70 dark:text-white/70">XP</span></span>
                       <Button asChild variant="secondary" size="sm" className="rounded-xl shadow-xl hover:scale-105 transition-transform">
-                        <Link href="/customer/quests">Hemen Katıl</Link>
+                        <Link prefetch={false} href="/customer/quests">Hemen Katıl</Link>
                       </Button>
                     </div>
                     <div className="w-full h-1.5 bg-black/20 rounded-full overflow-hidden">
@@ -753,7 +757,7 @@ export default function CustomerDashboard() {
                     <CardTitle className="text-lg">Trend Mekanlar</CardTitle>
                   </div>
                   <Button asChild variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-primary">
-                    <Link href="/customer/nearby">Tümünü gör</Link>
+                    <Link prefetch={false} href="/customer/nearby">Tümünü gör</Link>
                   </Button>
                 </div>
               </CardHeader>
@@ -788,7 +792,7 @@ export default function CustomerDashboard() {
                               <Heart className={`w-5 h-5 ${isFav ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
                             </button>
                             <Button asChild variant="secondary" size="sm" className="rounded-xl hidden sm:flex">
-                              <Link href={`/customer/nearby?focus=${venue.dealerId}`}>Ziyaret Et</Link>
+                              <Link prefetch={false} href={`/customer/nearby?focus=${venue.dealerId}`}>Ziyaret Et</Link>
                             </Button>
                           </div>
                         </div>
@@ -840,7 +844,7 @@ export default function CustomerDashboard() {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {discovery.sponsored.map((promo, idx) => (
-                <Link href={`/customer/nearby?promo=${promo.id}`} key={idx} className="group relative rounded-2xl overflow-hidden border border-primary/20 bg-background hover:shadow-lg hover:border-primary/50 transition-all flex h-28">
+                <Link prefetch={false} href={`/customer/nearby?promo=${promo.id}`} key={idx} className="group relative rounded-2xl overflow-hidden border border-primary/20 bg-background hover:shadow-lg hover:border-primary/50 transition-all flex h-28">
                   <div className="w-1/3 bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
                     <Zap className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
                   </div>
@@ -867,7 +871,7 @@ export default function CustomerDashboard() {
                   <CardTitle className="text-lg">Aktif Görevler</CardTitle>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="rounded-xl h-8">
-                  <Link href="/customer/quests">Detaylar</Link>
+                  <Link prefetch={false} href="/customer/quests">Detaylar</Link>
                 </Button>
               </CardHeader>
               <CardContent className="pt-6">
@@ -912,7 +916,7 @@ export default function CustomerDashboard() {
                   <CardTitle className="text-lg">Son Rozetler</CardTitle>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-primary hover:text-primary/90">
-                  <Link href="/customer/badges">Tümü ({stats.badgeCount})</Link>
+                  <Link prefetch={false} href="/customer/badges">Tümü ({stats.badgeCount})</Link>
                 </Button>
               </CardHeader>
               <CardContent className="pt-6">
@@ -956,7 +960,7 @@ export default function CustomerDashboard() {
                     <span>Kişisel analitiklerini detaylı görmek için tıkla.</span>
                   </div>
                   <Button asChild size="sm" variant="outline" className="h-7 px-3 rounded-xl text-xs">
-                    <Link href="/customer/analytics">Kişisel Analitiğim</Link>
+                    <Link prefetch={false} href="/customer/analytics">Kişisel Analitiğim</Link>
                   </Button>
                 </div>
               </CardContent>
@@ -1040,7 +1044,7 @@ export default function CustomerDashboard() {
                     <CardTitle className="text-lg">Liderlik Tablosu</CardTitle>
                   </div>
                   <Button asChild variant="ghost" size="sm" className="rounded-xl">
-                    <Link href="/customer/leaderboard">Tümü</Link>
+                    <Link prefetch={false} href="/customer/leaderboard">Tümü</Link>
                   </Button>
                 </CardHeader>
                 <CardContent className="pt-4 flex-1">
@@ -1106,7 +1110,7 @@ export default function CustomerDashboard() {
                   <CardTitle className="text-lg">Son Aktivite Logu</CardTitle>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="rounded-xl h-8">
-                  <Link href="/customer/feedbacks">Tümü</Link>
+                  <Link prefetch={false} href="/customer/feedbacks">Tümü</Link>
                 </Button>
               </CardHeader>
               <CardContent className="pt-2">
@@ -1164,7 +1168,7 @@ export default function CustomerDashboard() {
                   <CardTitle className="text-lg">Ödül Vitrini</CardTitle>
                 </div>
                 <Button asChild variant="ghost" size="sm" className="rounded-xl h-8">
-                  <Link href="/customer/rewards">Tümü</Link>
+                  <Link prefetch={false} href="/customer/rewards">Tümü</Link>
                 </Button>
               </CardHeader>
               <CardContent className="pt-2">
@@ -1183,7 +1187,7 @@ export default function CustomerDashboard() {
                         <p className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded-md inline-block mt-1 font-semibold">{formatNumber(reward.cost)} XP</p>
                       </div>
                       <Button asChild size="sm" variant="outline" className="rounded-xl shrink-0 h-8 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary" disabled={userPoints < reward.cost}>
-                        <Link href="/customer/rewards">{userPoints < reward.cost ? 'Kilitli' : 'Al'}</Link>
+                        <Link prefetch={false} href="/customer/rewards">{userPoints < reward.cost ? 'Kilitli' : 'Al'}</Link>
                       </Button>
                     </m.div>
                   ))}

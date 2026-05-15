@@ -2,12 +2,13 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authorizeInternalJobRequest, unauthorizedInternalJob } from '@/lib/inngest/internal-http';
+import { parsePositiveIntEnv } from '@/lib/safe-env-number';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const AI_QUALITY_SAMPLE_SIZE = parseInt(process.env.AI_QUALITY_SAMPLE_SIZE || '100', 10);
+const AI_QUALITY_SAMPLE_SIZE = parsePositiveIntEnv(process.env.AI_QUALITY_SAMPLE_SIZE, 100);
 
 export async function POST(req: NextRequest) {
   if (!authorizeInternalJobRequest(req)) return unauthorizedInternalJob();

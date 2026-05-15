@@ -2,8 +2,10 @@
  * Analytics sampling (P2-20 item 18).
  * Büyük date range (>90 gün) için otomatik sampling.
  */
-const SAMPLE_THRESHOLD_DAYS = parseInt(process.env.ANALYTICS_SAMPLE_THRESHOLD || '90', 10);
-const SAMPLE_RATIO = parseFloat(process.env.ANALYTICS_SAMPLE_RATIO || '0.1');
+import { parseOpenUnitFloatEnv, parsePositiveIntEnv } from '@/lib/safe-env-number';
+
+const SAMPLE_THRESHOLD_DAYS = parsePositiveIntEnv(process.env.ANALYTICS_SAMPLE_THRESHOLD, 90);
+const SAMPLE_RATIO = parseOpenUnitFloatEnv(process.env.ANALYTICS_SAMPLE_RATIO, 0.1);
 
 export interface SamplingConfig {
   sampleRatio: number;

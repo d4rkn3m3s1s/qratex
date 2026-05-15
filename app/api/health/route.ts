@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { getMailDeliverySummary } from '@/lib/mail-sender';
 
 const HEALTH_DB_ERROR_HEADERS: Record<string, string> = {
   ...PRIVATE_NO_STORE_HEADERS,
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const latencyMs = Date.now() - start;
+    const mail = getMailDeliverySummary();
     if (light) {
       return NextResponse.json(
         { status: 'ok', latencyMs },
@@ -29,7 +31,15 @@ export async function GET(request: NextRequest) {
       {
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        checks: { database: { status: 'ok', latencyMs } },
+        checks: {
+          database: { status: 'ok', latencyMs },
+          transactionalEmail: {
+            status: mail.configured ? 'ok' : 'warn',
+            message: mail.configured
+              ? 'İşlem e-postası (SMTP veya Resend) yapılandırıldı'
+              : 'SMTP veya RESEND_API_KEY tanımlanmadı',
+          },
+        },
         version: process.env.npm_package_version ?? '1.0.0',
         runtime: {
           nodeEnv: process.env.NODE_ENV,
@@ -40,6 +50,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (e) {
     const error = e instanceof Error ? e.message : 'Database unreachable';
+    const mail = getMailDeliverySummary();
     if (light) {
       return NextResponse.json(
         { status: 'error', error },
@@ -50,7 +61,15 @@ export async function GET(request: NextRequest) {
       {
         status: 'degraded',
         timestamp: new Date().toISOString(),
-        checks: { database: { status: 'error', error } },
+        checks: {
+          database: { status: 'error', error },
+          transactionalEmail: {
+            status: mail.configured ? 'ok' : 'warn',
+            message: mail.configured
+              ? 'İşlem e-postası yapılandırıldı (veritabanı hariç)'
+              : 'SMTP veya RESEND_API_KEY tanımlanmadı',
+          },
+        },
         version: process.env.npm_package_version ?? '1.0.0',
         runtime: {
           nodeEnv: process.env.NODE_ENV,

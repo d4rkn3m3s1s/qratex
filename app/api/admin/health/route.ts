@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { getSnapshot, trackRequest } from '@/lib/metrics';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { getMailDeliverySummary, type MailDeliverySummary } from '@/lib/mail-sender';
 
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,7 @@ export type HealthResponse = {
   latencyMs: number;
   database?: 'ok' | 'error';
   metrics: ReturnType<typeof getSnapshot>;
+  mail?: MailDeliverySummary;
 };
 
 export async function GET() {
@@ -44,6 +46,7 @@ export async function GET() {
       latencyMs,
       database,
       metrics,
+      mail: getMailDeliverySummary(),
     };
 
     return NextResponse.json(body, { headers: PRIVATE_NO_STORE_HEADERS });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertTriangle,
@@ -66,31 +66,44 @@ export default function DealerIncidentsPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formType, setFormType] = useState('nps_drop');
   const [formSeverity, setFormSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const incidentsFetchRef = useRef<AbortController | null>(null);
 
-  const fetchIncidents = async () => {
+  const fetchIncidents = useCallback(async () => {
+    incidentsFetchRef.current?.abort();
+    const ac = new AbortController();
+    incidentsFetchRef.current = ac;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       params.set('page', String(page));
       params.set('pageSize', '20');
-      const res = await fetch(`/api/dealer/incidents?${params}`);
+      const res = await fetch(`/api/dealer/incidents?${params}`, { signal: ac.signal });
       const data = await res.json();
+      if (incidentsFetchRef.current !== ac) return;
       if (data.items) {
         setItems(data.items);
         setTotal(data.total ?? 0);
         setTotalPages(data.totalPages ?? 1);
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (incidentsFetchRef.current !== ac) return;
       toast.error(t('dealerIncidents.toastLoadFailed'));
     } finally {
-      setLoading(false);
+      if (incidentsFetchRef.current === ac) {
+        incidentsFetchRef.current = null;
+        setLoading(false);
+      }
     }
-  };
+  }, [page, statusFilter, t]);
 
   useEffect(() => {
-    fetchIncidents();
-  }, [page, statusFilter, t]);
+    void fetchIncidents();
+    return () => {
+      incidentsFetchRef.current?.abort();
+    };
+  }, [fetchIncidents]);
 
   const handleCreate = async () => {
     if (!formTitle.trim()) {
