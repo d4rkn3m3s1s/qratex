@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Check } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { t as translate, type Locale } from "@/i18n/request";
 
@@ -24,6 +25,7 @@ export function ShopBuyButton({
 }) {
     const tr = (key: string) => translate(locale, key);
     const router = useRouter();
+    const { update: updateSession } = useSession();
     const [loading, setLoading] = useState(false);
 
     const handleBuy = async () => {
@@ -45,7 +47,7 @@ export function ShopBuyButton({
             } else {
                 toast.error(data.error || tr("common.error"));
             }
-        } catch (error) {
+        } catch {
             toast.error(tr("customerShop.connectionError"));
         } finally {
             setLoading(false);
@@ -61,11 +63,25 @@ export function ShopBuyButton({
             const data = await res.json();
             if (data.success) {
                 toast.success(data.message || tr("customerShop.equipSuccess"));
+                // Immediately sync the JWT session with new equipped cosmetics
+                // so the frame shows up in the dashboard without re-login
+                try {
+                    const cosRes = await fetch("/api/customer/equipped-cosmetics", { cache: "no-store" });
+                    if (cosRes.ok) {
+                        const cosData = await cosRes.json();
+                        await updateSession({
+                            equippedFrame: cosData.equippedFrame ?? null,
+                            equippedBackground: cosData.equippedBackground ?? null,
+                        });
+                    }
+                } catch {
+                    // Silent — page refresh is the fallback
+                }
                 router.refresh();
             } else {
                 toast.error(data.error || tr("common.error"));
             }
-        } catch (error) {
+        } catch {
             toast.error(tr("customerShop.connectionError"));
         } finally {
             setLoading(false);

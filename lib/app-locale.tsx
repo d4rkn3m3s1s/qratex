@@ -56,6 +56,6 @@ export function useAppLocale() {
 
 export function useAppT() {
   const { locale } = useAppLocale();
-  return useMemo(() => (key: string) => t(locale, key), [locale]);
+  return useMemo(() => (key: string, variables?: Record<string, string | number>) => t(locale, key, variables), [locale]);
 }
 

@@ -268,20 +268,40 @@ export async function POST(request: NextRequest) {
       const reward = getFeedbackReward(text, matrix);
       const cappedPoints = await capFeedbackPoints(session.user.id, reward.points);
 
+      let rewardData = null;
+
       if (cappedPoints > 0 || reward.xp > 0) {
-        await creditPointsAndXp(prisma, {
+        const userUpdate = await creditPointsAndXp(prisma, {
           userId: session.user.id,
           points: cappedPoints,
           xp: reward.xp,
         });
+
+        // Klan Sandığına Katkı
+        const { addToSquadTreasury } = await import('@/lib/gamification-engine');
+        const squadContribution = await addToSquadTreasury(session.user.id, cappedPoints);
+
         await prisma.analyticsEvent.create({
           data: {
             userId: session.user.id,
             event: 'points_credited',
             category: 'feedback',
-            data: { points: cappedPoints, xp: reward.xp },
+            data: { 
+              points: cappedPoints, 
+              xp: reward.xp, 
+              nextLevel: userUpdate.level,
+              squadContribution
+            },
           },
         });
+
+        rewardData = {
+          points: cappedPoints,
+          xp: reward.xp,
+          newLevel: userUpdate.level,
+          leveledUp: userUpdate.isLevelUp,
+          squadContribution
+        };
       }
 
       if (cappedPoints > 0) {
@@ -294,151 +314,91 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-    }
 
-    // Log analytics
-    await prisma.analyticsEvent.create({
-      data: {
-        userId: session?.user?.id || null,
-        event: 'feedback_submitted',
-        category: 'feedback',
-        data: { feedbackId: feedback.id, rating, hasText: !!text },
-      },
-    });
+      const resBody = {
+        success: true,
+        feedback,
+        reward: rewardData
+      };
 
-    // ── Otomatik AI Analizi (arka planda) ──
-    // Metin varsa ve yeterli uzunluktaysa AI analiz çalıştır
-    if (text && text.trim().length >= 5) {
-      // Dealer'ın AI ayarlarını kontrol et
-      const dealerId = qrCode.dealerId;
-      let shouldAnalyze = true;
 
-      let aiSettings: { isEnabled: boolean; autoAnalyze: boolean; customPrompt: string | null } | null = null;
-      try {
-        aiSettings = await prisma.aISettings.findUnique({
-          where: { dealerId },
-          select: { isEnabled: true, autoAnalyze: true, customPrompt: true },
-        });
+      // Log analytics
+      await prisma.analyticsEvent.create({
+        data: {
+          userId: session?.user?.id || null,
+          event: 'feedback_submitted',
+          category: 'feedback',
+          data: { feedbackId: feedback.id, rating, hasText: !!text },
+        },
+      });
 
-        // AI kapalıysa veya otomatik analiz devre dışıysa atla
-        if (aiSettings && (!aiSettings.isEnabled || !aiSettings.autoAnalyze)) {
-          shouldAnalyze = false;
-        }
-      } catch {
-        // Ayarlar bulunamazsa varsayılan olarak analiz yap
-      }
-
-      if (shouldAnalyze) {
-        // P2-20: Queue mode - Inngest ile arka planda analiz; yoksa inline
-        if (inngestQueueEnabled()) {
-          sendFeedbackAnalyze(feedback.id, dealerId).catch((err) =>
-            console.error('[Inngest] Failed to enqueue feedback/analyze:', err)
-          );
-        } else {
-          // Inline arka plan (önceki davranış)
-          let adaptiveProfileText: string | undefined;
-          try {
-            const adaptiveProfile = await getAdaptiveProfileForDealer(dealerId);
-            adaptiveProfileText = adaptiveProfile?.profile ? formatAdaptiveProfile(adaptiveProfile.profile) : undefined;
-          } catch {
-            adaptiveProfileText = undefined;
-          }
-
-          analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
-            try {
-              await prisma.feedback.update({
-                where: { id: feedback.id },
-                data: {
-                  sentiment: analysis.sentiment.label,
-                  emotions: analysis.emotions.map(e => e.label),
-                  topics: analysis.topics,
-                  isToxic: analysis.toxicity.isToxic,
-                  aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-                  // Experience Signals
-                  intent: analysis.intent?.label || null,
-                  intentScore: analysis.intent?.score || null,
-                  urgency: analysis.urgency || null,
-                  effortScore: analysis.effortScore || null,
-                  churnRisk: analysis.churnRisk || null,
-                  // Advanced NLP
-                  entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-                  themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-                  statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
-                  actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-                  // Meta
-                  aiProcessedAt: new Date(),
-                  aiModelUsed: analysis.modelUsed || null,
-                  aiVersion: analysis.version || null,
-                },
-              });
-
-              // Toksik içerik uyarısı
-              if (analysis.toxicity.isToxic) {
-                await prisma.notification.create({
-                  data: {
-                    userId: dealerId,
-                    title: '⚠️ Toksik İçerik Tespit Edildi',
-                    message: `Bir geri bildirimde uygunsuz içerik tespit edildi. Lütfen inceleyin.`,
-                    type: 'warning',
-                  },
-                });
-              }
-
-              // Yüksek aciliyet uyarısı
-              if (analysis.urgency && analysis.urgency > 0.7) {
-                await prisma.notification.create({
-                  data: {
-                    userId: dealerId,
-                    title: '🔴 Acil Geri Bildirim',
-                    message: `Yüksek aciliyetli bir geri bildirim alındı. Hemen aksiyon gerekebilir.`,
-                    type: 'warning',
-                  },
-                });
-              }
-
-              // Yüksek churn riski uyarısı
-              if (analysis.churnRisk && analysis.churnRisk > 0.7) {
-                await prisma.notification.create({
-                  data: {
-                    userId: dealerId,
-                    title: '⚡ Müşteri Kaybı Riski',
-                    message: `Bir müşterinin kaybedilme riski yüksek. Geri bildirimi inceleyin.`,
-                    type: 'warning',
-                  },
-                });
-              }
-
-              await storeFeedbackEmbedding({ feedbackId: feedback.id, dealerId, text });
-              await maybeTriggerAdaptiveUpdate(dealerId);
-
-              // AI analizinden sonra otomatik yanıt kurallarını işlet
-              await processAutoReplies(feedback.id);
-
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`[AI] Feedback ${feedback.id} analyzed: ${analysis.sentiment.label}, model: ${analysis.modelUsed}`);
-              }
-            } catch (err) {
-              if (process.env.NODE_ENV === 'development') {
-                console.error(`[AI] Failed to save analysis for feedback ${feedback.id}:`, err);
-              } else {
-                console.error('[AI] Failed to save analysis for feedback:', err);
-              }
-            }
-          }).catch(err => {
-            if (process.env.NODE_ENV === 'development') {
-              console.error(`[AI] Analysis failed for feedback ${feedback.id}:`, err);
-            } else {
-              console.error('[AI] Analysis failed for feedback:', err);
-            }
+      // ── Otomatik AI Analizi (arka planda) ──
+      if (text && text.trim().length >= 5) {
+        const dealerId = qrCode.dealerId;
+        let shouldAnalyze = true;
+        let aiSettings: any = null;
+        try {
+          aiSettings = await prisma.aISettings.findUnique({
+            where: { dealerId },
+            select: { isEnabled: true, autoAnalyze: true, customPrompt: true },
           });
+          if (aiSettings && (!aiSettings.isEnabled || !aiSettings.autoAnalyze)) shouldAnalyze = false;
+        } catch {}
+
+        if (shouldAnalyze) {
+          if (inngestQueueEnabled()) {
+            sendFeedbackAnalyze(feedback.id, dealerId).catch(console.error);
+          } else {
+            let adaptiveProfileText: string | undefined;
+            try {
+              const adaptiveProfile = await getAdaptiveProfileForDealer(dealerId);
+              adaptiveProfileText = adaptiveProfile?.profile ? formatAdaptiveProfile(adaptiveProfile.profile) : undefined;
+            } catch {}
+
+            analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
+              try {
+                await prisma.feedback.update({
+                  where: { id: feedback.id },
+                  data: {
+                    sentiment: analysis.sentiment.label,
+                    emotions: analysis.emotions.map(e => e.label),
+                    topics: analysis.topics,
+                    isToxic: analysis.toxicity.isToxic,
+                    aiAnalysis: JSON.parse(JSON.stringify(analysis)),
+                    intent: analysis.intent?.label || null,
+                    intentScore: analysis.intent?.score || null,
+                    urgency: analysis.urgency || null,
+                    effortScore: analysis.effortScore || null,
+                    churnRisk: analysis.churnRisk || null,
+                    entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
+                    themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
+                    statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
+                    actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
+                    aiProcessedAt: new Date(),
+                    aiModelUsed: analysis.modelUsed || null,
+                    aiVersion: analysis.version || null,
+                  },
+                });
+                if (analysis.toxicity.isToxic) {
+                  await prisma.notification.create({ data: { userId: dealerId, title: '⚠️ Toksik İçerik Tespit Edildi', message: 'Bir geri bildirimde uygunsuz içerik tespit edildi.', type: 'warning' } });
+                }
+                await storeFeedbackEmbedding({ feedbackId: feedback.id, dealerId, text });
+                await maybeTriggerAdaptiveUpdate(dealerId);
+                await processAutoReplies(feedback.id);
+              } catch (err) {
+                console.error('[AI] Failed to save analysis:', err);
+              }
+            }).catch(err => console.error('[AI] Analysis failed:', err));
+          }
+        } else {
+          processAutoReplies(feedback.id).catch(console.error);
         }
       } else {
-        // Eğer AI analizi kapalıysa kuralları hemen işle
         processAutoReplies(feedback.id).catch(console.error);
       }
-    } else {
-      // Metin yoksa veya kısa ise AI analizi yapılmaz, kuralları hemen işle
-      processAutoReplies(feedback.id).catch(console.error);
+
+      if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
+      return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const resBody = { success: true, feedback };

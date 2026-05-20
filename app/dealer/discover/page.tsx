@@ -30,7 +30,8 @@ type DealerLabelKey =
   | 'analytics'
   | 'innovation_hub'
   | 'operations_brief'
-  | 'experience_guide';
+  | 'experience_guide'
+  | 'shift_pulse';
 
 const SECTIONS: { sectionTitleKey: string; sectionDescKey: string; links: { href: string; labelKey: DealerLabelKey }[] }[] = [
   {
@@ -70,7 +71,6 @@ const SECTIONS: { sectionTitleKey: string; sectionDescKey: string; links: { href
       { href: '/dealer/action-items', labelKey: 'action_items' },
       { href: '/dealer/analytics', labelKey: 'analytics' },
       { href: '/dealer/operations-brief', labelKey: 'operations_brief' },
-      { href: '/dealer/experience-guide', labelKey: 'experience_guide' },
       { href: '/dealer/innovation', labelKey: 'innovation_hub' },
     ],
   },

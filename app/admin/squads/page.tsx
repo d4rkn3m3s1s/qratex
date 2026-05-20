@@ -56,7 +56,7 @@ export default function AdminSquadsPage() {
     const rows = data?.squads ?? [];
     const header = ['id', 'name', 'inviteCode', 'owner', 'memberCount', 'isFrozen'];
     const lines = rows.map((s) =>
-      [s.id, s.name, s.inviteCode, s.owner.name || s.owner.email, String(s.members.length), String(s.isFrozen)]
+      [s.id, s.name, s.inviteCode, s.owner?.name || s.owner?.email || 'Bilinmeyen', String(s.members?.length || 0), String(s.isFrozen)]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(',')
     );
@@ -94,9 +94,9 @@ export default function AdminSquadsPage() {
         </CardContent>
       </Card>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Toplam squad</p><p className="text-2xl font-semibold">{data?.stats.totalSquads ?? 0}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Toplam üye</p><p className="text-2xl font-semibold">{data?.stats.totalMembers ?? 0}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Ort. üye/squad</p><p className="text-2xl font-semibold">{data?.stats.avgMembersPerSquad ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Toplam squad</p><p className="text-2xl font-semibold">{data?.stats?.totalSquads ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Toplam üye</p><p className="text-2xl font-semibold">{data?.stats?.totalMembers ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Ort. üye/squad</p><p className="text-2xl font-semibold">{data?.stats?.avgMembersPerSquad ?? 0}</p></CardContent></Card>
       </div>
       <Card>
         <CardHeader><CardTitle>Squad Listesi</CardTitle><CardDescription>Owner + üyeler + davet kodu</CardDescription></CardHeader>
@@ -104,8 +104,8 @@ export default function AdminSquadsPage() {
           {(data?.squads ?? []).map((s) => (
             <div key={s.id} className="rounded border p-3 text-sm">
               <p className="font-medium">{s.name}</p>
-              <p className="text-xs text-muted-foreground">Owner: {s.owner.name || s.owner.email} • Kod: {s.inviteCode}</p>
-              <p className="text-xs mt-2">Üyeler: {s.members.map((m) => m.user.name || m.user.email).join(', ') || '-'}</p>
+              <p className="text-xs text-muted-foreground">Owner: {s.owner?.name || s.owner?.email || 'Bilinmeyen'} • Kod: {s.inviteCode}</p>
+              <p className="text-xs mt-2">Üyeler: {s.members?.map((m) => m.user?.name || m.user?.email).join(', ') || '-'}</p>
               <div className="mt-2">
                 <Button size="sm" variant={s.isFrozen ? 'outline' : 'destructive'} onClick={() => toggleFreeze(s.id, !s.isFrozen)}>
                   {s.isFrozen ? 'Freeze Kaldır' : 'Soft Freeze'}
@@ -119,18 +119,18 @@ export default function AdminSquadsPage() {
         <Button
           variant="outline"
           size="sm"
-          disabled={!data || data.pagination.page <= 1}
+          disabled={!data || (data.pagination?.page ?? 1) <= 1}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
         >
           Önceki
         </Button>
         <span className="text-sm text-muted-foreground">
-          Sayfa {data?.pagination.page ?? 1} / {data?.pagination.totalPages ?? 1}
+          Sayfa {data?.pagination?.page ?? 1} / {data?.pagination?.totalPages ?? 1}
         </span>
         <Button
           variant="outline"
           size="sm"
-          disabled={!data || data.pagination.page >= data.pagination.totalPages}
+          disabled={!data || (data.pagination?.page ?? 1) >= (data.pagination?.totalPages ?? 1)}
           onClick={() => setPage((p) => p + 1)}
         >
           Sonraki

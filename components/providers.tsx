@@ -14,6 +14,7 @@ import {
   type ThemeSettingRow,
 } from '@/lib/theme-settings-keys';
 import { AppLocaleProvider } from '@/lib/app-locale';
+import { ConfettiProvider } from '@/components/providers/confetti-provider';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -228,8 +229,10 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
             <MotionConfig reducedMotion="user">
               <ThemeModeSync />
               <ThemeColorsProvider initialThemeSettings={initialThemeSettings}>
-                {children}
-                <InstallBanner />
+                <ConfettiProvider>
+                  {children}
+                  <InstallBanner />
+                </ConfettiProvider>
               </ThemeColorsProvider>
             </MotionConfig>
           </ThemeProvider>

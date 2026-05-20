@@ -346,8 +346,31 @@ export default function AdminAISettingsPage() {
                 </Card>
               </motion.div>
 
+              {/* AI Tones Management */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <MessageSquare className="h-5 w-5 text-primary" /> AI Yanıt Üslupları
+                      </CardTitle>
+                      <CardDescription>Otomatik yanıtlar için kullanılacak sistem üsluplarını yönetin</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {/* Bu kısım normalde bir liste ve modal ile yeni ekleme içermeli, şimdilik temel bir yapı kuruyorum */}
+                      <p className="text-xs text-muted-foreground italic">Dinamik üslup yönetimi API üzerinden aktiftir. Detaylı UI için 'modules/ai-tones' sayfasını ziyaret edin.</p>
+                      <Button variant="outline" className="w-full" asChild>
+                        <a href="/admin/modules/ai-tones">Üslupları Yönet (Gelişmiş)</a>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
               {/* Kaydet */}
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
                 <Button onClick={saveSettings} disabled={saving} className="w-full" size="lg">
                   {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                   Ayarları Kaydet
@@ -360,3 +383,4 @@ export default function AdminAISettingsPage() {
     </div>
   );
 }
+

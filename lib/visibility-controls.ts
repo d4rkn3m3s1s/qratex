@@ -70,7 +70,6 @@ export const DEALER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'ai_settings', href: '/dealer/ai-settings', label: 'AI Ayarları', role: 'dealer' },
   { key: 'team', href: '/dealer/team', label: 'Personel', role: 'dealer' },
   { key: 'discover', href: '/dealer/discover', label: 'Keşfet', role: 'dealer' },
-  { key: 'experience_guide', href: '/dealer/experience-guide', label: 'Deneyim rehberi', role: 'dealer' },
   { key: 'settings', href: '/dealer/settings', label: 'Ayarlar', role: 'dealer' },
 ];
 
@@ -99,7 +98,6 @@ export const CUSTOMER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'donations', href: '/customer/donations', label: 'Sosyal Sorumluluk', role: 'customer' },
   { key: 'leaderboard', href: '/customer/leaderboard', label: 'Liderlik', role: 'customer' },
   { key: 'discover', href: '/customer/discover', label: 'Keşfet', role: 'customer' },
-  { key: 'experience_guide', href: '/customer/experience-guide', label: 'Deneyim rehberi', role: 'customer' },
   { key: 'settings', href: '/customer/settings', label: 'Ayarlar', role: 'customer' },
 ];
 

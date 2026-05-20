@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, Trash2, Pencil, Power, PowerOff, Zap, AlertTriangle,
-    Star, MessageSquare, Search, ChevronLeft, Loader2,
+    Star, MessageSquare, Search, ChevronLeft, Loader2, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ interface AutoReplyRule {
     condition: Condition;
     action: 'reply' | 'incident';
     template: string;
+    tone: string | null;
     createdAt: string;
 }
 
@@ -74,6 +75,7 @@ export default function AutoRepliesPage() {
     const [value, setValue] = useState<string>('2');
     const [action, setAction] = useState<'reply' | 'incident'>('reply');
     const [template, setTemplate] = useState('');
+    const [tone, setTone] = useState<string | null>(null);
     const [priority, setPriority] = useState(0);
 
     const { data, isLoading } = useQuery<{ success: boolean; rules: AutoReplyRule[] }>({
@@ -156,6 +158,7 @@ export default function AutoRepliesPage() {
         setValue('2');
         setAction('reply');
         setTemplate('');
+        setTone(null);
         setPriority(0);
         setDialogOpen(true);
     }
@@ -168,6 +171,7 @@ export default function AutoRepliesPage() {
         setValue(String(rule.condition.value));
         setAction(rule.action);
         setTemplate(rule.template);
+        setTone(rule.tone || null);
         setPriority(rule.priority);
         setDialogOpen(true);
     }
@@ -184,6 +188,7 @@ export default function AutoRepliesPage() {
             condition: { field, op, value: conditionValue },
             action,
             template,
+            tone,
             priority,
         };
         if (editingRule) {
@@ -417,16 +422,34 @@ export default function AutoRepliesPage() {
                         </div>
 
                         <div>
-                            <Label>{t('dealerAutoReplies.templateLabel')}</Label>
+                            <div className="flex items-center justify-between">
+                                <Label>{t('dealerAutoReplies.templateLabel')}</Label>
+                                <Select value={tone || 'none'} onValueChange={(v) => setTone(v === 'none' ? null : v)}>
+                                    <SelectTrigger className="h-7 px-2 text-[10px] w-fit border-primary/30 bg-primary/5 text-primary">
+                                        <Sparkles className="h-3 w-3 mr-1" />
+                                        <SelectValue placeholder={t('dealerAutoReplies.selectTone')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">{t('dealerAutoReplies.toneNone')}</SelectItem>
+                                        <SelectItem value="formal">{t('dealerAutoReplies.toneFormal')}</SelectItem>
+                                        <SelectItem value="friendly">{t('dealerAutoReplies.toneFriendly')}</SelectItem>
+                                        <SelectItem value="humorous">{t('dealerAutoReplies.toneHumorous')}</SelectItem>
+                                        <SelectItem value="professional">{t('dealerAutoReplies.toneProfessional')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <Textarea
                                 value={template}
                                 onChange={(e) => setTemplate(e.target.value)}
-                                placeholder={t('dealerAutoReplies.templatePlaceholder')}
+                                placeholder={tone ? t('dealerAutoReplies.templatePlaceholderAI') : t('dealerAutoReplies.templatePlaceholder')}
                                 rows={4}
-                                className="mt-1"
+                                className={`mt-1 ${tone ? 'border-primary/40 bg-primary/5' : ''}`}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                                {action === 'incident' ? t('dealerAutoReplies.templateHintIncident') : t('dealerAutoReplies.templateHintReply')}
+                                {tone 
+                                    ? t('dealerAutoReplies.templateHintAI').replace('{tone}', t(`dealerAutoReplies.tone_${tone}`))
+                                    : action === 'incident' ? t('dealerAutoReplies.templateHintIncident') : t('dealerAutoReplies.templateHintReply')
+                                }
                             </p>
                         </div>
                     </div>

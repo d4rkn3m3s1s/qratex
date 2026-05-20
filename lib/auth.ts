@@ -191,6 +191,11 @@ export const authOptions: NextAuthOptions = {
             image: true,
             preferredLanguage: true,
             staffProfile: { select: { dealerId: true } },
+            equippedCosmetics: {
+              where: { isEquipped: true },
+              select: { cosmetic: { select: { type: true, imageUrl: true } } }
+            },
+            customFrameColor: true
           },
         });
 
@@ -201,6 +206,13 @@ export const authOptions: NextAuthOptions = {
           token.level = dbUser.level;
           token.image = dbUser.image || user.image || token.image;
           token.preferredLanguage = (dbUser.preferredLanguage as 'tr' | 'en' | null) ?? 'tr';
+          
+          const frame = dbUser.equippedCosmetics.find(c => c.cosmetic.type === 'avatar_frame');
+          const background = dbUser.equippedCosmetics.find(c => c.cosmetic.type === 'profile_background');
+          token.equippedFrame = frame ? frame.cosmetic.imageUrl : null;
+          token.equippedBackground = background ? background.cosmetic.imageUrl : null;
+          token.customFrameColor = dbUser.customFrameColor || null;
+
           if (dbUser.role === 'STAFF' && dbUser.staffProfile?.dealerId) {
             token.dealerId = dbUser.staffProfile.dealerId;
           }
@@ -212,16 +224,22 @@ export const authOptions: NextAuthOptions = {
           token.level = user.level || 1;
           token.image = user.image || token.image;
           token.preferredLanguage = (user.preferredLanguage as 'tr' | 'en' | undefined) ?? 'tr';
+          token.equippedFrame = null;
+          token.equippedBackground = null;
+          token.customFrameColor = null;
         }
       }
 
-      // Handle session update
+      // Handle session update — only overwrite fields that are explicitly provided
       if (trigger === 'update' && session) {
-        token.name = session.name;
-        token.image = session.image;
-        token.points = session.points;
-        token.level = session.level;
-        token.preferredLanguage = session.preferredLanguage;
+        if (session.name !== undefined) token.name = session.name;
+        if (session.image !== undefined) token.image = session.image;
+        if (session.points !== undefined) token.points = session.points;
+        if (session.level !== undefined) token.level = session.level;
+        if (session.preferredLanguage !== undefined) token.preferredLanguage = session.preferredLanguage;
+        if (session.equippedFrame !== undefined) token.equippedFrame = session.equippedFrame;
+        if (session.equippedBackground !== undefined) token.equippedBackground = session.equippedBackground;
+        if (session.customFrameColor !== undefined) token.customFrameColor = session.customFrameColor;
       }
 
       return token;
@@ -234,6 +252,9 @@ export const authOptions: NextAuthOptions = {
         session.user.level = token.level as number;
         session.user.image = token.image as string;
         session.user.preferredLanguage = (token.preferredLanguage as 'tr' | 'en' | undefined) ?? 'tr';
+        (session.user as any).equippedFrame = token.equippedFrame as string | null;
+        (session.user as any).equippedBackground = token.equippedBackground as string | null;
+        (session.user as any).customFrameColor = token.customFrameColor as string | null;
         if (token.dealerId) session.user.dealerId = token.dealerId as string;
         (session as { jti?: string }).jti = token.jti as string;
       }

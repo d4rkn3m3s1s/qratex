@@ -21,6 +21,7 @@ import {
   FileDown,
   Trash2,
   Cake,
+  Sparkles,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
@@ -31,6 +32,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ShowcaseSelector } from '@/components/customer/showcase-selector';
 import {
   Select,
   SelectContent,
@@ -49,8 +51,8 @@ import {
 import { toast } from '@/lib/admin-toast';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
-import { t, type Locale } from '@/i18n/request';
 import { useAppLocale } from '@/lib/app-locale';
+import { useAppT } from '@/lib/app-locale';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -62,6 +64,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function CustomerSettingsPage() {
+  const tClient = useAppT();
   const queryClient = useQueryClient();
   const { data: session, update } = useSession();
   const { setLocale } = useAppLocale();
@@ -384,8 +387,9 @@ export default function CustomerSettingsPage() {
   const effectiveCategory = customerAvatarList.some((c) => c.category === selectedCategory) ? selectedCategory : (customerAvatarList[0]?.category ?? 'Erkek');
   const displayCategoryAvatars = customerAvatarList.find((c) => c.category === effectiveCategory)?.items || [];
 
-  const uiLocale: Locale = preferences.language === 'en' ? 'en' : 'tr';
-  const tp = (key: string) => t(uiLocale, key);
+  const uiLocale = preferences.language === 'en' ? 'en' : 'tr';
+  // Use client-side translation hook; server-side t() cannot be used in client components
+  const tp = tClient;
 
   const handleExportPersonalData = async () => {
     setExportingData(true);
@@ -468,6 +472,10 @@ export default function CustomerSettingsPage() {
           <TabsTrigger value="preferences" className="gap-2">
             <Palette className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Tercihler</span>
+          </TabsTrigger>
+          <TabsTrigger value="cosmetics" className="gap-2">
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Vitrin & Süslemeler</span>
           </TabsTrigger>
           <TabsTrigger value="privacy" className="gap-2">
             <Database className="h-4 w-4 shrink-0" />
@@ -750,7 +758,7 @@ export default function CustomerSettingsPage() {
           >
             <Card glass>
               <CardHeader>
-                <CardTitle>Şifre {profile.hasPassword ? 'Değiştir' : 'Oluştur'}</CardTitle>
+                <CardTitle>{tClient('customerSettings.passwordTitle', { action: profile.hasPassword ? tClient('common.change') : tClient('common.create') })}</CardTitle>
                 <CardDescription>
                   {profile.hasPassword
                     ? 'Güvenliğiniz için güçlü bir şifre kullanın'
@@ -915,6 +923,16 @@ export default function CustomerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="cosmetics">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <ShowcaseSelector />
           </motion.div>
         </TabsContent>
 

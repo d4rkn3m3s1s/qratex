@@ -23,10 +23,12 @@ export function getMessages(locale: Locale = defaultLocale): Messages {
 
 /**
  * Get a translation value by dot-path key, e.g. 'common.save'.
+ * Supports simple variable replacement: t('key', { name: 'John' }) replaces {name}.
  */
-export function t(locale: Locale, key: string): string {
+export function t(locale: Locale, key: string, variables?: Record<string, string | number>): string {
     const parts = key.split('.');
     let current: unknown = messageSets[locale] ?? messageSets[defaultLocale];
+    
     for (const part of parts) {
         if (current && typeof current === 'object' && part in current) {
             current = (current as Record<string, unknown>)[part];
@@ -34,5 +36,15 @@ export function t(locale: Locale, key: string): string {
             return key; // fallback to key if not found
         }
     }
-    return typeof current === 'string' ? current : key;
+    
+    if (typeof current !== 'string') return key;
+    
+    let result = current;
+    if (variables) {
+        Object.entries(variables).forEach(([k, v]) => {
+            result = result.replace(new RegExp(`{${k}}`, 'g'), String(v));
+        });
+    }
+    
+    return result;
 }

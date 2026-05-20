@@ -24,8 +24,7 @@ type CustomerLabelKey =
   | 'nearby'
   | 'experiences'
   | 'spending_overview'
-  | 'progress_hub'
-  | 'experience_guide';
+  | 'progress_hub';
 
 const SECTIONS: { sectionTitleKey: string; sectionDescKey: string; links: { href: string; labelKey: CustomerLabelKey }[] }[] = [
   {
@@ -33,7 +32,6 @@ const SECTIONS: { sectionTitleKey: string; sectionDescKey: string; links: { href
     sectionDescKey: 'customerDiscover.sectionEarnDesc',
     links: [
       { href: '/customer/progress-hub', labelKey: 'progress_hub' },
-      { href: '/customer/experience-guide', labelKey: 'experience_guide' },
       { href: '/customer/rewards', labelKey: 'rewards' },
       { href: '/customer/quests', labelKey: 'quests' },
       { href: '/customer/surprise-boxes', labelKey: 'surprise_boxes' },

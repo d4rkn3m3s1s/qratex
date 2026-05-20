@@ -1,4 +1,4 @@
-import { PrismaClient, Role, CardStatus } from '@prisma/client';
+import { PrismaClient, Role, CardStatus } from '../generated-prisma-client';
 import bcrypt from 'bcryptjs';
 import { getBadgePointCostById } from '../lib/badge-catalog';
 import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '../lib/brand-colors';
@@ -6,6 +6,7 @@ import {
   THEME_LEGACY_CONFIG_SETTING_KEY,
   THEME_SETTINGS_CATEGORY,
 } from '../lib/theme-settings-keys';
+import { seedAchievements } from '../lib/achievements';
 
 const prisma = new PrismaClient();
 
@@ -1438,6 +1439,10 @@ async function main() {
   });
   console.log('✅ User streak created');
 
+  const { upsertDemoCosmetics } = await import('../lib/cosmetic-seed-server');
+  const demoN = await upsertDemoCosmetics(prisma);
+  console.log(`✅ Demo cosmetics seeded/updated: ${demoN} items`);
+
   // ─────────────────────────────────────────────────────────────
   // CREATE REFERRAL CODE
   // ─────────────────────────────────────────────────────────────
@@ -1451,6 +1456,117 @@ async function main() {
     },
   });
   console.log('✅ Referral code created: DEMO2024');
+
+  // ─────────────────────────────────────────────────────────────
+  // CREATE COSMETIC ITEMS (SHOP)
+  // ─────────────────────────────────────────────────────────────
+  const cosmeticItems = [
+    {
+      slug: 'hellfire-frame',
+      name: 'Hellfire Frame',
+      description: 'Profilinin etrafında cehennem ateşleri yansın.',
+      price: 5000,
+      type: 'avatar_frame',
+      rarity: 'legendary',
+      imageUrl: 'fire_effect',
+      isActive: true,
+    },
+    {
+      slug: 'cosmic-space-frame',
+      name: 'Cosmic Space Frame',
+      description: 'Derin uzayın gizemi ve kayan yıldızlar.',
+      price: 7500,
+      type: 'avatar_frame',
+      rarity: 'legendary',
+      imageUrl: 'space_effect',
+      isActive: true,
+    },
+    {
+      slug: 'cyberpunk-neon-frame',
+      name: 'Cyberpunk Neon',
+      description: 'Geleceğin sokaklarından gelen neon yansımalar.',
+      price: 3000,
+      type: 'avatar_frame',
+      rarity: 'epic',
+      imageUrl: 'cyberpunk_effect',
+      isActive: true,
+    },
+    {
+      slug: 'golden-crown-frame',
+      name: 'Golden Crown',
+      description: 'Sadece gerçek krallara ve kraliçelere özel.',
+      price: 10000,
+      type: 'avatar_frame',
+      rarity: 'legendary',
+      imageUrl: 'crown_effect',
+      isActive: true,
+    },
+    {
+      slug: 'glitch-matrix-frame',
+      name: 'Glitch Matrix',
+      description: 'Sistemi hackle, gerçekliği bük.',
+      price: 6000,
+      type: 'avatar_frame',
+      rarity: 'epic',
+      imageUrl: 'glitch_effect',
+      isActive: true,
+    },
+    {
+      slug: 'toxic-slime-frame',
+      name: 'Toxic Slime',
+      description: 'Tehlikeli ve asidik bir aura.',
+      price: 4500,
+      type: 'avatar_frame',
+      rarity: 'rare',
+      imageUrl: 'toxic_effect',
+      isActive: true,
+    },
+    {
+      slug: 'diamond-sponsor-badge',
+      name: 'Diamond Sponsor Badge',
+      description: 'İşletmenin en değerli destekçisi rozeti.',
+      price: 2000,
+      type: 'profile_badge',
+      rarity: 'epic',
+      imageUrl: 'diamond_badge',
+      isActive: true,
+    },
+    {
+      slug: 'ruby-heart-badge',
+      name: 'Ruby Heart Badge',
+      description: 'Sevgi dolu bir destekçi.',
+      price: 1500,
+      type: 'profile_badge',
+      rarity: 'rare',
+      imageUrl: 'ruby_badge',
+      isActive: true,
+    }
+  ];
+
+  // Clean up any old/removed cosmetic items (including those with null slugs)
+  const cosmeticSlugs = cosmeticItems.map(item => item.slug);
+  await prisma.cosmeticItem.deleteMany({
+    where: {
+      OR: [
+        { slug: null },
+        {
+          slug: {
+            notIn: cosmeticSlugs,
+          },
+        },
+      ],
+    },
+  });
+
+  for (const item of cosmeticItems) {
+    await prisma.cosmeticItem.upsert({
+      where: { slug: item.slug },
+      update: item,
+      create: item,
+    });
+  }
+
+  console.log('✅ Cosmetic items seeded:', cosmeticItems.length);
 
   console.log('');
   console.log('🎉 Database seeded successfully!');
@@ -1470,6 +1586,9 @@ async function main() {
   console.log('   │ Test Kart:   /c/TEST123 (kısa test token)  │');
   console.log('   │ Bloklu Kart: /c/DEMO_BlokluKartToken345 (bloklanmış) │');
   console.log('   └─────────────────────────────────────────────────────┘');
+  console.log('🏆 Seeding achievements...');
+  await seedAchievements();
+
   console.log('');
 }
 

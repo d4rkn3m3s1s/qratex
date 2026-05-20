@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles } from 'lucide-react';
+import { useAppT } from '@/lib/app-locale';
 
 type Payload = {
   dealerLabel: string;
@@ -15,6 +16,7 @@ type Payload = {
 };
 
 export default function PublicExperienceSharePage() {
+  const t = useAppT();
   const params = useParams();
   const token = typeof params?.token === 'string' ? params.token : '';
   const [data, setData] = useState<Payload | null>(null);
@@ -30,7 +32,7 @@ export default function PublicExperienceSharePage() {
       try {
         const res = await fetch(`/api/public/experience-share/${token}`, { cache: 'no-store' });
         const j = await res.json();
-        if (!res.ok) throw new Error(j.error || 'Yüklenemedi');
+        if (!res.ok) throw new Error(j.error || t('common.failedToLoad'));
         if (!cancelled) setData(j);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Hata');
@@ -57,8 +59,7 @@ export default function PublicExperienceSharePage() {
     );
   }
 
-  const moodLabel =
-    data.mood === 'great' ? 'Harika' : data.mood === 'ok' ? 'Tamam' : 'Güzel';
+  const moodLabel = data.mood === 'great' ? t('publicExperience.moodGreat') : data.mood === 'ok' ? t('publicExperience.moodOk') : t('publicExperience.moodGood');
 
   return (
     <div className="mx-auto max-w-lg px-4 py-12 space-y-6">

@@ -7,6 +7,7 @@ import { ArrowLeft, CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 type JourneyStep = {
   key: string;
@@ -17,6 +18,7 @@ type JourneyStep = {
 };
 
 export default function CustomerFeedbackJourneyPage() {
+  const t = useAppT();
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : '';
   const [steps, setSteps] = useState<JourneyStep[]>([]);
@@ -33,7 +35,7 @@ export default function CustomerFeedbackJourneyPage() {
       try {
         const res = await fetch(`/api/customer/feedbacks/${id}/journey`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Yüklenemedi');
+        if (!res.ok) throw new Error(data.error || t('common.failedToLoad'));
         if (cancelled) return;
         setSteps(data.steps);
         setMeta({

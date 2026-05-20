@@ -16,7 +16,13 @@ export function resolveRewardDisplayImage(input: {
 }): string | null {
   const canonical = REWARD_DISPLAY_IMAGE_BY_ID[input.id];
   if (canonical) return canonical;
+
   const raw = input.image ?? input.icon;
-  if (typeof raw === 'string' && raw.trim()) return raw.trim();
+  if (typeof raw === 'string' && raw.trim()) {
+    const trimmed = raw.trim();
+    // next/image requires valid URL or relative path
+    const isValidPath = trimmed.startsWith('/') || trimmed.startsWith('http') || trimmed.startsWith('data:');
+    return isValidPath ? trimmed : null;
+  }
   return null;
 }

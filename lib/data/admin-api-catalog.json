@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-15T04:14:04.640Z",
+  "generatedAt": "2026-05-20T02:53:54.778Z",
   "routes": [
     {
       "path": "/api/admin/ab-testing/overview",
@@ -228,6 +228,28 @@
       "file": "app/api/admin/compose-mail/route.ts"
     },
     {
+      "path": "/api/admin/cosmetics/[id]",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/cosmetics/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/cosmetics",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/cosmetics/route.ts"
+    },
+    {
+      "path": "/api/admin/cosmetics/seed-demos",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/cosmetics/seed-demos/route.ts"
+    },
+    {
       "path": "/api/admin/dashboard",
       "methods": [
         "GET"
@@ -311,6 +333,14 @@
         "DELETE"
       ],
       "file": "app/api/admin/feedbacks/route.ts"
+    },
+    {
+      "path": "/api/admin/gamification/settings",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/gamification/settings/route.ts"
     },
     {
       "path": "/api/admin/health",
@@ -541,11 +571,28 @@
       "file": "app/api/admin/seo/route.ts"
     },
     {
+      "path": "/api/admin/settings/ai-tones",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "app/api/admin/settings/ai-tones/route.ts"
+    },
+    {
       "path": "/api/admin/settings/audit",
       "methods": [
         "GET"
       ],
       "file": "app/api/admin/settings/audit/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/experience-pulse",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/experience-pulse/route.ts"
     },
     {
       "path": "/api/admin/settings/leagues",
@@ -588,12 +635,37 @@
       "file": "app/api/admin/settings/route.ts"
     },
     {
+      "path": "/api/admin/settings/sidebar-order",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/sidebar-order/route.ts"
+    },
+    {
       "path": "/api/admin/settings/visibility",
       "methods": [
         "GET",
         "PUT"
       ],
       "file": "app/api/admin/settings/visibility/route.ts"
+    },
+    {
+      "path": "/api/admin/squads/battles/[id]",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "file": "app/api/admin/squads/battles/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/squads/battles",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/squads/battles/route.ts"
     },
     {
       "path": "/api/admin/squads",
@@ -703,6 +775,14 @@
         "POST"
       ],
       "file": "app/api/admin/users/bulk/route.ts"
+    },
+    {
+      "path": "/api/admin/users/hall-of-fame",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/users/hall-of-fame/route.ts"
     },
     {
       "path": "/api/admin/users",

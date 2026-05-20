@@ -34,6 +34,8 @@ model User {
   points        Int       @default(0)
   level         Int       @default(1)
   xp            Int       @default(0)
+  isHallOfFame  Boolean   @default(false)
+  biography     String?   @db.Text
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -157,12 +159,17 @@ model User {
   experienceSharesForDealer ExperienceShareToken[] @relation("ExperienceSharesDealer")
   improvementRequestsAsCustomer ImprovementRequest[] @relation("ImprovementRequestCustomer")
   improvementRequestsForDealer  ImprovementRequest[] @relation("ImprovementRequestDealer")
-  dataSubjectRequests       DataSubjectRequest[]
+  dataSubjectRequests           DataSubjectRequest[]
 
   // Squads Relations (Customer)
-  ownedSquad        Squad?         @relation("SquadOwner")
-  squadMemberships  SquadMember[]  @relation("UserSquadMemberships")
-  equippedCosmetics UserCosmetic[] @relation("UserCosmetics")
+  ownedSquad           Squad?                  @relation("SquadOwner")
+  squadMemberships     SquadMember[]           @relation("UserSquadMemberships")
+  equippedCosmetics    UserCosmetic[]          @relation("UserCosmetics")
+  giftsSent            UserCosmetic[]          @relation("UserGiftsSent")
+  battleParticipations SquadBattleParticipant[]
+
+  // Custom cosmetics
+  customFrameColor     String?
 
   // 2FA
   twoFactorSecret  String?
@@ -316,11 +323,16 @@ model Squad {
   weeklyTeamTarget   Int       @default(5)
   weeklyTeamProgress Int       @default(0)
   weeklyGoalResetAt  DateTime?
+  treasuryPoints     Int       @default(0)
+  isFrozen           Boolean   @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   owner   User          @relation("SquadOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members SquadMember[]
+  battlesAsSquad1 SquadBattle[] @relation("Squad1Battles")
+  battlesAsSquad2 SquadBattle[] @relation("Squad2Battles")
+  battleParticipations SquadBattleParticipant[]
 
   @@index([ownerId])
   @@index([totalPoints])
@@ -340,9 +352,70 @@ model SquadMember {
   @@index([squadId])
 }
 
-// ------ 2. COSMETIC ITEMS (ROZET KABİNESİ & AVATAR) ------
+// ------ 2. SQUAD BATTLES (KLAN SAVAŞLARI) ------
+model SquadBattle {
+  id          String   @id @default(cuid())
+  squad1Id    String
+  squad2Id    String
+  status      String   @default("pending") // pending, active, completed, cancelled
+  startTime   DateTime
+  endTime     DateTime
+  squad1Score Int      @default(0)
+  squad2Score Int      @default(0)
+  winnerId    String?
+  rewardPool  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  squad1 Squad @relation("Squad1Battles", fields: [squad1Id], references: [id], onDelete: Cascade)
+  squad2 Squad @relation("Squad2Battles", fields: [squad2Id], references: [id], onDelete: Cascade)
+  participants SquadBattleParticipant[]
+
+  @@index([status])
+}
+
+model SquadBattleParticipant {
+  id        String   @id @default(cuid())
+  battleId  String
+  squadId   String
+  userId    String
+  score     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  battle SquadBattle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  squad  Squad       @relation(fields: [squadId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([battleId, userId])
+}
+
+model GamificationSettings {
+  id                String   @id @default(cuid())
+  xpMultiplier      Float    @default(1.0)
+  pointMultiplier   Float    @default(1.0)
+  dailyXpCap        Int      @default(5000)
+  levelUpRewardBase Int      @default(100)
+  isSeasonActive    Boolean  @default(true)
+  seasonName        String?
+  seasonEndsAt      DateTime?
+  updatedAt         DateTime @updatedAt
+}
+
+model AITone {
+  id           String   @id @default(cuid())
+  slug         String   @unique // formal, friendly, humorous, etc.
+  name         String
+  systemPrompt String   @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ------ 3. COSMETIC ITEMS (ROZET KABİNESİ & AVATAR) ------
 model CosmeticItem {
   id          String   @id @default(cuid())
+  /// Admin vitrin / tohum ürünleri için sabit anahtar (ör. demo-aurora-frame)
+  slug        String?  @unique
   name        String
   description String?
   type        String // "avatar_frame", "profile_badge", "profile_background"
@@ -358,17 +431,22 @@ model CosmeticItem {
 }
 
 model UserCosmetic {
-  id         String   @id @default(cuid())
-  userId     String
-  cosmeticId String
-  isEquipped Boolean  @default(false)
-  acquiredAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  cosmeticId     String
+  isEquipped     Boolean  @default(false)
+  isPinned       Boolean  @default(false)
+  giftedByUserId String?
+  giftMessage    String?  @db.Text
+  acquiredAt     DateTime @default(now())
 
-  user     User         @relation("UserCosmetics", fields: [userId], references: [id], onDelete: Cascade)
-  cosmetic CosmeticItem @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+  user         User         @relation("UserCosmetics", fields: [userId], references: [id], onDelete: Cascade)
+  cosmetic     CosmeticItem @relation(fields: [cosmeticId], references: [id], onDelete: Cascade)
+  giftedByUser User?        @relation("UserGiftsSent", fields: [giftedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([userId, cosmeticId])
   @@index([userId])
+  @@index([giftedByUserId])
 }
 
 model Badge {
@@ -394,6 +472,7 @@ model UserBadge {
   id       String   @id @default(cuid())
   userId   String
   badgeId  String
+  isPinned Boolean  @default(false)
   earnedAt DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2056,6 +2135,7 @@ model AutoReplyRule {
   condition Json // { field: "rating"|"sentiment"|"text", op: "lte"|"gte"|"eq"|"contains", value: any }
   action    String   @default("reply") // "reply" | "incident"
   template  String   @db.Text
+  tone      String?  // "formal" | "friendly" | "humorous" | "professional"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2289,3 +2369,5 @@ model DataSubjectRequest {
   @@index([email])
   @@index([status, createdAt])
 }
+
+

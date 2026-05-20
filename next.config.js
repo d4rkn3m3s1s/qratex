@@ -270,6 +270,7 @@ const nextConfig = {
       { protocol: 'http', hostname: 'localhost' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'qratex.netlify.app' },
       {
         protocol: 'https',
@@ -278,6 +279,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.netlify.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
       },
     ],
   },
@@ -340,7 +345,8 @@ const nextConfig = {
 };
 
 // PWA: build sırasında _document hatası verebiliyor; varsayılan kapalı, production'da ENABLE_PWA=1 ile açılabilir
-const usePWA = process.env.ENABLE_PWA === '1';
+// PWA: Qratex 2.0 için varsayılan olarak açık
+const usePWA = true; // process.env.ENABLE_PWA === '1';
 const configWithPWA = usePWA ? withPWA(nextConfig) : nextConfig;
 
 let configToExport = configWithPWA;

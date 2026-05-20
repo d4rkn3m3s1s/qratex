@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ClipboardList, Download, Loader2, MessageSquare, Package, QrCode, Sparkles } from 'lucide-react';
+import { ClipboardList, Download, Loader2, MessageSquare, Package, QrCode, Sparkles, AlertCircle } from 'lucide-react';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/admin-toast';
@@ -245,8 +245,96 @@ export default function DealerOperationsBriefPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* AI PROACTIVE INSIGHTS (CORTEX 2.0) */}
+          <AIProactivePanel />
         </>
       )}
     </div>
   );
 }
+
+function AIProactivePanel() {
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/dealer/ai-proactive-analysis')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.report) setReport(data.report);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return null;
+  if (!report) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 px-1">
+        <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+        <h3 className="text-lg font-bold tracking-tight">Cortex 2.0 Proaktif Analiz</h3>
+      </div>
+      
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Summary Card */}
+        <Card className="md:col-span-2 border-primary/20 bg-primary/5 backdrop-blur-sm overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-3">
+            <Badge variant="outline" className="bg-background/50 border-primary/20">AI Insight</Badge>
+          </div>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-primary" /> Haftalık Stratejik Özet
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm leading-relaxed text-muted-foreground">{report.summary}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {report.recommendations?.slice(0, 3).map((rec: any, i: number) => (
+                <div key={i} className="text-[11px] px-2 py-1 rounded-md bg-background border border-border/50 flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${rec.priority === 'high' ? 'bg-red-500' : 'bg-orange-400'}`} />
+                  {rec.text}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Score Card */}
+        <Card className="border-border/80 flex flex-col justify-center items-center p-6 text-center">
+          <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Genel Performans Skoru</div>
+          <div className="text-5xl font-black text-primary tabular-nums">{report.overallScore}</div>
+          <div className={`text-xs mt-2 font-medium flex items-center gap-1 ${report.trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+            {report.trend === 'up' ? '▲' : '▼'} %{report.trendValue} {report.trend === 'up' ? 'İyileşme' : 'Düşüş'}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-4">Bir sonraki dönem tahmini: ⭐{report.predictedRating?.toFixed(1)}</p>
+        </Card>
+      </div>
+
+      {/* Alerts */}
+      {report.alerts && report.alerts.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {report.alerts.map((alert: any, i: number) => (
+            <div 
+              key={i} 
+              className={`p-3 rounded-xl border flex gap-3 items-start ${
+                alert.severity === 'critical' || alert.severity === 'error' 
+                ? 'bg-rose-50 border-rose-200 text-rose-900' 
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}
+            >
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-bold uppercase opacity-60 mb-0.5">{alert.type}</p>
+                <p className="text-xs font-medium leading-tight">{alert.message}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

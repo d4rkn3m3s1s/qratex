@@ -22,8 +22,10 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/lib/admin-toast';
 import type { InnovationPlatformConfig } from '@/lib/innovation-config';
+import { useAppT } from '@/lib/app-locale';
 
 export default function AdminInnovationPage() {
+  const t = useAppT();
   const [risk, setRisk] = useState<unknown>(null);
   const [config, setConfig] = useState<InnovationPlatformConfig | null>(null);
   const [segments, setSegments] = useState<unknown[]>([]);
@@ -106,7 +108,7 @@ export default function AdminInnovationPage() {
       toast.error('İşlem başarısız');
       return;
     }
-    toast.success('Güncellendi');
+    toast.success(t('common.updated'));
     load();
   }
 

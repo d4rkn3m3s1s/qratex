@@ -32,7 +32,7 @@ export async function GET(req: Request) {
                 orderBy: { acquiredAt: 'desc' },
                 take: 300,
             }),
-            prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
+            prisma.user.findUnique({ where: { id: userId }, select: { points: true, customFrameColor: true } }),
         ]);
 
         // Format items with ownership status
@@ -49,6 +49,7 @@ export async function GET(req: Request) {
             {
                 items: shopItems,
                 userPoints: user?.points || 0,
+                customFrameColor: user?.customFrameColor || null,
             },
             { headers: PRIVATE_NO_STORE_HEADERS }
         );
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
         }
 
         // Deduct points and grant item
+        const { advanceAchievementProgress } = await import('@/lib/achievements');
         await prisma.$transaction([
             prisma.user.update({
                 where: { id: userId },
@@ -123,6 +125,8 @@ export async function POST(req: Request) {
                 }
             })
         ]);
+
+        await advanceAchievementProgress(userId, 'quest-cosmetic-collector', 1, 'increment');
 
         return NextResponse.json(
             { success: true, message: `Successfully purchased ${item.name}` },

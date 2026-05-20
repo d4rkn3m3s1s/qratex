@@ -8,8 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { useAppT } from '@/lib/app-locale';
 
 export function TableSignalClient() {
+  const t = useAppT();
   const sp = useSearchParams();
   const dealerId = sp.get('dealerId') || '';
   const qrCodeId = sp.get('qrCodeId') || '';
@@ -21,7 +23,7 @@ export function TableSignalClient() {
 
   async function send(mood: 'OK' | 'CONCERN') {
     if (!dealerId.trim()) {
-      toast.error('Geçersiz bağlantı: dealerId eksik');
+      toast.error(t('tableSignal.invalidConnection'));
       return;
     }
     setSending(mood);
@@ -39,13 +41,13 @@ export function TableSignalClient() {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || 'Gönderilemedi');
+        toast.error(data.error || t('common.failedToSubmit'));
         return;
       }
-      toast.success(mood === 'OK' ? 'Ekip bilgilendirildi — teşekkürler!' : 'Sinyal iletildi — ekip ilgilenecek.');
+      toast.success(mood === 'OK' ? t('tableSignal.okMessage') : t('tableSignal.concernMessage'));
       setNote('');
     } catch {
-      toast.error('Bağlantı hatası');
+      toast.error(t('tableSignal.connectionError'));
     } finally {
       setSending(null);
     }
@@ -53,11 +55,11 @@ export function TableSignalClient() {
 
   if (!dealerId) {
     return (
-      <Card className="max-w-lg mx-auto mt-8">
+      <Card className="w-full max-w-lg mx-auto mt-4 sm:mt-8">
         <CardHeader>
-          <CardTitle>Bağlantı eksik</CardTitle>
+          <CardTitle>{t('tableSignal.missingConnection')}</CardTitle>
           <CardDescription>
-            Bu sayfa işletmenin QR koduyla açılmalıdır. Doğru QR&apos;ı taradığınızdan emin olun.
+            {t('tableSignal.missingConnectionDesc')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -65,34 +67,33 @@ export function TableSignalClient() {
   }
 
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-start p-4 pt-10">
+    <div className="min-h-[70vh] flex flex-col items-center justify-start p-3 sm:p-4 pt-6 sm:pt-10">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Masa sinyali</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Her şey yolunda mı?</h1>
-          <p className="text-sm text-muted-foreground text-pretty">
-            Şikâyet oluşturmadan ekibe tek dokunuşla haber verin. Kişisel veri toplanmaz; isterseniz masa
-            kodunu girin.
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">{t('tableSignal.title')}</p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">{t('tableSignal.heading')}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground text-pretty">
+            {t('tableSignal.description')}
           </p>
         </div>
 
         <Card>
           <CardContent className="pt-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="table">Masa / bölüm (isteğe bağlı)</Label>
+              <Label htmlFor="table">{t('tableSignal.tableLabel')}</Label>
               <Input
                 id="table"
-                placeholder="Örn. M7"
+                placeholder={t('tableSignal.tableExample')}
                 value={tableCode}
                 onChange={(e) => setTableCode(e.target.value)}
                 autoComplete="off"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="note">Kısa not (isteğe bağlı)</Label>
+              <Label htmlFor="note">{t('tableSignal.noteLabel')}</Label>
               <Input
                 id="note"
-                placeholder="Örn. servis hızı"
+                placeholder={t('tableSignal.noteExample')}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={400}
@@ -111,7 +112,7 @@ export function TableSignalClient() {
                 ) : (
                   <CheckCircle2 className="h-5 w-5" />
                 )}
-                Her şey yolunda
+                {t('tableSignal.okButton')}
               </Button>
               <Button
                 size="lg"
@@ -125,14 +126,14 @@ export function TableSignalClient() {
                 ) : (
                   <AlertTriangle className="h-5 w-5" />
                 )}
-                Bir şey var
+                {t('tableSignal.concernButton')}
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <p className="text-[11px] text-center text-muted-foreground px-2">
-          Oturum açmış müşteriler için isteğe bağlı hesap eşlemesi yapılabilir; zorunlu değildir.
+        <p className="text-[10px] sm:text-[11px] text-center text-muted-foreground px-2">
+          {t('tableSignal.footer')}
         </p>
       </div>
     </div>

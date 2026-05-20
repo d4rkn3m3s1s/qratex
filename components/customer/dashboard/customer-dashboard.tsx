@@ -32,6 +32,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { triggerConfetti, triggerSuccessBurst } from '@/lib/effects/confetti';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -40,7 +41,9 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { Spotlight } from '@/components/ui/spotlight';
+import { UserAvatarFrame, DiamondBadge, RubyBadge } from '@/components/ui/avatar-frame';
 import {
+  cn,
   getInitials,
   getLeague,
   getLeagueMeta,
@@ -119,6 +122,7 @@ export default function CustomerDashboard() {
   const [favorites, setFavorites] = useState<FavoriteDealer[]>([]);
   const [favoriteToggling, setFavoriteToggling] = useState<string | null>(null);
   const [isLeagueSheetOpen, setIsLeagueSheetOpen] = useState(false);
+  const [pinnedItems, setPinnedItems] = useState<any[]>([]);
 
   const queryClient = useQueryClient();
 
@@ -136,6 +140,8 @@ export default function CustomerDashboard() {
       discoveryRes: Response;
       favoritesData: Record<string, unknown>;
       favoritesRes: Response;
+      showcaseData: Record<string, unknown>;
+      showcaseRes: Response;
     }> => {
       const opts = { credentials: 'same-origin' as RequestCredentials };
 
@@ -156,7 +162,8 @@ export default function CustomerDashboard() {
         rewardsResult,
         spinResult,
         discoveryResult,
-        favoritesResult
+        favoritesResult,
+        showcaseResult
       ] = await Promise.all([
         safeFetch('/api/customer/stats'),
         safeFetch('/api/leaderboard?limit=4'),
@@ -164,6 +171,7 @@ export default function CustomerDashboard() {
         safeFetch('/api/gamification/spin'),
         safeFetch('/api/customer/discovery'),
         safeFetch('/api/customer/favorites'),
+        safeFetch('/api/customer/showcase'),
       ]);
 
       return {
@@ -175,6 +183,8 @@ export default function CustomerDashboard() {
         discoveryRes: discoveryResult.res,
         favoritesData: favoritesResult.data,
         favoritesRes: favoritesResult.res,
+        showcaseData: showcaseResult.data,
+        showcaseRes: showcaseResult.res,
       };
     },
     enabled: !!session?.user,
@@ -305,7 +315,46 @@ export default function CustomerDashboard() {
         }))
       );
     }
+
+    // 7. Showcase Pinned Items
+    const shResult = (dashboardData as any)?.showcaseData;
+    if (shResult?.success) {
+      const pins: any[] = [];
+      if (Array.isArray(shResult.cosmetics)) {
+        shResult.cosmetics.forEach((c: any) => {
+          if (c.isPinned) {
+            pins.push({
+              id: c.cosmeticId,
+              type: 'cosmetic',
+              name: c.cosmetic.name,
+              imageUrl: c.cosmetic.imageUrl,
+            });
+          }
+        });
+      }
+      if (Array.isArray(shResult.badges)) {
+        shResult.badges.forEach((b: any) => {
+          if (b.isPinned) {
+            pins.push({
+              id: b.badgeId,
+              type: 'badge',
+              name: b.badge.name,
+              imageUrl: b.badge.imageUrl,
+            });
+          }
+        });
+      }
+      setPinnedItems(pins);
+    }
   }, [dashboardData, user?.points, user?.level]);
+
+  // --- Level Up Detection ---
+  useEffect(() => {
+    if (stats.level > 1 && stats.level > (user?.level || 1)) {
+      triggerConfetti();
+      toast.success(`${tc('customerDashboard.levelUpTitle')} ${stats.level}! 🎉`);
+    }
+  }, [stats.level, user?.level]);
 
   // --- Handlers ---
   const toggleFavorite = async (dealerId: string) => {
@@ -379,7 +428,10 @@ export default function CustomerDashboard() {
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, type: 'spring', bounce: 0.35 }}
-            className="relative overflow-hidden rounded-[inherit] px-6 py-6 md:px-8 md:py-8"
+            className={cn(
+              "relative overflow-hidden rounded-[inherit] px-6 py-6 md:px-8 md:py-8",
+              (session?.user as any)?.equippedBackground
+            )}
           >
           <Spotlight className="top-0 left-0" fill="hsl(var(--primary))" />
           <FloatingOrbs />
@@ -391,24 +443,29 @@ export default function CustomerDashboard() {
           <div className="relative z-10 flex flex-col md:flex-row gap-6 md:gap-10 items-stretch justify-between">
             {/* Sol taraf: avatar + selamlama + mini özet */}
             <div className="flex flex-1 items-center gap-5 md:gap-7 text-center md:text-left">
-              <div className="relative shrink-0 group">
-                <Avatar className="h-24 w-24 border-4 border-background/60 shadow-2xl ring-2 ring-primary/40">
-                  {user?.image ? (
-                    <AvatarImage src={user.image} alt={displayName} />
-                  ) : (
-                    <AvatarFallback className="text-3xl bg-primary text-primary-foreground font-bold">
-                      {getInitials(user?.name || 'User')}
-                    </AvatarFallback>
-                  )}
-                </Avatar>
-                <div className="absolute -bottom-3 -right-3 flex items-center justify-center w-11 h-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 border-2 border-background shadow-lg shadow-amber-500/40 text-background font-black text-sm">
+              <div className="relative shrink-0 group w-28 h-28 flex items-center justify-center">
+                <UserAvatarFrame 
+                  frameId={(session?.user as any)?.equippedFrame || null}
+                  customColor={(session?.user as any)?.customFrameColor || null}
+                >
+                  <Avatar className="h-20 w-20 border-4 border-background/60 shadow-2xl ring-2 ring-primary/40">
+                    {user?.image ? (
+                      <AvatarImage src={user.image} alt={displayName} />
+                    ) : (
+                      <AvatarFallback className="text-2xl bg-primary text-primary-foreground font-bold">
+                        {getInitials(user?.name || 'User')}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                </UserAvatarFrame>
+                <div className="absolute bottom-0 right-0 flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 border-2 border-background shadow-lg shadow-amber-500/40 text-background font-black text-xs z-10">
                   {currentLevel}
                 </div>
                 <Button
                   asChild
                   size="sm"
                   variant="secondary"
-                  className="pointer-events-none group-hover:pointer-events-auto absolute -bottom-10 left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 rounded-full px-3 h-7 text-[11px] font-medium shadow-lg bg-background/95 text-foreground border border-border/70 transition-all"
+                  className="pointer-events-none group-hover:pointer-events-auto absolute -bottom-10 left-1/2 -translate-x-1/2 translate-y-1 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 rounded-full px-3 h-7 text-[11px] font-medium shadow-lg bg-background/95 text-foreground border border-border/70 transition-all z-20"
                 >
                   <Link prefetch={false} href="/customer/settings">{tc('customerDashboard.editProfile')}</Link>
                 </Button>
@@ -452,6 +509,31 @@ export default function CustomerDashboard() {
                     </span>
                   )}
                 </div>
+
+                {/* Showcase Pinned Badges/Cosmetics in Hero */}
+                {pinnedItems.length > 0 && (
+                  <div className="flex items-center justify-center md:justify-start gap-2.5 pt-3">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-bold mr-1">Vitrin:</span>
+                    <div className="flex items-center gap-2">
+                      {pinnedItems.map((item) => (
+                        <div key={item.id} className="relative w-8 h-8 rounded-lg bg-background/40 border border-white/5 p-1 flex items-center justify-center hover:scale-110 transition-transform duration-200" title={item.name}>
+                          {item.id === 'diamond_badge' ? (
+                            <DiamondBadge />
+                          ) : item.id === 'ruby_badge' ? (
+                            <RubyBadge />
+                          ) : item.imageUrl ? (
+                            <div className="relative w-full h-full">
+                              <Image src={item.imageUrl} alt={item.name} fill className="object-contain p-1" unoptimized />
+                            </div>
+                          ) : (
+                            <Award className="w-4 h-4 text-purple-400" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {stats.badgeCount === 0 && (
                   <div className="pt-2">
                     <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] text-primary shadow-sm">
@@ -650,7 +732,7 @@ export default function CustomerDashboard() {
               lastSpinDate={spinStatus.lastSpin}
               onPrizeWon={(prize) => {
                 if (prize.type === 'points') setStats((prev) => ({ ...prev, points: prev.points + prize.value }));
-                // Trigger confetti or similar here
+                triggerSuccessBurst(); // Qratex 2.0 Burst!
               }}
             />
           </div>
@@ -661,7 +743,6 @@ export default function CustomerDashboard() {
             { href: '/customer/quests', icon: Target, label: tc('customerDashboard.quickQuests'), bg: 'bg-emerald-500/10', color: 'text-emerald-500' },
             { href: '/customer/badges', icon: Trophy, label: tc('customerDashboard.quickBadges'), bg: 'bg-amber-500/10', color: 'text-amber-500' },
             { href: '/customer/rewards', icon: Gift, label: tc('customerDashboard.quickRewards'), bg: 'bg-primary/10', color: 'text-primary' },
-            { href: '/customer/experience-guide', icon: BookOpen, label: tc('customerDashboard.quickGuide'), bg: 'bg-violet-500/10', color: 'text-violet-600 dark:text-violet-400' },
           ].map((action, i) => (
             <Link prefetch={false} key={i} href={action.href} className="group flex flex-col items-center justify-center p-4 sm:p-6 min-h-[100px] sm:min-h-0 rounded-2xl bg-card border border-border/50 hover:bg-muted/50 active:bg-muted/70 transition-colors touch-manipulation">
               <div className={`p-3 sm:p-4 rounded-full ${action.bg} mb-2 sm:mb-3 group-hover:scale-110 transition-transform duration-300 shadow-inner`}>

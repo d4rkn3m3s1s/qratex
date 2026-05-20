@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
+import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
 import { Toaster } from '@/components/ui/toaster';
 import { ChatbotLazy } from '@/components/chat/chatbot-lazy';
@@ -10,6 +12,7 @@ import { siteUrl } from '@/lib/site-config';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/brand-colors';
 import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
+import { PageTransition } from '@/components/layout/page-transition';
 
 /** İlk boyamadan önce light/dark sınıfı (next-themes / localStorage ile uyumlu; FOUC azaltır). */
 const THEME_CLASS_INIT_SCRIPT = `
@@ -153,10 +156,13 @@ export default async function RootLayout({
       </head>
       <body className="min-h-dvh bg-background font-sans antialiased" suppressHydrationWarning>
         <Providers initialThemeSettings={initialThemeSettings}>
-          {children}
+          <PageTransition>
+            {children}
+          </PageTransition>
           <Toaster />
           <ChatbotLazy />
           <Analytics />
+          <SpeedInsights />
         </Providers>
       </body>
     </html>

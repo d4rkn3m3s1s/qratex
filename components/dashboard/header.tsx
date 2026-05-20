@@ -23,6 +23,7 @@ import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
 import { useAppT } from '@/lib/app-locale';
+import { UserAvatarFrame } from '@/components/ui/avatar-frame';
 
 const GlobalSearchResults = dynamic(
   () => import('./global-search-results').then((m) => m.GlobalSearchResults),
@@ -53,7 +54,10 @@ function NotificationCenterSkeleton() {
 
 const NotificationCenter = dynamic(
   () => import('./notification-center').then((m) => m.NotificationCenter),
-  { loading: () => <NotificationCenterSkeleton /> },
+  {
+    loading: () => <NotificationCenterSkeleton />,
+    ssr: false
+  },
 );
 
 interface DashboardHeaderProps {
@@ -494,15 +498,19 @@ export function DashboardHeader({ title, description, showSearch = true, actions
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-10 w-10 min-h-10 min-w-10 sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
+                className="relative h-12 w-12 min-h-12 min-w-12 sm:h-11 sm:min-h-11 sm:w-11 sm:min-w-11 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
                 aria-label={t('appShell.accountMenu')}
               >
-                <Avatar className="h-10 w-10 sm:h-9 sm:w-9">
-                  <AvatarImage src={session?.user?.image || ''} />
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-sm text-primary-foreground">
-                    {getInitials(session?.user?.name)}
-                  </AvatarFallback>
-                </Avatar>
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <UserAvatarFrame frameId={(session?.user as any)?.equippedFrame || null}>
+                    <Avatar className="h-9 w-9 sm:h-8 sm:w-8">
+                      <AvatarImage src={session?.user?.image || ''} />
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-sm text-primary-foreground">
+                        {getInitials(session?.user?.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </UserAvatarFrame>
+                </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 max-h-[85vh] overflow-y-auto">

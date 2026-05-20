@@ -1,4 +1,4 @@
-import { CHART_HEX } from '@/lib/chart-palette';
+import { CHART_HEX } from './chart-palette';
 
 /**
  * Brand solid hex values for contexts that cannot use `hsl(var(--primary))`

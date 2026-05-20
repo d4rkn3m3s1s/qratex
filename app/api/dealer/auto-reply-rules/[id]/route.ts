@@ -18,6 +18,7 @@ const updateSchema = z.object({
     }).optional(),
     action: z.enum(['reply', 'incident']).optional(),
     template: z.string().min(1).max(2000).optional(),
+    tone: z.string().nullable().optional(),
 });
 
 // PATCH — update a rule
@@ -43,6 +44,7 @@ export async function PATCH(
             ...(parsed.data.condition !== undefined && { condition: parsed.data.condition as object }),
             ...(parsed.data.action !== undefined && { action: parsed.data.action }),
             ...(parsed.data.template !== undefined && { template: parsed.data.template }),
+            ...(parsed.data.tone !== undefined && { tone: parsed.data.tone || null }),
         };
 
         const n = await prisma.autoReplyRule.updateMany({

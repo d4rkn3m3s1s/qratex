@@ -344,23 +344,42 @@ export default function AdminQuestsPage() {
             className="pl-10"
           />
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Yeni Görev
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Yeni Görev Oluştur</DialogTitle>
-              <DialogDescription>
-                Kullanıcıların tamamlayabileceği yeni bir görev oluşturun
-              </DialogDescription>
-            </DialogHeader>
-            <QuestForm onSubmit={handleCreate} submitLabel="Oluştur" />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={bootstrapQuests}>
+            Varsayılan Görevleri Ekle
+          </Button>
+          <Button variant="outline" className="gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10" onClick={async () => {
+            try {
+              const res = await fetch('/api/admin/bootstrap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'seed_achievements' }),
+              });
+              const data = await res.json();
+              if (data.success) { toast.success('Başarım görevleri eklendi!'); fetchQuests(); }
+              else toast.error(data.error || 'İşlem başarısız.');
+            } catch { toast.error('Bağlantı hatası.'); }
+          }}>
+            ✨ Başarımları Ekle
+          </Button>
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Yeni Görev
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Yeni Görev Oluştur</DialogTitle>
+                <DialogDescription>
+                  Kullanıcıların tamamlayabileceği yeni bir görev oluşturun
+                </DialogDescription>
+              </DialogHeader>
+              <QuestForm onSubmit={handleCreate} submitLabel="Oluştur" />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Quests Grid */}

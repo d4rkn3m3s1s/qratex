@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/lib/admin-toast';
 import { Clock, Copy, Share2, Sparkles } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { useAppT } from '@/lib/app-locale';
 import {
   Select,
   SelectContent,
@@ -34,6 +35,7 @@ type AtDealerPayload = {
 };
 
 export default function CustomerExperiencesPage() {
+  const t = useAppT();
   const searchParams = useSearchParams();
   const initialDealer = searchParams.get('dealerId') || '';
 
@@ -61,7 +63,7 @@ export default function CustomerExperiencesPage() {
         { cache: 'no-store' }
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Yüklenemedi');
+      if (!res.ok) throw new Error(data.error || t('common.failedToLoad'));
       setPayload(data);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Hata');
@@ -120,7 +122,7 @@ export default function CustomerExperiencesPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gönderilemedi');
+      if (!res.ok) throw new Error(data.error || t('common.failedToSubmit'));
       toast.success(
         `İyileştirme isteği kaydedildi. Tahmini dönüş: ${new Date(data.expectedResponseBy).toLocaleString()}`
       );
@@ -159,7 +161,7 @@ export default function CustomerExperiencesPage() {
             <Input value={dealerId} onChange={(e) => setDealerId(e.target.value)} placeholder="dealer id" />
           </div>
           <Button onClick={() => void load()} disabled={loading}>
-            {loading ? 'Yükleniyor…' : 'Yükle'}
+            {loading ? t('common.loading') : t('common.upload')}
           </Button>
         </CardContent>
       </Card>

@@ -16,7 +16,8 @@ type BootstrapAction =
   | 'seed_ai_quality_samples'
   | 'clear_insights_categories'
   | 'clear_suspicious_activities'
-  | 'clear_ai_quality_samples';
+  | 'clear_ai_quality_samples'
+  | 'seed_achievements';
 
 const BOOTSTRAP_TRACKER_KEY = 'admin_bootstrap_tracker_v1';
 
@@ -116,9 +117,16 @@ export async function POST(request: NextRequest) {
     action !== 'seed_ai_quality_samples' &&
     action !== 'clear_insights_categories' &&
     action !== 'clear_suspicious_activities' &&
-    action !== 'clear_ai_quality_samples'
+    action !== 'clear_ai_quality_samples' &&
+    action !== 'seed_achievements'
   ) {
     return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  if (action === 'seed_achievements') {
+    const { seedAchievements } = await import('@/lib/achievements');
+    await seedAchievements();
+    return NextResponse.json({ success: true, action, message: 'Başarım görevleri eklendi.' }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   if (action === 'quests_defaults') {

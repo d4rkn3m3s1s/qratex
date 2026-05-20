@@ -75,6 +75,10 @@ import {
   Sprout,
   LayoutTemplate,
   Accessibility,
+  Wand2,
+  PartyPopper,
+  GripVertical,
+  Sunrise,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -82,9 +86,10 @@ import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { cn, getInitials, calculateLevelProgress } from '@/lib/utils';
+import { applySidebarOrder } from '@/lib/sidebar-order-settings';
 import { useAppT } from '@/lib/app-locale';
 
-interface NavItem {
+export interface NavItem {
   key?: string;
   /** Messages path suffix: `sidebarNav.admin|dealer|customer.{labelKey}` */
   labelKey: string;
@@ -139,12 +144,16 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'partners', href: '/admin/partners', icon: Share2 },
   { labelKey: 'pages', href: '/admin/pages', icon: FileText },
   { labelKey: 'themes', href: '/admin/themes', icon: Palette },
+  { labelKey: 'avatar_shop', href: '/admin/shop', icon: ShoppingBag },
   { labelKey: 'design_language', href: '/admin/design-language', icon: LayoutTemplate },
+  { labelKey: 'menu_order', href: '/admin/sidebar-order', icon: GripVertical },
+  { labelKey: 'experience_pulse', href: '/admin/experience-pulse', icon: Wand2 },
   { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
   { labelKey: 'compliance', href: '/admin/compliance', icon: Shield },
   { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
   { labelKey: 'league_settings', href: '/admin/league-settings', icon: Trophy },
+  { labelKey: 'gamification_settings', href: '/admin/gamification-settings', icon: Zap },
   { labelKey: 'discovery', href: '/admin/discovery', icon: MapPin },
   { labelKey: 'seo', href: '/admin/seo', icon: Search },
   { labelKey: 'audit', href: '/admin/audit', icon: History },
@@ -188,7 +197,6 @@ const dealerNavItems: NavItem[] = [
   { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain, featureKey: 'ai_features', moduleKey: 'ai_features' },
   { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users, featureKey: 'staff_management', moduleKey: 'staff_management' },
   { key: 'discover', labelKey: 'discover', href: '/dealer/discover', icon: LayoutGrid },
-  { key: 'experience_guide', labelKey: 'experience_guide', href: '/dealer/experience-guide', icon: BookOpen },
   { key: 'settings', labelKey: 'settings', href: '/dealer/settings', icon: Settings },
 ];
 
@@ -217,7 +225,6 @@ const customerNavItems: NavItem[] = [
   { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart },
   { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy },
   { key: 'discover', labelKey: 'discover', href: '/customer/discover', icon: LayoutGrid, featureKey: 'discovery', moduleKey: 'discovery' },
-  { key: 'experience_guide', labelKey: 'experience_guide', href: '/customer/experience-guide', icon: BookOpen },
   { key: 'settings', labelKey: 'settings', href: '/customer/settings', icon: Settings },
 ];
 
@@ -233,6 +240,24 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
   const [menuVisibility, setMenuVisibility] = useState<Record<string, boolean>>({});
   const [featureVisibility, setFeatureVisibility] = useState<Record<string, boolean>>({});
   const [moduleControls, setModuleControls] = useState<Record<string, boolean>>({});
+  const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings/sidebar-order', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.success && Array.isArray(data.order)) setSidebarOrder(data.order);
+        else setSidebarOrder(null);
+      })
+      .catch(() => {
+        if (!cancelled) setSidebarOrder(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   useEffect(() => {
     setMounted(true);
@@ -285,7 +310,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
     : role === 'DEALER'
       ? dealerNavItems
       : customerNavItems;
-  const filteredNavItems = role === 'ADMIN'
+  const filteredNavItemsBase = role === 'ADMIN'
     ? navItems
     : navItems.filter((item) => {
       const menuKey = item.key ?? item.href;
@@ -302,6 +327,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
         moduleControls[mk] !== false;
       return menuEnabled && featureEnabled && moduleEnabled;
     });
+  const filteredNavItems = applySidebarOrder(filteredNavItemsBase, sidebarOrder);
   const navNs = role === 'ADMIN' ? 'admin' : role === 'DEALER' ? 'dealer' : 'customer';
   const visibleNavItems = filteredNavItems.map((item) => ({
     ...item,
@@ -518,3 +544,9 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
     </>
   );
 }
+
+export function getNavOrderId(item: NavItem): string {
+  return item.key ?? item.href;
+}
+
+export { adminNavItems, dealerNavItems, customerNavItems };

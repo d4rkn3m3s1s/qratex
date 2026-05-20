@@ -12,6 +12,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
+import { useAppT } from '@/lib/app-locale';
+
 type ProposalRow = {
   id: string;
   segmentKey: string;
@@ -21,6 +23,7 @@ type ProposalRow = {
 };
 
 export default function DealerInnovationPage() {
+  const t = useAppT();
   const { data: session } = useSession();
   const [brief, setBrief] = useState<unknown>(null);
   const [pulses, setPulses] = useState<unknown[]>([]);
@@ -128,7 +131,7 @@ export default function DealerInnovationPage() {
     });
     const data = await res.json();
     if (!res.ok) {
-      toast.error(data.error ?? 'Gönderilemedi');
+      toast.error(data.error ?? t('common.failedToSubmit'));
       return;
     }
     toast.success(`${data.sentCount ?? 0} müşteriye iletildi`);

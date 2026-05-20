@@ -18,6 +18,7 @@ const createRuleSchema = z.object({
     condition: conditionSchema,
     action: z.enum(['reply', 'incident']).default('reply'),
     template: z.string().min(1).max(2000),
+    tone: z.string().nullable().optional(),
     priority: z.number().int().min(0).max(100).default(0),
     isActive: z.boolean().default(true),
 });
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
                 condition: parsed.data.condition as object,
                 action: parsed.data.action,
                 template: parsed.data.template,
+                tone: parsed.data.tone || null,
                 priority: parsed.data.priority,
                 isActive: parsed.data.isActive,
             },

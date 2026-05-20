@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/lib/admin-toast';
 import { BootstrapActionButton } from '@/components/admin/bootstrap-action-button';
+import { useAppT } from '@/lib/app-locale';
 
 interface FeedbackData {
   id: string;
@@ -51,6 +52,7 @@ interface Stats {
 }
 
 export default function AdminAIQualityPage() {
+  const t = useAppT();
   const [samples, setSamples] = useState<Sample[]>([]);
   const [stats, setStats] = useState<Stats>({ pendingCount: 0, reviewedCount: 0 });
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ export default function AdminAIQualityPage() {
     try {
       const res = await fetch(`/api/admin/ai-quality?status=${statusFilter}&limit=50`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Yüklenemedi');
+      if (!res.ok) throw new Error(data.error || t('common.failedToLoad'));
       setSamples(data.samples || []);
       setStats(data.stats || { pendingCount: 0, reviewedCount: 0 });
     } catch (err) {
@@ -88,7 +90,7 @@ export default function AdminAIQualityPage() {
         body: JSON.stringify({ id: sampleId, accuracyScore: score, notes: notes || null }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Güncellenemedi');
+      if (!res.ok) throw new Error(data.error || t('common.failedToUpdate'));
       toast.success('Skor kaydedildi');
       setEditingId(null);
       setScore(75);

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Gift, Sparkles, X, Copy, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useAppT } from '@/lib/app-locale';
 
 export interface SurpriseBoxContent {
   title: string;
@@ -28,6 +29,7 @@ export function SurpriseBoxModal({
   onClose,
   pointsGranted = 0,
 }: SurpriseBoxModalProps) {
+  const t = useAppT();
   const [phase, setPhase] = useState<'idle' | 'shaking' | 'opening' | 'reveal' | 'done'>('idle');
   const [showParticles, setShowParticles] = useState(false);
 
@@ -54,7 +56,7 @@ export function SurpriseBoxModal({
   const copyCode = () => {
     if (content?.couponCode) {
       navigator.clipboard.writeText(content.couponCode);
-      toast.success('Kupon kodu kopyalandı');
+      toast.success(t('surpriseBoxes.copied') || 'Kupon kodu kopyalandı');
     }
   };
 
@@ -204,11 +206,11 @@ export function SurpriseBoxModal({
               <div className="flex items-center gap-2 text-amber-400 mb-3">
                 <Sparkles className="w-5 h-5" />
                 <span className="font-semibold text-sm uppercase tracking-wide">
-                  Sürpriz Kutu Açıldı!
+                  {t('surpriseBoxes.modalOpened') || 'Sürpriz Kutu Açıldı!'}
                 </span>
               </div>
               <h3 className="text-xl font-bold text-white mb-2">
-                {content?.title ?? 'Tebrikler!'}
+                {content?.title ?? (t('surpriseBoxes.congratulations') || 'Tebrikler!')}
               </h3>
               {content?.message && (
                 <p className="text-slate-300 text-sm mb-4 whitespace-pre-wrap">{content.message}</p>
@@ -217,13 +219,13 @@ export function SurpriseBoxModal({
                 <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 mb-4">
                   <Coins className="w-5 h-5 text-amber-400" />
                   <span className="text-amber-200 font-semibold">
-                    +{(pointsGranted ?? content?.points ?? 0)} puan
+                    {t('surpriseBoxes.pointsReward', { points: (pointsGranted ?? content?.points ?? 0) }) || `+${(pointsGranted ?? content?.points ?? 0)} puan`}
                   </span>
                 </div>
               ) : null}
               {content?.couponCode && (
                 <div className="flex items-center justify-between gap-2 rounded-lg bg-slate-700/50 border border-slate-600 px-3 py-2 mb-4">
-                  <span className="text-slate-300 text-sm">Kupon kodu</span>
+                  <span className="text-slate-300 text-sm">{t('surpriseBoxes.couponCode') || 'Kupon kodu'}</span>
                   <div className="flex items-center gap-2">
                     <code className="text-amber-300 font-mono font-bold">
                       {content.couponCode}
@@ -233,7 +235,7 @@ export function SurpriseBoxModal({
                       size="icon"
                       className="h-10 w-10 min-h-10 min-w-10 shrink-0 touch-manipulation text-slate-400 hover:text-white"
                       onClick={copyCode}
-                      aria-label="Kupon kodunu kopyala"
+                      aria-label={t('surpriseBoxes.copyCode') || 'Kupon kodunu kopyala'}
                     >
                       <Copy className="w-4 h-4" />
                     </Button>
@@ -245,7 +247,7 @@ export function SurpriseBoxModal({
                   className="h-12 w-full min-h-12 touch-manipulation bg-amber-500 font-semibold text-slate-900 hover:bg-amber-600"
                   onClick={onClose}
                 >
-                  Harika!
+                  {t('surpriseBoxes.awesome') || 'Harika!'}
                 </Button>
               )}
             </motion.div>
@@ -256,7 +258,7 @@ export function SurpriseBoxModal({
             size="icon"
             className="absolute -right-1 -top-1 z-10 h-11 w-11 min-h-11 min-w-11 touch-manipulation rounded-full bg-slate-800 text-white hover:bg-slate-700 sm:-right-2 sm:-top-2"
             onClick={onClose}
-            aria-label="Kapat"
+            aria-label={t('common.close') || 'Kapat'}
           >
             <X className="h-5 w-5" />
           </Button>

@@ -346,17 +346,6 @@ export default function DealerDashboard() {
               >
                 <Link prefetch={false} href="/dealer/scan"><ScanLine className="h-4 w-4 mr-2" />{t('dealerDashboard.scan')}</Link>
               </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="default"
-                className="rounded-xl hidden lg:inline-flex border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-              >
-                <Link prefetch={false} href="/dealer/experience-guide">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  {t('dealerDashboard.experienceGuide')}
-                </Link>
-              </Button>
             </>
           }
         />

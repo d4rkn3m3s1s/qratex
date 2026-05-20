@@ -6,6 +6,10 @@
     {
       "path": "/api/admin/preagg",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/squad-battles",
+      "schedule": "0 * * * *"
     }
   ]
 }

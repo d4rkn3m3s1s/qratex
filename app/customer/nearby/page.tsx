@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Compass, ExternalLink, MapPin, Navigation, Phone, RefreshCw, Star, Store, Zap } from 'lucide-react';
+import { Compass, ExternalLink, MapPin, Navigation, Phone, RefreshCw, Star, Store, Zap, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import Image from 'next/image';
 import { useAppT } from '@/lib/app-locale';
@@ -80,6 +80,8 @@ export default function CustomerNearbyPage() {
   const [liveBoosts, setLiveBoosts] = useState<LiveBoost[]>([]);
   const [innovationFlash, setInnovationFlash] = useState<InnovationFlashItem[]>([]);
   const [innovationRadar, setInnovationRadar] = useState<InnovationRadarPayload | null>(null);
+  const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
+  const [aiStats, setAiStats] = useState<any | null>(null);
   const [locationError, setLocationError] = useState<number | null>(null);
 
   const categoryOptions = useMemo(
@@ -181,15 +183,31 @@ export default function CustomerNearbyPage() {
       }
       setVenues(data.data.nearby || []);
       setLiveBoosts(Array.isArray(data.data.liveBoosts) ? data.data.liveBoosts : []);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('customerNearby.loadError'));
+    } catch (err) {
+      console.error('Nearby fetch error:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchAiRecommendations = async () => {
+    try {
+      const res = await fetch('/api/customer/ai-recommendations');
+      const data = await res.json();
+      if (data.success) {
+        setAiRecommendations(data.recommendations);
+        setAiStats(data.stats);
+      }
+    } catch (err) {
+      console.error('AI recommendations fetch error:', err);
+    }
+  };
+
   useEffect(() => {
-    fetchNearby();
+    if (latitude !== null && longitude !== null) {
+      fetchNearby();
+      fetchAiRecommendations();
+    }
   }, [latitude, longitude, radiusKm, category]);
 
   useEffect(() => {
@@ -414,6 +432,48 @@ export default function CustomerNearbyPage() {
                 </div>
               </div>
             ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      {latitude !== null && longitude !== null && aiRecommendations && (
+        <Card className="border-purple-500/30 bg-gradient-to-br from-purple-500/10 via-background to-cyan-500/5 shadow-lg shadow-purple-500/5 overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <Sparkles className="h-24 w-24 text-purple-500" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2 text-purple-600 dark:text-purple-400">
+              <Sparkles className="h-5 w-5 animate-pulse" />
+              Sana Özel AI Keşif Önerileri
+            </CardTitle>
+            <CardDescription>Geri bildirim geçmişinize dayalı kişiselleştirilmiş analiz.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {aiRecommendations}
+            </div>
+            
+            {aiStats && (
+              <div className="pt-4 border-t flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex gap-4">
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase text-muted-foreground font-semibold">Genel Puanın</p>
+                    <p className="text-sm font-bold">{aiStats.avgRating?.toFixed(1)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase text-muted-foreground font-semibold">Olumlu Oranı</p>
+                    <p className="text-sm font-bold text-emerald-500">%{aiStats.sentimentDist?.positive}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase text-muted-foreground font-semibold">Aciliyet</p>
+                    <p className="text-sm font-bold text-amber-500">{(aiStats.avgUrgency * 10)?.toFixed(1)}/10</p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="bg-purple-500/5 text-purple-500 border-purple-500/20">
+                  Cortex 2.0 Analizi
+                </Badge>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -26,7 +26,7 @@ export async function processAutoReplies(feedbackId: string) {
 
         let ruleApplied = false;
 
-        for (const rule of rules) {
+        for (const rule of (rules as any[])) {
             if (ruleApplied) break;
 
             const condition = rule.condition as unknown as AutoReplyRuleCondition;
@@ -45,17 +45,32 @@ export async function processAutoReplies(feedbackId: string) {
 
             if (isMatch) {
                 if (rule.action === 'reply') {
+                    let finalReply = rule.template;
+
+                    // Eğer tone varsa AI ile yanıt üret
+                    if (rule.tone) {
+                        const { generateAutoReply } = await import('@/lib/ai-engine');
+                        const aiReply = await generateAutoReply(
+                            feedback.text || "",
+                            feedback.rating || 5,
+                            rule.tone,
+                            dealerId
+                        );
+                        if (aiReply) {
+                            finalReply = aiReply;
+                        }
+                    }
+
                     // Update feedback with auto-reply
                     await prisma.feedback.update({
                         where: { id: feedback.id },
                         data: {
-                            dealerReply: rule.template,
+                            dealerReply: finalReply,
                             dealerRepliedAt: new Date()
                         }
                     });
 
-                    // Curently no notification sent to customer about the reply 
-                    // To do: If customer was logged in, notify them
+                    // If customer was logged in, notify them
                     if (feedback.userId) {
                         await prisma.notification.create({
                             data: {

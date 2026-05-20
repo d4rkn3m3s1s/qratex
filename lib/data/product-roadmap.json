@@ -117,22 +117,6 @@
         {
           "status": "shipped",
           "title": {
-            "tr": "Müşteri deneyim rehberi (okunabilirlik ve kısayollar)",
-            "en": "Customer experience guide (readability & shortcuts)"
-          },
-          "href": "/customer/experience-guide"
-        },
-        {
-          "status": "shipped",
-          "title": {
-            "tr": "Bayi deneyim rehberi (operasyon ve güvenlik ipuçları)",
-            "en": "Dealer experience guide (ops & device tips)"
-          },
-          "href": "/dealer/experience-guide"
-        },
-        {
-          "status": "shipped",
-          "title": {
             "tr": "Panel Web Vitals RUM (tüm paneller → admin özet)",
             "en": "Panel Web Vitals RUM (all panels → admin summary)"
           },

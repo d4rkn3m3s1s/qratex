@@ -37,6 +37,7 @@ import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
 import { toast } from '@/lib/admin-toast';
 import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor, cn } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 const QR_DOMAIN = 'https://demoqratex.vercel.app';
 
@@ -125,6 +126,7 @@ function LegendDigitalCard({
   onOpenQr,
   reduceMotion,
 }: LegendCardProps) {
+  const t = useAppT();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [glare, setGlare] = useState({ x: 50, y: 40 });
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
@@ -292,7 +294,7 @@ function LegendDigitalCard({
                           e.stopPropagation();
                           onToggleToken();
                         }}
-                        aria-label={showFullToken ? 'Gizle' : 'Göster'}
+                        aria-label={showFullToken ? t('common.hide') : t('common.show')}
                       >
                         {showFullToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -313,6 +315,7 @@ function LegendDigitalCard({
 }
 
 export default function CustomerMyCardPage() {
+  const t = useAppT();
   const { data: session } = useSession();
   const reduceMotion = useReducedMotion() === true;
   const [cards, setCards] = useState<UserCard[]>([]);
@@ -510,7 +513,7 @@ export default function CustomerMyCardPage() {
           </div>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <StatTile label="Kart" value={stats.totalCards} icon={CreditCard} tone="primary" />
-            <StatTile label="Tüketim" value={stats.totalConsumptions} icon={Zap} tone="cyan" />
+            <StatTile label={t('common.consumptions')} value={stats.totalConsumptions} icon={Zap} tone="cyan" />
             <StatTile label="Yorum" value={stats.reviewPending} icon={Star} tone="amber" />
           </div>
         </div>

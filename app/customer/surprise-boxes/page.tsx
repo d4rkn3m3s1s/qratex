@@ -27,6 +27,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { toast } from '@/lib/admin-toast';
 import { cn } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 interface SurpriseBoxItem {
   id: string;
@@ -73,6 +74,7 @@ function StatChip({
 }
 
 export default function CustomerSurpriseBoxesPage() {
+  const t = useAppT();
   const [unopened, setUnopened] = useState<SurpriseBoxItem[]>([]);
   const [opened, setOpened] = useState<SurpriseBoxItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +110,7 @@ export default function CustomerSurpriseBoxesPage() {
         });
       }
     } catch {
-      toast.error('Kutular yüklenemedi');
+      toast.error(t('surpriseBoxes.errorLoading') || 'Kutular yüklenemedi');
     } finally {
       setLoading(false);
     }
@@ -123,14 +125,13 @@ export default function CustomerSurpriseBoxesPage() {
     if (rewardStrategy.pendingReviewCount > 0) {
       return (
         <>
-          <span className="font-semibold text-foreground">{rewardStrategy.pendingReviewCount} tüketim</span> için
-          yorum yazarsan yeni sürpriz kutu ihtimalin artar.
+          <span className="font-semibold text-foreground">{rewardStrategy.pendingReviewCount} {t('common.consumptions') || 'tüketim'}</span> {t('surpriseBoxes.reviewHint', { count: rewardStrategy.pendingReviewCount }) || 'için yorum yazarsan yeni sürpriz kutu ihtimalin artar.'}
         </>
       );
     }
     return (
       <>
-        Bu dönemde ritmini koru: işletme deneyimlerini paylaşmaya devam et; özel kutular burada birikir.
+        {t('surpriseBoxes.keepRhythmHint') || 'Bu dönemde ritmini koru: işletme deneyimlerini paylaşmaya devam et; özel kutular burada birikir.'}
       </>
     );
   }, [rewardStrategy]);
@@ -156,7 +157,7 @@ export default function CustomerSurpriseBoxesPage() {
       setModalOpen(true);
       await fetchBoxes();
     } catch {
-      toast.error('Kutu açılamadı');
+      toast.error(t('surpriseBoxes.openError') || 'Kutu açılamadı');
     } finally {
       setOpeningId(null);
     }
@@ -165,14 +166,14 @@ export default function CustomerSurpriseBoxesPage() {
   return (
     <div className="space-y-5 md:space-y-6">
       <DashboardPageHeading
-        title="Sürpriz Kutularım"
-        description="Size özel kutuları açın; puan ve kuponlar hesabınıza işlenir."
+        title={t('surpriseBoxes.title') || 'Sürpriz Kutularım'}
+        description={t('surpriseBoxes.description') || 'Size özel kutuları açın; puan ve kuponlar hesabınıza işlenir.'}
       />
 
       <div className="rounded-2xl border border-border/60 bg-card/40 p-4 shadow-sm backdrop-blur-sm sm:hidden dark:bg-card/30">
-        <h1 className="text-balance text-xl font-bold tracking-tight">Sürpriz Kutularım</h1>
+        <h1 className="text-balance text-xl font-bold tracking-tight">{t('surpriseBoxes.title') || 'Sürpriz Kutularım'}</h1>
         <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
-          Size özel kutuları açın; puan ve kuponlar hesabınıza işlenir.
+          {t('surpriseBoxes.description') || 'Size özel kutuları açın; puan ve kuponlar hesabınıza işlenir.'}
         </p>
       </div>
 
@@ -187,11 +188,10 @@ export default function CustomerSurpriseBoxesPage() {
                 </span>
               </div>
               <div className="min-w-0 space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ödül merkezi</p>
-                <h2 className="text-balance text-lg font-semibold tracking-tight sm:text-xl">Kutularını aç, ödülleri topla</h2>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('surpriseBoxes.rewardCenter') || 'Ödül merkezi'}</p>
+                <h2 className="text-balance text-lg font-semibold tracking-tight sm:text-xl">{t('surpriseBoxes.heroTitle') || 'Kutularını aç, ödülleri topla'}</h2>
                 <p className="max-w-xl text-pretty text-sm text-muted-foreground">
-                  Her kutu işletmelerden veya platformdan size özel hazırlanır. Açmadan önce kutunun başlığını
-                  görebilirsiniz.
+                  {t('surpriseBoxes.heroDescription') || 'Her kutu işletmelerden veya platformdan size özel hazırlanır. Açmadan önce kutunun başlığını görebilirsiniz.'}
                 </p>
               </div>
             </div>
@@ -205,9 +205,9 @@ export default function CustomerSurpriseBoxesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <StatChip label="Açılacak" value={unopened.length} accent="amber" />
-              <StatChip label="Açılmış" value={opened.length} accent="muted" />
-              <StatChip label="Toplam" value={total} accent="primary" />
+              <StatChip label={t('surpriseBoxes.statUnopened') || 'Açılacak'} value={unopened.length} accent="amber" />
+              <StatChip label={t('surpriseBoxes.statOpened') || 'Açılmış'} value={opened.length} accent="muted" />
+              <StatChip label={t('surpriseBoxes.statTotal') || 'Toplam'} value={total} accent="primary" />
             </div>
           )}
         </div>
@@ -222,12 +222,11 @@ export default function CustomerSurpriseBoxesPage() {
                   <Sparkles className="h-5 w-5" aria-hidden />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground">Kişisel öneri</p>
+                  <p className="text-xs font-medium text-muted-foreground">{t('surpriseBoxes.personalRecommendation') || 'Kişisel öneri'}</p>
                   <p className="mt-1 text-pretty text-sm leading-relaxed text-foreground sm:text-base">{strategyHint}</p>
                   {rewardStrategy.consumptionCount > 0 && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Toplam <span className="font-medium text-foreground">{rewardStrategy.consumptionCount}</span>{' '}
-                      tüketim kaydın var.
+                      {t('surpriseBoxes.consumptionCount', { count: rewardStrategy.consumptionCount }) || `Toplam ${rewardStrategy.consumptionCount} tüketim kaydın var.`}
                     </p>
                   )}
                 </div>
@@ -240,12 +239,12 @@ export default function CustomerSurpriseBoxesPage() {
               <Button variant="outline" asChild className="w-full min-h-11 touch-manipulation sm:w-auto sm:min-w-[12rem]">
                 <Link href="/customer/consumptions" className="gap-2">
                   <MessageSquareText className="h-4 w-4 shrink-0" />
-                  Yorum bekleyenler
+                  {t('surpriseBoxes.pendingReviews') || 'Yorum bekleyenler'}
                 </Link>
               </Button>
               <Button variant="outline" asChild className="w-full min-h-11 touch-manipulation sm:w-auto sm:min-w-[12rem]">
                 <Link href="/customer/feedbacks" className="gap-2">
-                  Geri bildirimlerim
+                  {t('surpriseBoxes.myFeedbacks') || 'Geri bildirimlerim'}
                   <ArrowRight className="h-4 w-4 shrink-0 opacity-70" />
                 </Link>
               </Button>
@@ -278,17 +277,16 @@ export default function CustomerSurpriseBoxesPage() {
             <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-muted/60 ring-1 ring-border/60">
               <Box className="h-10 w-10 text-muted-foreground" aria-hidden />
             </div>
-            <h3 className="text-lg font-semibold text-foreground">Henüz sürpriz kutun yok</h3>
+            <h3 className="text-lg font-semibold text-foreground">{t('surpriseBoxes.emptyTitle') || 'Henüz sürpriz kutun yok'}</h3>
             <p className="mt-2 max-w-md text-pretty text-sm text-muted-foreground">
-              İşletmelerden veya kampanyalardan gönderilen kutular burada listelenir. Yorum ve geri bildirimlerinle
-              görünürlüğünü artır.
+              {t('surpriseBoxes.emptyDescription') || 'İşletmelerden veya kampanyalardan gönderilen kutular burada listelenir. Yorum ve geri bildirimlerinle görünürlüğünü artır.'}
             </p>
             <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
               <Button asChild className="min-h-11 w-full touch-manipulation sm:flex-1">
-                <Link href="/customer/consumptions">Tüketimlere git</Link>
+                <Link href="/customer/consumptions">{t('surpriseBoxes.goToConsumptions') || 'Tüketimlere git'}</Link>
               </Button>
               <Button asChild variant="outline" className="min-h-11 w-full touch-manipulation sm:flex-1">
-                <Link href="/customer/rewards">Ödül mağazası</Link>
+                <Link href="/customer/rewards">{t('surpriseBoxes.rewardStore') || 'Ödül mağazası'}</Link>
               </Button>
             </div>
           </CardContent>
@@ -302,7 +300,7 @@ export default function CustomerSurpriseBoxesPage() {
             >
               <span className="inline-flex items-center gap-1.5 font-medium">
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-500 sm:h-4 sm:w-4" aria-hidden />
-                Açılacaklar
+                {t('surpriseBoxes.tabUnopened') || 'Açılacaklar'}
               </span>
               <span className="rounded-md bg-background/90 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-foreground shadow-sm ring-1 ring-border/60 dark:bg-background/50">
                 {unopened.length}
@@ -314,7 +312,7 @@ export default function CustomerSurpriseBoxesPage() {
             >
               <span className="inline-flex items-center gap-1.5 font-medium">
                 <Trophy className="h-3.5 w-3.5 shrink-0 text-muted-foreground sm:h-4 sm:w-4" aria-hidden />
-                Geçmiş
+                {t('surpriseBoxes.tabHistory') || 'Geçmiş'}
               </span>
               <span className="rounded-md bg-background/90 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground shadow-sm ring-1 ring-border/60 dark:bg-background/50">
                 {opened.length}
@@ -328,13 +326,13 @@ export default function CustomerSurpriseBoxesPage() {
                 <CardContent className="flex flex-col items-center gap-4 px-4 py-12 text-center">
                   <PackageOpen className="h-12 w-12 text-muted-foreground/50" />
                   <div>
-                    <p className="font-medium text-foreground">Açılacak kutu yok</p>
+                    <p className="font-medium text-foreground">{t('surpriseBoxes.noUnopened') || 'Açılacak kutu yok'}</p>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                      Yeni kutu geldiğinde burada göreceksin. Geçmiş açılışların için &quot;Geçmiş&quot; sekmesine geç.
+                      {t('surpriseBoxes.noUnopenedDesc') || 'Yeni kutu geldiğinde burada göreceksin. Geçmiş açılışların için "Geçmiş" sekmesine geç.'}
                     </p>
                   </div>
                   <Button variant="outline" asChild className="min-h-11 w-full max-w-xs touch-manipulation">
-                    <Link href="/customer/consumptions">Yorum yaparak hızlan</Link>
+                    <Link href="/customer/consumptions">{t('surpriseBoxes.speedUpByReview') || 'Yorum yaparak hızlan'}</Link>
                   </Button>
                 </CardContent>
               </Card>
@@ -364,11 +362,11 @@ export default function CustomerSurpriseBoxesPage() {
                               </div>
                               <div className="min-w-0 flex-1 text-center sm:text-left">
                                 <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                                  <Badge className="bg-amber-500/90 text-amber-950 hover:bg-amber-500">Sürpriz</Badge>
+                                  <Badge className="bg-amber-500/90 text-amber-950 hover:bg-amber-500">{t('surpriseBoxes.surpriseBadge') || 'Sürpriz'}</Badge>
                                   {box.points > 0 && (
                                     <Badge variant="outline" className="gap-1 border-amber-500/30">
                                       <Coins className="h-3 w-3" />
-                                      +{box.points} puan potansiyeli
+                                      {t('surpriseBoxes.pointsPotential', { points: box.points }) || `+${box.points} puan potansiyeli`}
                                     </Badge>
                                   )}
                                 </div>
@@ -390,11 +388,11 @@ export default function CustomerSurpriseBoxesPage() {
                                 {openingId === box.id ? (
                                   <>
                                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                    Açılıyor…
+                                    {t('surpriseBoxes.opening') || 'Açılıyor…'}
                                   </>
                                 ) : (
                                   <>
-                                    Kutuyu aç
+                                    {t('surpriseBoxes.openBox') || 'Kutuyu aç'}
                                     <ChevronRight className="ml-1 h-5 w-5" />
                                   </>
                                 )}
@@ -415,8 +413,8 @@ export default function CustomerSurpriseBoxesPage() {
               <Card className="border-border/70 bg-card/50">
                 <CardContent className="flex flex-col items-center gap-3 px-4 py-12 text-center">
                   <Trophy className="h-11 w-11 text-muted-foreground/60" />
-                  <p className="font-medium text-foreground">Henüz açılmış kutu yok</p>
-                  <p className="max-w-sm text-sm text-muted-foreground">İlk kutunu açtığında ödüllerin burada özetlenir.</p>
+                  <p className="font-medium text-foreground">{t('surpriseBoxes.noOpened') || 'Henüz açılmış kutu yok'}</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">{t('surpriseBoxes.noOpenedDesc') || 'İlk kutunu açtığında ödüllerin burada özetlenir.'}</p>
                 </CardContent>
               </Card>
             ) : (

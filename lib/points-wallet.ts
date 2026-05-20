@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { calculateLevel } from '@/lib/utils';
 
 type WalletDb = Prisma.TransactionClient | typeof prisma;
 
@@ -15,21 +16,51 @@ export class InsufficientPointsError extends Error {
   }
 }
 
+export type CreditPointsAndXpResult = {
+  id: string;
+  points: number;
+  xp: number;
+  level: number;
+  isLevelUp: boolean;
+};
+
 export async function creditPointsAndXp(
   db: WalletDb,
   payload: { userId: string; points?: number; xp?: number }
-) {
+): Promise<CreditPointsAndXpResult> {
   const points = Math.max(0, Math.floor(payload.points ?? 0));
-  const xp = Math.max(0, Math.floor(payload.xp ?? 0));
+  const xpToAdd = Math.max(0, Math.floor(payload.xp ?? 0));
 
-  return db.user.update({
+  // 1. Mevcut XP'yi al (seviye hesaplaması için)
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+    select: { xp: true, level: true },
+  });
+
+  if (!user) {
+    throw new Error('Kullanıcı bulunamadı');
+  }
+
+  // 2. Yeni XP ve seviyeyi hesapla
+  const nextTotalXp = user.xp + xpToAdd;
+  const nextLevel = calculateLevel(nextTotalXp);
+  const leveledUp = nextLevel > user.level;
+
+  // 3. Veritabanını güncelle
+  const updatedUser = await db.user.update({
     where: { id: payload.userId },
     data: {
       ...(points > 0 ? { points: { increment: points } } : {}),
-      ...(xp > 0 ? { xp: { increment: xp } } : {}),
+      ...(xpToAdd > 0 ? { xp: { increment: xpToAdd } } : {}),
+      level: nextLevel,
     },
     select: { id: true, points: true, xp: true, level: true },
   });
+
+  return {
+    ...updatedUser,
+    isLevelUp: leveledUp,
+  };
 }
 
 export async function debitPoints(db: WalletDb, payload: { userId: string; points: number }) {

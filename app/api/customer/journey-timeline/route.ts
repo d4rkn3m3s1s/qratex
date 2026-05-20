@@ -1,172 +1,144 @@
+/**
+ * Müşteri journey timeline: register, feedback, badge, reward ve consumption eventlerini
+ * kronolojik sırada döndürür. customer/journey-score sayfasında kullanılır.
+ */
+
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    try {
-        const auth = await requireAuth(['CUSTOMER']);
-        if ('error' in auth) return auth.error;
-        const userId = auth.session.user.id;
+  const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
+  if ('error' in auth) return auth.error;
+  const { session } = auth;
 
-        // Fetch user data
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { createdAt: true, points: true, level: true },
-        });
+  const userId = session.user.id as string;
 
-        if (!user) {
-            return NextResponse.json(
-                { error: 'Kullanıcı bulunamadı' },
-                { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
+  const [user, feedbacks, userBadges, userRewards, consumptions] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { createdAt: true, name: true, level: true, points: true },
+    }),
+    prisma.feedback.findMany({
+      where: { userId, deletedAt: null } as { userId: string; deletedAt: null },
+      select: { id: true, rating: true, sentiment: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+    prisma.userBadge.findMany({
+      where: { userId },
+      include: { badge: { select: { name: true, icon: true } } },
+      orderBy: { earnedAt: 'desc' },
+      take: 10,
+    }),
+    prisma.userReward.findMany({
+      where: { userId },
+      include: { reward: { select: { name: true, icon: true } } },
+      orderBy: { redeemedAt: 'desc' },
+      take: 10,
+    }),
+    prisma.consumption.findMany({
+      where: { customerId: userId },
+      select: { id: true, createdAt: true, amount: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+  ]);
 
-        // Fetch all possible events for the timeline
-        const [feedbacks, badges, claims, consumptions, vipStatus] = await Promise.all([
-            prisma.feedback.findMany({
-                where: { userId },
-                include: { qrCode: { select: { name: true, dealer: { select: { businessName: true } } } } },
-                orderBy: { createdAt: 'desc' },
-                take: 50,
-            }),
-            prisma.userBadge.findMany({
-                where: { userId },
-                include: { badge: { select: { name: true, description: true, icon: true } } },
-                orderBy: { earnedAt: 'desc' },
-                take: 50,
-            }),
-            prisma.userReward.findMany({
-                where: { userId },
-                include: { reward: { select: { name: true, icon: true } } },
-                orderBy: { redeemedAt: 'desc' },
-                take: 50,
-            }),
-            prisma.consumption.findMany({
-                where: { card: { customerId: userId } },
-                include: { product: { select: { name: true, category: { select: { icon: true } } } } },
-                orderBy: { createdAt: 'desc' },
-                take: 50,
-            }),
-            prisma.userVIPStatus.findUnique({
-                where: { userId },
-                include: { tier: { select: { name: true } } },
-            }),
-        ]);
+  type TimelineEvent = {
+    id: string;
+    type: 'register' | 'feedback' | 'badge' | 'reward' | 'consumption' | 'vip';
+    title: string;
+    description: string;
+    icon: string;
+    date: string;
+    color: string;
+    metadata?: Record<string, unknown>;
+  };
 
-        type TimelineEvent = {
-            id: string;
-            type: 'register' | 'feedback' | 'badge' | 'reward' | 'consumption' | 'vip';
-            title: string;
-            description: string;
-            icon: string;
-            date: string;
-            color: string;
-            metadata?: any;
-        };
+  const events: TimelineEvent[] = [];
 
-        const events: TimelineEvent[] = [];
+  // Register event
+  if (user) {
+    events.push({
+      id: `register-${userId}`,
+      type: 'register',
+      title: 'Yolculuk Başladı',
+      description: `${user.name || 'Müşteri'} QRATEX platformuna katıldı!`,
+      icon: '🚀',
+      date: user.createdAt.toISOString(),
+      color: 'primary',
+    });
+  }
 
-        // 1. Account Creation
-        events.push({
-            id: 'register',
-            type: 'register',
-            title: 'QRATEX Ailesine Katıldın 🎉',
-            description: 'Yolculuğun burada başladı!',
-            icon: '🚀',
-            date: user.createdAt.toISOString(),
-            color: 'violet',
-        });
+  // Feedback events
+  for (const f of feedbacks) {
+    events.push({
+      id: `feedback-${f.id}`,
+      type: 'feedback',
+      title: f.rating >= 4 ? 'Olumlu Geri Bildirim' : f.rating <= 2 ? 'Geri Bildirim Verildi' : 'Geri Bildirim',
+      description: `${f.rating}/5 puan ile geri bildirim verildi.`,
+      icon: f.rating >= 4 ? '⭐' : '💬',
+      date: f.createdAt.toISOString(),
+      color: f.rating >= 4 ? 'emerald' : f.rating <= 2 ? 'amber' : 'blue',
+      metadata: { rating: f.rating, sentiment: f.sentiment },
+    });
+  }
 
-        // 2. Feedbacks
-        feedbacks.forEach((f: any) => {
-            events.push({
-                id: `fb_${f.id}`,
-                type: 'feedback',
-                title: `${f.qrCode?.dealer?.businessName || 'İşletme'} Ziyareti`,
-                description: f.rating >= 4 ? `${f.rating} yıldız verdin, harika bir gün!` : `${f.rating} yıldız verdin.`,
-                icon: '⭐',
-                date: f.createdAt.toISOString(),
-                color: 'amber',
-                metadata: { rating: f.rating }
-            });
-        });
+  // Badge events
+  for (const ub of userBadges) {
+    events.push({
+      id: `badge-${ub.id}`,
+      type: 'badge',
+      title: `Rozet Kazanıldı: ${ub.badge.name}`,
+      description: `${ub.badge.name} rozeti başarıyla kazanıldı!`,
+      icon: ub.badge.icon || '🏆',
+      date: ub.earnedAt.toISOString(),
+      color: 'amber',
+    });
+  }
 
-        // 3. Badges
-        badges.forEach((b: any) => {
-            events.push({
-                id: `badge_${b.id}`,
-                type: 'badge',
-                title: 'Yeni Bir Rozet Kazandın!',
-                description: `${b.badge.name} - ${b.badge.description}`,
-                icon: b.badge.icon || '🏅',
-                date: b.earnedAt.toISOString(),
-                color: 'emerald',
-            });
-        });
+  // Reward events
+  for (const ur of userRewards) {
+    events.push({
+      id: `reward-${ur.id}`,
+      type: 'reward',
+      title: `Ödül Talep Edildi: ${ur.reward.name}`,
+      description: `${ur.reward.name} ödülü talep edildi.`,
+      icon: ur.reward.icon || '🎁',
+      date: ur.redeemedAt.toISOString(),
+      color: 'primary',
+    });
+  }
 
-        // 4. Reward Claims
-        claims.forEach((c: any) => {
-            events.push({
-                id: `reward_${c.id}`,
-                type: 'reward',
-                title: 'Ödül Kullanıldı 🎁',
-                description: `${c.reward.name} ödülünün tadını çıkardın.`,
-                icon: c.reward.icon || '🎁',
-                date: (c.claimedAt || c.redeemedAt).toISOString(),
-                color: 'pink',
-            });
-        });
+  // Consumption events
+  for (const c of consumptions) {
+    events.push({
+      id: `consumption-${c.id}`,
+      type: 'consumption',
+      title: 'Tüketim Gerçekleşti',
+      description: c.amount ? `${c.amount.toLocaleString('tr-TR')} ₺ tutarında tüketim.` : 'Tüketim kaydedildi.',
+      icon: '☕',
+      date: c.createdAt.toISOString(),
+      color: 'blue',
+    });
+  }
 
-        // 5. Consumptions
-        consumptions.forEach((c: any) => {
-            events.push({
-                id: `cons_${c.id}`,
-                type: 'consumption',
-                title: 'Yeni Tüketim',
-                description: c.product ? `${c.product.name} siparişi verdin.` : 'Bir tüketim kaydı oluşturuldu.',
-                icon: c.product?.category?.icon || '☕',
-                date: c.createdAt.toISOString(),
-                color: 'blue',
-            });
-        });
+  // Sort by date descending
+  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        // 6. VIP Status
-        if (vipStatus) {
-            events.push({
-                id: `vip_${vipStatus.id}`,
-                type: 'vip',
-                title: 'VIP Lige Yükseldin 👑',
-                description: `Artık ${vipStatus.tier.name} statüsündesin! Ayrıcalıkların tadını çıkar.`,
-                icon: '👑',
-                date: vipStatus.upgradedAt.toISOString(),
-                color: 'amber',
-            });
-        }
+  const stats = {
+    totalFeedbacks: feedbacks.length,
+    totalBadges: userBadges.length,
+    level: user?.level ?? 1,
+    points: user?.points ?? 0,
+  };
 
-        // Sort events chronologically (newest first)
-        events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        return NextResponse.json(
-            {
-                success: true,
-                timeline: events,
-                stats: {
-                    totalFeedbacks: feedbacks.length,
-                    totalBadges: badges.length,
-                    level: user.level ?? 1,
-                    points: user.points ?? 0,
-                },
-            },
-            { headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    } catch (error) {
-        console.error('Journey timeline error:', error);
-        return NextResponse.json(
-            { error: 'Timeline yüklenemedi' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    }
+  return NextResponse.json(
+    { success: true, timeline: events.slice(0, 30), stats },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

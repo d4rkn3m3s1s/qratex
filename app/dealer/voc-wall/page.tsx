@@ -218,7 +218,7 @@ function LiveTicker({ items }: { items: VoCItem[] }) {
               key={`${item.id}-${idx}`}
               className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium ${tone}`}
             >
-              <span className="truncate max-w-[260px]">{item.text || t('dealerVocWall.noComment')}</span>
+              <span className="truncate max-w-[120px] sm:max-w-[260px]">{item.text || t('dealerVocWall.noComment')}</span>
               <span className="opacity-70">•</span>
               <span>{item.locationName || t('dealerVocWall.locationFallback')}</span>
               <span className="opacity-70">•</span>
@@ -265,7 +265,7 @@ function LiveFeedStrip({ items }: { items: VoCItem[] }) {
             return (
               <div
                 key={`${item.id}-strip-${idx}`}
-                className="w-[240px] rounded-xl border border-border/70 bg-background/70 p-3"
+                className="w-[90vw] min-w-[140px] sm:w-[240px] rounded-xl border border-border/70 bg-background/70 p-2 sm:p-3"
               >
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -424,7 +424,7 @@ export default function DealerVoCWallPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4"
       >
         <Card className="overflow-hidden border-0 shadow-md bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30">
           <CardContent className="p-4 flex items-center gap-3">
@@ -479,7 +479,7 @@ export default function DealerVoCWallPage() {
       {/* Charts */}
       <div className="grid lg:grid-cols-3 gap-6">
         <motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ y: -3 }}>
-          <Card className="h-full">
+          <Card className="h-full overflow-x-auto md:overflow-x-visible">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <ThumbsUp className="h-4 w-4 text-emerald-500" />
@@ -576,16 +576,6 @@ export default function DealerVoCWallPage() {
                 >
                   <Card className={`h-full overflow-hidden border-l-4 ${borderColor} hover:shadow-lg transition-shadow bg-gradient-to-r ${bgGlow}`}>
                     <CardContent className="p-4">
-                      <motion.div
-                        className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-primary/70 to-transparent"
-                        animate={{ opacity: [0.2, 1, 0.2], scaleX: [0.85, 1.1, 0.85] }}
-                        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', delay: i * 0.08 }}
-                      />
-                      <motion.div
-                        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-                        animate={{ x: ['-120%', '140%'] }}
-                        transition={{ duration: 4.6, ease: 'linear', repeat: Infinity, delay: i * 0.12 }}
-                      />
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <div className="flex">

@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { formatRelativeTime } from '@/lib/utils';
+import { useAppT } from '@/lib/app-locale';
 
 export default function StaffFieldPage() {
+  const t = useAppT();
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [pings, setPings] = useState<Array<{ id: string; createdAt: string; data: unknown }>>([]);
@@ -62,7 +64,7 @@ export default function StaffFieldPage() {
         body: JSON.stringify({ note: note || undefined, latitude, longitude }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'Gönderilemedi');
+      if (!r.ok) throw new Error(j.error || t('common.failedToSubmit'));
       toast.success('Saha ping kaydedildi');
       setNote('');
       void load();

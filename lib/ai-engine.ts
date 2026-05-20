@@ -1029,3 +1029,61 @@ export default {
   getRecentUsageLogs,
   getFallbackStats,
 };
+/**
+ * Geri bildirime üsluba göre AI yanıtı üretir
+ */
+export async function generateAutoReply(
+  feedbackText: string,
+  rating: number,
+  toneSlug: string,
+  dealerId?: string
+): Promise<string | null> {
+  const client = getAIClient();
+  if (!client) return null;
+
+  const startTime = Date.now();
+  
+  // 1. Veritabanından üslubu getir
+  const dbTone = await import('@/lib/prisma').then(m => m.prisma.aITone.findUnique({
+    where: { slug: toneSlug, isActive: true }
+  }));
+
+  const fallbackToneMap: Record<string, string> = {
+    formal: 'Resmi, kurumsal ve nazik',
+    friendly: 'Samimi, sıcak ve arkadaş canlısı',
+    humorous: 'Esprili, enerjik ve eğlenceli',
+    professional: 'Profesyonel, çözüm odaklı ve ciddi',
+  };
+
+  const systemPrompt = dbTone?.systemPrompt || `Sen bir müşteri ilişkileri uzmanısın. İşletme adına müşteri geri bildirimlerine yanıt veriyorsun.
+    Üslubun: ${fallbackToneMap[toneSlug] || fallbackToneMap.professional} olmalı.
+    Kısa, öz ve müşteriyi değerli hissettiren bir yanıt yaz.
+    Yanıtın dili geri bildirimle aynı olsun (Türkçe).
+    Eğer puan düşükse (1-2) özür dile ve çözüm odaklı ol.
+    Eğer puan yüksekse (4-5) teşekkür et ve tekrar beklediğini belirt.`;
+
+  try {
+    const response = await withRetry(() =>
+      client.chat.completions.create({
+        model: getModel(),
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: `Müşteri Puanı: ${rating}/5\nMüşteri Yorumu: "${feedbackText}"\n\nBu geri bildirime uygun bir yanıt üret.`
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+      })
+    );
+
+    const reply = response.choices[0]?.message?.content?.trim() || null;
+    logAIUsage('auto_reply', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, true);
+    return reply;
+  } catch (error) {
+    console.error('Error generating auto reply:', error);
+    return null;
+  }
+}
+

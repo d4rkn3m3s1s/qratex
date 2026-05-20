@@ -76,6 +76,12 @@ export function NotificationCenter() {
     const t = useAppT();
     const dateFnsLocale = locale === 'en' ? enUS : tr;
 
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     const formatTime = useCallback((dateString: string) => {
         try {
             return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: dateFnsLocale });
@@ -233,6 +239,21 @@ export function NotificationCenter() {
     const filteredNotifications = filter === 'unread'
         ? notifications.filter((n) => !n.isRead)
         : notifications;
+
+    if (!mounted) {
+        return (
+            <Button
+                variant="ghost"
+                size="icon"
+                type="button"
+                className="relative h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                disabled
+                aria-label={t('notificationCenter.trigger')}
+            >
+                <Bell className="h-[18px] w-[18px] opacity-50" aria-hidden />
+            </Button>
+        );
+    }
 
     return (
         <>

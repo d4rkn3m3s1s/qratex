@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { t, Locale, defaultLocale } from '@/i18n/request';
 import { LOCALE_STORAGE_KEY, writeLocaleCookieClient } from '@/lib/locale-shared';
+import { triggerConfetti } from '@/lib/effects/confetti';
 
 interface QRCodeData {
   id: string;
@@ -39,6 +40,7 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rewardData, setRewardData] = useState<{ points: number; xp: number; leveledUp: boolean; newLevel: number | null } | null>(null);
 
   // Form state
   const [rating, setRating] = useState(0);
@@ -128,7 +130,18 @@ export default function FeedbackPage() {
         return;
       }
 
+      const data = await response.json();
       setSubmitted(true);
+      setRewardData(data.reward || null);
+
+      if (data.reward?.leveledUp) {
+        // Seviye atlayınca havai fişek!
+        const { triggerRewardShower } = await import('@/lib/effects/confetti');
+        triggerRewardShower();
+      } else {
+        triggerConfetti(); // Qratex 2.0 Celebration!
+      }
+      
       toast.success('Geri bildiriminiz için teşekkürler! 🎉');
     } catch (err) {
       toast.error('Bir hata oluştu');
@@ -218,13 +231,26 @@ export default function FeedbackPage() {
               <h2 className="text-2xl font-bold mb-2">{t(locale, 'publicFeedback.successMsg')}</h2>
               <p className="text-muted-foreground mb-6">
                 {t(locale, 'publicFeedback.successMsg')}
-                {session?.user && (
-                  <>
-                    <br />
-                    <span className="text-primary font-medium">
-                      +{text.trim().length > 50 ? 100 : 50} {t(locale, 'publicFeedback.pointsEarned')}
-                    </span>
-                  </>
+                {rewardData && (
+                  <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Kazanılan</span>
+                      <div className="flex gap-2">
+                        {rewardData.points > 0 && <span className="text-sm font-bold text-amber-500">+{rewardData.points} Puan</span>}
+                        {rewardData.xp > 0 && <span className="text-sm font-bold text-primary">+{rewardData.xp} XP</span>}
+                      </div>
+                    </div>
+                    {rewardData.leveledUp && (
+                      <motion.div 
+                        initial={{ y: 10, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="pt-2 border-t border-primary/20 flex flex-col items-center gap-1"
+                      >
+                        <span className="text-lg font-black text-primary animate-bounce">SEVİYE ATLADIN! 🆙</span>
+                        <span className="text-xs font-bold text-muted-foreground">Yeni Seviye: {rewardData.newLevel}</span>
+                      </motion.div>
+                    )}
+                  </div>
                 )}
               </p>
               <div className="space-y-3">

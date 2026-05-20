@@ -103,7 +103,7 @@ export default function CustomerScanPage() {
           (decodedText) => {
             const extracted = extractCodeFromDecoded(decodedText);
             if (!extracted) return;
-            qr.stop().then(() => {
+            qr.stop().catch(() => {}).then(() => {
               html5QrRef.current = null;
               setCameraOpen(false);
               validateAndGo(router, extracted).then((ok) => {
@@ -123,7 +123,7 @@ export default function CustomerScanPage() {
     })();
     return () => {
       mounted = false;
-      if (html5QrRef.current) {
+      if (html5QrRef.current?.isScanning) {
         html5QrRef.current.stop().catch(() => {});
         html5QrRef.current.clear();
         html5QrRef.current = null;

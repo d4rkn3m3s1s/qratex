@@ -68,20 +68,6 @@ export default function AdminDesignLanguagePage() {
           <ExternalLink className="size-3.5 opacity-70" aria-hidden />
         </Link>
         <Link
-          href="/customer/experience-guide"
-          title={t('adminDesignLanguage.linkCustomerExperienceGuideHint')}
-          className="rounded-xl border border-border/80 bg-card px-4 py-2.5 text-sm font-medium hover:border-primary/30"
-        >
-          {t('adminDesignLanguage.linkCustomerExperienceGuide')}
-        </Link>
-        <Link
-          href="/dealer/experience-guide"
-          title={t('adminDesignLanguage.linkDealerExperienceGuideHint')}
-          className="rounded-xl border border-border/80 bg-card px-4 py-2.5 text-sm font-medium hover:border-primary/30"
-        >
-          {t('adminDesignLanguage.linkDealerExperienceGuide')}
-        </Link>
-        <Link
           href="/admin/settings?tab=auth"
           className="rounded-xl border border-border/80 bg-card px-4 py-2.5 text-sm font-medium hover:border-primary/30"
         >

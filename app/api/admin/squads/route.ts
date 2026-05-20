@@ -1,111 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
 
 export const dynamic = 'force-dynamic';
 
-const FREEZE_KEY = 'admin_frozen_squads';
+export async function GET(req: NextRequest) {
+  try {
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
-async function getFrozenSquadIds(): Promise<string[]> {
-  const row = await prisma.settings.findUnique({
-    where: { key: FREEZE_KEY },
-    select: { value: true },
-  });
-  if (!row?.value || typeof row.value !== 'object' || Array.isArray(row.value)) return [];
-  const arr = (row.value as { squadIds?: unknown }).squadIds;
-  return Array.isArray(arr) ? arr.map(String) : [];
-}
+    const { searchParams } = new URL(req.url);
+    const q = searchParams.get('q') || '';
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const sort = searchParams.get('sort') || 'newest';
 
-async function saveFrozenSquadIds(ids: string[]) {
-  await prisma.settings.upsert({
-    where: { key: FREEZE_KEY },
-    create: { key: FREEZE_KEY, category: 'admin', value: { squadIds: ids } as object },
-    update: { value: { squadIds: ids } as object },
-  });
-}
+    const skip = (page - 1) * pageSize;
 
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
+    // Build where clause
+    const where: any = {};
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { inviteCode: { contains: q, mode: 'insensitive' } },
+        { owner: { email: { contains: q, mode: 'insensitive' } } },
+        { owner: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
 
-  const { searchParams } = new URL(request.url);
-  const q = (searchParams.get('q') || '').trim();
-  const page = Math.max(1, Number(searchParams.get('page') || '1'));
-  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || '20')));
-  const sort = searchParams.get('sort') || 'newest';
-  const where = q
-    ? {
-        OR: [
-          { name: { contains: q, mode: 'insensitive' as const } },
-          { inviteCode: { contains: q, mode: 'insensitive' as const } },
-          { owner: { email: { contains: q, mode: 'insensitive' as const } } },
-        ],
-      }
-    : {};
+    // Build orderBy
+    let orderBy: any = { createdAt: 'desc' };
+    if (sort === 'oldest') orderBy = { createdAt: 'asc' };
+    if (sort === 'members_desc') orderBy = { members: { _count: 'desc' } };
+    if (sort === 'members_asc') orderBy = { members: { _count: 'asc' } };
 
-  const orderBy =
-    sort === 'members_desc'
-      ? [{ members: { _count: 'desc' as const } }]
-      : sort === 'members_asc'
-        ? [{ members: { _count: 'asc' as const } }]
-        : sort === 'oldest'
-          ? [{ createdAt: 'asc' as const }]
-          : [{ createdAt: 'desc' as const }];
-
-  const [squads, memberCount, totalSquads, frozenIds] = await Promise.all([
-    prisma.squad.findMany({
-      where,
-      orderBy,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        owner: { select: { id: true, name: true, email: true } },
-        members: {
-          select: {
-            id: true,
-            user: { select: { id: true, name: true, email: true, points: true } },
-          },
+    // Fetch data
+    const [squads, total, stats] = await Promise.all([
+      prisma.squad.findMany({
+        where,
+        include: {
+          owner: { select: { name: true, email: true } },
+          members: { include: { user: { select: { name: true, email: true, points: true } } } },
         },
-      },
-    }),
-    prisma.squadMember.count(),
-    prisma.squad.count({ where }),
-    getFrozenSquadIds(),
-  ]);
+        orderBy,
+        skip,
+        take: pageSize,
+      }),
+      prisma.squad.count({ where }),
+      prisma.$transaction([
+        prisma.squad.count(),
+        prisma.squadMember.count(),
+      ]),
+    ]);
 
-  return NextResponse.json({
-    success: true,
-    stats: {
-      totalSquads,
-      totalMembers: memberCount,
-      avgMembersPerSquad: totalSquads > 0 ? Number((memberCount / totalSquads).toFixed(2)) : 0,
-    },
-    pagination: {
-      page,
-      pageSize,
-      total: totalSquads,
-      totalPages: Math.max(1, Math.ceil(totalSquads / pageSize)),
-    },
-    squads: squads.map((s) => ({ ...s, isFrozen: frozenIds.includes(s.id) })),
-  }, { headers: PRIVATE_NO_STORE_HEADERS });
+    const [totalSquads, totalMembers] = stats;
+
+    return NextResponse.json({
+      success: true,
+      squads,
+      stats: {
+        totalSquads,
+        totalMembers,
+        avgMembersPerSquad: totalSquads > 0 ? (totalMembers / totalSquads).toFixed(1) : 0,
+      },
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin squads:', error);
+    return NextResponse.json({ error: 'Klanlar getirilemedi' }, { status: 500 });
+  }
 }
 
-export async function PATCH(request: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
+export async function PATCH(req: Request) {
+  try {
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
 
-  const body = await request.json().catch(() => ({}));
-  const squadId = String(body?.squadId || '');
-  const action = String(body?.action || '');
-  if (!squadId || (action !== 'freeze' && action !== 'unfreeze')) {
-    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    const { squadId, action } = await req.json();
+
+    if (action === 'freeze' || action === 'unfreeze') {
+      await prisma.squad.update({
+        where: { id: squadId },
+        data: { isFrozen: action === 'freeze' },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: 'Geçersiz aksiyon' }, { status: 400 });
+  } catch (error) {
+    console.error('Error updating squad:', error);
+    return NextResponse.json({ error: 'Squad güncellenemedi' }, { status: 500 });
   }
-
-  const ids = await getFrozenSquadIds();
-  const next =
-    action === 'freeze' ? Array.from(new Set([...ids, squadId])) : ids.filter((id) => id !== squadId);
-  await saveFrozenSquadIds(next);
-  return NextResponse.json({ success: true, frozenSquadIds: next }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
