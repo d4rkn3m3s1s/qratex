@@ -50,29 +50,37 @@ export async function runFeedbackAnalyzePipeline(feedbackId: string): Promise<Fe
     dealerId: feedback.dealerId,
   });
 
+  // Gerçek LLM yoksa (local-fallback) zayıf keyword sentiment'i gerçek AI gibi
+  // yazmayız — sadece kaba isToxic + etiket, aiProcessedAt NULL.
+  const isFallback = analysis.modelUsed === 'local-fallback';
   await prisma.feedback.update({
     where: { id: feedbackId },
-    data: {
-      sentiment: analysis.sentiment.label,
-      emotions: analysis.emotions.map((e) => e.label),
-      topics: analysis.topics,
-      isToxic: analysis.toxicity.isToxic,
-      aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-      intent: analysis.intent?.label || null,
-      intentScore: analysis.intent?.score || null,
-      urgency: analysis.urgency || null,
-      effortScore: analysis.effortScore || null,
-      churnRisk: analysis.churnRisk || null,
-      entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-      themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-      statementSentiments: analysis.statementSentiments
-        ? JSON.parse(JSON.stringify(analysis.statementSentiments))
-        : null,
-      actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-      aiProcessedAt: new Date(),
-      aiModelUsed: analysis.modelUsed || null,
-      aiVersion: analysis.version || null,
-    },
+    data: isFallback
+      ? {
+          isToxic: analysis.toxicity.isToxic,
+          aiModelUsed: 'local-fallback',
+        }
+      : {
+          sentiment: analysis.sentiment.label,
+          emotions: analysis.emotions.map((e) => e.label),
+          topics: analysis.topics,
+          isToxic: analysis.toxicity.isToxic,
+          aiAnalysis: JSON.parse(JSON.stringify(analysis)),
+          intent: analysis.intent?.label || null,
+          intentScore: analysis.intent?.score || null,
+          urgency: analysis.urgency || null,
+          effortScore: analysis.effortScore || null,
+          churnRisk: analysis.churnRisk || null,
+          entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
+          themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
+          statementSentiments: analysis.statementSentiments
+            ? JSON.parse(JSON.stringify(analysis.statementSentiments))
+            : null,
+          actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
+          aiProcessedAt: new Date(),
+          aiModelUsed: analysis.modelUsed || null,
+          aiVersion: analysis.version || null,
+        },
   });
 
   if (analysis.toxicity.isToxic) {

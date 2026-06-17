@@ -27,14 +27,22 @@ export default async function DealerWinBackPage() {
 
     const consumptions = await prisma.consumption.findMany({
         where: { dealerId },
-        select: { customerId: true, createdAt: true },
+        select: { customerId: true, createdAt: true, amount: true },
         orderBy: { createdAt: 'desc' }
     });
 
     const latestVisits = new Map<string, Date>();
+    // Müşteri başına GERÇEK ortalama harcama (amount kayıtlarından).
+    const spendAgg = new Map<string, { sum: number; n: number }>();
     consumptions.forEach(c => {
         if (!latestVisits.has(c.customerId)) {
             latestVisits.set(c.customerId, c.createdAt);
+        }
+        if (c.amount != null) {
+            const e = spendAgg.get(c.customerId) ?? { sum: 0, n: 0 };
+            e.sum += Number(c.amount);
+            e.n += 1;
+            spendAgg.set(c.customerId, e);
         }
     });
 
@@ -47,10 +55,14 @@ export default async function DealerWinBackPage() {
         select: { id: true, name: true, email: true, image: true }
     });
 
-    const radarData = sleepingUsers.map(u => ({
-        ...u,
-        lastVisit: latestVisits.get(u.id)!
-    }));
+    const radarData = sleepingUsers.map(u => {
+        const agg = spendAgg.get(u.id);
+        return {
+            ...u,
+            lastVisit: latestVisits.get(u.id)!,
+            avgSpend: agg && agg.n > 0 ? agg.sum / agg.n : null,
+        };
+    });
 
     const radarScopeContacts: RadarScopeContact[] = radarData.map((u) => ({
         id: u.id,
@@ -60,7 +72,11 @@ export default async function DealerWinBackPage() {
         lastVisitIso: u.lastVisit.toISOString(),
     }));
 
-    const potentialRevenue = radarData.length * 200; // Mock calculation
+    // Tahmini geri kazanım geliri = uyuyan müşterilerin GERÇEK ortalama
+    // harcamalarının toplamı (sabit varsayım değil, geçmiş veriye dayalı).
+    const potentialRevenue = Math.round(
+        radarData.reduce((sum, r) => sum + (r.avgSpend ?? 0), 0)
+    );
 
     return (
         <div className="space-y-6">

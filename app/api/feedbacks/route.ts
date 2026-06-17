@@ -381,27 +381,39 @@ export async function POST(request: NextRequest) {
 
             analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
               try {
+                // Gerçek LLM yoksa analyzeWithFallback 'local-fallback' döndürür.
+                // Bu durumda zayıf keyword-tabanlı sentiment'i "işlenmiş AI sonucu"
+                // gibi sunmayız: sadece kaba sentiment + isToxic yazıp aiProcessedAt'i
+                // NULL bırakırız (UI'da "AI bekliyor / yapılandırılmamış" görünür).
+                const isFallback = analysis.modelUsed === 'local-fallback';
                 await prisma.feedback.update({
                   where: { id: feedback.id },
-                  data: {
-                    sentiment: analysis.sentiment.label,
-                    emotions: analysis.emotions.map(e => e.label),
-                    topics: analysis.topics,
-                    isToxic: analysis.toxicity.isToxic,
-                    aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-                    intent: analysis.intent?.label || null,
-                    intentScore: analysis.intent?.score || null,
-                    urgency: analysis.urgency || null,
-                    effortScore: analysis.effortScore || null,
-                    churnRisk: analysis.churnRisk || null,
-                    entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-                    themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-                    statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
-                    actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-                    aiProcessedAt: new Date(),
-                    aiModelUsed: analysis.modelUsed || null,
-                    aiVersion: analysis.version || null,
-                  },
+                  data: isFallback
+                    ? {
+                        // Yalnızca güvenli, kaba sinyaller — gerçek AI alanları boş.
+                        isToxic: analysis.toxicity.isToxic,
+                        aiModelUsed: 'local-fallback',
+                        // aiProcessedAt bilerek set EDİLMEZ → "gerçek AI işlendi" izlenimi verilmez.
+                      }
+                    : {
+                        sentiment: analysis.sentiment.label,
+                        emotions: analysis.emotions.map(e => e.label),
+                        topics: analysis.topics,
+                        isToxic: analysis.toxicity.isToxic,
+                        aiAnalysis: JSON.parse(JSON.stringify(analysis)),
+                        intent: analysis.intent?.label || null,
+                        intentScore: analysis.intent?.score || null,
+                        urgency: analysis.urgency || null,
+                        effortScore: analysis.effortScore || null,
+                        churnRisk: analysis.churnRisk || null,
+                        entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
+                        themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
+                        statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
+                        actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
+                        aiProcessedAt: new Date(),
+                        aiModelUsed: analysis.modelUsed || null,
+                        aiVersion: analysis.version || null,
+                      },
                 });
                 if (analysis.toxicity.isToxic) {
                   await prisma.notification.create({ data: { userId: dealerId, title: '⚠️ Toksik İçerik Tespit Edildi', message: 'Bir geri bildirimde uygunsuz içerik tespit edildi.', type: 'warning' } });

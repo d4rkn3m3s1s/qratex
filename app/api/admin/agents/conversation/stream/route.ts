@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { AGENT_PERSONAS } from '@/lib/agent-personas';
-import { generateDialogueRound } from '@/lib/agent-dialogue';
+import { generateDialogueRoundLive, councilLLMAvailable, type DialogueMessage } from '@/lib/agent-dialogue';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
@@ -22,10 +23,9 @@ export async function GET(req: NextRequest) {
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       let closed = false;
-      let round = 0;
-      let messages: any[] = [];
+      const mode = councilLLMAvailable() ? 'live' : 'demo';
 
       const send = (event: string, payload: unknown) => {
         if (closed) return;
@@ -33,42 +33,41 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
       };
 
-      send('meta', { topic, personas: AGENT_PERSONAS });
-
-      const tick = () => {
-        if (closed) return;
-        round += 1;
-        const state = generateDialogueRound(topic, messages, round);
-        messages = state.messages;
-        const newRoundMessages = state.messages.filter((m) => m.round === round);
-        send('round', { round, messages: newRoundMessages, decision: state.decision ?? null });
-
-        if (state.decision || round >= 6) {
-          send('done', state);
-          closed = true;
-          controller.close();
-          return;
-        }
-        setTimeout(tick, 1650);
-      };
-
-      const timer = setTimeout(tick, 500);
       const heartbeat = setInterval(() => {
         if (closed) return;
         controller.enqueue(encoder.encode(': keepalive\n\n'));
       }, 10000);
 
-      // safety cleanup in case client disconnects
       req.signal.addEventListener('abort', () => {
         closed = true;
-        clearTimeout(timer);
         clearInterval(heartbeat);
-        try {
-          controller.close();
-        } catch {
-          // ignore
-        }
+        try { controller.close(); } catch { /* ignore */ }
       });
+
+      send('meta', { topic, personas: AGENT_PERSONAS, mode });
+
+      try {
+        let messages: DialogueMessage[] = [];
+        // Her tur GERÇEK LLM çağrısı yapar (4 ajan + nihai sentez).
+        for (let round = 1; round <= 4 && !closed; round++) {
+          const state = await generateDialogueRoundLive(topic, messages, round);
+          messages = state.messages;
+          const newRoundMessages = state.messages.filter((m) => m.round === round);
+          send('round', { round, messages: newRoundMessages, decision: state.decision ?? null, live: state.live });
+
+          if (state.decision) {
+            send('done', state);
+            break;
+          }
+        }
+      } catch (error) {
+        send('error', { message: 'Konsey üretimi sırasında hata oluştu' });
+        console.error('Council stream error:', error);
+      } finally {
+        closed = true;
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* ignore */ }
+      }
     },
   });
 

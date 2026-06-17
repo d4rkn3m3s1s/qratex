@@ -70,6 +70,83 @@ function getModelProvider(): string {
   return 'none';
 }
 
+/** Gerçek bir LLM sağlayıcısı yapılandırılmış mı? (Groq veya OpenAI) */
+export function isAIConfigured(): boolean {
+  return getAIClient() !== null;
+}
+
+/** UI/health için sağlayıcı + model bilgisi. */
+export function getAIProviderStatus(): { configured: boolean; provider: string; model: string | null } {
+  const configured = isAIConfigured();
+  return {
+    configured,
+    provider: getModelProvider(),
+    model: configured ? getModel() : null,
+  };
+}
+
+/**
+ * Genel amaçlı LLM chat completion. Gerçek sağlayıcı yoksa null döner
+ * (sahte/şablon yanıt ÜRETMEZ — çağıran taraf dürüstçe degraded davranır).
+ * Agent Council ve diğer üretken akışlar bunu kullanır.
+ */
+export async function runChatCompletion(params: {
+  system: string;
+  user: string;
+  temperature?: number;
+  maxTokens?: number;
+  jsonMode?: boolean;
+  dealerId?: string;
+}): Promise<{ content: string; modelUsed: string } | null> {
+  const client = getAIClient();
+  if (!client) return null;
+
+  if (detectPromptInjection(params.user)) {
+    console.warn('[AI] Prompt injection detected in runChatCompletion input');
+    return null;
+  }
+
+  if (params.dealerId) {
+    await checkAiCostGuard(params.dealerId);
+  }
+
+  const start = Date.now();
+  try {
+    const response = await withRetry(() =>
+      client.chat.completions.create({
+        model: getModel(),
+        messages: [
+          { role: 'system', content: params.system },
+          { role: 'user', content: params.user },
+        ],
+        temperature: params.temperature ?? 0.6,
+        max_tokens: params.maxTokens ?? 900,
+        ...(params.jsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+      })
+    );
+    const content = response.choices[0]?.message?.content;
+    if (!content) return null;
+    const latencyMs = Date.now() - start;
+    const modelUsed = `${getModelProvider()}/${getModel()}`;
+    logAIUsage('chat_completion', modelUsed, latencyMs, true);
+    if (params.dealerId) {
+      await recordAiCostUsage(
+        params.dealerId,
+        response.usage?.prompt_tokens ?? 0,
+        response.usage?.completion_tokens ?? 0,
+        'chat_completion',
+        modelUsed,
+        latencyMs
+      );
+    }
+    return { content, modelUsed };
+  } catch (error) {
+    logAIUsage('chat_completion', getModel(), Date.now() - start, false, error instanceof Error ? error.message : 'unknown');
+    console.error('[AI] runChatCompletion failed:', error);
+    return null;
+  }
+}
+
 // Retry logic
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 3000;

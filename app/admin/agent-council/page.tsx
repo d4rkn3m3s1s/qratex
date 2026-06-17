@@ -75,6 +75,8 @@ export default function AgentCouncilPage() {
   const [running, setRunning] = useState(false);
   const [run, setRun] = useState<AgentRun | null>(null);
   const [round, setRound] = useState(0);
+  /** 'live' = gerçek LLM, 'demo' = AI yapılandırılmamış (şablon). */
+  const [councilMode, setCouncilMode] = useState<'live' | 'demo' | null>(null);
   const streamRef = useRef<EventSource | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
   const [dealers, setDealers] = useState<{ id: string; label: string }[]>([]);
@@ -221,6 +223,7 @@ export default function AgentCouncilPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Konsey başlatılamadı');
+      setCouncilMode(data.mode === 'live' ? 'live' : 'demo');
       setRun({ ...data.state, personas: data.personas ?? councilPersonasForUi() });
       setRound(data.state.round);
       toast.success(newConversation ? 'Konsey tartışması başladı' : 'Yeni tur eklendi');
@@ -248,6 +251,7 @@ export default function AgentCouncilPage() {
 
     es.addEventListener('meta', (evt) => {
       const data = JSON.parse((evt as MessageEvent).data);
+      setCouncilMode(data.mode === 'live' ? 'live' : 'demo');
       setRun({ topic: data.topic, round: 0, messages: [], personas: data.personas ?? councilPersonasForUi() });
     });
 
@@ -341,6 +345,27 @@ export default function AgentCouncilPage() {
           </div>
         }
       />
+
+      {councilMode === 'demo' && (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm"
+          role="status"
+        >
+          <span className="mt-0.5 rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+            Demo
+          </span>
+          <span className="text-amber-950 dark:text-amber-100">
+            Gerçek LLM yapılandırılmamış (GROQ_API_KEY / OPENAI_API_KEY yok). Konsey diyalogları
+            <strong> şablon metinlerdir</strong>, canlı yapay zeka çıktısı değildir. Gerçek konsey için bir AI sağlayıcı anahtarı tanımlayın.
+          </span>
+        </div>
+      )}
+
+      {councilMode === 'live' && run && !running && run.decision && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2 text-xs font-medium text-emerald-900 dark:text-emerald-100">
+          <Sparkles className="h-3.5 w-3.5" /> Canlı LLM ile üretildi
+        </div>
+      )}
 
       {viewingHistoryRun && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm">
