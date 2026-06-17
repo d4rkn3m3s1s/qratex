@@ -113,6 +113,16 @@ export const analyticsEventCleanupFn = inngest.createFunction(
   }
 );
 
+export const rateLimitCleanupFn = inngest.createFunction(
+  { id: 'rate-limit-cleanup', retries: 2 },
+  { cron: '15 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-rate-limit-cleanup', () =>
+      invokeInternalCron('/api/internal/inngest/rate-limit-cleanup')
+    );
+  }
+);
+
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
   { cron: '0 */6 * * *' },

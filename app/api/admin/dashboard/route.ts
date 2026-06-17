@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { ADMIN_DASHBOARD_TAG } from '@/lib/cache-tags';
 
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
-
+/**
+ * Admin dashboard verisi tamamen toplulaştırma (viewer'a özel veri YOK) ve her
+ * yüklemede ~24 sorgu çalıştırıyordu. unstable_cache ile 60sn tag'lı cache:
+ * feedback/consumption mutation'larında revalidateTag(ADMIN_DASHBOARD_TAG) ile
+ * bayatlatılabilir. Auth cache DIŞINDA kalır (her istek yetki kontrolünden geçer).
+ */
+const getDashboardData = unstable_cache(
+  async () => {
     // Get date ranges
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -277,8 +282,8 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    return NextResponse.json({
-      success: true,
+    return {
+      success: true as const,
       stats,
       recentUsers,
       recentFeedbacks: allRecentReviews,
@@ -297,7 +302,19 @@ export async function GET(request: NextRequest) {
         ...cardStats,
       },
       cardStats,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
+    };
+  },
+  ['admin-dashboard'],
+  { revalidate: 60, tags: [ADMIN_DASHBOARD_TAG] }
+);
+
+export async function GET(_request: NextRequest) {
+  try {
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+
+    const data = await getDashboardData();
+    return NextResponse.json(data, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching admin dashboard:', error);
     return NextResponse.json(
