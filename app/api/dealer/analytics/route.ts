@@ -255,24 +255,28 @@ export async function GET(request: NextRequest) {
       dayOfWeekData[dayOfWeek].count++;
     });
 
-    // Top QR codes
+    // Top QR codes — önceden her qrCode için qrFeedbacksFlat.filter() (O(qr×fb),
+    // 200 QR × binlerce feedback). Artık feedback'ler tek geçişte qrCodeId Map'ine
+    // indirilir; her qrCode O(1) okur (O(qr+fb)).
+    const qrStats = new Map<string, { count: number; ratingSum: number; positive: number }>();
+    for (const f of qrFeedbacksFlat) {
+      if (new Date(f.createdAt) < startDate) continue;
+      const e = qrStats.get(f.qrCodeId) ?? { count: 0, ratingSum: 0, positive: 0 };
+      e.count += 1;
+      e.ratingSum += f.rating;
+      if (f.sentiment === 'positive') e.positive += 1;
+      qrStats.set(f.qrCodeId, e);
+    }
     const topQRCodes = qrCodes
       .map((q) => {
-        const qrFeedbacks = qrFeedbacksFlat.filter(
-          (f) => f.qrCodeId === q.id && new Date(f.createdAt) >= startDate
-        );
-        const qrAvgRating =
-          qrFeedbacks.length > 0
-            ? qrFeedbacks.reduce((acc, f) => acc + f.rating, 0) / qrFeedbacks.length
-            : 0;
-        const qrPositive = qrFeedbacks.filter((f) => f.sentiment === 'positive').length;
+        const s = qrStats.get(q.id) ?? { count: 0, ratingSum: 0, positive: 0 };
+        const qrAvgRating = s.count > 0 ? s.ratingSum / s.count : 0;
         return {
           name: q.name,
           scans: q.scanCount,
-          feedbacks: qrFeedbacks.length,
+          feedbacks: s.count,
           rating: qrAvgRating.toFixed(1),
-          positiveRate:
-            qrFeedbacks.length > 0 ? Math.round((qrPositive / qrFeedbacks.length) * 100) : 0,
+          positiveRate: s.count > 0 ? Math.round((s.positive / s.count) * 100) : 0,
         };
       })
       .sort((a, b) => b.scans - a.scans)

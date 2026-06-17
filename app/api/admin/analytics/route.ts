@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -80,15 +81,7 @@ export async function GET(request: NextRequest) {
       prisma.user.findMany({
         where: { role: 'DEALER' },
         take: 10,
-        select: {
-          id: true, businessName: true, name: true,
-          qrCodes: {
-            select: {
-              _count: { select: { feedbacks: true } },
-              feedbacks: { select: { rating: true, sentiment: true } },
-            },
-          },
-        },
+        select: { id: true, businessName: true, name: true },
       }),
       prisma.feedback.findMany({
         where: { createdAt: { gte: startDate } },
@@ -228,24 +221,37 @@ export async function GET(request: NextRequest) {
     });
 
     // Top dealers with proper calculations
-    const formattedTopDealers = topDealers.map((dealer: any) => {
-      const allFeedbacks = dealer.qrCodes.flatMap((qr: any) => qr.feedbacks);
-      const totalFeedbackCount = allFeedbacks.length;
-      const avgDealerRating = totalFeedbackCount > 0
-        ? allFeedbacks.reduce((sum: number, f: any) => sum + f.rating, 0) / totalFeedbackCount
-        : 0;
+    // Önceden top-10 dealer'ın TÜM feedback satırları nested çekiliyordu (busy
+    // dealer'da büyük transfer). Artık dealer başına count/avg/positive tek SQL'de.
+    const topDealerIds = topDealers.map((d) => d.id);
+    const topDealerAgg = topDealerIds.length === 0 ? [] : await prisma.$queryRaw<
+      Array<{ dealerId: string; feedbackCount: bigint; avgRating: number | null; positiveCount: bigint }>
+    >(Prisma.sql`
+      SELECT q."dealerId" AS "dealerId",
+             COUNT(f."id") AS "feedbackCount",
+             AVG(f."rating") AS "avgRating",
+             COUNT(*) FILTER (WHERE f."sentiment" = 'positive') AS "positiveCount"
+      FROM "QRCode" q
+      JOIN "Feedback" f ON f."qrCodeId" = q."id"
+      WHERE q."dealerId" IN (${Prisma.join(topDealerIds)})
+        AND f."deletedAt" IS NULL
+      GROUP BY q."dealerId"
+    `);
+    const topAggByDealer = new Map(topDealerAgg.map((r) => [r.dealerId, r]));
+    const formattedTopDealers = topDealers.map((dealer) => {
+      const agg = topAggByDealer.get(dealer.id);
+      const totalFeedbackCount = Number(agg?.feedbackCount ?? 0);
       const positiveRate = totalFeedbackCount > 0
-        ? Math.round((allFeedbacks.filter((f: any) => f.sentiment === 'positive').length / totalFeedbackCount) * 100)
+        ? Math.round((Number(agg?.positiveCount ?? 0) / totalFeedbackCount) * 100)
         : 0;
-      
       return {
         id: dealer.id,
         name: dealer.businessName || dealer.name || 'İsimsiz İşletme',
         feedbackCount: totalFeedbackCount,
-        avgRating: Number(avgDealerRating.toFixed(1)),
+        avgRating: Number((agg?.avgRating != null ? Number(agg.avgRating) : 0).toFixed(1)),
         positiveRate,
       };
-    }).sort((a: any, b: any) => b.feedbackCount - a.feedbackCount).slice(0, 5);
+    }).sort((a, b) => b.feedbackCount - a.feedbackCount).slice(0, 5);
 
     // Recent activity
     const recentActivity: any[] = [];
@@ -392,28 +398,34 @@ export async function GET(request: NextRequest) {
       },
       take: 250,
     });
-    const dealerBenchRows = await Promise.all(
-      dealerBenchBase.map(async (dealer) => {
-        const feedbacks = await prisma.feedback.findMany({
-          where: {
-            qrCode: { dealerId: dealer.id },
-            createdAt: { gte: startDate },
-            deletedAt: null,
-          },
-          select: { rating: true },
-          take: 500,
-        });
-        const avgRatingRaw =
-          feedbacks.length > 0 ? feedbacks.reduce((s, f) => s + (f.rating || 0), 0) / feedbacks.length : 0;
-        return {
-          dealerId: dealer.id,
-          dealerName: dealer.businessName || dealer.name || 'İsimsiz işletme',
-          segment: dealer.businessCategory || 'general',
-          feedbackCount: feedbacks.length,
-          avgRating: Number(avgRatingRaw.toFixed(2)),
-        };
-      })
-    );
+    // Önceden 250 dealer × findMany(500) = ~125K satır transferi + JS ortalama.
+    // Artık tek SQL ile dealer başına AVG(rating) + COUNT (qrCode join, dönem filtreli).
+    const benchIds = dealerBenchBase.map((d) => d.id);
+    const benchAggRows = benchIds.length === 0 ? [] : await prisma.$queryRaw<
+      Array<{ dealerId: string; feedbackCount: bigint; avgRating: number | null }>
+    >(Prisma.sql`
+      SELECT q."dealerId" AS "dealerId",
+             COUNT(f."id") AS "feedbackCount",
+             AVG(f."rating") AS "avgRating"
+      FROM "QRCode" q
+      JOIN "Feedback" f ON f."qrCodeId" = q."id"
+      WHERE q."dealerId" IN (${Prisma.join(benchIds)})
+        AND f."deletedAt" IS NULL
+        AND f."createdAt" >= ${startDate}
+      GROUP BY q."dealerId"
+    `);
+    const benchByDealer = new Map(benchAggRows.map((r) => [r.dealerId, r]));
+    const dealerBenchRows = dealerBenchBase.map((dealer) => {
+      const agg = benchByDealer.get(dealer.id);
+      const count = Number(agg?.feedbackCount ?? 0);
+      return {
+        dealerId: dealer.id,
+        dealerName: dealer.businessName || dealer.name || 'İsimsiz işletme',
+        segment: dealer.businessCategory || 'general',
+        feedbackCount: count,
+        avgRating: Number((agg?.avgRating != null ? Number(agg.avgRating) : 0).toFixed(2)),
+      };
+    });
 
     const segmentStats = new Map<string, { ratings: number[] }>();
     for (const row of dealerBenchRows) {
