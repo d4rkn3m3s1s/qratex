@@ -123,6 +123,16 @@ export const rateLimitCleanupFn = inngest.createFunction(
   }
 );
 
+export const weeklyDigestFn = inngest.createFunction(
+  { id: 'weekly-digest', retries: 2 },
+  { cron: '0 8 * * 1' },
+  async ({ step }) => {
+    return step.run('delegate-weekly-digest', () =>
+      invokeInternalCron('/api/internal/inngest/weekly-digest')
+    );
+  }
+);
+
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
   { cron: '0 */6 * * *' },
