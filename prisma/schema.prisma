@@ -655,6 +655,10 @@ model Feedback {
   @@index([aiProcessedAt])
   @@index([deletedAt])
   @@index([dealerStaffId])
+  // Dealer feedback inbox: where qrCode{dealerId} → qrCodeId IN(...) + deletedAt:null + orderBy createdAt
+  @@index([qrCodeId, deletedAt, createdAt])
+  // Müşteri geçmişi: where userId + createdAt range / orderBy
+  @@index([userId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -740,6 +744,9 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+  // Okunmamış rozet sayımı (sık polling) + listeleme
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }
 
 model FileUpload {
@@ -824,6 +831,8 @@ model AuditLog {
   @@index([action])
   @@index([entity])
   @@index([createdAt])
+  // Quest ödül dedupe: where userId + action + entity + entityId IN(...)
+  @@index([userId, action, entity])
 }
 
 model UserAutomationRule {
@@ -969,6 +978,8 @@ model Incident {
   @@index([dealerId])
   @@index([status])
   @@index([createdAt])
+  // Açık incident kontrolü: where dealerId + status
+  @@index([dealerId, status])
 }
 
 // P2 Churn playbook: CSM görevi - düşük tenant health için CSM takibi
@@ -1049,6 +1060,8 @@ model RemedyOffer {
   @@index([dealerId])
   @@index([userId])
   @@index([status])
+  // Dealer onay kuyruğu: where dealerId + status
+  @@index([dealerId, status])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1250,6 +1263,10 @@ model Consumption {
   @@index([dealerId])
   @@index([productId])
   @@index([createdAt])
+  // Dealer zaman aralığı taramaları (pre-agg, radar, analytics)
+  @@index([dealerId, createdAt])
+  // Müşteri zaman aralığı + fraud velocity (write hot-path)
+  @@index([customerId, createdAt])
 }
 
 model ConsumptionReview {
@@ -1272,6 +1289,8 @@ model ConsumptionReview {
   @@index([customerId])
   @@index([rating])
   @@index([createdAt])
+  // Müşteri yorum geçmişi: where customerId + createdAt range / orderBy
+  @@index([customerId, createdAt])
 }
 
 model CardAuditLog {
@@ -1291,6 +1310,8 @@ model CardAuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  // Hızlı-tarama limiti: where cardId + action + createdAt range (scan write-path)
+  @@index([cardId, action, createdAt])
 }
 
 model CardBatch {
@@ -1830,6 +1851,8 @@ model AIUsageLog {
   @@index([action])
   @@index([createdAt])
   @@index([success])
+  // AI bütçe guard: where dealerId + createdAt range (her AI çağrısından önce)
+  @@index([dealerId, createdAt])
 }
 
 /// QRA floating chat — kötüye kullanım incelemesi ve admin denetimi
@@ -1953,6 +1976,8 @@ model AIEmbedding {
 
   @@index([dealerId])
   @@index([createdAt])
+  // KNN aday getirme: where dealerId + model + dimension
+  @@index([dealerId, model, dimension])
 }
 
 model AIFeedbackCorrection {

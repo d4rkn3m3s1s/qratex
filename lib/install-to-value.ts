@@ -3,6 +3,7 @@
  * İşletme kayıttan ilk anlamlı insight'a geçen süre (dakika).
  */
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export interface InstallToValueResult {
   dealerId: string;
@@ -33,31 +34,35 @@ export async function getInstallToValue(dealerIds?: string[]): Promise<InstallTo
     },
   });
 
-  const results: InstallToValueResult[] = [];
-  for (const d of dealers) {
-    const firstFeedback = await prisma.feedback.findFirst({
-      where: {
-        qrCode: { dealerId: d.id },
-        aiProcessedAt: { not: null },
-      },
-      orderBy: { aiProcessedAt: 'asc' },
-      select: { aiProcessedAt: true },
-    });
-    const firstInsightAt = firstFeedback?.aiProcessedAt ?? null;
+  if (dealers.length === 0) return [];
+  const ids = dealers.map((d) => d.id);
+
+  // Önceden N dealer × findFirst (N+1). Artık tek SQL: dealer başına ilk
+  // (en erken) AI-işlenmiş feedback zamanı. aiProcessedAt index'inden yararlanır.
+  const firstRows = await prisma.$queryRaw<Array<{ dealerId: string; firstInsightAt: Date | null }>>(Prisma.sql`
+    SELECT q."dealerId" AS "dealerId", MIN(f."aiProcessedAt") AS "firstInsightAt"
+    FROM "Feedback" f
+    JOIN "QRCode" q ON q."id" = f."qrCodeId"
+    WHERE q."dealerId" IN (${Prisma.join(ids)})
+      AND f."aiProcessedAt" IS NOT NULL
+    GROUP BY q."dealerId"
+  `);
+  const firstByDealer = new Map(firstRows.map((r) => [r.dealerId, r.firstInsightAt]));
+
+  return dealers.map((d) => {
+    const firstInsightAt = firstByDealer.get(d.id) ?? null;
     const minutesToValue =
       firstInsightAt != null
         ? Math.round((firstInsightAt.getTime() - d.createdAt.getTime()) / (60 * 1000))
         : null;
-
-    results.push({
+    return {
       dealerId: d.id,
       dealerName: d.businessName || d.name,
       registeredAt: d.createdAt,
       firstInsightAt,
       minutesToValue,
-    });
-  }
-  return results;
+    };
+  });
 }
 
 export async function getInstallToValueAverage(dealerIds?: string[]): Promise<number | null> {
@@ -71,8 +76,16 @@ function percentile(sorted: number[], p: number): number {
   return sorted[idx];
 }
 
-export async function getInstallToValueStats(dealerIds?: string[]): Promise<InstallToValueStats> {
-  const results = await getInstallToValue(dealerIds);
+export async function getInstallToValueStats(
+  dealerIdsOrResults?: string[] | InstallToValueResult[]
+): Promise<InstallToValueStats> {
+  // Önceden hesaplanmış sonuçlar geçilebilir (route'ta çift çağrıyı önler).
+  const isResults = Array.isArray(dealerIdsOrResults) &&
+    dealerIdsOrResults.length > 0 &&
+    typeof dealerIdsOrResults[0] === 'object';
+  const results = isResults
+    ? (dealerIdsOrResults as InstallToValueResult[])
+    : await getInstallToValue(dealerIdsOrResults as string[] | undefined);
   const raw = results
     .map((r) => r.minutesToValue)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0);

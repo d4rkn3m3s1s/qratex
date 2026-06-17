@@ -16,14 +16,21 @@ export async function GET() {
     take: 200,
   });
 
-  const ranked = [];
-  for (const d of dealers) {
-    const h = await computeDealerHealthV2(d.id);
-    ranked.push({
-      dealerId: d.id,
-      label: d.businessName || d.name || d.id,
-      ...h,
-    });
+  // Önceden 200 dealer için sıralı for-await (her biri 5 sorgu = ~1000 seri
+  // round-trip). Şimdi sınırlı eşzamanlılıkla paralel — DB havuzunu boğmadan
+  // gecikmeyi ~ortalama_sorgu × (200/CONCURRENCY)'e indirir.
+  const CONCURRENCY = 10;
+  const ranked: Array<{ dealerId: string; label: string } & Awaited<ReturnType<typeof computeDealerHealthV2>>> = [];
+  for (let i = 0; i < dealers.length; i += CONCURRENCY) {
+    const chunk = dealers.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (d) => ({
+        dealerId: d.id,
+        label: d.businessName || d.name || d.id,
+        ...(await computeDealerHealthV2(d.id)),
+      }))
+    );
+    ranked.push(...results);
   }
 
   ranked.sort((a, b) => b.score - a.score);
