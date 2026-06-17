@@ -17,30 +17,31 @@ export default async function SquadsPage() {
         redirect("/auth/signin");
     }
 
-    // Fetch the user's squad
-    const member = await prisma.squadMember.findFirst({
-        where: { userId: session.user.id },
-        include: {
-            squad: {
-                include: {
-                    members: {
-                        include: {
-                            user: { select: { id: true, name: true, image: true, points: true } }
-                        }
-                    },
-                    owner: { select: { id: true, name: true } },
-                    battlesAsSquad1: {
-                        where: { status: 'active' },
-                        include: { squad2: true }
-                    },
-                    battlesAsSquad2: {
-                        where: { status: 'active' },
-                        include: { squad1: true }
+    // Üye lookup + global top-10 leaderboard bağımsız → paralel.
+    const [member, allSquads] = await Promise.all([
+        prisma.squadMember.findFirst({
+            where: { userId: session.user.id },
+            include: {
+                squad: {
+                    include: {
+                        members: {
+                            include: {
+                                user: { select: { id: true, name: true, image: true, points: true } }
+                            }
+                        },
+                        owner: { select: { id: true, name: true } },
+                        battlesAsSquad1: { where: { status: 'active' }, include: { squad2: true } },
+                        battlesAsSquad2: { where: { status: 'active' }, include: { squad1: true } }
                     }
                 }
             }
-        }
-    });
+        }),
+        prisma.squad.findMany({
+            take: 10,
+            orderBy: { totalPoints: 'desc' },
+            include: { _count: { select: { members: true } } }
+        }),
+    ]);
 
     const squad = member?.squad;
 
@@ -64,15 +65,6 @@ export default async function SquadsPage() {
 
     // Sorted members by points
     const sortedMembers = [...squad.members].sort((a, b) => (b.user.points || 0) - (a.user.points || 0));
-
-    // Fetch all squads for leaderboard
-    const allSquads = await prisma.squad.findMany({
-        take: 10,
-        orderBy: { totalPoints: 'desc' },
-        include: {
-            _count: { select: { members: true } }
-        }
-    });
 
     const squadRanks = allSquads.map(s => ({
         id: s.id,

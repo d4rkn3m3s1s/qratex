@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Radar, Users, Gift, Megaphone, Clock, Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { RadarBulkCampaignButton, RadarSingleOfferButton } from "@/components/dealer/radar-interactive";
 import { DealerRadarScope, type RadarScopeContact } from "@/components/dealer/dealer-radar-scope";
 import { t, type Locale } from "@/i18n/request";
@@ -25,42 +26,38 @@ export default async function DealerWinBackPage() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const consumptions = await prisma.consumption.findMany({
-        where: { dealerId },
-        select: { customerId: true, createdAt: true, amount: true },
-        orderBy: { createdAt: 'desc' }
-    });
+    // Önceden bu bayinin TÜM consumption'ları belleğe çekiliyordu. Artık SQL'de
+    // müşteri başına son ziyaret + ortalama harcama hesaplanıp HAVING ile yalnızca
+    // 30 günden uzun süredir gelmeyen ("uyuyan") müşteriler döner.
+    // [dealerId, createdAt] index'inden yararlanır.
+    const sleepingRows = await prisma.$queryRaw<Array<{ customerId: string; lastVisit: Date; avgSpend: number | null }>>(
+        Prisma.sql`
+            SELECT c."customerId",
+                   MAX(c."createdAt") AS "lastVisit",
+                   AVG(c."amount") FILTER (WHERE c."amount" IS NOT NULL) AS "avgSpend"
+            FROM "Consumption" c
+            WHERE c."dealerId" = ${dealerId}
+            GROUP BY c."customerId"
+            HAVING MAX(c."createdAt") < ${thirtyDaysAgo}
+            ORDER BY MAX(c."createdAt") ASC
+            LIMIT 500
+        `
+    );
 
-    const latestVisits = new Map<string, Date>();
-    // Müşteri başına GERÇEK ortalama harcama (amount kayıtlarından).
-    const spendAgg = new Map<string, { sum: number; n: number }>();
-    consumptions.forEach(c => {
-        if (!latestVisits.has(c.customerId)) {
-            latestVisits.set(c.customerId, c.createdAt);
-        }
-        if (c.amount != null) {
-            const e = spendAgg.get(c.customerId) ?? { sum: 0, n: 0 };
-            e.sum += Number(c.amount);
-            e.n += 1;
-            spendAgg.set(c.customerId, e);
-        }
-    });
+    const metaByCustomer = new Map(sleepingRows.map((r) => [r.customerId, r]));
+    const sleepingIds = sleepingRows.map((r) => r.customerId);
 
-    const sleepingIds = Array.from(latestVisits.entries())
-        .filter(([_, date]) => date < thirtyDaysAgo)
-        .map(([id]) => id);
-
-    const sleepingUsers = await prisma.user.findMany({
+    const sleepingUsers = sleepingIds.length === 0 ? [] : await prisma.user.findMany({
         where: { id: { in: sleepingIds } },
         select: { id: true, name: true, email: true, image: true }
     });
 
     const radarData = sleepingUsers.map(u => {
-        const agg = spendAgg.get(u.id);
+        const meta = metaByCustomer.get(u.id);
         return {
             ...u,
-            lastVisit: latestVisits.get(u.id)!,
-            avgSpend: agg && agg.n > 0 ? agg.sum / agg.n : null,
+            lastVisit: meta?.lastVisit ?? new Date(),
+            avgSpend: meta?.avgSpend != null ? Number(meta.avgSpend) : null,
         };
     });
 

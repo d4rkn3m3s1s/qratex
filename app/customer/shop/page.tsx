@@ -18,24 +18,17 @@ export default async function ShopPage() {
     const locale: Locale = userSession.preferredLanguage === "en" ? "en" : "tr";
     const tr = (key: string) => translate(locale, key);
 
-    // 1. Fetch user points
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { points: true }
-    });
+    // 3 bağımsız sorgu paralel (önceden sıralı await — gereksiz 3 RTT).
+    const [user, items, inventory] = await Promise.all([
+        prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
+        prisma.cosmeticItem.findMany({
+            where: { isActive: true },
+            orderBy: [{ rarity: 'desc' }, { createdAt: 'desc' }],
+        }),
+        prisma.userCosmetic.findMany({ where: { userId } }),
+    ]);
 
     const userPoints = user?.points || 0;
-
-    // 2. Fetch all shop items
-    const items = await prisma.cosmeticItem.findMany({
-        where: { isActive: true },
-        orderBy: [{ rarity: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    // 3. Fetch user's inventory
-    const inventory = await prisma.userCosmetic.findMany({
-        where: { userId }
-    });
 
     // 4. Map ownership state
     const shopItems = items.map(item => {
