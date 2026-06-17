@@ -1,7 +1,10 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
-import { localEmbed, LOCAL_EMBEDDING_MODEL, cosineSimilarity } from '@/lib/local-embedding';
+import { localEmbed, embedFromFeatures, LOCAL_EMBEDDING_MODEL, cosineSimilarity } from '@/lib/local-embedding';
+
+/** Groq LLM destekli embedding model etiketi (yerel uzayla uyumlu vektör). */
+const GROQ_EMBED_MODEL = 'groq-llm-features-v1';
 
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 const LEARNING_MODEL =
@@ -49,25 +52,76 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   }
 }
 
+/**
+ * Groq LLM ile metni deterministik semantik özelliklere indirir (tema, niyet,
+ * anahtar kelimeler), sonra bu özelliklerden cosine-karşılaştırılabilir vektör
+ * türetir. Groq embedding modeli SUNMADIĞI için (canlı doğrulandı), gerçek LLM
+ * anlayışını embedding'e dönüştürmenin Groq-yolu budur.
+ */
+async function groqFeatureEmbedding(text: string): Promise<number[] | null> {
+  if (!process.env.GROQ_API_KEY) return null;
+
+  // Dinamik import: ai-engine ↔ ai-learning döngüsel bağımlılığını kırar.
+  const { runChatCompletion } = await import('@/lib/ai-engine');
+  const res = await runChatCompletion({
+    system:
+      'Bir müşteri geri bildirimini semantik aramaya uygun, NORMALİZE anahtar ' +
+      'özelliklere indir. Eş anlamlıları tek köke indir (ör. "yavaştı/geç/bekledik" ' +
+      '→ "yavaş_servis"). Türkçe, küçük harf, snake_case. SADECE şu JSON: ' +
+      '{"themes":[...3-6 tema...],"intent":"...tek kelime...","keywords":[...4-8 anahtar kelime...]}',
+    user: text.slice(0, 1500),
+    temperature: 0,
+    maxTokens: 220,
+    jsonMode: true,
+  });
+  if (!res) return null;
+
+  try {
+    const parsed = JSON.parse(res.content) as { themes?: unknown; intent?: unknown; keywords?: unknown };
+    const features: string[] = [];
+    const pushArr = (v: unknown, prefix: string) => {
+      if (Array.isArray(v)) {
+        for (const x of v) if (typeof x === 'string' && x.trim()) features.push(`${prefix}:${x.trim()}`);
+      }
+    };
+    pushArr(parsed.themes, 'theme');
+    pushArr(parsed.keywords, 'kw');
+    if (typeof parsed.intent === 'string' && parsed.intent.trim()) features.push(`intent:${parsed.intent.trim()}`);
+    if (features.length === 0) return null;
+    return embedFromFeatures(features);
+  } catch {
+    return null;
+  }
+}
+
 async function generateEmbedding(text: string): Promise<{ vector: number[]; model: string } | null> {
   if (!text || text.trim().length < 5) return null;
   const safeText = text.trim().slice(0, 4000);
 
-  // Tercih: gerçek OpenAI embedding (en yüksek kalite).
+  // 1) Tercih: gerçek OpenAI embedding (en yüksek kalite).
   const client = getEmbeddingClient();
   if (client) {
-    const response = await withRetry(() =>
-      client.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: safeText,
-      })
-    );
-    const vector = response.data?.[0]?.embedding;
-    if (vector) return { vector, model: EMBEDDING_MODEL };
+    try {
+      const response = await withRetry(() =>
+        client.embeddings.create({ model: EMBEDDING_MODEL, input: safeText })
+      );
+      const vector = response.data?.[0]?.embedding;
+      if (vector) return { vector, model: EMBEDDING_MODEL };
+    } catch (err) {
+      console.error('OpenAI embedding failed, falling back:', err);
+    }
   }
 
-  // OpenAI yoksa (ve Groq embedding sunmadığı için): SAHTE değil, metnin gerçek
-  // içeriğinden türetilen deterministik yerel embedding. Cosine ile karşılaştırılabilir.
+  // 2) Groq LLM destekli embedding: LLM metni semantik özelliklere indirir,
+  //    biz vektörleştiririz (Groq gerçekten kullanılır — embedding modeli yok).
+  try {
+    const groqVec = await groqFeatureEmbedding(safeText);
+    if (groqVec) return { vector: groqVec, model: GROQ_EMBED_MODEL };
+  } catch (err) {
+    console.error('Groq feature embedding failed, falling back:', err);
+  }
+
+  // 3) Son çare: anahtarsız deterministik yerel embedding (yine gerçek, sahte değil).
   return { vector: localEmbed(safeText), model: LOCAL_EMBEDDING_MODEL };
 }
 

@@ -1,4 +1,4 @@
-import { localEmbed, cosineSimilarity, LOCAL_EMBEDDING_DIM } from '@/lib/local-embedding';
+import { localEmbed, embedFromFeatures, cosineSimilarity, LOCAL_EMBEDDING_DIM } from '@/lib/local-embedding';
 
 describe('local-embedding', () => {
   it('produces a fixed-dimension L2-normalized vector', () => {
@@ -36,5 +36,22 @@ describe('local-embedding', () => {
     const a = localEmbed('aynı metin testi burada');
     const b = localEmbed('aynı metin testi burada');
     expect(cosineSimilarity(a, b)).toBeCloseTo(1, 5);
+  });
+
+  describe('embedFromFeatures (Groq-LLM-supported path)', () => {
+    it('overlapping feature sets score higher than disjoint ones', () => {
+      const a = embedFromFeatures(['theme:servis_yavas', 'kw:garson', 'intent:sikayet']);
+      const b = embedFromFeatures(['theme:gec_siparis', 'kw:garson', 'intent:sikayet']);
+      const c = embedFromFeatures(['theme:lezzet', 'kw:tatli', 'intent:tavsiye']);
+      expect(cosineSimilarity(a, b)).toBeGreaterThan(cosineSimilarity(a, c));
+    });
+
+    it('is deterministic and L2-normalized', () => {
+      const a = embedFromFeatures(['theme:x', 'kw:y']);
+      const b = embedFromFeatures(['theme:x', 'kw:y']);
+      expect(a).toEqual(b);
+      const norm = Math.sqrt(a.reduce((s, x) => s + x * x, 0));
+      expect(norm).toBeCloseTo(1, 5);
+    });
   });
 });

@@ -74,6 +74,39 @@ export function localEmbed(text: string): number[] {
   return vec;
 }
 
+/**
+ * Hazır bir özellik listesinden (kelime/tema/niyet etiketleri) embedding üretir.
+ * Groq LLM destekli embedding bunu kullanır: LLM metni semantik etiketlere indirir,
+ * biz o etiketlerden deterministik, cosine-karşılaştırılabilir vektör türetiriz.
+ * Aynı uzayda olması için localEmbed ile AYNI hashing/normalize mantığını kullanır.
+ */
+export function embedFromFeatures(features: string[]): number[] {
+  const vec = new Array<number>(LOCAL_EMBEDDING_DIM).fill(0);
+  const cleaned = features
+    .map((f) => f.toLocaleLowerCase('tr-TR').trim())
+    .filter((f) => f.length >= 2);
+  if (cleaned.length === 0) return vec;
+
+  const tf = new Map<string, number>();
+  for (const f of cleaned) tf.set(f, (tf.get(f) ?? 0) + 1);
+
+  for (const [feature, count] of tf) {
+    const h = fnv1a(feature);
+    const idx = h % LOCAL_EMBEDDING_DIM;
+    const sign = (h & 0x80000000) !== 0 ? -1 : 1;
+    const weight = 1 + Math.log(count);
+    vec[idx] += sign * weight;
+  }
+
+  let norm = 0;
+  for (const v of vec) norm += v * v;
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+  }
+  return vec;
+}
+
 /** İki L2-normalize vektör için cosine benzerliği (= dot product). */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
