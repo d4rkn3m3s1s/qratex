@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createConsumptionSchema } from '@/lib/validations';
+import { isHappyHourLive } from '@/lib/happy-hour-live';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -292,7 +293,21 @@ export async function POST(request: NextRequest) {
     const BASE_XP_CAP = 1000; // tek tüketimden kazanılabilecek max ham puan
     const rawBaseXP = amount ? Math.floor(amount * 10) : 50;
     const baseXP = Math.min(Math.max(0, rawBaseXP), BASE_XP_CAP);
-    const passivePoints = Math.floor(baseXP * 0.05);
+
+    // Happy Hour çarpanı: önceden müşteriye "2x puan" gösteriliyordu ama puana HİÇ
+    // uygulanmıyordu. Artık bu işletmenin AKTİF happy-hour penceresindeki en yüksek
+    // çarpan pasif puana uygulanır (1x = etki yok).
+    const nowDate = new Date();
+    const dealerHappyHours = await prisma.happyHour.findMany({
+      where: { dealerId: session.user.id, isActive: true },
+      select: { startTime: true, endTime: true, daysOfWeek: true, isActive: true, validFrom: true, validUntil: true, multiplier: true },
+    });
+    const activeMultipliers = dealerHappyHours
+      .filter((hh) => isHappyHourLive(hh, nowDate))
+      .map((hh) => hh.multiplier || 1);
+    const happyHourMultiplier = activeMultipliers.length > 0 ? Math.max(...activeMultipliers) : 1;
+
+    const passivePoints = Math.floor(baseXP * 0.05 * happyHourMultiplier);
 
     if (passivePoints > 0) {
       const squadMembership = await prisma.squadMember.findFirst({

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { creditPointsAndXp } from '@/lib/points-wallet';
 import { triggerConfetti } from '@/lib/effects/confetti';
 
 /**
@@ -42,13 +43,12 @@ export async function finishSquadBattle(battleId: string) {
         const xpPerPerson = Math.floor(rewardPerPerson * 0.5); // XP de verelim
 
         for (const participant of winnerParticipants) {
-          // Kullanıcı puanını ve XP'sini güncelle
-          await tx.user.update({
-            where: { id: participant.userId },
-            data: {
-              points: { increment: rewardPerPerson },
-              xp: { increment: xpPerPerson },
-            },
+          // creditPointsAndXp ile (level'ı doğru günceller; önceden raw increment
+          // level sınırını geçen XP'de level atlatmıyordu).
+          await creditPointsAndXp(tx, {
+            userId: participant.userId,
+            points: rewardPerPerson,
+            xp: xpPerPerson,
           });
 
           // Bildirim gönder

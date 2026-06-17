@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { creditPointsAndXp } from '@/lib/points-wallet';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
@@ -209,14 +210,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Award points for badge
+    // Award points for badge — creditPointsAndXp ile (level'ı doğru günceller;
+    // önceden raw increment level sınırını geçen XP'de level atlatmıyordu).
     const badgePoints = (badge.requirement as { value?: number })?.value || 100;
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        points: { increment: badgePoints },
-        xp: { increment: Math.floor(badgePoints / 2) },
-      },
+    await creditPointsAndXp(prisma, {
+      userId,
+      points: badgePoints,
+      xp: Math.floor(badgePoints / 2),
     });
 
     // Create notification

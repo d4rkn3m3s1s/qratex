@@ -3,18 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { startOfWeekUTC as startOfWeekMonday } from '@/lib/timezone';
 
 
 export const dynamic = 'force-dynamic';
-
-function startOfWeekMonday(d: Date): Date {
-  const x = new Date(d);
-  const day = x.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  x.setDate(x.getDate() + diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
 
 export async function GET() {
   const gate = await assertModuleEnabled('squads');

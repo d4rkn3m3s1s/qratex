@@ -8,14 +8,9 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { buildNextBestActions } from '@/lib/next-best-action';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { startOfDayUTC as startOfDay } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
 
 export async function GET() {
   try {
@@ -146,7 +141,7 @@ export async function GET() {
     date.setDate(date.getDate() - d);
     const dayStart = startOfDay(date);
     const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    dayEnd.setUTCHours(23, 59, 59, 999);
     const [dayTotal, dayNegative, dayAvg] = await Promise.all([
       prisma.feedback.count({
         where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: dayStart, lte: dayEnd } },
@@ -166,7 +161,7 @@ export async function GET() {
     ]);
     dailyTrend.push({
       date: dayStart.toISOString().slice(0, 10),
-      label: dayLabels[dayStart.getDay()],
+      label: dayLabels[dayStart.getUTCDay()],
       total: dayTotal,
       negative: dayNegative,
       avgRating: dayAvg._avg.rating != null ? Number(dayAvg._avg.rating.toFixed(1)) : 0,

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { parseCursor, encodeCursor } from '@/lib/cursor-pagination';
 import { requireAuth } from '@/lib/api-auth';
+import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 import { adminUsersQuerySchema } from '@/lib/validations-admin';
@@ -434,21 +435,23 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        // Calculate new level (1000 XP per level)
-        const currentXp = currentUser.xp || 0;
-        const currentLevel = currentUser.level || 1;
-        const newXp = currentXp + data.amount;
-        const newLevel = Math.floor(newXp / 1000) + 1;
-        const leveledUp = newLevel > currentLevel;
+        // TEK kaynak: creditPointsAndXp (geometrik calculateLevel + atomik artış).
+        // Önceden linear floor(xp/1000)+1 ile canonical formülle çelişiyordu.
+        const credited = await creditPointsAndXp(prisma, {
+          userId: data.userId,
+          xp: data.amount,
+        });
+        const newXp = credited.xp;
+        const newLevel = credited.level;
+        const leveledUp = credited.isLevelUp;
 
-        const user = await prisma.user.update({
+        const user = await prisma.user.findUnique({
           where: { id: data.userId },
-          data: { 
-            xp: newXp,
-            level: newLevel,
-          },
           select: { id: true, name: true, xp: true, level: true },
         });
+        if (!user) {
+          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+        }
 
         // Notification for XP
         await prisma.notification.create({

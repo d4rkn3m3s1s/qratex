@@ -7,23 +7,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { startOfDayUTC as startOfDay, startOfWeekUTC as startOfWeek } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function startOfWeek(d: Date): Date {
-  const x = new Date(d);
-  const day = x.getDay();
-  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-  x.setDate(diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
 
 export async function GET() {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -95,7 +81,7 @@ export async function GET() {
     const weekStart = startOfWeek(weekEnd);
     const weekEndDate = new Date(weekStart);
     weekEndDate.setDate(weekEndDate.getDate() + 6);
-    weekEndDate.setHours(23, 59, 59, 999);
+    weekEndDate.setUTCHours(23, 59, 59, 999);
     const [fbCount, fbReplied, ag, actions] = await Promise.all([
       prisma.feedback.count({ where: { ...baseWhere, createdAt: { gte: weekStart, lte: weekEndDate } } }),
       prisma.feedback.count({ where: { ...baseWhere, dealerRepliedAt: { not: null }, createdAt: { gte: weekStart, lte: weekEndDate } } }),
@@ -120,7 +106,7 @@ export async function GET() {
     date.setDate(date.getDate() - d);
     const dayStart = startOfDay(date);
     const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    dayEnd.setUTCHours(23, 59, 59, 999);
     const [fbCount, fbReplied, ag] = await Promise.all([
       prisma.feedback.count({ where: { ...baseWhere, createdAt: { gte: dayStart, lte: dayEnd } } }),
       prisma.feedback.count({ where: { ...baseWhere, dealerRepliedAt: { not: null }, createdAt: { gte: dayStart, lte: dayEnd } } }),

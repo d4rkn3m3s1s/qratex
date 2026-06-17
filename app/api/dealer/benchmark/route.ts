@@ -8,17 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
+import { startOfDayUTC, startOfWeekUTC as startOfWeek } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
-
-function startOfWeek(d: Date): Date {
-  const x = new Date(d);
-  const day = x.getDay();
-  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-  x.setDate(diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
@@ -127,7 +119,7 @@ export async function GET(request: NextRequest) {
     const weekStart = startOfWeek(weekEnd);
     const weekEndDate = new Date(weekStart);
     weekEndDate.setDate(weekEndDate.getDate() + 6);
-    weekEndDate.setHours(23, 59, 59, 999);
+    weekEndDate.setUTCHours(23, 59, 59, 999);
 
     const [dealerAggWeek, dealerRepliedWeek, platformAggWeek, platformRepliedWeek] = await Promise.all([
       prisma.feedback.aggregate({
@@ -159,12 +151,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Günlük trend: son 7 gün (siz vs platform ortalama puan)
-  function startOfDay(d: Date): Date {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  }
+  // Günlük trend: son 7 gün (siz vs platform ortalama puan) — UTC gün sınırı.
+  const startOfDay = startOfDayUTC;
   const dailyData: Array<{ date: string; label: string; dealerRating: number; platformRating: number }> = [];
   const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
   for (let d = 6; d >= 0; d--) {
@@ -172,7 +160,7 @@ export async function GET(request: NextRequest) {
     date.setDate(date.getDate() - d);
     const dayStart = startOfDay(date);
     const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    dayEnd.setUTCHours(23, 59, 59, 999);
     const [dealerDay, platformDay] = await Promise.all([
       prisma.feedback.aggregate({
         where: { ...dealerWhere, createdAt: { gte: dayStart, lte: dayEnd } },
@@ -185,7 +173,7 @@ export async function GET(request: NextRequest) {
     ]);
     dailyData.push({
       date: dayStart.toISOString().slice(0, 10),
-      label: dayLabels[dayStart.getDay()],
+      label: dayLabels[dayStart.getUTCDay()],
       dealerRating: dealerDay._avg.rating != null ? Number(dealerDay._avg.rating.toFixed(2)) : 0,
       platformRating: platformDay._avg.rating != null ? Number(platformDay._avg.rating.toFixed(2)) : 0,
     });

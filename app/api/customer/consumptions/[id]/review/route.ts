@@ -7,6 +7,7 @@ import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { createConsumptionReviewSchema } from '@/lib/validations';
 import { getConsumptionReviewReward, getPointsMatrix } from '@/lib/points-rules';
 import { creditPointsAndXp } from '@/lib/points-wallet';
+import { capFeedbackPoints } from '@/lib/points-caps';
 import { analyzeWithFallback } from '@/lib/ai-engine';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
@@ -147,7 +148,7 @@ export async function POST(
     // Kullanıcıya verilecek puanı hesapla (gamification)
     const matrix = await getPointsMatrix();
     const reward = getConsumptionReviewReward(text, matrix);
-    const pointsEarned = reward.points;
+    let pointsEarned = reward.points; // tx içinde günlük/haftalık cap'e göre kısaltılır
     const xpEarned = reward.xp;
 
     // Yorum oluşturma + puan kredisi + bildirimler TEK transaction içinde.
@@ -167,11 +168,28 @@ export async function POST(
           },
         });
 
+        // Günlük/haftalık feedback cap'i burada da uygulanır — aksi halde yorum
+        // yolu üzerinden cap görünmez şekilde aşılıyordu (feedback yolu cap'liydi).
+        pointsEarned = await capFeedbackPoints(session.user.id, pointsEarned, tx);
+
         await creditPointsAndXp(tx, {
           userId: session.user.id,
           points: pointsEarned,
           xp: xpEarned,
         });
+
+        // Cap hesabının kaynağı olan points_credited event'i (feedback kategorisi)
+        // — feedback yoluyla aynı sayaca yazılır ki çapraz cap tutarlı olsun.
+        if (pointsEarned > 0) {
+          await tx.analyticsEvent.create({
+            data: {
+              userId: session.user.id,
+              event: 'points_credited',
+              category: 'feedback',
+              data: { points: pointsEarned, xp: xpEarned, source: 'consumption_review' },
+            },
+          });
+        }
 
         await tx.notification.create({
           data: {
