@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
@@ -73,53 +74,104 @@ export async function GET() {
   const ratingChange = prevAvgRating != null && avgRating != null ? Number((avgRating - prevAvgRating).toFixed(1)) : null;
   const feedbackChange = prevFeedbackTotal > 0 ? feedbackTotal - prevFeedbackTotal : null;
 
-  // Son 6 hafta: her hafta için feedback sayısı, yanıt sayısı, ortalama puan, tamamlanan aksiyon
-  const weeklyData: Array<{ weekLabel: string; weekStart: string; feedbacks: number; replied: number; avgRating: number; actionsDone: number }> = [];
+  // Son 6 hafta: her hafta için feedback sayısı, yanıt sayısı, ortalama puan, tamamlanan aksiyon.
+  // Önceden hafta başına 4 sorgu (6×4=24) döngüde çalışıyordu; tek pass'te
+  // date_trunc('week') ile gruplanmış 2 sorguya indirildi (feedback + aksiyon).
+  const weekStarts: Date[] = [];
   for (let w = 5; w >= 0; w--) {
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() - w * 7);
-    const weekStart = startOfWeek(weekEnd);
-    const weekEndDate = new Date(weekStart);
-    weekEndDate.setDate(weekEndDate.getDate() + 6);
-    weekEndDate.setUTCHours(23, 59, 59, 999);
-    const [fbCount, fbReplied, ag, actions] = await Promise.all([
-      prisma.feedback.count({ where: { ...baseWhere, createdAt: { gte: weekStart, lte: weekEndDate } } }),
-      prisma.feedback.count({ where: { ...baseWhere, dealerRepliedAt: { not: null }, createdAt: { gte: weekStart, lte: weekEndDate } } }),
-      prisma.feedback.aggregate({ where: { ...baseWhere, createdAt: { gte: weekStart, lte: weekEndDate } }, _avg: { rating: true } }),
-      prisma.actionItem.count({ where: { dealerId, status: 'done', createdAt: { gte: weekStart, lte: weekEndDate } } }),
-    ]);
-    weeklyData.push({
-      weekLabel: `Hafta ${6 - w}`,
-      weekStart: weekStart.toISOString().slice(0, 10),
-      feedbacks: fbCount,
-      replied: fbReplied,
-      avgRating: ag._avg.rating != null ? Number(ag._avg.rating.toFixed(1)) : 0,
-      actionsDone: actions,
-    });
+    weekStarts.push(startOfWeek(weekEnd));
   }
+  const firstWeekStart = weekStarts[0];
+  const lastWeekEnd = new Date(weekStarts[weekStarts.length - 1]);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
+  lastWeekEnd.setUTCHours(23, 59, 59, 999);
 
-  // Son 7 gün: günlük feedback ve yanıt
-  const dailyData: Array<{ date: string; label: string; feedbacks: number; replied: number; avgRating: number }> = [];
+  // Postgres'te date_trunc('week') ISO haftası (Pazartesi) ile aynıdır → weekStart'larla eşleşir.
+  const weeklyFbRows = await prisma.$queryRaw<
+    Array<{ bucket: Date; total: bigint; replied: bigint; avg_rating: number | null }>
+  >(Prisma.sql`
+    SELECT date_trunc('week', f."createdAt" AT TIME ZONE 'UTC') AS bucket,
+           COUNT(*)::bigint AS total,
+           COUNT(f."dealerRepliedAt")::bigint AS replied,
+           AVG(f."rating")::float AS avg_rating
+    FROM "Feedback" f
+    JOIN "QRCode" q ON q."id" = f."qrCodeId"
+    WHERE q."dealerId" = ${dealerId}
+      AND f."deletedAt" IS NULL
+      AND f."createdAt" >= ${firstWeekStart}
+      AND f."createdAt" <= ${lastWeekEnd}
+    GROUP BY 1
+  `);
+  const weeklyActionRows = await prisma.$queryRaw<Array<{ bucket: Date; done: bigint }>>(Prisma.sql`
+    SELECT date_trunc('week', "createdAt" AT TIME ZONE 'UTC') AS bucket,
+           COUNT(*)::bigint AS done
+    FROM "ActionItem"
+    WHERE "dealerId" = ${dealerId}
+      AND "status" = 'done'
+      AND "createdAt" >= ${firstWeekStart}
+      AND "createdAt" <= ${lastWeekEnd}
+    GROUP BY 1
+  `);
+  const weekKey = (d: Date) => d.toISOString().slice(0, 10);
+  const fbByWeek = new Map(weeklyFbRows.map((r) => [weekKey(new Date(r.bucket)), r]));
+  const actByWeek = new Map(weeklyActionRows.map((r) => [weekKey(new Date(r.bucket)), Number(r.done)]));
+
+  const weeklyData = weekStarts.map((weekStart, i) => {
+    const k = weekKey(weekStart);
+    const fb = fbByWeek.get(k);
+    return {
+      weekLabel: `Hafta ${i + 1}`,
+      weekStart: k,
+      feedbacks: fb ? Number(fb.total) : 0,
+      replied: fb ? Number(fb.replied) : 0,
+      avgRating: fb?.avg_rating != null ? Number(fb.avg_rating.toFixed(1)) : 0,
+      actionsDone: actByWeek.get(k) ?? 0,
+    };
+  });
+
+  // Son 7 gün: günlük feedback ve yanıt. Önceden gün başına 3 sorgu (7×3=21)
+  // döngüde; tek pass'te date_trunc('day') ile gruplanmış 1 sorguya indirildi.
   const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  const dayStarts: Date[] = [];
   for (let d = 6; d >= 0; d--) {
     const date = new Date(now);
     date.setDate(date.getDate() - d);
-    const dayStart = startOfDay(date);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-    const [fbCount, fbReplied, ag] = await Promise.all([
-      prisma.feedback.count({ where: { ...baseWhere, createdAt: { gte: dayStart, lte: dayEnd } } }),
-      prisma.feedback.count({ where: { ...baseWhere, dealerRepliedAt: { not: null }, createdAt: { gte: dayStart, lte: dayEnd } } }),
-      prisma.feedback.aggregate({ where: { ...baseWhere, createdAt: { gte: dayStart, lte: dayEnd } }, _avg: { rating: true } }),
-    ]);
-    dailyData.push({
-      date: dayStart.toISOString().slice(0, 10),
-      label: dayLabels[dayStart.getDay()],
-      feedbacks: fbCount,
-      replied: fbReplied,
-      avgRating: ag._avg.rating != null ? Number(ag._avg.rating.toFixed(1)) : 0,
-    });
+    dayStarts.push(startOfDay(date));
   }
+  const firstDayStart = dayStarts[0];
+  const lastDayEnd = new Date(dayStarts[dayStarts.length - 1]);
+  lastDayEnd.setUTCHours(23, 59, 59, 999);
+
+  const dailyFbRows = await prisma.$queryRaw<
+    Array<{ bucket: Date; total: bigint; replied: bigint; avg_rating: number | null }>
+  >(Prisma.sql`
+    SELECT date_trunc('day', f."createdAt" AT TIME ZONE 'UTC') AS bucket,
+           COUNT(*)::bigint AS total,
+           COUNT(f."dealerRepliedAt")::bigint AS replied,
+           AVG(f."rating")::float AS avg_rating
+    FROM "Feedback" f
+    JOIN "QRCode" q ON q."id" = f."qrCodeId"
+    WHERE q."dealerId" = ${dealerId}
+      AND f."deletedAt" IS NULL
+      AND f."createdAt" >= ${firstDayStart}
+      AND f."createdAt" <= ${lastDayEnd}
+    GROUP BY 1
+  `);
+  const fbByDay = new Map(dailyFbRows.map((r) => [weekKey(new Date(r.bucket)), r]));
+
+  const dailyData = dayStarts.map((dayStart) => {
+    const k = weekKey(dayStart);
+    const fb = fbByDay.get(k);
+    return {
+      date: k,
+      label: dayLabels[dayStart.getUTCDay()],
+      feedbacks: fb ? Number(fb.total) : 0,
+      replied: fb ? Number(fb.replied) : 0,
+      avgRating: fb?.avg_rating != null ? Number(fb.avg_rating.toFixed(1)) : 0,
+    };
+  });
 
   return NextResponse.json(
     {

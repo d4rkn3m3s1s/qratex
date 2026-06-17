@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 
 
 export const dynamic = 'force-dynamic';
@@ -47,39 +48,31 @@ export async function POST(
         { success: false, error: 'Bu rozete zaten sahipsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { points: true },
-    });
-
-    if (!user || (user.points ?? 0) < pointCost) {
-      return NextResponse.json(
-        { success: false, error: `Yeterli puanınız yok. Gerekli: ${pointCost} puan` }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    // Atomik harcama: check-then-act yerine guarded decrement (debitPoints).
+    // İki eşzamanlı istek aynı bakiyeyi görüp ikisi de düşürmesin (çift harcama/eksi bakiye).
+    let newPoints: number;
+    try {
+      const debited = await prisma.$transaction(async (tx) => {
+        const wallet = await debitPoints(tx, { userId: session.user.id, points: pointCost });
+        await tx.userBadge.create({ data: { userId: session.user.id, badgeId } });
+        return wallet;
+      });
+      newPoints = debited.points;
+    } catch (err) {
+      if (err instanceof InsufficientPointsError) {
+        return NextResponse.json(
+          { success: false, error: `Yeterli puanınız yok. Gerekli: ${pointCost} puan` },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      throw err;
     }
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: session.user.id },
-        data: { points: { decrement: pointCost } },
-      }),
-      prisma.userBadge.create({
-        data: {
-          userId: session.user.id,
-          badgeId,
-        },
-      }),
-    ]);
-
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { points: true },
-    });
 
     return NextResponse.json({
       success: true,
       data: {
         badgeId,
-        newPoints: updatedUser?.points ?? user.points - pointCost,
+        newPoints,
       },
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

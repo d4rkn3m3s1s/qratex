@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 
 // GET all available cosmetic items and the user's inventory
 
@@ -110,21 +111,25 @@ export async function POST(req: Request) {
             );
         }
 
-        // Deduct points and grant item
+        // Atomik harcama: guarded decrement (debitPoints) — eşzamanlı iki satın alma
+        // aynı bakiyeyi görüp ikisi de düşürmesin (çift harcama / eksi bakiye).
         const { advanceAchievementProgress } = await import('@/lib/achievements');
-        await prisma.$transaction([
-            prisma.user.update({
-                where: { id: userId },
-                data: { points: { decrement: item.price } }
-            }),
-            prisma.userCosmetic.create({
-                data: {
-                    userId,
-                    cosmeticId: itemId,
-                    isEquipped: false
-                }
-            })
-        ]);
+        try {
+            await prisma.$transaction(async (tx) => {
+                await debitPoints(tx, { userId, points: item.price });
+                await tx.userCosmetic.create({
+                    data: { userId, cosmeticId: itemId, isEquipped: false },
+                });
+            });
+        } catch (err) {
+            if (err instanceof InsufficientPointsError) {
+                return NextResponse.json(
+                    { error: 'Not enough points' },
+                    { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+                );
+            }
+            throw err;
+        }
 
         await advanceAchievementProgress(userId, 'quest-cosmetic-collector', 1, 'increment');
 

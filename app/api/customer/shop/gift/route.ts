@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,12 +99,12 @@ export async function POST(req: NextRequest) {
         }
 
         // 5. Execute transaction (Deduct points, Create UserCosmetic, Send Notification)
+        // Atomik harcama: yukarıdaki ön kontrol UX içindir; gerçek düşüm guarded
+        // debitPoints ile yapılır ki eşzamanlı hediyeler eksi bakiyeye yol açmasın.
+        try {
         await prisma.$transaction(async (tx) => {
-            // Deduct points
-            await tx.user.update({
-                where: { id: senderId },
-                data: { points: { decrement: cosmetic.price } }
-            });
+            // Deduct points (atomik, bakiye yetersizse InsufficientPointsError fırlatır)
+            await debitPoints(tx, { userId: senderId, points: cosmetic.price });
 
             // Grant item
             await tx.userCosmetic.create({
@@ -127,6 +128,15 @@ export async function POST(req: NextRequest) {
                 }
             });
         });
+        } catch (err) {
+            if (err instanceof InsufficientPointsError) {
+                return NextResponse.json(
+                    { error: `Yetersiz puan. Bu hediye ${cosmetic.price} puan gerektiriyor.` },
+                    { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+                );
+            }
+            throw err;
+        }
 
         // Trigger gifting master achievement
         const { advanceAchievementProgress } = await import('@/lib/achievements');

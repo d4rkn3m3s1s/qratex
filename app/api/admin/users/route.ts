@@ -425,10 +425,10 @@ export async function PATCH(request: NextRequest) {
       case 'add_xp': {
         const data = addXpSchema.parse(body);
         
-        // Get current user
+        // Varlık kontrolü (yalnızca name + existence; xp/level credited'tan gelir).
         const currentUser = await prisma.user.findUnique({
           where: { id: data.userId },
-          select: { xp: true, level: true },
+          select: { name: true },
         });
 
         if (!currentUser) {
@@ -437,6 +437,7 @@ export async function PATCH(request: NextRequest) {
 
         // TEK kaynak: creditPointsAndXp (geometrik calculateLevel + atomik artış).
         // Önceden linear floor(xp/1000)+1 ile canonical formülle çelişiyordu.
+        // credited zaten güncel xp/level döndürür → ikinci tam-satır fetch kaldırıldı.
         const credited = await creditPointsAndXp(prisma, {
           userId: data.userId,
           xp: data.amount,
@@ -445,13 +446,7 @@ export async function PATCH(request: NextRequest) {
         const newLevel = credited.level;
         const leveledUp = credited.isLevelUp;
 
-        const user = await prisma.user.findUnique({
-          where: { id: data.userId },
-          select: { id: true, name: true, xp: true, level: true },
-        });
-        if (!user) {
-          return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-        }
+        const user = { id: credited.id, name: currentUser.name, xp: newXp, level: newLevel };
 
         // Notification for XP
         await prisma.notification.create({

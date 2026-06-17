@@ -282,11 +282,16 @@ export async function POST(request: NextRequest) {
       // (Serializable) yapılır; aksi halde eşzamanlı feedback POST'ları aynı
       // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
       const { addToSquadTreasury } = await import('@/lib/gamification-engine');
+      const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
       const result = await prisma.$transaction(
         async (tx) => {
-          const capped = await capFeedbackPoints(userId, reward.points, tx);
+          // VIP çarpanı taban ödüle uygulanır (organik kazanım), sonra GÜNLÜK
+          // TAVAN boosted tutara uygulanır — VIP kazancı hızlandırır ama tavan
+          // ekonomi korumasını yine de uygular.
+          const vip = await applyVipMultiplier(userId, reward.points, tx);
+          const capped = await capFeedbackPoints(userId, vip.points, tx);
           if (capped <= 0 && reward.xp <= 0) {
-            return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0 };
+            return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0, vipMultiplier: vip.multiplier };
           }
           const userUpdate = await creditPointsAndXp(tx, {
             userId,
@@ -304,6 +309,8 @@ export async function POST(request: NextRequest) {
                 xp: reward.xp,
                 nextLevel: userUpdate.level,
                 squadContribution,
+                vipMultiplier: vip.multiplier,
+                vipBonus: vip.bonus,
               },
             },
           });
@@ -312,6 +319,7 @@ export async function POST(request: NextRequest) {
             level: userUpdate.level,
             isLevelUp: userUpdate.isLevelUp,
             squadContribution,
+            vipMultiplier: vip.multiplier,
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
