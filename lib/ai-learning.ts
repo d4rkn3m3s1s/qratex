@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { prisma } from '@/lib/prisma';
 import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
+import { localEmbed, LOCAL_EMBEDDING_MODEL, cosineSimilarity } from '@/lib/local-embedding';
 
 const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
 const LEARNING_MODEL =
@@ -49,21 +50,25 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 }
 
 async function generateEmbedding(text: string): Promise<{ vector: number[]; model: string } | null> {
-  const client = getEmbeddingClient();
-  if (!client) return null;
   if (!text || text.trim().length < 5) return null;
-
   const safeText = text.trim().slice(0, 4000);
-  const response = await withRetry(() =>
-    client.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: safeText,
-    })
-  );
 
-  const vector = response.data?.[0]?.embedding;
-  if (!vector) return null;
-  return { vector, model: EMBEDDING_MODEL };
+  // Tercih: gerçek OpenAI embedding (en yüksek kalite).
+  const client = getEmbeddingClient();
+  if (client) {
+    const response = await withRetry(() =>
+      client.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: safeText,
+      })
+    );
+    const vector = response.data?.[0]?.embedding;
+    if (vector) return { vector, model: EMBEDDING_MODEL };
+  }
+
+  // OpenAI yoksa (ve Groq embedding sunmadığı için): SAHTE değil, metnin gerçek
+  // içeriğinden türetilen deterministik yerel embedding. Cosine ile karşılaştırılabilir.
+  return { vector: localEmbed(safeText), model: LOCAL_EMBEDDING_MODEL };
 }
 
 export async function storeFeedbackEmbedding(params: {
@@ -94,6 +99,46 @@ export async function storeFeedbackEmbedding(params: {
     console.error('Failed to store embedding:', error);
     return null;
   }
+}
+
+/**
+ * Bir metne en benzer geçmiş feedback'leri bulur (aynı bayi içinde, cosine).
+ * Embedding'i gerçek bir özelliğe dönüştürür: tekrarlayan şikâyet/temaları,
+ * benzer geçmiş yorumları ve onlara verilen yanıtları yüzeye çıkarmak için.
+ * OpenAI varsa onun, yoksa yerel embedding'in vektörlerini kullanır (model alanı
+ * uyumlu kayıtlar arasında karşılaştırma yapılır).
+ */
+export async function findSimilarFeedback(params: {
+  dealerId: string;
+  text: string;
+  limit?: number;
+  minScore?: number;
+}): Promise<Array<{ feedbackId: string; score: number }>> {
+  const query = await generateEmbedding(params.text);
+  if (!query) return [];
+
+  const limit = params.limit ?? 5;
+  const minScore = params.minScore ?? 0.4;
+
+  // Aynı model ailesiyle üretilmiş vektörler kıyaslanabilir (boyut + uzay aynı).
+  const rows = await prisma.aIEmbedding.findMany({
+    where: { dealerId: params.dealerId, model: query.model, dimension: query.vector.length },
+    select: { feedbackId: true, vector: true },
+    orderBy: { createdAt: 'desc' },
+    take: 1000, // bellek koruması: en güncel 1000 vektör
+  });
+
+  const scored = rows
+    .map((r) => {
+      const vec = r.vector as unknown;
+      if (!Array.isArray(vec)) return null;
+      return { feedbackId: r.feedbackId, score: cosineSimilarity(query.vector, vec as number[]) };
+    })
+    .filter((x): x is { feedbackId: string; score: number } => x !== null && x.score >= minScore)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  return scored;
 }
 
 export async function recordFeedbackCorrection(params: {
