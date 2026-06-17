@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import {
   analyzeWithFallback,
   analyzeComprehensive,
@@ -19,27 +20,8 @@ import type { AITheme } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-// Rate limiting (simple in-memory)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 20; // requests per minute
-const RATE_WINDOW = 60 * 1000; // 1 minute
-
-function checkRateLimit(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-
-  if (!userLimit || now > userLimit.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW });
-    return { ok: true };
-  }
-
-  if (userLimit.count >= RATE_LIMIT) {
-    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((userLimit.resetAt - now) / 1000)) };
-  }
-
-  userLimit.count++;
-  return { ok: true };
-}
+// Rate limit: DB-backed (serverless'te in-memory Map cold start'ta sıfırlanıyordu).
+const RATE_LIMIT = 20; // dakikada istek
 
 function normalizeSentimentPercentages(counts: { positive: number; negative: number; neutral: number }) {
   const total = counts.positive + counts.negative + counts.neutral;
@@ -116,7 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const rlAnalyze = checkRateLimit(session.user.id);
+    const rlAnalyze = await checkRateLimitDb(`ai_analyze:${session.user.id}`, RATE_LIMIT, 60_000);
     if (!rlAnalyze.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
@@ -124,7 +106,7 @@ export async function POST(request: NextRequest) {
           status: 429,
           headers: {
             ...PRIVATE_NO_STORE_HEADERS,
-            'Retry-After': String(rlAnalyze.retryAfterSec),
+            'Retry-After': String(Math.ceil((rlAnalyze.retryAfterMs ?? 60_000) / 1000)),
           },
         }
       );

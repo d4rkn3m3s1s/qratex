@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { askAI } from '@/lib/ai-engine';
 import { z } from 'zod';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -14,21 +15,8 @@ const chatSchema = z.object({
   conversationId: z.string().optional(),
 });
 
-// Rate limiting
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-function checkRateLimit(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
-  const now = Date.now();
-  const entry = rateLimitMap.get(userId);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + 60000 });
-    return { ok: true };
-  }
-  if (entry.count >= 10) {
-    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
-  }
-  entry.count++;
-  return { ok: true };
-}
+// Rate limit: DB-backed (serverless'te in-memory Map cold start'ta sıfırlanıyordu).
+const AI_CHAT_LIMIT_PER_MIN = 10;
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rlChat = checkRateLimit(session.user.id);
+    const rlChat = await checkRateLimitDb(`ai_chat:${session.user.id}`, AI_CHAT_LIMIT_PER_MIN, 60_000);
     if (!rlChat.ok) {
       return NextResponse.json(
         { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
@@ -48,7 +36,7 @@ export async function POST(request: NextRequest) {
           status: 429,
           headers: {
             ...PRIVATE_NO_STORE_HEADERS,
-            'Retry-After': String(rlChat.retryAfterSec),
+            'Retry-After': String(Math.ceil((rlChat.retryAfterMs ?? 60_000) / 1000)),
           },
         }
       );

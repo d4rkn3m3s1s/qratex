@@ -421,6 +421,19 @@ export async function POST(request: NextRequest) {
                 await storeFeedbackEmbedding({ feedbackId: feedback.id, dealerId, text });
                 await maybeTriggerAdaptiveUpdate(dealerId);
                 await processAutoReplies(feedback.id);
+                // Otomatik telafi taslağı (inngest kapalıyken inline yol).
+                try {
+                  const { maybeCreateAutoRemedyForFeedback } = await import('@/lib/remedy-automation-core');
+                  await maybeCreateAutoRemedyForFeedback({
+                    feedbackId: feedback.id,
+                    dealerId,
+                    userId: session?.user?.id ?? null,
+                    rating,
+                    churnRisk: analysis.churnRisk ?? null,
+                  });
+                } catch (err) {
+                  console.error('[REMEDY_AUTOMATION] inline auto-draft failed:', err);
+                }
               } catch (err) {
                 console.error('[AI] Failed to save analysis:', err);
               }

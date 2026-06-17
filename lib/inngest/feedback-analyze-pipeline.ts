@@ -11,6 +11,7 @@ import {
   storeFeedbackEmbedding,
 } from '@/lib/ai-learning';
 import { processAutoReplies } from '@/lib/auto-reply-engine';
+import { maybeCreateAutoRemedyForFeedback } from '@/lib/remedy-automation-core';
 
 export type FeedbackAnalyzePipelineResult =
   | { skipped: true; reason: string }
@@ -112,6 +113,21 @@ export async function runFeedbackAnalyzePipeline(feedbackId: string): Promise<Fe
         type: 'warning',
       },
     });
+  }
+
+  // Otomatik telafi taslağı: düşük puan VEYA yüksek churn'de, bayinin otomasyonu
+  // açıksa onay kuyruğuna RemedyOffer taslağı ekle (önceden sadece bildirim atılıp
+  // döngü kapatılmıyordu; dealerRemedyAutomation config'i tam bunun içindi).
+  try {
+    await maybeCreateAutoRemedyForFeedback({
+      feedbackId,
+      dealerId: feedback.dealerId,
+      userId: f.userId,
+      rating: f.rating,
+      churnRisk: analysis.churnRisk ?? null,
+    });
+  } catch (err) {
+    console.error('[REMEDY_AUTOMATION] auto-draft failed:', err);
   }
 
   await storeFeedbackEmbedding({ feedbackId, dealerId: feedback.dealerId, text: feedback.text });

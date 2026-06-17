@@ -124,3 +124,14 @@ export const partnerDigestWebhookFn = inngest.createFunction(
     );
   }
 );
+
+// Süresi dolan klan savaşlarını otomatik bitirir (önceden yalnızca elle kapanıyordu).
+export const squadBattlesFinishFn = inngest.createFunction(
+  { id: 'squad-battles-finish', retries: 2 },
+  { cron: '*/10 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-squad-battles-finish', () =>
+      invokeInternalCron('/api/internal/inngest/squad-battles-finish')
+    );
+  }
+);
