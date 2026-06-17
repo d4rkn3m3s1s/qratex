@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -279,26 +280,24 @@ export async function GET(request: NextRequest) {
           take: MAX_LEADERBOARD_FETCH,
         });
 
-        // Calculate period points (each feedback = points based on text length)
-        const periodFeedbacks = await prisma.feedback.findMany({
-          where: {
-            createdAt: { gte: startDate },
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            text: true,
-          },
-          take: 100000,
-        });
+        // Dönem puanı: feedback başına metin uzunluğuna göre 50/100. Önceden 100K
+        // satır (text dahil) belleğe çekilip JS'te sayılıyordu; tek gruplanmış SQL
+        // ile DB'de hesaplanır (uzunluk eşiğine göre CASE toplamı).
+        const periodPointsRows = userIds.length > 0
+          ? await prisma.$queryRaw<Array<{ userId: string; points: bigint }>>(Prisma.sql`
+              SELECT "userId",
+                     SUM(CASE WHEN length("text") > 50 THEN 100 ELSE 50 END)::bigint AS points
+              FROM "Feedback"
+              WHERE "createdAt" >= ${startDate}
+                AND "userId" IN (${Prisma.join(userIds)})
+              GROUP BY "userId"
+            `)
+          : [];
 
         const periodPointsMap = new Map<string, number>();
-        periodFeedbacks.forEach(f => {
-          if (f.userId) {
-            const points = f.text && f.text.length > 50 ? 100 : 50;
-            periodPointsMap.set(f.userId, (periodPointsMap.get(f.userId) || 0) + points);
-          }
-        });
+        for (const r of periodPointsRows) {
+          if (r.userId) periodPointsMap.set(r.userId, Number(r.points));
+        }
 
         // Sort by period points
         const sortedUsers = users

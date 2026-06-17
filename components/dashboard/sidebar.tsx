@@ -302,7 +302,7 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
           setFeedbackBadge((badgeData as { badgeCount: number }).badgeCount);
         }
       })
-      .catch(() => {});
+      .catch((err) => console.warn('[Sidebar] badge/visibility fetch failed:', err));
 
     return () => {
       cancelled = true;

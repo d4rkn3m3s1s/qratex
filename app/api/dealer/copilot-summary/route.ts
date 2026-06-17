@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { buildNextBestActions } from '@/lib/next-best-action';
@@ -133,40 +134,47 @@ export async function GET() {
   const avgRating = avgRatingAgg._avg.rating ?? null;
   const positiveCount = totalCount - negativeCount;
 
-  // Son 7 gün günlük veri
-  const dailyTrend: Array<{ date: string; label: string; total: number; negative: number; avgRating: number }> = [];
+  // Son 7 gün günlük veri. Önceden gün başına 3 sorgu (7×3=21) döngüde
+  // çalışıyordu; tek pass'te date_trunc('day') ile gruplanmış 1 sorguya indirildi.
   const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  const dayStarts: Date[] = [];
   for (let d = 6; d >= 0; d--) {
     const date = new Date(now);
     date.setDate(date.getDate() - d);
-    const dayStart = startOfDay(date);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setUTCHours(23, 59, 59, 999);
-    const [dayTotal, dayNegative, dayAvg] = await Promise.all([
-      prisma.feedback.count({
-        where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: dayStart, lte: dayEnd } },
-      }),
-      prisma.feedback.count({
-        where: {
-          qrCode: { dealerId },
-          deletedAt: null,
-          createdAt: { gte: dayStart, lte: dayEnd },
-          OR: [{ rating: { lte: 3 } }, { sentiment: 'negative' }],
-        },
-      }),
-      prisma.feedback.aggregate({
-        where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: dayStart, lte: dayEnd } },
-        _avg: { rating: true },
-      }),
-    ]);
-    dailyTrend.push({
-      date: dayStart.toISOString().slice(0, 10),
-      label: dayLabels[dayStart.getUTCDay()],
-      total: dayTotal,
-      negative: dayNegative,
-      avgRating: dayAvg._avg.rating != null ? Number(dayAvg._avg.rating.toFixed(1)) : 0,
-    });
+    dayStarts.push(startOfDay(date));
   }
+  const firstDayStart = dayStarts[0];
+  const lastDayEnd = new Date(dayStarts[dayStarts.length - 1]);
+  lastDayEnd.setUTCHours(23, 59, 59, 999);
+
+  const dailyRows = await prisma.$queryRaw<
+    Array<{ bucket: Date; total: bigint; negative: bigint; avg_rating: number | null }>
+  >(Prisma.sql`
+    SELECT date_trunc('day', f."createdAt" AT TIME ZONE 'UTC') AS bucket,
+           COUNT(*)::bigint AS total,
+           COUNT(*) FILTER (WHERE f."rating" <= 3 OR f."sentiment" = 'negative')::bigint AS negative,
+           AVG(f."rating")::float AS avg_rating
+    FROM "Feedback" f
+    JOIN "QRCode" q ON q."id" = f."qrCodeId"
+    WHERE q."dealerId" = ${dealerId}
+      AND f."deletedAt" IS NULL
+      AND f."createdAt" >= ${firstDayStart}
+      AND f."createdAt" <= ${lastDayEnd}
+    GROUP BY 1
+  `);
+  const dayKey = (dt: Date) => dt.toISOString().slice(0, 10);
+  const byDay = new Map(dailyRows.map((r) => [dayKey(new Date(r.bucket)), r]));
+
+  const dailyTrend = dayStarts.map((dayStart) => {
+    const row = byDay.get(dayKey(dayStart));
+    return {
+      date: dayKey(dayStart),
+      label: dayLabels[dayStart.getUTCDay()],
+      total: row ? Number(row.total) : 0,
+      negative: row ? Number(row.negative) : 0,
+      avgRating: row?.avg_rating != null ? Number(row.avg_rating.toFixed(1)) : 0,
+    };
+  });
 
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const recentCampaigns = await prisma.campaign.findMany({

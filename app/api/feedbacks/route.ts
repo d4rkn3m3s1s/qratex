@@ -394,14 +394,16 @@ export async function POST(request: NextRequest) {
       if (text && text.trim().length >= 5) {
         const dealerId = qrCode.dealerId;
         let shouldAnalyze = true;
-        let aiSettings: any = null;
+        let aiSettings: { isEnabled: boolean; autoAnalyze: boolean; customPrompt: string | null } | null = null;
         try {
           aiSettings = await prisma.aISettings.findUnique({
             where: { dealerId },
             select: { isEnabled: true, autoAnalyze: true, customPrompt: true },
           });
           if (aiSettings && (!aiSettings.isEnabled || !aiSettings.autoAnalyze)) shouldAnalyze = false;
-        } catch {}
+        } catch (err) {
+          console.error('[FEEDBACK] AI settings lookup failed, defaulting to analyze:', err);
+        }
 
         if (shouldAnalyze) {
           if (inngestQueueEnabled()) {
