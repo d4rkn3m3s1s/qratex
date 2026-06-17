@@ -4,9 +4,9 @@
  */
 import { serve } from 'inngest/next';
 import { inngest } from '@/lib/inngest/client';
-import { analyzeFeedbackFn, outboxProcessFn, featureFlagCleanupFn, analyticsEventCleanupFn, syntheticMonitorFn, negativeFeedbackSLAFn, churnPlaybookFn, aiQualitySampleFn, customerReminderNudgeFn, partnerDigestWebhookFn, squadBattlesFinishFn } from '@/lib/inngest/functions';
+import { analyzeFeedbackFn, outboxProcessFn, featureFlagCleanupFn, analyticsEventCleanupFn, syntheticMonitorFn, negativeFeedbackSLAFn, churnPlaybookFn, aiQualitySampleFn, customerReminderNudgeFn, partnerDigestWebhookFn, squadBattlesFinishFn, calculateClvFn } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [analyzeFeedbackFn, outboxProcessFn, featureFlagCleanupFn, analyticsEventCleanupFn, syntheticMonitorFn, negativeFeedbackSLAFn, churnPlaybookFn, aiQualitySampleFn, customerReminderNudgeFn, partnerDigestWebhookFn, squadBattlesFinishFn],
+  functions: [analyzeFeedbackFn, outboxProcessFn, featureFlagCleanupFn, analyticsEventCleanupFn, syntheticMonitorFn, negativeFeedbackSLAFn, churnPlaybookFn, aiQualitySampleFn, customerReminderNudgeFn, partnerDigestWebhookFn, squadBattlesFinishFn, calculateClvFn],
 });

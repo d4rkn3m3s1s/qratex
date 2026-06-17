@@ -75,6 +75,14 @@ export const churnPlaybookFn = inngest.createFunction(
   }
 );
 
+export const calculateClvFn = inngest.createFunction(
+  { id: 'calculate-clv', retries: 2 },
+  { cron: '0 2 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-calculate-clv', () => invokeInternalCron('/api/internal/inngest/calculate-clv'));
+  }
+);
+
 export const aiQualitySampleFn = inngest.createFunction(
   { id: 'ai-quality-sample', retries: 2 },
   { cron: '0 3 * * 0' },

@@ -283,13 +283,16 @@ export async function POST(request: NextRequest) {
       // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
       const { addToSquadTreasury } = await import('@/lib/gamification-engine');
       const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
+      const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
       const result = await prisma.$transaction(
         async (tx) => {
-          // VIP çarpanı taban ödüle uygulanır (organik kazanım), sonra GÜNLÜK
-          // TAVAN boosted tutara uygulanır — VIP kazancı hızlandırır ama tavan
-          // ekonomi korumasını yine de uygular.
+          // Çarpan zinciri: VIP (kullanıcı seviyesi) → sezonsal kampanya (zaman
+          // penceresi) taban ödüle uygulanır, sonra GÜNLÜK TAVAN nihai tutara
+          // uygulanır — çarpanlar kazancı hızlandırır ama tavan ekonomi korumasını
+          // yine de uygular.
           const vip = await applyVipMultiplier(userId, reward.points, tx);
-          const capped = await capFeedbackPoints(userId, vip.points, tx);
+          const seasonal = await applySeasonalCampaignMultiplier(vip.points, new Date(), tx);
+          const capped = await capFeedbackPoints(userId, seasonal.points, tx);
           if (capped <= 0 && reward.xp <= 0) {
             return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0, vipMultiplier: vip.multiplier };
           }
@@ -311,6 +314,9 @@ export async function POST(request: NextRequest) {
                 squadContribution,
                 vipMultiplier: vip.multiplier,
                 vipBonus: vip.bonus,
+                seasonalCampaignId: seasonal.campaignId,
+                seasonalMultiplier: seasonal.multiplier,
+                seasonalBonus: seasonal.bonusPoints,
               },
             },
           });
@@ -377,6 +383,12 @@ export async function POST(request: NextRequest) {
           })
         )
         .catch((err) => console.error('[WEBHOOK] feedback.created dispatch failed:', err));
+
+      // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut). Feedback'in
+      // geliri yok → revenue 0; yalnızca count artar.
+      import('@/lib/heatmap-track')
+        .then(({ recordHeatmapHit }) => recordHeatmapHit(qrCode.dealerId, new Date(), 0))
+        .catch((err) => console.error('[HEATMAP] feedback track failed:', err));
 
       // ── Otomatik AI Analizi (arka planda) ──
       if (text && text.trim().length >= 5) {

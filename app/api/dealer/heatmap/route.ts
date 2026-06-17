@@ -16,52 +16,52 @@ export async function GET(req: Request) {
     }
 
     const dealerId = session.user.id;
+    const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
-    // Fetch the consumptions and feedbacks
-    const [consumptions, feedbacks] = await Promise.all([
-      prisma.consumption.findMany({
-        where: { dealerId },
-        select: { createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 500
-      }),
-      prisma.feedback.findMany({
-        where: { qrCode: { dealerId } },
-        select: { createdAt: true },
-        orderBy: { createdAt: 'desc' },
-        take: 500
-      })
-    ]);
-
-    // Initialize an empty 7x24 grid
+    // 7x24 grid (TR-locale: 0 = Pazartesi .. 6 = Pazar).
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    // Ham getDay() (Paz=0..Cmt=6) → TR-locale (Pzt=0..Paz=6).
+    const toTrDay = (rawDay: number) => (rawDay === 0 ? 6 : rawDay - 1);
 
-    // Combine and aggregate
-    const allEvents = [...consumptions, ...feedbacks];
+    // Önce KALICI HeatmapData'dan oku (tam geçmiş, kapaksız sayım).
+    const rows = await prisma.heatmapData.findMany({
+      where: { dealerId },
+      select: { dayOfWeek: true, hour: true, count: true },
+    });
 
-    for (const event of allEvents) {
-      const date = new Date(event.createdAt);
-      const day = date.getDay(); // 0 (Sun) - 6 (Sat)
-      const hour = date.getHours(); // 0 - 23
-
-      // Map to 0 = Monday ... 6 = Sunday format (TR Locale)
-      const trLocalDay = day === 0 ? 6 : day - 1;
-      grid[trLocalDay][hour] += 1;
+    if (rows.length > 0) {
+      for (const r of rows) {
+        const d = toTrDay(r.dayOfWeek);
+        if (d >= 0 && d < 7 && r.hour >= 0 && r.hour < 24) grid[d][r.hour] += r.count;
+      }
+    } else {
+      // Cold start (henüz olay yazılmadan önce): son kayıtlardan sentezle (fallback).
+      const [consumptions, feedbacks] = await Promise.all([
+        prisma.consumption.findMany({
+          where: { dealerId },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        }),
+        prisma.feedback.findMany({
+          where: { qrCode: { dealerId } },
+          select: { createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
+        }),
+      ]);
+      for (const event of [...consumptions, ...feedbacks]) {
+        const date = new Date(event.createdAt);
+        grid[toTrDay(date.getUTCDay())][date.getUTCHours()] += 1;
+      }
     }
 
     // Format for Frontend
     const heatmapData = [];
-    const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-
     for (let d = 0; d < 7; d++) {
       for (let h = 0; h < 24; h++) {
         if (grid[d][h] > 0) {
-          heatmapData.push({
-            dayIndex: d,
-            dayName: days[d],
-            hour: h,
-            count: grid[d][h]
-          });
+          heatmapData.push({ dayIndex: d, dayName: days[d], hour: h, count: grid[d][h] });
         }
       }
     }

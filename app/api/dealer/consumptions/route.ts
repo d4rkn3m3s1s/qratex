@@ -307,7 +307,12 @@ export async function POST(request: NextRequest) {
       .map((hh) => hh.multiplier || 1);
     const happyHourMultiplier = activeMultipliers.length > 0 ? Math.max(...activeMultipliers) : 1;
 
-    const passivePoints = Math.floor(baseXP * 0.05 * happyHourMultiplier);
+    // Sezonsal kampanya çarpanı/bonusu happy-hour'dan SONRA pasif puana uygulanır
+    // (zaman penceresindeki en yüksek çarpanlı aktif kampanya). Kampanya yoksa no-op.
+    const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
+    const basePassivePoints = Math.floor(baseXP * 0.05 * happyHourMultiplier);
+    const seasonal = await applySeasonalCampaignMultiplier(basePassivePoints, nowDate);
+    const passivePoints = seasonal.points;
 
     if (passivePoints > 0) {
       const squadMembership = await prisma.squadMember.findFirst({
@@ -334,6 +339,13 @@ export async function POST(request: NextRequest) {
       }
     }
     // ----------------------------------
+
+    // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut).
+    import('@/lib/heatmap-track')
+      .then(({ recordHeatmapHit }) =>
+        recordHeatmapHit(session.user.id, nowDate, amount || product?.price || 0)
+      )
+      .catch((err) => console.error('[HEATMAP] consumption track failed:', err));
 
     return NextResponse.json(
       {
