@@ -114,9 +114,35 @@ export async function GET(req: NextRequest) {
     const avgSpentPerVisit = totalConsumptions > 0 ? totalSpent / totalConsumptions : 0;
 
     // Growth calculations
-    const consumptionGrowth = prevConsumptions > 0 
+    const consumptionGrowth = prevConsumptions > 0
       ? Math.round(((totalConsumptions - prevConsumptions) / prevConsumptions) * 100)
       : 0;
+
+    // GERÇEK puan büyümesi: bu dönem vs önceki dönem points_credited toplamları
+    // (önceden Math.random ile uyduruluyordu).
+    const sumCreditedPoints = (events: Array<{ data: unknown }>): number => {
+      let sum = 0;
+      for (const e of events) {
+        const d = e.data as { points?: number } | null;
+        if (d && typeof d.points === 'number') sum += d.points;
+      }
+      return sum;
+    };
+    const [pointsThisPeriodRows, pointsPrevPeriodRows] = await Promise.all([
+      prisma.analyticsEvent.findMany({
+        where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: startDate } },
+        select: { data: true },
+      }),
+      prisma.analyticsEvent.findMany({
+        where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: prevStartDate, lt: startDate } },
+        select: { data: true },
+      }),
+    ]);
+    const pointsThisPeriod = sumCreditedPoints(pointsThisPeriodRows);
+    const pointsPrevPeriod = sumCreditedPoints(pointsPrevPeriodRows);
+    const pointsGrowth = pointsPrevPeriod > 0
+      ? Math.round(((pointsThisPeriod - pointsPrevPeriod) / pointsPrevPeriod) * 100)
+      : (pointsThisPeriod > 0 ? 100 : 0);
 
     // Category breakdown
     const categoryMap = new Map<string, { count: number; icon: string }>();
@@ -316,7 +342,7 @@ export async function GET(req: NextRequest) {
       },
       trends: {
         consumptionGrowth,
-        pointsGrowth: Math.round(Math.random() * 30 + 10), // Would need historical data
+        pointsGrowth,
         spendingTrend: consumptionGrowth >= 0 ? 'up' : 'down',
       },
       categoryBreakdown,

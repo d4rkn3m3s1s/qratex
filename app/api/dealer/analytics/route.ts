@@ -340,8 +340,19 @@ export async function GET(request: NextRequest) {
     const peakHour = hourlyData.indexOf(Math.max(...hourlyData));
     const peakDay = dayOfWeekData.reduce((max, d) => d.count > max.count ? d : max, dayOfWeekData[0]);
 
-    // Response rate (feedbacks with text / total feedbacks) - simulated
-    const responseRate = totalFeedbacks > 0 ? Math.round(Math.random() * 30 + 60) : 0;
+    // GERÇEK yanıt oranı: dönem içinde bayi tarafından yanıtlanmış (dealerRepliedAt)
+    // feedback / toplam feedback (önceden Math.random ile simüle ediliyordu).
+    const [periodTotalForRate, periodRepliedForRate] = await Promise.all([
+      prisma.feedback.count({
+        where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: startDate } },
+      }),
+      prisma.feedback.count({
+        where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: startDate }, dealerRepliedAt: { not: null } },
+      }),
+    ]);
+    const responseRate = periodTotalForRate > 0
+      ? Math.round((periodRepliedForRate / periodTotalForRate) * 100)
+      : 0;
 
     const [positivePct, neutralPct, negativePct] = normalizePercentages([
       positiveCount,
