@@ -66,21 +66,11 @@ export async function GET(req: Request) {
       }
     }
 
-    // If completely empty, return mock data
-    if (heatmapData.length === 0) {
-      return NextResponse.json({
-        data: [
-          { dayIndex: 0, dayName: 'Pzt', hour: 12, count: 5 },
-          { dayIndex: 1, dayName: 'Sal', hour: 13, count: 8 },
-          { dayIndex: 4, dayName: 'Cum', hour: 19, count: 12 },
-          { dayIndex: 5, dayName: 'Cmt', hour: 14, count: 20 },
-          { dayIndex: 6, dayName: 'Paz', hour: 15, count: 15 },
-          { dayIndex: 6, dayName: 'Paz', hour: 20, count: 25 },
-        ]
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    return NextResponse.json({ data: heatmapData }, { headers: PRIVATE_NO_STORE_HEADERS });
+    // Veri yoksa SAHTE yoğunluk verisi ÜRETMİYORUZ; boş + empty bayrağı döner.
+    return NextResponse.json(
+      { data: heatmapData, empty: heatmapData.length === 0 },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
 
   } catch (error) {
     console.error('[HEATMAP_API_ERROR]', error);

@@ -91,9 +91,11 @@ export async function POST(req: NextRequest) {
       persistence: supportsPersistentRun ? 'database' : 'memory',
     };
 
+    const mode = council.enriched ? 'live' : 'demo';
+
     if (!supportsPersistentRun) {
       memoryAddRun(fallbackRun);
-      return NextResponse.json({ success: true, run: fallbackRun, warning: 'AgentRun tablolari bulunamadi, memory fallback kullanildi.' }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ success: true, run: fallbackRun, mode, warning: 'AgentRun tablolari bulunamadi, memory fallback kullanildi.' }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const run = await db.agentRun.create({
@@ -141,7 +143,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, run: { ...run, personas: AGENT_PERSONAS, persistence: 'database' } }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: true, run: { ...run, personas: AGENT_PERSONAS, persistence: 'database' }, mode }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error creating agent run:', error);
     return NextResponse.json({ error: 'Ajan koşusu oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

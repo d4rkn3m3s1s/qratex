@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getMockReplyBucket } from '@/lib/ai-reply-tone';
+import { suggestResponseWithGroq } from '@/lib/groq';
+import { isAIConfigured } from '@/lib/ai-engine';
 
 
 export const dynamic = 'force-dynamic';
@@ -28,8 +30,8 @@ const STRONG_POSITIVE_REPLIES: string[] = [
     `Güzel sözleriniz için teşekkür ederiz; motivasyon kaynağı oldunuz. Tekrar görüşmek dileğiyle.`,
 ];
 
-/** Mock yanıtlar — puan + metin + (varsa) sentiment ile ton seçilir. */
-function buildMockReplies(
+/** Şablon yanıtlar — yalnızca LLM yapılandırılmadığında/başarısızsa kullanılır. */
+function buildFallbackReplies(
     rating: number,
     text: string | null | undefined,
     feedbackSentiment?: string | null,
@@ -115,11 +117,32 @@ export async function POST(req: Request) {
                 { error: 'feedbackId or consumptionReviewId is required' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        const mockReplies = buildMockReplies(rating!, reviewText, feedbackSentiment, feedbackIntent);
+        // GERÇEK LLM ile yanıt önerileri (Groq). reviewText varsa modele sorulur;
+        // başarısız/boş dönerse veya AI yoksa şablon yanıtlara düşülür.
+        let replies: string[] = [];
+        let source: 'ai' | 'template' = 'template';
 
-        await new Promise((resolve) => setTimeout(resolve, 800));
+        if (isAIConfigured() && reviewText && reviewText.trim().length > 0) {
+            try {
+                const aiReplies = await suggestResponseWithGroq(reviewText, rating!);
+                const cleaned = Array.isArray(aiReplies)
+                    ? aiReplies.filter((r) => typeof r === 'string' && r.trim().length > 0).slice(0, 3)
+                    : [];
+                if (cleaned.length > 0) {
+                    replies = cleaned;
+                    source = 'ai';
+                }
+            } catch (err) {
+                console.error('[AI_GENERATE_REPLY] LLM failed, using template fallback:', err);
+            }
+        }
 
-        return NextResponse.json({ replies: mockReplies }, { headers: PRIVATE_NO_STORE_HEADERS });
+        if (replies.length === 0) {
+            replies = buildFallbackReplies(rating!, reviewText, feedbackSentiment, feedbackIntent);
+            source = 'template';
+        }
+
+        return NextResponse.json({ replies, source }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('[AI_GENERATE_REPLY_ERROR]', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

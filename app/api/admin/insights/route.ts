@@ -65,19 +65,13 @@ export async function GET(req: Request) {
             totalScans: stats.scanCount
         }));
 
-        // Generate random mock stats if no data exists to show the UI
-        if (categoriesList.length === 0 || categoriesList.every(c => c.category === 'uncategorized' && c.totalScans === 0)) {
-            return NextResponse.json({
-                data: [
-                    { category: 'cafe', dealerCount: 45, avgRating: 4.6, totalScans: 12500 },
-                    { category: 'restaurant', dealerCount: 120, avgRating: 4.2, totalScans: 45000 },
-                    { category: 'retail', dealerCount: 30, avgRating: 4.8, totalScans: 8500 },
-                    { category: 'uncategorized', dealerCount: dealers.length, avgRating: 4.0, totalScans: 1200 }
-                ]
-            }, { headers: PRIVATE_NO_STORE_HEADERS });
-        }
+        // Veri yoksa SAHTE örnek istatistik ÜRETMİYORUZ (admin'i yanıltır).
+        // Boş sonuç + empty bayrağı döndürülür; UI boş durumu gösterir.
+        const isEmpty =
+            categoriesList.length === 0 ||
+            categoriesList.every((c) => c.category === 'uncategorized' && c.totalScans === 0);
 
-        return NextResponse.json({ data: categoriesList }, { headers: PRIVATE_NO_STORE_HEADERS });
+        return NextResponse.json({ data: categoriesList, empty: isEmpty }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[ADMIN_INSIGHTS_ERROR]', error);
