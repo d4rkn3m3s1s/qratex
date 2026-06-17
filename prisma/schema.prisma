@@ -100,8 +100,6 @@ model User {
   offlineQueue              OfflineQueue[]             @relation("DealerOfflineQueue")
   favoriteProducts          DealerFavoriteProduct[]    @relation("DealerFavorites")
   quickPresets              QuickScanPreset[]          @relation("DealerQuickPresets")
-  customerCLV               CustomerLifetimeValue?     @relation("CustomerCLV")
-  heatmapData               HeatmapData[]              @relation("DealerHeatmap")
   incidents                 Incident[] // dealer'ın kriz/incident kayıtları
   incidentAssignments       Incident[]                 @relation("IncidentAssignments")
   csmTasks                  CSMTask[] // dealer'a atanan CSM görevleri
@@ -1150,23 +1148,6 @@ model Partner {
   @@index([isActive])
 }
 
-model Coupon {
-  id          String    @id @default(cuid())
-  code        String    @unique
-  type        String    @default("percentage") // percentage, fixed
-  value       Float
-  minPurchase Float?
-  maxUses     Int       @default(-1) // -1 = unlimited
-  usedCount   Int       @default(0)
-  expiresAt   DateTime?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([code])
-  @@index([isActive])
-}
-
 // ─────────────────────────────────────────────────────────────
 // PHYSICAL CARD SYSTEM (QR Kartlı Tüketim Sistemi)
 // ─────────────────────────────────────────────────────────────
@@ -1488,27 +1469,6 @@ model HappyHour {
   @@index([isActive])
 }
 
-model SeasonalCampaign {
-  id          String   @id @default(cuid())
-  name        String
-  description String   @db.Text
-  type        String // BIRTHDAY, ANNIVERSARY, SEASONAL, SPECIAL
-  multiplier  Float    @default(1.5)
-  bonusPoints Int      @default(0)
-  discount    Float? // Percentage discount
-  imageUrl    String?
-  conditions  Json? // Eligibility conditions
-  isActive    Boolean  @default(true)
-  startDate   DateTime
-  endDate     DateTime
-  createdAt   DateTime @default(now())
-
-  @@index([type])
-  @@index([isActive])
-  @@index([startDate])
-  @@index([endDate])
-}
-
 model UserBirthday {
   id          String    @id @default(cuid())
   userId      String    @unique
@@ -1669,59 +1629,6 @@ model QuickScanPreset {
 
   @@index([dealerId])
   @@index([isDefault])
-}
-
-// ─────────────────────────────────────────────────────────────
-// ANALYTICS ENHANCEMENTS
-// ─────────────────────────────────────────────────────────────
-
-model CustomerLifetimeValue {
-  id              String    @id @default(cuid())
-  userId          String    @unique
-  totalSpent      Float     @default(0)
-  totalVisits     Int       @default(0)
-  avgOrderValue   Float     @default(0)
-  firstPurchaseAt DateTime?
-  lastPurchaseAt  DateTime?
-  predictedChurn  Float? // 0-1 probability
-  churnRisk       String? // LOW, MEDIUM, HIGH
-  segmentId       String?
-  calculatedAt    DateTime  @default(now())
-
-  user    User             @relation("CustomerCLV", fields: [userId], references: [id], onDelete: Cascade)
-  segment CustomerSegment? @relation(fields: [segmentId], references: [id])
-
-  @@index([predictedChurn])
-  @@index([churnRisk])
-}
-
-model CustomerSegment {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  criteria    Json // Segmentation rules
-  color       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-
-  customers CustomerLifetimeValue[]
-}
-
-model HeatmapData {
-  id        String   @id @default(cuid())
-  dealerId  String
-  date      DateTime @db.Date
-  hour      Int // 0-23
-  dayOfWeek Int // 0-6 (Sunday = 0)
-  count     Int      @default(0)
-  revenue   Float    @default(0)
-  createdAt DateTime @default(now())
-
-  dealer User @relation("DealerHeatmap", fields: [dealerId], references: [id], onDelete: Cascade)
-
-  @@unique([dealerId, date, hour])
-  @@index([dealerId])
-  @@index([date])
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -364,6 +364,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Webhook: feedback.created — admin'de kayıtlı abone webhook'lara tetikle
+      // (ateşle-unut; request yolunu bloklamaz). Önceden webhook'lar hiç fire etmiyordu.
+      import('@/lib/webhook-dispatch')
+        .then(({ dispatchWebhookEvent }) =>
+          dispatchWebhookEvent('feedback.created', {
+            feedbackId: feedback.id,
+            dealerId: qrCode.dealerId,
+            rating,
+            hasText: !!text,
+            createdAt: feedback.createdAt,
+          })
+        )
+        .catch((err) => console.error('[WEBHOOK] feedback.created dispatch failed:', err));
+
       // ── Otomatik AI Analizi (arka planda) ──
       if (text && text.trim().length >= 5) {
         const dealerId = qrCode.dealerId;
