@@ -193,6 +193,7 @@ const dealerNavItems: NavItem[] = [
   { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3 },
   { key: 'copilot', labelKey: 'copilot', href: '/dealer/copilot', icon: Bot },
   { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features' },
+  { key: 'ask_analytics', labelKey: 'ask_analytics', href: '/dealer/ask-analytics', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features' },
   { key: 'voc_wall', labelKey: 'voc_wall', href: '/dealer/voc-wall', icon: MessageSquare },
   { key: 'heatmap', labelKey: 'heatmap', href: '/dealer/heatmap', icon: MapPin },
   { key: 'radar', labelKey: 'radar', href: '/dealer/radar', icon: Radar },

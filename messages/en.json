@@ -2487,6 +2487,7 @@
             "benchmark": "Benchmark",
             "copilot": "Copilot",
             "ai_chat": "AI chat",
+            "ask_analytics": "Ask Your Data",
             "voc_wall": "VoC Wall",
             "heatmap": "Heatmap",
             "radar": "Customer Radar",
