@@ -130,24 +130,17 @@ export async function POST(req: NextRequest) {
 
     const now = new Date();
     const lastActivity = streak.lastActivityAt ? new Date(streak.lastActivityAt) : null;
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    // Check if already checked in today
-    if (lastActivity) {
-      const lastActivityDate = new Date(
-        lastActivity.getFullYear(),
-        lastActivity.getMonth(),
-        lastActivity.getDate()
-      );
-      
-      if (lastActivityDate.getTime() === today.getTime()) {
-        return NextResponse.json({
-          success: true,
-          message: 'Bugün zaten check-in yaptın!',
-          streak,
-          alreadyCheckedIn: true,
-        }, { headers: PRIVATE_NO_STORE_HEADERS });
-      }
+    // Gün sınırı UTC üzerinden (backend = UTC kuralı, lib/timezone.ts).
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+    // Ön kontrol — asıl koruma tx içindeki koşullu updateMany guard'ı.
+    if (lastActivity && lastActivity >= todayStart) {
+      return NextResponse.json({
+        success: true,
+        message: 'Bugün zaten check-in yaptın!',
+        streak,
+        alreadyCheckedIn: true,
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Calculate new streak
@@ -155,7 +148,7 @@ export async function POST(req: NextRequest) {
     if (lastActivity) {
       const hoursDiff = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
       const daysDiff = Math.floor(hoursDiff / 24);
-      
+
       if (daysDiff <= 1 || (streak.frozenUntil && new Date(streak.frozenUntil) >= now)) {
         newStreak = streak.currentStreak + 1;
       }
@@ -163,39 +156,64 @@ export async function POST(req: NextRequest) {
 
     const bonusEarned = getStreakMilestoneBonus(newStreak, matrix);
     const milestoneReached = bonusEarned > 0;
+    const prevLongestStreak = streak.longestStreak;
 
-    // Update streak
-    streak = await prisma.userStreak.update({
-      where: { userId: session.user.id },
-      data: {
-        currentStreak: newStreak,
-        longestStreak: Math.max(streak.longestStreak, newStreak),
-        lastActivityAt: now,
-        totalActiveDays: { increment: 1 },
-        frozenUntil: null,
-      },
-    });
-
-    // Award bonus points if milestone reached
-    if (bonusEarned > 0) {
-      await creditPointsAndXp(prisma, {
-        userId: session.user.id,
-        points: bonusEarned,
-      });
-
-      await prisma.notification.create({
-        data: {
+    // Atomik guard + kredi tek transaction içinde. updateMany koşulu
+    // "lastActivityAt bugünden önce VEYA null"; iki eşzamanlı check-in'den
+    // yalnızca biri count=1 alır, diğeri bonus krediyi ASLA çalıştırmaz.
+    const checkInResult = await prisma.$transaction(async (tx) => {
+      const guard = await tx.userStreak.updateMany({
+        where: {
           userId: session.user.id,
-          type: 'STREAK_MILESTONE',
-          title: 'Seri Başarısı!',
-          message: `${newStreak} günlük seri! ${bonusEarned} bonus puan kazandın!`,
+          OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: todayStart } }],
+        },
+        data: {
+          currentStreak: newStreak,
+          longestStreak: Math.max(prevLongestStreak, newStreak),
+          lastActivityAt: now,
+          totalActiveDays: { increment: 1 },
+          frozenUntil: null,
         },
       });
+
+      if (guard.count === 0) {
+        return { checkedIn: false as const };
+      }
+
+      if (bonusEarned > 0) {
+        await creditPointsAndXp(tx, {
+          userId: session.user.id,
+          points: bonusEarned,
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: session.user.id,
+            type: 'STREAK_MILESTONE',
+            title: 'Seri Başarısı!',
+            message: `${newStreak} günlük seri! ${bonusEarned} bonus puan kazandın!`,
+          },
+        });
+      }
+
+      const updated = await tx.userStreak.findUnique({ where: { userId: session.user.id } });
+      return { checkedIn: true as const, streak: updated };
+    });
+
+    if (!checkInResult.checkedIn) {
+      return NextResponse.json({
+        success: true,
+        message: 'Bugün zaten check-in yaptın!',
+        streak,
+        alreadyCheckedIn: true,
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
+
+    streak = checkInResult.streak ?? streak;
 
     return NextResponse.json({
       success: true,
-      message: bonusEarned > 0 
+      message: bonusEarned > 0
         ? `🔥 ${newStreak} gün! ${bonusEarned} bonus puan kazandın!`
         : `🔥 ${newStreak} günlük seri!`,
       streak,

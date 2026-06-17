@@ -6,12 +6,12 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { registerSchema } from '@/lib/validations';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
-import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
 import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   const id = getClientIdentifier(request);
-  const limit = checkRateLimit('register', id);
+  const limit = await checkRateLimitDb(`register:${id}`, 5, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'auth.registerRateLimited' },
@@ -148,15 +148,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // verifyUrl'i (doğrulama token'ı içerir) yalnızca e-posta GÖNDERİLEMEDİĞİNDE
+    // ve production DIŞINDA döndür — aksi halde token'ı HTTP yanıtında sızdırmak
+    // "inbox'a erişim" doğrulamasını anlamsız kılar.
+    const exposeVerifyUrl = !emailSent && process.env.NODE_ENV !== 'production';
+
     return NextResponse.json({
       success: true,
       user,
       referralApplied: referralApplied ? true : undefined,
-      verifyUrl,
+      ...(exposeVerifyUrl ? { verifyUrl } : {}),
       emailSent,
       message: emailSent
         ? 'Kayıt başarılı. E-postanıza gönderilen doğrulama linkine tıklayıp giriş yapın.'
-        : 'Kayıt başarılı. Giriş yapmak için aşağıdaki doğrulama linkine tıklayın.',
+        : 'Kayıt başarılı. E-posta gönderimi yapılandırılmamış; lütfen yöneticinizle iletişime geçin.',
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const { captureApiError } = await import('@/lib/capture-api-error');

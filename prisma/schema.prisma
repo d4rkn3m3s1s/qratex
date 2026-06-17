@@ -53,6 +53,7 @@ model User {
   analytics     AnalyticsEvent[]
   auditLogs     AuditLog[]
   donations     Donation[]
+  dailySpins    DailySpin[]
 
   // Dealer specific
   businessName         String?
@@ -771,6 +772,38 @@ model AnalyticsEvent {
   @@index([event])
   @@index([category])
   @@index([createdAt])
+  // Hot paths: points-velocity / leaderboard anti-cheat ve feedback cap
+  // sorguları userId+event+createdAt ile filtreliyor; tek sütun index yetmiyordu.
+  @@index([userId, event, createdAt])
+  @@index([userId, category, event, createdAt])
+}
+
+/// Günlük çark çevirme sayacı. (userId, day) UNIQUE → atomik upsert ile
+/// eşzamanlı çift-spin engellenir (önceden Notification sayımına bağlıydı, racy).
+model DailySpin {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime @db.Date // UTC gün (00:00)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([userId])
+}
+
+/// DB-backed rate limiter / login lockout. Serverless'te her Lambda kendi
+/// belleğinde olduğu ve cold start sayaçları sıfırladığı için in-memory Map
+/// güvenilir değildi; brute-force/flood koruması bu tabloya taşındı.
+model RateLimitCounter {
+  bucket    String   @id // örn "login:1.2.3.4:user@x", "scan:ip", "lockout:..."
+  count     Int      @default(0)
+  resetAt   DateTime
+  lockedUntil DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 model AuditLog {

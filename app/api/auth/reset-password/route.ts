@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { consumePasswordResetToken } from '@/lib/auth-email-token';
+import { checkAuthEmailActionLimit, getClientIdentifier } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,17 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Rate limit — token tahmin/deneme ve DB yükünü sınırla (diğer auth-email
+  // aksiyonlarıyla tutarlı, IP başına 15 dk penceresi).
+  const ip = getClientIdentifier(request);
+  const rl = await checkAuthEmailActionLimit('reset_password', ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin.' },
+      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    );
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();

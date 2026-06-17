@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { triggerConfetti } from '@/lib/effects/confetti';
 
@@ -95,15 +96,19 @@ export async function toggleHallOfFame(userId: string, status: boolean) {
 /**
  * Klan Sandığına Puan Ekle
  */
-export async function addToSquadTreasury(userId: string, points: number) {
-  const membership = await prisma.squadMember.findFirst({
+export async function addToSquadTreasury(
+  userId: string,
+  points: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma
+) {
+  const membership = await db.squadMember.findFirst({
     where: { userId },
     select: { squadId: true },
   });
 
   if (membership) {
     const treasuryShare = Math.ceil(points * 0.1); // %10 sandığa
-    await prisma.squad.update({
+    await db.squad.update({
       where: { id: membership.squadId },
       data: { treasuryPoints: { increment: treasuryShare } },
     });

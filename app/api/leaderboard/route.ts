@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { isSuspiciousPoints } from '@/lib/points-velocity';
+import { getSuspiciousUserIds } from '@/lib/points-velocity';
 import {
   getLeagueRules,
   getLeagueMetaFromRules,
@@ -99,13 +99,8 @@ export async function GET(request: NextRequest) {
         })
         .sort((a, b) => b.score - a.score);
 
-      const suspiciousIds = new Set<string>();
-      await Promise.all(
-        sortedUsers.slice(0, limit).map(async (u) => {
-          const suspicious = await isSuspiciousPoints(u.id);
-          if (suspicious) suspiciousIds.add(u.id);
-        })
-      );
+      const topSlice = sortedUsers.slice(0, limit);
+      const suspiciousIds = await getSuspiciousUserIds(topSlice.map((u) => u.id));
 
       const leaderboard = sortedUsers.slice(0, limit).map((user, index) => ({
         ...user,
@@ -180,10 +175,7 @@ export async function GET(request: NextRequest) {
         take: limit,
       });
 
-      const suspiciousIds = new Set<string>();
-      await Promise.all(users.map(async (u) => {
-        if (await isSuspiciousPoints(u.id)) suspiciousIds.add(u.id);
-      }));
+      const suspiciousIds = await getSuspiciousUserIds(users.map((u) => u.id));
 
       leaderboardData = users.map((user, index) => {
         const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -244,10 +236,7 @@ export async function GET(request: NextRequest) {
           take: limit,
         });
 
-        const fallbackSuspicious = new Set<string>();
-        await Promise.all(users.map(async (u) => {
-          if (await isSuspiciousPoints(u.id)) fallbackSuspicious.add(u.id);
-        }));
+        const fallbackSuspicious = await getSuspiciousUserIds(users.map((u) => u.id));
 
         leaderboardData = users.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -320,10 +309,7 @@ export async function GET(request: NextRequest) {
           .sort((a, b) => b.periodPoints - a.periodPoints)
           .slice(0, limit);
 
-        const suspiciousIdsPeriod = new Set<string>();
-        await Promise.all(sortedUsers.map(async (u) => {
-          if (await isSuspiciousPoints(u.id)) suspiciousIdsPeriod.add(u.id);
-        }));
+        const suspiciousIdsPeriod = await getSuspiciousUserIds(sortedUsers.map((u) => u.id));
 
         leaderboardData = sortedUsers.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);

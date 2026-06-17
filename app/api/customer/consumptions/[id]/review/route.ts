@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -144,58 +144,69 @@ export async function POST(
       );
     }
 
-    // Yorum oluştur
-    const review = await prisma.consumptionReview.create({
-      data: {
-        consumptionId: consumption.id,
-        customerId: session.user.id,
-        rating,
-        text: text || undefined,
-        dimensions: dimensions || undefined,
-      },
-    });
-
-    // Kullanıcıya puan ver (gamification)
+    // Kullanıcıya verilecek puanı hesapla (gamification)
     const matrix = await getPointsMatrix();
     const reward = getConsumptionReviewReward(text, matrix);
     const pointsEarned = reward.points;
     const xpEarned = reward.xp;
 
-    await creditPointsAndXp(prisma, {
-      userId: session.user.id,
-      points: pointsEarned,
-      xp: xpEarned,
-    });
+    // Yorum oluşturma + puan kredisi + bildirimler TEK transaction içinde.
+    // `consumptionReview.consumptionId` UNIQUE olduğundan, iki eşzamanlı istekten
+    // yalnızca biri create'i geçer; diğeri P2002 ile rollback olur ve ASLA puan
+    // kredisi almaz (önceki kod create ile krediyi ayrı yürütüyordu → çift puan).
+    let review;
+    try {
+      review = await prisma.$transaction(async (tx) => {
+        const created = await tx.consumptionReview.create({
+          data: {
+            consumptionId: consumption.id,
+            customerId: session.user.id,
+            rating,
+            text: text || undefined,
+            dimensions: dimensions || undefined,
+          },
+        });
 
-    // Bildirim gönder
-    await prisma.notification.create({
-      data: {
-        userId: session.user.id,
-        title: 'Yorum için teşekkürler!',
-        message: `${pointsEarned} puan kazandınız!`,
-        type: 'success',
-        data: {
-          reviewId: review.id,
-          pointsEarned,
-          xpEarned,
-        },
-      },
-    });
+        await creditPointsAndXp(tx, {
+          userId: session.user.id,
+          points: pointsEarned,
+          xp: xpEarned,
+        });
 
-    // Bayiye de bildirim
-    await prisma.notification.create({
-      data: {
-        userId: consumption.dealerId,
-        title: 'Yeni Müşteri Yorumu',
-        message: `${consumption.product?.name || 'Bir ürün'} için ${rating} yıldızlı yorum aldınız.`,
-        type: 'info',
-        data: {
-          reviewId: review.id,
-          consumptionId: consumption.id,
-          rating,
-        },
-      },
-    });
+        await tx.notification.create({
+          data: {
+            userId: session.user.id,
+            title: 'Yorum için teşekkürler!',
+            message: `${pointsEarned} puan kazandınız!`,
+            type: 'success',
+            data: { reviewId: created.id, pointsEarned, xpEarned },
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: consumption.dealerId,
+            title: 'Yeni Müşteri Yorumu',
+            message: `${consumption.product?.name || 'Bir ürün'} için ${rating} yıldızlı yorum aldınız.`,
+            type: 'info',
+            data: { reviewId: created.id, consumptionId: consumption.id, rating },
+          },
+        });
+
+        return created;
+      });
+    } catch (txError) {
+      if (
+        txError instanceof Prisma.PrismaClientKnownRequestError &&
+        txError.code === 'P2002'
+      ) {
+        return NextResponse.json(
+          { error: 'Bu tüketim için zaten yorum yapılmış' },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      throw txError;
+    }
 
     // Yorum geldiği anda analiz + segment sinyallerini DB'ye kaydet
     analyzeAndPersistConsumptionReview({

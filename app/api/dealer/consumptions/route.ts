@@ -285,31 +285,36 @@ export async function POST(request: NextRequest) {
     });
 
     // --- SQUAD PASSIVE POINTS LOGIC ---
-    // Calculate an arbitrary base XP for scanning/consuming
-    const baseXP = amount ? Math.floor(amount * 10) : 50;
+    // Tüketim/taramadan kazanılan pasif puan. `amount` bayi tarafından kontrol
+    // edildiği için, ham `amount * 10` ile sınırsız puan basılmasını engellemek
+    // adına baseXP bir tavana sabitlenir ve kullanıcıya yalnızca PASİF puan
+    // (baseXP'nin %5'i) verilir — squad'a ve kullanıcıya aynı miktar.
+    const BASE_XP_CAP = 1000; // tek tüketimden kazanılabilecek max ham puan
+    const rawBaseXP = amount ? Math.floor(amount * 10) : 50;
+    const baseXP = Math.min(Math.max(0, rawBaseXP), BASE_XP_CAP);
     const passivePoints = Math.floor(baseXP * 0.05);
 
     if (passivePoints > 0) {
       const squadMembership = await prisma.squadMember.findFirst({
-        where: { userId: card.customerId }
+        where: { userId: card.customerId },
+        select: { squadId: true },
       });
 
       if (squadMembership) {
         await prisma.$transaction([
           prisma.squad.update({
             where: { id: squadMembership.squadId },
-            data: { totalPoints: { increment: passivePoints } }
+            data: { totalPoints: { increment: passivePoints } },
           }),
           prisma.user.update({
             where: { id: card.customerId },
-            data: { points: { increment: baseXP } } // Primary user gets full XP
-          })
+            data: { points: { increment: passivePoints } },
+          }),
         ]);
       } else {
-        // Normal XP without squad
         await prisma.user.update({
           where: { id: card.customerId },
-          data: { points: { increment: baseXP } }
+          data: { points: { increment: passivePoints } },
         });
       }
     }

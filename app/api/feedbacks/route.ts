@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
@@ -15,7 +16,7 @@ import {
 import { getFeedbackReward, getPointsMatrix } from '@/lib/points-rules';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { capFeedbackPoints } from '@/lib/points-caps';
-import { checkRateLimit, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { checkRateLimitDb, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { inngestQueueEnabled, sendFeedbackAnalyze } from '@/lib/inngest/send';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { processAutoReplies } from '@/lib/auto-reply-engine';
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const clientId = getClientIdentifier(request);
-  const limit = checkRateLimit('feedback', clientId);
+  const limit = await checkRateLimitDb(`feedback:${clientId}`, 20, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Çok fazla geri bildirim gönderdiniz. Lütfen biraz bekleyip tekrar deneyin.' },
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const qrLimit = checkFeedbackPerQrRateLimit(qrCodeId, clientId);
+    const qrLimit = await checkFeedbackPerQrRateLimit(qrCodeId, clientId);
     if (!qrLimit.ok) {
       return NextResponse.json(
         { error: 'Bu QR kod için çok fazla gönderim. Lütfen kısa süre sonra tekrar deneyin.' },
@@ -266,41 +267,64 @@ export async function POST(request: NextRequest) {
     if (session?.user?.id) {
       const matrix = await getPointsMatrix();
       const reward = getFeedbackReward(text, matrix);
-      const cappedPoints = await capFeedbackPoints(session.user.id, reward.points);
+      const userId = session.user.id;
 
-      let rewardData = null;
+      let rewardData: {
+        points: number;
+        xp: number;
+        newLevel: number;
+        leveledUp: boolean;
+        squadContribution: number;
+      } | null = null;
+      let cappedPoints = 0;
 
-      if (cappedPoints > 0 || reward.xp > 0) {
-        const userUpdate = await creditPointsAndXp(prisma, {
-          userId: session.user.id,
-          points: cappedPoints,
-          xp: reward.xp,
-        });
-
-        // Klan Sandığına Katkı
-        const { addToSquadTreasury } = await import('@/lib/gamification-engine');
-        const squadContribution = await addToSquadTreasury(session.user.id, cappedPoints);
-
-        await prisma.analyticsEvent.create({
-          data: {
-            userId: session.user.id,
-            event: 'points_credited',
-            category: 'feedback',
-            data: { 
-              points: cappedPoints, 
-              xp: reward.xp, 
-              nextLevel: userUpdate.level,
-              squadContribution
+      // Cap hesaplama + kredi + points_credited event'i TEK transaction içinde
+      // (Serializable) yapılır; aksi halde eşzamanlı feedback POST'ları aynı
+      // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
+      const { addToSquadTreasury } = await import('@/lib/gamification-engine');
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const capped = await capFeedbackPoints(userId, reward.points, tx);
+          if (capped <= 0 && reward.xp <= 0) {
+            return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0 };
+          }
+          const userUpdate = await creditPointsAndXp(tx, {
+            userId,
+            points: capped,
+            xp: reward.xp,
+          });
+          const squadContribution = await addToSquadTreasury(userId, capped, tx);
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'feedback',
+              data: {
+                points: capped,
+                xp: reward.xp,
+                nextLevel: userUpdate.level,
+                squadContribution,
+              },
             },
-          },
-        });
+          });
+          return {
+            capped,
+            level: userUpdate.level,
+            isLevelUp: userUpdate.isLevelUp,
+            squadContribution,
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
 
+      cappedPoints = result.capped;
+      if (cappedPoints > 0 || reward.xp > 0) {
         rewardData = {
           points: cappedPoints,
           xp: reward.xp,
-          newLevel: userUpdate.level,
-          leveledUp: userUpdate.isLevelUp,
-          squadContribution
+          newLevel: result.level,
+          leveledUp: result.isLevelUp,
+          squadContribution: result.squadContribution,
         };
       }
 

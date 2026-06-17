@@ -15,6 +15,14 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
+// DB-backed rate limiter / login lockout — testlerde her zaman "geçer" (kilitsiz, limit ok).
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimitDb: jest.fn().mockResolvedValue({ ok: true, remaining: 9 }),
+  getLoginLockoutDb: jest.fn().mockResolvedValue({ locked: false }),
+  recordFailedLoginAttemptDb: jest.fn().mockResolvedValue(undefined),
+  clearFailedLoginAttemptsDb: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('next/headers', () => ({
   headers: jest.fn(() => Promise.resolve(new Headers({ 'x-forwarded-for': '127.0.0.1' }))),
 }));
@@ -326,6 +334,7 @@ describe('auth.ts', () => {
         role: 'ADMIN',
         points: 1000,
         level: 20,
+        equippedCosmetics: [],
       };
       mockFindUnique.mockResolvedValue(mockDbUser);
 
@@ -460,6 +469,7 @@ describe('auth.ts', () => {
         role: 'CUSTOMER',
         points: 0,
         level: 1,
+        equippedCosmetics: [],
       });
 
       await jwtCallback({
@@ -479,6 +489,11 @@ describe('auth.ts', () => {
           image: true,
           preferredLanguage: true,
           staffProfile: { select: { dealerId: true } },
+          equippedCosmetics: {
+            where: { isEquipped: true },
+            select: { cosmetic: { select: { type: true, imageUrl: true } } },
+          },
+          customFrameColor: true,
         },
       });
     });

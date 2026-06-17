@@ -3,7 +3,10 @@
  * Aynı davranışla sınırsız puan kazanımını sınırlar.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+
+type CapsDb = Prisma.TransactionClient | typeof prisma;
 
 const DAILY_FEEDBACK_POINTS_CAP = 500;
 const WEEKLY_FEEDBACK_POINTS_CAP = 2000;
@@ -15,18 +18,19 @@ function startOfDay(d: Date): Date {
 }
 
 function startOfWeek(d: Date): Date {
+  // Pazartesi'yi haftanın başı kabul et, tamamen UTC üzerinden hesapla.
   const x = new Date(d);
-  const day = x.getUTCDay();
-  const diff = x.getDate() - day + (day === 0 ? -6 : 1);
-  x.setDate(diff);
+  const day = x.getUTCDay(); // 0=Pazar ... 6=Cumartesi
+  const diffToMonday = day === 0 ? -6 : 1 - day; // Pazar ise -6 gün, diğer günler 1-day
+  x.setUTCDate(x.getUTCDate() + diffToMonday);
   x.setUTCHours(0, 0, 0, 0);
   return x;
 }
 
 /** Bugün kullanıcının feedback kaynaklı kazandığı puan toplamı (AnalyticsEvent points_credited) */
-export async function getDailyFeedbackPointsEarned(userId: string): Promise<number> {
+export async function getDailyFeedbackPointsEarned(userId: string, db: CapsDb = prisma): Promise<number> {
   const start = startOfDay(new Date());
-  const events = await prisma.analyticsEvent.findMany({
+  const events = await db.analyticsEvent.findMany({
     where: {
       userId,
       event: 'points_credited',
@@ -44,9 +48,9 @@ export async function getDailyFeedbackPointsEarned(userId: string): Promise<numb
 }
 
 /** Bu hafta kullanıcının feedback kaynaklı kazandığı puan toplamı */
-export async function getWeeklyFeedbackPointsEarned(userId: string): Promise<number> {
+export async function getWeeklyFeedbackPointsEarned(userId: string, db: CapsDb = prisma): Promise<number> {
   const start = startOfWeek(new Date());
-  const events = await prisma.analyticsEvent.findMany({
+  const events = await db.analyticsEvent.findMany({
     where: {
       userId,
       event: 'points_credited',
@@ -64,10 +68,10 @@ export async function getWeeklyFeedbackPointsEarned(userId: string): Promise<num
 }
 
 /** Verilecek puanı günlük ve haftalık tavana göre kısaltır */
-export async function capFeedbackPoints(userId: string, points: number): Promise<number> {
+export async function capFeedbackPoints(userId: string, points: number, db: CapsDb = prisma): Promise<number> {
   const [daily, weekly] = await Promise.all([
-    getDailyFeedbackPointsEarned(userId),
-    getWeeklyFeedbackPointsEarned(userId),
+    getDailyFeedbackPointsEarned(userId, db),
+    getWeeklyFeedbackPointsEarned(userId, db),
   ]);
   const afterDaily = Math.max(0, DAILY_FEEDBACK_POINTS_CAP - daily);
   const afterWeekly = Math.max(0, WEEKLY_FEEDBACK_POINTS_CAP - weekly);

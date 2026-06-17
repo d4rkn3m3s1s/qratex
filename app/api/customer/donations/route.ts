@@ -5,9 +5,19 @@ import { authOptions } from '@/lib/auth';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { z } from 'zod';
 
 // Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
+
+// Bağış doğrulaması: points tamsayı + pozitif + makul üst sınır (float/overflow
+// ile ledger ↔ cüzdan tutarsızlığı yaratılamaz).
+const donationSchema = z.object({
+  projectId: z.string().min(1),
+  points: z.number().int().positive().max(1_000_000),
+  message: z.string().max(500).optional(),
+  isPublic: z.boolean().optional().default(true),
+});
 
 // GET - Fetch projects and user donation stats
 export async function GET(request: NextRequest) {
@@ -184,14 +194,14 @@ export async function POST(request: NextRequest) {
     if (gate) return gate;
 
     const body = await request.json();
-    const { projectId, points, message, isPublic = true } = body;
-
-    if (!projectId || !points || points < 1) {
+    const parsed = donationSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Geçersiz bağış bilgisi' },
+        { error: parsed.error.errors[0]?.message || 'Geçersiz bağış bilgisi' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const { projectId, points, message, isPublic } = parsed.data;
 
     // Check project exists and is active
     const project = await prisma.donationProject.findUnique({

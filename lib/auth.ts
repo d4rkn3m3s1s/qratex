@@ -7,10 +7,10 @@ import bcrypt from 'bcryptjs';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import {
-  checkRateLimit,
-  getLoginLockout,
-  recordFailedLoginAttempt,
-  clearFailedLoginAttempts,
+  checkRateLimitDb,
+  getLoginLockoutDb,
+  recordFailedLoginAttemptDb,
+  clearFailedLoginAttemptsDb,
 } from '@/lib/rate-limit';
 import {
   logLoginFailed,
@@ -82,7 +82,7 @@ export const authOptions: NextAuthOptions = {
           if (!user) {
             throw new Error('Geçersiz veya süresi dolmuş bağlantı');
           }
-          clearFailedLoginAttempts(`${ip}:${user.email}`);
+          await clearFailedLoginAttemptsDb(`${ip}:${user.email}`);
           logLoginSuccess(ip, user.email);
           return {
             id: user.id,
@@ -101,7 +101,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const identifier = `${ip}:${cred.email}`;
-        const lockout = getLoginLockout(identifier);
+        const lockout = await getLoginLockoutDb(identifier);
         if (lockout.locked) {
           const sec = lockout.retryAfterMs
             ? Math.ceil(lockout.retryAfterMs / 1000)
@@ -110,7 +110,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error(`Çok fazla başarısız deneme. ${sec} saniye sonra tekrar deneyin.`);
         }
 
-        const limit = checkRateLimit('login', identifier);
+        const limit = await checkRateLimitDb(`login:${identifier}`, 10, 60_000);
         if (!limit.ok) {
           logRateLimit(
             ip,
@@ -140,13 +140,13 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.password) {
-          recordFailedLoginAttempt(identifier);
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'user_not_found');
           throw new Error('Kullanıcı bulunamadı');
         }
 
         if (!user.emailVerified) {
-          recordFailedLoginAttempt(identifier);
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'email_not_verified');
           throw new Error('E-posta adresinizi doğrulayın. Kayıt sonrası size gönderilen linke tıklayın.');
         }
@@ -154,12 +154,12 @@ export const authOptions: NextAuthOptions = {
         const isPasswordValid = await bcrypt.compare(cred.password, user.password);
 
         if (!isPasswordValid) {
-          recordFailedLoginAttempt(identifier);
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'invalid_password');
           throw new Error('Şifre hatalı');
         }
 
-        clearFailedLoginAttempts(identifier);
+        await clearFailedLoginAttemptsDb(identifier);
         logLoginSuccess(ip, cred.email);
         return {
           id: user.id,

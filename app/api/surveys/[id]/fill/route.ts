@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { checkPublicActionRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/request-metadata';
 import { z } from 'zod';
 
 // GET — public: get survey for filling
@@ -52,8 +56,8 @@ const answerSchema = z.object({
 });
 
 const submitSchema = z.object({
-    answers: z.array(answerSchema).min(1),
-    userId: z.string().optional(),
+    answers: z.array(answerSchema).min(1).max(100),
+    // userId ARTIK kabul edilmiyor — atfedilen kimlik client'ten gelemez (forgery).
 });
 
 // POST — submit survey response
@@ -63,11 +67,26 @@ export async function POST(
 ) {
     try {
         const { id } = await params;
+
+        // Rate limit (IP + survey bazlı) — toplu yanıt doldurmayı engeller.
+        const ip = getClientIp({ headers: request.headers }) || 'unknown';
+        const rl = await checkPublicActionRateLimit(`survey-fill:${id}:${ip}`, 10, 60_000);
+        if (!rl.ok) {
+            return NextResponse.json(
+                { error: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin.' },
+                { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+            );
+        }
+
         const body = await request.json();
         const parsed = submitSchema.safeParse(body);
         if (!parsed.success) {
             return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
+
+        // Kimlik yalnızca oturumdan; oturum yoksa anonim (null).
+        const session = await getServerSession(authOptions);
+        const userId = session?.user?.id ?? null;
 
         const survey = await prisma.survey.findUnique({
             where: { id, isActive: true },
@@ -89,7 +108,7 @@ export async function POST(
         const response = await prisma.surveyResponse.create({
             data: {
                 surveyId: id,
-                userId: parsed.data.userId ?? null,
+                userId,
                 answers: parsed.data.answers as object[],
             },
         });

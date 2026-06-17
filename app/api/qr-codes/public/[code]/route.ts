@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const clientId = getClientIdentifier(request);
-    const scanLimit = checkScanRateLimit(clientId);
+    const scanLimit = await checkScanRateLimit(clientId);
     if (!scanLimit.ok) {
       return NextResponse.json(
         { error: 'Çok fazla QR taraması. Lütfen biraz bekleyip tekrar deneyin.' },

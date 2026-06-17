@@ -61,5 +61,10 @@ export async function PUT(request: NextRequest) {
     },
   });
 
+  // Module-gate cache'ini geçersiz kıl (aksi halde 60s boyunca eski değer gated route'larda kullanılır).
+  const { revalidateTag } = await import('next/cache');
+  const { MODULE_GATE_CACHE_TAG } = await import('@/lib/module-gate');
+  revalidateTag(MODULE_GATE_CACHE_TAG, 'max');
+
   return NextResponse.json({ success: true, controls }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

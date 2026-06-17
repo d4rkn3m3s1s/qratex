@@ -26,6 +26,21 @@ export async function GET(request: NextRequest) {
         { error: 'Sadece müşteriler kart indirebilir' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
+    // Apple Wallet pass'i geçerli olması için PKCS#7 imzası gerektirir; sertifikalar
+    // yoksa imzasız .pkpass iOS tarafından REDDEDİLİR. Bu durumda kullanıcıya
+    // "başarı" gibi bozuk dosya göndermek yerine dürüst bir hata döndürürüz.
+    const walletConfigured = !!(
+      process.env.APPLE_PASS_CERT_P12_BASE64 &&
+      process.env.APPLE_PASS_CERT_PASSWORD &&
+      process.env.APPLE_PASS_TYPE_IDENTIFIER
+    );
+    if (!walletConfigured) {
+      return NextResponse.json(
+        { error: 'Apple Wallet entegrasyonu henüz yapılandırılmamış. Lütfen daha sonra tekrar deneyin.', reason: 'not_configured' },
+        { status: 503, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const cardId = searchParams.get('cardId');
 
