@@ -1,5 +1,14 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+/** Sabit-zaman string karşılaştırma (bearer token timing attack önlemi). */
+function safeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 /** Inngest veya harici cron’ların kendi deployment’ına güvenli POST atması için. */
 export function internalAppBaseUrl(): string {
@@ -17,7 +26,8 @@ export function internalJobSecret(): string | undefined {
 export function authorizeInternalJobRequest(req: NextRequest): boolean {
   const secret = internalJobSecret();
   const auth = req.headers.get('authorization');
-  return !!(secret && auth === `Bearer ${secret}`);
+  if (!secret || !auth) return false;
+  return safeEqual(auth, `Bearer ${secret}`);
 }
 
 export function unauthorizedInternalJob(): NextResponse {

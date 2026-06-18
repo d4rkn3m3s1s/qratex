@@ -11,11 +11,15 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-async function getHealthHandler(light?: boolean) {
+async function getHealthHandler(light?: boolean, authorized?: boolean) {
   const { GET } = await import('@/app/api/health/route');
   const url = new URL('http://localhost/api/health');
   if (light) url.searchParams.set('light', '1');
-  const req = new NextRequest(url);
+  // Yetkili çağrı (internal job secret) verbose alanları alır.
+  const headers: Record<string, string> = authorized
+    ? { authorization: `Bearer ${process.env.INNGEST_INTERNAL_JOB_SECRET || process.env.CRON_SECRET || 'test-secret'}` }
+    : {};
+  const req = new NextRequest(url, { headers });
   return GET(req);
 }
 
@@ -46,17 +50,27 @@ describe('GET /api/health', () => {
   });
 
   describe('full health', () => {
-    it('returns 200 with healthy status and checks when DB is ok', async () => {
+    it('unauthenticated: 200 healthy, minimal (no version/runtime/email — recon önlemi)', async () => {
       mockQueryRaw.mockResolvedValueOnce(undefined);
-      const res = await getHealthHandler(false);
+      const res = await getHealthHandler(false, false);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body).toHaveProperty('status', 'healthy');
       expect(body).toHaveProperty('timestamp');
-      expect(body).toHaveProperty('checks');
       expect(body.checks).toHaveProperty('database');
       expect(body.checks.database).toMatchObject({ status: 'ok' });
-      expect(body.checks.database).toHaveProperty('latencyMs');
+      // Hassas alanlar anonim çağrıda OLMAMALI.
+      expect(body.checks).not.toHaveProperty('transactionalEmail');
+      expect(body).not.toHaveProperty('runtime');
+      expect(body).not.toHaveProperty('version');
+    });
+
+    it('authorized: verbose alanlar (version/runtime/email) döner', async () => {
+      process.env.INNGEST_INTERNAL_JOB_SECRET = 'test-secret';
+      mockQueryRaw.mockResolvedValueOnce(undefined);
+      const res = await getHealthHandler(false, true);
+      expect(res.status).toBe(200);
+      const body = await res.json();
       expect(body.checks).toHaveProperty('transactionalEmail');
       expect(body.checks.transactionalEmail).toMatchObject({
         status: expect.stringMatching(/^(ok|warn)$/),
@@ -67,6 +81,7 @@ describe('GET /api/health', () => {
         nodeEnv: expect.any(String),
         uptimeSeconds: expect.any(Number),
       });
+      delete process.env.INNGEST_INTERNAL_JOB_SECRET;
     });
 
     it('returns 503 with degraded status when DB fails', async () => {
