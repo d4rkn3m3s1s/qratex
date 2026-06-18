@@ -3570,6 +3570,7 @@
     },
     "customerConsumptionDetail": {
         "loadError": "Tüketim bilgisi alınamadı",
+        "notFound": "Bu tüketim kaydı bulunamadı veya erişiminiz yok.",
         "giveRating": "Lütfen bir puan verin",
         "pointsEarned": "puan kazandınız!",
         "saveError": "Yorum kaydedilemedi",

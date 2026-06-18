@@ -3570,6 +3570,7 @@
     },
     "customerConsumptionDetail": {
         "loadError": "Consumption details could not be loaded",
+        "notFound": "This consumption record was not found or you don't have access.",
         "giveRating": "Please provide a rating",
         "pointsEarned": "points earned!",
         "saveError": "Review could not be saved",

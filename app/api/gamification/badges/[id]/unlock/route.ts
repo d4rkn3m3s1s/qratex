@@ -68,6 +68,13 @@ export async function POST(
       throw err;
     }
 
+    // Rozet kazanım e-postası (opt-out kontrollü, ateşle-unut).
+    const earnerId = session.user.id;
+    const earnedBadgeName = badge.name;
+    import('@/lib/notify-email')
+      .then(({ emailBadgeEarned }) => emailBadgeEarned({ userId: earnerId, badgeName: earnedBadgeName }))
+      .catch((e) => console.error('[BADGE_EMAIL]', e));
+
     return NextResponse.json({
       success: true,
       data: {
