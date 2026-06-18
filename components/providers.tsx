@@ -15,6 +15,7 @@ import {
 } from '@/lib/theme-settings-keys';
 import { AppLocaleProvider } from '@/lib/app-locale';
 import { ConfettiProvider } from '@/components/providers/confetti-provider';
+import { AccessibilityClassSync } from '@/components/accessibility-class-sync';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -228,6 +229,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
           >
             <MotionConfig reducedMotion="user">
               <ThemeModeSync />
+              <AccessibilityClassSync />
               <ThemeColorsProvider initialThemeSettings={initialThemeSettings}>
                 <ConfettiProvider>
                   {children}

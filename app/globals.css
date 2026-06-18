@@ -816,6 +816,63 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
+   ERİŞİLEBİLİRLİK (ayarlardan açılır; <html> sınıfı olarak uygulanır)
+───────────────────────────────────────────────────────────── */
+
+/* Animasyonları azalt — kullanıcı tercihi (prefers-reduced-motion'dan bağımsız). */
+html.reduce-animations *,
+html.reduce-animations *::before,
+html.reduce-animations *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Yüksek kontrast — kenarlık ve metin zıtlığını artırır. */
+html.high-contrast {
+  --border: 0 0% 35%;
+  --ring: 0 0% 0%;
+}
+html.dark.high-contrast {
+  --border: 0 0% 70%;
+  --foreground: 0 0% 100%;
+}
+html.high-contrast a,
+html.high-contrast button {
+  text-underline-offset: 2px;
+}
+
+/* Renk körü modu — kırmızı/yeşil semantik renkleri renk körü-güvenli palete
+   (mavi/turuncu — Okabe-Ito) kaydırır; tek başına renge bağımlı göstergeler
+   ayırt edilebilir kalır. Ek olarak durum renkli metinlere alt çizgi eklenir. */
+html.colorblind {
+  --success: 205 90% 42%; /* yeşil → mavi */
+  --destructive: 25 95% 53%; /* kırmızı → turuncu */
+  --warning: 280 60% 55%; /* amber → mor (turuncudan ayrışsın) */
+}
+html.colorblind.dark {
+  --success: 205 90% 55%;
+  --destructive: 25 95% 60%;
+  --warning: 280 65% 65%;
+}
+/* Tailwind'in sabit kırmızı/yeşil yardımcılarını da kaydır (status göstergeleri). */
+html.colorblind .text-red-600,
+html.colorblind .text-red-500,
+html.colorblind .text-destructive {
+  color: hsl(25 95% 50%) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+html.colorblind .text-green-600,
+html.colorblind .text-green-500,
+html.colorblind .text-emerald-600,
+html.colorblind .text-emerald-500 {
+  color: hsl(205 90% 45%) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
    QR SCANNER STYLES (html5-qrcode)
 ───────────────────────────────────────────────────────────── */
 #qr-reader {

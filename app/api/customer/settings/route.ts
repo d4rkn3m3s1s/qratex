@@ -23,6 +23,9 @@ const defaultSettings = {
     theme: 'dark',
     showProfile: true,
     showLeaderboard: true,
+    highContrast: false,
+    reduceAnimations: false,
+    colorblindMode: false,
   },
 } as const;
 
@@ -44,6 +47,11 @@ const preferencesPatchSchema = z
     theme: z.enum(['dark', 'light']).optional(),
     showProfile: z.boolean().optional(),
     showLeaderboard: z.boolean().optional(),
+    // Erişilebilirlik (önceden şemada yoktu → strict mod bunları reddedip kalıcı
+    // olmalarını engelliyordu; renk körü modu + diğer ikisi artık kaydedilir).
+    highContrast: z.boolean().optional(),
+    reduceAnimations: z.boolean().optional(),
+    colorblindMode: z.boolean().optional(),
   })
   .strict();
 
