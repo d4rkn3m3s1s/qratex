@@ -155,6 +155,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
   { labelKey: 'compliance', href: '/admin/compliance', icon: Shield },
+  { labelKey: 'privacy_requests', href: '/admin/privacy-requests', icon: Shield },
   { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
   { labelKey: 'league_settings', href: '/admin/league-settings', icon: Trophy },
   { labelKey: 'gamification_settings', href: '/admin/gamification-settings', icon: Zap },
