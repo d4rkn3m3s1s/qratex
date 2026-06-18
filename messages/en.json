@@ -1676,6 +1676,14 @@
         "dayStreak": "day streak",
         "firstBadgeHint": "Your first badge is one QR away.",
         "firstQuest": "First quest",
+        "welcome": {
+            "title": "Welcome to QRATEX! 🎉",
+            "subtitle": "Your feedback improves businesses, and you earn points and badges. Start with these 3 steps:",
+            "step1": "Scan a QR code at a business",
+            "step2": "Rate your experience and leave a review",
+            "step3": "Earn points + badges, redeem for rewards",
+            "cta": "Start your first quest"
+        },
         "currentPoints": "Current points",
         "nextLeague": "Next league",
         "xpLeft": "XP to go",

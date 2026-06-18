@@ -147,6 +147,8 @@ export async function GET(request: NextRequest) {
               emailVerified: true,
               createdAt: true,
               updatedAt: true,
+              pricingPlanId: true,
+              pricingPlan: { select: { id: true, name: true } },
               _count: {
                 select: {
                   feedbacks: true,
@@ -179,6 +181,8 @@ export async function GET(request: NextRequest) {
               emailVerified: true,
               createdAt: true,
               updatedAt: true,
+              pricingPlanId: true,
+              pricingPlan: { select: { id: true, name: true } },
               _count: {
                 select: {
                   feedbacks: true,

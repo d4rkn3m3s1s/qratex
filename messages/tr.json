@@ -1676,6 +1676,14 @@
         "dayStreak": "gün seri",
         "firstBadgeHint": "İlk rozetin 1 QR uzağında.",
         "firstQuest": "İlk Görevin",
+        "welcome": {
+            "title": "QRATEX’e hoş geldin! 🎉",
+            "subtitle": "Geri bildirimlerin işletmeleri geliştirir, sen de puan ve rozet kazanırsın. İlk 3 adımla başla:",
+            "step1": "Bir işletmedeki QR kodunu tara",
+            "step2": "Deneyimini puanla ve yorumunu bırak",
+            "step3": "Puan + rozet kazan, ödüllerle kullan",
+            "cta": "İlk görevine başla"
+        },
         "currentPoints": "Cari Puan",
         "nextLeague": "Sonraki lig",
         "xpLeft": "XP kaldı",
