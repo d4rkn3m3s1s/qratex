@@ -77,6 +77,10 @@ model User {
   fraudScore       Float?  @default(0.0)
   abCohort         String? // for Gamification A/B tests: A, B, C...
 
+  // Billing: bayinin etkin fiyatlandırma planı (null = varsayılan/ücretsiz kademe)
+  pricingPlanId String?
+  pricingPlan   PricingPlan? @relation("DealerPricingPlan", fields: [pricingPlanId], references: [id], onDelete: SetNull)
+
   // Physical Card System Relations
   physicalCards        PhysicalCard[]      @relation("CustomerCards")
   customerConsumptions Consumption[]       @relation("CustomerConsumptions")
@@ -1147,6 +1151,8 @@ model PricingPlan {
   order          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  dealers User[] @relation("DealerPricingPlan")
 
   @@index([isActive])
   @@index([order])

@@ -818,6 +818,7 @@
         "fillRequiredFields": "Lütfen zorunlu alanları doldurun",
         "created": "QR kod oluşturuldu",
         "createFailed": "QR kod oluşturulamadı",
+        "planLimitReached": "Planınızın QR kodu limitine ulaştınız. Daha fazlası için planınızı yükseltin.",
         "genericError": "Bir hata oluştu",
         "confirmDelete": "Bu QR kodunu silmek istediğinizden emin misiniz?",
         "confirmRevoke": "Bu QR kodunu iptal etmek istiyor musunuz? İptal edilen kodlar artık taranamaz.",
