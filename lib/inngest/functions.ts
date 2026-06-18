@@ -143,6 +143,16 @@ export const dealerFlashOfferExpiryFn = inngest.createFunction(
   }
 );
 
+export const churnInterventionFn = inngest.createFunction(
+  { id: 'churn-intervention', retries: 2 },
+  { cron: '30 3 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-churn-intervention', () =>
+      invokeInternalCron('/api/internal/inngest/churn-intervention')
+    );
+  }
+);
+
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
   { cron: '0 */6 * * *' },

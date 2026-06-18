@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/lib/admin-toast';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
+import { ChurnInterventionSettings } from '@/components/dealer/churn-intervention-settings';
 import { formatRelativeTime, getInitials } from '@/lib/utils';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 
@@ -115,6 +116,8 @@ export default function DealerChurnRiskPage() {
           </Button>
         }
       />
+
+      <ChurnInterventionSettings />
 
       {/* Metrik kartları */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

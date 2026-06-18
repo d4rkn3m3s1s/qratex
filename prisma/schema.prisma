@@ -68,6 +68,8 @@ model User {
   holidayMode          Boolean @default(false)
   /// Bayi: otomatik telafi eşikleri ve bütçe (JSON)
   dealerRemedyAutomation Json?
+  /// Bayi: tahminsel churn müdahale eşikleri (JSON: enabled, churnThreshold, inactiveDays, autoFlashOffer)
+  dealerChurnIntervention Json?
 
   // Admin Features (Insights, Fraud, A/B Testing)
   businessCategory String? // e.g. "cafe", "restaurant" for global insights
