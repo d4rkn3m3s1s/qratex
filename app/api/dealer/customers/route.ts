@@ -69,7 +69,9 @@ export async function GET(request: NextRequest) {
     });
 
     const customers = clvRows.map((c) => ({
-      userId: c.userId,
+      // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik). Liste anahtarı için
+      // kararlı ama geri döndürülemez kısa bir referans üretilir.
+      ref: `c_${c.userId.slice(-8)}`,
       name: c.user.name,
       email: c.user.email,
       image: c.user.image,

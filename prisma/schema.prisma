@@ -221,12 +221,16 @@ model UserSurpriseBox {
   points       Int       @default(0)
   rewardType   String? // coupon, points, badge, reward
   metadata     Json? // ek veri
+  /// Günlük giriş kutusu için "YYYY-MM-DD" (UTC). Yalnızca otomatik günlük kutuda dolu;
+  /// hediye/manuel kutularda null. @@unique ile aynı gün ikinci kez üretimi engeller (çift ödül fix).
+  dayKey       String?
   openedAt     DateTime? // null = henüz açılmadı
   createdAt    DateTime  @default(now())
 
   user   User  @relation("UserSurpriseBoxesReceived", fields: [userId], references: [id], onDelete: Cascade)
   sentBy User? @relation("UserSurpriseBoxesSent", fields: [sentByUserId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, dayKey])
   @@index([userId])
   @@index([openedAt])
   @@index([createdAt])

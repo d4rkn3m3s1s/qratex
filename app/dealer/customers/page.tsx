@@ -8,7 +8,7 @@ import { Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 
 type CustomerRow = {
-  userId: string;
+  ref: string;
   name: string | null;
   email: string | null;
   image: string | null;
@@ -98,7 +98,7 @@ export default function DealerCustomersPage() {
                 </thead>
                 <tbody>
                   {list.map((c) => (
-                    <tr key={c.userId} className="border-b last:border-0">
+                    <tr key={c.ref} className="border-b last:border-0">
                       <td className="py-2 pr-4">
                         <p className="font-medium">{c.name || 'İsimsiz'}</p>
                         <p className="text-xs text-muted-foreground">{c.email}</p>

@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
             },
           },
           customer: {
+            // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
             select: {
-              id: true,
               name: true,
               email: true,
               image: true,
@@ -237,8 +237,8 @@ export async function POST(request: NextRequest) {
       },
       include: {
         customer: {
+          // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
           select: {
-            id: true,
             name: true,
             email: true,
           },

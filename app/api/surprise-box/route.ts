@@ -14,31 +14,24 @@ export async function GET() {
       return NextResponse.json({ success: false, error: 'Yetkisiz' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    // 2. Günlük giriş kutusu kontrolü ve üretimi
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const dailyBox = await prisma.userSurpriseBox.findFirst({
-      where: {
+    // 2. Günlük giriş kutusu — atomik upsert (çift ödül fix).
+    //    Eski kod findFirst + create yapıyordu; iki eşzamanlı istek "kutu yok" görüp
+    //    iki kutu üretebiliyordu (13.06 çift ödül). dayKey + @@unique([userId, dayKey])
+    //    ile aynı gün ikinci üretim veritabanı seviyesinde imkânsız.
+    const dayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    const randomPoints = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
+    await prisma.userSurpriseBox.upsert({
+      where: { userId_dayKey: { userId: session.user.id, dayKey } },
+      update: {}, // bugünün kutusu zaten varsa hiçbir şey yapma
+      create: {
         userId: session.user.id,
+        dayKey,
         title: 'Günlük Giriş Ödülü',
-        createdAt: { gte: today },
+        message: 'Her gün giriş yaparak yeni sürprizler kazanabilirsin! Bugünün ödülü seninle.',
+        points: randomPoints,
+        rewardType: 'points',
       },
     });
-
-    if (!dailyBox) {
-      // 50-250 arası rastgele puan
-      const randomPoints = Math.floor(Math.random() * (250 - 50 + 1)) + 50;
-      await prisma.userSurpriseBox.create({
-        data: {
-          userId: session.user.id,
-          title: 'Günlük Giriş Ödülü',
-          message: 'Her gün giriş yaparak yeni sürprizler kazanabilirsin! Bugünün ödülü seninle.',
-          points: randomPoints,
-          rewardType: 'points',
-        },
-      });
-    }
 
     // 3. Güncel listeyi tekrar çek (yeni kutu dahil)
     const boxes = await prisma.userSurpriseBox.findMany({

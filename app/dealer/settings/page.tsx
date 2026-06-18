@@ -635,8 +635,8 @@ export default function DealerSettingsPage() {
                     onChange={(e) => setProfile({ ...profile, preferredLanguage: e.target.value })}
                     className="flex h-10 w-full rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-foreground shadow-sm dark:border-white/25 dark:bg-white/[0.07]"
                   >
-                    <option value="tr">{t('dealerSettings.turkish')}</option>
-                    <option value="en">{t('dealerSettings.english')}</option>
+                    <option value="tr" className="bg-background text-foreground">{t('dealerSettings.turkish')}</option>
+                    <option value="en" className="bg-background text-foreground">{t('dealerSettings.english')}</option>
                   </select>
                 </div>
                 {/* Holiday Mode (S6-T9) */}
