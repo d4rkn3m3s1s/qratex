@@ -132,6 +132,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'economy_sim', href: '/admin/economy-sim', icon: Activity },
   { labelKey: 'dealers_health', href: '/admin/dealers-health', icon: Heart },
   { labelKey: 'innovation_platform', href: '/admin/innovation', icon: Radar },
+  { labelKey: 'segment_proposals', href: '/admin/innovation/segment-proposals', icon: Users2 },
   { labelKey: 'ab_testing', href: '/admin/ab-testing', icon: Beaker },
   { labelKey: 'analytics', href: '/admin/analytics', icon: BarChart3 },
   { labelKey: 'segments', href: '/admin/segments', icon: PieChart },

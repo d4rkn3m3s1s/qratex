@@ -133,6 +133,16 @@ export const weeklyDigestFn = inngest.createFunction(
   }
 );
 
+export const dealerFlashOfferExpiryFn = inngest.createFunction(
+  { id: 'dealer-flash-offer-expiry', retries: 2 },
+  { cron: '0 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-flash-offer-expiry', () =>
+      invokeInternalCron('/api/internal/inngest/dealer-flash-offer-expiry')
+    );
+  }
+);
+
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
   { cron: '0 */6 * * *' },
