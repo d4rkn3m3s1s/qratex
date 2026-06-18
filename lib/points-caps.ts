@@ -5,27 +5,13 @@
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+// Gün/hafta sınırı TEK kaynaktan (lib/timezone) — yerel kopya divergence riski yaratıyordu.
+import { startOfDayUTC as startOfDay, startOfWeekUTC as startOfWeek } from '@/lib/timezone';
 
 type CapsDb = Prisma.TransactionClient | typeof prisma;
 
 const DAILY_FEEDBACK_POINTS_CAP = 500;
 const WEEKLY_FEEDBACK_POINTS_CAP = 2000;
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setUTCHours(0, 0, 0, 0);
-  return x;
-}
-
-function startOfWeek(d: Date): Date {
-  // Pazartesi'yi haftanın başı kabul et, tamamen UTC üzerinden hesapla.
-  const x = new Date(d);
-  const day = x.getUTCDay(); // 0=Pazar ... 6=Cumartesi
-  const diffToMonday = day === 0 ? -6 : 1 - day; // Pazar ise -6 gün, diğer günler 1-day
-  x.setUTCDate(x.getUTCDate() + diffToMonday);
-  x.setUTCHours(0, 0, 0, 0);
-  return x;
-}
 
 /** Bugün kullanıcının feedback kaynaklı kazandığı puan toplamı (AnalyticsEvent points_credited) */
 export async function getDailyFeedbackPointsEarned(userId: string, db: CapsDb = prisma): Promise<number> {

@@ -110,10 +110,12 @@ export async function GET(request: NextRequest) {
         needsReview: suspiciousIds.has(user.id),
       }));
 
-      const userRank =
-        session?.user?.id
-          ? (sortedUsers.findIndex((u) => u.id === session.user.id) ?? -1) + 1 || null
-          : null;
+      // findIndex -1 döndürür (nullish değil) → eski "?? -1 + 1 || null" 1. sıradaki
+      // kullanıcıyı (index 0 → 0 → null) yanlışlıkla "sırasız" gösteriyordu. Düzeltildi.
+      const rankIdx = session?.user?.id
+        ? sortedUsers.findIndex((u) => u.id === session.user.id)
+        : -1;
+      const userRank = rankIdx >= 0 ? rankIdx + 1 : null;
       const totalUsers = totalUsersCount;
 
       return NextResponse.json(

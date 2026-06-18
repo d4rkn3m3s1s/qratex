@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -78,22 +79,36 @@ export async function GET() {
       prisma.qRCode.count({ where: { dealerId, isActive: true } }),
     ]);
 
-    const dailySeries = await Promise.all(
-      seriesDays.map(async (day) => {
-        const [feedbacks, consumptions] = await Promise.all([
-          prisma.feedback.count({
-            where: {
-              ...fbBase,
-              createdAt: { gte: day.start, lte: day.end },
-            },
-          }),
-          prisma.consumption.count({
-            where: { dealerId, createdAt: { gte: day.start, lte: day.end } },
-          }),
-        ]);
-        return { date: day.key, feedbacks, consumptions };
-      })
-    );
+    // Günlük seri: önceden gün başına 2 sorgu (7×2=14) döngüde çalışıyordu →
+    // date_trunc('day') ile gruplanmış 2 sorguya indirildi (feedback + consumption).
+    const rangeStart = seriesDays[0].start;
+    const rangeEnd = seriesDays[seriesDays.length - 1].end;
+    const [fbDayRows, consDayRows] = await Promise.all([
+      prisma.$queryRaw<Array<{ bucket: Date; n: bigint }>>(Prisma.sql`
+        SELECT date_trunc('day', f."createdAt" AT TIME ZONE 'UTC') AS bucket, COUNT(*)::bigint AS n
+        FROM "Feedback" f
+        JOIN "QRCode" q ON q."id" = f."qrCodeId"
+        WHERE q."dealerId" = ${dealerId}
+          ${useSoftDelete ? Prisma.sql`AND f."deletedAt" IS NULL` : Prisma.empty}
+          AND f."createdAt" >= ${rangeStart} AND f."createdAt" <= ${rangeEnd}
+        GROUP BY 1
+      `),
+      prisma.$queryRaw<Array<{ bucket: Date; n: bigint }>>(Prisma.sql`
+        SELECT date_trunc('day', "createdAt" AT TIME ZONE 'UTC') AS bucket, COUNT(*)::bigint AS n
+        FROM "Consumption"
+        WHERE "dealerId" = ${dealerId}
+          AND "createdAt" >= ${rangeStart} AND "createdAt" <= ${rangeEnd}
+        GROUP BY 1
+      `),
+    ]);
+    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+    const fbByDay = new Map(fbDayRows.map((r) => [dayKey(new Date(r.bucket)), Number(r.n)]));
+    const consByDay = new Map(consDayRows.map((r) => [dayKey(new Date(r.bucket)), Number(r.n)]));
+    const dailySeries = seriesDays.map((day) => ({
+      date: day.key,
+      feedbacks: fbByDay.get(dayKey(day.start)) ?? 0,
+      consumptions: consByDay.get(dayKey(day.start)) ?? 0,
+    }));
 
     return NextResponse.json(
       {
