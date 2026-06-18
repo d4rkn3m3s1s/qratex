@@ -10,6 +10,7 @@ import Image from "next/image";
 import { SquadIntroCards, SquadLeaveButton } from "@/components/customer/squad-interactive";
 import { SquadWeeklyGoalBar } from "@/components/customer/squad-weekly-goal";
 import { SquadLeaderboard } from "@/components/customer/squad-leaderboard";
+import { SquadBattlePanel } from "@/components/customer/squad-battle-panel";
 export default async function SquadsPage() {
     const session = await getServerSession(authOptions);
 
@@ -29,9 +30,8 @@ export default async function SquadsPage() {
                                 user: { select: { id: true, name: true, image: true, points: true } }
                             }
                         },
-                        owner: { select: { id: true, name: true } },
-                        battlesAsSquad1: { where: { status: 'active' }, include: { squad2: true } },
-                        battlesAsSquad2: { where: { status: 'active' }, include: { squad1: true } }
+                        owner: { select: { id: true, name: true } }
+                        // Savaş verisi artık SquadBattlePanel tarafından canlı çekiliyor.
                     }
                 }
             }
@@ -74,41 +74,16 @@ export default async function SquadsPage() {
         memberCount: s._count.members,
     }));
 
-    // Check for active battle
-    const activeBattle1 = squad.battlesAsSquad1[0] ?? null;
-    const activeBattle2 = squad.battlesAsSquad2[0] ?? null;
-    const activeBattle = activeBattle1 || activeBattle2 || null;
-
-    let opponent = null;
-    if (activeBattle1) {
-        opponent = activeBattle1.squad2;
-    } else if (activeBattle2) {
-        opponent = activeBattle2.squad1;
-    }
+    const isOwner = squad.owner.id === session.user.id;
 
     return (
         <div className="space-y-8">
-            {activeBattle && opponent && (
-                <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent p-6 shadow-sm relative overflow-hidden">
-                    <div className="absolute -right-4 -top-4 opacity-10">
-                        <Swords className="w-32 h-32 text-amber-500" />
-                    </div>
-                    <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div>
-                            <Badge className="bg-amber-500 text-white mb-2 shadow-sm border-0 animate-pulse">AKTİF SAVAŞ</Badge>
-                            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-balance">
-                                {squad.name} <span className="text-muted-foreground font-medium mx-2 italic">VS</span> {opponent.name}
-                            </h2>
-                            <p className="text-sm text-muted-foreground mt-1">Klanınız savaşıyor! En çok puanı toplayan ödül havuzunu kazanır.</p>
-                        </div>
-                        <div className="shrink-0 text-center bg-card border border-border/50 rounded-xl p-4 min-w-[150px]">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Ödül Havuzu</p>
-                            <p className="text-3xl font-black text-amber-500 drop-shadow-sm">{activeBattle.rewardPool}</p>
-                            <p className="text-xs font-semibold mt-0.5 text-muted-foreground">Puan + XP</p>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Klan savaşı: meydan okuma + bekleyen davet + canlı skor (client, polling) */}
+            <SquadBattlePanel
+                squadId={squad.id}
+                isOwner={isOwner}
+                leaderboard={squadRanks.map((s) => ({ id: s.id, name: s.name }))}
+            />
 
             <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm md:flex-row md:justify-between md:items-end">
                 <div className="min-w-0">
