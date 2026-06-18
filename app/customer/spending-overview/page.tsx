@@ -216,7 +216,7 @@ export default function CustomerSpendingOverviewPage() {
                         #{i + 1}
                       </Badge>
                       {d.logo ? (
-                        <img src={d.logo} alt="" className="size-9 rounded-lg object-cover" />
+                        <img src={d.logo} alt={d.label} className="size-9 rounded-lg object-cover" />
                       ) : (
                         <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
                           {d.label.slice(0, 2).toUpperCase()}

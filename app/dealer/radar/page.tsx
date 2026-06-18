@@ -165,7 +165,7 @@ export default async function DealerWinBackPage() {
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img
                                                 src={user.image}
-                                                alt=""
+                                                alt={user.name || t(locale, "dealerRadar.avatarFallbackLetter")}
                                                 className="w-10 h-10 rounded-full object-cover ring-2 ring-primary/20"
                                                 referrerPolicy="no-referrer"
                                             />
