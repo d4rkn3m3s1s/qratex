@@ -85,6 +85,14 @@ export default function CustomerSurpriseBoxesPage() {
   const [rewardStrategy, setRewardStrategy] = useState<RewardStrategyData | null>(null);
   const [listTab, setListTab] = useState<'unopened' | 'opened'>('unopened');
 
+  const previewBox: SurpriseBoxContent = {
+    title: 'Günlük Giriş Ödülü',
+    message: 'Her gün giriş yaparak yeni sürprizler kazanabilirsin. Bugünün ödülü seninle.',
+    couponCode: 'PREVIEW-2026',
+    points: 120,
+    rewardType: 'points',
+  };
+
   const total = unopened.length + opened.length;
 
   const fetchBoxes = useCallback(async () => {
@@ -161,6 +169,12 @@ export default function CustomerSurpriseBoxesPage() {
     } finally {
       setOpeningId(null);
     }
+  };
+
+  const handlePreview = () => {
+    setModalContent(previewBox);
+    setPointsGranted(previewBox.points ?? 0);
+    setModalOpen(true);
   };
 
   return (
@@ -248,6 +262,9 @@ export default function CustomerSurpriseBoxesPage() {
                   <ArrowRight className="h-4 w-4 shrink-0 opacity-70" />
                 </Link>
               </Button>
+              <Button variant="secondary" className="w-full min-h-11 touch-manipulation sm:w-auto sm:min-w-[12rem]" onClick={handlePreview}>
+                Önizlemeyi aç
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -287,6 +304,9 @@ export default function CustomerSurpriseBoxesPage() {
               </Button>
               <Button asChild variant="outline" className="min-h-11 w-full touch-manipulation sm:flex-1">
                 <Link href="/customer/rewards">{t('surpriseBoxes.rewardStore') || 'Ödül mağazası'}</Link>
+              </Button>
+              <Button variant="secondary" className="min-h-11 w-full touch-manipulation sm:flex-1" onClick={handlePreview}>
+                Önizlemeyi aç
               </Button>
             </div>
           </CardContent>
