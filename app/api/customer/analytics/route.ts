@@ -57,7 +57,11 @@ export async function GET(req: NextRequest) {
     const [consumptions, periodTotalCount, spentAgg] = await Promise.all([
       prisma.consumption.findMany({
         where: periodWhere,
-        include: {
+        select: {
+          id: true,
+          createdAt: true,
+          amount: true,
+          note: true,
           product: {
             select: {
               id: true,
@@ -198,16 +202,16 @@ export async function GET(req: NextRequest) {
         visits: hourlyMap.get(hour) || 0,
       }));
 
-    // Top products
+    // Top products — ürünsüz tüketimler de görünsün: ürün adı yoksa not, o da
+    // yoksa "Diğer" etiketiyle sayılır (önceden tamamen atlanıyordu → liste boştu).
     const productMap = new Map<string, { count: number; totalSpent: number }>();
     consumptions.forEach((c) => {
-      if (c.product) {
-        const existing = productMap.get(c.product.name) || { count: 0, totalSpent: 0 };
-        productMap.set(c.product.name, {
-          count: existing.count + 1,
-          totalSpent: existing.totalSpent + (c.amount || 0),
-        });
-      }
+      const label = c.product?.name || (c.note && c.note.trim() !== '' ? c.note.trim() : 'Diğer');
+      const existing = productMap.get(label) || { count: 0, totalSpent: 0 };
+      productMap.set(label, {
+        count: existing.count + 1,
+        totalSpent: existing.totalSpent + (c.amount || 0),
+      });
     });
 
     const topProducts = Array.from(productMap.entries())
