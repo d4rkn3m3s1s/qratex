@@ -174,6 +174,7 @@ model User {
   dealerSegmentProposals    SegmentCampaignProposal[] @relation("DealerSegmentProposals")
   dealerLocations           DealerLocation[]          @relation("DealerLocations")
   dealerRemedyTemplates     RemedyTemplate[]          @relation("DealerRemedyTemplates")
+  miniGameSessions          MiniGameSession[]         @relation("UserMiniGameSessions")
   /// Müşteri masadan sinyal gönderdiyse
   customerTablePulses       TablePulse[]              @relation("CustomerTablePulses")
   experienceSharesCreated   ExperienceShareToken[]   @relation("ExperienceSharesCreated")
@@ -432,6 +433,25 @@ model SquadBattleParticipant {
   user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([battleId, userId])
+}
+
+/// Mini oyun (Pacman tarzı yıldız toplama) oturumu. Günde 1 hak için
+/// @@unique([userId, gameType, dayKey]); sunucu ödülü doğrular (client'a güvenmez).
+model MiniGameSession {
+  id             String    @id @default(cuid())
+  userId         String
+  gameType       String    @default("pacman")
+  dayKey         String // "YYYY-MM-DD" (UTC) — günlük tek oturum
+  status         String    @default("active") // active | completed | failed
+  starsCollected Int       @default(0)
+  rewardPoints   Int       @default(0)
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  user User @relation("UserMiniGameSessions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameType, dayKey])
+  @@index([userId])
 }
 
 model GamificationSettings {
