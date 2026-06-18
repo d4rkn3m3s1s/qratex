@@ -100,6 +100,12 @@ export default function DealerRemedyAutomationPage() {
           {t('dealerRemedyAutomation.title')}
         </h1>
         <p className="text-sm text-muted-foreground mt-2 text-pretty leading-relaxed">{t('dealerRemedyAutomation.description')}</p>
+        <Button variant="outline" size="sm" asChild className="mt-4 w-fit touch-manipulation">
+          <Link href="/dealer/remedy-automation/templates">
+            <Settings2 className="h-4 w-4 shrink-0 mr-2" />
+            Şablonlar & Mekanlar
+          </Link>
+        </Button>
       </div>
 
       <Card>

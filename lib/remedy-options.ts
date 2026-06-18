@@ -27,8 +27,9 @@ function templateToOption(t: {
   unit: string;
   values: unknown;
 }): RemedyOption {
+  // Yalnızca gerçek sayıları kabul et: Number(null)===0 gibi sürprizleri ele.
   const values = Array.isArray(t.values)
-    ? (t.values as unknown[]).map(Number).filter((n) => Number.isFinite(n))
+    ? (t.values as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
     : [];
   return { type: t.type, label: t.label, unit: t.unit, values };
 }
