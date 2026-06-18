@@ -81,6 +81,12 @@ model User {
   pricingPlanId String?
   pricingPlan   PricingPlan? @relation("DealerPricingPlan", fields: [pricingPlanId], references: [id], onDelete: SetNull)
 
+  // Stripe abonelik durumu (webhook ile senkron tutulur)
+  stripeCustomerId             String?   @unique
+  stripeSubscriptionId         String?   @unique
+  subscriptionStatus           String? // active, trialing, past_due, canceled, incomplete
+  subscriptionCurrentPeriodEnd DateTime?
+
   // Physical Card System Relations
   physicalCards        PhysicalCard[]      @relation("CustomerCards")
   customerConsumptions Consumption[]       @relation("CustomerConsumptions")
@@ -1146,6 +1152,7 @@ model PricingPlan {
   maxQRCodes     Int? // null = unlimited (P3 segment fiyatlandırma)
   maxBranches    Int? // null = unlimited
   pricePerBranch Float? // Şube başına ek ücret (opsiyonel)
+  stripePriceId  String? // Stripe Price ID (Checkout için); null = Stripe'sız plan
   isPopular      Boolean  @default(false)
   isActive       Boolean  @default(true)
   order          Int      @default(0)

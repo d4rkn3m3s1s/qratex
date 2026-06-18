@@ -205,6 +205,7 @@ const dealerNavItems: NavItem[] = [
   { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain, featureKey: 'ai_features', moduleKey: 'ai_features' },
   { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users, featureKey: 'staff_management', moduleKey: 'staff_management' },
   { key: 'discover', labelKey: 'discover', href: '/dealer/discover', icon: LayoutGrid },
+  { key: 'billing', labelKey: 'billing', href: '/dealer/billing', icon: CreditCard },
   { key: 'settings', labelKey: 'settings', href: '/dealer/settings', icon: Settings },
 ];
 
