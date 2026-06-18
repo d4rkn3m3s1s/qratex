@@ -173,6 +173,17 @@ export const partnerDigestWebhookFn = inngest.createFunction(
   }
 );
 
+// Dönemsel konsept aktivasyonu: penceresi açılan/kapanan konsepti Settings'e yazar.
+export const seasonalConceptActivationFn = inngest.createFunction(
+  { id: 'seasonal-concept-activation', retries: 2 },
+  { cron: '5 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-seasonal-concept-activation', () =>
+      invokeInternalCron('/api/internal/inngest/seasonal-concept-activation')
+    );
+  }
+);
+
 // Süresi dolan klan savaşlarını otomatik bitirir (önceden yalnızca elle kapanıyordu).
 export const squadBattlesFinishFn = inngest.createFunction(
   { id: 'squad-battles-finish', retries: 2 },

@@ -1629,6 +1629,36 @@ model SeasonalCampaign {
   @@index([endDate])
 }
 
+/// Dönemsel konsept: bir tarih penceresinde tek pakette site temasını değiştirir
+/// (arka plan efekti + renk paleti + banner + opsiyonel bonus çarpan). Admin
+/// planlayıcıdan oluşturulur; saatlik cron aktif konsepti Settings'e yazar.
+/// Çakışan konseptlerde priority (büyük = öncelikli), sonra başlangıç tarihi.
+model SeasonalConcept {
+  id               String   @id @default(cuid())
+  name             String // "Yaz Festivali", "Yılbaşı", "Cadılar Bayramı"
+  description      String?  @db.Text
+  startDate        DateTime
+  endDate          DateTime
+  isActive         Boolean  @default(true)
+  priority         Int      @default(0)
+
+  // Görsel kaldıraçlar (null = değiştirme)
+  backgroundEffect String? // background-effect-shared VALID_VARIANTS değeri
+  themePresetId    String? // theme-presets THEME_COLOR_PRESETS anahtarı
+  bannerText       String? // ana sayfa/panel banner metni
+  bannerEmoji      String? // banner başı emoji (🎄, 🎃, ☀️)
+
+  // Opsiyonel gamification kaldıracı
+  bonusMultiplier  Float?  @default(1.0)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+}
+
 model UserBirthday {
   id          String    @id @default(cuid())
   userId      String    @unique
