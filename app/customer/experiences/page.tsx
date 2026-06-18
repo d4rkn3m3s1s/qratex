@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -142,11 +141,6 @@ export default function CustomerExperiencesPage() {
 
   return (
     <div className="space-y-6">
-      <DashboardPageHeading
-        title="İşletmede deneyim"
-        description="Son deneyimleriniz, yerel sadakat rozeti ve arkadaşınıza güvenli paylaşım — kişisel veriyi abartmadan."
-      />
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">İşletme</CardTitle>
