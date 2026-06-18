@@ -8,6 +8,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { getRemedyOptionsForQrCode } from '@/lib/remedy-options';
 
 export interface RemedyAutomationConfig {
   enabled: boolean;
@@ -25,11 +26,6 @@ const DEFAULTS: RemedyAutomationConfig = {
   messageTemplate:
     'Deneyiminiz için özür dileriz. Aşağıdan telafi türü ve miktarınızı seçin (otomatik teklif).',
 };
-
-const DEFAULT_OPTIONS = [
-  { type: 'discount', label: 'İndirim', unit: '%', values: [10, 15, 20] },
-  { type: 'points', label: 'Puan', unit: 'puan', values: [50, 100, 150] },
-];
 
 export function parseRemedyAutomation(raw: unknown): RemedyAutomationConfig {
   const base = { ...DEFAULTS };
@@ -60,8 +56,10 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
   userId: string | null;
   rating: number;
   churnRisk?: number | null;
+  /** Mekana özel telafi seçeneklerini çözmek için (opsiyonel, geriye uyumlu). */
+  qrCodeId?: string | null;
 }): Promise<{ created: boolean; offerId?: string; reason?: string }> {
-  const { feedbackId, dealerId, userId, rating, churnRisk } = params;
+  const { feedbackId, dealerId, userId, rating, churnRisk, qrCodeId } = params;
   if (!userId) return { created: false, reason: 'no_user' };
 
   const dealer = await prisma.user.findUnique({
@@ -93,6 +91,9 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
   });
   if (existing) return { created: false, reason: 'already_exists' };
 
+  // Telafi seçenekleri: mekana/işletmeye özel şablonlardan (yoksa varsayılan).
+  const options = await getRemedyOptionsForQrCode(dealerId, qrCodeId);
+
   const offer = await prisma.remedyOffer.create({
     data: {
       feedbackId,
@@ -100,7 +101,7 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
       userId,
       message: cfg.messageTemplate,
       status: 'awaiting_dealer_approval',
-      options: DEFAULT_OPTIONS as object,
+      options: options as object,
     },
   });
 

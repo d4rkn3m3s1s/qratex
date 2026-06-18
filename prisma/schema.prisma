@@ -172,6 +172,8 @@ model User {
   dealerFlashOffers         DealerFlashOffer[]        @relation("DealerFlashOffers")
   dealerWeeklyBriefs        DealerWeeklyBrief[]       @relation("DealerWeeklyBriefs")
   dealerSegmentProposals    SegmentCampaignProposal[] @relation("DealerSegmentProposals")
+  dealerLocations           DealerLocation[]          @relation("DealerLocations")
+  dealerRemedyTemplates     RemedyTemplate[]          @relation("DealerRemedyTemplates")
   /// Müşteri masadan sinyal gönderdiyse
   customerTablePulses       TablePulse[]              @relation("CustomerTablePulses")
   experienceSharesCreated   ExperienceShareToken[]   @relation("ExperienceSharesCreated")
@@ -606,10 +608,12 @@ model QRCode {
   expiresAt     DateTime? // lifecycle: optional expiry; null = no expiry
   revokedAt     DateTime? // lifecycle: revoked (e.g. lost); null = not revoked
   segmentConfig Json? // madde 45: { "new": { "welcomeText": "..." }, "returning": { "welcomeText": "..." } }
+  locationId    String? // bağlı olduğu mekan/şube (null = işletme geneli)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   dealer    User       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  location  DealerLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   feedbacks Feedback[]
   tablePulses TablePulse[]
 
@@ -617,6 +621,28 @@ model QRCode {
   @@index([dealerId])
   @@index([isActive])
   @@index([expiresAt])
+  @@index([locationId])
+}
+
+/// Bayinin fiziksel mekanı/şubesi. Telefon teklifleri ve QR kodlar mekana özel
+/// olabilsin diye eklendi. Bir bayinin birden çok mekanı olabilir.
+model DealerLocation {
+  id        String   @id @default(cuid())
+  dealerId  String
+  name      String // "Merkez", "Şube 2", "Kadıköy" vb.
+  address   String?
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer          User             @relation("DealerLocations", fields: [dealerId], references: [id], onDelete: Cascade)
+  qrCodes         QRCode[]
+  remedyTemplates RemedyTemplate[]
+
+  @@unique([dealerId, name])
+  @@index([dealerId])
 }
 
 model Feedback {
@@ -1105,6 +1131,30 @@ model RemedyOffer {
   @@index([status])
   // Dealer onay kuyruğu: where dealerId + status
   @@index([dealerId, status])
+}
+
+/// Bayinin telafi teklif şablonu. Hardcoded DEFAULT_OPTIONS'ın yerini alır:
+/// bayi kendi indirim/puan/ücretsiz-ürün seçeneklerini ve değerlerini tanımlar.
+/// locationId null ise işletme geneli; dolu ise yalnızca o mekana özel.
+model RemedyTemplate {
+  id         String   @id @default(cuid())
+  dealerId   String
+  locationId String? // null = işletme geneli; dolu = mekana özel
+  type       String // discount | points | free_item
+  label      String // "İndirim", "Puan", "Ücretsiz ürün/içecek"
+  unit       String // "%", "puan", "adet"
+  values     Json // izin verilen değerler: [10, 15, 20]
+  isActive   Boolean  @default(true)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  dealer   User            @relation("DealerRemedyTemplates", fields: [dealerId], references: [id], onDelete: Cascade)
+  location DealerLocation? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([locationId])
+  @@index([dealerId, isActive])
 }
 
 // ─────────────────────────────────────────────────────────────

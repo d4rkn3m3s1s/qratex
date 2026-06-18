@@ -14,6 +14,7 @@ import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { z } from 'zod';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { getRemedyOptions } from '@/lib/remedy-options';
 
 const remedyOptionSchema = z.object({
   type: z.string(),
@@ -28,11 +29,6 @@ const bodySchema = z.object({
   queueForApproval: z.boolean().optional(),
 });
 
-const DEFAULT_OPTIONS = [
-  { type: 'discount', label: 'İndirim', unit: '%', values: [10, 15, 20, 25, 30] },
-  { type: 'points', label: 'Puan', unit: 'puan', values: [50, 100, 150, 200] },
-  { type: 'free_item', label: 'Ücretsiz ürün/içecek', unit: 'adet', values: [1] },
-];
 
 export async function POST(
   request: NextRequest,
@@ -77,11 +73,15 @@ export async function POST(
     : parsed.success
       ? parsed.data.sendNotification
       : true;
-  const options = parsed.success && parsed.data.options?.length ? parsed.data.options : DEFAULT_OPTIONS;
-
-  let remedyOfferId: string | null = null;
   const userId = review.customerId;
   const dealerId = review.consumption.dealerId;
+  // Tüketim yorumları QR koda bağlı değil → işletme geneli telafi şablonları.
+  const options =
+    parsed.success && parsed.data.options?.length
+      ? parsed.data.options
+      : await getRemedyOptions(dealerId, null);
+
+  let remedyOfferId: string | null = null;
 
   if (userId && (queueForApproval || sendNotification)) {
     const offer = await prisma.remedyOffer.create({

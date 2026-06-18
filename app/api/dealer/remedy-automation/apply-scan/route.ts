@@ -3,14 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { getRemedyOptions } from '@/lib/remedy-options';
 
 
 export const dynamic = 'force-dynamic';
-
-const DEFAULT_OPTIONS = [
-  { type: 'discount', label: 'İndirim', unit: '%', values: [10, 15, 20] },
-  { type: 'points', label: 'Puan', unit: 'puan', values: [50, 100, 150] },
-];
 
 function parseAutomation(raw: unknown) {
   const base = {
@@ -87,7 +83,7 @@ export async function POST() {
     },
     orderBy: { createdAt: 'desc' },
     take: cfg.maxPerRun + 15,
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, qrCode: { select: { locationId: true } } },
   });
 
   const createdIds: string[] = [];
@@ -114,6 +110,9 @@ export async function POST() {
       continue;
     }
 
+    // Telafi seçenekleri: feedbackin QR kodunun mekanına (yoksa işletmeye) özel.
+    const options = await getRemedyOptions(dealerId, fb.qrCode.locationId);
+
     const offer = await prisma.remedyOffer.create({
       data: {
         feedbackId: fb.id,
@@ -121,7 +120,7 @@ export async function POST() {
         userId: fb.userId,
         message: cfg.messageTemplate,
         status: 'awaiting_dealer_approval',
-        options: DEFAULT_OPTIONS as object,
+        options: options as object,
       },
     });
     createdIds.push(offer.id);

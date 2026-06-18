@@ -125,6 +125,7 @@ export async function runFeedbackAnalyzePipeline(feedbackId: string): Promise<Fe
       userId: f.userId,
       rating: f.rating,
       churnRisk: analysis.churnRisk ?? null,
+      qrCodeId: f.qrCodeId,
     });
   } catch (err) {
     console.error('[REMEDY_AUTOMATION] auto-draft failed:', err);

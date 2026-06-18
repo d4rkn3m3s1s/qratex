@@ -498,6 +498,7 @@ export async function POST(request: NextRequest) {
                     userId: session?.user?.id ?? null,
                     rating,
                     churnRisk: analysis.churnRisk ?? null,
+                    qrCodeId,
                   });
                 } catch (err) {
                   console.error('[REMEDY_AUTOMATION] inline auto-draft failed:', err);

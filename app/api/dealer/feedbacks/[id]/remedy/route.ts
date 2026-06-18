@@ -13,6 +13,7 @@ import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { z } from 'zod';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { getRemedyOptions } from '@/lib/remedy-options';
 
 const remedyOptionSchema = z.object({
   type: z.string(),
@@ -27,12 +28,6 @@ const bodySchema = z.object({
   /** true: müşteriye bildirim yok, onay kuyruğuna düşer (awaiting_dealer_approval) */
   queueForApproval: z.boolean().optional(),
 });
-
-const DEFAULT_OPTIONS = [
-  { type: 'discount', label: 'İndirim', unit: '%', values: [10, 15, 20, 25, 30] },
-  { type: 'points', label: 'Puan', unit: 'puan', values: [50, 100, 150, 200] },
-  { type: 'free_item', label: 'Ücretsiz ürün/içecek', unit: 'adet', values: [1] },
-];
 
 export async function POST(
   request: NextRequest,
@@ -52,7 +47,7 @@ export async function POST(
 
   const feedback = await prisma.feedback.findUnique({
     where: { id: feedbackId },
-    include: { qrCode: { select: { dealerId: true } }, user: { select: { id: true } } },
+    include: { qrCode: { select: { dealerId: true, locationId: true } }, user: { select: { id: true } } },
   });
 
   if (!feedback) {
@@ -74,7 +69,10 @@ export async function POST(
     : parsed.success
       ? parsed.data.sendNotification
       : true;
-  const options = parsed.success && parsed.data.options?.length ? parsed.data.options : DEFAULT_OPTIONS;
+  const options =
+    parsed.success && parsed.data.options?.length
+      ? parsed.data.options
+      : await getRemedyOptions(feedback.qrCode.dealerId, feedback.qrCode.locationId);
 
   let remedyOfferId: string | null = null;
 
