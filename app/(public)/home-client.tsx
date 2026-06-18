@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { type BackgroundVariant } from '@/components/ui/backgrounds';
+import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import HeroSection from '@/components/landing/HeroSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
@@ -64,17 +64,31 @@ export default function HomeClient({ initialBackgroundEffect }: HomeClientProps)
     }
   }, [session, status, router]);
 
+  // Arka plan efekti yalnızca hero'da değil TÜM landing sayfasının arkasında görünür.
+  // `fixed inset-0` (viewport boyu) → kullanıcı aşağı kaydırınca opak bölümlerin de
+  // arkasında efekt görünür kalır. Bölümler `relative z-10` ile efektin önünde.
+  const hasEffect = backgroundEffect !== 'none' && backgroundEffect !== 'original';
+
   // Oturum kontrolü arka planda; misafirleri tam sayfa "Yükleniyor"da tutmayız (SEO / algılanan hız).
   return (
-    <div className="relative">
-      <HeroSection backgroundEffect={backgroundEffect} reducedMotion={reducedMotion} />
-      <FeaturesSection />
-      <DemoSection />
-      <HowItWorksSection />
-      <TestimonialsSection />
-      <PricingSection />
-      <FAQSection />
-      <CTASection />
+    <div className="relative isolate">
+      {hasEffect && (
+        <div className="fixed inset-0 z-0 pointer-events-none" aria-hidden="true">
+          <DynamicBackground variant={backgroundEffect} fetchFromApi={false}>
+            <div />
+          </DynamicBackground>
+        </div>
+      )}
+      <div className="relative z-10">
+        <HeroSection backgroundEffect={backgroundEffect} reducedMotion={reducedMotion} />
+        <FeaturesSection />
+        <DemoSection />
+        <HowItWorksSection />
+        <TestimonialsSection />
+        <PricingSection />
+        <FAQSection />
+        <CTASection />
+      </div>
     </div>
   );
 }
