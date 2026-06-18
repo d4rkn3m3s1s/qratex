@@ -66,10 +66,10 @@ describe('auth.ts', () => {
       expect(authOptions.session?.strategy).toBe('jwt');
     });
 
-    it('should resolve session maxAge (default 3 days, min 300s; mirrors lib/auth)', () => {
+    it('should resolve session maxAge (default 24h, min 300s; mirrors lib/auth)', () => {
       const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
       const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
-      const fallback = 3 * 24 * 60 * 60;
+      const fallback = 24 * 60 * 60; // güvenlik: 72sa → 24sa
       const expected = Math.max(300, Number.isFinite(parsed) && parsed > 0 ? parsed : fallback);
       expect(authOptions.session?.maxAge).toBe(expected);
     });

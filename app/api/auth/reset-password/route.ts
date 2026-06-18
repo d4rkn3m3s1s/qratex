@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { consumePasswordResetToken } from '@/lib/auth-email-token';
 import { checkAuthEmailActionLimit, getClientIdentifier } from '@/lib/rate-limit';
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const hashed = await bcrypt.hash(parsed.data.newPassword, 12);
+  const hashed = await hashPassword(parsed.data.newPassword);
   const result = await consumePasswordResetToken(parsed.data.token, hashed);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

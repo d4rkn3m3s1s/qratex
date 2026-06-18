@@ -322,9 +322,18 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // HSTS: HTTPS'i zorla (downgrade/SSL-strip önlemi). 2 yıl + preload.
+          // Tarayıcı yalnızca HTTPS üzerinden uygular; HTTP'de etkisizdir (güvenli).
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          // Cross-origin izolasyon: kaynakların başka origin'lerce gömülmesini sınırla.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self)',
+            value: 'camera=(), microphone=(), geolocation=(self), payment=(), usb=()',
           },
           {
             key: 'Content-Security-Policy',
@@ -336,6 +345,12 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "connect-src 'self' https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://*.ingest.sentry.io",
               "frame-ancestors 'none'",
+              // base-uri: <base> ile script kaçırma/relative-URL hijack önlemi.
+              "base-uri 'self'",
+              // form-action: form gönderimini yalnızca kendi origin'e sınırla.
+              "form-action 'self'",
+              // object-src: eklenti/Flash vektörlerini kapat.
+              "object-src 'none'",
             ].join('; '),
           },
         ],

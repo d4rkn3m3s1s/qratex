@@ -34,7 +34,9 @@ if (process.env.NODE_ENV === 'production') {
 function resolveSessionMaxAgeSeconds(): number {
   const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
   const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
-  const fallback = 3 * 24 * 60 * 60;
+  // Varsayılan 24sa (önceden 72sa): puan/ekonomi içeren bir sistemde sızan
+  // token'ın geçerlilik penceresini daraltır. Env ile özelleştirilebilir.
+  const fallback = 24 * 60 * 60;
   const base = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   return Math.max(300, base);
 }
