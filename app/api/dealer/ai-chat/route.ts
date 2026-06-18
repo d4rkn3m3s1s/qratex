@@ -80,7 +80,8 @@ export async function POST(request: NextRequest) {
 
         let ownedConversation: { messages: unknown } | null = null;
         if (conversationId) {
-            ownedConversation = await prisma.aIConversation.findUnique({
+            // Sahiplik doğrulaması: sohbet bu bayiye ait olmalı.
+            ownedConversation = await prisma.aIConversation.findFirst({
                 where: { id: conversationId, dealerId: userId },
                 select: { messages: true },
             });
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
             createdAt: f.createdAt.toISOString(),
         }));
 
-        const answer = await askAI(question, {
+        const aiAnswer = await askAI(question, {
             totalFeedbacks: stats._count,
             avgRating: stats._avg.rating ?? 0,
             sentimentDist,
@@ -154,6 +155,13 @@ export async function POST(request: NextRequest) {
             recentFeedbacks,
             previousMessages,
         });
+
+        // askAI, AI sağlayıcı yapılandırılmamışsa null döner → eskiden yeni sohbette
+        // boş cevap görünüyordu ("cevap vermiyor"). Her zaman görünür bir yanıt garanti et.
+        const answer =
+            aiAnswer ??
+            'Yapay zeka yanıtı şu anda üretilemedi. AI sağlayıcı (GROQ/OpenAI) anahtarı ' +
+                'yapılandırılmamış olabilir. Lütfen yöneticinizle iletişime geçin veya daha sonra tekrar deneyin.';
 
         let savedId = conversationId;
         const ts = new Date().toISOString();

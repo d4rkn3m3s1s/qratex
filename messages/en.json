@@ -3482,6 +3482,7 @@
         "nextBadge": "Next Badge",
         "earned": "Earned",
         "locked": "Locked",
+        "searchPlaceholder": "Search badges…",
         "allCategories": "All Categories",
         "points": "Points",
         "unlocking": "Unlocking...",
