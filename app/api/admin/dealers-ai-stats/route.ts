@@ -11,7 +11,13 @@ export async function GET() {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
 
-    // Get all dealers with their feedback stats
+    // Performans: AI Kontrol Merkezi "güncel durum" gösterir. Tüm zamanların
+    // geri bildirimlerini çekmek yerine son 90 günle sınırla + bayi başına makul
+    // bir tavan koy. Bu hem sorguyu hızlandırır hem de urgent/churn sayımlarını
+    // bayat veriyle şişmekten korur.
+    const SINCE = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const PER_DEALER_FEEDBACK_CAP = 500;
+
     const dealers = await prisma.user.findMany({
       where: { role: 'DEALER' },
       select: {
@@ -21,6 +27,7 @@ export async function GET() {
         qrCodes: {
           select: {
             feedbacks: {
+              where: { createdAt: { gte: SINCE }, deletedAt: null },
               select: {
                 id: true,
                 text: true,
@@ -33,6 +40,8 @@ export async function GET() {
                 aiProcessedAt: true,
                 createdAt: true,
               },
+              orderBy: { createdAt: 'desc' },
+              take: PER_DEALER_FEEDBACK_CAP,
             },
           },
         },

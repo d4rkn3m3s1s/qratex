@@ -36,35 +36,37 @@ export async function GET(request: NextRequest) {
       where.qrCode = { dealerId: session.user.id };
     }
 
-    // Detaylı feedbacklar
-    const detailedFeedbacks = await prisma.feedback.findMany({
-      where,
-      select: {
-        id: true, text: true, rating: true, sentiment: true, emotions: true,
-        topics: true, isToxic: true, intent: true, intentScore: true,
-        urgency: true, effortScore: true, churnRisk: true, entities: true,
-        themes: true, statementSentiments: true, actionSuggestions: true,
-        aiProcessedAt: true, aiModelUsed: true, aiVersion: true, createdAt: true,
-        user: { select: { name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
-
-    // Tüm feedbacklardan aggregation
-    const allFeedbacks = await prisma.feedback.findMany({
-      where: {
-        ...(session.user.role === 'DEALER' ? { qrCode: { dealerId: session.user.id } } : {}),
-        text: { not: null },
-      },
-      select: {
-        intent: true, urgency: true, effortScore: true, churnRisk: true,
-        entities: true, themes: true, actionSuggestions: true,
-        sentiment: true, emotions: true, rating: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: AI_DETAILED_AGG_SAMPLE_MAX,
-    });
+    // İki sorgu birbirinden bağımsız → paralel (önceden sıralı await'ti).
+    const [detailedFeedbacks, allFeedbacks] = await Promise.all([
+      // Detaylı feedbacklar
+      prisma.feedback.findMany({
+        where,
+        select: {
+          id: true, text: true, rating: true, sentiment: true, emotions: true,
+          topics: true, isToxic: true, intent: true, intentScore: true,
+          urgency: true, effortScore: true, churnRisk: true, entities: true,
+          themes: true, statementSentiments: true, actionSuggestions: true,
+          aiProcessedAt: true, aiModelUsed: true, aiVersion: true, createdAt: true,
+          user: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      }),
+      // Tüm feedbacklardan aggregation
+      prisma.feedback.findMany({
+        where: {
+          ...(session.user.role === 'DEALER' ? { qrCode: { dealerId: session.user.id } } : {}),
+          text: { not: null },
+        },
+        select: {
+          intent: true, urgency: true, effortScore: true, churnRisk: true,
+          entities: true, themes: true, actionSuggestions: true,
+          sentiment: true, emotions: true, rating: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: AI_DETAILED_AGG_SAMPLE_MAX,
+      }),
+    ]);
 
     // ── Intent Distribution ──
     const intentDist: Record<string, number> = { complaint: 0, suggestion: 0, praise: 0, question: 0, general: 0 };

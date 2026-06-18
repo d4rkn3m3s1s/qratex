@@ -102,8 +102,9 @@ export default function AdminAIDashboardPage() {
 
   const fetchStats = async () => {
     try {
-      // Fetch system-wide AI stats
-      const [insightsRes, usageRes] = await Promise.all([
+      // Sistem geneli AI istatistikleri + bayi istatistikleri TEK Promise.all ile
+      // paralel çekilir (önceden dealers ayrı/sıralı bekleniyordu → ~1 sn fazla).
+      const [insightsRes, usageRes, dealersRes] = await Promise.all([
         fetch('/api/ai/analyze?action=insights', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -114,13 +115,11 @@ export default function AdminAIDashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }),
+        fetch('/api/admin/dealers-ai-stats'),
       ]);
 
       const insightsData = await insightsRes.json();
       const usageData = await usageRes.json();
-
-      // Fetch all dealers stats
-      const dealersRes = await fetch('/api/admin/dealers-ai-stats');
       let dealersData: {
         dealers: { id: string; name: string; feedbackCount: number; avgRating: number; sentiment: string }[];
         urgentCount: number;
