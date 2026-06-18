@@ -405,6 +405,10 @@ model SquadBattle {
   squad2Score Int      @default(0)
   winnerId    String?
   rewardPool  Int      @default(0)
+  /// Meydan okumayı başlatan kullanıcı (challenge akışı). null = admin oluşturdu.
+  challengedById String?
+  /// Rakip klan kabul ettiğinde dolar (status: pending → active).
+  acceptedAt     DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

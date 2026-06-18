@@ -116,3 +116,57 @@ export async function addToSquadTreasury(
   }
   return 0;
 }
+
+/**
+ * Aktif klan savaşı skoruna katkı. Kullanıcı puan kazandığında çağrılır:
+ * klanı şu an AKTİF bir savaştaysa, kullanıcının katılımcı skorunu ve savaşın
+ * ilgili klan skorunu (squad1Score/squad2Score) artırır. Önceden bu skor hiç
+ * birikmiyordu (her zaman 0) — savaş "tamamlanma"da rastgele kazanan çıkıyordu.
+ *
+ * Katılımcı kaydı yoksa otomatik oluşturulur (savaşa katılım = klan üyeliği).
+ * Hata-toleranslı tutulması çağıran tarafın sorumluluğunda (puan akışını bozmasın).
+ */
+export async function addToActiveBattleScore(
+  userId: string,
+  points: number,
+  db: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<number> {
+  if (points <= 0) return 0;
+
+  const membership = await db.squadMember.findFirst({
+    where: { userId },
+    select: { squadId: true },
+  });
+  if (!membership) return 0;
+
+  const now = new Date();
+  const battle = await db.squadBattle.findFirst({
+    where: {
+      status: 'active',
+      startTime: { lte: now },
+      endTime: { gt: now },
+      OR: [{ squad1Id: membership.squadId }, { squad2Id: membership.squadId }],
+    },
+    select: { id: true, squad1Id: true, squad2Id: true },
+  });
+  if (!battle) return 0;
+
+  const isSquad1 = battle.squad1Id === membership.squadId;
+
+  // Katılımcı skorunu artır (yoksa oluştur).
+  await db.squadBattleParticipant.upsert({
+    where: { battleId_userId: { battleId: battle.id, userId } },
+    update: { score: { increment: points } },
+    create: { battleId: battle.id, squadId: membership.squadId, userId, score: points },
+  });
+
+  // Savaşın ilgili klan toplam skorunu artır.
+  await db.squadBattle.update({
+    where: { id: battle.id },
+    data: isSquad1
+      ? { squad1Score: { increment: points } }
+      : { squad2Score: { increment: points } },
+  });
+
+  return points;
+}

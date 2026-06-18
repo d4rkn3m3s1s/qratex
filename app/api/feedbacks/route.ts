@@ -297,7 +297,7 @@ export async function POST(request: NextRequest) {
       // Cap hesaplama + kredi + points_credited event'i TEK transaction içinde
       // (Serializable) yapılır; aksi halde eşzamanlı feedback POST'ları aynı
       // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
-      const { addToSquadTreasury } = await import('@/lib/gamification-engine');
+      const { addToSquadTreasury, addToActiveBattleScore } = await import('@/lib/gamification-engine');
       const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
       const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
       const { getGamificationMultipliers } = await import('@/lib/gamification-settings');
@@ -323,6 +323,8 @@ export async function POST(request: NextRequest) {
             xp: xpToCredit,
           });
           const squadContribution = await addToSquadTreasury(userId, capped, tx);
+          // Klanı aktif savaştaysa kazanılan puan savaş skoruna da işlenir.
+          await addToActiveBattleScore(userId, capped, tx);
           await tx.analyticsEvent.create({
             data: {
               userId,
