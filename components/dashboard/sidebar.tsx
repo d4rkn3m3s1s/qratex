@@ -210,6 +210,7 @@ const dealerNavItems: NavItem[] = [
 const customerNavItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'dashboard', href: '/customer', icon: LayoutDashboard },
   { key: 'progress_hub', labelKey: 'progress_hub', href: '/customer/progress-hub', icon: Gauge },
+  { key: 'my_year', labelKey: 'my_year', href: '/customer/my-year', icon: Sparkles },
   { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard },
   { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History },
   { key: 'scan', labelKey: 'scan', href: '/customer/scan', icon: QrCode },
