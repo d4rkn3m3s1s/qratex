@@ -9,6 +9,7 @@ import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
+  Rocket,
   QrCode,
   MessageSquare,
   MessageCircle,
@@ -173,6 +174,7 @@ const adminNavItems: NavItem[] = [
 
 const dealerNavItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'dashboard', href: '/dealer', icon: LayoutDashboard },
+  { key: 'onboarding', labelKey: 'onboarding', href: '/dealer/onboarding', icon: Rocket },
   { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target },
   { key: 'growth_hub', labelKey: 'growth_hub', href: '/dealer/growth-hub', icon: Sprout },
   { key: 'scan', labelKey: 'scan_card', href: '/dealer/scan', icon: ScanLine },
