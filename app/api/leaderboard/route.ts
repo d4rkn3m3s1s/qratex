@@ -12,6 +12,7 @@ import {
   getNextLeagueMetaFromRules,
 } from '@/lib/league-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { startOfWeekUTC } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
 /** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
@@ -142,10 +143,12 @@ export async function GET(request: NextRequest) {
 
     switch (period) {
       case 'weekly':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // UTC hafta başı (Pzt 00:00 UTC) — gamification/progress ile aynı sınır.
+        // Eski "now - 7gün" kayan pencereydi; yerel ay başı da TZ'e göre kayıyordu.
+        startDate = startOfWeekUTC(now);
         break;
       case 'monthly':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
         break;
       case 'alltime':
       default:

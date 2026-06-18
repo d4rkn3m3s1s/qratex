@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { startOfDayUTC, startOfWeekUTC } from '@/lib/timezone';
 
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const userId = session.user.id;
 
@@ -47,14 +42,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Calculate additional stats
-    const thisWeekStart = new Date();
-    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
-    thisWeekStart.setHours(0, 0, 0, 0);
-
-    const thisMonthStart = new Date();
-    thisMonthStart.setDate(1);
-    thisMonthStart.setHours(0, 0, 0, 0);
+    // Calculate additional stats — UTC sınırları (lib/timezone tek kaynak; yerel
+    // setHours/setDate sunucu TZ'ine göre kayar ve ay başında hafta sınırını yanlış
+    // önceki aya taşırdı).
+    const nowForStats = new Date();
+    const thisWeekStart = startOfWeekUTC(nowForStats);
+    const thisMonthStart = new Date(
+      Date.UTC(nowForStats.getUTCFullYear(), nowForStats.getUTCMonth(), 1)
+    );
 
     const [weeklyFeedbacks, monthlyFeedbacks] = await Promise.all([
       prisma.feedback.count({
@@ -87,19 +82,16 @@ export async function GET(request: NextRequest) {
 
     let currentStreak = 0;
     if (recentFeedbacks.length > 0) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
+      // UTC gün sınırları — yerel setHours ay/gün geçişlerinde streak'i yanlış
+      // sıfırlıyordu. Aktivite günlerini UTC gün damgasına indirgeyip karşılaştır.
+      const activityDays = new Set(
+        recentFeedbacks.map((f) => startOfDayUTC(new Date(f.createdAt)).getTime())
+      );
+      const todayUTC = startOfDayUTC(new Date());
+
       for (let i = 0; i < 30; i++) {
-        const checkDate = new Date(today);
-        checkDate.setDate(checkDate.getDate() - i);
-        const hasActivity = recentFeedbacks.some((f) => {
-          const feedbackDate = new Date(f.createdAt);
-          feedbackDate.setHours(0, 0, 0, 0);
-          return feedbackDate.getTime() === checkDate.getTime();
-        });
-        
-        if (hasActivity) {
+        const checkDay = todayUTC.getTime() - i * 24 * 60 * 60 * 1000;
+        if (activityDays.has(checkDay)) {
           currentStreak++;
         } else if (i > 0) {
           break;
@@ -158,14 +150,9 @@ export async function GET(request: NextRequest) {
 // Award badge to user
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { badgeId } = await request.json();
     const userId = session.user.id;
