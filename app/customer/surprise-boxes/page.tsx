@@ -28,6 +28,7 @@ import { tr } from 'date-fns/locale';
 import { toast } from '@/lib/admin-toast';
 import { cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
+import { playRewardChime } from '@/lib/play-chime';
 
 interface SurpriseBoxItem {
   id: string;
@@ -163,6 +164,7 @@ export default function CustomerSurpriseBoxesPage() {
       });
       setPointsGranted(data.data?.pointsGranted ?? box.points ?? 0);
       setModalOpen(true);
+      playRewardChime(); // kutlama ses efekti (animasyon-azaltma açıksa sessiz)
       await fetchBoxes();
     } catch {
       toast.error(t('surpriseBoxes.openError') || 'Kutu açılamadı');
