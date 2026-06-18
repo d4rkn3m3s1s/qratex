@@ -100,6 +100,7 @@ export async function recordFailedLoginAttemptDb(identifier: string): Promise<vo
   }
 
   const newCount = existing.count + 1;
+  const justLocked = newCount >= MAX_FAILED_ATTEMPTS && !(existing.lockedUntil && existing.lockedUntil > now);
   await prisma.rateLimitCounter.update({
     where: { bucket },
     data: {
@@ -107,6 +108,22 @@ export async function recordFailedLoginAttemptDb(identifier: string): Promise<vo
       lockedUntil: newCount >= MAX_FAILED_ATTEMPTS ? new Date(now.getTime() + LOCKOUT_MS) : existing.lockedUntil,
     },
   });
+
+  // Brute-force tespiti: hesap bu denemeyle ilk kez kilitlendiyse HIGH şiddetli
+  // güvenlik uyarısı üret (admin trust-command'da görünür + admin bildirimi).
+  // Ateşle-unut: login akışını bloklamaz, hatayı yutar.
+  if (justLocked) {
+    import('@/lib/security')
+      .then(({ reportSuspiciousActivity }) =>
+        reportSuspiciousActivity({
+          type: 'BRUTE_FORCE',
+          severity: 'HIGH',
+          description: `Çok sayıda başarısız giriş denemesi sonrası hesap geçici olarak kilitlendi (${identifier}).`,
+          metadata: { identifier, failedAttempts: newCount, lockoutMs: LOCKOUT_MS },
+        })
+      )
+      .catch((err) => console.error('[BRUTE_FORCE_ALERT] üretilemedi:', err));
+  }
 }
 
 export async function clearFailedLoginAttemptsDb(identifier: string): Promise<void> {

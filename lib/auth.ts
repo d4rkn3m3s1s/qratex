@@ -20,16 +20,13 @@ import {
 } from '@/lib/auth-events';
 import { consumeMagicLoginToken } from '@/lib/auth-email-token';
 import { verifyTwoFactorForLogin } from '@/lib/two-factor';
+import { assertEnvOrThrow } from '@/lib/env-validation';
 import type { Adapter } from 'next-auth/adapters';
 
-// NEXTAUTH_SECRET olmadan JWT imzalanmaz → forge edilebilir oturum. Üretimde
-// zorunlu ve yeterince uzun olmalı (startup'ta erken hata ver).
-if (process.env.NODE_ENV === 'production') {
-  const s = process.env.NEXTAUTH_SECRET;
-  if (!s || s.length < 32) {
-    throw new Error('NEXTAUTH_SECRET üretimde zorunludur ve en az 32 karakter olmalıdır.');
-  }
-}
+// Boot-time ortam doğrulaması: DATABASE_URL + NEXTAUTH_SECRET (üretimde min 32,
+// JWT forge koruması) + NEXTAUTH_URL + yarım OAuth yapılandırması. Üretimde 'error'
+// seviyesi dağıtımı durdurur; aksi halde sadece loglanır.
+assertEnvOrThrow();
 
 function resolveSessionMaxAgeSeconds(): number {
   const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
