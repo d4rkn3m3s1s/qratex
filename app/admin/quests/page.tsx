@@ -87,6 +87,10 @@ export default function AdminQuestsPage() {
     reward: 50,
     isActive: true,
     expiresAt: '',
+    // Görev mekaniği: 'custom' (elle ilerletilir) veya 'visit_category'
+    // (müşteri ziyaret edince otomatik ilerler). category boş = herhangi işletme.
+    requirementType: 'custom',
+    category: '',
   });
 
   useEffect(() => {
@@ -116,7 +120,13 @@ export default function AdminQuestsPage() {
         description: formData.description,
         icon: formData.icon,
         type: formData.type,
-        requirement: { type: 'custom', count: formData.target },
+        requirement: {
+          type: formData.requirementType,
+          count: formData.target,
+          ...(formData.requirementType === 'visit_category' && formData.category.trim()
+            ? { category: formData.category.trim() }
+            : {}),
+        },
         reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
         expiresAt: formData.expiresAt || null,
       };
@@ -150,7 +160,13 @@ export default function AdminQuestsPage() {
         description: formData.description,
         icon: formData.icon,
         type: formData.type,
-        requirement: { type: 'custom', count: formData.target },
+        requirement: {
+          type: formData.requirementType,
+          count: formData.target,
+          ...(formData.requirementType === 'visit_category' && formData.category.trim()
+            ? { category: formData.category.trim() }
+            : {}),
+        },
         reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
         expiresAt: formData.expiresAt || null,
         isActive: formData.isActive,
@@ -219,6 +235,8 @@ export default function AdminQuestsPage() {
       reward: 50,
       isActive: true,
       expiresAt: '',
+      requirementType: 'custom',
+      category: '',
     });
   };
 
@@ -233,6 +251,8 @@ export default function AdminQuestsPage() {
       reward: quest.reward?.points || 50,
       isActive: quest.isActive,
       expiresAt: quest.expiresAt ? new Date(quest.expiresAt).toISOString().split('T')[0] : '',
+      requirementType: quest.requirement?.type === 'visit_category' ? 'visit_category' : 'custom',
+      category: (quest.requirement as { category?: string } | null)?.category || '',
     });
     setEditDialogOpen(true);
   };
@@ -286,6 +306,29 @@ export default function AdminQuestsPage() {
             min={1}
           />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Mekanik</Label>
+          <select
+            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+            value={formData.requirementType}
+            onChange={(e) => setFormData({ ...formData, requirementType: e.target.value })}
+          >
+            <option value="custom">Manuel (elle ilerletilir)</option>
+            <option value="visit_category">Ziyaret (otomatik — N farklı işletme)</option>
+          </select>
+        </div>
+        {formData.requirementType === 'visit_category' && (
+          <div className="space-y-2">
+            <Label>Kategori (opsiyonel)</Label>
+            <Input
+              value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              placeholder="cafe (boş = herhangi)"
+            />
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">

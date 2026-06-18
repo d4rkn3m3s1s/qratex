@@ -168,6 +168,8 @@ export const createQuestSchema = z.object({
   requirement: z.object({
     type: z.string(),
     count: z.number().positive(),
+    // visit_category görevleri için opsiyonel kategori (boş = herhangi işletme).
+    category: z.string().max(60).optional(),
   }),
   reward: z.object({
     points: z.number().nonnegative(),

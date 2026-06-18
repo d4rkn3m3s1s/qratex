@@ -347,6 +347,15 @@ export async function POST(request: NextRequest) {
       )
       .catch((err) => console.error('[HEATMAP] consumption track failed:', err));
 
+    // Konum/ziyaret görevlerini ilerlet (ateşle-unut). Müşteri bu işletmeyi
+    // ziyaret etti → eşleşen visit_category görevleri otomatik ilerler/tamamlanır.
+    if (card.customerId) {
+      const visitCustomerId = card.customerId;
+      import('@/lib/visit-missions')
+        .then(({ advanceVisitMissions }) => advanceVisitMissions(visitCustomerId, session.user.id))
+        .catch((err) => console.error('[VISIT_MISSION] advance failed:', err));
+    }
+
     return NextResponse.json(
       {
         success: true,
