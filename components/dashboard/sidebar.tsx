@@ -220,6 +220,7 @@ const customerNavItems: NavItem[] = [
   { key: 'trends', labelKey: 'trends', href: '/customer/trends', icon: TrendingUp },
   { key: 'journey_score', labelKey: 'journey_score', href: '/customer/journey-score', icon: Compass },
   { key: 'nearby', labelKey: 'nearby', href: '/customer/nearby', icon: MapPin, featureKey: 'discovery', moduleKey: 'discovery' },
+  { key: 'category_leaderboard', labelKey: 'category_leaderboard', href: '/customer/category-leaderboard', icon: Trophy },
   { key: 'experiences', labelKey: 'experiences', href: '/customer/experiences', icon: Share2 },
   { key: 'analytics', labelKey: 'analytics', href: '/customer/analytics', icon: BarChart3 },
   { key: 'spending_overview', labelKey: 'spending_overview', href: '/customer/spending-overview', icon: Wallet },
