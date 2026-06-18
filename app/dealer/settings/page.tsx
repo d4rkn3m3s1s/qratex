@@ -35,6 +35,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { TwoFactorSettings } from '@/components/auth/two-factor-settings';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -768,7 +769,9 @@ export default function DealerSettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
           >
+            <TwoFactorSettings />
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

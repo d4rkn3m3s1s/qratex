@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { TwoFactorSettings } from '@/components/auth/two-factor-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -755,7 +756,9 @@ export default function CustomerSettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
           >
+            <TwoFactorSettings />
             <Card glass>
               <CardHeader>
                 <CardTitle>{tClient('customerSettings.passwordTitle', { action: profile.hasPassword ? tClient('common.change') : tClient('common.create') })}</CardTitle>

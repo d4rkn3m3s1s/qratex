@@ -19,7 +19,17 @@ import {
   logRateLimit,
 } from '@/lib/auth-events';
 import { consumeMagicLoginToken } from '@/lib/auth-email-token';
+import { verifyTwoFactorForLogin } from '@/lib/two-factor';
 import type { Adapter } from 'next-auth/adapters';
+
+// NEXTAUTH_SECRET olmadan JWT imzalanmaz → forge edilebilir oturum. Üretimde
+// zorunlu ve yeterince uzun olmalı (startup'ta erken hata ver).
+if (process.env.NODE_ENV === 'production') {
+  const s = process.env.NEXTAUTH_SECRET;
+  if (!s || s.length < 32) {
+    throw new Error('NEXTAUTH_SECRET üretimde zorunludur ve en az 32 karakter olmalıdır.');
+  }
+}
 
 function resolveSessionMaxAgeSeconds(): number {
   const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
@@ -65,6 +75,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
         magicToken: { label: 'Magic', type: 'text' },
+        twoFactorCode: { label: '2FA', type: 'text' },
       },
       async authorize(credentials) {
         const cred = credentials as Record<string, string | undefined> | undefined;
@@ -136,13 +147,20 @@ export const authOptions: NextAuthOptions = {
             level: true,
             preferredLanguage: true,
             emailVerified: true,
+            twoFactorEnabled: true,
+            twoFactorSecret: true,
           },
         });
 
+        // Kullanıcı sayımı (user enumeration) önlemi: "bulunamadı" ile "şifre hatalı"
+        // AYNI generic mesajı döndürür; saldırgan e-posta varlığını ayırt edemez.
+        // Ayrıca kullanıcı yoksa da bcrypt karşılaştırması yaparak zamanlama farkını eşitle.
+        const INVALID_CREDENTIALS = 'E-posta veya şifre hatalı';
         if (!user || !user.password) {
+          await bcrypt.compare(cred.password, '$2a$12$0000000000000000000000000000000000000000000000000000a'); // sabit-zaman
           await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'user_not_found');
-          throw new Error('Kullanıcı bulunamadı');
+          throw new Error(INVALID_CREDENTIALS);
         }
 
         if (!user.emailVerified) {
@@ -156,7 +174,24 @@ export const authOptions: NextAuthOptions = {
         if (!isPasswordValid) {
           await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'invalid_password');
-          throw new Error('Şifre hatalı');
+          throw new Error(INVALID_CREDENTIALS);
+        }
+
+        // 2FA: şifre doğruysa ama 2FA açıksa TOTP/kurtarma kodu zorunlu.
+        // Önceden 2FA secret saklanıyordu ama login'de HİÇ kontrol edilmiyordu
+        // (dekoratif koruma). Artık doğrulanır.
+        if (user.twoFactorEnabled && user.twoFactorSecret) {
+          const code = typeof cred.twoFactorCode === 'string' ? cred.twoFactorCode.trim() : '';
+          if (!code) {
+            // İstemci bu işareti yakalayıp 2FA kod ekranını gösterir.
+            throw new Error('2FA_REQUIRED');
+          }
+          const ok = await verifyTwoFactorForLogin(user.id, code);
+          if (!ok) {
+            await recordFailedLoginAttemptDb(identifier);
+            logLoginFailed(ip, cred.email, 'invalid_2fa');
+            throw new Error('2FA kodu hatalı');
+          }
         }
 
         await clearFailedLoginAttemptsDb(identifier);

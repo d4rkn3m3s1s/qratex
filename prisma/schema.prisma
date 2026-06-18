@@ -173,8 +173,11 @@ model User {
   customFrameColor     String?
 
   // 2FA
-  twoFactorSecret  String?
-  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean @default(false)
+  twoFactorVerifiedAt DateTime? // 2FA'nın etkinleştirildiği an
+
+  twoFactorRecoveryCodes TwoFactorRecoveryCode[] @relation("UserRecoveryCodes")
 
   @@index([email])
   @@index([role])
@@ -306,6 +309,19 @@ model AuthEmailToken {
 
   @@index([userId, purpose])
   @@index([expiresAt])
+}
+
+/// 2FA kurtarma kodları — yetkilendirici cihaz kaybında giriş. Tek kullanımlık,
+/// hash saklanır (AuthEmailToken deseni). Setup'ta 10 adet üretilir.
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserRecoveryCodes", fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────────────────────────

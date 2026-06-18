@@ -192,9 +192,10 @@ describe('auth.ts', () => {
       const authorize = getAuthorize();
       mockFindUnique.mockResolvedValue(null);
 
+      // User enumeration önlemi: "bulunamadı" da "şifre hatalı" da AYNI generic mesaj.
       await expect(
         authorize({ email: 'notfound@test.com', password: 'test123' })
-      ).rejects.toThrow('Kullanıcı bulunamadı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should throw error when user has no password (OAuth user)', async () => {
@@ -212,7 +213,7 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'oauth@test.com', password: 'test123' })
-      ).rejects.toThrow('Kullanıcı bulunamadı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should throw error when password is invalid', async () => {
@@ -233,7 +234,7 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'test@test.com', password: 'wrongpassword' })
-      ).rejects.toThrow('Şifre hatalı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should return user object when credentials are valid', async () => {
@@ -298,6 +299,8 @@ describe('auth.ts', () => {
           level: true,
           preferredLanguage: true,
           emailVerified: true,
+          twoFactorEnabled: true,
+          twoFactorSecret: true,
         },
       });
     });

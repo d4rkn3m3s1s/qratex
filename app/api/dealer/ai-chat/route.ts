@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { askAI } from '@/lib/ai-engine';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 
@@ -13,21 +14,9 @@ const chatSchema = z.object({
     conversationId: z.string().optional(),
 });
 
-// Rate limiter: 20 req/min for dealers
-const rateMap = new Map<string, { count: number; resetAt: number }>();
-function checkRate(userId: string): { ok: true } | { ok: false; retryAfterSec: number } {
-    const now = Date.now();
-    const e = rateMap.get(userId);
-    if (!e || now > e.resetAt) {
-        rateMap.set(userId, { count: 1, resetAt: now + 60000 });
-        return { ok: true };
-    }
-    if (e.count >= 20) {
-        return { ok: false, retryAfterSec: Math.max(1, Math.ceil((e.resetAt - now) / 1000)) };
-    }
-    e.count++;
-    return { ok: true };
-}
+// Rate limit: DB-backed (in-memory Map serverless'te Lambda başına ayrıydı →
+// saldırgan instance'lara dağıtarak limiti aşabiliyordu). 20 istek/dk.
+const AI_CHAT_LIMIT_PER_MIN = 20;
 
 // GET — list dealer's conversations
 export async function GET() {
@@ -64,7 +53,7 @@ export async function POST(request: NextRequest) {
         if ('error' in auth) return auth.error;
         const userId = auth.session.user.id;
 
-        const rate = checkRate(userId);
+        const rate = await checkRateLimitDb(`ai_chat_dealer:${userId}`, AI_CHAT_LIMIT_PER_MIN, 60_000);
         if (!rate.ok) {
             return NextResponse.json(
                 { error: 'Çok fazla istek. Lütfen bir dakika bekleyin.' },
@@ -72,7 +61,7 @@ export async function POST(request: NextRequest) {
                     status: 429,
                     headers: {
                         ...PRIVATE_NO_STORE_HEADERS,
-                        'Retry-After': String(rate.retryAfterSec),
+                        'Retry-After': String(Math.ceil((rate.retryAfterMs ?? 60_000) / 1000)),
                     },
                 }
             );
