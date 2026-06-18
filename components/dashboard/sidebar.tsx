@@ -183,6 +183,7 @@ const dealerNavItems: NavItem[] = [
   { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap, featureKey: 'remedy_offers', moduleKey: 'remedy_offers' },
   { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3 },
   { key: 'operations_brief', labelKey: 'operations_brief', href: '/dealer/operations-brief', icon: ClipboardList },
+  { key: 'weekly_brief', labelKey: 'weekly_brief', href: '/dealer/weekly-brief', icon: ClipboardList },
   { key: 'campaigns', labelKey: 'campaigns', href: '/dealer/campaigns', icon: Megaphone },
   { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles, featureKey: 'dealer_innovation', moduleKey: 'dealer_innovation' },
   { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText, featureKey: 'dealer_surveys', moduleKey: 'dealer_surveys' },

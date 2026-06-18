@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { GAMIFICATION_SETTINGS_TAG } from '@/lib/gamification-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +52,7 @@ export async function PATCH(request: NextRequest) {
           seasonEndsAt: body.seasonEndsAt ? new Date(body.seasonEndsAt) : null,
         },
       });
+      revalidateTag(GAMIFICATION_SETTINGS_TAG, 'max');
       return NextResponse.json({ success: true, settings: created });
     }
 
@@ -66,6 +69,7 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
+    revalidateTag(GAMIFICATION_SETTINGS_TAG, 'max');
     return NextResponse.json({ success: true, settings: updated });
   } catch (error) {
     console.error('Error updating gamification settings:', error);

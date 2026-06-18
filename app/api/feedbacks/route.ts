@@ -284,22 +284,27 @@ export async function POST(request: NextRequest) {
       const { addToSquadTreasury } = await import('@/lib/gamification-engine');
       const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
       const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
+      const { getGamificationMultipliers } = await import('@/lib/gamification-settings');
+      // Platform geneli gamification çarpanları (admin ayarı; önceden write-only'di).
+      const gamiSettings = await getGamificationMultipliers();
       const result = await prisma.$transaction(
         async (tx) => {
           // Çarpan zinciri: VIP (kullanıcı seviyesi) → sezonsal kampanya (zaman
-          // penceresi) taban ödüle uygulanır, sonra GÜNLÜK TAVAN nihai tutara
-          // uygulanır — çarpanlar kazancı hızlandırır ama tavan ekonomi korumasını
-          // yine de uygular.
+          // penceresi) → platform geneli gamification çarpanı, taban ödüle uygulanır,
+          // sonra GÜNLÜK TAVAN nihai tutara uygulanır — çarpanlar kazancı hızlandırır
+          // ama tavan ekonomi korumasını yine de uygular.
           const vip = await applyVipMultiplier(userId, reward.points, tx);
           const seasonal = await applySeasonalCampaignMultiplier(vip.points, new Date(), tx);
-          const capped = await capFeedbackPoints(userId, seasonal.points, tx);
-          if (capped <= 0 && reward.xp <= 0) {
+          const withGlobal = Math.floor(seasonal.points * gamiSettings.pointMultiplier);
+          const capped = await capFeedbackPoints(userId, withGlobal, tx);
+          const xpToCredit = Math.floor(reward.xp * gamiSettings.xpMultiplier);
+          if (capped <= 0 && xpToCredit <= 0) {
             return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0, vipMultiplier: vip.multiplier };
           }
           const userUpdate = await creditPointsAndXp(tx, {
             userId,
             points: capped,
-            xp: reward.xp,
+            xp: xpToCredit,
           });
           const squadContribution = await addToSquadTreasury(userId, capped, tx);
           await tx.analyticsEvent.create({
@@ -309,7 +314,7 @@ export async function POST(request: NextRequest) {
               category: 'feedback',
               data: {
                 points: capped,
-                xp: reward.xp,
+                xp: xpToCredit,
                 nextLevel: userUpdate.level,
                 squadContribution,
                 vipMultiplier: vip.multiplier,
@@ -317,6 +322,8 @@ export async function POST(request: NextRequest) {
                 seasonalCampaignId: seasonal.campaignId,
                 seasonalMultiplier: seasonal.multiplier,
                 seasonalBonus: seasonal.bonusPoints,
+                globalPointMultiplier: gamiSettings.pointMultiplier,
+                globalXpMultiplier: gamiSettings.xpMultiplier,
               },
             },
           });
