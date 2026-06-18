@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Sparkles, ArrowRight, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { type BackgroundVariant } from '@/components/ui/backgrounds';
+import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
 import { HyperText } from '@/components/ui/hyper-text';
 import { AuroraText } from '@/components/ui/aurora-text';
 import { BRAND_ACCENT_PINK_HEX, BRAND_AURORA_HEX_STOPS, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
@@ -88,8 +88,12 @@ export default function HeroSection({ backgroundEffect, reducedMotion }: HeroSec
 
   return (
     <>
-      {/* Arka plan efekti artık home-client'te tüm sayfa arkasında render edilir
-          (sadece hero'da değil). Burada tekrar render edilmez — çift katman olmasın. */}
+      {backgroundEffect !== 'none' && backgroundEffect !== 'original' && (
+        <DynamicBackground variant={backgroundEffect} fetchFromApi={false}>
+          <div />
+        </DynamicBackground>
+      )}
+
       <section className="relative min-h-[100dvh] flex items-center justify-center overflow-hidden pt-16">
         {(backgroundEffect === 'original' || backgroundEffect === 'none') && (
           <>
