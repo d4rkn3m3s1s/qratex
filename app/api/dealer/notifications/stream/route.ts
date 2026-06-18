@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { parsePositiveIntEnv } from '@/lib/safe-env-number';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,12 +11,18 @@ export const maxDuration = 60;
  * GET /api/dealer/notifications/stream — gerçek zamanlı bildirim akışı (SSE).
  *
  * Serverless'te kalıcı pub/sub yok; bunun yerine bu kısa ömürlü SSE bağlantısı
- * son bildirim zamanını imleç tutarak DB'yi birkaç saniyede bir yoklar ve YENİ
- * bildirimleri anında iter. İstemci EventSource ile bağlanır; bağlantı maxDuration
- * sonunda kapanınca otomatik yeniden bağlanır. 30sn client polling'e kıyasla
- * negatif feedback/uyarılar <~3sn görünür.
+ * son bildirim zamanını imleç tutarak DB'yi yoklar ve YENİ bildirimleri anında
+ * iter. İstemci EventSource ile bağlanır; bağlantı maxDuration sonunda kapanınca
+ * otomatik yeniden bağlanır.
+ *
+ * ADAPTİF YOKLAMA: sabit aralık yerine, son bildirimden sonra HIZLI (MIN_POLL_MS)
+ * yoklar; ardışık boş turlarda aralığı kademeli MAX_POLL_MS'e çıkarır. Böylece
+ * aktivite anında gecikme düşer (~1.2sn) ama boştaki bağlantılarda DB yükü artmaz.
+ * Aralıklar env ile ayarlanabilir (NOTIF_STREAM_MIN_MS / NOTIF_STREAM_MAX_MS).
  */
-const POLL_MS = 3000;
+const MIN_POLL_MS = parsePositiveIntEnv(process.env.NOTIF_STREAM_MIN_MS, 1200);
+const MAX_POLL_MS = Math.max(MIN_POLL_MS, parsePositiveIntEnv(process.env.NOTIF_STREAM_MAX_MS, 5000));
+const BACKOFF_STEP_MS = 800;
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN', 'STAFF']);
@@ -38,11 +45,12 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
       };
 
+      let pollTimer: ReturnType<typeof setTimeout> | null = null;
       const cleanup = () => {
         if (closed) return;
         closed = true;
         clearInterval(heartbeat);
-        clearInterval(poller);
+        if (pollTimer) clearTimeout(pollTimer);
         try { controller.close(); } catch { /* ignore */ }
       };
 
@@ -61,6 +69,9 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(': keepalive\n\n'));
       }, 15000);
 
+      // Adaptif aralık: yeni bildirimde MIN'e sıfırla, boş turlarda kademeli artır.
+      let currentDelay = MIN_POLL_MS;
+
       const poll = async () => {
         if (closed) return;
         try {
@@ -73,13 +84,20 @@ export async function GET(req: NextRequest) {
           if (fresh.length > 0) {
             cursor = fresh[fresh.length - 1].createdAt;
             send('notifications', { items: fresh });
+            currentDelay = MIN_POLL_MS; // aktivite var → hızlı yokla
+          } else {
+            currentDelay = Math.min(MAX_POLL_MS, currentDelay + BACKOFF_STEP_MS); // sessiz → yavaşla
           }
         } catch (err) {
           console.error('[NOTIF_STREAM] poll failed:', err);
+          currentDelay = Math.min(MAX_POLL_MS, currentDelay + BACKOFF_STEP_MS);
+        }
+        if (!closed) {
+          pollTimer = setTimeout(poll, currentDelay);
         }
       };
 
-      const poller = setInterval(poll, POLL_MS);
+      pollTimer = setTimeout(poll, currentDelay);
     },
   });
 
