@@ -263,6 +263,22 @@ export async function POST(request: NextRequest) {
       data: { scanCount: { increment: 1 } },
     });
 
+    // Trust Score: oturum açmış kullanıcı için güven sinyallerini değerlendir.
+    // Şüpheliyse yorumu İŞARETLER (silmez/gizlemez) ve User.trustScore'u günceller.
+    // Ucuz sayım sorguları; hata olsa bile feedback akışını bozmaz.
+    if (session?.user?.id) {
+      try {
+        const { applyTrustEvaluation } = await import('@/lib/trust-score');
+        await applyTrustEvaluation(feedback.id, {
+          userId: session.user.id,
+          dealerId: qrCode.dealerId,
+          rating,
+        });
+      } catch (err) {
+        console.error('[TRUST_SCORE] evaluation failed:', err);
+      }
+    }
+
     // Award points to user if logged in (anti-exploit: günlük/haftalık tavan)
     if (session?.user?.id) {
       const matrix = await getPointsMatrix();

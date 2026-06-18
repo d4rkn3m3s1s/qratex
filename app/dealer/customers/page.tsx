@@ -19,11 +19,29 @@ type CustomerRow = {
   predictedChurn: number | null;
   churnRisk: string | null;
   segment: { name: string; color: string } | null;
+  trustScore: number | null;
+  trustTier: string | null;
   calculatedAt: string;
 };
 
 const churnColor = (risk: string | null) =>
   risk === 'HIGH' ? 'text-red-600' : risk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600';
+
+// Güven skoru kademesini renkli rozete çevirir. Düşük kademe = kötü niyetli yorumcu riski.
+const trustBadge = (
+  tier: string | null
+): { label: string; className: string } => {
+  switch (tier) {
+    case 'low':
+      return { label: 'Düşük', className: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' };
+    case 'watch':
+      return { label: 'İzlemede', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' };
+    case 'neutral':
+      return { label: 'Nötr', className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300' };
+    default:
+      return { label: 'Güvenilir', className: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300' };
+  }
+};
 
 export default function DealerCustomersPage() {
   const [list, setList] = useState<CustomerRow[]>([]);
@@ -88,6 +106,7 @@ export default function DealerCustomersPage() {
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-4">Müşteri</th>
+                    <th className="py-2 pr-4">Güven</th>
                     <th className="py-2 pr-4">Segment</th>
                     <th className="py-2 pr-4 text-right">Toplam harcama</th>
                     <th className="py-2 pr-4 text-right">Ziyaret</th>
@@ -102,6 +121,20 @@ export default function DealerCustomersPage() {
                       <td className="py-2 pr-4">
                         <p className="font-medium">{c.name || 'İsimsiz'}</p>
                         <p className="text-xs text-muted-foreground">{c.email}</p>
+                      </td>
+                      <td className="py-2 pr-4">
+                        {(() => {
+                          const b = trustBadge(c.trustTier);
+                          return (
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${b.className}`}
+                              title={c.trustScore != null ? `Güven skoru: ${c.trustScore}/100` : undefined}
+                            >
+                              {b.label}
+                              {c.trustScore != null ? ` · ${c.trustScore}` : ''}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-2 pr-4">
                         {c.segment ? (

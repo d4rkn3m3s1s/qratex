@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
         predictedChurn: true,
         churnRisk: true,
         calculatedAt: true,
-        user: { select: { name: true, email: true, image: true } },
+        user: { select: { name: true, email: true, image: true, trustScore: true, trustTier: true } },
         segment: { select: { name: true, color: true } },
       },
       orderBy: sort === 'churn' ? { predictedChurn: 'desc' } : { totalSpent: 'desc' },
@@ -82,6 +82,8 @@ export async function GET(request: NextRequest) {
       predictedChurn: c.predictedChurn,
       churnRisk: c.churnRisk,
       segment: c.segment ? { name: c.segment.name, color: c.segment.color } : null,
+      trustScore: c.user.trustScore,
+      trustTier: c.user.trustTier,
       calculatedAt: c.calculatedAt,
     }));
 

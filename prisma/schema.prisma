@@ -77,6 +77,12 @@ model User {
   fraudScore       Float?  @default(0.0)
   abCohort         String? // for Gamification A/B tests: A, B, C...
 
+  // Trust Score (kötü niyetli yorumcu tespiti). 100 = tam güven, düşük = şüpheli.
+  // Yorum gönderiminde sinyallerle güncellenir; bayi/admin müşteri analizinde görünür.
+  trustScore       Int      @default(100)
+  trustTier        String   @default("trusted") // "trusted" | "neutral" | "watch" | "low"
+  trustUpdatedAt   DateTime?
+
   // Billing: bayinin etkin fiyatlandırma planı (null = varsayılan/ücretsiz kademe)
   pricingPlanId String?
   pricingPlan   PricingPlan? @relation("DealerPricingPlan", fields: [pricingPlanId], references: [id], onDelete: SetNull)
@@ -665,6 +671,11 @@ model Feedback {
   attributionSource String? // branch, app, web
 
   fraudScore Float? // 0-1 sahte yorum / anomali skoru (madde 41)
+
+  // Trust Score: gönderen kullanıcının güven sinyalleri düşükse işaretlenir.
+  // "Sadece işaretle" politikası: yorum silinmez/gizlenmez, bayi/admin görür.
+  trustFlagged Boolean @default(false)
+  trustReason  String? // işaretleme sebebi (sıklık, tekrar, düşük güven vb.)
 
   isPublic  Boolean   @default(true)
   deletedAt DateTime? // soft delete; null = active
