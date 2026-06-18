@@ -16,6 +16,7 @@ import {
 import { AppLocaleProvider } from '@/lib/app-locale';
 import { ConfettiProvider } from '@/components/providers/confetti-provider';
 import { AccessibilityClassSync } from '@/components/accessibility-class-sync';
+import { SeasonalConceptApplier } from '@/components/seasonal/seasonal-concept-applier';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -230,6 +231,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
             <MotionConfig reducedMotion="user">
               <ThemeModeSync />
               <AccessibilityClassSync />
+              <SeasonalConceptApplier />
               <ThemeColorsProvider initialThemeSettings={initialThemeSettings}>
                 <ConfettiProvider>
                   {children}
