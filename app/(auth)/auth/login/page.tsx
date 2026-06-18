@@ -359,9 +359,9 @@ function LoginPageContent() {
           {twoFactorStep ? (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="twoFactorCode">İki Adımlı Doğrulama</Label>
+                <Label htmlFor="twoFactorCode">{t('auth.twoFactorTitle')}</Label>
                 <p className="text-sm text-muted-foreground">
-                  Authenticator uygulamanızdaki 6 haneli kodu veya bir kurtarma kodunu girin.
+                  {t('auth.twoFactorHint')}
                 </p>
                 <Input
                   id="twoFactorCode"
@@ -371,11 +371,11 @@ function LoginPageContent() {
                   value={twoFactorCode}
                   onChange={(e) => setTwoFactorCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !isLoading && submitTwoFactor()}
-                  placeholder="123456 veya XXXX-XXXX"
+                  placeholder={t('auth.twoFactorPlaceholder')}
                 />
               </div>
               <Button type="button" className="w-full" onClick={submitTwoFactor} disabled={isLoading}>
-                {isLoading ? t('auth.loading') : 'Doğrula ve giriş yap'}
+                {isLoading ? t('auth.loading') : t('auth.twoFactorSubmit')}
               </Button>
               <Button
                 type="button"
@@ -388,7 +388,7 @@ function LoginPageContent() {
                 }}
                 disabled={isLoading}
               >
-                Geri dön
+                {t('auth.twoFactorBack')}
               </Button>
             </div>
           ) : (

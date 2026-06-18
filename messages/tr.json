@@ -291,6 +291,19 @@
         "quickActions": "Hızlı İşlemler"
     },
     "dealerDashboard": {
+        "gettingStarted": {
+            "title": "Hadi başlayalım",
+            "subtitle": "QRATEX’ten ilk değeri almak için şu adımları tamamla",
+            "qrTitle": "İlk QR kodunu oluştur",
+            "qrDesc": "Müşterilerin tarayıp geri bildirim bırakacağı QR kodunu oluştur.",
+            "qrCta": "QR oluştur",
+            "locationTitle": "İşletme konumunu ekle",
+            "locationDesc": "Keşfet ve harita özelliklerinde görünmek için adres/konum ekle.",
+            "locationCta": "Ayarlar",
+            "feedbackTitle": "İlk geri bildirimini topla",
+            "feedbackDesc": "QR kodunu masaya/kasaya koy; ilk müşteri yorumun burada görünecek.",
+            "feedbackCta": "QR’ı paylaş"
+        },
         "statsLoadError": "İstatistikler yüklenemedi",
         "connectionError": "Bağlantı hatası.",
         "greetingMorning": "Günaydın",
@@ -2288,6 +2301,11 @@
         },
         "or": "veya",
         "orEmail": "email ile",
+        "twoFactorTitle": "İki Adımlı Doğrulama",
+        "twoFactorHint": "Authenticator uygulamanızdaki 6 haneli kodu veya bir kurtarma kodunu girin.",
+        "twoFactorPlaceholder": "123456 veya XXXX-XXXX",
+        "twoFactorSubmit": "Doğrula ve giriş yap",
+        "twoFactorBack": "Geri dön",
         "googleLogin": "Google ile Giriş Yap",
         "githubLogin": "GitHub ile Giriş Yap",
         "githubLoginAria": "GitHub ile giriş yap",

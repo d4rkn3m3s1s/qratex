@@ -291,6 +291,19 @@
         "quickActions": "Quick Actions"
     },
     "dealerDashboard": {
+        "gettingStarted": {
+            "title": "Let’s get started",
+            "subtitle": "Complete these steps to get your first value from QRATEX",
+            "qrTitle": "Create your first QR code",
+            "qrDesc": "Create the QR code customers will scan to leave feedback.",
+            "qrCta": "Create QR",
+            "locationTitle": "Add your business location",
+            "locationDesc": "Add an address/location to appear in discovery and map features.",
+            "locationCta": "Settings",
+            "feedbackTitle": "Collect your first feedback",
+            "feedbackDesc": "Place the QR on tables/counter; your first customer review shows up here.",
+            "feedbackCta": "Share QR"
+        },
         "statsLoadError": "Failed to load stats",
         "connectionError": "Connection error.",
         "greetingMorning": "Good morning",
@@ -2288,6 +2301,11 @@
         },
         "or": "or",
         "orEmail": "with email",
+        "twoFactorTitle": "Two-Factor Authentication",
+        "twoFactorHint": "Enter the 6-digit code from your authenticator app or a recovery code.",
+        "twoFactorPlaceholder": "123456 or XXXX-XXXX",
+        "twoFactorSubmit": "Verify and sign in",
+        "twoFactorBack": "Go back",
         "googleLogin": "Sign in with Google",
         "githubLogin": "Sign in with GitHub",
         "githubLoginAria": "Sign in with GitHub",
