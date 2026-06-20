@@ -3,6 +3,7 @@
  * Her işletme için risk skoru: kullanım düşüşü, negatif artışı, aksiyon yapılmaması.
  */
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export interface TenantHealthResult {
   dealerId: string;
@@ -24,39 +25,54 @@ export async function getTenantHealth(dealerIds?: string[]): Promise<TenantHealt
     where: { role: 'DEALER', ...(dealerIds?.length ? { id: { in: dealerIds } } : {}) },
     select: { id: true, name: true, businessName: true },
   });
+  if (dealers.length === 0) return [];
+  const ids = dealers.map((d) => d.id);
+
+  // Önceden N dealer × 6 sorgu (sıralı for) vardı. Artık 2 toplu SQL geçişi:
+  // (1) feedback metrikleri (dealer × dönem × negatiflik) tek sorguda,
+  // (2) actionItem tamamlama tek sorguda. Hepsi dealerId bazında gruplanır.
+  type FbRow = {
+    dealerId: string;
+    last7Fb: bigint; prev7Fb: bigint; last7Neg: bigint; prev7Neg: bigint;
+  };
+  const [fbRows, actionRows] = await Promise.all([
+    prisma.$queryRaw<FbRow[]>(Prisma.sql`
+      SELECT q."dealerId" AS "dealerId",
+        COUNT(*) FILTER (WHERE f."createdAt" >= ${last7}) AS "last7Fb",
+        COUNT(*) FILTER (WHERE f."createdAt" >= ${prev7} AND f."createdAt" < ${last7}) AS "prev7Fb",
+        COUNT(*) FILTER (WHERE f."createdAt" >= ${last7} AND (f."rating" <= 2 OR f."sentiment" = 'negative')) AS "last7Neg",
+        COUNT(*) FILTER (WHERE f."createdAt" >= ${prev7} AND f."createdAt" < ${last7} AND (f."rating" <= 2 OR f."sentiment" = 'negative')) AS "prev7Neg"
+      FROM "Feedback" f
+      JOIN "QRCode" q ON q."id" = f."qrCodeId"
+      WHERE q."dealerId" IN (${Prisma.join(ids)})
+        AND f."deletedAt" IS NULL
+        AND f."createdAt" >= ${prev7}
+      GROUP BY q."dealerId"
+    `),
+    prisma.$queryRaw<Array<{ dealerId: string; total: bigint; done: bigint }>>(Prisma.sql`
+      SELECT "dealerId",
+        COUNT(*) AS "total",
+        COUNT(*) FILTER (WHERE "status" = 'done') AS "done"
+      FROM "ActionItem"
+      WHERE "dealerId" IN (${Prisma.join(ids)})
+        AND "createdAt" >= ${last30}
+      GROUP BY "dealerId"
+    `),
+  ]);
+
+  const fbByDealer = new Map(fbRows.map((r) => [r.dealerId, r]));
+  const actionByDealer = new Map(actionRows.map((r) => [r.dealerId, r]));
 
   const results: TenantHealthResult[] = [];
   for (const d of dealers) {
-    const [last7Fb, prev7Fb, last7Neg, prev7Neg, actionTotal, actionDone] = await Promise.all([
-      prisma.feedback.count({
-        where: { qrCode: { dealerId: d.id }, deletedAt: null, createdAt: { gte: last7 } },
-      }),
-      prisma.feedback.count({
-        where: { qrCode: { dealerId: d.id }, deletedAt: null, createdAt: { gte: prev7, lt: last7 } },
-      }),
-      prisma.feedback.count({
-        where: {
-          qrCode: { dealerId: d.id },
-          deletedAt: null,
-          createdAt: { gte: last7 },
-          OR: [{ rating: { lte: 2 } }, { sentiment: 'negative' }],
-        },
-      }),
-      prisma.feedback.count({
-        where: {
-          qrCode: { dealerId: d.id },
-          deletedAt: null,
-          createdAt: { gte: prev7, lt: last7 },
-          OR: [{ rating: { lte: 2 } }, { sentiment: 'negative' }],
-        },
-      }),
-      prisma.actionItem.count({
-        where: { dealerId: d.id, createdAt: { gte: last30 } },
-      }),
-      prisma.actionItem.count({
-        where: { dealerId: d.id, status: 'done', createdAt: { gte: last30 } },
-      }),
-    ]);
+    const fb = fbByDealer.get(d.id);
+    const act = actionByDealer.get(d.id);
+    const last7Fb = Number(fb?.last7Fb ?? 0);
+    const prev7Fb = Number(fb?.prev7Fb ?? 0);
+    const last7Neg = Number(fb?.last7Neg ?? 0);
+    const prev7Neg = Number(fb?.prev7Neg ?? 0);
+    const actionTotal = Number(act?.total ?? 0);
+    const actionDone = Number(act?.done ?? 0);
 
     const usageTrend = prev7Fb > 0 ? last7Fb / prev7Fb : 1;
     const last7NegRate = last7Fb > 0 ? (last7Neg / last7Fb) * 100 : 0;

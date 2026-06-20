@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Radar, Users, Gift, Megaphone, Clock, Star } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { RadarBulkCampaignButton, RadarSingleOfferButton } from "@/components/dealer/radar-interactive";
 import { DealerRadarScope, type RadarScopeContact } from "@/components/dealer/dealer-radar-scope";
 import { t, type Locale } from "@/i18n/request";
@@ -25,32 +26,40 @@ export default async function DealerWinBackPage() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const consumptions = await prisma.consumption.findMany({
-        where: { dealerId },
-        select: { customerId: true, createdAt: true },
-        orderBy: { createdAt: 'desc' }
-    });
+    // Önceden bu bayinin TÜM consumption'ları belleğe çekiliyordu. Artık SQL'de
+    // müşteri başına son ziyaret + ortalama harcama hesaplanıp HAVING ile yalnızca
+    // 30 günden uzun süredir gelmeyen ("uyuyan") müşteriler döner.
+    // [dealerId, createdAt] index'inden yararlanır.
+    const sleepingRows = await prisma.$queryRaw<Array<{ customerId: string; lastVisit: Date; avgSpend: number | null }>>(
+        Prisma.sql`
+            SELECT c."customerId",
+                   MAX(c."createdAt") AS "lastVisit",
+                   AVG(c."amount") FILTER (WHERE c."amount" IS NOT NULL) AS "avgSpend"
+            FROM "Consumption" c
+            WHERE c."dealerId" = ${dealerId}
+            GROUP BY c."customerId"
+            HAVING MAX(c."createdAt") < ${thirtyDaysAgo}
+            ORDER BY MAX(c."createdAt") ASC
+            LIMIT 500
+        `
+    );
 
-    const latestVisits = new Map<string, Date>();
-    consumptions.forEach(c => {
-        if (!latestVisits.has(c.customerId)) {
-            latestVisits.set(c.customerId, c.createdAt);
-        }
-    });
+    const metaByCustomer = new Map(sleepingRows.map((r) => [r.customerId, r]));
+    const sleepingIds = sleepingRows.map((r) => r.customerId);
 
-    const sleepingIds = Array.from(latestVisits.entries())
-        .filter(([_, date]) => date < thirtyDaysAgo)
-        .map(([id]) => id);
-
-    const sleepingUsers = await prisma.user.findMany({
+    const sleepingUsers = sleepingIds.length === 0 ? [] : await prisma.user.findMany({
         where: { id: { in: sleepingIds } },
         select: { id: true, name: true, email: true, image: true }
     });
 
-    const radarData = sleepingUsers.map(u => ({
-        ...u,
-        lastVisit: latestVisits.get(u.id)!
-    }));
+    const radarData = sleepingUsers.map(u => {
+        const meta = metaByCustomer.get(u.id);
+        return {
+            ...u,
+            lastVisit: meta?.lastVisit ?? new Date(),
+            avgSpend: meta?.avgSpend != null ? Number(meta.avgSpend) : null,
+        };
+    });
 
     const radarScopeContacts: RadarScopeContact[] = radarData.map((u) => ({
         id: u.id,
@@ -60,7 +69,11 @@ export default async function DealerWinBackPage() {
         lastVisitIso: u.lastVisit.toISOString(),
     }));
 
-    const potentialRevenue = radarData.length * 200; // Mock calculation
+    // Tahmini geri kazanım geliri = uyuyan müşterilerin GERÇEK ortalama
+    // harcamalarının toplamı (sabit varsayım değil, geçmiş veriye dayalı).
+    const potentialRevenue = Math.round(
+        radarData.reduce((sum, r) => sum + (r.avgSpend ?? 0), 0)
+    );
 
     return (
         <div className="space-y-6">
@@ -152,7 +165,7 @@ export default async function DealerWinBackPage() {
                                             // eslint-disable-next-line @next/next/no-img-element
                                             <img
                                                 src={user.image}
-                                                alt=""
+                                                alt={user.name || t(locale, "dealerRadar.avatarFallbackLetter")}
                                                 className="w-10 h-10 rounded-full object-cover ring-2 ring-primary/20"
                                                 referrerPolicy="no-referrer"
                                             />

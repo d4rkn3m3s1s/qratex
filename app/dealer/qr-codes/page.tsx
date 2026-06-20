@@ -216,6 +216,9 @@ export default function DealerQRCodesPage() {
         setCreateDialogOpen(false);
         resetForm();
         fetchQRCodes(page);
+      } else if (data.code === 'PLAN_LIMIT_REACHED') {
+        // Plan kotası dolu — upsell mesajını uzun süreli göster.
+        toast.error(data.error || t('dealerQrCodes.planLimitReached'), { duration: 6000 });
       } else {
         toast.error(data.error || t('dealerQrCodes.createFailed'));
       }

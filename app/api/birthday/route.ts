@@ -157,16 +157,33 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Today is not your birthday' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
-      // Check if already claimed this year
-      const thisYear = today.getFullYear();
+      // Check if already claimed this year (ön kontrol — asıl guard tx içinde atomik)
+      const thisYear = today.getUTCFullYear();
+      const yearStart = new Date(Date.UTC(thisYear, 0, 1, 0, 0, 0, 0));
       const lastBonus = birthday.lastBonusAt ? new Date(birthday.lastBonusAt) : null;
-      
-      if (lastBonus && lastBonus.getFullYear() >= thisYear) {
+
+      if (lastBonus && lastBonus >= yearStart) {
         return NextResponse.json({ error: 'Already claimed this year' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
-      // Claim bonus
-      await prisma.$transaction(async (tx) => {
+      // Claim bonus — atomik guard: yalnızca bu yıl içinde claim edilmemiş kayıt
+      // güncellenir. İki eşzamanlı istekten yalnızca biri count=1 alır.
+      const claimed = await prisma.$transaction(async (tx) => {
+        const guard = await tx.userBirthday.updateMany({
+          where: {
+            userId: session.user.id,
+            OR: [{ lastBonusAt: null }, { lastBonusAt: { lt: yearStart } }],
+          },
+          data: {
+            bonusGiven: true,
+            lastBonusAt: new Date(),
+          },
+        });
+
+        if (guard.count === 0) {
+          return false; // başka bir istek bu yılki bonusu zaten aldı
+        }
+
         await tx.notification.deleteMany({
           where: { userId: session.user.id, type: 'BIRTHDAY_CLAIM' },
         });
@@ -174,14 +191,6 @@ export async function POST(req: NextRequest) {
         await creditPointsAndXp(tx, {
           userId: session.user.id,
           points: birthdayBonus,
-        });
-
-        await tx.userBirthday.update({
-          where: { userId: session.user.id },
-          data: {
-            bonusGiven: true,
-            lastBonusAt: new Date(),
-          },
         });
 
         await tx.notification.create({
@@ -192,7 +201,12 @@ export async function POST(req: NextRequest) {
             message: `${birthdayBonus} bonus puan hesabına eklendi!`,
           },
         });
+        return true;
       });
+
+      if (!claimed) {
+        return NextResponse.json({ error: 'Already claimed this year' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+      }
 
       return NextResponse.json({
         success: true,

@@ -15,6 +15,14 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
+// DB-backed rate limiter / login lockout — testlerde her zaman "geçer" (kilitsiz, limit ok).
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimitDb: jest.fn().mockResolvedValue({ ok: true, remaining: 9 }),
+  getLoginLockoutDb: jest.fn().mockResolvedValue({ locked: false }),
+  recordFailedLoginAttemptDb: jest.fn().mockResolvedValue(undefined),
+  clearFailedLoginAttemptsDb: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('next/headers', () => ({
   headers: jest.fn(() => Promise.resolve(new Headers({ 'x-forwarded-for': '127.0.0.1' }))),
 }));
@@ -58,10 +66,10 @@ describe('auth.ts', () => {
       expect(authOptions.session?.strategy).toBe('jwt');
     });
 
-    it('should resolve session maxAge (default 3 days, min 300s; mirrors lib/auth)', () => {
+    it('should resolve session maxAge (default 24h, min 300s; mirrors lib/auth)', () => {
       const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
       const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
-      const fallback = 3 * 24 * 60 * 60;
+      const fallback = 24 * 60 * 60; // güvenlik: 72sa → 24sa
       const expected = Math.max(300, Number.isFinite(parsed) && parsed > 0 ? parsed : fallback);
       expect(authOptions.session?.maxAge).toBe(expected);
     });
@@ -184,9 +192,10 @@ describe('auth.ts', () => {
       const authorize = getAuthorize();
       mockFindUnique.mockResolvedValue(null);
 
+      // User enumeration önlemi: "bulunamadı" da "şifre hatalı" da AYNI generic mesaj.
       await expect(
         authorize({ email: 'notfound@test.com', password: 'test123' })
-      ).rejects.toThrow('Kullanıcı bulunamadı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should throw error when user has no password (OAuth user)', async () => {
@@ -204,7 +213,7 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'oauth@test.com', password: 'test123' })
-      ).rejects.toThrow('Kullanıcı bulunamadı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should throw error when password is invalid', async () => {
@@ -225,7 +234,7 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'test@test.com', password: 'wrongpassword' })
-      ).rejects.toThrow('Şifre hatalı');
+      ).rejects.toThrow('E-posta veya şifre hatalı');
     });
 
     it('should return user object when credentials are valid', async () => {
@@ -290,6 +299,8 @@ describe('auth.ts', () => {
           level: true,
           preferredLanguage: true,
           emailVerified: true,
+          twoFactorEnabled: true,
+          twoFactorSecret: true,
         },
       });
     });
@@ -326,6 +337,7 @@ describe('auth.ts', () => {
         role: 'ADMIN',
         points: 1000,
         level: 20,
+        equippedCosmetics: [],
       };
       mockFindUnique.mockResolvedValue(mockDbUser);
 
@@ -460,6 +472,7 @@ describe('auth.ts', () => {
         role: 'CUSTOMER',
         points: 0,
         level: 1,
+        equippedCosmetics: [],
       });
 
       await jwtCallback({
@@ -479,6 +492,11 @@ describe('auth.ts', () => {
           image: true,
           preferredLanguage: true,
           staffProfile: { select: { dealerId: true } },
+          equippedCosmetics: {
+            where: { isEquipped: true },
+            select: { cosmetic: { select: { type: true, imageUrl: true } } },
+          },
+          customFrameColor: true,
         },
       });
     });

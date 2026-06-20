@@ -168,10 +168,21 @@ export function getLeagueProgress(levelOrPoints: number): number {
 }
 
 export function generateQRCode(): string {
+  // QR `code` public lookup anahtarıdır (scan/feedback endpoint'lerinde).
+  // Tahmin edilebilir Math.random yerine kriptografik rastgelelik kullanılır.
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const length = 8;
   let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < length; i++) {
+      result += chars[array[i] % chars.length];
+    }
+  } else {
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
   }
   return result;
 }

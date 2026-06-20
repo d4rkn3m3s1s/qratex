@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { ADMIN_DASHBOARD_TAG } from '@/lib/cache-tags';
 
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
-
+/**
+ * Admin dashboard verisi tamamen toplulaştırma (viewer'a özel veri YOK) ve her
+ * yüklemede ~24 sorgu çalıştırıyordu. unstable_cache ile 60sn tag'lı cache:
+ * feedback/consumption mutation'larında revalidateTag(ADMIN_DASHBOARD_TAG) ile
+ * bayatlatılabilir. Auth cache DIŞINDA kalır (her istek yetki kontrolünden geçer).
+ */
+const getDashboardData = unstable_cache(
+  async () => {
     // Get date ranges
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -208,33 +214,37 @@ export async function GET(request: NextRequest) {
     // Total all reviews
     const totalAllReviews = totalFeedbacks + cardStats.reviews;
 
-    // Sentiment hesaplamasını tek kaynağa bağla:
-    // - Feedback tablosunda sentiment yoksa rating fallback uygula
-    // - Consumption review'ları rating üzerinden dahil et
-    const [feedbackForSentiment, consumptionForSentiment] = await Promise.all([
-      prisma.feedback.findMany({
-        where: { deletedAt: null },
-        select: { sentiment: true, rating: true },
-      }),
-      prisma.consumptionReview.findMany({
-        select: { rating: true },
-      }),
+    // Sentiment özeti — önceden TÜM feedback + review tablosu belleğe çekilip
+    // JS'te sayılıyordu. Artık SQL CASE ile bucket sayımı (satır transferi yok):
+    // - Feedback'te sentiment varsa onu, yoksa rating fallback'i kullan
+    // - Consumption review rating üzerinden dahil edilir
+    const [fbSent, crSent] = await Promise.all([
+      prisma.$queryRaw<Array<{ bucket: string; n: bigint }>>(Prisma.sql`
+        SELECT CASE
+          WHEN "sentiment" IN ('positive','negative','neutral') THEN "sentiment"
+          WHEN "rating" >= 4 THEN 'positive'
+          WHEN "rating" >= 3 THEN 'neutral'
+          ELSE 'negative' END AS bucket,
+          COUNT(*) AS n
+        FROM "Feedback" WHERE "deletedAt" IS NULL
+        GROUP BY 1
+      `),
+      prisma.$queryRaw<Array<{ bucket: string; n: bigint }>>(Prisma.sql`
+        SELECT CASE
+          WHEN "rating" >= 4 THEN 'positive'
+          WHEN "rating" >= 3 THEN 'neutral'
+          ELSE 'negative' END AS bucket,
+          COUNT(*) AS n
+        FROM "ConsumptionReview"
+        GROUP BY 1
+      `),
     ]);
-    const normalizedFeedbackSentiment = feedbackForSentiment.map((f) => {
-      if (f.sentiment === 'positive' || f.sentiment === 'negative' || f.sentiment === 'neutral') {
-        return f.sentiment;
+    const sentimentSummary = { positive: 0, neutral: 0, negative: 0 };
+    for (const row of [...fbSent, ...crSent]) {
+      if (row.bucket in sentimentSummary) {
+        sentimentSummary[row.bucket as keyof typeof sentimentSummary] += Number(row.n);
       }
-      return f.rating >= 4 ? 'positive' : f.rating >= 3 ? 'neutral' : 'negative';
-    });
-    const normalizedConsumptionSentiment = consumptionForSentiment.map((r) =>
-      r.rating >= 4 ? 'positive' : r.rating >= 3 ? 'neutral' : 'negative'
-    );
-    const combinedSentiment = [...normalizedFeedbackSentiment, ...normalizedConsumptionSentiment];
-    const sentimentSummary = {
-      positive: combinedSentiment.filter((s) => s === 'positive').length,
-      neutral: combinedSentiment.filter((s) => s === 'neutral').length,
-      negative: combinedSentiment.filter((s) => s === 'negative').length,
-    };
+    }
 
     // Stats for cards
     const stats = [
@@ -272,8 +282,8 @@ export async function GET(request: NextRequest) {
       },
     ];
 
-    return NextResponse.json({
-      success: true,
+    return {
+      success: true as const,
       stats,
       recentUsers,
       recentFeedbacks: allRecentReviews,
@@ -292,7 +302,19 @@ export async function GET(request: NextRequest) {
         ...cardStats,
       },
       cardStats,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
+    };
+  },
+  ['admin-dashboard'],
+  { revalidate: 60, tags: [ADMIN_DASHBOARD_TAG] }
+);
+
+export async function GET(_request: NextRequest) {
+  try {
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+
+    const data = await getDashboardData();
+    return NextResponse.json(data, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching admin dashboard:', error);
     return NextResponse.json(

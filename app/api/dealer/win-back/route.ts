@@ -28,9 +28,13 @@ export async function GET(req: Request) {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const sleepingRows = await prisma.$queryRaw<Array<{ customerId: string; lastVisit: Date }>>(
+        // Uyuyan müşteriler + GERÇEK geçmiş ortalama harcamaları (tahmini gelir için).
+        // avgSpend: bu müşterinin bu işletmedeki amount'u olan tüketimlerinin ortalaması.
+        const sleepingRows = await prisma.$queryRaw<Array<{ customerId: string; lastVisit: Date; avgSpend: number | null }>>(
             Prisma.sql`
-                SELECT c."customerId", MAX(c."createdAt") AS "lastVisit"
+                SELECT c."customerId",
+                       MAX(c."createdAt") AS "lastVisit",
+                       AVG(c."amount") FILTER (WHERE c."amount" IS NOT NULL) AS "avgSpend"
                 FROM "Consumption" c
                 WHERE c."dealerId" = ${dealerId}
                 GROUP BY c."customerId"
@@ -54,17 +58,29 @@ export async function GET(req: Request) {
                       },
                   });
 
-        const lastByCustomer = new Map(sleepingRows.map((r) => [r.customerId, r.lastVisit]));
+        const metaByCustomer = new Map(sleepingRows.map((r) => [r.customerId, r]));
 
-        const radarData = customerDetails.map((user) => ({
-            ...user,
-            lastVisit: lastByCustomer.get(user.id) ?? null,
-        }));
+        const radarData = customerDetails.map((user) => {
+            const meta = metaByCustomer.get(user.id);
+            return {
+                ...user,
+                lastVisit: meta?.lastVisit ?? null,
+                avgSpend: meta?.avgSpend != null ? Math.round(Number(meta.avgSpend)) : null,
+            };
+        });
+
+        // Tahmini geri kazanım geliri = uyuyan müşterilerin gerçek ortalama
+        // harcamalarının toplamı (geçmiş veriye dayalı; sabit varsayım DEĞİL).
+        const potentialRevenue = Math.round(
+            radarData.reduce((sum, r) => sum + (r.avgSpend ?? 0), 0)
+        );
 
         return NextResponse.json({
             data: radarData,
             count: radarData.length,
-            potentialRevenue: radarData.length * 250 // Mock estimation
+            potentialRevenue,
+            // Hiç amount kaydı yoksa tahmin 0 olur; UI bunu "veri yetersiz" gösterebilir.
+            potentialRevenueBasis: 'avg_historical_spend',
         }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {

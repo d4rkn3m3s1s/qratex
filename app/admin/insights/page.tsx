@@ -5,66 +5,52 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Users, Target, Activity } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { BootstrapActionButton } from "@/components/admin/bootstrap-action-button";
 import { AdminPremiumHero } from "@/components/admin/admin-premium-hero";
 
-async function getAggregatedData() {
-    // 1. Get dealers with categories
-    const dealers = await prisma.user.findMany({
-        where: { role: 'DEALER', businessCategory: { not: null } },
-        select: { id: true, businessCategory: true }
-    });
+// Platform geneli (kullanıcıya özel değil) → 5 dk cache. Önceden 3 sıralı sorgu
+// + her feedback/qr için dealers.find() (O(n²)) vardı; artık 2 toplu SQL groupBy.
+const getAggregatedData = unstable_cache(
+    async () => {
+        const [ratingRows, scanRows] = await Promise.all([
+            prisma.$queryRaw<Array<{ category: string; dealerCount: bigint; ratingSum: bigint | null; ratingN: bigint }>>(Prisma.sql`
+                SELECT LOWER(u."businessCategory") AS category,
+                       COUNT(DISTINCT u."id") AS "dealerCount",
+                       SUM(f."rating") AS "ratingSum",
+                       COUNT(f."id") AS "ratingN"
+                FROM "User" u
+                LEFT JOIN "QRCode" q ON q."dealerId" = u."id"
+                LEFT JOIN "Feedback" f ON f."qrCodeId" = q."id" AND f."deletedAt" IS NULL
+                WHERE u."role" = 'DEALER' AND u."businessCategory" IS NOT NULL
+                GROUP BY LOWER(u."businessCategory")
+            `),
+            prisma.$queryRaw<Array<{ category: string; totalScans: bigint | null }>>(Prisma.sql`
+                SELECT LOWER(u."businessCategory") AS category,
+                       COALESCE(SUM(q."scanCount"), 0) AS "totalScans"
+                FROM "User" u
+                LEFT JOIN "QRCode" q ON q."dealerId" = u."id"
+                WHERE u."role" = 'DEALER' AND u."businessCategory" IS NOT NULL
+                GROUP BY LOWER(u."businessCategory")
+            `),
+        ]);
 
-    const categoryMap = new Map<string, { dealerCount: number; totalRating: number; ratingCount: number; totalScans: number }>();
-
-    // Initialize categories
-    for (const dealer of dealers) {
-        const cat = dealer.businessCategory?.toLowerCase() || 'other';
-        if (!categoryMap.has(cat)) {
-            categoryMap.set(cat, { dealerCount: 0, totalRating: 0, ratingCount: 0, totalScans: 0 });
-        }
-        categoryMap.get(cat)!.dealerCount++;
-    }
-
-    // 2. Aggregate feedbacks (average rating)
-    const feedbacks = await prisma.feedback.findMany({
-        where: { qrCode: { dealerId: { in: dealers.map(d => d.id) } } },
-        select: { rating: true, qrCode: { select: { dealerId: true } } }
-    });
-
-    for (const fb of feedbacks) {
-        const dealer = dealers.find(d => d.id === fb.qrCode.dealerId);
-        if (dealer && dealer.businessCategory) {
-            const cat = dealer.businessCategory.toLowerCase();
-            const stats = categoryMap.get(cat)!;
-            stats.totalRating += fb.rating;
-            stats.ratingCount++;
-        }
-    }
-
-    // 3. Aggregate scans
-    const qrCodes = await prisma.qRCode.findMany({
-        where: { dealerId: { in: dealers.map(d => d.id) } },
-        select: { scanCount: true, dealerId: true }
-    });
-
-    for (const qr of qrCodes) {
-        const dealer = dealers.find(d => d.id === qr.dealerId);
-        if (dealer && dealer.businessCategory) {
-            const cat = dealer.businessCategory.toLowerCase();
-            categoryMap.get(cat)!.totalScans += qr.scanCount;
-        }
-    }
-
-    const rawStats = Array.from(categoryMap.entries()).map(([category, stats]) => ({
-        category,
-        dealerCount: stats.dealerCount,
-        avgRating: stats.ratingCount > 0 ? stats.totalRating / stats.ratingCount : 0,
-        totalScans: stats.totalScans
-    }));
-
-    return rawStats.sort((a, b) => b.totalScans - a.totalScans); // Sort by popularity
-}
+        const scanByCat = new Map(scanRows.map((r) => [r.category, Number(r.totalScans ?? 0)]));
+        const rawStats = ratingRows.map((r) => {
+            const ratingN = Number(r.ratingN ?? 0);
+            return {
+                category: r.category,
+                dealerCount: Number(r.dealerCount ?? 0),
+                avgRating: ratingN > 0 ? Number(r.ratingSum ?? 0) / ratingN : 0,
+                totalScans: scanByCat.get(r.category) ?? 0,
+            };
+        });
+        return rawStats.sort((a, b) => b.totalScans - a.totalScans);
+    },
+    ['admin-insights-categories'],
+    { revalidate: 300, tags: ['admin-insights'] }
+);
 
 export default async function AdminInsightsPage() {
     const session = await getServerSession(authOptions);

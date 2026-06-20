@@ -20,6 +20,7 @@ import {
   Clock,
   MapPin,
   Coffee,
+  Search,
 } from 'lucide-react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
@@ -128,6 +129,7 @@ export default function CustomerBadgesPage() {
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
   const [filter, setFilter] = useState<'all' | 'earned' | 'locked'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     fetchBadges();
@@ -145,6 +147,8 @@ export default function CustomerBadgesPage() {
           const normalizedCategory = badge.category || 'general';
           return {
             ...badge,
+            // Boş/eksik ikon next/image'i patlatır (boş src) ve önizleme görünmez kalırdı.
+            icon: typeof badge.icon === 'string' && badge.icon.trim() !== '' ? badge.icon : '/logo/logo.png',
             progress: typeof badge.progress === 'number' ? Math.floor(badge.progress) : (badge.earned ? 100 : 0),
             currentValue: typeof badge.currentValue === 'number' ? badge.currentValue : 0,
             targetValue: typeof badge.targetValue === 'number' ? badge.targetValue : 10,
@@ -165,7 +169,12 @@ export default function CustomerBadgesPage() {
   const filteredBadges = badges.filter((b) => {
     const statusMatch = filter === 'all' || (filter === 'earned' ? b.earned : !b.earned);
     const categoryMatch = categoryFilter === 'all' || b.category === categoryFilter;
-    return statusMatch && categoryMatch;
+    const q = searchQuery.trim().toLowerCase();
+    const searchMatch =
+      q === '' ||
+      b.name.toLowerCase().includes(q) ||
+      (b.description?.toLowerCase().includes(q) ?? false);
+    return statusMatch && categoryMatch && searchMatch;
   });
 
   const earnedBadges = badges.filter((b) => b.earned);
@@ -304,6 +313,19 @@ export default function CustomerBadgesPage() {
           )}
         </div>
       </DashboardPageHeroChrome>
+
+      {/* Arama */}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t('customerBadges.searchPlaceholder')}
+          aria-label={t('customerBadges.searchPlaceholder')}
+          className="flex h-10 w-full rounded-md border border-border/80 bg-background pl-9 pr-3 py-2 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-white/25 dark:bg-white/[0.07]"
+        />
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">

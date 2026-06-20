@@ -521,6 +521,30 @@ export default function AdminObservabilityPage() {
                           </span>
                         </p>
                       )}
+                      {health.ops && (
+                        <div className="mt-2 space-y-1 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                          <p>
+                            {t('adminObservability.queue')}{' '}
+                            <span className={health.ops.queuePending > 50 ? 'text-amber-700 dark:text-amber-300 font-medium' : 'text-foreground'}>
+                              {health.ops.queuePending} {t('adminObservability.pending')}
+                            </span>
+                            {health.ops.queueOldestAgeSec != null && health.ops.queueOldestAgeSec > 120 && (
+                              <span className="text-amber-700 dark:text-amber-300"> · {Math.round(health.ops.queueOldestAgeSec / 60)}dk gecikme</span>
+                            )}
+                          </p>
+                          <p>
+                            {t('adminObservability.webhooks24h')}{' '}
+                            <span className="text-foreground">{health.ops.webhookDeliveries24h}</span>
+                            {health.ops.webhookFailures24h > 0 && (
+                              <span className="text-red-700 dark:text-red-300"> · {health.ops.webhookFailures24h} {t('adminObservability.failed')}</span>
+                            )}
+                          </p>
+                          <p>
+                            {t('adminObservability.activeUsers24h')}{' '}
+                            <span className="text-foreground">{health.ops.activeUsers24h}</span>
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">{t('adminObservability.emptyDash')}</p>

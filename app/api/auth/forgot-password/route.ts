@@ -18,7 +18,7 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   const ip = getClientIdentifier(request);
-  const rl = checkAuthEmailActionLimit('forgot_password', ip);
+  const rl = await checkAuthEmailActionLimit('forgot_password', ip);
   if (!rl.ok) {
     return NextResponse.json(
       { success: true, message: 'İsteğiniz alındı.' },

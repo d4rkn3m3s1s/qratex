@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { AGENT_PERSONAS, type AgentName } from '@/lib/agent-personas';
+import { runChatCompletion, isAIConfigured } from '@/lib/ai-engine';
 
 export interface CouncilAction {
   title: string;
@@ -34,6 +35,8 @@ export interface CouncilComputationResult {
   consensusScore: number;
   rationale: string;
   actions: CouncilAction[];
+  /** true: proposals/critiques/rationale gerçek LLM ile üretildi; false: metrik-şablon. */
+  enriched: boolean;
 }
 
 const AGENTS: AgentName[] = ['Harper', 'Benjamin', 'Lucas', 'Grok'];
@@ -115,15 +118,88 @@ export async function computeCouncil(goal: string): Promise<CouncilComputationRe
   const winner = critiques.sort((a, b) => b.score - a.score)[0]?.agentName ?? 'Harper';
   const consensusScore = critiques.reduce((sum, c) => sum + c.score, 0) / AGENTS.length;
 
-  const rationale = `${AGENT_PERSONAS[winner].codename} bu metrik setinde en güçlü çizgiyi taşıyor. ` +
+  // Şablon (deterministik) varsayılanlar — LLM yoksa veya başarısız olursa kullanılır.
+  let rationale = `${AGENT_PERSONAS[winner].codename} bu metrik setinde en güçlü çizgiyi taşıyor. ` +
     `Grok çoklu ajan düzeninde (Harper veri, Benjamin mantık, Lucas karşı senaryo) hedef “${goal.slice(0, 80)}” için önce ölçüm ve risk mitigasyonu birlikte yürütülmeli.`;
 
-  const actions: CouncilAction[] = [
+  let actions: CouncilAction[] = [
     { title: 'Harper: KPI panosu + kontrol grubu + başarısızlık eşiği', owner: 'Harper', priority: 'high', expectedImpact: 18 },
     { title: 'Benjamin: öncelik matrisi ve bağımlılık sırası', owner: 'Benjamin', priority: 'high', expectedImpact: 16 },
     { title: 'Lucas: kohort risk mitigasyonu ve iletişim metni', owner: 'Lucas', priority: 'medium', expectedImpact: 14 },
     { title: 'Grok: tek sayfa konsensüs özeti (ana cevap)', owner: 'Grok', priority: 'medium', expectedImpact: 15 },
   ];
+
+  // GERÇEK LLM zenginleştirmesi: gerçek metrikleri besleyip proposals.details,
+  // critiques.content, rationale ve actions'ı modele ürettir. Metrikler gerçek
+  // olduğu için halüsinasyon riski düşüktür. LLM yoksa şablon korunur.
+  let enriched = false;
+  if (isAIConfigured()) {
+    const metricsText =
+      `feedbackCount30d=${feedbackCount30d}, averageRating30d=${averageRating30d}, ` +
+      `negativeRatio30d=${(negativeRatio30d * 100).toFixed(1)}%, highChurnCount30d=${highChurnCount30d}, ` +
+      `unresolvedSuspicious=${unresolvedSuspicious}`;
+    const personaText = AGENTS.map((a) => `${a} (${AGENT_PERSONAS[a].codename}): ${AGENT_PERSONAS[a].grokRole}`).join('\n');
+
+    const res = await runChatCompletion({
+      system:
+        'Sen bir çoklu-ajan konsey orkestratörüsün. Dört uzman ajan (Harper=veri, ' +
+        'Benjamin=mantık, Lucas=karşı senaryo, Grok=kaptan/sentez) GERÇEK metriklere ' +
+        'dayanarak bir hedefi değerlendirir. Yalnızca verilen metriklere dayan, sayı UYDURMA. ' +
+        'Türkçe yaz. SADECE şu şemada JSON döndür: ' +
+        '{"proposals":[{"agentName":"Harper|Benjamin|Lucas|Grok","details":string}],' +
+        '"critiques":[{"agentName":"Harper|Benjamin|Lucas|Grok","content":string}],' +
+        '"rationale":string,' +
+        '"actions":[{"title":string,"owner":"Harper|Benjamin|Lucas|Grok","priority":"low|medium|high","expectedImpact":number}]}',
+      user:
+        `Hedef: "${goal}"\n\nGerçek metrikler (son 30 gün):\n${metricsText}\n\n` +
+        `Ajanlar:\n${personaText}\n\nÖne çıkan uzman (skor bazlı): ${winner}.\n\n` +
+        `Her ajan için 1 öneri (details) ve 1 eleştiri (content) üret; bir gerekçe (rationale) ` +
+        `ve 3-5 uygulanabilir aksiyon yaz. Metriklere atıfta bulun.`,
+      temperature: 0.5,
+      maxTokens: 1100,
+      jsonMode: true,
+    });
+
+    if (res) {
+      try {
+        const parsed = JSON.parse(res.content);
+        if (typeof parsed.rationale === 'string' && parsed.rationale.trim()) {
+          rationale = parsed.rationale.trim();
+        }
+        if (Array.isArray(parsed.proposals)) {
+          for (const p of parsed.proposals) {
+            const target = proposals.find((x) => x.agentName === p.agentName);
+            if (target && typeof p.details === 'string' && p.details.trim()) {
+              target.details = p.details.trim();
+            }
+          }
+        }
+        if (Array.isArray(parsed.critiques)) {
+          for (const c of parsed.critiques) {
+            const target = critiques.find((x) => x.agentName === c.agentName);
+            if (target && typeof c.content === 'string' && c.content.trim()) {
+              target.content = c.content.trim();
+            }
+          }
+        }
+        if (Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+          const mapped = parsed.actions
+            .filter((a: { title?: string }) => a && typeof a.title === 'string' && a.title.trim())
+            .slice(0, 5)
+            .map((a: { title: string; owner?: string; priority?: string; expectedImpact?: number }) => ({
+              title: a.title.trim(),
+              owner: (AGENTS.includes(a.owner as AgentName) ? a.owner : 'Grok') as AgentName,
+              priority: (['low', 'medium', 'high'].includes(a.priority as string) ? a.priority : 'medium') as 'low' | 'medium' | 'high',
+              expectedImpact: typeof a.expectedImpact === 'number' ? Math.round(a.expectedImpact) : 12,
+            }));
+          if (mapped.length > 0) actions = mapped;
+        }
+        enriched = true;
+      } catch {
+        // JSON parse başarısızsa şablon değerler korunur (enriched=false).
+      }
+    }
+  }
 
   return {
     metrics: { feedbackCount30d, averageRating30d, negativeRatio30d, highChurnCount30d, unresolvedSuspicious },
@@ -133,6 +209,7 @@ export async function computeCouncil(goal: string): Promise<CouncilComputationRe
     consensusScore: Number(consensusScore.toFixed(1)),
     rationale,
     actions,
+    enriched,
   };
 }
 

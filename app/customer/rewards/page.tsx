@@ -38,9 +38,10 @@ import { enUS, tr } from 'date-fns/locale';
 import { getLeagueMeta, type LeagueKey } from '@/lib/utils';
 import { useCustomerLocale, useCustomerT } from '@/lib/use-customer-locale';
 import { resolveRewardDisplayImage } from '@/lib/reward-display-image';
+import { CouponRedeemCard } from '@/components/rewards/coupon-redeem-card';
 
 const SurpriseEggThreeModal = dynamic(
-  () => import('@/components/rewards/surprise-egg-three-modal').then((m) => m.SurpriseEggThreeModal),
+  () => import('@/components/rewards/surprise-egg-three-modal-premium').then((m) => m.SurpriseEggThreeModal),
   { ssr: false, loading: () => null }
 );
 
@@ -130,6 +131,7 @@ export default function CustomerRewardsPage() {
   const [activeTab, setActiveTab] = useState('store');
   const [surpriseOpen, setSurpriseOpen] = useState(false);
   const [surpriseTitle, setSurpriseTitle] = useState('Sürpriz Ödül Açıldı!');
+  const [surpriseMessage, setSurpriseMessage] = useState<string | null>(null);
   const [surpriseCouponCode, setSurpriseCouponCode] = useState<string | null>(null);
   const [surpriseLeagueKey, setSurpriseLeagueKey] = useState<LeagueKey>('BASLANGIC');
 
@@ -239,6 +241,11 @@ export default function CustomerRewardsPage() {
         const leagueMeta = getLeagueMeta((session?.user as { points?: number })?.points ?? 0);
         setSurpriseLeagueKey(leagueMeta.key);
         setSurpriseTitle(`${selectedReward.name} ödülünü kazandınız!`);
+        setSurpriseMessage(
+          data.data?.couponCode
+            ? 'Ödül hesabına işlendi. Kupon kodunu aşağıda güvenle saklayabilirsin.'
+            : 'Ödül hesabına işlendi. Ayrıntılar aşağıda görünüyor.'
+        );
         setSurpriseCouponCode(data.data?.couponCode || null);
         setSurpriseOpen(true);
       } else {
@@ -294,6 +301,9 @@ export default function CustomerRewardsPage() {
           </div>
         </div>
       </DashboardPageHeroChrome>
+
+      {/* Kupon kullanım kutusu */}
+      <CouponRedeemCard />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
@@ -778,6 +788,7 @@ export default function CustomerRewardsPage() {
         <SurpriseEggThreeModal
           open
           title={surpriseTitle}
+          message={surpriseMessage}
           couponCode={surpriseCouponCode}
           leagueKey={surpriseLeagueKey}
           onClose={() => setSurpriseOpen(false)}

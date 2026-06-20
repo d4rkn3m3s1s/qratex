@@ -150,8 +150,11 @@ export async function signManifest(manifest: Buffer): Promise<Buffer> {
   // const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, certPassword);
   // ... signing logic ...
   
-  // Return placeholder - in production this would be actual signature
-  console.warn('Apple Pass signing not fully implemented - requires certificates');
+  // TODO: Gerçek PKCS#7 imzalama (node-forge) burada uygulanmalı. Şu an
+  // imzasız manifest dönüyor — bu yüzden API route sertifika yoksa zaten 503
+  // döndürür; bu fonksiyon yalnızca imzalama implemente edildiğinde geçerli
+  // pkpass üretir. Sahte "başarı" akışı kaldırıldı.
+  console.warn('Apple Pass PKCS#7 signing not implemented - pass will not be valid until implemented');
   return manifest;
 }
 
@@ -179,13 +182,10 @@ export async function createPkPass(data: PassData): Promise<Buffer> {
   const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
   files.set('manifest.json', manifestBuffer);
   
-  // Sign the manifest (requires Apple certificates)
-  try {
-    const signature = await signManifest(manifestBuffer);
-    files.set('signature', signature);
-  } catch (e) {
-    console.warn('Skipping signature - certificates not configured');
-  }
+  // Sign the manifest (requires Apple certificates). İmza ZORUNLUDUR — imzasız
+  // .pkpass iOS tarafından reddedilir; bu yüzden sessizce atlamak yerine hata fırlat.
+  const signature = await signManifest(manifestBuffer);
+  files.set('signature', signature);
   
   // Add all files to ZIP
   files.forEach((content, filename) => {

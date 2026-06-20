@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -66,15 +67,21 @@ export async function GET() {
       };
     });
 
-    const monthly = await Promise.all(
-      [5, 4, 3, 2, 1, 0].map(async (offset) => {
-        const { start, end, key } = monthRange(offset, now);
-        const count = await prisma.consumption.count({
-          where: { customerId, createdAt: { gte: start, lte: end } },
-        });
-        return { key, label: key, count };
-      })
-    );
+    // Aylık seri: önceden ay başına 1 sorgu (6 sorgu) → tek gruplanmış sorgu
+    // (date_trunc('month')). monthRange yerel ay sınırı kullanıyor; aynı sonucu
+    // korumak için DB'de de yerel aya göre grupla (to_char ile YYYY-MM anahtarı).
+    const months = [5, 4, 3, 2, 1, 0].map((offset) => monthRange(offset, now));
+    const monthStart = months[0].start;
+    const monthEnd = months[months.length - 1].end;
+    const monthRows = await prisma.$queryRaw<Array<{ key: string; n: bigint }>>(Prisma.sql`
+      SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS key, COUNT(*)::bigint AS n
+      FROM "Consumption"
+      WHERE "customerId" = ${customerId}
+        AND "createdAt" >= ${monthStart} AND "createdAt" <= ${monthEnd}
+      GROUP BY 1
+    `);
+    const monthCountByKey = new Map(monthRows.map((r) => [r.key, Number(r.n)]));
+    const monthly = months.map(({ key }) => ({ key, label: key, count: monthCountByKey.get(key) ?? 0 }));
 
     const maxMonth = Math.max(1, ...monthly.map((m) => m.count));
 

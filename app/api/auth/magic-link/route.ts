@@ -19,7 +19,7 @@ const bodySchema = z.object({
 
 export async function POST(request: NextRequest) {
   const ip = getClientIdentifier(request);
-  const rl = checkAuthEmailActionLimit('magic_link', ip);
+  const rl = await checkAuthEmailActionLimit('magic_link', ip);
   if (!rl.ok) {
     return NextResponse.json(
       { success: true, message: 'İsteğiniz alındı.' },

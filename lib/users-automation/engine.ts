@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@/generated-prisma-client';
+import { creditPointsAndXp } from '@/lib/points-wallet';
 import type { AutomationAction, AutomationCondition, AutomationRunResult } from './types';
 
 export function buildUserWhere(condition: AutomationCondition): Prisma.UserWhereInput {
@@ -60,17 +61,10 @@ async function applyAction(userId: string, action: AutomationAction) {
       return;
     }
     case 'add_xp': {
-      const current = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { xp: true, level: true },
-      });
-      if (!current) throw new Error('Kullanici bulunamadi');
-      const newXp = (current.xp || 0) + action.amount;
-      const newLevel = Math.floor(newXp / 1000) + 1;
-      await prisma.user.update({
-        where: { id: userId },
-        data: { xp: newXp, level: newLevel },
-      });
+      // TEK kaynak: creditPointsAndXp (geometrik calculateLevel). Önceden linear
+      // floor(xp/1000)+1 ile canonical formülle çelişiyordu. Negatif XP desteklenmez
+      // (creditPointsAndXp yalnızca artırır) — automation add_xp pozitif kullanılır.
+      await creditPointsAndXp(prisma, { userId, xp: Math.max(0, action.amount) });
       return;
     }
     case 'set_role': {

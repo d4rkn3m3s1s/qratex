@@ -21,6 +21,7 @@ const createSchema = z.object({
   maxQRCodes: z.number().int().min(0).optional().nullable(),
   maxBranches: z.number().int().min(0).optional().nullable(),
   pricePerBranch: z.number().min(0).optional().nullable(),
+  stripePriceId: z.string().max(255).optional().nullable(),
   isPopular: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
   order: z.number().int().min(0).optional(),
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
       maxQRCodes: parsed.data.maxQRCodes ?? null,
       maxBranches: parsed.data.maxBranches ?? null,
       pricePerBranch: parsed.data.pricePerBranch ?? null,
+      stripePriceId: parsed.data.stripePriceId?.trim() || null,
       isPopular: parsed.data.isPopular,
       isActive: parsed.data.isActive,
       order,
@@ -119,6 +121,9 @@ export async function PUT(request: NextRequest) {
       ...(fields.maxBranches !== undefined ? { maxBranches: fields.maxBranches ?? null } : {}),
       ...(fields.pricePerBranch !== undefined
         ? { pricePerBranch: fields.pricePerBranch ?? null }
+        : {}),
+      ...(fields.stripePriceId !== undefined
+        ? { stripePriceId: fields.stripePriceId?.trim() || null }
         : {}),
       ...(fields.isPopular !== undefined ? { isPopular: fields.isPopular } : {}),
       ...(fields.isActive !== undefined ? { isActive: fields.isActive } : {}),

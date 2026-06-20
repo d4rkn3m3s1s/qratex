@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { TwoFactorSettings } from '@/components/auth/two-factor-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +50,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { toast } from '@/lib/admin-toast';
+import { applyAccessibilityPrefs } from '@/lib/accessibility-prefs';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
 import { useAppLocale } from '@/lib/app-locale';
@@ -125,6 +127,7 @@ export default function CustomerSettingsPage() {
     showLeaderboard: true,
     highContrast: false,
     reduceAnimations: false,
+    colorblindMode: false,
   });
 
   const [exportingData, setExportingData] = useState(false);
@@ -151,7 +154,14 @@ export default function CustomerSettingsPage() {
             setNotifications(data.data.notifications);
           }
           if (data.data.preferences) {
-            setPreferences(data.data.preferences);
+            const p = data.data.preferences;
+            setPreferences((prev) => ({ ...prev, ...p }));
+            // DB'den gelen erişilebilirlik tercihlerini anında uygula + sakla.
+            applyAccessibilityPrefs({
+              colorblindMode: !!p.colorblindMode,
+              highContrast: !!p.highContrast,
+              reduceAnimations: !!p.reduceAnimations,
+            });
           }
         }
       } catch (error) {
@@ -755,7 +765,9 @@ export default function CustomerSettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
           >
+            <TwoFactorSettings />
             <Card glass>
               <CardHeader>
                 <CardTitle>{tClient('customerSettings.passwordTitle', { action: profile.hasPassword ? tClient('common.change') : tClient('common.create') })}</CardTitle>
@@ -898,7 +910,15 @@ export default function CustomerSettingsPage() {
                       </div>
                       <Switch
                         checked={preferences.highContrast}
-                        onCheckedChange={(checked) => setPreferences({ ...preferences, highContrast: checked })}
+                        onCheckedChange={(checked) => {
+                          const next = { ...preferences, highContrast: checked };
+                          setPreferences(next);
+                          applyAccessibilityPrefs({
+                            colorblindMode: next.colorblindMode,
+                            highContrast: next.highContrast,
+                            reduceAnimations: next.reduceAnimations,
+                          });
+                        }}
                       />
                     </div>
                     <div className="flex items-center justify-between">
@@ -911,7 +931,36 @@ export default function CustomerSettingsPage() {
                       </div>
                       <Switch
                         checked={preferences.reduceAnimations}
-                        onCheckedChange={(checked) => setPreferences({ ...preferences, reduceAnimations: checked })}
+                        onCheckedChange={(checked) => {
+                          const next = { ...preferences, reduceAnimations: checked };
+                          setPreferences(next);
+                          applyAccessibilityPrefs({
+                            colorblindMode: next.colorblindMode,
+                            highContrast: next.highContrast,
+                            reduceAnimations: next.reduceAnimations,
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex gap-3">
+                        <div className="mt-1"><Eye className="h-5 w-5 text-muted-foreground" /></div>
+                        <div>
+                          <p className="font-medium">Renk Körü Modu</p>
+                          <p className="text-sm text-muted-foreground">Kırmızı/yeşil göstergeleri renk körü-güvenli renklere çevirir</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={preferences.colorblindMode}
+                        onCheckedChange={(checked) => {
+                          const next = { ...preferences, colorblindMode: checked };
+                          setPreferences(next);
+                          applyAccessibilityPrefs({
+                            colorblindMode: next.colorblindMode,
+                            highContrast: next.highContrast,
+                            reduceAnimations: next.reduceAnimations,
+                          });
+                        }}
                       />
                     </div>
                   </div>

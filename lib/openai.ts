@@ -83,7 +83,7 @@ export async function analyzeWithFallback(
   return _analyzeWithFallback(text, options);
 }
 
-export default {
+const openaiApi = {
   analyzeFeedback,
   generateInsights,
   chatWithAI,
@@ -91,3 +91,5 @@ export default {
   analyzeSentimentLocal,
   analyzeWithFallback,
 };
+
+export default openaiApi;

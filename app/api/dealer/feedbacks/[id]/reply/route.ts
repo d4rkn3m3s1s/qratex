@@ -5,9 +5,26 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { suggestResponseWithGroq } from '@/lib/groq';
 import { z } from 'zod';
 import { INPUT_LIMITS } from '@/lib/input-limits';
+import { emailDealerReply } from '@/lib/notify-email';
 
 
 export const dynamic = 'force-dynamic';
+
+/** Yanıt veren bayinin gösterim adını çözer (e-posta için). */
+async function resolveDealerName(dealerId: string): Promise<string> {
+  const d = await prisma.user.findUnique({
+    where: { id: dealerId },
+    select: { businessName: true, name: true },
+  });
+  return d?.businessName || d?.name || 'İşletme';
+}
+
+/** Bayi yanıtı sonrası müşteriye e-posta (ateşle-unut, opt-out kontrollü). */
+function fireReplyEmail(customerId: string, dealerId: string, snippet: string | null) {
+  resolveDealerName(dealerId)
+    .then((dealerName) => emailDealerReply({ customerId, dealerName, feedbackSnippet: snippet }))
+    .catch((err) => console.error('[REPLY_EMAIL] gönderim hatası:', err));
+}
 
 const replySchema = z.object({
   reply: z.string().min(1, 'Yanıt boş olamaz').max(INPUT_LIMITS.replyText),
@@ -118,6 +135,7 @@ export async function POST(
               },
             });
           } catch { /* non-critical */ }
+          fireReplyEmail(review.customerId, review.consumption.dealerId, review.text ?? null);
         }
         return NextResponse.json({ success: true, review: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
@@ -150,6 +168,7 @@ export async function POST(
             },
           });
         } catch { /* non-critical */ }
+        fireReplyEmail(review.customerId, session.user.id, review.text ?? null);
       }
 
       return NextResponse.json({ success: true, review: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
@@ -191,6 +210,7 @@ export async function POST(
             },
           });
         } catch { /* non-critical */ }
+        fireReplyEmail(feedback.userId, feedback.qrCode.dealerId, feedback.text ?? null);
       }
 
       return NextResponse.json({ success: true, feedback: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
@@ -225,6 +245,7 @@ export async function POST(
           },
         });
       } catch { /* non-critical */ }
+      fireReplyEmail(feedback.userId, session.user.id, feedback.text ?? null);
     }
 
     return NextResponse.json({ success: true, feedback: updated }, { headers: PRIVATE_NO_STORE_HEADERS });

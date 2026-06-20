@@ -225,6 +225,11 @@ export async function PUT(request: NextRequest) {
     ],
   });
 
+  // Module-gate görünürlük cache'ini geçersiz kıl.
+  const { revalidateTag } = await import('next/cache');
+  const { MODULE_GATE_CACHE_TAG } = await import('@/lib/module-gate');
+  revalidateTag(MODULE_GATE_CACHE_TAG, 'max');
+
   return NextResponse.json({
     success: true,
     meta: {

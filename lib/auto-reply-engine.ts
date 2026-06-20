@@ -6,6 +6,15 @@ interface AutoReplyRuleCondition {
     value: string | number;
 }
 
+/** Yanıt veren bayinin gösterim adını çözer (e-posta için). */
+async function resolveDealerNameForEmail(dealerId: string): Promise<string> {
+    const d = await prisma.user.findUnique({
+        where: { id: dealerId },
+        select: { businessName: true, name: true },
+    });
+    return d?.businessName || d?.name || 'İşletme';
+}
+
 export async function processAutoReplies(feedbackId: string) {
     try {
         const feedback = await prisma.feedback.findUnique({
@@ -80,6 +89,15 @@ export async function processAutoReplies(feedbackId: string) {
                                 type: "info"
                             }
                         });
+                        // Transactional e-posta (opt-out kontrollü, ateşle-unut).
+                        const customerId = feedback.userId;
+                        import('@/lib/notify-email')
+                            .then(({ emailDealerReply }) =>
+                                resolveDealerNameForEmail(dealerId).then((dealerName) =>
+                                    emailDealerReply({ customerId, dealerName, feedbackSnippet: feedback.text })
+                                )
+                            )
+                            .catch((err) => console.error('[AUTO_REPLY_EMAIL]', err));
                     }
 
                 } else if (rule.action === 'incident') {

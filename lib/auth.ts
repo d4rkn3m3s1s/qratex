@@ -7,10 +7,10 @@ import bcrypt from 'bcryptjs';
 import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import {
-  checkRateLimit,
-  getLoginLockout,
-  recordFailedLoginAttempt,
-  clearFailedLoginAttempts,
+  checkRateLimitDb,
+  getLoginLockoutDb,
+  recordFailedLoginAttemptDb,
+  clearFailedLoginAttemptsDb,
 } from '@/lib/rate-limit';
 import {
   logLoginFailed,
@@ -19,12 +19,21 @@ import {
   logRateLimit,
 } from '@/lib/auth-events';
 import { consumeMagicLoginToken } from '@/lib/auth-email-token';
+import { verifyTwoFactorForLogin } from '@/lib/two-factor';
+import { assertEnvOrThrow } from '@/lib/env-validation';
 import type { Adapter } from 'next-auth/adapters';
+
+// Boot-time ortam doğrulaması: DATABASE_URL + NEXTAUTH_SECRET (üretimde min 32,
+// JWT forge koruması) + NEXTAUTH_URL + yarım OAuth yapılandırması. Üretimde 'error'
+// seviyesi dağıtımı durdurur; aksi halde sadece loglanır.
+assertEnvOrThrow();
 
 function resolveSessionMaxAgeSeconds(): number {
   const raw = process.env.NEXTAUTH_SESSION_MAX_AGE;
   const parsed = raw !== undefined && raw !== '' ? parseInt(raw, 10) : NaN;
-  const fallback = 3 * 24 * 60 * 60;
+  // Varsayılan 24sa (önceden 72sa): puan/ekonomi içeren bir sistemde sızan
+  // token'ın geçerlilik penceresini daraltır. Env ile özelleştirilebilir.
+  const fallback = 24 * 60 * 60;
   const base = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   return Math.max(300, base);
 }
@@ -65,6 +74,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
         magicToken: { label: 'Magic', type: 'text' },
+        twoFactorCode: { label: '2FA', type: 'text' },
       },
       async authorize(credentials) {
         const cred = credentials as Record<string, string | undefined> | undefined;
@@ -82,7 +92,7 @@ export const authOptions: NextAuthOptions = {
           if (!user) {
             throw new Error('Geçersiz veya süresi dolmuş bağlantı');
           }
-          clearFailedLoginAttempts(`${ip}:${user.email}`);
+          await clearFailedLoginAttemptsDb(`${ip}:${user.email}`);
           logLoginSuccess(ip, user.email);
           return {
             id: user.id,
@@ -101,7 +111,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const identifier = `${ip}:${cred.email}`;
-        const lockout = getLoginLockout(identifier);
+        const lockout = await getLoginLockoutDb(identifier);
         if (lockout.locked) {
           const sec = lockout.retryAfterMs
             ? Math.ceil(lockout.retryAfterMs / 1000)
@@ -110,7 +120,7 @@ export const authOptions: NextAuthOptions = {
           throw new Error(`Çok fazla başarısız deneme. ${sec} saniye sonra tekrar deneyin.`);
         }
 
-        const limit = checkRateLimit('login', identifier);
+        const limit = await checkRateLimitDb(`login:${identifier}`, 10, 60_000);
         if (!limit.ok) {
           logRateLimit(
             ip,
@@ -136,17 +146,24 @@ export const authOptions: NextAuthOptions = {
             level: true,
             preferredLanguage: true,
             emailVerified: true,
+            twoFactorEnabled: true,
+            twoFactorSecret: true,
           },
         });
 
+        // Kullanıcı sayımı (user enumeration) önlemi: "bulunamadı" ile "şifre hatalı"
+        // AYNI generic mesajı döndürür; saldırgan e-posta varlığını ayırt edemez.
+        // Ayrıca kullanıcı yoksa da bcrypt karşılaştırması yaparak zamanlama farkını eşitle.
+        const INVALID_CREDENTIALS = 'E-posta veya şifre hatalı';
         if (!user || !user.password) {
-          recordFailedLoginAttempt(identifier);
+          await bcrypt.compare(cred.password, '$2a$12$0000000000000000000000000000000000000000000000000000a'); // sabit-zaman
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'user_not_found');
-          throw new Error('Kullanıcı bulunamadı');
+          throw new Error(INVALID_CREDENTIALS);
         }
 
         if (!user.emailVerified) {
-          recordFailedLoginAttempt(identifier);
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'email_not_verified');
           throw new Error('E-posta adresinizi doğrulayın. Kayıt sonrası size gönderilen linke tıklayın.');
         }
@@ -154,12 +171,29 @@ export const authOptions: NextAuthOptions = {
         const isPasswordValid = await bcrypt.compare(cred.password, user.password);
 
         if (!isPasswordValid) {
-          recordFailedLoginAttempt(identifier);
+          await recordFailedLoginAttemptDb(identifier);
           logLoginFailed(ip, cred.email, 'invalid_password');
-          throw new Error('Şifre hatalı');
+          throw new Error(INVALID_CREDENTIALS);
         }
 
-        clearFailedLoginAttempts(identifier);
+        // 2FA: şifre doğruysa ama 2FA açıksa TOTP/kurtarma kodu zorunlu.
+        // Önceden 2FA secret saklanıyordu ama login'de HİÇ kontrol edilmiyordu
+        // (dekoratif koruma). Artık doğrulanır.
+        if (user.twoFactorEnabled && user.twoFactorSecret) {
+          const code = typeof cred.twoFactorCode === 'string' ? cred.twoFactorCode.trim() : '';
+          if (!code) {
+            // İstemci bu işareti yakalayıp 2FA kod ekranını gösterir.
+            throw new Error('2FA_REQUIRED');
+          }
+          const ok = await verifyTwoFactorForLogin(user.id, code);
+          if (!ok) {
+            await recordFailedLoginAttemptDb(identifier);
+            logLoginFailed(ip, cred.email, 'invalid_2fa');
+            throw new Error('2FA kodu hatalı');
+          }
+        }
+
+        await clearFailedLoginAttemptsDb(identifier);
         logLoginSuccess(ip, cred.email);
         return {
           id: user.id,

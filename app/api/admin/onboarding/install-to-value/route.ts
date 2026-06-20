@@ -11,7 +11,7 @@ export async function GET() {
   if ('error' in auth) return auth.error;
 
   const results = await getInstallToValue();
-  const stats = await getInstallToValueStats();
+  const stats = await getInstallToValueStats(results); // çift hesaplamayı önle
 
   return NextResponse.json({
     installToValue: results,

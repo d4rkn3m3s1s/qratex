@@ -57,7 +57,11 @@ export async function GET(req: NextRequest) {
     const [consumptions, periodTotalCount, spentAgg] = await Promise.all([
       prisma.consumption.findMany({
         where: periodWhere,
-        include: {
+        select: {
+          id: true,
+          createdAt: true,
+          amount: true,
+          note: true,
           product: {
             select: {
               id: true,
@@ -114,9 +118,35 @@ export async function GET(req: NextRequest) {
     const avgSpentPerVisit = totalConsumptions > 0 ? totalSpent / totalConsumptions : 0;
 
     // Growth calculations
-    const consumptionGrowth = prevConsumptions > 0 
+    const consumptionGrowth = prevConsumptions > 0
       ? Math.round(((totalConsumptions - prevConsumptions) / prevConsumptions) * 100)
       : 0;
+
+    // GERÇEK puan büyümesi: bu dönem vs önceki dönem points_credited toplamları
+    // (önceden Math.random ile uyduruluyordu).
+    const sumCreditedPoints = (events: Array<{ data: unknown }>): number => {
+      let sum = 0;
+      for (const e of events) {
+        const d = e.data as { points?: number } | null;
+        if (d && typeof d.points === 'number') sum += d.points;
+      }
+      return sum;
+    };
+    const [pointsThisPeriodRows, pointsPrevPeriodRows] = await Promise.all([
+      prisma.analyticsEvent.findMany({
+        where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: startDate } },
+        select: { data: true },
+      }),
+      prisma.analyticsEvent.findMany({
+        where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: prevStartDate, lt: startDate } },
+        select: { data: true },
+      }),
+    ]);
+    const pointsThisPeriod = sumCreditedPoints(pointsThisPeriodRows);
+    const pointsPrevPeriod = sumCreditedPoints(pointsPrevPeriodRows);
+    const pointsGrowth = pointsPrevPeriod > 0
+      ? Math.round(((pointsThisPeriod - pointsPrevPeriod) / pointsPrevPeriod) * 100)
+      : (pointsThisPeriod > 0 ? 100 : 0);
 
     // Category breakdown
     const categoryMap = new Map<string, { count: number; icon: string }>();
@@ -172,16 +202,16 @@ export async function GET(req: NextRequest) {
         visits: hourlyMap.get(hour) || 0,
       }));
 
-    // Top products
+    // Top products — ürünsüz tüketimler de görünsün: ürün adı yoksa not, o da
+    // yoksa "Diğer" etiketiyle sayılır (önceden tamamen atlanıyordu → liste boştu).
     const productMap = new Map<string, { count: number; totalSpent: number }>();
     consumptions.forEach((c) => {
-      if (c.product) {
-        const existing = productMap.get(c.product.name) || { count: 0, totalSpent: 0 };
-        productMap.set(c.product.name, {
-          count: existing.count + 1,
-          totalSpent: existing.totalSpent + (c.amount || 0),
-        });
-      }
+      const label = c.product?.name || (c.note && c.note.trim() !== '' ? c.note.trim() : 'Diğer');
+      const existing = productMap.get(label) || { count: 0, totalSpent: 0 };
+      productMap.set(label, {
+        count: existing.count + 1,
+        totalSpent: existing.totalSpent + (c.amount || 0),
+      });
     });
 
     const topProducts = Array.from(productMap.entries())
@@ -316,7 +346,7 @@ export async function GET(req: NextRequest) {
       },
       trends: {
         consumptionGrowth,
-        pointsGrowth: Math.round(Math.random() * 30 + 10), // Would need historical data
+        pointsGrowth,
         spendingTrend: consumptionGrowth >= 0 ? 'up' : 'down',
       },
       categoryBreakdown,

@@ -2345,8 +2345,14 @@ export default function DealerAIInsightsPage() {
                             </div>
                           )}
 
-                          <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
-                            <span>{t('dealerAiInsights.aiModelLine')} {fb.aiModelUsed || '-'}</span>
+                          <div className="text-xs text-muted-foreground flex flex-wrap gap-3 items-center">
+                            {fb.aiModelUsed === 'local-fallback' ? (
+                              <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700 dark:text-amber-300">
+                                AI yapılandırılmamış — yalnızca yerel ön-analiz (gerçek AI sonucu değil)
+                              </span>
+                            ) : (
+                              <span>{t('dealerAiInsights.aiModelLine')} {fb.aiModelUsed || '-'}</span>
+                            )}
                             <span>{t('dealerAiInsights.versionLabel')} {fb.aiVersion || '-'}</span>
                             <span>{t('dealerAiInsights.processedLabel')} {fb.aiProcessedAt ? new Date(fb.aiProcessedAt).toLocaleString(localeTag) : t('dealerAiInsights.pendingProcessing')}</span>
                           </div>

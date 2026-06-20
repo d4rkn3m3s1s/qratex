@@ -15,18 +15,19 @@ export default async function AdminFraudPreventionPage() {
         redirect("/auth/signin");
     }
 
-    // Fetch Suspicious Activities
-    const recentActivities = await prisma.suspiciousActivity.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        include: {
-            user: { select: { name: true, email: true, fraudStatus: true, fraudScore: true } },
-            dealer: { select: { businessName: true } }
-        }
-    });
-
-    const shadowBannedCount = await prisma.user.count({ where: { fraudStatus: 'shadow_ban' } });
-    const flaggedCount = await prisma.user.count({ where: { fraudStatus: 'flagged' } });
+    // 3 bağımsız sorgu paralel (önceden sıralı await — gereksiz TTFB).
+    const [recentActivities, shadowBannedCount, flaggedCount] = await Promise.all([
+        prisma.suspiciousActivity.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+            include: {
+                user: { select: { name: true, email: true, fraudStatus: true, fraudScore: true } },
+                dealer: { select: { businessName: true } }
+            }
+        }),
+        prisma.user.count({ where: { fraudStatus: 'shadow_ban' } }),
+        prisma.user.count({ where: { fraudStatus: 'flagged' } }),
+    ]);
 
     return (
         <div className="space-y-6">

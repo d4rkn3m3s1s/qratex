@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
@@ -15,7 +16,7 @@ import {
 import { getFeedbackReward, getPointsMatrix } from '@/lib/points-rules';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { capFeedbackPoints } from '@/lib/points-caps';
-import { checkRateLimit, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { checkRateLimitDb, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { inngestQueueEnabled, sendFeedbackAnalyze } from '@/lib/inngest/send';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { processAutoReplies } from '@/lib/auto-reply-engine';
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const clientId = getClientIdentifier(request);
-  const limit = checkRateLimit('feedback', clientId);
+  const limit = await checkRateLimitDb(`feedback:${clientId}`, 20, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: 'Çok fazla geri bildirim gönderdiniz. Lütfen biraz bekleyip tekrar deneyin.' },
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const qrLimit = checkFeedbackPerQrRateLimit(qrCodeId, clientId);
+    const qrLimit = await checkFeedbackPerQrRateLimit(qrCodeId, clientId);
     if (!qrLimit.ok) {
       return NextResponse.json(
         { error: 'Bu QR kod için çok fazla gönderim. Lütfen kısa süre sonra tekrar deneyin.' },
@@ -262,45 +263,107 @@ export async function POST(request: NextRequest) {
       data: { scanCount: { increment: 1 } },
     });
 
+    // Trust Score: oturum açmış kullanıcı için güven sinyallerini değerlendir.
+    // Şüpheliyse yorumu İŞARETLER (silmez/gizlemez) ve User.trustScore'u günceller.
+    // Ucuz sayım sorguları; hata olsa bile feedback akışını bozmaz.
+    if (session?.user?.id) {
+      try {
+        const { applyTrustEvaluation } = await import('@/lib/trust-score');
+        await applyTrustEvaluation(feedback.id, {
+          userId: session.user.id,
+          dealerId: qrCode.dealerId,
+          rating,
+        });
+      } catch (err) {
+        console.error('[TRUST_SCORE] evaluation failed:', err);
+      }
+    }
+
     // Award points to user if logged in (anti-exploit: günlük/haftalık tavan)
     if (session?.user?.id) {
       const matrix = await getPointsMatrix();
       const reward = getFeedbackReward(text, matrix);
-      const cappedPoints = await capFeedbackPoints(session.user.id, reward.points);
+      const userId = session.user.id;
 
-      let rewardData = null;
+      let rewardData: {
+        points: number;
+        xp: number;
+        newLevel: number;
+        leveledUp: boolean;
+        squadContribution: number;
+      } | null = null;
+      let cappedPoints = 0;
 
-      if (cappedPoints > 0 || reward.xp > 0) {
-        const userUpdate = await creditPointsAndXp(prisma, {
-          userId: session.user.id,
-          points: cappedPoints,
-          xp: reward.xp,
-        });
-
-        // Klan Sandığına Katkı
-        const { addToSquadTreasury } = await import('@/lib/gamification-engine');
-        const squadContribution = await addToSquadTreasury(session.user.id, cappedPoints);
-
-        await prisma.analyticsEvent.create({
-          data: {
-            userId: session.user.id,
-            event: 'points_credited',
-            category: 'feedback',
-            data: { 
-              points: cappedPoints, 
-              xp: reward.xp, 
-              nextLevel: userUpdate.level,
-              squadContribution
+      // Cap hesaplama + kredi + points_credited event'i TEK transaction içinde
+      // (Serializable) yapılır; aksi halde eşzamanlı feedback POST'ları aynı
+      // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
+      const { addToSquadTreasury, addToActiveBattleScore } = await import('@/lib/gamification-engine');
+      const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
+      const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
+      const { getGamificationMultipliers } = await import('@/lib/gamification-settings');
+      // Platform geneli gamification çarpanları (admin ayarı; önceden write-only'di).
+      const gamiSettings = await getGamificationMultipliers();
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Çarpan zinciri: VIP (kullanıcı seviyesi) → sezonsal kampanya (zaman
+          // penceresi) → platform geneli gamification çarpanı, taban ödüle uygulanır,
+          // sonra GÜNLÜK TAVAN nihai tutara uygulanır — çarpanlar kazancı hızlandırır
+          // ama tavan ekonomi korumasını yine de uygular.
+          const vip = await applyVipMultiplier(userId, reward.points, tx);
+          const seasonal = await applySeasonalCampaignMultiplier(vip.points, new Date(), tx);
+          const withGlobal = Math.floor(seasonal.points * gamiSettings.pointMultiplier);
+          const capped = await capFeedbackPoints(userId, withGlobal, tx);
+          const xpToCredit = Math.floor(reward.xp * gamiSettings.xpMultiplier);
+          if (capped <= 0 && xpToCredit <= 0) {
+            return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0, vipMultiplier: vip.multiplier };
+          }
+          const userUpdate = await creditPointsAndXp(tx, {
+            userId,
+            points: capped,
+            xp: xpToCredit,
+          });
+          const squadContribution = await addToSquadTreasury(userId, capped, tx);
+          // Klanı aktif savaştaysa kazanılan puan savaş skoruna da işlenir.
+          await addToActiveBattleScore(userId, capped, tx);
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'feedback',
+              data: {
+                points: capped,
+                xp: xpToCredit,
+                nextLevel: userUpdate.level,
+                squadContribution,
+                vipMultiplier: vip.multiplier,
+                vipBonus: vip.bonus,
+                seasonalCampaignId: seasonal.campaignId,
+                seasonalMultiplier: seasonal.multiplier,
+                seasonalBonus: seasonal.bonusPoints,
+                globalPointMultiplier: gamiSettings.pointMultiplier,
+                globalXpMultiplier: gamiSettings.xpMultiplier,
+              },
             },
-          },
-        });
+          });
+          return {
+            capped,
+            level: userUpdate.level,
+            isLevelUp: userUpdate.isLevelUp,
+            squadContribution,
+            vipMultiplier: vip.multiplier,
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
 
+      cappedPoints = result.capped;
+      if (cappedPoints > 0 || reward.xp > 0) {
         rewardData = {
           points: cappedPoints,
           xp: reward.xp,
-          newLevel: userUpdate.level,
-          leveledUp: userUpdate.isLevelUp,
-          squadContribution
+          newLevel: result.level,
+          leveledUp: result.isLevelUp,
+          squadContribution: result.squadContribution,
         };
       }
 
@@ -332,18 +395,49 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Webhook: feedback.created — admin'de kayıtlı abone webhook'lara tetikle
+      // (ateşle-unut; request yolunu bloklamaz). Önceden webhook'lar hiç fire etmiyordu.
+      import('@/lib/webhook-dispatch')
+        .then(({ dispatchWebhookEvent }) =>
+          dispatchWebhookEvent('feedback.created', {
+            feedbackId: feedback.id,
+            dealerId: qrCode.dealerId,
+            rating,
+            hasText: !!text,
+            createdAt: feedback.createdAt,
+          })
+        )
+        .catch((err) => console.error('[WEBHOOK] feedback.created dispatch failed:', err));
+
+      // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut). Feedback'in
+      // geliri yok → revenue 0; yalnızca count artar.
+      import('@/lib/heatmap-track')
+        .then(({ recordHeatmapHit }) => recordHeatmapHit(qrCode.dealerId, new Date(), 0))
+        .catch((err) => console.error('[HEATMAP] feedback track failed:', err));
+
+      // Admin dashboard cache'ini bayatlat (yeni feedback toplulaştırmaları etkiler).
+      try {
+        const { revalidateTag } = await import('next/cache');
+        const { ADMIN_DASHBOARD_TAG } = await import('@/lib/cache-tags');
+        revalidateTag(ADMIN_DASHBOARD_TAG, 'max');
+      } catch (err) {
+        console.error('[CACHE] dashboard revalidate failed:', err);
+      }
+
       // ── Otomatik AI Analizi (arka planda) ──
       if (text && text.trim().length >= 5) {
         const dealerId = qrCode.dealerId;
         let shouldAnalyze = true;
-        let aiSettings: any = null;
+        let aiSettings: { isEnabled: boolean; autoAnalyze: boolean; customPrompt: string | null } | null = null;
         try {
           aiSettings = await prisma.aISettings.findUnique({
             where: { dealerId },
             select: { isEnabled: true, autoAnalyze: true, customPrompt: true },
           });
           if (aiSettings && (!aiSettings.isEnabled || !aiSettings.autoAnalyze)) shouldAnalyze = false;
-        } catch {}
+        } catch (err) {
+          console.error('[FEEDBACK] AI settings lookup failed, defaulting to analyze:', err);
+        }
 
         if (shouldAnalyze) {
           if (inngestQueueEnabled()) {
@@ -357,27 +451,39 @@ export async function POST(request: NextRequest) {
 
             analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
               try {
+                // Gerçek LLM yoksa analyzeWithFallback 'local-fallback' döndürür.
+                // Bu durumda zayıf keyword-tabanlı sentiment'i "işlenmiş AI sonucu"
+                // gibi sunmayız: sadece kaba sentiment + isToxic yazıp aiProcessedAt'i
+                // NULL bırakırız (UI'da "AI bekliyor / yapılandırılmamış" görünür).
+                const isFallback = analysis.modelUsed === 'local-fallback';
                 await prisma.feedback.update({
                   where: { id: feedback.id },
-                  data: {
-                    sentiment: analysis.sentiment.label,
-                    emotions: analysis.emotions.map(e => e.label),
-                    topics: analysis.topics,
-                    isToxic: analysis.toxicity.isToxic,
-                    aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-                    intent: analysis.intent?.label || null,
-                    intentScore: analysis.intent?.score || null,
-                    urgency: analysis.urgency || null,
-                    effortScore: analysis.effortScore || null,
-                    churnRisk: analysis.churnRisk || null,
-                    entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-                    themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-                    statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
-                    actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-                    aiProcessedAt: new Date(),
-                    aiModelUsed: analysis.modelUsed || null,
-                    aiVersion: analysis.version || null,
-                  },
+                  data: isFallback
+                    ? {
+                        // Yalnızca güvenli, kaba sinyaller — gerçek AI alanları boş.
+                        isToxic: analysis.toxicity.isToxic,
+                        aiModelUsed: 'local-fallback',
+                        // aiProcessedAt bilerek set EDİLMEZ → "gerçek AI işlendi" izlenimi verilmez.
+                      }
+                    : {
+                        sentiment: analysis.sentiment.label,
+                        emotions: analysis.emotions.map(e => e.label),
+                        topics: analysis.topics,
+                        isToxic: analysis.toxicity.isToxic,
+                        aiAnalysis: JSON.parse(JSON.stringify(analysis)),
+                        intent: analysis.intent?.label || null,
+                        intentScore: analysis.intent?.score || null,
+                        urgency: analysis.urgency || null,
+                        effortScore: analysis.effortScore || null,
+                        churnRisk: analysis.churnRisk || null,
+                        entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
+                        themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
+                        statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
+                        actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
+                        aiProcessedAt: new Date(),
+                        aiModelUsed: analysis.modelUsed || null,
+                        aiVersion: analysis.version || null,
+                      },
                 });
                 if (analysis.toxicity.isToxic) {
                   await prisma.notification.create({ data: { userId: dealerId, title: '⚠️ Toksik İçerik Tespit Edildi', message: 'Bir geri bildirimde uygunsuz içerik tespit edildi.', type: 'warning' } });
@@ -385,6 +491,20 @@ export async function POST(request: NextRequest) {
                 await storeFeedbackEmbedding({ feedbackId: feedback.id, dealerId, text });
                 await maybeTriggerAdaptiveUpdate(dealerId);
                 await processAutoReplies(feedback.id);
+                // Otomatik telafi taslağı (inngest kapalıyken inline yol).
+                try {
+                  const { maybeCreateAutoRemedyForFeedback } = await import('@/lib/remedy-automation-core');
+                  await maybeCreateAutoRemedyForFeedback({
+                    feedbackId: feedback.id,
+                    dealerId,
+                    userId: session?.user?.id ?? null,
+                    rating,
+                    churnRisk: analysis.churnRisk ?? null,
+                    qrCodeId,
+                  });
+                } catch (err) {
+                  console.error('[REMEDY_AUTOMATION] inline auto-draft failed:', err);
+                }
               } catch (err) {
                 console.error('[AI] Failed to save analysis:', err);
               }

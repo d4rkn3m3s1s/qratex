@@ -67,6 +67,10 @@ function LoginPageContent() {
   const callbackUrl = searchParams.get('callbackUrl') || '/';
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // 2FA: şifre doğru ama 2FA gerektiriyorsa kod ekranı gösterilir.
+  const [twoFactorStep, setTwoFactorStep] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [pendingCreds, setPendingCreds] = useState<{ email: string; password: string } | null>(null);
   const [authFeatures, setAuthFeatures] = useState<{ magicLink: boolean; mailConfigured: boolean } | null>(null);
   const [magicEmail, setMagicEmail] = useState('');
   const [magicSending, setMagicSending] = useState(false);
@@ -111,6 +115,20 @@ function LoginPageContent() {
     resolver: zodResolver(loginSchema),
   });
 
+  const redirectAfterLogin = async () => {
+    toast.success(t('auth.loginSuccess'), { description: t('auth.redirecting') });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const session = await getSession();
+    const role = session?.user?.role;
+    if (callbackUrl && callbackUrl !== '/') {
+      window.location.href = callbackUrl;
+    } else {
+      const redirectUrl =
+        role === 'ADMIN' ? '/admin' : role === 'DEALER' ? '/dealer' : role === 'CUSTOMER' ? '/customer' : '/';
+      window.location.href = redirectUrl;
+    }
+  };
+
   const onSubmit = async (data: LoginInput) => {
     setIsLoading(true);
     try {
@@ -120,33 +138,47 @@ function LoginPageContent() {
         redirect: false,
       });
 
-      if (result?.error) {
-        toast.error(t('auth.loginFailed'), {
-          description: t('auth.wrongCredentials'),
-        });
+      if (result?.error === '2FA_REQUIRED') {
+        // Şifre doğru; 2FA kodu iste. Geçici kimlik bilgilerini tut (yeniden gönderim için).
+        setPendingCreds({ email: data.email, password: data.password });
+        setTwoFactorStep(true);
+        setIsLoading(false);
+      } else if (result?.error) {
+        toast.error(t('auth.loginFailed'), { description: t('auth.wrongCredentials') });
         setIsLoading(false);
       } else if (result?.ok) {
-        toast.success(t('auth.loginSuccess'), {
-          description: t('auth.redirecting'),
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const session = await getSession();
-        const role = session?.user?.role;
-
-        if (callbackUrl && callbackUrl !== '/') {
-          window.location.href = callbackUrl;
-        } else {
-          const redirectUrl =
-            role === 'ADMIN' ? '/admin' : role === 'DEALER' ? '/dealer' : role === 'CUSTOMER' ? '/customer' : '/';
-          window.location.href = redirectUrl;
-        }
+        await redirectAfterLogin();
       }
     } catch {
-      toast.error(t('auth.errorOccurred'), {
-        description: t('auth.tryAgainShort'),
+      toast.error(t('auth.errorOccurred'), { description: t('auth.tryAgainShort') });
+      setIsLoading(false);
+    }
+  };
+
+  const submitTwoFactor = async () => {
+    if (!pendingCreds) return;
+    const code = twoFactorCode.trim();
+    if (code.length < 6) {
+      toast.error('6 haneli kodu veya kurtarma kodunu girin');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const result = await signIn('credentials', {
+        email: pendingCreds.email,
+        password: pendingCreds.password,
+        twoFactorCode: code,
+        redirect: false,
       });
+      if (result?.ok) {
+        await redirectAfterLogin();
+      } else {
+        toast.error('2FA kodu hatalı', { description: 'Tekrar deneyin veya kurtarma kodu kullanın.' });
+        setTwoFactorCode('');
+        setIsLoading(false);
+      }
+    } catch {
+      toast.error(t('auth.errorOccurred'));
       setIsLoading(false);
     }
   };
@@ -324,6 +356,42 @@ function LoginPageContent() {
             </div>
           </div>
 
+          {twoFactorStep ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="twoFactorCode">{t('auth.twoFactorTitle')}</Label>
+                <p className="text-sm text-muted-foreground">
+                  {t('auth.twoFactorHint')}
+                </p>
+                <Input
+                  id="twoFactorCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !isLoading && submitTwoFactor()}
+                  placeholder={t('auth.twoFactorPlaceholder')}
+                />
+              </div>
+              <Button type="button" className="w-full" onClick={submitTwoFactor} disabled={isLoading}>
+                {isLoading ? t('auth.loading') : t('auth.twoFactorSubmit')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => {
+                  setTwoFactorStep(false);
+                  setTwoFactorCode('');
+                  setPendingCreds(null);
+                }}
+                disabled={isLoading}
+              >
+                {t('auth.twoFactorBack')}
+              </Button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">{t('auth.emailLabel')}</Label>
@@ -392,8 +460,9 @@ function LoginPageContent() {
               {t('auth.loginButton')}
             </Button>
           </form>
+          )}
 
-          {authFeatures?.magicLink ? (
+          {!twoFactorStep && authFeatures?.magicLink ? (
             <div className="space-y-3 pt-1">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

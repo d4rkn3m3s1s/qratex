@@ -204,6 +204,28 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Cmd+K (mac) / Ctrl+K: global aramaya hızlı erişim. Geniş ekranda masaüstü
+  // arama girişini odaklar; dar ekranda mobil arama panelini açar. Esc kapatır.
+  useEffect(() => {
+    if (!showSearch) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        if (window.matchMedia('(min-width: 768px)').matches) {
+          desktopSearchInputRef.current?.focus();
+          desktopSearchInputRef.current?.select();
+          if (searchResults) setSearchOpen(true);
+        } else {
+          setMobileSearchOpen(true);
+          // panel açıldıktan sonra odakla
+          setTimeout(() => mobileSearchInputRef.current?.focus(), 50);
+        }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showSearch, searchResults]);
+
   const totalResults = useMemo(() => {
     if (!searchResults) return 0;
     return (
@@ -350,11 +372,16 @@ export function DashboardHeader({ title, description, showSearch = true, actions
                   aria-autocomplete="list"
                   aria-controls={desktopSearchPopoverOpen ? desktopResultsRegionId : undefined}
                 />
+                {!searchQuery && !searchLoading && (
+                  <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 hidden select-none items-center gap-0.5 rounded border border-border/60 bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline-flex">
+                    ⌘K
+                  </kbd>
+                )}
                 <Button
                   type="submit"
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0"
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0 ${!searchQuery && !searchLoading ? 'lg:hidden' : ''}`}
                   aria-label={t('appShell.search')}
                 >
                   {searchLoading ? (

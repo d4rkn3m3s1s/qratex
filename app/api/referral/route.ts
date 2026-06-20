@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -162,8 +163,12 @@ export async function POST(req: NextRequest) {
     const { referredPoints: REFERRAL_BONUS, referrerPoints: REFERRER_BONUS } =
       getReferralRewards(pointsMatrix);
 
-    // Create referral and update points in transaction
-    await prisma.$transaction(async (tx: any) => {
+    // Create referral and update points in transaction.
+    // `Referral.referredId` UNIQUE olduğundan, iki eşzamanlı istekten yalnızca
+    // biri create'i geçer; diğeri unique violation (P2002) ile tüm tx'i
+    // rollback eder — krediler create'ten SONRA geldiği için çift bonus oluşmaz.
+    try {
+      await prisma.$transaction(async (tx: any) => {
       // Create referral
       await tx.referral.create({
         data: {
@@ -212,7 +217,19 @@ export async function POST(req: NextRequest) {
           },
         ],
       });
-    });
+      });
+    } catch (txError) {
+      if (
+        txError instanceof Prisma.PrismaClientKnownRequestError &&
+        txError.code === 'P2002'
+      ) {
+        return NextResponse.json(
+          { error: 'You have already used a referral code' },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      throw txError;
+    }
 
     return NextResponse.json({
       success: true,

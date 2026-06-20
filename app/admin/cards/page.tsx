@@ -812,7 +812,7 @@ export default function AdminCardsPage() {
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                                 {card.customer.image ? (
-                                  <img src={card.customer.image} alt="" className="w-full h-full rounded-full" />
+                                  <img src={card.customer.image} alt={card.customer.name || 'Müşteri'} className="w-full h-full rounded-full" />
                                 ) : (
                                   <User className="w-4 h-4 text-primary" />
                                 )}

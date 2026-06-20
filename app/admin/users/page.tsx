@@ -101,11 +101,19 @@ interface UserType {
   emailVerified?: string | null;
   createdAt: string;
   updatedAt?: string;
+  pricingPlanId?: string | null;
+  pricingPlan?: { id: string; name: string } | null;
   _count?: {
     feedbacks: number;
     qrCodes: number;
     badges: number;
   };
+}
+
+interface PricingPlanType {
+  id: string;
+  name: string;
+  maxQRCodes?: number | null;
 }
 
 interface BadgeType {
@@ -214,6 +222,10 @@ export default function AdminUsersPage() {
     latitude: '',
     longitude: '',
   });
+  // Plan atama (bayi billing)
+  const [pricingPlans, setPricingPlans] = useState<PricingPlanType[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('none');
+  const [planSaving, setPlanSaving] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -230,6 +242,10 @@ export default function AdminUsersPage() {
     fetchBadges();
     fetchRewards();
   }, [roleFilter, searchDebounced, page, pageSize]);
+
+  useEffect(() => {
+    fetchPricingPlans();
+  }, []);
 
   const fetchUsers = async () => {
     try {
@@ -333,6 +349,45 @@ export default function AdminUsersPage() {
     }
   };
 
+  const fetchPricingPlans = async () => {
+    try {
+      const res = await fetch('/api/admin/pricing');
+      const data = await res.json();
+      const plans = Array.isArray(data.plans) ? data.plans : Array.isArray(data) ? data : [];
+      setPricingPlans(plans);
+    } catch (error) {
+      console.error('Pricing plans fetch error:', error);
+    }
+  };
+
+  const handleAssignPlan = async () => {
+    if (!selectedUser || selectedUser.role !== 'DEALER') return;
+    setPlanSaving(true);
+    try {
+      const pricingPlanId = selectedPlanId === 'none' ? null : selectedPlanId;
+      const res = await fetch(`/api/admin/users/${selectedUser.id}/plan`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pricingPlanId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Plan atanamadı');
+        return;
+      }
+      const planName = pricingPlanId ? pricingPlans.find((p) => p.id === pricingPlanId)?.name ?? null : null;
+      toast.success(pricingPlanId ? `Plan atandı: ${planName ?? ''}` : 'Plan kaldırıldı (ücretsiz kademe)');
+      setSelectedUser((prev) =>
+        prev ? { ...prev, pricingPlanId, pricingPlan: pricingPlanId && planName ? { id: pricingPlanId, name: planName } : null } : prev
+      );
+      fetchUsers();
+    } catch (error) {
+      toast.error('Plan atanamadı');
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
   const fetchUserBadges = async (userId: string) => {
     try {
       const res = await fetch(`/api/gamification/badges?userId=${userId}`);
@@ -414,6 +469,7 @@ export default function AdminUsersPage() {
       latitude: typeof user.latitude === 'number' ? String(user.latitude) : '',
       longitude: typeof user.longitude === 'number' ? String(user.longitude) : '',
     });
+    setSelectedPlanId(user.pricingPlanId ?? 'none');
     await fetchUserBadges(user.id);
     setDetailsOpen(true);
   };
@@ -1146,6 +1202,42 @@ export default function AdminUsersPage() {
                       <Button onClick={handleSaveDealerInfo} disabled={dealerInfoSaving}>
                         {dealerInfoSaving ? 'Kaydediliyor...' : 'Bayi Bilgilerini Kaydet'}
                       </Button>
+
+                      {/* Plan atama (billing kotası) */}
+                      <div className="border-t pt-4 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          <h4 className="font-medium">Fiyatlandırma Planı</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Bayinin planı QR kodu limitini (kotayı) belirler. Plansız bayiler ücretsiz kademeye tabidir.
+                          {selectedUser.pricingPlan?.name && (
+                            <> Mevcut: <strong className="text-foreground">{selectedUser.pricingPlan.name}</strong>.</>
+                          )}
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Plan seçin..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Plansız (Ücretsiz kademe)</SelectItem>
+                              {pricingPlans.map((plan) => (
+                                <SelectItem key={plan.id} value={plan.id}>
+                                  {plan.name}
+                                  {plan.maxQRCodes != null ? ` · ${plan.maxQRCodes} QR` : ' · Sınırsız QR'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            onClick={handleAssignPlan}
+                            disabled={planSaving || selectedPlanId === (selectedUser.pricingPlanId ?? 'none')}
+                          >
+                            {planSaving ? 'Atanıyor...' : 'Planı Ata'}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </TabsContent>

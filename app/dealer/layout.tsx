@@ -4,6 +4,7 @@ import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
+import { RealtimeNotifications } from '@/components/dashboard/realtime-notifications';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
@@ -42,6 +43,7 @@ export default async function DealerLayout({
       </div>
       <OnboardingSheet />
       <WebVitalsReporter />
+      <RealtimeNotifications />
     </div>
   );
 }

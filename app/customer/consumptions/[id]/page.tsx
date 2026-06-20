@@ -230,7 +230,21 @@ export default function ConsumptionDetailPage() {
     );
   }
 
-  if (!consumption) return null;
+  if (!consumption) {
+    // Bulunamadı / erişim yok: yönlendirme tetiklendi; boş ekran flash'ı yerine
+    // kısa bir durum mesajı göster.
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">{t('customerConsumptionDetail.notFound')}</p>
+        <Button variant="outline" asChild className="gap-2">
+          <Link href="/customer/consumptions">
+            <ArrowLeft className="w-4 h-4" />
+            {t('common.back')}
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   const hasReview = !!consumption.review;
 

@@ -75,6 +75,14 @@ export const churnPlaybookFn = inngest.createFunction(
   }
 );
 
+export const calculateClvFn = inngest.createFunction(
+  { id: 'calculate-clv', retries: 2 },
+  { cron: '0 2 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-calculate-clv', () => invokeInternalCron('/api/internal/inngest/calculate-clv'));
+  }
+);
+
 export const aiQualitySampleFn = inngest.createFunction(
   { id: 'ai-quality-sample', retries: 2 },
   { cron: '0 3 * * 0' },
@@ -105,6 +113,46 @@ export const analyticsEventCleanupFn = inngest.createFunction(
   }
 );
 
+export const rateLimitCleanupFn = inngest.createFunction(
+  { id: 'rate-limit-cleanup', retries: 2 },
+  { cron: '15 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-rate-limit-cleanup', () =>
+      invokeInternalCron('/api/internal/inngest/rate-limit-cleanup')
+    );
+  }
+);
+
+export const weeklyDigestFn = inngest.createFunction(
+  { id: 'weekly-digest', retries: 2 },
+  { cron: '0 8 * * 1' },
+  async ({ step }) => {
+    return step.run('delegate-weekly-digest', () =>
+      invokeInternalCron('/api/internal/inngest/weekly-digest')
+    );
+  }
+);
+
+export const dealerFlashOfferExpiryFn = inngest.createFunction(
+  { id: 'dealer-flash-offer-expiry', retries: 2 },
+  { cron: '0 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-flash-offer-expiry', () =>
+      invokeInternalCron('/api/internal/inngest/dealer-flash-offer-expiry')
+    );
+  }
+);
+
+export const churnInterventionFn = inngest.createFunction(
+  { id: 'churn-intervention', retries: 2 },
+  { cron: '30 3 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-churn-intervention', () =>
+      invokeInternalCron('/api/internal/inngest/churn-intervention')
+    );
+  }
+);
+
 export const customerReminderNudgeFn = inngest.createFunction(
   { id: 'customer-reminder-nudges', retries: 1 },
   { cron: '0 */6 * * *' },
@@ -121,6 +169,28 @@ export const partnerDigestWebhookFn = inngest.createFunction(
   async ({ step }) => {
     return step.run('delegate-partner-digest-webhook', () =>
       invokeInternalCron('/api/internal/inngest/partner-digest-webhook')
+    );
+  }
+);
+
+// Dönemsel konsept aktivasyonu: penceresi açılan/kapanan konsepti Settings'e yazar.
+export const seasonalConceptActivationFn = inngest.createFunction(
+  { id: 'seasonal-concept-activation', retries: 2 },
+  { cron: '5 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-seasonal-concept-activation', () =>
+      invokeInternalCron('/api/internal/inngest/seasonal-concept-activation')
+    );
+  }
+);
+
+// Süresi dolan klan savaşlarını otomatik bitirir (önceden yalnızca elle kapanıyordu).
+export const squadBattlesFinishFn = inngest.createFunction(
+  { id: 'squad-battles-finish', retries: 2 },
+  { cron: '*/10 * * * *' },
+  async ({ step }) => {
+    return step.run('delegate-squad-battles-finish', () =>
+      invokeInternalCron('/api/internal/inngest/squad-battles-finish')
     );
   }
 );

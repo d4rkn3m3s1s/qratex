@@ -35,6 +35,20 @@ export async function sendPushNotification(
             data: { url },
         });
 
+        // Gönderimler paralel; loglar tek createMany'de toplanır (abone başına
+        // ayrı insert yerine). Süresi dolan abonelikler (404/410) ayrıca silinir.
+        type LogEntry = {
+            userId: string;
+            subscriptionId: string;
+            title: string;
+            body: string;
+            data: { url: string | undefined; icon: string | undefined };
+            status: string;
+            error?: string;
+        };
+        const logEntries: LogEntry[] = [];
+        const staleSubIds: string[] = [];
+
         const results = await Promise.allSettled(
             subscriptions.map(async (sub) => {
                 try {
@@ -48,38 +62,43 @@ export async function sendPushNotification(
                         },
                         payload
                     );
-
-                    await prisma.pushNotificationLog.create({
-                        data: {
-                            userId,
-                            subscriptionId: sub.id,
-                            title,
-                            body,
-                            data: { url, icon },
-                            status: "SENT",
-                        },
+                    logEntries.push({
+                        userId,
+                        subscriptionId: sub.id,
+                        title,
+                        body,
+                        data: { url, icon },
+                        status: "SENT",
                     });
                 } catch (err: any) {
                     if (err.statusCode === 404 || err.statusCode === 410) {
-                        await prisma.pushSubscription.delete({ where: { id: sub.id } });
+                        staleSubIds.push(sub.id);
                     }
-
-                    await prisma.pushNotificationLog.create({
-                        data: {
-                            userId,
-                            subscriptionId: sub.id,
-                            title,
-                            body,
-                            data: { url, icon },
-                            status: "FAILED",
-                            error: err.message,
-                        },
+                    logEntries.push({
+                        userId,
+                        subscriptionId: sub.id,
+                        title,
+                        body,
+                        data: { url, icon },
+                        status: "FAILED",
+                        error: err?.message,
                     });
-
                     throw err;
                 }
             })
         );
+
+        // Toplu yazımlar (tek tek insert/delete yerine).
+        if (staleSubIds.length > 0) {
+            await prisma.pushSubscription
+                .deleteMany({ where: { id: { in: staleSubIds } } })
+                .catch((e) => console.error("stale push sub cleanup failed:", e));
+        }
+        if (logEntries.length > 0) {
+            await prisma.pushNotificationLog
+                .createMany({ data: logEntries })
+                .catch((e) => console.error("push log batch failed:", e));
+        }
 
         return results.some((r) => r.status === "fulfilled");
     } catch (error) {

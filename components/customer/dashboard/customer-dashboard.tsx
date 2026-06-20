@@ -689,6 +689,54 @@ export default function CustomerDashboard() {
           </Card>
         </m.section>
 
+        {/* ─── Yeni müşteri rehberi (hiç feedback yoksa): ilk değer yolculuğu ─── */}
+        {stats.feedbackCount === 0 && (
+          <m.section initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 to-transparent">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-primary/15 p-2.5 shrink-0">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg font-bold tracking-tight">
+                      {tc('customerDashboard.welcome.title')}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+                      {tc('customerDashboard.welcome.subtitle')}
+                    </p>
+                    <ol className="mt-3 space-y-2 text-sm">
+                      <li className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">1</span>
+                        <QrCode className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span>{tc('customerDashboard.welcome.step1')}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">2</span>
+                        <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span>{tc('customerDashboard.welcome.step2')}</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">3</span>
+                        <Gift className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span>{tc('customerDashboard.welcome.step3')}</span>
+                      </li>
+                    </ol>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button asChild className="h-10 rounded-xl px-4">
+                        <Link prefetch={false} href="/customer/quests">
+                          {tc('customerDashboard.welcome.cta')}
+                          <ArrowRight className="ml-1.5 h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </m.section>
+        )}
+
         {/* ─── Özet Rakamlar (Bento Grid) ─── */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard

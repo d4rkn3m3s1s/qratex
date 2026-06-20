@@ -10,6 +10,12 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     qRCode: { findUnique: (...args: unknown[]) => mockFindUnique(...args) },
     idempotencyKey: { findUnique: (...args: unknown[]) => mockIdempotencyFindUnique(...args) },
+    // DB-backed rate limiter: create başarılı → ilk istek "ok" (limit dolmaz).
+    rateLimitCounter: {
+      create: jest.fn().mockResolvedValue({ bucket: 'x', count: 1 }),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   },
 }));
 

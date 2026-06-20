@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { detectPromptInjection } from '@/lib/prompt-injection';
+import { buildQraKnowledgeBlock } from '@/lib/qra-knowledge-base';
 
 // Groq API Client (OpenAI uyumlu)
 let groqClient: OpenAI | null = null;
@@ -81,6 +82,7 @@ QRATEX, işletmelerin müşteri deneyimini dönüştüren yenilikçi bir QR kod 
 4. Platformla ilgili sorularda detaylı yardım et
 5. Genel konularda da yardımcı ol
 6. Uygunsuz içeriklere yanıt verme
+${buildQraKnowledgeBlock()}
 
 Şimdi kullanıcıya yardım etmeye hazırsın! 🚀`;
 
@@ -210,7 +212,9 @@ SADECE JSON array döndür: ["yanıt1", "yanıt2", "yanıt3"]`,
   }
 }
 
-export default {
+const groqApi = {
   chatWithQRA,
   suggestResponseWithGroq,
 };
+
+export default groqApi;

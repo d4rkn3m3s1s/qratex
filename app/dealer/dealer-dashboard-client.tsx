@@ -37,6 +37,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GettingStartedCard, type GettingStartedStep } from '@/components/dealer/getting-started-card';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from '@/lib/admin-toast';
 import { SimpleBarChart, DonutChart, SimpleAreaChart } from '@/components/charts/chart-lazy';
@@ -314,6 +315,36 @@ export default function DealerDashboard() {
     statCards.push({ key: 'action', title: t('dealerDashboard.actionCompletion'), value: stats.actionCompletionRate, suffix: '%', icon: ListChecks, iconClass: 'text-teal-600 dark:text-teal-400', bgClass: 'bg-teal-500/10' });
   }
 
+  // Yeni bayi rehberi: hiç QR yok / konum yok / hiç feedback yok ise "ilk adımlar"
+  // kontrol listesi. Hepsi tamamsa GettingStartedCard kendini render etmez.
+  const hasLocation = !!profile?.address || (profile?.latitude != null && profile?.longitude != null);
+  const onboardingSteps: GettingStartedStep[] = [
+    {
+      done: stats.totalQRCodes > 0,
+      title: t('dealerDashboard.gettingStarted.qrTitle'),
+      description: t('dealerDashboard.gettingStarted.qrDesc'),
+      href: '/dealer/qr-codes',
+      cta: t('dealerDashboard.gettingStarted.qrCta'),
+      icon: 'qr',
+    },
+    {
+      done: hasLocation,
+      title: t('dealerDashboard.gettingStarted.locationTitle'),
+      description: t('dealerDashboard.gettingStarted.locationDesc'),
+      href: '/dealer/settings',
+      cta: t('dealerDashboard.gettingStarted.locationCta'),
+      icon: 'location',
+    },
+    {
+      done: stats.totalFeedbacks > 0,
+      title: t('dealerDashboard.gettingStarted.feedbackTitle'),
+      description: t('dealerDashboard.gettingStarted.feedbackDesc'),
+      href: '/dealer/qr-codes',
+      cta: t('dealerDashboard.gettingStarted.feedbackCta'),
+      icon: 'feedback',
+    },
+  ];
+
   return (
     <LazyMotion features={domAnimation} strict>
       <div className="space-y-5 pb-10">
@@ -349,6 +380,15 @@ export default function DealerDashboard() {
             </>
           }
         />
+
+        {/* ─── Yeni bayi rehberi (sıfır veriyle açılışta) ─── */}
+        {!statsLoading && (
+          <GettingStartedCard
+            steps={onboardingSteps}
+            title={t('dealerDashboard.gettingStarted.title')}
+            subtitle={t('dealerDashboard.gettingStarted.subtitle')}
+          />
+        )}
 
         {/* ─── Alerts: offline, next best, location ─── */}
         <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col gap-2">

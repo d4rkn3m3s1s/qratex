@@ -31,34 +31,43 @@ export async function creditPointsAndXp(
   const points = Math.max(0, Math.floor(payload.points ?? 0));
   const xpToAdd = Math.max(0, Math.floor(payload.xp ?? 0));
 
-  // 1. Mevcut XP'yi al (seviye hesaplaması için)
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    select: { xp: true, level: true },
-  });
-
-  if (!user) {
-    throw new Error('Kullanıcı bulunamadı');
-  }
-
-  // 2. Yeni XP ve seviyeyi hesapla
-  const nextTotalXp = user.xp + xpToAdd;
-  const nextLevel = calculateLevel(nextTotalXp);
-  const leveledUp = nextLevel > user.level;
-
-  // 3. Veritabanını güncelle
+  // 1. Puan ve XP'yi ATOMİK olarak artır. Level'ı burada yazmıyoruz çünkü
+  //    eşzamanlı kredilerde stale read'den hesaplanan level yanlış/eski olur.
   const updatedUser = await db.user.update({
     where: { id: payload.userId },
     data: {
       ...(points > 0 ? { points: { increment: points } } : {}),
       ...(xpToAdd > 0 ? { xp: { increment: xpToAdd } } : {}),
-      level: nextLevel,
     },
     select: { id: true, points: true, xp: true, level: true },
   });
 
+  // 2. Level'ı, increment SONRASI gerçek toplam XP'den hesapla (atomik sonuç).
+  const nextLevel = calculateLevel(updatedUser.xp);
+  const leveledUp = nextLevel > updatedUser.level;
+
+  // 3. Sadece level gerçekten değiştiyse ve hâlâ daha düşükse koşullu güncelle.
+  //    updateMany + level guard ile iki eşzamanlı krediden yalnızca biri
+  //    level'ı yukarı taşır; isLevelUp yalnızca o çağrı için true döner.
+  if (nextLevel !== updatedUser.level) {
+    const bump = await db.user.updateMany({
+      where: { id: payload.userId, level: { lt: nextLevel } },
+      data: { level: nextLevel },
+    });
+    return {
+      id: updatedUser.id,
+      points: updatedUser.points,
+      xp: updatedUser.xp,
+      level: nextLevel,
+      isLevelUp: bump.count > 0,
+    };
+  }
+
   return {
-    ...updatedUser,
+    id: updatedUser.id,
+    points: updatedUser.points,
+    xp: updatedUser.xp,
+    level: updatedUser.level,
     isLevelUp: leveledUp,
   };
 }

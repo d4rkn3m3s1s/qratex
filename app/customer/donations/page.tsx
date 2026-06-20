@@ -125,6 +125,7 @@ export default function CustomerDonationsPage() {
   const [donationMessage, setDonationMessage] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   const [projects, setProjects] = useState<DonationProject[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -295,7 +296,12 @@ export default function CustomerDonationsPage() {
               <Heart className="w-5 h-5 shrink-0" />
               {t('customerDonations.donateNow')}
             </Button>
-            <Button size="lg" variant="outline" className="gap-2 touch-manipulation">
+            <Button
+              size="lg"
+              variant="outline"
+              className="gap-2 touch-manipulation"
+              onClick={() => setShowHowItWorks(true)}
+            >
               <Play className="w-5 h-5 shrink-0" />
               {t('customerDonations.howItWorks')}
             </Button>
@@ -549,6 +555,34 @@ export default function CustomerDonationsPage() {
         quickAmounts={quickAmounts}
         t={t}
       />
+
+      <Dialog open={showHowItWorks} onOpenChange={setShowHowItWorks}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t('customerDonations.howItWorks')}</DialogTitle>
+            <DialogDescription>{t('customerDonations.howItWorksDescription')}</DialogDescription>
+          </DialogHeader>
+          <ol className="space-y-3 text-sm">
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">1</span>
+              <span>{t('customerDonations.howItWorksStep1')}</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">2</span>
+              <span>{t('customerDonations.howItWorksStep2')}</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-semibold">3</span>
+              <span>{t('customerDonations.howItWorksStep3')}</span>
+            </li>
+          </ol>
+          <DialogFooter>
+            <Button onClick={() => setShowHowItWorks(false)} className="w-full sm:w-auto min-h-10 touch-manipulation">
+              {t('common.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

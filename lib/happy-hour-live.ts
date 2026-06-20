@@ -19,7 +19,9 @@ export function isHappyHourLive(
   const rawDays = hh.daysOfWeek;
   const days = Array.isArray(rawDays) ? rawDays.map(Number).filter((n) => !Number.isNaN(n)) : [];
   const allowed = days.length > 0 ? days : [0, 1, 2, 3, 4, 5, 6];
-  if (!allowed.includes(now.getDay())) return false;
+  // UTC standardı: backend her yerde UTC (lib/timezone). Yerel getDay()/getHours()
+  // sunucu TZ'ine göre kayıp, happy-hour'u yanlış gün/saatte tetikliyordu.
+  if (!allowed.includes(now.getUTCDay())) return false;
 
   const parse = (s: string) => {
     const [h, m] = s.split(':').map((x) => Number(x));
@@ -29,7 +31,7 @@ export function isHappyHourLive(
   const startM = parse(hh.startTime);
   const endM = parse(hh.endTime);
   if (startM == null || endM == null) return false;
-  const cur = now.getHours() * 60 + now.getMinutes();
+  const cur = now.getUTCHours() * 60 + now.getUTCMinutes();
   if (endM < startM) {
     return cur >= startM || cur <= endM;
   }

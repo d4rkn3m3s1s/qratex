@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           customer: {
+            // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
             select: {
-              id: true,
               name: true,
               email: true,
               image: true,

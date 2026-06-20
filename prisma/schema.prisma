@@ -53,6 +53,7 @@ model User {
   analytics     AnalyticsEvent[]
   auditLogs     AuditLog[]
   donations     Donation[]
+  dailySpins    DailySpin[]
 
   // Dealer specific
   businessName         String?
@@ -67,12 +68,30 @@ model User {
   holidayMode          Boolean @default(false)
   /// Bayi: otomatik telafi eşikleri ve bütçe (JSON)
   dealerRemedyAutomation Json?
+  /// Bayi: tahminsel churn müdahale eşikleri (JSON: enabled, churnThreshold, inactiveDays, autoFlashOffer)
+  dealerChurnIntervention Json?
 
   // Admin Features (Insights, Fraud, A/B Testing)
   businessCategory String? // e.g. "cafe", "restaurant" for global insights
   fraudStatus      String  @default("clean") // "clean", "flagged", "shadow_ban"
   fraudScore       Float?  @default(0.0)
   abCohort         String? // for Gamification A/B tests: A, B, C...
+
+  // Trust Score (kötü niyetli yorumcu tespiti). 100 = tam güven, düşük = şüpheli.
+  // Yorum gönderiminde sinyallerle güncellenir; bayi/admin müşteri analizinde görünür.
+  trustScore       Int      @default(100)
+  trustTier        String   @default("trusted") // "trusted" | "neutral" | "watch" | "low"
+  trustUpdatedAt   DateTime?
+
+  // Billing: bayinin etkin fiyatlandırma planı (null = varsayılan/ücretsiz kademe)
+  pricingPlanId String?
+  pricingPlan   PricingPlan? @relation("DealerPricingPlan", fields: [pricingPlanId], references: [id], onDelete: SetNull)
+
+  // Stripe abonelik durumu (webhook ile senkron tutulur)
+  stripeCustomerId             String?   @unique
+  stripeSubscriptionId         String?   @unique
+  subscriptionStatus           String? // active, trialing, past_due, canceled, incomplete
+  subscriptionCurrentPeriodEnd DateTime?
 
   // Physical Card System Relations
   physicalCards        PhysicalCard[]      @relation("CustomerCards")
@@ -153,6 +172,9 @@ model User {
   dealerFlashOffers         DealerFlashOffer[]        @relation("DealerFlashOffers")
   dealerWeeklyBriefs        DealerWeeklyBrief[]       @relation("DealerWeeklyBriefs")
   dealerSegmentProposals    SegmentCampaignProposal[] @relation("DealerSegmentProposals")
+  dealerLocations           DealerLocation[]          @relation("DealerLocations")
+  dealerRemedyTemplates     RemedyTemplate[]          @relation("DealerRemedyTemplates")
+  miniGameSessions          MiniGameSession[]         @relation("UserMiniGameSessions")
   /// Müşteri masadan sinyal gönderdiyse
   customerTablePulses       TablePulse[]              @relation("CustomerTablePulses")
   experienceSharesCreated   ExperienceShareToken[]   @relation("ExperienceSharesCreated")
@@ -172,8 +194,11 @@ model User {
   customFrameColor     String?
 
   // 2FA
-  twoFactorSecret  String?
-  twoFactorEnabled Boolean @default(false)
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean @default(false)
+  twoFactorVerifiedAt DateTime? // 2FA'nın etkinleştirildiği an
+
+  twoFactorRecoveryCodes TwoFactorRecoveryCode[] @relation("UserRecoveryCodes")
 
   @@index([email])
   @@index([role])
@@ -205,12 +230,16 @@ model UserSurpriseBox {
   points       Int       @default(0)
   rewardType   String? // coupon, points, badge, reward
   metadata     Json? // ek veri
+  /// Günlük giriş kutusu için "YYYY-MM-DD" (UTC). Yalnızca otomatik günlük kutuda dolu;
+  /// hediye/manuel kutularda null. @@unique ile aynı gün ikinci kez üretimi engeller (çift ödül fix).
+  dayKey       String?
   openedAt     DateTime? // null = henüz açılmadı
   createdAt    DateTime  @default(now())
 
   user   User  @relation("UserSurpriseBoxesReceived", fields: [userId], references: [id], onDelete: Cascade)
   sentBy User? @relation("UserSurpriseBoxesSent", fields: [sentByUserId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, dayKey])
   @@index([userId])
   @@index([openedAt])
   @@index([createdAt])
@@ -307,6 +336,19 @@ model AuthEmailToken {
   @@index([expiresAt])
 }
 
+/// 2FA kurtarma kodları — yetkilendirici cihaz kaybında giriş. Tek kullanımlık,
+/// hash saklanır (AuthEmailToken deseni). Setup'ta 10 adet üretilir.
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation("UserRecoveryCodes", fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
 // ─────────────────────────────────────────────────────────────
 // GAMIFICATION MODELS
 // ─────────────────────────────────────────────────────────────
@@ -364,6 +406,10 @@ model SquadBattle {
   squad2Score Int      @default(0)
   winnerId    String?
   rewardPool  Int      @default(0)
+  /// Meydan okumayı başlatan kullanıcı (challenge akışı). null = admin oluşturdu.
+  challengedById String?
+  /// Rakip klan kabul ettiğinde dolar (status: pending → active).
+  acceptedAt     DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -387,6 +433,25 @@ model SquadBattleParticipant {
   user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([battleId, userId])
+}
+
+/// Mini oyun (Pacman tarzı yıldız toplama) oturumu. Günde 1 hak için
+/// @@unique([userId, gameType, dayKey]); sunucu ödülü doğrular (client'a güvenmez).
+model MiniGameSession {
+  id             String    @id @default(cuid())
+  userId         String
+  gameType       String    @default("pacman")
+  dayKey         String // "YYYY-MM-DD" (UTC) — günlük tek oturum
+  status         String    @default("active") // active | completed | failed
+  starsCollected Int       @default(0)
+  rewardPoints   Int       @default(0)
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  user User @relation("UserMiniGameSessions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameType, dayKey])
+  @@index([userId])
 }
 
 model GamificationSettings {
@@ -567,10 +632,12 @@ model QRCode {
   expiresAt     DateTime? // lifecycle: optional expiry; null = no expiry
   revokedAt     DateTime? // lifecycle: revoked (e.g. lost); null = not revoked
   segmentConfig Json? // madde 45: { "new": { "welcomeText": "..." }, "returning": { "welcomeText": "..." } }
+  locationId    String? // bağlı olduğu mekan/şube (null = işletme geneli)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   dealer    User       @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  location  DealerLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   feedbacks Feedback[]
   tablePulses TablePulse[]
 
@@ -578,6 +645,28 @@ model QRCode {
   @@index([dealerId])
   @@index([isActive])
   @@index([expiresAt])
+  @@index([locationId])
+}
+
+/// Bayinin fiziksel mekanı/şubesi. Telefon teklifleri ve QR kodlar mekana özel
+/// olabilsin diye eklendi. Bir bayinin birden çok mekanı olabilir.
+model DealerLocation {
+  id        String   @id @default(cuid())
+  dealerId  String
+  name      String // "Merkez", "Şube 2", "Kadıköy" vb.
+  address   String?
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer          User             @relation("DealerLocations", fields: [dealerId], references: [id], onDelete: Cascade)
+  qrCodes         QRCode[]
+  remedyTemplates RemedyTemplate[]
+
+  @@unique([dealerId, name])
+  @@index([dealerId])
 }
 
 model Feedback {
@@ -633,6 +722,11 @@ model Feedback {
 
   fraudScore Float? // 0-1 sahte yorum / anomali skoru (madde 41)
 
+  // Trust Score: gönderen kullanıcının güven sinyalleri düşükse işaretlenir.
+  // "Sadece işaretle" politikası: yorum silinmez/gizlenmez, bayi/admin görür.
+  trustFlagged Boolean @default(false)
+  trustReason  String? // işaretleme sebebi (sıklık, tekrar, düşük güven vb.)
+
   isPublic  Boolean   @default(true)
   deletedAt DateTime? // soft delete; null = active
   createdAt DateTime  @default(now())
@@ -654,6 +748,10 @@ model Feedback {
   @@index([aiProcessedAt])
   @@index([deletedAt])
   @@index([dealerStaffId])
+  // Dealer feedback inbox: where qrCode{dealerId} → qrCodeId IN(...) + deletedAt:null + orderBy createdAt
+  @@index([qrCodeId, deletedAt, createdAt])
+  // Müşteri geçmişi: where userId + createdAt range / orderBy
+  @@index([userId, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -739,6 +837,9 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+  // Okunmamış rozet sayımı (sık polling) + listeleme
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }
 
 model FileUpload {
@@ -771,6 +872,38 @@ model AnalyticsEvent {
   @@index([event])
   @@index([category])
   @@index([createdAt])
+  // Hot paths: points-velocity / leaderboard anti-cheat ve feedback cap
+  // sorguları userId+event+createdAt ile filtreliyor; tek sütun index yetmiyordu.
+  @@index([userId, event, createdAt])
+  @@index([userId, category, event, createdAt])
+}
+
+/// Günlük çark çevirme sayacı. (userId, day) UNIQUE → atomik upsert ile
+/// eşzamanlı çift-spin engellenir (önceden Notification sayımına bağlıydı, racy).
+model DailySpin {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime @db.Date // UTC gün (00:00)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([userId])
+}
+
+/// DB-backed rate limiter / login lockout. Serverless'te her Lambda kendi
+/// belleğinde olduğu ve cold start sayaçları sıfırladığı için in-memory Map
+/// güvenilir değildi; brute-force/flood koruması bu tabloya taşındı.
+model RateLimitCounter {
+  bucket    String   @id // örn "login:1.2.3.4:user@x", "scan:ip", "lockout:..."
+  count     Int      @default(0)
+  resetAt   DateTime
+  lockedUntil DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 model AuditLog {
@@ -791,6 +924,8 @@ model AuditLog {
   @@index([action])
   @@index([entity])
   @@index([createdAt])
+  // Quest ödül dedupe: where userId + action + entity + entityId IN(...)
+  @@index([userId, action, entity])
 }
 
 model UserAutomationRule {
@@ -936,6 +1071,8 @@ model Incident {
   @@index([dealerId])
   @@index([status])
   @@index([createdAt])
+  // Açık incident kontrolü: where dealerId + status
+  @@index([dealerId, status])
 }
 
 // P2 Churn playbook: CSM görevi - düşük tenant health için CSM takibi
@@ -1016,6 +1153,32 @@ model RemedyOffer {
   @@index([dealerId])
   @@index([userId])
   @@index([status])
+  // Dealer onay kuyruğu: where dealerId + status
+  @@index([dealerId, status])
+}
+
+/// Bayinin telafi teklif şablonu. Hardcoded DEFAULT_OPTIONS'ın yerini alır:
+/// bayi kendi indirim/puan/ücretsiz-ürün seçeneklerini ve değerlerini tanımlar.
+/// locationId null ise işletme geneli; dolu ise yalnızca o mekana özel.
+model RemedyTemplate {
+  id         String   @id @default(cuid())
+  dealerId   String
+  locationId String? // null = işletme geneli; dolu = mekana özel
+  type       String // discount | points | free_item
+  label      String // "İndirim", "Puan", "Ücretsiz ürün/içecek"
+  unit       String // "%", "puan", "adet"
+  values     Json // izin verilen değerler: [10, 15, 20]
+  isActive   Boolean  @default(true)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  dealer   User            @relation("DealerRemedyTemplates", fields: [dealerId], references: [id], onDelete: Cascade)
+  location DealerLocation? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@index([locationId])
+  @@index([dealerId, isActive])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1078,11 +1241,14 @@ model PricingPlan {
   maxQRCodes     Int? // null = unlimited (P3 segment fiyatlandırma)
   maxBranches    Int? // null = unlimited
   pricePerBranch Float? // Şube başına ek ücret (opsiyonel)
+  stripePriceId  String? // Stripe Price ID (Checkout için); null = Stripe'sız plan
   isPopular      Boolean  @default(false)
   isActive       Boolean  @default(true)
   order          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  dealers User[] @relation("DealerPricingPlan")
 
   @@index([isActive])
   @@index([order])
@@ -1217,6 +1383,10 @@ model Consumption {
   @@index([dealerId])
   @@index([productId])
   @@index([createdAt])
+  // Dealer zaman aralığı taramaları (pre-agg, radar, analytics)
+  @@index([dealerId, createdAt])
+  // Müşteri zaman aralığı + fraud velocity (write hot-path)
+  @@index([customerId, createdAt])
 }
 
 model ConsumptionReview {
@@ -1239,6 +1409,8 @@ model ConsumptionReview {
   @@index([customerId])
   @@index([rating])
   @@index([createdAt])
+  // Müşteri yorum geçmişi: where customerId + createdAt range / orderBy
+  @@index([customerId, createdAt])
 }
 
 model CardAuditLog {
@@ -1258,6 +1430,8 @@ model CardAuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  // Hızlı-tarama limiti: where cardId + action + createdAt range (scan write-path)
+  @@index([cardId, action, createdAt])
 }
 
 model CardBatch {
@@ -1450,6 +1624,36 @@ model SeasonalCampaign {
   createdAt   DateTime @default(now())
 
   @@index([type])
+  @@index([isActive])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+/// Dönemsel konsept: bir tarih penceresinde tek pakette site temasını değiştirir
+/// (arka plan efekti + renk paleti + banner + opsiyonel bonus çarpan). Admin
+/// planlayıcıdan oluşturulur; saatlik cron aktif konsepti Settings'e yazar.
+/// Çakışan konseptlerde priority (büyük = öncelikli), sonra başlangıç tarihi.
+model SeasonalConcept {
+  id               String   @id @default(cuid())
+  name             String // "Yaz Festivali", "Yılbaşı", "Cadılar Bayramı"
+  description      String?  @db.Text
+  startDate        DateTime
+  endDate          DateTime
+  isActive         Boolean  @default(true)
+  priority         Int      @default(0)
+
+  // Görsel kaldıraçlar (null = değiştirme)
+  backgroundEffect String? // background-effect-shared VALID_VARIANTS değeri
+  themePresetId    String? // theme-presets THEME_COLOR_PRESETS anahtarı
+  bannerText       String? // ana sayfa/panel banner metni
+  bannerEmoji      String? // banner başı emoji (🎄, 🎃, ☀️)
+
+  // Opsiyonel gamification kaldıracı
+  bonusMultiplier  Float?  @default(1.0)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
   @@index([isActive])
   @@index([startDate])
   @@index([endDate])
@@ -1797,6 +2001,8 @@ model AIUsageLog {
   @@index([action])
   @@index([createdAt])
   @@index([success])
+  // AI bütçe guard: where dealerId + createdAt range (her AI çağrısından önce)
+  @@index([dealerId, createdAt])
 }
 
 /// QRA floating chat — kötüye kullanım incelemesi ve admin denetimi
@@ -1920,6 +2126,8 @@ model AIEmbedding {
 
   @@index([dealerId])
   @@index([createdAt])
+  // KNN aday getirme: where dealerId + model + dimension
+  @@index([dealerId, model, dimension])
 }
 
 model AIFeedbackCorrection {

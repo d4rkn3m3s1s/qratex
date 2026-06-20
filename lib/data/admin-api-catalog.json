@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T02:53:54.778Z",
+  "generatedAt": "2026-06-19T23:33:05.516Z",
   "routes": [
     {
       "path": "/api/admin/ab-testing/overview",
@@ -248,6 +248,15 @@
         "POST"
       ],
       "file": "app/api/admin/cosmetics/seed-demos/route.ts"
+    },
+    {
+      "path": "/api/admin/coupons",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/coupons/route.ts"
     },
     {
       "path": "/api/admin/dashboard",
@@ -501,6 +510,7 @@
     {
       "path": "/api/admin/privacy-requests/[id]",
       "methods": [
+        "POST",
         "PATCH"
       ],
       "file": "app/api/admin/privacy-requests/[id]/route.ts"
@@ -533,6 +543,25 @@
         "PATCH"
       ],
       "file": "app/api/admin/referrals/route.ts"
+    },
+    {
+      "path": "/api/admin/seasonal-campaigns",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "file": "app/api/admin/seasonal-campaigns/route.ts"
+    },
+    {
+      "path": "/api/admin/seasonal-concepts",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/seasonal-concepts/route.ts"
     },
     {
       "path": "/api/admin/segments",
@@ -725,6 +754,13 @@
       "file": "app/api/admin/trust-timeline/route.ts"
     },
     {
+      "path": "/api/admin/users/[id]/plan",
+      "methods": [
+        "PATCH"
+      ],
+      "file": "app/api/admin/users/[id]/plan/route.ts"
+    },
+    {
       "path": "/api/admin/users/automation/dry-run",
       "methods": [
         "POST"
@@ -808,6 +844,13 @@
         "GET"
       ],
       "file": "app/api/admin/web-vitals-summary/route.ts"
+    },
+    {
+      "path": "/api/admin/webhooks/deliveries",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/webhooks/deliveries/route.ts"
     },
     {
       "path": "/api/admin/webhooks",

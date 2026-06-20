@@ -128,94 +128,17 @@ export default function CustomerAnalyticsPage() {
       const res = await fetch(`/api/customer/analytics?period=${period}`);
       const data = await res.json();
 
-      if (data.success) {
+      if (data.success && data.analytics) {
         setAnalytics(data.analytics);
       } else {
-        // Mock data for demo
-        setAnalytics({
-          summary: {
-            totalConsumptions: 47,
-            totalSpent: 2847.50,
-            totalPoints: 7670,
-            currentStreak: 5,
-            avgSpentPerVisit: 60.58,
-            favoriteCategory: 'Kahve & İçecek',
-            vipTier: 'Gold',
-            memberSince: '2024-01-15',
-          },
-          trends: {
-            consumptionGrowth: 23,
-            pointsGrowth: 45,
-            spendingTrend: 'up',
-          },
-          categoryBreakdown: [
-            { name: 'Kahve & İçecek', count: 28, percentage: 60, icon: '☕' },
-            { name: 'Yemek', count: 12, percentage: 25, icon: '🍽️' },
-            { name: 'Tatlı', count: 5, percentage: 11, icon: '🍰' },
-            { name: 'Diğer', count: 2, percentage: 4, icon: '📦' },
-          ],
-          weeklyPattern: [
-            { day: 'Pzt', visits: 8, avgSpent: 45 },
-            { day: 'Sal', visits: 6, avgSpent: 52 },
-            { day: 'Çar', visits: 9, avgSpent: 48 },
-            { day: 'Per', visits: 7, avgSpent: 55 },
-            { day: 'Cum', visits: 12, avgSpent: 68 },
-            { day: 'Cmt', visits: 3, avgSpent: 85 },
-            { day: 'Paz', visits: 2, avgSpent: 78 },
-          ],
-          hourlyPattern: [
-            { hour: 8, visits: 5 },
-            { hour: 9, visits: 12 },
-            { hour: 10, visits: 8 },
-            { hour: 11, visits: 4 },
-            { hour: 12, visits: 15 },
-            { hour: 13, visits: 10 },
-            { hour: 14, visits: 6 },
-            { hour: 15, visits: 8 },
-            { hour: 16, visits: 4 },
-            { hour: 17, visits: 7 },
-            { hour: 18, visits: 3 },
-          ],
-          topProducts: [
-            { name: 'Caffè Latte', count: 18, totalSpent: 540 },
-            { name: 'Cappuccino', count: 12, totalSpent: 324 },
-            { name: 'Kola', count: 8, totalSpent: 120 },
-            { name: 'Cheesecake', count: 5, totalSpent: 225 },
-          ],
-          favoriteDealers: [
-            { name: 'Demo Cafe', visits: 35, avgRating: 4.8 },
-            { name: 'Kahve Dünyası', visits: 8, avgRating: 4.5 },
-            { name: 'Starbucks', visits: 4, avgRating: 4.2 },
-          ],
-          branchComparison: [
-            { dealerId: 'd1', dealerName: 'Demo Cafe', visits: 35, avgRating: 4.8, estimatedWaitMinutes: 9 },
-            { dealerId: 'd2', dealerName: 'Kahve Dünyası', visits: 8, avgRating: 4.5, estimatedWaitMinutes: 12 },
-            { dealerId: 'd3', dealerName: 'Starbucks', visits: 4, avgRating: 4.2, estimatedWaitMinutes: 14 },
-          ],
-          monthlyData: [
-            { month: 'Eyl', consumptions: 8, spent: 420, points: 840 },
-            { month: 'Eki', consumptions: 12, spent: 680, points: 1360 },
-            { month: 'Kas', consumptions: 15, spent: 890, points: 1780 },
-            { month: 'Ara', consumptions: 12, spent: 857, points: 1714 },
-          ],
-          achievements: {
-            totalBadges: 12,
-            recentBadges: [
-              { name: 'Sadık Müşteri', icon: '🏆', date: '2024-01-20' },
-              { name: '50 Yorum', icon: '💬', date: '2024-01-15' },
-              { name: 'Kahve Uzmanı', icon: '☕', date: '2024-01-10' },
-            ],
-            nextMilestone: { name: '100 Ziyaret', progress: 47, target: 100 },
-          },
-          rewards: {
-            totalRedeemed: 5,
-            pointsSaved: 2500,
-            nextReward: { name: 'Ücretsiz Kahve', pointsNeeded: 330 },
-          },
-        });
+        // Sahte demo verisi GÖSTERMİYORUZ — başarısızlıkta gerçek veri yokmuş
+        // gibi görünüp kullanıcıyı yanıltmamak için boş/hata durumu gösterilir.
+        setAnalytics(null);
+        if (!data.success) toast.error(tc('customerAnalytics.loadError'));
       }
     } catch (error) {
       console.error('Error fetching analytics:', error);
+      setAnalytics(null);
       toast.error(tc('customerAnalytics.loadError'));
     } finally {
       setLoading(false);
@@ -230,7 +153,16 @@ export default function CustomerAnalyticsPage() {
     );
   }
 
-  if (!analytics) return null;
+  if (!analytics) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[320px] text-center gap-3 px-6">
+        <p className="text-lg font-semibold">Henüz analiz verisi yok</p>
+        <p className="text-sm text-muted-foreground max-w-md">
+          İşletmeleri ziyaret edip kart okuttukça burada tüketim, puan ve alışkanlık analizlerin görünecek.
+        </p>
+      </div>
+    );
+  }
 
   const maxWeeklyVisits = Math.max(...analytics.weeklyPattern.map(d => d.visits));
   const maxHourlyVisits = Math.max(...analytics.hourlyPattern.map(d => d.visits));

@@ -11,20 +11,18 @@ import { getVariant } from '@/lib/gamification-ab';
 export const dynamic = 'force-dynamic';
 
 function getTodayStart() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
+  // UTC gün başlangıcı (backend = UTC; lib/timezone.ts).
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 async function getTodaySpinCount(userId: string) {
   const today = getTodayStart();
-  return prisma.notification.count({
-    where: {
-      userId,
-      title: '🎡 Günlük Çark',
-      createdAt: { gte: today },
-    },
+  const row = await prisma.dailySpin.findUnique({
+    where: { userId_day: { userId, day: today } },
+    select: { count: true },
   });
+  return row?.count ?? 0;
 }
 
 // POST /api/gamification/spin - Server-side weighted spin and award
@@ -59,15 +57,20 @@ export async function POST(request: NextRequest) {
     const prizeIndex = spinRules.prizes.findIndex((entry) => entry.id === prize.id);
     const abVariant = await getVariant(userId, 'reward_copy');
 
+    const today = getTodayStart();
     const result = await prisma.$transaction(async (tx) => {
-      const latestCount = await tx.notification.count({
-        where: {
-          userId,
-          title: '🎡 Günlük Çark',
-          createdAt: { gte: getTodayStart() },
-        },
+      // Atomik günlük limit guard: (userId, day) kaydını oluştur, sonra
+      // count < dailyLimit koşuluyla artır. count=0 ise limit dolu demektir.
+      await tx.dailySpin.upsert({
+        where: { userId_day: { userId, day: today } },
+        create: { userId, day: today, count: 0 },
+        update: {},
       });
-      if (latestCount >= spinRules.dailyLimit) {
+      const bumped = await tx.dailySpin.updateMany({
+        where: { userId, day: today, count: { lt: spinRules.dailyLimit } },
+        data: { count: { increment: 1 } },
+      });
+      if (bumped.count === 0) {
         return null;
       }
 

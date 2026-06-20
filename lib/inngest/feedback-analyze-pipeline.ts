@@ -11,6 +11,7 @@ import {
   storeFeedbackEmbedding,
 } from '@/lib/ai-learning';
 import { processAutoReplies } from '@/lib/auto-reply-engine';
+import { maybeCreateAutoRemedyForFeedback } from '@/lib/remedy-automation-core';
 
 export type FeedbackAnalyzePipelineResult =
   | { skipped: true; reason: string }
@@ -50,29 +51,37 @@ export async function runFeedbackAnalyzePipeline(feedbackId: string): Promise<Fe
     dealerId: feedback.dealerId,
   });
 
+  // Gerçek LLM yoksa (local-fallback) zayıf keyword sentiment'i gerçek AI gibi
+  // yazmayız — sadece kaba isToxic + etiket, aiProcessedAt NULL.
+  const isFallback = analysis.modelUsed === 'local-fallback';
   await prisma.feedback.update({
     where: { id: feedbackId },
-    data: {
-      sentiment: analysis.sentiment.label,
-      emotions: analysis.emotions.map((e) => e.label),
-      topics: analysis.topics,
-      isToxic: analysis.toxicity.isToxic,
-      aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-      intent: analysis.intent?.label || null,
-      intentScore: analysis.intent?.score || null,
-      urgency: analysis.urgency || null,
-      effortScore: analysis.effortScore || null,
-      churnRisk: analysis.churnRisk || null,
-      entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-      themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-      statementSentiments: analysis.statementSentiments
-        ? JSON.parse(JSON.stringify(analysis.statementSentiments))
-        : null,
-      actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-      aiProcessedAt: new Date(),
-      aiModelUsed: analysis.modelUsed || null,
-      aiVersion: analysis.version || null,
-    },
+    data: isFallback
+      ? {
+          isToxic: analysis.toxicity.isToxic,
+          aiModelUsed: 'local-fallback',
+        }
+      : {
+          sentiment: analysis.sentiment.label,
+          emotions: analysis.emotions.map((e) => e.label),
+          topics: analysis.topics,
+          isToxic: analysis.toxicity.isToxic,
+          aiAnalysis: JSON.parse(JSON.stringify(analysis)),
+          intent: analysis.intent?.label || null,
+          intentScore: analysis.intent?.score || null,
+          urgency: analysis.urgency || null,
+          effortScore: analysis.effortScore || null,
+          churnRisk: analysis.churnRisk || null,
+          entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
+          themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
+          statementSentiments: analysis.statementSentiments
+            ? JSON.parse(JSON.stringify(analysis.statementSentiments))
+            : null,
+          actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
+          aiProcessedAt: new Date(),
+          aiModelUsed: analysis.modelUsed || null,
+          aiVersion: analysis.version || null,
+        },
   });
 
   if (analysis.toxicity.isToxic) {
@@ -104,6 +113,22 @@ export async function runFeedbackAnalyzePipeline(feedbackId: string): Promise<Fe
         type: 'warning',
       },
     });
+  }
+
+  // Otomatik telafi taslağı: düşük puan VEYA yüksek churn'de, bayinin otomasyonu
+  // açıksa onay kuyruğuna RemedyOffer taslağı ekle (önceden sadece bildirim atılıp
+  // döngü kapatılmıyordu; dealerRemedyAutomation config'i tam bunun içindi).
+  try {
+    await maybeCreateAutoRemedyForFeedback({
+      feedbackId,
+      dealerId: feedback.dealerId,
+      userId: f.userId,
+      rating: f.rating,
+      churnRisk: analysis.churnRisk ?? null,
+      qrCodeId: f.qrCodeId,
+    });
+  } catch (err) {
+    console.error('[REMEDY_AUTOMATION] auto-draft failed:', err);
   }
 
   await storeFeedbackEmbedding({ feedbackId, dealerId: feedback.dealerId, text: feedback.text });

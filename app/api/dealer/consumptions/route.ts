@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createConsumptionSchema } from '@/lib/validations';
+import { isHappyHourLive } from '@/lib/happy-hour-live';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -47,8 +48,8 @@ export async function GET(request: NextRequest) {
             },
           },
           customer: {
+            // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
             select: {
-              id: true,
               name: true,
               email: true,
               image: true,
@@ -236,8 +237,8 @@ export async function POST(request: NextRequest) {
       },
       include: {
         customer: {
+          // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
           select: {
-            id: true,
             name: true,
             email: true,
           },
@@ -285,35 +286,75 @@ export async function POST(request: NextRequest) {
     });
 
     // --- SQUAD PASSIVE POINTS LOGIC ---
-    // Calculate an arbitrary base XP for scanning/consuming
-    const baseXP = amount ? Math.floor(amount * 10) : 50;
-    const passivePoints = Math.floor(baseXP * 0.05);
+    // Tüketim/taramadan kazanılan pasif puan. `amount` bayi tarafından kontrol
+    // edildiği için, ham `amount * 10` ile sınırsız puan basılmasını engellemek
+    // adına baseXP bir tavana sabitlenir ve kullanıcıya yalnızca PASİF puan
+    // (baseXP'nin %5'i) verilir — squad'a ve kullanıcıya aynı miktar.
+    const BASE_XP_CAP = 1000; // tek tüketimden kazanılabilecek max ham puan
+    const rawBaseXP = amount ? Math.floor(amount * 10) : 50;
+    const baseXP = Math.min(Math.max(0, rawBaseXP), BASE_XP_CAP);
+
+    // Happy Hour çarpanı: önceden müşteriye "2x puan" gösteriliyordu ama puana HİÇ
+    // uygulanmıyordu. Artık bu işletmenin AKTİF happy-hour penceresindeki en yüksek
+    // çarpan pasif puana uygulanır (1x = etki yok).
+    const nowDate = new Date();
+    const dealerHappyHours = await prisma.happyHour.findMany({
+      where: { dealerId: session.user.id, isActive: true },
+      select: { startTime: true, endTime: true, daysOfWeek: true, isActive: true, validFrom: true, validUntil: true, multiplier: true },
+    });
+    const activeMultipliers = dealerHappyHours
+      .filter((hh) => isHappyHourLive(hh, nowDate))
+      .map((hh) => hh.multiplier || 1);
+    const happyHourMultiplier = activeMultipliers.length > 0 ? Math.max(...activeMultipliers) : 1;
+
+    // Sezonsal kampanya çarpanı/bonusu happy-hour'dan SONRA pasif puana uygulanır
+    // (zaman penceresindeki en yüksek çarpanlı aktif kampanya). Kampanya yoksa no-op.
+    const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
+    const basePassivePoints = Math.floor(baseXP * 0.05 * happyHourMultiplier);
+    const seasonal = await applySeasonalCampaignMultiplier(basePassivePoints, nowDate);
+    const passivePoints = seasonal.points;
 
     if (passivePoints > 0) {
       const squadMembership = await prisma.squadMember.findFirst({
-        where: { userId: card.customerId }
+        where: { userId: card.customerId },
+        select: { squadId: true },
       });
 
       if (squadMembership) {
         await prisma.$transaction([
           prisma.squad.update({
             where: { id: squadMembership.squadId },
-            data: { totalPoints: { increment: passivePoints } }
+            data: { totalPoints: { increment: passivePoints } },
           }),
           prisma.user.update({
             where: { id: card.customerId },
-            data: { points: { increment: baseXP } } // Primary user gets full XP
-          })
+            data: { points: { increment: passivePoints } },
+          }),
         ]);
       } else {
-        // Normal XP without squad
         await prisma.user.update({
           where: { id: card.customerId },
-          data: { points: { increment: baseXP } }
+          data: { points: { increment: passivePoints } },
         });
       }
     }
     // ----------------------------------
+
+    // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut).
+    import('@/lib/heatmap-track')
+      .then(({ recordHeatmapHit }) =>
+        recordHeatmapHit(session.user.id, nowDate, amount || product?.price || 0)
+      )
+      .catch((err) => console.error('[HEATMAP] consumption track failed:', err));
+
+    // Konum/ziyaret görevlerini ilerlet (ateşle-unut). Müşteri bu işletmeyi
+    // ziyaret etti → eşleşen visit_category görevleri otomatik ilerler/tamamlanır.
+    if (card.customerId) {
+      const visitCustomerId = card.customerId;
+      import('@/lib/visit-missions')
+        .then(({ advanceVisitMissions }) => advanceVisitMissions(visitCustomerId, session.user.id))
+        .catch((err) => console.error('[VISIT_MISSION] advance failed:', err));
+    }
 
     return NextResponse.json(
       {

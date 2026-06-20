@@ -85,6 +85,16 @@ export default function DealerProductsPage() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Düzenleme / silme
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    price: '',
+    categoryId: '',
+  });
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -171,6 +181,75 @@ export default function DealerProductsPage() {
       fetchData();
     } catch (err) {
       toast.error(t('dealerProducts.productCreateError'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setEditForm({
+      name: product.name,
+      description: product.description ?? '',
+      price: product.price != null ? String(product.price) : '',
+      categoryId: product.category.id,
+    });
+  };
+
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return;
+    if (!editForm.name || !editForm.categoryId) {
+      toast.error(t('dealerProducts.productNameCategoryRequired'));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/dealer/products/${editingProduct.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name,
+          description: editForm.description || null,
+          price: editForm.price ? parseFloat(editForm.price) : null,
+          categoryId: editForm.categoryId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success(t('dealerProducts.productUpdated'));
+      setEditingProduct(null);
+      fetchData();
+    } catch (err) {
+      toast.error(t('dealerProducts.productUpdateError'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!deletingProduct) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/dealer/products/${deletingProduct.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error);
+        return;
+      }
+
+      toast.success(t('dealerProducts.productDeleted'));
+      setDeletingProduct(null);
+      fetchData();
+    } catch (err) {
+      toast.error(t('dealerProducts.productDeleteError'));
     } finally {
       setSubmitting(false);
     }
@@ -326,11 +405,14 @@ export default function DealerProductsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditProduct(product)}>
                             <Edit className="h-4 w-4 mr-2" />
                             {t('common.edit')}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => setDeletingProduct(product)}
+                          >
                             <Trash2 className="h-4 w-4 mr-2" />
                             {t('common.delete')}
                           </DropdownMenuItem>
@@ -478,6 +560,96 @@ export default function DealerProductsPage() {
             </Button>
             <Button onClick={handleCreateProduct} disabled={submitting}>
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.create')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog open={!!editingProduct} onOpenChange={(open) => !open && setEditingProduct(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('dealerProducts.editProduct')}</DialogTitle>
+            <DialogDescription>{t('dealerProducts.editProductDescription')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>{t('dealerProducts.productNameRequiredLabel')}</Label>
+              <Input
+                placeholder={t('dealerProducts.productNamePlaceholder')}
+                value={editForm.name}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('dealerProducts.categoryRequiredLabel')}</Label>
+              <Select
+                value={editForm.categoryId}
+                onValueChange={(val) => setEditForm((prev) => ({ ...prev, categoryId: val }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t('dealerProducts.selectCategoryPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('dealerProducts.productDescription')}</Label>
+              <Textarea
+                placeholder={t('dealerProducts.productDescriptionPlaceholder')}
+                value={editForm.description}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                rows={2}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('dealerProducts.price')}</Label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={editForm.price}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingProduct(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleUpdateProduct} disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Product Confirm */}
+      <Dialog open={!!deletingProduct} onOpenChange={(open) => !open && setDeletingProduct(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('dealerProducts.deleteProductTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('dealerProducts.deleteProductConfirm')}
+              {deletingProduct ? ` "${deletingProduct.name}"` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingProduct(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteProduct} disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

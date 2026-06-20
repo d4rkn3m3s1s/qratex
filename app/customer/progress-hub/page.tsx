@@ -6,6 +6,13 @@ import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ChevronRight, Gauge, Loader2, Target } from 'lucide-react';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { cn } from '@/lib/utils';
@@ -30,6 +37,9 @@ export default function CustomerProgressHubPage() {
   const { locale } = useAppLocale();
   const [data, setData] = useState<StatsPayload['data'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [previewBadge, setPreviewBadge] = useState<
+    { id: string; name: string; icon?: string; rarity?: string } | null
+  >(null);
 
   const nf = useMemo(
     () => new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'tr-TR'),
@@ -191,10 +201,21 @@ export default function CustomerProgressHubPage() {
                   <p className="text-sm text-muted-foreground">{t('customerProgressHub.noBadges')}</p>
                 ) : (
                   badges.map((b) => (
-                    <Badge key={b.id} variant="secondary" className="gap-1 px-2 py-1 text-xs font-normal">
-                      {b.icon ? <span aria-hidden>{b.icon}</span> : null}
-                      <span className="max-w-[10rem] truncate">{b.name}</span>
-                    </Badge>
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setPreviewBadge(b)}
+                      className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`${b.name} — ${t('customerProgressHub.badgePreviewAria')}`}
+                    >
+                      <Badge
+                        variant="secondary"
+                        className="gap-1 px-2 py-1 text-xs font-normal cursor-pointer hover:bg-secondary/80 transition-colors"
+                      >
+                        {b.icon ? <span aria-hidden>{b.icon}</span> : null}
+                        <span className="max-w-[10rem] truncate">{b.name}</span>
+                      </Badge>
+                    </button>
                   ))
                 )}
               </CardContent>
@@ -226,6 +247,30 @@ export default function CustomerProgressHubPage() {
           </div>
         </>
       )}
+
+      <Dialog open={!!previewBadge} onOpenChange={(open) => !open && setPreviewBadge(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {previewBadge?.icon ? <span aria-hidden className="text-2xl">{previewBadge.icon}</span> : null}
+              {previewBadge?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {previewBadge?.rarity
+                ? t('customerProgressHub.badgeRarityLabel').replace('{rarity}', previewBadge.rarity)
+                : t('customerProgressHub.badgePreviewDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <Link
+            href="/customer/badges"
+            className="text-sm font-medium text-primary hover:underline"
+            onClick={() => setPreviewBadge(null)}
+          >
+            {t('customerProgressHub.openBadges')}
+            <ChevronRight className="inline size-4 align-text-bottom" aria-hidden />
+          </Link>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

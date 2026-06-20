@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
@@ -12,12 +14,28 @@ import {
 } from '@/lib/visibility-controls';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 
-export async function getModuleControls() {
+/** Cache invalidation tag — admin settings yazınca revalidateTag(MODULE_GATE_CACHE_TAG). */
+export const MODULE_GATE_CACHE_TAG = 'module-gate-settings';
+
+async function loadModuleControlsRow() {
   const row = await prisma.settings.findUnique({
     where: { key: MODULE_CONTROLS_SETTINGS_KEY },
     select: { value: true },
   });
   return normalizeModuleControls(row?.value);
+}
+
+// unstable_cache (cross-request 60s) + React cache (aynı istekte tek çağrı).
+// Önceden her gated istek 4 cache'siz settings.findUnique yapıyordu (50+ route).
+const getModuleControlsCached = cache(() =>
+  unstable_cache(loadModuleControlsRow, ['module-controls'], {
+    revalidate: 60,
+    tags: [MODULE_GATE_CACHE_TAG],
+  })()
+);
+
+export async function getModuleControls() {
+  return getModuleControlsCached();
 }
 
 type RequestMetaSource = {
@@ -33,7 +51,7 @@ type ModuleGateOptions = {
   routeKey?: string;
 };
 
-async function getVisibilitySettings() {
+async function loadVisibilitySettings() {
   const [featureRow, menuRow, systemFeatureRow] = await Promise.all([
     prisma.settings.findUnique({
       where: { key: FEATURE_VISIBILITY_SETTINGS_KEY },
@@ -50,6 +68,13 @@ async function getVisibilitySettings() {
   ]);
   return normalizeVisibilitySettingsWithSystem(featureRow?.value, menuRow?.value, systemFeatureRow?.value);
 }
+
+const getVisibilitySettings = cache(() =>
+  unstable_cache(loadVisibilitySettings, ['visibility-settings'], {
+    revalidate: 60,
+    tags: [MODULE_GATE_CACHE_TAG],
+  })()
+);
 
 export async function assertModuleEnabled(moduleKey: string, options: ModuleGateOptions = {}) {
   const controls = await getModuleControls();

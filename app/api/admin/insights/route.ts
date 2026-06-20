@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma'; // Note: Ensure it points to the correct location for your project.
+import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 
@@ -15,47 +16,39 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        // Default benchmarks aggregated by businessCategory
-        const dealers = await prisma.user.findMany({
-            where: { role: 'DEALER' },
-            select: {
-                id: true,
-                businessCategory: true,
-            }
-        });
+        // Kategori bazında benchmark — önceden N dealer × 2 sorgu + hatalı hareketli
+        // ortalama vardı. Artık 2 toplu SQL: (1) kategori başına dealer sayısı +
+        // ortalama rating (qrCode join), (2) kategori başına tarama toplamı.
+        const [ratingRows, scanRows] = await Promise.all([
+            prisma.$queryRaw<Array<{ category: string; dealerCount: bigint; avgRating: number | null }>>(Prisma.sql`
+                SELECT COALESCE(u."businessCategory", 'uncategorized') AS category,
+                       COUNT(DISTINCT u."id") AS "dealerCount",
+                       AVG(f."rating") AS "avgRating"
+                FROM "User" u
+                LEFT JOIN "QRCode" q ON q."dealerId" = u."id"
+                LEFT JOIN "Feedback" f ON f."qrCodeId" = q."id" AND f."deletedAt" IS NULL
+                WHERE u."role" = 'DEALER'
+                GROUP BY COALESCE(u."businessCategory", 'uncategorized')
+            `),
+            prisma.$queryRaw<Array<{ category: string; totalScans: bigint | null }>>(Prisma.sql`
+                SELECT COALESCE(u."businessCategory", 'uncategorized') AS category,
+                       COALESCE(SUM(q."scanCount"), 0) AS "totalScans"
+                FROM "User" u
+                LEFT JOIN "QRCode" q ON q."dealerId" = u."id"
+                WHERE u."role" = 'DEALER'
+                GROUP BY COALESCE(u."businessCategory", 'uncategorized')
+            `),
+        ]);
 
-        const categoryStats: Record<string, { count: number, avgRating: number, scanCount: number }> = {};
-
-        for (const dealer of dealers) {
-            const cat = dealer.businessCategory || 'uncategorized';
-
-            if (!categoryStats[cat]) {
-                categoryStats[cat] = { count: 0, avgRating: 0, scanCount: 0 };
-            }
-
-            categoryStats[cat].count += 1;
-
-            // Group their stats 
-            const [feedbacks, scans] = await Promise.all([
-                prisma.feedback.aggregate({
-                    where: { qrCode: { dealerId: dealer.id } },
-                    _avg: { rating: true }
-                }),
-                prisma.qRCode.aggregate({
-                    where: { dealerId: dealer.id },
-                    _sum: { scanCount: true }
-                })
-            ]);
-
-            const avgRating = feedbacks._avg.rating || 0;
-            const scanSum = scans._sum.scanCount || 0;
-
-            // Weighted moving average concept applied simply
-            const currentAvg = categoryStats[cat].avgRating;
-            const count = categoryStats[cat].count;
-
-            categoryStats[cat].avgRating = currentAvg === 0 ? avgRating : ((currentAvg * (count - 1)) + avgRating) / count;
-            categoryStats[cat].scanCount += scanSum;
+        const scanByCat = new Map(scanRows.map((r) => [r.category, Number(r.totalScans ?? 0)]));
+        const categoryStats: Record<string, { count: number; avgRating: number; scanCount: number }> = {};
+        for (const r of ratingRows) {
+            const cat = r.category || 'uncategorized';
+            categoryStats[cat] = {
+                count: Number(r.dealerCount ?? 0),
+                avgRating: r.avgRating != null ? Number(r.avgRating) : 0,
+                scanCount: scanByCat.get(cat) ?? 0,
+            };
         }
 
         const categoriesList = Object.entries(categoryStats).map(([category, stats]) => ({
@@ -65,19 +58,13 @@ export async function GET(req: Request) {
             totalScans: stats.scanCount
         }));
 
-        // Generate random mock stats if no data exists to show the UI
-        if (categoriesList.length === 0 || categoriesList.every(c => c.category === 'uncategorized' && c.totalScans === 0)) {
-            return NextResponse.json({
-                data: [
-                    { category: 'cafe', dealerCount: 45, avgRating: 4.6, totalScans: 12500 },
-                    { category: 'restaurant', dealerCount: 120, avgRating: 4.2, totalScans: 45000 },
-                    { category: 'retail', dealerCount: 30, avgRating: 4.8, totalScans: 8500 },
-                    { category: 'uncategorized', dealerCount: dealers.length, avgRating: 4.0, totalScans: 1200 }
-                ]
-            }, { headers: PRIVATE_NO_STORE_HEADERS });
-        }
+        // Veri yoksa SAHTE örnek istatistik ÜRETMİYORUZ (admin'i yanıltır).
+        // Boş sonuç + empty bayrağı döndürülür; UI boş durumu gösterir.
+        const isEmpty =
+            categoriesList.length === 0 ||
+            categoriesList.every((c) => c.category === 'uncategorized' && c.totalScans === 0);
 
-        return NextResponse.json({ data: categoriesList }, { headers: PRIVATE_NO_STORE_HEADERS });
+        return NextResponse.json({ data: categoriesList, empty: isEmpty }, { headers: PRIVATE_NO_STORE_HEADERS });
 
     } catch (error) {
         console.error('[ADMIN_INSIGHTS_ERROR]', error);

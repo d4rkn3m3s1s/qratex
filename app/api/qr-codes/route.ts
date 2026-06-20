@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
+import { canCreateQRCode } from '@/lib/plan-limits';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -93,6 +94,22 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, description } = validatedData.data;
+
+    // Plan kotası: bayinin etkin planındaki QR limiti dolduysa engelle (ADMIN hariç,
+    // canCreateQRCode içinde limitsiz). 402 Payment Required + upsell mesajı.
+    if (session.user.role === 'DEALER') {
+      const quota = await canCreateQRCode(session.user.id);
+      if (!quota.allowed) {
+        return NextResponse.json(
+          {
+            error: quota.reason,
+            code: 'PLAN_LIMIT_REACHED',
+            quota: { used: quota.used, limit: quota.limit, planName: quota.planName },
+          },
+          { status: 402, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+    }
 
     // Generate unique QR code
     let code = generateQRCode();

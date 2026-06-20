@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { isSuspiciousPoints } from '@/lib/points-velocity';
+import { getSuspiciousUserIds } from '@/lib/points-velocity';
 import {
   getLeagueRules,
   getLeagueMetaFromRules,
@@ -11,6 +12,7 @@ import {
   getNextLeagueMetaFromRules,
 } from '@/lib/league-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { startOfWeekUTC } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
 /** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
@@ -99,13 +101,8 @@ export async function GET(request: NextRequest) {
         })
         .sort((a, b) => b.score - a.score);
 
-      const suspiciousIds = new Set<string>();
-      await Promise.all(
-        sortedUsers.slice(0, limit).map(async (u) => {
-          const suspicious = await isSuspiciousPoints(u.id);
-          if (suspicious) suspiciousIds.add(u.id);
-        })
-      );
+      const topSlice = sortedUsers.slice(0, limit);
+      const suspiciousIds = await getSuspiciousUserIds(topSlice.map((u) => u.id));
 
       const leaderboard = sortedUsers.slice(0, limit).map((user, index) => ({
         ...user,
@@ -114,10 +111,12 @@ export async function GET(request: NextRequest) {
         needsReview: suspiciousIds.has(user.id),
       }));
 
-      const userRank =
-        session?.user?.id
-          ? (sortedUsers.findIndex((u) => u.id === session.user.id) ?? -1) + 1 || null
-          : null;
+      // findIndex -1 döndürür (nullish değil) → eski "?? -1 + 1 || null" 1. sıradaki
+      // kullanıcıyı (index 0 → 0 → null) yanlışlıkla "sırasız" gösteriyordu. Düzeltildi.
+      const rankIdx = session?.user?.id
+        ? sortedUsers.findIndex((u) => u.id === session.user.id)
+        : -1;
+      const userRank = rankIdx >= 0 ? rankIdx + 1 : null;
       const totalUsers = totalUsersCount;
 
       return NextResponse.json(
@@ -144,10 +143,12 @@ export async function GET(request: NextRequest) {
 
     switch (period) {
       case 'weekly':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        // UTC hafta başı (Pzt 00:00 UTC) — gamification/progress ile aynı sınır.
+        // Eski "now - 7gün" kayan pencereydi; yerel ay başı da TZ'e göre kayıyordu.
+        startDate = startOfWeekUTC(now);
         break;
       case 'monthly':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
         break;
       case 'alltime':
       default:
@@ -180,10 +181,7 @@ export async function GET(request: NextRequest) {
         take: limit,
       });
 
-      const suspiciousIds = new Set<string>();
-      await Promise.all(users.map(async (u) => {
-        if (await isSuspiciousPoints(u.id)) suspiciousIds.add(u.id);
-      }));
+      const suspiciousIds = await getSuspiciousUserIds(users.map((u) => u.id));
 
       leaderboardData = users.map((user, index) => {
         const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -244,10 +242,7 @@ export async function GET(request: NextRequest) {
           take: limit,
         });
 
-        const fallbackSuspicious = new Set<string>();
-        await Promise.all(users.map(async (u) => {
-          if (await isSuspiciousPoints(u.id)) fallbackSuspicious.add(u.id);
-        }));
+        const fallbackSuspicious = await getSuspiciousUserIds(users.map((u) => u.id));
 
         leaderboardData = users.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -290,26 +285,24 @@ export async function GET(request: NextRequest) {
           take: MAX_LEADERBOARD_FETCH,
         });
 
-        // Calculate period points (each feedback = points based on text length)
-        const periodFeedbacks = await prisma.feedback.findMany({
-          where: {
-            createdAt: { gte: startDate },
-            userId: { in: userIds },
-          },
-          select: {
-            userId: true,
-            text: true,
-          },
-          take: 100000,
-        });
+        // Dönem puanı: feedback başına metin uzunluğuna göre 50/100. Önceden 100K
+        // satır (text dahil) belleğe çekilip JS'te sayılıyordu; tek gruplanmış SQL
+        // ile DB'de hesaplanır (uzunluk eşiğine göre CASE toplamı).
+        const periodPointsRows = userIds.length > 0
+          ? await prisma.$queryRaw<Array<{ userId: string; points: bigint }>>(Prisma.sql`
+              SELECT "userId",
+                     SUM(CASE WHEN length("text") > 50 THEN 100 ELSE 50 END)::bigint AS points
+              FROM "Feedback"
+              WHERE "createdAt" >= ${startDate}
+                AND "userId" IN (${Prisma.join(userIds)})
+              GROUP BY "userId"
+            `)
+          : [];
 
         const periodPointsMap = new Map<string, number>();
-        periodFeedbacks.forEach(f => {
-          if (f.userId) {
-            const points = f.text && f.text.length > 50 ? 100 : 50;
-            periodPointsMap.set(f.userId, (periodPointsMap.get(f.userId) || 0) + points);
-          }
-        });
+        for (const r of periodPointsRows) {
+          if (r.userId) periodPointsMap.set(r.userId, Number(r.points));
+        }
 
         // Sort by period points
         const sortedUsers = users
@@ -320,10 +313,7 @@ export async function GET(request: NextRequest) {
           .sort((a, b) => b.periodPoints - a.periodPoints)
           .slice(0, limit);
 
-        const suspiciousIdsPeriod = new Set<string>();
-        await Promise.all(sortedUsers.map(async (u) => {
-          if (await isSuspiciousPoints(u.id)) suspiciousIdsPeriod.add(u.id);
-        }));
+        const suspiciousIdsPeriod = await getSuspiciousUserIds(sortedUsers.map((u) => u.id));
 
         leaderboardData = sortedUsers.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);
