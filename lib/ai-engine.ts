@@ -1093,7 +1093,7 @@ export function getFallbackStats(limit = 500): { total: number; fallbacks: numbe
 // EXPORTS
 // ─────────────────────────────────────────────────────────────
 
-export default {
+const aiEngine = {
   analyzeComprehensive,
   analyzeBulk,
   clusterThemes,
@@ -1106,6 +1106,8 @@ export default {
   getRecentUsageLogs,
   getFallbackStats,
 };
+
+export default aiEngine;
 /**
  * Geri bildirime üsluba göre AI yanıtı üretir
  */

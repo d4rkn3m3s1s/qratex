@@ -212,7 +212,9 @@ SADECE JSON array döndür: ["yanıt1", "yanıt2", "yanıt3"]`,
   }
 }
 
-export default {
+const groqApi = {
   chatWithQRA,
   suggestResponseWithGroq,
 };
+
+export default groqApi;

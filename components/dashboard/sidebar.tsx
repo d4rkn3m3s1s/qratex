@@ -237,7 +237,7 @@ const customerNavItems: NavItem[] = [
   { key: 'quests', labelKey: 'quests', href: '/customer/quests', icon: Target },
   { key: 'rewards', labelKey: 'rewards', href: '/customer/rewards', icon: Gift },
   { key: 'surprise_boxes', labelKey: 'surprise_boxes', href: '/customer/surprise-boxes', icon: Box },
-  { key: 'pacman_game', labelKey: 'pacman_game', href: '/customer/games/pacman', icon: Gamepad2 },
+  { key: 'games_hub', labelKey: 'games_hub', href: '/customer/games', icon: Gamepad2 },
   { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone, featureKey: 'customer_campaigns', moduleKey: 'customer_campaigns' },
   { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart },
   { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy },

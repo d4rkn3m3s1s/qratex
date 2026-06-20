@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 export interface StreamNotification {
   id: string;
@@ -36,8 +36,11 @@ export function useNotificationStream({
   // Callback'leri ref'te tut ki effect her render'da yeniden bağlanmasın.
   const onNotifRef = useRef(onNotification);
   const onInitRef = useRef(onInit);
-  onNotifRef.current = onNotification;
-  onInitRef.current = onInit;
+  // Render sırasında ref'e yazmak yerine commit fazında güncelle.
+  useLayoutEffect(() => {
+    onNotifRef.current = onNotification;
+    onInitRef.current = onInit;
+  });
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;

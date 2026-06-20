@@ -102,6 +102,51 @@ export function sfxWarn(): void {
   tone(c, 520, 0.12, 0.08, 'square', 0.1);
 }
 
+/** Kombo arttıkça pitch yükselen kısa "klik" — zincir hissi. */
+export function sfxCombo(level = 0): void {
+  const c = getCtx();
+  if (!c) return;
+  const base = 600 + Math.min(level, 20) * 40;
+  tone(c, base, 0, 0.07, 'square', 0.14);
+  tone(c, base * 1.5, 0.03, 0.06, 'sine', 0.1);
+}
+
+/** Milestone / büyük başarı fanfarı (kombo 5x, başarım, boss). */
+export function sfxFanfare(): void {
+  const c = getCtx();
+  if (!c) return;
+  const notes = [392, 523.25, 659.25, 783.99, 1046.5];
+  notes.forEach((f, i) => tone(c, f, i * 0.07, 0.16, 'triangle', 0.2));
+}
+
+/** Patlama / yıkım — gürültülü düşen ton. */
+export function sfxBoom(): void {
+  const c = getCtx();
+  if (!c) return;
+  tone(c, 160, 0, 0.32, 'sawtooth', 0.26, 40);
+  tone(c, 90, 0.02, 0.34, 'square', 0.18, 30);
+}
+
+/** Hafif arayüz tık sesi (kart çevir, buton). */
+export function sfxClick(): void {
+  const c = getCtx();
+  if (!c) return;
+  tone(c, 720, 0, 0.04, 'square', 0.08);
+}
+
+/**
+ * Dokunsal geri bildirim (mobil titreşim). reduce-animations'ta veya desteklemeyen
+ * cihazda sessizce geçer. pattern: ms veya ms dizisi.
+ */
+export function haptic(pattern: number | number[] = 12): void {
+  if (typeof navigator === 'undefined' || muted()) return;
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* yoksay */
+  }
+}
+
 /** Kullanıcı etkileşiminde context'i hazırlamak için (Oyna butonu). */
 export function primeAudio(): void {
   getCtx();
