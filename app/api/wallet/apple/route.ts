@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
     const walletConfigured = !!(
       process.env.APPLE_PASS_CERT_P12_BASE64 &&
       process.env.APPLE_PASS_CERT_PASSWORD &&
-      process.env.APPLE_PASS_TYPE_IDENTIFIER
+      process.env.APPLE_PASS_TYPE_IDENTIFIER &&
+      process.env.APPLE_WWDR_CERT_BASE64
     );
     if (!walletConfigured) {
       return NextResponse.json(
@@ -141,7 +142,8 @@ export async function POST(request: NextRequest) {
     const hasCertificates = !!(
       process.env.APPLE_PASS_CERT_P12_BASE64 &&
       process.env.APPLE_PASS_CERT_PASSWORD &&
-      process.env.APPLE_PASS_TYPE_IDENTIFIER
+      process.env.APPLE_PASS_TYPE_IDENTIFIER &&
+      process.env.APPLE_WWDR_CERT_BASE64
     );
 
     // Check if user has an activated card
