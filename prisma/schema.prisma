@@ -460,6 +460,35 @@ model MiniGameSession {
   @@index([userId])
 }
 
+/// Admin'in mini oyun registry'sini (lib/minigame-config.ts MINI_GAMES) ezdiği
+/// override katmanı. gameType UNIQUE; her satır TEK bir oyunu temsil eder.
+/// Override alanları NULL ise registry varsayılanı kullanılır (effective-config
+/// birleştirmesi lib/minigame-config-effective.ts'de). enabled=false → oyun
+/// hub'da gizlenir ve server start'ı reddeder. Ödül/eşik/süre DAİMA sunucuda
+/// bu effective değerlerden hesaplanır (client'a güvenilmez).
+model MiniGameConfig {
+  id        String  @id @default(cuid())
+  gameType  String  @unique
+  /// Oyun açık mı (hub'da görünür + oynanabilir).
+  enabled   Boolean @default(true)
+
+  // --- Ödül & anti-cheat override'ları (null = registry varsayılanı) ---
+  rewardPoints    Int?
+  rewardXp        Int?
+  rewardThreshold Int?
+  minDurationSec  Int?
+  maxScore        Int?
+
+  // --- Görsel override'lar (null/boş = registry varsayılanı) ---
+  title       String?
+  description String?
+  emoji       String?
+  accent      String?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
 model GamificationSettings {
   id                String   @id @default(cuid())
   xpMultiplier      Float    @default(1.0)

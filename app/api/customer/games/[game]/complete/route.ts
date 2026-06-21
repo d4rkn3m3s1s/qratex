@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { creditPointsAndXp } from '@/lib/points-wallet';
-import { getMiniGame, computeGameReward } from '@/lib/minigame-config';
+import { getEffectiveMiniGame, computeEffectiveReward } from '@/lib/minigame-config-effective';
 import { computeAchievementStats } from '@/lib/game-achievement-stats';
 import { evaluateAchievements } from '@/lib/game-achievements';
 
@@ -32,7 +32,7 @@ export async function POST(
 ) {
   try {
     const { game: gameType } = await params;
-    const game = getMiniGame(gameType);
+    const game = await getEffectiveMiniGame(gameType);
     if (!game) {
       return NextResponse.json(
         { error: 'Oyun bulunamadı' },
@@ -84,7 +84,7 @@ export async function POST(
 
     // Ödül yalnızca kazanıldıysa, yeterince skor yapıldıysa ve süre makulse.
     const eligible = won && !tooFast;
-    const reward = eligible ? computeGameReward(game, clampedScore) : { points: 0, xp: 0 };
+    const reward = eligible ? computeEffectiveReward(game, clampedScore) : { points: 0, xp: 0 };
 
     // Başarım tespiti için: bu tamamlamadan ÖNCE açık olan başarım id'leri.
     const beforeUnlocked = new Set(
