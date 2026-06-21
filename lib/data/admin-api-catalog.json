@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-21T12:46:38.638Z",
+  "generatedAt": "2026-06-21T12:53:41.428Z",
   "routes": [
     {
       "path": "/api/admin/ab-testing/overview",
@@ -822,10 +822,7 @@
     },
     {
       "path": "/api/admin/users/hall-of-fame",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
+      "methods": [],
       "file": "app/api/admin/users/hall-of-fame/route.ts"
     },
     {
