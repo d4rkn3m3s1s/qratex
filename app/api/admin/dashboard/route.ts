@@ -75,18 +75,14 @@ const getDashboardData = unstable_cache(
           qrCode: { select: { name: true, dealer: { select: { businessName: true } } } }
         }
       }),
+      // Sadece dealer kimlik bilgileri; feedback sayım/ortalaması aşağıda TEK
+      // gruplanmış SQL ile hesaplanır (önceden top 10 dealer'ın TÜM rating
+      // satırları nested çekilip JS'te flatMap+reduce ediliyordu → busy dealer'da
+      // binlerce satır belleğe).
       prisma.user.findMany({
         where: { role: 'DEALER' },
         take: 10,
-        select: {
-          id: true, businessName: true, name: true,
-          qrCodes: {
-            select: {
-              _count: { select: { feedbacks: true } },
-              feedbacks: { select: { rating: true } }
-            }
-          }
-        }
+        select: { id: true, businessName: true, name: true },
       }),
       prisma.feedback.count({ where: { sentiment: 'positive' } }),
       prisma.feedback.count({ where: { sentiment: 'neutral' } }),
@@ -166,18 +162,32 @@ const getDashboardData = unstable_cache(
     const scans = totalScans._sum.scanCount || 0;
 
     // Format top dealers
+    // Dealer başına feedback sayım + ortalama puanı TEK SQL ile (Feedback→QRCode
+    // join, GROUP BY dealerId). JS map-reduce yerine DB'de hesaplanır.
+    const dealerIds = topDealers.map((d: any) => d.id);
+    const dealerStatsRows = dealerIds.length > 0
+      ? await prisma.$queryRaw<Array<{ dealerId: string; cnt: bigint; avg: number }>>(Prisma.sql`
+          SELECT q."dealerId" AS "dealerId",
+                 COUNT(f."id")::bigint AS cnt,
+                 COALESCE(AVG(f."rating"), 0) AS avg
+          FROM "QRCode" q
+          JOIN "Feedback" f ON f."qrCodeId" = q."id"
+          WHERE q."dealerId" IN (${Prisma.join(dealerIds)})
+          GROUP BY q."dealerId"
+        `)
+      : [];
+    const dealerStatsMap = new Map<string, { count: number; avg: number }>();
+    for (const r of dealerStatsRows) {
+      dealerStatsMap.set(r.dealerId, { count: Number(r.cnt), avg: Number(r.avg) });
+    }
+
     const formattedTopDealers = topDealers.map((dealer: any) => {
-      const allFeedbacks = dealer.qrCodes.flatMap((qr: any) => qr.feedbacks);
-      const totalFeedbackCount = allFeedbacks.length;
-      const avgRating = totalFeedbackCount > 0
-        ? (allFeedbacks.reduce((sum: number, f: any) => sum + f.rating, 0) / totalFeedbackCount).toFixed(1)
-        : '0.0';
-      
+      const s = dealerStatsMap.get(dealer.id);
       return {
         id: dealer.id,
         name: dealer.businessName || dealer.name || 'İsimsiz İşletme',
-        feedbacks: totalFeedbackCount,
-        rating: parseFloat(avgRating),
+        feedbacks: s?.count ?? 0,
+        rating: s ? parseFloat(s.avg.toFixed(1)) : 0,
       };
     }).sort((a: any, b: any) => b.feedbacks - a.feedbacks);
 
