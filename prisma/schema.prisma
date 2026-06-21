@@ -423,7 +423,12 @@ model SquadBattle {
   squad2 Squad @relation("Squad2Battles", fields: [squad2Id], references: [id], onDelete: Cascade)
   participants SquadBattleParticipant[]
 
-  @@index([status])
+  // Cron süresi-dolan taraması (status='active'/'pending' + endTime<=now) en hot
+  // sorgu; status tek-sütun prefix'i de bu composite'ten faydalanır.
+  @@index([status, endTime])
+  // Challenge "açık savaş var mı" kontrolü squad1Id/squad2Id + status filtreler.
+  @@index([squad1Id, status])
+  @@index([squad2Id, status])
 }
 
 model SquadBattleParticipant {
@@ -458,6 +463,11 @@ model MiniGameSession {
 
   @@unique([userId, gameType, dayKey])
   @@index([userId])
+  // Leaderboard groupBy: gameType + status (userId YOK) → tek-sütun userId index'i
+  // bu sorguda işe yaramıyordu, tam-tablo taraması oluyordu.
+  @@index([gameType, status])
+  // Streak / achievement-stats: userId + status filtreler (status='completed').
+  @@index([userId, status])
 }
 
 /// Admin'in mini oyun registry'sini (lib/minigame-config.ts MINI_GAMES) ezdiği
