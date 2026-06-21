@@ -6,6 +6,7 @@ import { Target, Zap } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxPowerUp, sfxWin, sfxFanfare, haptic } from '@/lib/game-sounds';
 
 function reducedMotion() {
@@ -203,6 +204,7 @@ export function LuckyWheelGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="rounded-full bg-white/10 px-3 py-0.5 text-xs text-white/80">Hak: {spinsLeft}</div>

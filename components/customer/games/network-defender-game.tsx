@@ -7,6 +7,7 @@ import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxWin, sfxWarn, sfxCombo, sfxPowerUp, sfxFanfare, haptic } from '@/lib/game-sounds';
 
 const QUARANTINE_CHARGE_MS = 10000; // karantina şarj süresi
@@ -232,6 +233,7 @@ export function NetworkDefenderGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-2 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1.5 text-rose-400">

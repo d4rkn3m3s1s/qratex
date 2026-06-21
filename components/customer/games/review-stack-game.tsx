@@ -5,6 +5,7 @@ import { Layers, Zap } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxWin, sfxPowerUp, sfxFanfare, sfxBoom, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('review-stack')!;
@@ -356,6 +357,7 @@ export function ReviewStackGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1.5" style={{ color: DEF.accent }}>

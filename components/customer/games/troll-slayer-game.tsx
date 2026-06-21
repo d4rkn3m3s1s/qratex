@@ -5,6 +5,7 @@ import { Swords, Zap, Flame } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxEatGhost, sfxHit, sfxWin, sfxCombo, sfxBoom, sfxFanfare, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('troll-slayer')!;
@@ -321,6 +322,7 @@ export function TrollSlayerGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-2 flex items-center justify-between text-sm font-semibold text-white">
         <div className="rounded-full bg-white/10 px-3 py-0.5 text-xs text-white/80">Dalga {wave}</div>

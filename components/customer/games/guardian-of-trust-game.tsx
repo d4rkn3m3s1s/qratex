@@ -5,6 +5,7 @@ import { Heart, ShieldCheck, Flame } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxWin, sfxCombo, sfxPowerUp, sfxFanfare, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('guardian-of-trust')!;
@@ -296,6 +297,7 @@ export function GuardianOfTrustGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1">
