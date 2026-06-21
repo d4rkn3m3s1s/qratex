@@ -415,13 +415,15 @@ export async function POST(request: NextRequest) {
         .then(({ recordHeatmapHit }) => recordHeatmapHit(qrCode.dealerId, new Date(), 0))
         .catch((err) => console.error('[HEATMAP] feedback track failed:', err));
 
-      // Admin dashboard cache'ini bayatlat (yeni feedback toplulaştırmaları etkiler).
+      // Admin dashboard + leaderboard sıralama cache'ini bayatlat (yeni feedback
+      // hem toplulaştırmaları hem leaderboard sırasını etkiler).
       try {
         const { revalidateTag } = await import('next/cache');
-        const { ADMIN_DASHBOARD_TAG } = await import('@/lib/cache-tags');
+        const { ADMIN_DASHBOARD_TAG, LEADERBOARD_RANKING_TAG } = await import('@/lib/cache-tags');
         revalidateTag(ADMIN_DASHBOARD_TAG, 'max');
+        revalidateTag(LEADERBOARD_RANKING_TAG, 'max');
       } catch (err) {
-        console.error('[CACHE] dashboard revalidate failed:', err);
+        console.error('[CACHE] revalidate failed:', err);
       }
 
       // ── Otomatik AI Analizi (arka planda) ──

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
+import { unstable_cache } from 'next/cache';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getSuspiciousUserIds } from '@/lib/points-velocity';
+import { LEADERBOARD_RANKING_TAG } from '@/lib/cache-tags';
 import {
   getLeagueRules,
   getLeagueMetaFromRules,
@@ -17,6 +19,57 @@ import { startOfWeekUTC } from '@/lib/timezone';
 export const dynamic = 'force-dynamic';
 /** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
 const MAX_LEADERBOARD_FETCH = 5000;
+
+const USER_LB_SELECT = {
+  id: true,
+  name: true,
+  image: true,
+  points: true,
+  level: true,
+  _count: { select: { feedbacks: true, badges: true, referralsMade: true } },
+} as const;
+
+/**
+ * Kullanıcı-BAĞIMSIZ ağır sıralama verisi (5000'e kadar kullanıcı + sayım) 60sn
+ * cache'lenir; LEADERBOARD_RANKING_TAG ile feedback/puan mutasyonunda bayatlar.
+ * Kullanıcıya-özel alanlar (isCurrentUser/needsReview/userRank) cache DIŞINDA,
+ * çağıran tarafça uygulanır. category+limit cache anahtarına girer.
+ */
+const getNonPointsRanking = unstable_cache(
+  async (category: string, limit: number) => {
+    const orderBy =
+      category === 'feedbacks'
+        ? { feedbacks: { _count: 'desc' as const } }
+        : category === 'badges'
+          ? { badges: { _count: 'desc' as const } }
+          : { referralsMade: { _count: 'desc' as const } };
+    const [allUsers, totalUsersCount] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: 'CUSTOMER' },
+        orderBy,
+        take: MAX_LEADERBOARD_FETCH,
+        select: USER_LB_SELECT,
+      }),
+      prisma.user.count({ where: { role: 'CUSTOMER' } }),
+    ]);
+    return { allUsers, totalUsersCount };
+  },
+  ['leaderboard-nonpoints'],
+  { revalidate: 60, tags: [LEADERBOARD_RANKING_TAG] }
+);
+
+/** All-time points sıralaması (kullanıcı-bağımsız top-N) — 60sn cache. */
+const getAlltimePointsRanking = unstable_cache(
+  async (limit: number) =>
+    prisma.user.findMany({
+      where: { role: 'CUSTOMER', points: { gt: 0 } },
+      select: { ...USER_LB_SELECT, xp: true },
+      orderBy: { points: 'desc' },
+      take: limit,
+    }),
+  ['leaderboard-alltime'],
+  { revalidate: 60, tags: [LEADERBOARD_RANKING_TAG] }
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,35 +100,8 @@ export async function GET(request: NextRequest) {
     };
 
     if (category !== 'points') {
-      const orderBy =
-        category === 'feedbacks'
-          ? { feedbacks: { _count: 'desc' as const } }
-          : category === 'badges'
-            ? { badges: { _count: 'desc' as const } }
-            : { referralsMade: { _count: 'desc' as const } };
-
-      const [allUsers, totalUsersCount] = await Promise.all([
-        prisma.user.findMany({
-          where: { role: 'CUSTOMER' },
-          orderBy,
-          take: MAX_LEADERBOARD_FETCH,
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            points: true,
-            level: true,
-            _count: {
-              select: {
-                feedbacks: true,
-                badges: true,
-                referralsMade: true,
-              },
-            },
-          },
-        }),
-        prisma.user.count({ where: { role: 'CUSTOMER' } }),
-      ]);
+      // Kullanıcı-bağımsız ağır sıralama: cache'li (60sn, tag ile bayatlar).
+      const { allUsers, totalUsersCount } = await getNonPointsRanking(category, limit);
 
       const sortedUsers = allUsers
         .map((user) => {
@@ -160,26 +186,8 @@ export async function GET(request: NextRequest) {
     let leaderboardData;
 
     if (period === 'alltime') {
-      // All time - just use user points directly
-      const users = await prisma.user.findMany({
-        where: {
-          role: 'CUSTOMER',
-          points: { gt: 0 },
-        },
-        select: {
-          id: true,
-          name: true,
-          image: true,
-          points: true,
-          level: true,
-          xp: true,
-          _count: {
-            select: { feedbacks: true, badges: true, referralsMade: true },
-          },
-        },
-        orderBy: { points: 'desc' },
-        take: limit,
-      });
+      // All time - kullanıcı-bağımsız top-N puan sıralaması (cache'li 60sn).
+      const users = await getAlltimePointsRanking(limit);
 
       const suspiciousIds = await getSuspiciousUserIds(users.map((u) => u.id));
 
