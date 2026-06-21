@@ -116,19 +116,33 @@ export async function generateWeeklyDigestForDealer(
     `Bu hafta ${stats.total} geri bildirim aldınız${stats.avgRating != null ? `, ortalama puan ${stats.avgRating.toFixed(2)}★` : ''}. ` +
       `${stats.negativeCount} negatif, ${stats.churnHighCount} yüksek kayıp riski. Önerilen odak: ${playbook.title}.`;
 
-  // DealerWeeklyBrief'e idempotent yaz (haftada bir).
-  await prisma.dealerWeeklyBrief.upsert({
-    where: { dealerId_weekStart: { dealerId: dealer.id, weekStart } },
-    update: { topThemes: stats.topThemes as object, recommendedAction: `${playbook.title}: ${playbook.dealerActions[0] ?? ''}` },
-    create: {
-      dealerId: dealer.id,
-      weekStart,
-      topThemes: stats.topThemes as object,
-      recommendedAction: `${playbook.title}: ${playbook.dealerActions[0] ?? ''}`,
-    },
+  // DealerWeeklyBrief'i ATOMİK oluştur: yalnızca bu (dealerId, weekStart) için
+  // İLK kez oluşturulduğunda bildirim+e-posta gönderilir. createMany(skipDuplicates)
+  // bize "yeni mi yazıldı" bilgisini count ile verir → cron retry'ı veya elle
+  // yeniden POST aynı haftada bildirim/e-postayı TEKRAR göndermez (rank 10).
+  const recommendedAction = `${playbook.title}: ${playbook.dealerActions[0] ?? ''}`;
+  const created = await prisma.dealerWeeklyBrief.createMany({
+    data: [
+      {
+        dealerId: dealer.id,
+        weekStart,
+        topThemes: stats.topThemes as object,
+        recommendedAction,
+      },
+    ],
+    skipDuplicates: true,
   });
+  const isFirstTime = created.count > 0;
+  if (!isFirstTime) {
+    // Zaten vardı: içeriği güncelle ama yeniden gönderme.
+    await prisma.dealerWeeklyBrief.update({
+      where: { dealerId_weekStart: { dealerId: dealer.id, weekStart } },
+      data: { topThemes: stats.topThemes as object, recommendedAction },
+    });
+    return { dealerId: dealer.id, status: 'skipped' };
+  }
 
-  // Bildirim (in-app her zaman).
+  // Bildirim (in-app) — yalnızca ilk üretimde.
   await prisma.notification.create({
     data: {
       userId: dealer.id,

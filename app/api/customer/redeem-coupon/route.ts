@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -12,10 +13,15 @@ export const dynamic = 'force-dynamic';
  * POST /api/customer/redeem-coupon
  * Müşteri bir kupon kodunu kullanır. Doğrulamalar: aktif, süresi geçmemiş,
  * kullanım limiti dolmamış, bu kullanıcı daha önce kullanmamış. usedCount
- * atomik guarded updateMany ile artırılır (limit yarışını engeller). Kullanım
- * AnalyticsEvent (category: coupon) olarak kaydedilir → çift kullanım kontrolü.
+ * atomik guarded updateMany ile artırılır (global limit yarışını engeller).
+ * Kullanıcı başına tek kullanım, CouponRedemption (userId, couponId) UNIQUE
+ * kaydıyla atomik garanti edilir — eşzamanlı çift-kullanım transaction içinde
+ * DB seviyesinde reddedilir (eski AnalyticsEvent ön-kontrolü racy idi).
  */
 const schema = z.object({ code: z.string().min(3).max(40) });
+
+/** Global kullanım limiti dolduğunda transaction'ı geri almak için sentinel. */
+class CouponLimitReachedError extends Error {}
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,45 +54,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Kuponun süresi dolmuş' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    // Bu kullanıcı daha önce kullandı mı? (AnalyticsEvent ile tek kullanım.)
-    const prior = await prisma.analyticsEvent.findFirst({
-      where: {
-        userId,
-        event: 'coupon_redeemed',
-        category: 'coupon',
-        data: { path: ['couponId'], equals: coupon.id },
-      },
+    // Hızlı UX ön-kontrolü (yarış-güvenli DEĞİL — gerçek garanti aşağıdaki
+    // CouponRedemption UNIQUE kaydıdır; bu sadece çoğu durumda hoş bir 409 verir).
+    const priorRedemption = await prisma.couponRedemption.findUnique({
+      where: { userId_couponId: { userId, couponId: coupon.id } },
       select: { id: true },
     });
-    if (prior) {
+    if (priorRedemption) {
       return NextResponse.json({ error: 'Bu kuponu zaten kullandınız' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    // Atomik kullanım: limitsiz (maxUses = -1) ya da usedCount < maxUses iken artır.
-    const result = await prisma.$transaction(async (tx) => {
-      const inc = await tx.coupon.updateMany({
-        where: {
-          id: coupon.id,
-          isActive: true,
-          OR: [{ maxUses: -1 }, { usedCount: { lt: coupon.maxUses } }],
-        },
-        data: { usedCount: { increment: 1 } },
+    // Atomik kullanım: önce kullanıcı-başına tek-kullanım kaydını oluştur (UNIQUE
+    // ihlali eşzamanlı ikinci isteği burada düşürür), sonra global usedCount'u
+    // guarded artır. Her ikisi de aynı transaction içinde.
+    let alreadyRedeemed = false;
+    const result = await prisma
+      .$transaction(async (tx) => {
+        // (userId, couponId) UNIQUE → ikinci eşzamanlı istek P2002 ile patlar.
+        await tx.couponRedemption.create({
+          data: { userId, couponId: coupon.id },
+        });
+
+        const inc = await tx.coupon.updateMany({
+          where: {
+            id: coupon.id,
+            isActive: true,
+            OR: [{ maxUses: -1 }, { usedCount: { lt: coupon.maxUses } }],
+          },
+          data: { usedCount: { increment: 1 } },
+        });
+        if (inc.count === 0) {
+          // Limit doldu — kullanıcı kaydını da geri al (transaction throw → rollback).
+          throw new CouponLimitReachedError();
+        }
+
+        // Analitik/iz: ödül akışıyla uyumlu, ama tek-kullanım garantisi artık
+        // CouponRedemption'da; bu sadece raporlama içindir.
+        await tx.analyticsEvent.create({
+          data: {
+            userId,
+            event: 'coupon_redeemed',
+            category: 'coupon',
+            data: { couponId: coupon.id, code: coupon.code, type: coupon.type, value: coupon.value },
+          },
+        });
+        return { ok: true as const };
+      })
+      .catch((e: unknown) => {
+        if (e instanceof CouponLimitReachedError) return { ok: false as const, reason: 'limit' as const };
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          alreadyRedeemed = true;
+          return { ok: false as const, reason: 'duplicate' as const };
+        }
+        throw e;
       });
-      if (inc.count === 0) {
-        return { ok: false as const };
-      }
-      await tx.analyticsEvent.create({
-        data: {
-          userId,
-          event: 'coupon_redeemed',
-          category: 'coupon',
-          data: { couponId: coupon.id, code: coupon.code, type: coupon.type, value: coupon.value },
-        },
-      });
-      return { ok: true as const };
-    });
 
     if (!result.ok) {
+      if (alreadyRedeemed || result.reason === 'duplicate') {
+        return NextResponse.json({ error: 'Bu kuponu zaten kullandınız' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
+      }
       return NextResponse.json({ error: 'Kupon kullanım limiti dolmuş' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
 

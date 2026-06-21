@@ -102,9 +102,15 @@ async function generateEmbedding(text: string): Promise<{ vector: number[]; mode
   const client = getEmbeddingClient();
   if (client) {
     try {
-      const response = await withRetry(() =>
-        client.embeddings.create({ model: EMBEDDING_MODEL, input: safeText })
-      );
+      // Her denemeye 5sn timeout (AbortController): yavaş/asılı sağlayıcı isteği
+      // sonsuza dek bloklamasın; süre aşımında aşağıdaki Groq/yerel'e düşeriz.
+      const response = await withRetry(() => {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 5000);
+        return client.embeddings
+          .create({ model: EMBEDDING_MODEL, input: safeText }, { signal: ac.signal })
+          .finally(() => clearTimeout(t));
+      });
       const vector = response.data?.[0]?.embedding;
       if (vector) return { vector, model: EMBEDDING_MODEL };
     } catch (err) {

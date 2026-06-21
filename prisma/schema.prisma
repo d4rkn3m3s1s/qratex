@@ -406,6 +406,12 @@ model SquadBattle {
   squad2Score Int      @default(0)
   winnerId    String?
   rewardPool  Int      @default(0)
+  /// Ödül havuzu meydan okuyandan TAHSİL EDİLDİ mi (escrow). true ise kazanana
+  /// ödenir / kazanan yoksa veya savaş iptal/ret olursa challenger'a iade edilir.
+  /// false = eski/admin savaşları (escrow yok → ödeme yapılmaz, mint engellenir).
+  rewardFunded   Boolean  @default(false)
+  /// Escrow iade edildi mi (idempotent refund guard).
+  rewardRefunded Boolean  @default(false)
   /// Meydan okumayı başlatan kullanıcı (challenge akışı). null = admin oluşturdu.
   challengedById String?
   /// Rakip klan kabul ettiğinde dolar (status: pending → active).
@@ -893,6 +899,20 @@ model DailySpin {
   @@index([userId])
 }
 
+/// Mini oyun günlük seri (streak) bonusunun günde tek kez verilmesini ATOMİK
+/// garanti eder. (userId, dayKey) UNIQUE → aynı gün iki farklı oyunun eşzamanlı
+/// tamamlanmasında yalnızca biri bu kaydı oluşturabilir, diğeri P2002 alır ve
+/// bonus verilmez (önceden count-then-act idi → Read Committed'da çift bonus).
+model GameStreakClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  dayKey    String // "YYYY-MM-DD" (UTC)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dayKey])
+  @@index([userId])
+}
+
 /// DB-backed rate limiter / login lockout. Serverless'te her Lambda kendi
 /// belleğinde olduğu ve cold start sayaçları sıfırladığı için in-memory Map
 /// güvenilir değildi; brute-force/flood koruması bu tabloya taşındı.
@@ -1285,6 +1305,19 @@ model Coupon {
 
   @@index([code])
   @@index([isActive])
+}
+
+/// Kupon kullanımı: kullanıcı başına tek kullanım garantisi. (userId, couponId)
+/// UNIQUE → eşzamanlı çift-kullanım transaction içinde DB seviyesinde reddedilir
+/// (AnalyticsEvent okuması racy idi; DailySpin/UserCosmetic ile aynı atomik desen).
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  userId    String
+  couponId  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, couponId])
+  @@index([couponId])
 }
 
 // ─────────────────────────────────────────────────────────────

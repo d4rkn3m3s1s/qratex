@@ -3,6 +3,7 @@ import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { findSimilarFeedback } from '@/lib/ai-learning';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,16 @@ export async function POST(request: NextRequest) {
       dealerId = qp;
     } else {
       dealerId = session.user.id;
+    }
+
+    // Her istek bir dış LLM embedding çağrısı + 1000 vektör üzerinde cosine tarama
+    // tetikler (düşük-maliyetli istek → ağır dış+CPU iş). Kullanıcı başına sınırla.
+    const rl = await checkRateLimitDb(`feedback_search:${session.user.id}`, 10, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Çok fazla arama. Lütfen biraz bekleyin.' },
+        { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+      );
     }
 
     const parsed = bodySchema.safeParse(await request.json());
