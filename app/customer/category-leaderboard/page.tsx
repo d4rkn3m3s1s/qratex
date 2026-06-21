@@ -5,6 +5,7 @@ import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Trophy, Star, Heart, Medal } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 
 type Cat = { category: string; dealerCount: number };
 type Row = { rank: number; dealerId: string; name: string; avgRating: number; feedbackCount: number; isFavorite: boolean };
@@ -68,7 +69,7 @@ export default function CategoryLeaderboardPage() {
       )}
 
       {loading ? (
-        <Card><CardContent className="p-6 text-sm text-muted-foreground">Yükleniyor...</CardContent></Card>
+        <Card><CardContent className="p-6"><InlineLoadingStatus /></CardContent></Card>
       ) : rows.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">

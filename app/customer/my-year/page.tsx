@@ -5,6 +5,7 @@ import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sparkles, MessageSquare, Store, Trophy, Flame, Zap, TrendingUp } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 
 interface MyYear {
   period: string;
@@ -53,7 +54,9 @@ export default function CustomerMyYearPage() {
 
       {loading ? (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">Yükleniyor...</CardContent>
+          <CardContent className="p-6">
+            <InlineLoadingStatus />
+          </CardContent>
         </Card>
       ) : !data ? (
         <Card>

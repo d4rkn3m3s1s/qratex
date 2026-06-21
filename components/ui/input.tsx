@@ -4,13 +4,21 @@ import { cn } from '@/lib/utils';
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
+  /** Hata mesajı elemanının id'si — aria-describedby ile bağlanır (erişilebilirlik). */
+  errorId?: string;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, error, ...props }, ref) => {
+  ({ className, type, error, errorId, 'aria-describedby': ariaDescribedBy, ...props }, ref) => {
+    // error → aria-invalid (ekran okuyucu hatayı duyar); errorId varsa describedby.
+    const describedBy = [ariaDescribedBy, error && errorId ? errorId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
     return (
       <input
         type={type}
+        aria-invalid={error || undefined}
+        aria-describedby={describedBy}
         className={cn(
           'flex h-11 min-h-11 w-full min-w-0 max-w-full touch-manipulation rounded-lg border bg-background px-3 py-2 text-base sm:text-sm text-foreground ring-offset-background transition-[color,background-color,border-color,box-shadow] duration-200',
           'file:border-0 file:bg-transparent file:text-sm file:font-medium',
