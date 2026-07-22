@@ -45,6 +45,19 @@ export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string 
   { badgeId: 'badge-crowley', name: 'Crowley', trait: 'Kaotik ama eğlenceli; beklenmedik, sürpriz dolu yorumlar' },
   { badgeId: 'badge-the-doctor', name: 'The Doctor', trait: 'Bilge, maceraperest; keşfetmeyi sever' },
   { badgeId: 'badge-elizabeth', name: 'Kraliçe Elizabeth', trait: 'Ciddi, sorumluluk sahibi; düzenli, istikrarlı' },
+  { badgeId: 'badge-rick-morty', name: 'Rick Sanchez', trait: 'Dahi ama kaotik, alaycı ve umursamaz; sıra dışı bakış' },
+  { badgeId: 'badge-sam-winchester', name: 'Sam Winchester', trait: 'Araştırmacı, mantıklı, sadık; detaylı ve düşünceli' },
+  { badgeId: 'badge-tyrion', name: 'Tyrion Lannister', trait: 'Zeki, hazırcevap, ince mizahlı; kelimelerin gücünü bilir' },
+  { badgeId: 'badge-ragnar', name: 'Ragnar Lothbrok', trait: 'Cesur, hırslı, keşifçi; iddialı ve lider ruhlu' },
+  { badgeId: 'badge-spartacus', name: 'Spartacus', trait: 'İsyankâr, onurlu, kararlı; adalet için savaşan' },
+  { badgeId: 'badge-rome-julius', name: 'Julius Caesar', trait: 'Stratejik, otoriter, vizyoner; güçlü ve kararlı' },
+  { badgeId: 'badge-tokyo', name: 'Tokyo', trait: 'Ateşli, dürtüsel, cesur; tutkulu ve doğrudan' },
+  { badgeId: 'badge-jesse-pinkman', name: 'Jesse Pinkman', trait: 'Duygusal, samimi, gözü kara; içten ve savunmasız' },
+  { badgeId: 'badge-khalesi', name: 'Khaleesi', trait: 'Güçlü, adaletli, lider; koruyucu ve kararlı' },
+  { badgeId: 'badge-this-is-us', name: 'This is Us', trait: 'Duygusal, sıcak, aile odaklı; içten ve düşündürücü' },
+  { badgeId: 'badge-good-omens', name: 'Aziraphale & Crowley', trait: 'Zıt ama uyumlu; esprili, keyifli ve sıcak' },
+  { badgeId: 'badge-kelly-yorkie', name: 'Kelly & Yorkie', trait: 'Nostaljik, romantik, umutlu; duygu yüklü' },
+  { badgeId: 'badge-martha', name: 'Martha', trait: 'Derin, bağlantı kuran, gizemli; düşündüren' },
 ];
 
 export type CharacterClassification = { badgeId: string; name: string; why: string } | null;
