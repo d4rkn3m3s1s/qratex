@@ -154,6 +154,7 @@ model User {
   companyTasksCreated       CompanyTask[]              @relation("CompanyTaskCreator")
   taskCommentsAuthored      TaskComment[]              @relation("TaskCommentAuthor")
   taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
+  taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2693,11 +2694,12 @@ model CompanyTask {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  assignedTo User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
-  createdBy  User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  checklist  TaskChecklistItem[]
-  comments   TaskComment[]
-  activities TaskActivity[]
+  assignedTo  User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy   User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  checklist   TaskChecklistItem[]
+  comments    TaskComment[]
+  activities  TaskActivity[]
+  attachments TaskAttachment[]
 
   @@index([status])
   @@index([department])
@@ -2737,7 +2739,7 @@ model TaskActivity {
   id        String   @id @default(cuid())
   taskId    String
   actorId   String
-  action    String   // "created" | "status" | "assigned" | "commented" | "checklist" | "priority"
+  action    String   // "created" | "status" | "assigned" | "commented" | "checklist" | "priority" | "mentioned" | "attachment"
   detail    String?  // insan-okunur özet
   createdAt DateTime @default(now())
 
@@ -2745,4 +2747,21 @@ model TaskActivity {
   actor User        @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
+}
+
+// Ekip görevine yüklenen dosya eki (resim/PDF/belge). Dosya public/images/uploads/tasks altında.
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String
+  uploadedById String
+  filename   String   // orijinal ad (gösterim)
+  path       String   // public URL yolu
+  mime       String
+  size       Int      // bayt
+  createdAt  DateTime @default(now())
+
+  task       CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("TaskAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
 }

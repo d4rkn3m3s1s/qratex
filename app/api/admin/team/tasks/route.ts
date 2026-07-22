@@ -18,6 +18,7 @@ const createSchema = z.object({
   priority: z.enum(PRIORITIES).default('medium'),
   department: z.string().max(50).optional().nullable(),
   weekKey: z.string().max(10).optional().nullable(),
+  tags: z.string().max(200).optional().nullable(),
   assignedToId: z.string().optional().nullable(),
   dueAt: z.string().datetime().optional().nullable(),
 });
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
     include: {
       assignedTo: { select: { id: true, name: true, email: true, image: true } },
       createdBy: { select: { id: true, name: true } },
+      _count: { select: { comments: true, attachments: true, checklist: true } },
     },
   });
 
@@ -72,6 +74,7 @@ export async function POST(req: NextRequest) {
       priority: d.priority,
       department: d.department ?? null,
       weekKey: d.weekKey ?? null,
+      tags: d.tags ?? null,
       assignedToId: d.assignedToId || null,
       createdById: auth.session.user.id,
       dueAt: d.dueAt ? new Date(d.dueAt) : null,
@@ -124,6 +127,7 @@ export async function PUT(req: NextRequest) {
   if (d.priority !== undefined) data.priority = d.priority;
   if (d.department !== undefined) data.department = d.department;
   if (d.weekKey !== undefined) data.weekKey = d.weekKey;
+  if (d.tags !== undefined) data.tags = d.tags;
   if (d.dueAt !== undefined) data.dueAt = d.dueAt ? new Date(d.dueAt) : null;
   if (d.assignedToId !== undefined) {
     data.assignedTo = d.assignedToId ? { connect: { id: d.assignedToId } } : { disconnect: true };

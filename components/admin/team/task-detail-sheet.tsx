@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,20 +9,55 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks } from 'lucide-react';
+import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks, Paperclip, FileText, Download } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { toast } from '@/lib/admin-toast';
+
+export type TeamMember = { id: string; name: string | null; email: string; image: string | null };
+
+/** Yorum metnindeki @isim geçişlerini vurgulu render eder. Üye adlarıyla eşleşenler primary rozet. */
+function renderCommentText(text: string, members: TeamMember[]): React.ReactNode {
+  // @ + [harf/rakam/nokta/alt-çizgi/boşluk yok] — isim tek kelime varsayımı yerine üye adlarını dene.
+  const parts: React.ReactNode[] = [];
+  const regex = /@([\p{L}0-9_.]+)/gu;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Fragment key={key++}>{text.slice(last, m.index)}</Fragment>);
+    const handle = m[1].toLowerCase();
+    const matched = members.some((mem) => {
+      const nm = (mem.name || mem.email.split('@')[0]).toLowerCase().replace(/\s+/g, '');
+      return nm.startsWith(handle) || handle.startsWith(nm.slice(0, handle.length));
+    });
+    parts.push(
+      <span key={key++} className={cn('rounded px-1 font-medium', matched ? 'bg-primary/15 text-primary' : 'text-primary/70')}>
+        @{m[1]}
+      </span>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<Fragment key={key++}>{text.slice(last)}</Fragment>);
+  return parts;
+}
 
 type ChecklistItem = { id: string; text: string; done: boolean };
 type Comment = { id: string; text: string; createdAt: string; author: { id: string; name: string | null; email: string; image: string | null } };
 type Activity = { id: string; action: string; detail: string | null; createdAt: string; actor: { name: string | null } };
+type Attachment = { id: string; filename: string; path: string; mime: string; size: number; createdAt: string; uploadedBy: { name: string | null } };
 type TaskDetail = {
   id: string; title: string; description: string | null; status: string; priority: string;
   department: string | null; dueAt: string | null;
   assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
   createdBy: { name: string | null } | null;
-  checklist: ChecklistItem[]; comments: Comment[]; activities: Activity[];
+  checklist: ChecklistItem[]; comments: Comment[]; activities: Activity[]; attachments: Attachment[];
 };
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', done: 'Bitti' };
 const STATUS_STYLE: Record<string, string> = {
@@ -38,13 +73,95 @@ function fmt(iso: string): string {
   return `${d.getUTCDate()} ${TR_MONTHS[d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged }: {
+export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members = [] }: {
   taskId: string | null; open: boolean; onOpenChange: (o: boolean) => void; onChanged?: () => void;
+  members?: TeamMember[];
 }) {
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [newComment, setNewComment] = useState('');
+
+  // Dosya eki yükleme durumu
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const uploadFile = async (file: File) => {
+    if (!taskId) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/admin/team/tasks/${taskId}/attachments`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Yüklenemedi');
+      toast.success('Dosya eklendi');
+      load();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Dosya yüklenemedi');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteAttachment = async (attachmentId: string) => {
+    if (!taskId) return;
+    await fetch(`/api/admin/team/tasks/${taskId}/attachments?attachmentId=${attachmentId}`, { method: 'DELETE' }).catch(() => {});
+    load();
+    onChanged?.();
+  };
+
+  // @mention autocomplete durumu
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null); // null = kapalı
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return members
+      .filter((m) => (m.name || m.email).toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [mentionQuery, members]);
+
+  // Metinden @bahsedilen üye id'lerini çıkar (mail bildirimi için).
+  const resolveMentions = useCallback((text: string): string[] => {
+    const ids = new Set<string>();
+    const regex = /@([\p{L}0-9_.]+)/gu;
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(text)) !== null) {
+      const handle = m[1].toLowerCase();
+      for (const mem of members) {
+        const nm = (mem.name || mem.email.split('@')[0]).toLowerCase().replace(/\s+/g, '');
+        if (nm.startsWith(handle) || handle.startsWith(nm)) { ids.add(mem.id); break; }
+      }
+    }
+    return [...ids];
+  }, [members]);
+
+  // Textarea değişince @ tetikleyicisini yakala (imlecin solundaki son @kelime).
+  const onCommentChange = (val: string) => {
+    setNewComment(val);
+    const caret = commentRef.current?.selectionStart ?? val.length;
+    const before = val.slice(0, caret);
+    const match = /(?:^|\s)@([\p{L}0-9_.]*)$/u.exec(before);
+    if (match) { setMentionQuery(match[1]); setMentionIndex(0); }
+    else setMentionQuery(null);
+  };
+
+  // Seçilen üyeyi @isim olarak imlecin konumuna yerleştir.
+  const insertMention = (mem: TeamMember) => {
+    const el = commentRef.current;
+    const handle = (mem.name || mem.email.split('@')[0]).replace(/\s+/g, '');
+    const caret = el?.selectionStart ?? newComment.length;
+    const before = newComment.slice(0, caret).replace(/@([\p{L}0-9_.]*)$/u, `@${handle} `);
+    const after = newComment.slice(caret);
+    const next = before + after;
+    setNewComment(next);
+    setMentionQuery(null);
+    requestAnimationFrame(() => { el?.focus(); const pos = before.length; el?.setSelectionRange(pos, pos); });
+  };
 
   const load = useCallback(async () => {
     if (!taskId) return;
@@ -132,6 +249,74 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged }: {
               </div>
             </section>
 
+            {/* Ekler (dosya) */}
+            <section className="mt-6 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="flex items-center gap-2 text-sm font-semibold"><Paperclip className="h-4 w-4" /> Ekler</h4>
+                {task.attachments.length > 0 && <span className="text-xs text-muted-foreground">{task.attachments.length}</span>}
+              </div>
+
+              {/* Görsel ekler için önizleme ızgarası */}
+              {task.attachments.some((a) => a.mime.startsWith('image/')) && (
+                <div className="grid grid-cols-3 gap-2">
+                  {task.attachments.filter((a) => a.mime.startsWith('image/')).map((a) => (
+                    <a key={a.id} href={a.path} target="_blank" rel="noopener noreferrer"
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-border/60 bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={a.path} alt={a.filename} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                      <button
+                        onClick={(e) => { e.preventDefault(); deleteAttachment(a.id); }}
+                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label="Sil"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-white" />
+                      </button>
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {/* Görsel olmayan ekler (PDF/belge) liste */}
+              <div className="space-y-1.5">
+                {task.attachments.filter((a) => !a.mime.startsWith('image/')).map((a) => (
+                  <div key={a.id} className="group flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-red-500/10 text-red-500">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{a.filename}</p>
+                      <p className="text-[10px] text-muted-foreground">{formatSize(a.size)} · {a.uploadedBy.name || 'Ekip'}</p>
+                    </div>
+                    <a href={a.path} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="İndir">
+                      <Download className="h-4 w-4" />
+                    </a>
+                    <button onClick={() => deleteAttachment(a.id)} className="opacity-0 group-hover:opacity-100" aria-label="Sil">
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Yükleme alanı — tıkla veya sürükle-bırak */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); }}
+                disabled={uploading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 py-3 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-60"
+              >
+                {uploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…</> : <><Plus className="h-4 w-4" /> Dosya ekle (resim/PDF, max 8MB)</>}
+              </button>
+            </section>
+
             {/* Yorumlar */}
             <section className="mt-6 space-y-3">
               <h4 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="h-4 w-4" /> Yorumlar</h4>
@@ -147,7 +332,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged }: {
                         <span className="text-xs font-semibold">{c.author.name || c.author.email}</span>
                         <span className="text-[10px] text-muted-foreground">{fmt(c.createdAt)}</span>
                       </div>
-                      <p className="mt-0.5 whitespace-pre-wrap text-sm">{c.text}</p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-sm">{renderCommentText(c.text, members)}</p>
                     </div>
                     <button onClick={() => act({ op: 'delete_comment', commentId: c.id })} className="opacity-0 group-hover:opacity-100" aria-label="Sil">
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
@@ -156,9 +341,55 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged }: {
                 ))}
                 {task.comments.length === 0 && <p className="text-xs text-muted-foreground/60">Henüz yorum yok</p>}
               </div>
-              <div className="flex gap-2">
-                <Textarea placeholder="Yorum yaz…" value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} className="resize-none" />
-                <Button size="sm" onClick={() => { if (newComment.trim()) { act({ op: 'add_comment', text: newComment }); setNewComment(''); } }}>
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <Textarea
+                    ref={commentRef}
+                    placeholder="Yorum yaz… (@ ile birini etiketle)"
+                    value={newComment}
+                    onChange={(e) => onCommentChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (mentionQuery !== null && mentionMatches.length > 0) {
+                        if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => (i + 1) % mentionMatches.length); return; }
+                        if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length); return; }
+                        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionMatches[mentionIndex]); return; }
+                        if (e.key === 'Escape') { setMentionQuery(null); return; }
+                      }
+                    }}
+                    rows={2}
+                    className="resize-none"
+                  />
+                  {/* @mention autocomplete popover */}
+                  {mentionQuery !== null && mentionMatches.length > 0 && (
+                    <div className="absolute bottom-full left-0 z-50 mb-1 w-64 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
+                      {mentionMatches.map((mem, i) => (
+                        <button
+                          key={mem.id}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); insertMention(mem); }}
+                          onMouseEnter={() => setMentionIndex(i)}
+                          className={cn('flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-sm transition-colors',
+                            i === mentionIndex ? 'bg-primary/10' : 'hover:bg-muted/50')}
+                        >
+                          <Avatar className="h-6 w-6">
+                            {mem.image ? <AvatarImage src={mem.image} /> : null}
+                            <AvatarFallback className="text-[9px]">{getInitials(mem.name || mem.email)}</AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{mem.name || mem.email.split('@')[0]}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">{mem.email}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button size="sm" className="self-end" onClick={() => {
+                  if (newComment.trim()) {
+                    act({ op: 'add_comment', text: newComment, mentions: resolveMentions(newComment) });
+                    setNewComment(''); setMentionQuery(null);
+                  }
+                }}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
@@ -170,7 +401,10 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged }: {
               <div className="space-y-1.5">
                 {task.activities.map((a) => (
                   <div key={a.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckSquare className="h-3 w-3 shrink-0" />
+                    {a.action === 'attachment' ? <Paperclip className="h-3 w-3 shrink-0" />
+                      : a.action === 'mentioned' ? <MessageSquare className="h-3 w-3 shrink-0" />
+                        : a.action === 'commented' ? <MessageSquare className="h-3 w-3 shrink-0" />
+                          : <CheckSquare className="h-3 w-3 shrink-0" />}
                     <span className="font-medium text-foreground/80">{a.actor.name || 'Biri'}</span>
                     <span>{a.detail || a.action}</span>
                     <span className="ml-auto shrink-0 opacity-60">{fmt(a.createdAt)}</span>

@@ -13,10 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
+  ListChecks, MessageSquare, Paperclip,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
-import { weekKeyOf, shiftWeekKey, weekKeyLabel } from '@/lib/team-week';
+import { weekKeyOf, shiftWeekKey, weekKeyLabel, mondayFromWeekKey } from '@/lib/team-week';
 import { TaskDetailSheet } from '@/components/admin/team/task-detail-sheet';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
@@ -25,8 +26,9 @@ type Member = { id: string; name: string | null; email: string; image: string | 
 type Department = { id: string; slug: string; name: string; color: string };
 type Task = {
   id: string; title: string; description: string | null; status: string; priority: string;
-  department: string | null; weekKey: string | null; dueAt: string | null;
+  department: string | null; weekKey: string | null; dueAt: string | null; tags: string | null;
   assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
+  _count?: { comments: number; attachments: number; checklist: number };
 };
 
 const COLUMNS = [
@@ -34,6 +36,26 @@ const COLUMNS = [
   { key: 'in_progress', label: 'Devam Ediyor', emoji: '⚡', dot: 'bg-amber-400', ring: 'ring-amber-400/40', head: 'text-amber-600 dark:text-amber-400' },
   { key: 'done', label: 'Bitti', emoji: '✅', dot: 'bg-emerald-400', ring: 'ring-emerald-400/40', head: 'text-emerald-600 dark:text-emerald-400' },
 ] as const;
+
+// Etiket rozetleri: CSV'yi ayrıştır, isme göre deterministik renk paleti ata.
+const TAG_PALETTE = [
+  'bg-violet-500/15 text-violet-600 dark:text-violet-300',
+  'bg-sky-500/15 text-sky-600 dark:text-sky-300',
+  'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
+  'bg-rose-500/15 text-rose-600 dark:text-rose-300',
+  'bg-amber-500/15 text-amber-600 dark:text-amber-300',
+  'bg-teal-500/15 text-teal-600 dark:text-teal-300',
+  'bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300',
+];
+function parseTags(csv: string | null | undefined): string[] {
+  if (!csv) return [];
+  return [...new Set(csv.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 8);
+}
+function tagColor(tag: string): string {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return TAG_PALETTE[h % TAG_PALETTE.length];
+}
 
 const PRIORITY_STYLE: Record<string, string> = {
   high: 'bg-red-500/15 text-red-600 dark:text-red-400',
@@ -56,11 +78,11 @@ export default function TeamPage() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people' | 'calendar'>('kanban');
 
   // Yeni görev diyaloğu
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', department: '', assignedToId: '' });
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '' });
   const [saving, setSaving] = useState(false);
 
   const loadMeta = useCallback(async () => {
@@ -145,13 +167,14 @@ export default function TeamPage() {
         body: JSON.stringify({
           title: form.title, description: form.description || null, priority: form.priority,
           department: form.department || null, assignedToId: form.assignedToId || null, weekKey,
+          tags: form.tags || null, dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error();
       toast.success('Görev eklendi');
       setDialogOpen(false);
-      setForm({ title: '', description: '', priority: 'medium', department: '', assignedToId: '' });
+      setForm({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '' });
       loadTasks();
     } catch {
       toast.error('Görev eklenemedi');
@@ -209,7 +232,7 @@ export default function TeamPage() {
 
         {/* Görünüm modu geçişi */}
         <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/50 p-1">
-          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler']] as const).map(([mode, label]) => (
+          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler'], ['calendar', 'Takvim']] as const).map(([mode, label]) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -339,6 +362,17 @@ export default function TeamPage() {
                               {departments.find((d) => d.slug === task.department)?.name ?? task.department}
                             </span>
                           )}
+                          {task.dueAt && (
+                            <span className={cn(
+                              'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                              new Date(task.dueAt) < new Date() && task.status !== 'done'
+                                ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                : 'bg-muted text-muted-foreground'
+                            )}>
+                              <CalendarDays className="h-3 w-3" />
+                              {new Date(task.dueAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                            </span>
+                          )}
                           {task.assignedTo && (
                             <Avatar className="h-5 w-5">
                               {task.assignedTo.image ? <AvatarImage src={task.assignedTo.image} /> : null}
@@ -346,6 +380,23 @@ export default function TeamPage() {
                             </Avatar>
                           )}
                         </div>
+                        {parseTags(task.tags).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {parseTags(task.tags).map((tag) => (
+                              <span key={tag} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', tagColor(tag))}>
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Meta göstergeleri: alt görev / yorum / ek sayısı */}
+                        {task._count && (task._count.checklist > 0 || task._count.comments > 0 || task._count.attachments > 0) && (
+                          <div className="mt-2 flex items-center gap-2.5 text-[10px] text-muted-foreground">
+                            {task._count.checklist > 0 && <span className="flex items-center gap-0.5"><ListChecks className="h-3 w-3" />{task._count.checklist}</span>}
+                            {task._count.comments > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span>}
+                            {task._count.attachments > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{task._count.attachments}</span>}
+                          </div>
+                        )}
                       </div>
                       {isManager && (
                         <button onClick={() => deleteTask(task.id)} className="opacity-0 transition-opacity group-hover:opacity-100" aria-label="Sil">
@@ -381,8 +432,20 @@ export default function TeamPage() {
                     task.status === 'done' ? 'bg-emerald-500' : task.status === 'in_progress' ? 'bg-amber-500' : 'bg-slate-400')} />
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-sm font-medium', task.status === 'done' && 'text-muted-foreground line-through')}>{task.title}</span>
-                    {task.department && <span className="text-xs text-muted-foreground">{departments.find((d) => d.slug === task.department)?.name ?? task.department}</span>}
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {task.department && <span className="text-xs text-muted-foreground">{departments.find((d) => d.slug === task.department)?.name ?? task.department}</span>}
+                      {parseTags(task.tags).map((tag) => (
+                        <span key={tag} className={cn('rounded px-1 py-0.5 text-[9px] font-medium', tagColor(tag))}>#{tag}</span>
+                      ))}
+                    </span>
                   </span>
+                  {task.dueAt && (
+                    <span className={cn('hidden shrink-0 items-center gap-1 text-[11px] sm:flex',
+                      new Date(task.dueAt) < new Date() && task.status !== 'done' ? 'text-red-500' : 'text-muted-foreground')}>
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {new Date(task.dueAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
                   <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', PRIORITY_STYLE[task.priority])}>{PRIORITY_LABEL[task.priority]}</span>
                   {task.assignedTo && (
                     <Avatar className="h-6 w-6">
@@ -395,7 +458,7 @@ export default function TeamPage() {
             </div>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === 'people' ? (
         /* Kişiler görünümü — kim ne yapıyor */
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {(() => {
@@ -434,6 +497,14 @@ export default function TeamPage() {
           })()}
           {tasks.length === 0 && <p className="col-span-full py-12 text-center text-sm text-muted-foreground">Bu hafta görev yok</p>}
         </div>
+      ) : (
+        /* Takvim görünümü — haftanın 7 günü, göreve dueAt bazlı yerleşim */
+        <CalendarView
+          tasks={tasks}
+          weekKey={weekKey}
+          departments={departments}
+          onOpenTask={setDetailId}
+        />
       )}
 
       {/* Yeni görev diyaloğu — ferah, etiketli, öncelik renk butonlu */}
@@ -526,6 +597,35 @@ export default function TeamPage() {
                 </Select>
               </div>
             </div>
+
+            {/* Etiketler + bitiş tarihi */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Etiketler</label>
+                <Input
+                  placeholder="tasarım, acil, v2…"
+                  value={form.tags}
+                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  className="h-11"
+                />
+                {parseTags(form.tags).length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {parseTags(form.tags).map((tag) => (
+                      <span key={tag} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', tagColor(tag))}>#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Bitiş Tarihi</label>
+                <Input
+                  type="date"
+                  value={form.dueAt}
+                  onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="border-t border-border/50 pt-4">
@@ -543,7 +643,137 @@ export default function TeamPage() {
         open={detailId !== null}
         onOpenChange={(o) => { if (!o) setDetailId(null); }}
         onChanged={loadTasks}
+        members={members}
       />
+    </div>
+  );
+}
+
+/* ── Takvim görünümü ─────────────────────────────────────────────
+   Haftanın 7 günü sütun olarak; her görev dueAt'ına göre yerleşir.
+   Tarihi olmayanlar ayrı "Tarihsiz" bölmesinde toplanır. UTC bazlı,
+   hydration-güvenli (sabit gün adları). */
+const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
+function CalendarView({
+  tasks, weekKey, departments, onOpenTask,
+}: {
+  tasks: Task[];
+  weekKey: string;
+  departments: Department[];
+  onOpenTask: (id: string) => void;
+}) {
+  const days = useMemo(() => {
+    const monday = mondayFromWeekKey(weekKey);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setUTCDate(d.getUTCDate() + i);
+      return d;
+    });
+  }, [weekKey]);
+
+  // Görevleri gün anahtarına (YYYY-MM-DD, UTC) göre grupla + tarihsizler.
+  const { byDay, undated } = useMemo(() => {
+    const map: Record<string, Task[]> = {};
+    const und: Task[] = [];
+    for (const t of tasks) {
+      if (!t.dueAt) { und.push(t); continue; }
+      const d = new Date(t.dueAt);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      (map[key] ??= []).push(t);
+    }
+    return { byDay: map, undated: und };
+  }, [tasks]);
+
+  const todayKey = (() => {
+    const n = new Date();
+    return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, '0')}-${String(n.getUTCDate()).padStart(2, '0')}`;
+  })();
+
+  const dayKeyOf = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
+        {days.map((d, i) => {
+          const key = dayKeyOf(d);
+          const dayTasks = byDay[key] ?? [];
+          const isToday = key === todayKey;
+          return (
+            <div
+              key={key}
+              className={cn(
+                'flex min-h-[160px] flex-col rounded-2xl border bg-card/40 p-2.5 transition-colors',
+                isToday ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/50'
+              )}
+            >
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className={cn('text-xs font-bold', isToday ? 'text-primary' : 'text-muted-foreground')}>
+                  {DAY_NAMES[i]}
+                </span>
+                <span className={cn(
+                  'grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs font-semibold',
+                  isToday ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+                )}>
+                  {d.getUTCDate()}
+                </span>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {dayTasks.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => onOpenTask(t.id)}
+                    className={cn(
+                      'block w-full rounded-lg border-l-2 bg-background p-2 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md',
+                      t.status === 'done' ? 'border-l-emerald-400' : t.status === 'in_progress' ? 'border-l-amber-400' : 'border-l-slate-400'
+                    )}
+                  >
+                    <span className={cn('block truncate text-xs font-medium leading-tight', t.status === 'done' && 'text-muted-foreground line-through')}>
+                      {t.title}
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className={cn('rounded px-1 py-0.5 text-[9px] font-semibold', PRIORITY_STYLE[t.priority])}>
+                        {PRIORITY_LABEL[t.priority]}
+                      </span>
+                      {t.assignedTo && (
+                        <Avatar className="h-4 w-4">
+                          {t.assignedTo.image ? <AvatarImage src={t.assignedTo.image} /> : null}
+                          <AvatarFallback className="text-[8px]">{getInitials(t.assignedTo.name || t.assignedTo.email)}</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </span>
+                  </button>
+                ))}
+                {dayTasks.length === 0 && (
+                  <div className="grid h-full min-h-[80px] place-items-center text-[10px] text-muted-foreground/40">—</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {undated.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Tarihsiz görevler ({undated.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {undated.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => onOpenTask(t.id)}
+                className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/50"
+              >
+                <span className={cn('h-2 w-2 shrink-0 rounded-full', t.status === 'done' ? 'bg-emerald-500' : t.status === 'in_progress' ? 'bg-amber-500' : 'bg-slate-400')} />
+                <span className={cn('truncate max-w-[180px]', t.status === 'done' && 'text-muted-foreground line-through')}>{t.title}</span>
+                {t.department && <span className="text-muted-foreground/70">· {departments.find((dep) => dep.slug === t.department)?.name ?? t.department}</span>}
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -28,6 +28,34 @@ export async function sendTaskAssignedEmail(opts: {
   } catch { /* mail hatası akışı bozmasın */ }
 }
 
+/** Yorumda @bahsedilen kişiye bildirim maili. */
+export async function sendMentionEmail(opts: {
+  to: string; mentionName?: string | null; byName?: string | null; taskTitle: string; commentText: string;
+}): Promise<void> {
+  try {
+    const origin = getPublicAppOrigin();
+    const link = `${origin}/admin/ekip`;
+    const snippet = opts.commentText.length > 240 ? `${opts.commentText.slice(0, 240)}…` : opts.commentText;
+    const bodyLines = [
+      opts.mentionName ? `Merhaba ${opts.mentionName},` : 'Merhaba,',
+      `<strong>${opts.byName || 'Bir ekip üyesi'}</strong> seni bir görev yorumunda etiketledi.`,
+      `Görev: <strong>${opts.taskTitle}</strong>`,
+      `“${snippet}”`,
+    ];
+    const html = buildTransactionalEmailHtml({
+      heading: 'Bir Yorumda Etiketlendin 💬', bodyHtml: bodyLines.join('<br>'),
+      cta: { href: link, label: 'Yoruma Git' },
+      footnoteHtml: 'QRateX ekip yönetimi bildirimi.',
+    });
+    const text = buildTransactionalPlainText({
+      heading: 'Bir Yorumda Etiketlendin',
+      bodyLines: [`${opts.byName || 'Biri'} seni "${opts.taskTitle}" görevinde etiketledi.`, snippet],
+      cta: { href: link, label: 'Yoruma Git' },
+    });
+    await sendTransactionalEmail({ to: opts.to, subject: `💬 ${opts.byName || 'Biri'} seni etiketledi: ${opts.taskTitle}`, html, text, from });
+  } catch { /* sessiz */ }
+}
+
 /** Haftalık hatırlatma: kişinin açık (tamamlanmamış) görevlerini özetler. */
 export async function sendWeeklyReminderEmail(opts: {
   to: string; name?: string | null; openTasks: { title: string; priority: string }[];
