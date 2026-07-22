@@ -30,9 +30,9 @@ type Task = {
 };
 
 const COLUMNS = [
-  { key: 'todo', label: 'Yapılacak', accent: 'border-slate-400/40' },
-  { key: 'in_progress', label: 'Devam Ediyor', accent: 'border-amber-400/40' },
-  { key: 'done', label: 'Bitti', accent: 'border-emerald-400/40' },
+  { key: 'todo', label: 'Yapılacak', emoji: '📋', dot: 'bg-slate-400', ring: 'ring-slate-400/30', head: 'text-slate-600 dark:text-slate-300' },
+  { key: 'in_progress', label: 'Devam Ediyor', emoji: '⚡', dot: 'bg-amber-400', ring: 'ring-amber-400/40', head: 'text-amber-600 dark:text-amber-400' },
+  { key: 'done', label: 'Bitti', emoji: '✅', dot: 'bg-emerald-400', ring: 'ring-emerald-400/40', head: 'text-emerald-600 dark:text-emerald-400' },
 ] as const;
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -54,6 +54,7 @@ export default function TeamPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people'>('kanban');
 
@@ -165,7 +166,7 @@ export default function TeamPage() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-7 pb-16">
       <AdminPremiumHero
         eyebrow="Ekip Yönetimi"
         title="Haftalık Görev Panosu"
@@ -288,29 +289,40 @@ export default function TeamPage() {
           <Loader2 className="size-6 animate-spin" /> Yükleniyor…
         </div>
       ) : viewMode === 'kanban' ? (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-3">
           {COLUMNS.map((col) => (
             <div
               key={col.key}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => { if (dragId) moveTask(dragId, col.key); setDragId(null); }}
-              className={cn('rounded-2xl border-2 border-dashed bg-card/30 p-3', col.accent)}
+              onDragOver={(e) => { e.preventDefault(); if (dragOverCol !== col.key) setDragOverCol(col.key); }}
+              onDragLeave={() => setDragOverCol((c) => (c === col.key ? null : c))}
+              onDrop={() => { if (dragId) moveTask(dragId, col.key); setDragId(null); setDragOverCol(null); }}
+              className={cn(
+                'rounded-2xl border-2 bg-card/40 p-3 transition-all duration-200',
+                dragOverCol === col.key && dragId
+                  ? cn('border-solid ring-2 scale-[1.01]', col.ring, 'bg-card/70')
+                  : 'border-dashed border-border/50'
+              )}
             >
               <div className="mb-3 flex items-center justify-between px-1">
-                <h3 className="text-sm font-semibold">{col.label}</h3>
-                <Badge variant="outline">{tasksByCol[col.key].length}</Badge>
+                <h3 className={cn('flex items-center gap-2 text-sm font-bold', col.head)}>
+                  <span className="text-base">{col.emoji}</span>
+                  {col.label}
+                </h3>
+                <span className={cn('grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-bold text-white', col.dot)}>
+                  {tasksByCol[col.key].length}
+                </span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {tasksByCol[col.key].map((task) => (
                   <div
                     key={task.id}
                     draggable={isManager}
                     onDragStart={() => setDragId(task.id)}
-                    onDragEnd={() => setDragId(null)}
+                    onDragEnd={() => { setDragId(null); setDragOverCol(null); }}
                     className={cn(
-                      'group rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm transition-all',
-                      isManager && 'cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-md',
-                      dragId === task.id && 'opacity-50'
+                      'group rounded-xl border border-border/60 bg-background p-3.5 shadow-sm transition-all duration-200',
+                      isManager && 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg',
+                      dragId === task.id && 'rotate-1 opacity-40 shadow-xl'
                     )}
                   >
                     <div className="flex items-start gap-2">
@@ -344,7 +356,10 @@ export default function TeamPage() {
                   </div>
                 ))}
                 {tasksByCol[col.key].length === 0 && (
-                  <p className="py-6 text-center text-xs text-muted-foreground/60">Boş</p>
+                  <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border/40 py-8 text-muted-foreground/50">
+                    <span className="text-2xl opacity-40">{col.emoji}</span>
+                    <p className="text-xs">Buraya sürükle</p>
+                  </div>
                 )}
               </div>
             </div>
@@ -421,41 +436,95 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Yeni görev diyaloğu */}
+      {/* Yeni görev diyaloğu — ferah, etiketli, öncelik renk butonlu */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Yeni Görev</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Görev başlığı" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <Textarea placeholder="Açıklama (opsiyonel)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-            <div className="grid grid-cols-2 gap-3">
-              <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
-                <SelectTrigger><SelectValue placeholder="Öncelik" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="high">Yüksek</SelectItem>
-                  <SelectItem value="medium">Orta</SelectItem>
-                  <SelectItem value="low">Düşük</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={form.department || 'none'} onValueChange={(v) => setForm({ ...form, department: v === 'none' ? '' : v })}>
-                <SelectTrigger><SelectValue placeholder="Departman" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Genel</SelectItem>
-                  {departments.map((d) => <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="border-b border-border/50 pb-4">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary/15 text-primary">
+                <Plus className="h-5 w-5" />
+              </span>
+              Yeni Görev
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Başlık</label>
+              <Input
+                placeholder="Ne yapılacak?"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className="h-11 text-base"
+                autoFocus
+              />
             </div>
-            <Select value={form.assignedToId || 'none'} onValueChange={(v) => setForm({ ...form, assignedToId: v === 'none' ? '' : v })}>
-              <SelectTrigger><SelectValue placeholder="Atanan kişi" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Atanmadı</SelectItem>
-                {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
-              </SelectContent>
-            </Select>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Açıklama</label>
+              <Textarea
+                placeholder="Detay ekle (opsiyonel)…"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+
+            {/* Öncelik — renkli seçim butonları (dropdown yerine) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Öncelik</label>
+              <div className="grid grid-cols-3 gap-2">
+                {([['low', 'Düşük', 'slate'], ['medium', 'Orta', 'amber'], ['high', 'Yüksek', 'red']] as const).map(([val, label, c]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setForm({ ...form, priority: val })}
+                    className={cn(
+                      'flex items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 text-sm font-medium transition-all',
+                      form.priority === val
+                        ? c === 'red' ? 'border-red-400 bg-red-500/10 text-red-600 dark:text-red-400'
+                          : c === 'amber' ? 'border-amber-400 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'border-slate-400 bg-slate-500/10 text-slate-600 dark:text-slate-300'
+                        : 'border-border/50 text-muted-foreground hover:border-border'
+                    )}
+                  >
+                    <span className={cn('h-2 w-2 rounded-full', c === 'red' ? 'bg-red-500' : c === 'amber' ? 'bg-amber-500' : 'bg-slate-400')} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Departman</label>
+                <Select value={form.department || 'none'} onValueChange={(v) => setForm({ ...form, department: v === 'none' ? '' : v })}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Departman" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Genel</SelectItem>
+                    {departments.map((d) => <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Atanan</label>
+                <Select value={form.assignedToId || 'none'} onValueChange={(v) => setForm({ ...form, assignedToId: v === 'none' ? '' : v })}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Kişi seç" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Atanmadı</SelectItem>
+                    {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="border-t border-border/50 pt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>İptal</Button>
-            <Button onClick={createTask} disabled={saving}>{saving ? 'Ekleniyor…' : 'Ekle'}</Button>
+            <Button onClick={createTask} disabled={saving || !form.title.trim()} className="gap-1.5">
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Ekleniyor…</> : <><Plus className="h-4 w-4" /> Görevi Ekle</>}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
