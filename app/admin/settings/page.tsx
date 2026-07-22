@@ -829,6 +829,7 @@ export default function AdminSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
+          <BootstrapActionButton action="seed_demo_cafes" label="3 Demo Kafe Ekle" />
           <BootstrapActionButton action="seed_insights_categories" label="Sektör verisi üret" />
           <BootstrapActionButton action="seed_suspicious_activities" label="Şüpheli aktivite üret" />
           <BootstrapActionButton action="seed_ai_quality_samples" label="AI kalite örneği üret" />

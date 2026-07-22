@@ -15,7 +15,8 @@ type BootstrapAction =
   | 'seed_ai_quality_samples'
   | 'clear_insights_categories'
   | 'clear_suspicious_activities'
-  | 'clear_ai_quality_samples';
+  | 'clear_ai_quality_samples'
+  | 'seed_demo_cafes';
 
 type BootstrapActionButtonProps = {
   action: BootstrapAction;
