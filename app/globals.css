@@ -7,7 +7,9 @@
      LIGHT MODE (DEFAULT)
   ───────────────────────────────────────────────────────────── */
   :root {
-    --background: 0 0% 98%;
+    /* Açık tema: full beyaz DEĞİL — hafif lila/mor tonlu zemin (marka moru hue 262).
+       Kartlar hâlâ beyaza yakın ama zemin ve blok yüzeyleri hafif renkli, daha canlı. */
+    --background: 264 40% 98%;
     --foreground: 240 10% 10%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 10%;
@@ -15,16 +17,16 @@
     --popover-foreground: 240 10% 10%;
     --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 92%;
+    --secondary: 262 30% 93%;
     --secondary-foreground: 240 10% 10%;
-    --muted: 240 5% 94%;
+    --muted: 264 30% 95%;
     --muted-foreground: 240 5% 45%;
-    --accent: 262 80% 96%;
+    --accent: 262 70% 95%;
     --accent-foreground: 262 83% 40%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 88%;
-    --input: 240 6% 88%;
+    --border: 262 20% 89%;
+    --input: 262 20% 89%;
     --ring: 262 83% 58%;
     --radius: 0.75rem;
     --success: 142 76% 36%;

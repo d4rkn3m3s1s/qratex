@@ -12,6 +12,7 @@ import {
   Gift,
   Star,
   QrCode,
+  Gamepad,
   MessageSquare,
   Zap,
   Medal,
@@ -796,7 +797,7 @@ export default function CustomerDashboard() {
 
           {[
             { href: '/customer/scan', icon: QrCode, label: tc('customerDashboard.quickScan'), bg: 'bg-primary/10', color: 'text-primary' },
-            { href: '/customer/progress-hub', icon: Gauge, label: tc('customerDashboard.quickProgress'), bg: 'bg-sky-500/10', color: 'text-sky-500' },
+            { href: '/customer/games', icon: Gamepad, label: 'Mini Oyunlar', bg: 'bg-fuchsia-500/10', color: 'text-fuchsia-500' },
             { href: '/customer/quests', icon: Target, label: tc('customerDashboard.quickQuests'), bg: 'bg-emerald-500/10', color: 'text-emerald-500' },
             { href: '/customer/badges', icon: Trophy, label: tc('customerDashboard.quickBadges'), bg: 'bg-amber-500/10', color: 'text-amber-500' },
             { href: '/customer/rewards', icon: Gift, label: tc('customerDashboard.quickRewards'), bg: 'bg-primary/10', color: 'text-primary' },
