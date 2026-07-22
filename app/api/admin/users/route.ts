@@ -26,6 +26,9 @@ const updateUserSchema = z.object({
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
   image: z.string().optional().nullable(),
+  // İç ekip yönetimi — yalnızca ADMIN'e atanır
+  adminDepartment: z.string().max(50).optional().nullable(),
+  adminTeamRole: z.enum(['yonetici', 'uye']).optional().nullable(),
 });
 
 const createUserSchema = z.object({
@@ -347,6 +350,8 @@ export async function PUT(request: NextRequest) {
         address: true,
         latitude: true,
         longitude: true,
+        adminDepartment: true,
+        adminTeamRole: true,
         updatedAt: true,
       },
     });

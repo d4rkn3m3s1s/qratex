@@ -229,7 +229,9 @@ export const authOptions: NextAuthOptions = {
               where: { isEquipped: true },
               select: { cosmetic: { select: { type: true, imageUrl: true } } }
             },
-            customFrameColor: true
+            customFrameColor: true,
+            adminDepartment: true,
+            adminTeamRole: true
           },
         });
 
@@ -246,6 +248,8 @@ export const authOptions: NextAuthOptions = {
           token.equippedFrame = frame ? frame.cosmetic.imageUrl : null;
           token.equippedBackground = background ? background.cosmetic.imageUrl : null;
           token.customFrameColor = dbUser.customFrameColor || null;
+          token.adminDepartment = dbUser.adminDepartment ?? null;
+          token.adminTeamRole = dbUser.adminTeamRole ?? null;
 
           if (dbUser.role === 'STAFF' && dbUser.staffProfile?.dealerId) {
             token.dealerId = dbUser.staffProfile.dealerId;
@@ -289,6 +293,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).equippedFrame = token.equippedFrame as string | null;
         (session.user as any).equippedBackground = token.equippedBackground as string | null;
         (session.user as any).customFrameColor = token.customFrameColor as string | null;
+        (session.user as any).adminDepartment = (token.adminDepartment as string | null) ?? null;
+        (session.user as any).adminTeamRole = (token.adminTeamRole as string | null) ?? null;
         if (token.dealerId) session.user.dealerId = token.dealerId as string;
         (session as { jti?: string }).jti = token.jti as string;
       }

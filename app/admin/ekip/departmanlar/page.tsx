@@ -1,0 +1,150 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Building2, Loader2, Plus, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/admin-toast';
+import { getInitials } from '@/lib/utils';
+
+type Member = { id: string; name: string | null; email: string; image: string | null; adminDepartment: string | null; adminTeamRole: string | null };
+type Department = { id: string; slug: string; name: string; color: string; description: string | null };
+
+export default function TeamDepartmentsPage() {
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newDep, setNewDep] = useState('');
+  const [savingDep, setSavingDep] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/team/departments', { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) { setDepartments(json.departments); setMembers(json.members); }
+    } catch { toast.error('Yüklenemedi'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addDepartment = async () => {
+    if (!newDep.trim()) return;
+    setSavingDep(true);
+    try {
+      const res = await fetch('/api/admin/team/departments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newDep }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Departman eklendi');
+      setNewDep('');
+      load();
+    } catch { toast.error('Eklenemedi'); }
+    finally { setSavingDep(false); }
+  };
+
+  const deleteDepartment = async (slug: string) => {
+    setDepartments((p) => p.filter((d) => d.slug !== slug));
+    await fetch(`/api/admin/team/departments?slug=${slug}`, { method: 'DELETE' }).catch(() => {});
+  };
+
+  // Üyeye departman/rol ata → users PUT
+  const updateMember = async (userId: string, patch: { adminDepartment?: string | null; adminTeamRole?: string | null }) => {
+    setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, ...patch } : m)));
+    try {
+      const res = await fetch(`/api/admin/users?id=${userId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Güncellendi');
+    } catch { toast.error('Güncellenemedi'); load(); }
+  };
+
+  return (
+    <div className="space-y-6 pb-12">
+      <AdminPremiumHero
+        eyebrow="Ekip Yönetimi"
+        title="Departmanlar & Roller"
+        description="Departman oluştur, ekip üyelerine departman ve rol (Yönetici / Üye) ata."
+        icon={<Building2 className="size-7" />}
+        tone="auto"
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+          <Loader2 className="size-6 animate-spin" /> Yükleniyor…
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Departmanlar */}
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Departmanlar</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Input placeholder="Yeni departman adı" value={newDep} onChange={(e) => setNewDep(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDepartment()} />
+                <Button onClick={addDepartment} disabled={savingDep}><Plus className="h-4 w-4" /></Button>
+              </div>
+              <div className="space-y-2">
+                {departments.map((d) => (
+                  <div key={d.slug} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full" style={{ background: d.color }} />
+                      <span className="font-medium">{d.name}</span>
+                      <span className="text-xs text-muted-foreground">{d.slug}</span>
+                    </span>
+                    <button onClick={() => deleteDepartment(d.slug)} aria-label="Sil">
+                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+                {departments.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Henüz departman yok</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Ekip üyeleri (admin'ler) */}
+          <Card>
+            <CardHeader><CardTitle className="text-lg">Ekip Üyeleri (Adminler)</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {members.map((m) => (
+                <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 p-3">
+                  <Avatar className="h-9 w-9">
+                    {m.image ? <AvatarImage src={m.image} /> : null}
+                    <AvatarFallback>{getInitials(m.name || m.email)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{m.name || m.email}</p>
+                    <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                  </div>
+                  <Select value={m.adminDepartment ?? 'none'} onValueChange={(v) => updateMember(m.id, { adminDepartment: v === 'none' ? null : v })}>
+                    <SelectTrigger className="w-36"><SelectValue placeholder="Departman" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Departman —</SelectItem>
+                      {departments.map((d) => <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={m.adminTeamRole ?? 'none'} onValueChange={(v) => updateMember(m.id, { adminTeamRole: v === 'none' ? null : v })}>
+                    <SelectTrigger className="w-28"><SelectValue placeholder="Rol" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Rol —</SelectItem>
+                      <SelectItem value="yonetici">Yönetici</SelectItem>
+                      <SelectItem value="uye">Üye</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+              {members.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Admin bulunamadı</p>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}

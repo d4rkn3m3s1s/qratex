@@ -1,0 +1,342 @@
+'use client';
+
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
+import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
+} from 'lucide-react';
+import { toast } from '@/lib/admin-toast';
+import { cn, getInitials } from '@/lib/utils';
+import { weekKeyOf, shiftWeekKey, weekKeyLabel } from '@/lib/team-week';
+
+type Member = { id: string; name: string | null; email: string; image: string | null; adminDepartment: string | null; adminTeamRole: string | null };
+type Department = { id: string; slug: string; name: string; color: string };
+type Task = {
+  id: string; title: string; description: string | null; status: string; priority: string;
+  department: string | null; weekKey: string | null; dueAt: string | null;
+  assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
+};
+
+const COLUMNS = [
+  { key: 'todo', label: 'Yapılacak', accent: 'border-slate-400/40' },
+  { key: 'in_progress', label: 'Devam Ediyor', accent: 'border-amber-400/40' },
+  { key: 'done', label: 'Bitti', accent: 'border-emerald-400/40' },
+] as const;
+
+const PRIORITY_STYLE: Record<string, string> = {
+  high: 'bg-red-500/15 text-red-600 dark:text-red-400',
+  medium: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  low: 'bg-slate-500/15 text-slate-600 dark:text-slate-400',
+};
+const PRIORITY_LABEL: Record<string, string> = { high: 'Yüksek', medium: 'Orta', low: 'Düşük' };
+
+export default function TeamPage() {
+  const { data: session } = useSession();
+  const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
+  const isManager = teamRole === 'yonetici' || teamRole == null; // rol atanmamışsa tam görünüm (ilk kurulum)
+
+  const [weekKey, setWeekKey] = useState<string>(() => weekKeyOf());
+  const [department, setDepartment] = useState<string>('all');
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dragId, setDragId] = useState<string | null>(null);
+
+  // Yeni görev diyaloğu
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', department: '', assignedToId: '' });
+  const [saving, setSaving] = useState(false);
+
+  const loadMeta = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/team/departments', { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) {
+        setDepartments(json.departments);
+        setMembers(json.members);
+      }
+    } catch { /* sessiz */ }
+  }, []);
+
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ weekKey });
+      if (department !== 'all') params.set('department', department);
+      const res = await fetch(`/api/admin/team/tasks?${params}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) setTasks(json.tasks);
+    } catch {
+      toast.error('Görevler yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }, [weekKey, department]);
+
+  useEffect(() => { loadMeta(); }, [loadMeta]);
+  useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  const tasksByCol = useMemo(() => {
+    const map: Record<string, Task[]> = { todo: [], in_progress: [], done: [] };
+    for (const t of tasks) (map[t.status] ?? map.todo).push(t);
+    return map;
+  }, [tasks]);
+
+  // Durum raporu: kolon dağılımı + kişi başı yük
+  const report = useMemo(() => {
+    const total = tasks.length;
+    const done = tasksByCol.done.length;
+    const byMember = new Map<string, { name: string; count: number }>();
+    for (const t of tasks) {
+      if (!t.assignedTo) continue;
+      const cur = byMember.get(t.assignedTo.id) ?? { name: t.assignedTo.name || t.assignedTo.email, count: 0 };
+      cur.count += 1;
+      byMember.set(t.assignedTo.id, cur);
+    }
+    return { total, done, pct: total ? Math.round((done / total) * 100) : 0, members: [...byMember.values()].sort((a, b) => b.count - a.count) };
+  }, [tasks, tasksByCol]);
+
+  const moveTask = async (taskId: string, newStatus: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+    // Optimistik
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
+    try {
+      const res = await fetch(`/api/admin/team/tasks?id=${taskId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error('Taşınamadı');
+      loadTasks();
+    }
+  };
+
+  const createTask = async () => {
+    if (!form.title.trim()) { toast.error('Başlık gerekli'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/team/tasks', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title, description: form.description || null, priority: form.priority,
+          department: form.department || null, assignedToId: form.assignedToId || null, weekKey,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error();
+      toast.success('Görev eklendi');
+      setDialogOpen(false);
+      setForm({ title: '', description: '', priority: 'medium', department: '', assignedToId: '' });
+      loadTasks();
+    } catch {
+      toast.error('Görev eklenemedi');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTask = async (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await fetch(`/api/admin/team/tasks?id=${id}`, { method: 'DELETE' }).catch(() => {});
+  };
+
+  return (
+    <div className="space-y-6 pb-12">
+      <AdminPremiumHero
+        eyebrow="Ekip Yönetimi"
+        title="Haftalık Görev Panosu"
+        description={
+          teamRole
+            ? `Rolün: ${teamRole === 'yonetici' ? 'Yönetici' : 'Üye'}${session?.user && (session.user as { adminDepartment?: string | null }).adminDepartment ? ' · ' + (session.user as { adminDepartment?: string | null }).adminDepartment : ''}`
+            : 'Departmanlara görev ata, haftalık ilerlemeyi takip et.'
+        }
+        icon={<Users2 className="size-7" />}
+        tone="auto"
+      />
+
+      {/* Kontrol çubuğu: hafta + departman + yeni görev */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/50 p-1">
+          <Button variant="ghost" size="sm" onClick={() => setWeekKey((k) => shiftWeekKey(k, -1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="flex items-center gap-2 px-2 text-sm font-medium">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            {weekKeyLabel(weekKey)}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setWeekKey((k) => shiftWeekKey(k, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {weekKey !== weekKeyOf() && (
+            <Button variant="ghost" size="sm" onClick={() => setWeekKey(weekKeyOf())}>Bu hafta</Button>
+          )}
+        </div>
+
+        <Select value={department} onValueChange={setDepartment}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Departman" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tüm departmanlar</SelectItem>
+            {departments.map((d) => (
+              <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button asChild variant="outline">
+            <a href="/admin/ekip/departmanlar">Departmanlar & Roller</a>
+          </Button>
+          {isManager && (
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> Yeni Görev
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Durum raporu özeti */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-6 p-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Bu hafta</p>
+            <p className="text-2xl font-bold">{report.total} <span className="text-sm font-normal text-muted-foreground">görev</span></p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Tamamlanan</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">%{report.pct}</p>
+          </div>
+          <div className="h-10 w-px bg-border" />
+          <div className="flex flex-wrap gap-2">
+            {report.members.slice(0, 6).map((m) => (
+              <Badge key={m.name} variant="secondary" className="gap-1">
+                {m.name} <span className="opacity-60">· {m.count}</span>
+              </Badge>
+            ))}
+            {report.members.length === 0 && <span className="text-sm text-muted-foreground">Henüz atama yok</span>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Kanban pano */}
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
+          <Loader2 className="size-6 animate-spin" /> Yükleniyor…
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {COLUMNS.map((col) => (
+            <div
+              key={col.key}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => { if (dragId) moveTask(dragId, col.key); setDragId(null); }}
+              className={cn('rounded-2xl border-2 border-dashed bg-card/30 p-3', col.accent)}
+            >
+              <div className="mb-3 flex items-center justify-between px-1">
+                <h3 className="text-sm font-semibold">{col.label}</h3>
+                <Badge variant="outline">{tasksByCol[col.key].length}</Badge>
+              </div>
+              <div className="space-y-2">
+                {tasksByCol[col.key].map((task) => (
+                  <div
+                    key={task.id}
+                    draggable={isManager}
+                    onDragStart={() => setDragId(task.id)}
+                    onDragEnd={() => setDragId(null)}
+                    className={cn(
+                      'group rounded-xl border border-border/60 bg-background/80 p-3 shadow-sm transition-all',
+                      isManager && 'cursor-grab active:cursor-grabbing hover:border-primary/40 hover:shadow-md',
+                      dragId === task.id && 'opacity-50'
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      {isManager && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug">{task.title}</p>
+                        {task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', PRIORITY_STYLE[task.priority])}>
+                            {PRIORITY_LABEL[task.priority]}
+                          </span>
+                          {task.department && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              {departments.find((d) => d.slug === task.department)?.name ?? task.department}
+                            </span>
+                          )}
+                          {task.assignedTo && (
+                            <Avatar className="h-5 w-5">
+                              {task.assignedTo.image ? <AvatarImage src={task.assignedTo.image} /> : null}
+                              <AvatarFallback className="text-[9px]">{getInitials(task.assignedTo.name || task.assignedTo.email)}</AvatarFallback>
+                            </Avatar>
+                          )}
+                        </div>
+                      </div>
+                      {isManager && (
+                        <button onClick={() => deleteTask(task.id)} className="opacity-0 transition-opacity group-hover:opacity-100" aria-label="Sil">
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {tasksByCol[col.key].length === 0 && (
+                  <p className="py-6 text-center text-xs text-muted-foreground/60">Boş</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Yeni görev diyaloğu */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Yeni Görev</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Görev başlığı" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <Textarea placeholder="Açıklama (opsiyonel)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+            <div className="grid grid-cols-2 gap-3">
+              <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}>
+                <SelectTrigger><SelectValue placeholder="Öncelik" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">Yüksek</SelectItem>
+                  <SelectItem value="medium">Orta</SelectItem>
+                  <SelectItem value="low">Düşük</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={form.department || 'none'} onValueChange={(v) => setForm({ ...form, department: v === 'none' ? '' : v })}>
+                <SelectTrigger><SelectValue placeholder="Departman" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Genel</SelectItem>
+                  {departments.map((d) => <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Select value={form.assignedToId || 'none'} onValueChange={(v) => setForm({ ...form, assignedToId: v === 'none' ? '' : v })}>
+              <SelectTrigger><SelectValue placeholder="Atanan kişi" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Atanmadı</SelectItem>
+                {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>İptal</Button>
+            <Button onClick={createTask} disabled={saving}>{saving ? 'Ekleniyor…' : 'Ekle'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

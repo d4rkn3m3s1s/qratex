@@ -31,6 +31,9 @@ model User {
   phone         String?
   password      String?
   role          Role      @default(CUSTOMER)
+  // İç ekip yönetimi — yalnızca role=ADMIN için anlamlı (nullable = mevcut satırları etkilemez)
+  adminDepartment String? // "pazarlama" | "gelistirme" | "destek" | ... (Department.slug)
+  adminTeamRole   String? // "yonetici" | "uye"
   points        Int       @default(0)
   level         Int       @default(1)
   xp            Int       @default(0)
@@ -147,6 +150,8 @@ model User {
   checklistTemplates        ChecklistTemplate[]        @relation("DealerChecklistTemplates")
   // Staff: tasks/shifts/leave assigned to this user
   staffTasksAssigned        StaffTask[]                @relation("StaffTaskAssignments")
+  companyTasksAssigned      CompanyTask[]              @relation("CompanyTaskAssignments")
+  companyTasksCreated       CompanyTask[]              @relation("CompanyTaskCreator")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2651,3 +2656,46 @@ model DataSubjectRequest {
 }
 
 
+
+// ─────────────────────────────────────────────────────────────
+// İç Ekip Yönetimi (Notion/Asana tarzı) — yalnızca ADMIN alt-rolleri kullanır.
+// ─────────────────────────────────────────────────────────────
+
+model Department {
+  id          String   @id @default(cuid())
+  slug        String   @unique // "pazarlama", "gelistirme" — User.adminDepartment ile eşleşir
+  name        String
+  description String?
+  color       String   @default("#8b5cf6")
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model CompanyTask {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?   @db.Text
+  status       String    @default("todo")   // todo | in_progress | done
+  priority     String    @default("medium") // low | medium | high
+  department   String?   // Department.slug (null = genel)
+  weekKey      String? // "YYYY-Www" (haftalık pano; null = bu haftaya bağlı değil)
+  assignedToId String?
+  createdById  String
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedTo User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy  User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([department])
+  @@index([weekKey])
+  @@index([assignedToId])
+  @@index([createdAt])
+}

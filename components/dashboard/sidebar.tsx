@@ -194,6 +194,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'design_language', href: '/admin/design-language', icon: LayoutTemplate },
   { labelKey: 'menu_order', href: '/admin/sidebar-order', icon: GripVertical },
   { labelKey: 'menu_groups', href: '/admin/menu-groups', icon: LayoutTemplate },
+  { key: 'team', labelKey: 'team', href: '/admin/ekip', icon: Users2 },
   { labelKey: 'experience_pulse', href: '/admin/experience-pulse', icon: Wand2 },
   { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },

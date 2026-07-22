@@ -10,6 +10,8 @@ declare module 'next-auth' {
       level: number;
       preferredLanguage?: 'tr' | 'en';
       dealerId?: string; // when role is STAFF, the employer dealer id
+      adminDepartment?: string | null; // iç ekip: departman slug (yalnızca ADMIN)
+      adminTeamRole?: string | null; // iç ekip: "yonetici" | "uye" (yalnızca ADMIN)
     } & DefaultSession['user'];
   }
 
@@ -30,6 +32,8 @@ declare module 'next-auth/jwt' {
     preferredLanguage?: 'tr' | 'en';
     dealerId?: string;
     jti?: string;
+    adminDepartment?: string | null;
+    adminTeamRole?: string | null;
   }
 }
 
