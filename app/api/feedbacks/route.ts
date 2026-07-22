@@ -519,11 +519,23 @@ export async function POST(request: NextRequest) {
         processAutoReplies(feedback.id).catch(console.error);
       }
 
+      // Karakter rozeti: kullanıcı eşiğe ulaşınca (fire-and-forget, bloke etmez).
+      if (session?.user?.id) {
+        import('@/lib/character-badges')
+          .then((m) => m.maybeAssignCharacterOnThreshold(session.user.id))
+          .catch(() => {});
+      }
+
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
       return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const resBody = { success: true, feedback };
+    if (session?.user?.id) {
+      import('@/lib/character-badges')
+        .then((m) => m.maybeAssignCharacterOnThreshold(session.user.id))
+        .catch(() => {});
+    }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
