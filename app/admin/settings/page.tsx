@@ -252,7 +252,7 @@ export default function AdminSettingsPage() {
     siteName: 'QRateX',
     siteDescription: 'QR Kod Tabanlı Müşteri Geri Bildirim Platformu',
     siteUrl: 'https://qratex.com',
-    logoUrl: '/logo/icon.png',
+    logoUrl: '/logo/logo.png',
     faviconUrl: '/favicon.ico',
     primaryColor: BRAND_PRIMARY_HEX.toUpperCase(),
     defaultTheme: 'dark',

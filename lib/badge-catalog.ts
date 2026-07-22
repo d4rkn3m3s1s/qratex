@@ -105,9 +105,9 @@ export const BADGE_CATALOG: BadgeCatalogEntry[] = [
   { id: 'badge-good-omens', name: 'Good Omens', description: 'İyilik ve kötülüğün dengesi!', category: 'special', pointCost: null, icon: `${B}/GOOD OMENS.svg`, rarity: 'epic' },
   { id: 'badge-kelly-yorkie', name: 'Kelly & Yorkie', description: 'Birlikte daha güçlü!', category: 'special', pointCost: null, icon: `${B}/KELLY AND YORKİE.svg`, rarity: 'epic' },
   { id: 'badge-martha', name: 'Martha', description: 'Her dünyada bir bağlantı!', category: 'special', pointCost: null, icon: `${B}/MARTHA.svg`, rarity: 'epic' },
-  // Kullanıcı listesinden eklenen karakterler (ikon dosyası gelene kadar mevcut ikon placeholder).
-  { id: 'badge-daenerys', name: 'Daenerys Targaryen', description: 'Vizyoner, idealist ve güçlü — ilham veren fikirleriyle topluluğa yön katan.', category: 'special', pointCost: null, icon: `${B}/KHALESİ.svg`, rarity: 'legendary' },
-  { id: 'badge-crowley', name: 'Crowley', description: 'Kaotik ama eğlenceli — beklenmedik, sürpriz dolu yorumlar yapan.', category: 'special', pointCost: null, icon: `${B}/GOOD OMENS.svg`, rarity: 'legendary' },
+  // Kullanıcı listesinden eklenen karakterler — kendi tematik rozet görselleri.
+  { id: 'badge-daenerys', name: 'Daenerys Targaryen', description: 'Vizyoner, idealist ve güçlü — ilham veren fikirleriyle topluluğa yön katan.', category: 'special', pointCost: null, icon: `${B}/DAENERYS.svg`, rarity: 'legendary' },
+  { id: 'badge-crowley', name: 'Crowley', description: 'Kaotik ama eğlenceli — beklenmedik, sürpriz dolu yorumlar yapan.', category: 'special', pointCost: null, icon: `${B}/CROWLEY.svg`, rarity: 'legendary' },
 ];
 
 export function getBadgePointCostById(badgeId: string): number | null {

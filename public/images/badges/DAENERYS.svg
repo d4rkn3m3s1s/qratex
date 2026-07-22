@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1417.32 1417.32" role="img" aria-label="Daenerys Targaryen rozeti">
+  <defs>
+    <radialGradient id="dae-bg" cx="50%" cy="38%" r="70%">
+      <stop offset="0%" stop-color="#2a1533"/>
+      <stop offset="55%" stop-color="#3d1526"/>
+      <stop offset="100%" stop-color="#160a1c"/>
+    </radialGradient>
+    <linearGradient id="dae-ring" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f6d67b"/>
+      <stop offset="45%" stop-color="#c9972f"/>
+      <stop offset="100%" stop-color="#8a5a12"/>
+    </linearGradient>
+    <linearGradient id="dae-fire" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#7a1f0e"/>
+      <stop offset="45%" stop-color="#e8531d"/>
+      <stop offset="80%" stop-color="#f9a825"/>
+      <stop offset="100%" stop-color="#ffe08a"/>
+    </linearGradient>
+    <linearGradient id="dae-dragon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbe9b0"/>
+      <stop offset="100%" stop-color="#d9a13a"/>
+    </linearGradient>
+    <filter id="dae-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Madalyon zemin + çerçeve -->
+  <circle cx="708.66" cy="708.66" r="690" fill="url(#dae-bg)"/>
+  <circle cx="708.66" cy="708.66" r="690" fill="none" stroke="url(#dae-ring)" stroke-width="34"/>
+  <circle cx="708.66" cy="708.66" r="632" fill="none" stroke="#c9972f" stroke-width="4" opacity="0.55"/>
+
+  <!-- Ateş dili (alt) -->
+  <g filter="url(#dae-glow)" opacity="0.92">
+    <path d="M708.66 1140
+      C 640 1060, 596 1000, 604 928
+      C 610 968, 636 992, 660 1000
+      C 636 940, 640 872, 690 828
+      C 682 884, 704 924, 726 940
+      C 738 884, 780 848, 830 852
+      C 796 892, 792 944, 812 984
+      C 838 964, 856 936, 858 904
+      C 878 984, 820 1064, 708.66 1140 Z"
+      fill="url(#dae-fire)"/>
+  </g>
+
+  <!-- Üç başlı ejderha ambleminin sadeleştirilmiş silüeti (Targaryen esini) -->
+  <g fill="url(#dae-dragon)" stroke="#7a4e12" stroke-width="6" stroke-linejoin="round">
+    <!-- gövde -->
+    <path d="M708.66 430
+      c -46 0 -84 30 -100 74
+      c -70 -6 -128 26 -150 84
+      c 40 -30 78 -34 108 -22
+      c -30 40 -34 92 -8 138
+      c 14 -44 40 -66 66 -74
+      c -8 46 8 92 44 122
+      c 40 -30 56 -76 48 -122
+      c 26 8 52 30 66 74
+      c 26 -46 22 -98 -8 -138
+      c 30 -12 68 -8 108 22
+      c -22 -58 -80 -90 -150 -84
+      c -16 -44 -54 -74 -100 -74 Z"/>
+    <!-- orta baş -->
+    <circle cx="708.66" cy="470" r="34"/>
+    <!-- yan başlar -->
+    <circle cx="600" cy="560" r="26"/>
+    <circle cx="817" cy="560" r="26"/>
+  </g>
+
+  <!-- Kraliçe tacı motifi (üst) -->
+  <g fill="url(#dae-ring)" stroke="#7a4e12" stroke-width="5">
+    <path d="M708.66 250
+      l 34 60 54 -40 -18 66 66 6 -52 44 40 54 -66 -18 0 68 -58 -36 -58 36 0 -68 -66 18 40 -54 -52 -44 66 -6 -18 -66 54 40 z"/>
+  </g>
+  <circle cx="708.66" cy="330" r="18" fill="#e8531d"/>
+</svg>
