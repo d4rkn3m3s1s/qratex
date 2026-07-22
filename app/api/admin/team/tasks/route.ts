@@ -90,6 +90,14 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // Atama varsa bildirim maili (fire-and-forget)
+  if (task.assignedTo?.email) {
+    import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
+      to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
+      taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
+    })).catch(() => {});
+  }
+
   return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 

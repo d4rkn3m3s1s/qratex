@@ -85,6 +85,15 @@ export const businessOfMonthFn = inngest.createFunction(
   }
 );
 
+// Ekip haftalık hatırlatma — Pazartesi 09:00 UTC, açık görevi olanlara mail.
+export const teamWeeklyReminderFn = inngest.createFunction(
+  { id: 'team-weekly-reminder', retries: 2 },
+  { cron: '0 9 * * 1' },
+  async ({ step }) => {
+    return step.run('delegate-team-weekly-reminder', () => invokeInternalCron('/api/internal/inngest/team-weekly-reminder'));
+  }
+);
+
 export const calculateClvFn = inngest.createFunction(
   { id: 'calculate-clv', retries: 2 },
   { cron: '0 2 * * *' },
