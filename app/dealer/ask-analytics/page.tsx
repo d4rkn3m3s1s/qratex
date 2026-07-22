@@ -64,6 +64,15 @@ export default function DealerAskAnalyticsPage() {
         icon={<MessageCircleQuestion className="text-white" />}
       />
 
+      {/* AI merkezi bağlantısı: sürekli sohbet için AI Sohbet'e geçiş */}
+      <a
+        href="/dealer/ai-chat"
+        className="inline-flex w-fit items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+      >
+        <Sparkles className="h-4 w-4" />
+        Sürekli sohbet mi istiyorsun? AI Sohbet'e geç →
+      </a>
+
       <Card>
         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
           <Input

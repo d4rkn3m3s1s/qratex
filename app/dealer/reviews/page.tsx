@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { LazyMotion, domAnimation, m } from 'framer-motion';
-import { Star, MessageSquare, Clock, Tag } from 'lucide-react';
+import { Star, MessageSquare, Clock, Tag, Gift } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -178,14 +178,22 @@ export default function DealerReviewsPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="rounded-2xl border border-border/60 bg-card/50 p-6 shadow-sm backdrop-blur-sm"
                 >
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
                             <MessageSquare className="h-6 w-6" />
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <h1 className="text-2xl font-bold tracking-tight text-balance">{t('dealerReviews.title')}</h1>
                             <p className="text-sm text-muted-foreground text-pretty leading-relaxed">{t('dealerReviews.description')}</p>
                         </div>
+                        {/* Telafi merkezi köprüsü: yorumları telafi akışıyla aynı yerden yönet */}
+                        <a
+                            href="/dealer/remedy-queue"
+                            className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                        >
+                            <Gift className="h-4 w-4" />
+                            Telafi Merkezi →
+                        </a>
                     </div>
                 </m.header>
 

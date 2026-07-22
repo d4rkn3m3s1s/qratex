@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Gift, Loader2, Check, X, ArrowLeft } from 'lucide-react';
+import { Gift, Loader2, Check, X, ArrowLeft, MessageSquare } from 'lucide-react';
 import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,13 @@ export default function DealerRemedyQueuePage() {
         </Button>
         <Button variant="outline" size="sm" asChild className="w-fit touch-manipulation">
           <Link href="/dealer/remedy-automation">{t('dealerRemedyQueue.automationSettings')}</Link>
+        </Button>
+        {/* Yorumlar köprüsü: telafi ile yorumları aynı yerden yönet */}
+        <Button variant="outline" size="sm" asChild className="w-fit touch-manipulation">
+          <Link href="/dealer/reviews">
+            <MessageSquare className="h-4 w-4 shrink-0 mr-2" />
+            Yorumlar
+          </Link>
         </Button>
       </div>
 
