@@ -75,6 +75,16 @@ export const churnPlaybookFn = inngest.createFunction(
   }
 );
 
+// "Ayın İşletmesi" — her ayın 1'i 03:00 UTC'de bir önceki ayın kazananına ROZET verir.
+// Puan değil rozet olduğu için idempotent + fail-closed yeterli (worker'da).
+export const businessOfMonthFn = inngest.createFunction(
+  { id: 'business-of-month', retries: 2 },
+  { cron: '0 3 1 * *' },
+  async ({ step }) => {
+    return step.run('delegate-business-of-month', () => invokeInternalCron('/api/internal/inngest/business-of-month'));
+  }
+);
+
 export const calculateClvFn = inngest.createFunction(
   { id: 'calculate-clv', retries: 2 },
   { cron: '0 2 * * *' },
