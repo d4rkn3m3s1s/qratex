@@ -18,6 +18,8 @@ import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
 import { weekKeyOf, shiftWeekKey, weekKeyLabel } from '@/lib/team-week';
 import { TaskDetailSheet } from '@/components/admin/team/task-detail-sheet';
+import { DonutChart } from '@/components/charts/donut-chart';
+import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
 
 type Member = { id: string; name: string | null; email: string; image: string | null; adminDepartment: string | null; adminTeamRole: string | null };
 type Department = { id: string; slug: string; name: string; color: string };
@@ -53,6 +55,7 @@ export default function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people'>('kanban');
 
   // Yeni görev diyaloğu
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -94,7 +97,7 @@ export default function TeamPage() {
     return map;
   }, [tasks]);
 
-  // Durum raporu: kolon dağılımı + kişi başı yük
+  // Durum raporu: kolon dağılımı + kişi başı yük + grafik verileri
   const report = useMemo(() => {
     const total = tasks.length;
     const done = tasksByCol.done.length;
@@ -105,7 +108,14 @@ export default function TeamPage() {
       cur.count += 1;
       byMember.set(t.assignedTo.id, cur);
     }
-    return { total, done, pct: total ? Math.round((done / total) * 100) : 0, members: [...byMember.values()].sort((a, b) => b.count - a.count) };
+    const memberList = [...byMember.values()].sort((a, b) => b.count - a.count);
+    const statusDonut = [
+      { name: 'Yapılacak', value: tasksByCol.todo.length, color: '#94a3b8' },
+      { name: 'Devam', value: tasksByCol.in_progress.length, color: '#f59e0b' },
+      { name: 'Bitti', value: tasksByCol.done.length, color: '#10b981' },
+    ];
+    const memberBars = memberList.slice(0, 8).map((m) => ({ name: m.name.split(' ')[0], value: m.count }));
+    return { total, done, pct: total ? Math.round((done / total) * 100) : 0, members: memberList, statusDonut, memberBars };
   }, [tasks, tasksByCol]);
 
   const moveTask = async (taskId: string, newStatus: string) => {
@@ -196,6 +206,22 @@ export default function TeamPage() {
           </SelectContent>
         </Select>
 
+        {/* Görünüm modu geçişi */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/50 p-1">
+          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler']] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           <Button asChild variant="outline">
             <a href="/admin/ekip/departmanlar">Departmanlar & Roller</a>
@@ -208,35 +234,60 @@ export default function TeamPage() {
         </div>
       </div>
 
-      {/* Durum raporu özeti */}
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-6 p-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Bu hafta</p>
-            <p className="text-2xl font-bold">{report.total} <span className="text-sm font-normal text-muted-foreground">görev</span></p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Tamamlanan</p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">%{report.pct}</p>
-          </div>
-          <div className="h-10 w-px bg-border" />
-          <div className="flex flex-wrap gap-2">
-            {report.members.slice(0, 6).map((m) => (
-              <Badge key={m.name} variant="secondary" className="gap-1">
-                {m.name} <span className="opacity-60">· {m.count}</span>
-              </Badge>
-            ))}
-            {report.members.length === 0 && <span className="text-sm text-muted-foreground">Henüz atama yok</span>}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Durum raporu — grafiklerle */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* KPI'lar */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Bu Hafta</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-end gap-2">
+              <span className="text-4xl font-bold">{report.total}</span>
+              <span className="mb-1 text-sm text-muted-foreground">görev</span>
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Tamamlanma</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">%{report.pct}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all" style={{ width: `${report.pct}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+              <div><p className="text-lg font-bold text-slate-500">{tasksByCol.todo.length}</p><p className="text-[10px] text-muted-foreground">Yapılacak</p></div>
+              <div><p className="text-lg font-bold text-amber-500">{tasksByCol.in_progress.length}</p><p className="text-[10px] text-muted-foreground">Devam</p></div>
+              <div><p className="text-lg font-bold text-emerald-500">{tasksByCol.done.length}</p><p className="text-[10px] text-muted-foreground">Bitti</p></div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Kanban pano */}
+        {/* Durum dağılımı donut */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Durum Dağılımı</CardTitle></CardHeader>
+          <CardContent>
+            <DonutChart data={report.statusDonut} height={180} />
+          </CardContent>
+        </Card>
+
+        {/* Kişi başı yük bar */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Kişi Başı Yük</CardTitle></CardHeader>
+          <CardContent>
+            {report.memberBars.length > 0 ? (
+              <SimpleBarChart data={report.memberBars} height={180} color="hsl(var(--primary))" />
+            ) : (
+              <div className="flex h-[180px] items-center justify-center text-sm text-muted-foreground">Henüz atama yok</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* İçerik: yükleniyor / kanban / liste / kişiler */}
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="size-6 animate-spin" /> Yükleniyor…
         </div>
-      ) : (
+      ) : viewMode === 'kanban' ? (
         <div className="grid gap-4 lg:grid-cols-3">
           {COLUMNS.map((col) => (
             <div
@@ -298,6 +349,75 @@ export default function TeamPage() {
               </div>
             </div>
           ))}
+        </div>
+      ) : viewMode === 'list' ? (
+        /* Liste görünümü */
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border/60">
+              {tasks.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Bu hafta görev yok</p>}
+              {tasks.map((task) => (
+                <button
+                  key={task.id}
+                  onClick={() => setDetailId(task.id)}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                >
+                  <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full',
+                    task.status === 'done' ? 'bg-emerald-500' : task.status === 'in_progress' ? 'bg-amber-500' : 'bg-slate-400')} />
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block truncate text-sm font-medium', task.status === 'done' && 'text-muted-foreground line-through')}>{task.title}</span>
+                    {task.department && <span className="text-xs text-muted-foreground">{departments.find((d) => d.slug === task.department)?.name ?? task.department}</span>}
+                  </span>
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', PRIORITY_STYLE[task.priority])}>{PRIORITY_LABEL[task.priority]}</span>
+                  {task.assignedTo && (
+                    <Avatar className="h-6 w-6">
+                      {task.assignedTo.image ? <AvatarImage src={task.assignedTo.image} /> : null}
+                      <AvatarFallback className="text-[9px]">{getInitials(task.assignedTo.name || task.assignedTo.email)}</AvatarFallback>
+                    </Avatar>
+                  )}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Kişiler görünümü — kim ne yapıyor */
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {(() => {
+            const byPerson = new Map<string, { member: typeof members[number] | null; tasks: Task[] }>();
+            for (const t of tasks) {
+              const key = t.assignedTo?.id ?? 'unassigned';
+              if (!byPerson.has(key)) {
+                byPerson.set(key, { member: members.find((m) => m.id === t.assignedTo?.id) ?? null, tasks: [] });
+              }
+              byPerson.get(key)!.tasks.push(t);
+            }
+            return [...byPerson.entries()].map(([key, group]) => (
+              <Card key={key}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      {group.member?.image ? <AvatarImage src={group.member.image} /> : null}
+                      <AvatarFallback className="text-xs">{key === 'unassigned' ? '?' : getInitials(group.member?.name || group.member?.email || '?')}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-sm">{key === 'unassigned' ? 'Atanmamış' : (group.member?.name || group.member?.email || 'Bilinmeyen')}</CardTitle>
+                      <p className="text-xs text-muted-foreground">{group.tasks.length} görev · {group.tasks.filter((t) => t.status === 'done').length} bitti</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-1.5">
+                  {group.tasks.map((t) => (
+                    <button key={t.id} onClick={() => setDetailId(t.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50">
+                      <span className={cn('h-2 w-2 shrink-0 rounded-full', t.status === 'done' ? 'bg-emerald-500' : t.status === 'in_progress' ? 'bg-amber-500' : 'bg-slate-400')} />
+                      <span className={cn('truncate', t.status === 'done' && 'text-muted-foreground line-through')}>{t.title}</span>
+                    </button>
+                  ))}
+                </CardContent>
+              </Card>
+            ));
+          })()}
+          {tasks.length === 0 && <p className="col-span-full py-12 text-center text-sm text-muted-foreground">Bu hafta görev yok</p>}
         </div>
       )}
 
