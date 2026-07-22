@@ -508,7 +508,15 @@ export default function TeamPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Atanan</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-muted-foreground">Atanan</label>
+                  {session?.user?.id && form.assignedToId !== session.user.id && (
+                    <button type="button" onClick={() => setForm({ ...form, assignedToId: session.user.id })}
+                      className="text-[11px] font-medium text-primary hover:underline">
+                      Bana ata
+                    </button>
+                  )}
+                </div>
                 <Select value={form.assignedToId || 'none'} onValueChange={(v) => setForm({ ...form, assignedToId: v === 'none' ? '' : v })}>
                   <SelectTrigger className="h-11"><SelectValue placeholder="Kişi seç" /></SelectTrigger>
                   <SelectContent>
