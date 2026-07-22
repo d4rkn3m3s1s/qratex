@@ -30,7 +30,7 @@ export default function DemoSection() {
   const embed = demoVideoUrl ? getEmbedUrl(demoVideoUrl) : null;
 
   return (
-    <section id="demo" className="py-20 lg:py-32 bg-muted/20 dark:bg-muted/30 scroll-mt-20 [content-visibility:auto]">
+    <section id="demo" className="py-20 lg:py-32 scroll-mt-20 [content-visibility:auto]">
       <div className="container px-4">
         <motion.div
           className="text-center mb-16"

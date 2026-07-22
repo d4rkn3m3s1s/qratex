@@ -166,17 +166,17 @@ export function DataSnakeGame() {
       const nx = head.x + d.x;
       const ny = head.y + d.y;
 
-      // duvar / kendine çarpma
+      // duvar / kendine çarpma = ÖLÜM → kayıp (ödül YOK, 💀 ekranı tutarlı olsun)
       if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) {
         sfxHit();
         haptic([30, 50]);
-        endGame(scoreRef.current >= DEF.rewardThreshold);
+        endGame(false);
         return;
       }
       if (snakeRef.current.some((s, i) => i < snakeRef.current.length - 1 && s.x === nx && s.y === ny)) {
         sfxHit();
         haptic([30, 50]);
-        endGame(scoreRef.current >= DEF.rewardThreshold);
+        endGame(false);
         return;
       }
 
@@ -295,6 +295,8 @@ export function DataSnakeGame() {
       draw();
       rafRef.current = requestAnimationFrame(loop);
     };
+    // Guard: retry/StrictMode remount'ta eski döngü hâlâ canlıysa iptal et → çift hız önlenir.
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {

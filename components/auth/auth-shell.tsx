@@ -63,7 +63,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <>
               <Image
                 src="/logo/logo.png"
-                alt="QRATEX Logo"
+                alt="QRateX Logo"
                 width={56}
                 height={56}
                 className="object-contain h-10 sm:h-11 hidden dark:block"
@@ -71,7 +71,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               />
               <Image
                 src="/logo/logo-light.png"
-                alt="QRATEX Logo"
+                alt="QRateX Logo"
                 width={56}
                 height={56}
                 className="object-contain h-10 sm:h-11 block dark:hidden"
@@ -79,7 +79,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               />
               <Image
                 src="/logo/font.png"
-                alt="QRATEX"
+                alt="QRateX"
                 width={140}
                 height={36}
                 className="object-contain h-10 sm:h-11 hidden dark:block"
@@ -88,7 +88,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
               />
               <Image
                 src="/logo/font-light.png"
-                alt="QRATEX"
+                alt="QRateX"
                 width={140}
                 height={36}
                 className="object-contain h-10 sm:h-11 block dark:hidden"

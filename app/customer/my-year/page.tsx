@@ -47,7 +47,7 @@ export default function CustomerMyYearPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <DashboardPageHero
-        title="QRATEX'te Yılım"
+        title="QRateX'te Yılım"
         description="Geri bildirimlerinin gerçek etkisi ve bu yılki kilometre taşların"
         icon={<Sparkles className="text-white" />}
       />

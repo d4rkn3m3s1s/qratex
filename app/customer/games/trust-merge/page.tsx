@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { TrustMergeGame } from '@/components/customer/games/trust-merge-game';
 
-export const metadata = { title: 'Güven Birleştir | QRATEX' };
+export const metadata = { title: 'Güven Birleştir | QRateX' };
 
 export default async function TrustMergePage() {
   const session = await getServerSession(authOptions);

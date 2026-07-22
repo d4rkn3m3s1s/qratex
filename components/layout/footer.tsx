@@ -17,7 +17,7 @@ const footerLinks = {
   company: [
     { label: 'Hakkımızda', href: '/#features' },
     { label: 'Blog', href: '/blog' },
-    { label: 'Neden QRATEX?', href: '/neden-qratex' },
+    { label: 'Neden QRateX?', href: '/neden-qratex' },
   ],
   support: [
     { label: 'SSS', href: '/#faq' },
@@ -65,7 +65,7 @@ export function Footer() {
     'rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
   return (
-    <footer className="border-t border-border/60 bg-card/50 backdrop-blur-xl">
+    <footer className="border-t border-border/40 bg-background/20 backdrop-blur-md">
       <div className="container mx-auto px-4 py-12 lg:py-16">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12">
           {/* Brand */}
@@ -75,14 +75,14 @@ export function Footer() {
                 <>
                   <Image
                     src={logoSrc}
-                    alt="QRATEX Logo"
+                    alt="QRateX Logo"
                     width={56}
                     height={56}
                     className="object-contain w-12 h-12 sm:w-14 sm:h-14"
                   />
                   <Image
                     src={fontLogoSrc}
-                    alt="QRATEX"
+                    alt="QRateX"
                     width={140}
                     height={36}
                     className="object-contain h-8 sm:h-9"
@@ -189,7 +189,7 @@ export function Footer() {
         {/* Bottom */}
         <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} QRATEX. Tüm hakları saklıdır.
+            © {new Date().getFullYear()} QRateX. Tüm hakları saklıdır.
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -203,6 +203,12 @@ export function Footer() {
               <span>İstanbul, Türkiye</span>
             </div>
           </div>
+        </div>
+
+        {/* ReverBot üretici imzası (placeholder — gerçek logo geldiğinde img ile değiştir) */}
+        <div className="mt-8 flex items-center justify-center gap-1.5 text-[11px] tracking-wide text-muted-foreground/50">
+          <span>Powered by</span>
+          <span className="font-semibold text-foreground/60">ReverBot</span>
         </div>
       </div>
     </footer>

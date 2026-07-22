@@ -50,6 +50,8 @@ export const MODULE_CATALOG: ModuleControlItem[] = [
   { key: 'webhooks', label: 'Webhook Yönetimi', description: 'Webhook oluşturma ve event akışı', scope: 'admin', severity: 'important', detailHref: '/admin/webhooks' },
   { key: 'api_keys', label: 'API Anahtarları', description: 'Anahtar üretimi, iptal, listeleme', scope: 'admin', severity: 'critical', detailHref: '/admin/api-keys' },
   { key: 'seo_engine', label: 'SEO Motoru', description: 'SEO ayarları, health check, rollback', scope: 'admin', severity: 'important', detailHref: '/admin/seo' },
+  { key: 'landing_pricing', label: 'Ana sayfa fiyatlandırma', description: 'Açık ana sayfadaki fiyatlandırma bölümü ve ilgili şema; kapalıyken landing pricing gizlenir', scope: 'platform', severity: 'optional', detailHref: '/' },
+  { key: 'landing_marquee', label: 'Ana sayfa reklam şeridi', description: 'Ana sayfadaki kayan reklam/işletme şeridi; kapalıyken gizlenir', scope: 'platform', severity: 'optional', detailHref: '/' },
   {
     key: 'experience_pulse_studio',
     label: 'Ritim stüdyosu',

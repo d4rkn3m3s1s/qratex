@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = getCanonicalBase(seo);
   return {
     title: override?.title ?? 'Kullanım Şartları',
-    description: override?.description ?? 'QRATEX hizmet kullanım şartları: kullanıcı yükümlülükleri, kabul ve sonlandırma koşulları.',
+    description: override?.description ?? 'QRateX hizmet kullanım şartları: kullanıcı yükümlülükleri, kabul ve sonlandırma koşulları.',
     alternates: { canonical: override?.canonical ?? `${base}/kullanim-sartlari` },
   };
 }
@@ -22,7 +22,7 @@ export default async function KullanimSartlariPage() {
   const base = getCanonicalBase(seo);
   const override = await getPageSeo('/kullanim-sartlari');
   const title = override?.title ?? 'Kullanım Şartları';
-  const description = override?.description ?? 'QRATEX hizmet kullanım şartları: kullanıcı yükümlülükleri, kabul ve sonlandırma koşulları.';
+  const description = override?.description ?? 'QRateX hizmet kullanım şartları: kullanıcı yükümlülükleri, kabul ve sonlandırma koşulları.';
   return (
     <>
       <WebPageJsonLd name={title} description={description} url={`${base}/kullanim-sartlari`} />
@@ -35,7 +35,7 @@ export default async function KullanimSartlariPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
           <p>
-            QRATEX hizmetlerini kullanarak bu şartları kabul etmiş sayılırsınız. Platform; QR tabanlı geri bildirim,
+            QRateX hizmetlerini kullanarak bu şartları kabul etmiş sayılırsınız. Platform; QR tabanlı geri bildirim,
             tüketim kaydı, puan/rozet sistemi ve ilgili özellikleri sunar.
           </p>
           <p>

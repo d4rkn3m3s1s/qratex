@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = getCanonicalBase(seo);
   return {
     title: override?.title ?? 'KVKK Aydınlatma Metni',
-    description: override?.description ?? '6698 sayılı KVKK kapsamında QRATEX veri sorumlusu aydınlatma metni. İşlenen veri kategorileri ve haklarınız.',
+    description: override?.description ?? '6698 sayılı KVKK kapsamında QRateX veri sorumlusu aydınlatma metni. İşlenen veri kategorileri ve haklarınız.',
     alternates: { canonical: override?.canonical ?? `${base}/kvkk-aydinlatma-metni` },
   };
 }
@@ -21,7 +21,7 @@ export default async function KvkkAydinlatmaPage() {
   const base = getCanonicalBase(seo);
   const override = await getPageSeo('/kvkk-aydinlatma-metni');
   const title = override?.title ?? 'KVKK Aydınlatma Metni';
-  const description = override?.description ?? '6698 sayılı KVKK kapsamında QRATEX veri sorumlusu aydınlatma metni. İşlenen veri kategorileri ve haklarınız.';
+  const description = override?.description ?? '6698 sayılı KVKK kapsamında QRateX veri sorumlusu aydınlatma metni. İşlenen veri kategorileri ve haklarınız.';
   return (
     <>
       <WebPageJsonLd name={title} description={description} url={`${base}/kvkk-aydinlatma-metni`} />
@@ -34,7 +34,7 @@ export default async function KvkkAydinlatmaPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
           <p>
-            6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında, veri sorumlusu olarak QRATEX tarafından
+            6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında, veri sorumlusu olarak QRateX tarafından
             işlenen kişisel verileriniz hakkında sizi bilgilendiriyoruz.
           </p>
           <p>

@@ -143,7 +143,8 @@ export function NetworkDefenderGame() {
               }
               sync();
               if (nodesRef.current.filter((n) => n.state === 'infected').length >= INFECT_LIMIT) {
-                endGame(scoreRef.current >= DEF.rewardThreshold);
+                // Ağ enfekte oldu = KAYIP (ödül yok). Süre dolumundaki bitiş (aşağıda) skor eşiğini korur.
+                endGame(false);
                 return;
               }
             }

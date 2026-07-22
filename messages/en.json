@@ -23,7 +23,7 @@
         "customerAnalytics": "Personal analytics",
         "customerAnalyticsDescription": "Visits, engagement, and personal trend signals in one view.",
         "customerAiInsights": "My AI insights",
-        "customerAiInsightsDescription": "Narrative and ranked insights from your QRATEX activity.",
+        "customerAiInsightsDescription": "Narrative and ranked insights from your QRateX activity.",
         "customerSettings": "Settings",
         "customerSettingsDescription": "Profile, notifications, theme, and account preferences.",
         "customerScan": "Scan QR",
@@ -41,7 +41,7 @@
         "customerRewards": "Rewards",
         "customerRewardsDescription": "Claimable rewards, progress, and redemption status.",
         "customerMyCard": "My card",
-        "customerMyCardDescription": "Your QRATEX card, tier signals, and quick sharing tools.",
+        "customerMyCardDescription": "Your QRateX card, tier signals, and quick sharing tools.",
         "dealerProducts": "My products",
         "dealerProductsDescription": "Catalog items tied to QR flows, availability, and consumptions.",
         "dealerVocWall": "VoC wall",
@@ -125,7 +125,7 @@
         "dealerInnovation": "Innovation",
         "dealerInnovationDescription": "Experiments, betas, and roadmap previews for your account.",
         "customerDashboard": "Dashboard",
-        "customerDashboardDescription": "Your QRATEX home: progress, shortcuts, and live signals.",
+        "customerDashboardDescription": "Your QRateX home: progress, shortcuts, and live signals.",
         "customerFeedbackJourney": "Feedback journey",
         "customerFeedbackJourneyDescription": "Step-by-step view of a single feedback thread and outcomes.",
         "dealerDashboard": "Dashboard",
@@ -137,15 +137,15 @@
         "staffField": "Field check-in",
         "staffFieldDescription": "Location notes and field pings for the operations team.",
         "authLogin": "Sign in",
-        "authLoginDescription": "Secure access to your QRATEX customer, dealer, admin, or staff workspace.",
+        "authLoginDescription": "Secure access to your QRateX customer, dealer, admin, or staff workspace.",
         "authRegister": "Create account",
-        "authRegisterDescription": "Join QRATEX with email verification and role-aware onboarding.",
+        "authRegisterDescription": "Join QRateX with email verification and role-aware onboarding.",
         "authForgotPassword": "Forgot password",
         "authForgotPasswordDescription": "Request a secure reset link sent to your email.",
         "authResetPassword": "Reset password",
         "authResetPasswordDescription": "Choose a new password to finish account recovery.",
         "authMagicLink": "Magic link",
-        "authMagicLinkDescription": "Passwordless sign-in link for your QRATEX account.",
+        "authMagicLinkDescription": "Passwordless sign-in link for your QRateX account.",
         "authVerifyEmail": "Verify email",
         "authVerifyEmailDescription": "Confirm your address to activate access.",
         "authComplete": "Complete profile",
@@ -212,7 +212,7 @@
         "dailyRewardMessage": "You can win new surprises by logging in every day! Today's reward is with you."
     },
     "common": {
-        "appName": "QRATEX",
+        "appName": "QRateX",
         "loading": "Loading...",
         "error": "An error occurred",
         "save": "Save",
@@ -293,7 +293,7 @@
     "dealerDashboard": {
         "gettingStarted": {
             "title": "Let’s get started",
-            "subtitle": "Complete these steps to get your first value from QRATEX",
+            "subtitle": "Complete these steps to get your first value from QRateX",
             "qrTitle": "Create your first QR code",
             "qrDesc": "Create the QR code customers will scan to leave feedback.",
             "qrCta": "Create QR",
@@ -1685,7 +1685,7 @@
         "firstBadgeHint": "Your first badge is one QR away.",
         "firstQuest": "First quest",
         "welcome": {
-            "title": "Welcome to QRATEX! 🎉",
+            "title": "Welcome to QRateX! 🎉",
             "subtitle": "Your feedback improves businesses, and you earn points and badges. Start with these 3 steps:",
             "step1": "Scan a QR code at a business",
             "step2": "Rate your experience and leave a review",
@@ -1745,7 +1745,7 @@
         "loading": "Loading journey score",
         "eyebrow": "Customer area",
         "title": "My timeline",
-        "description": "All your experiences, rewards, and feedback history in QRATEX.",
+        "description": "All your experiences, rewards, and feedback history in QRateX.",
         "feedbackJourneyDesc": "A dedicated timeline for each QR feedback including business response and remedy steps.",
         "feedbackJourneyBtn": "Feedback journeys",
         "score": "Score",
@@ -1854,7 +1854,7 @@
         "navFeatures": "Features",
         "navPricing": "Pricing",
         "navBlog": "Blog",
-        "navWhyQratex": "Why QRATEX?",
+        "navWhyQratex": "Why QRateX?",
         "pageLoading": "Loading page",
         "globalSearchResultsRegion": "Search results",
         "globalSearchSearching": "Searching…",
@@ -2039,7 +2039,7 @@
         "anonFingerprint": "Anon · fingerprint:"
     },
     "pwaInstall": {
-        "title": "Install QRATEX",
+        "title": "Install QRateX",
         "subtitle": "Add it to your home screen for faster access!",
         "install": "Install",
         "later": "Later",
@@ -2052,7 +2052,7 @@
         "iosStep2Before": "In the menu, find ",
         "iosStep2After": " Add to Home Screen",
         "iosStep3Title": "Tap Add",
-        "iosStep3Desc": "QRATEX will be added to your home screen",
+        "iosStep3Desc": "QRateX will be added to your home screen",
         "iosGotIt": "Got it"
     },
     "onboarding": {
@@ -2064,7 +2064,7 @@
         "dealer": {
             "welcome": {
                 "title": "Welcome!",
-                "desc": "Manage customer feedback from one dashboard with QRATEX."
+                "desc": "Manage customer feedback from one dashboard with QRateX."
             },
             "qr": {
                 "title": "Create your first QR code",
@@ -2109,7 +2109,7 @@
             "badge": "New: AI-powered sentiment analysis",
             "headlineLine1": "Customer experience",
             "headlineAccent": "Reimagined",
-            "sub": "Collect feedback via QR codes with QRATEX, analyze with AI, and boost loyalty with gamification.",
+            "sub": "Collect feedback via QR codes with QRateX, analyze with AI, and boost loyalty with gamification.",
             "ctaStart": "Start free",
             "ctaDemo": "Watch demo",
             "scrollHint": "Scroll to content",
@@ -2158,12 +2158,16 @@
             "primary": "Try it free",
             "sales": "Talk to sales"
         },
+        "adMarquee": {
+            "title": "Businesses that trust us",
+            "aria": "Scrolling business and ad strip"
+        },
         "demo": {
             "badge": "Demo",
             "heading": "See how it works",
             "sub": "Explore QR feedback, scoring, and live analytics.",
-            "videoTitle": "QRATEX demo",
-            "videoAria": "QRATEX product demo video",
+            "videoTitle": "QRateX demo",
+            "videoAria": "QRateX product demo video",
             "placeholder": "A demo video or live preview can appear here.",
             "ctaFeatures": "Explore features"
         },
@@ -2233,12 +2237,12 @@
         "testimonials": {
             "badge": "Testimonials",
             "heading": "What businesses say",
-            "sub": "Feedback from businesses using QRATEX",
+            "sub": "Feedback from businesses using QRateX",
             "items": [
                 {
                     "name": "Alex Johnson",
                     "role": "Cafe owner",
-                    "content": "QRATEX helped us raise customer satisfaction by 40%. Real-time feedback changed how we work."
+                    "content": "QRateX helped us raise customer satisfaction by 40%. Real-time feedback changed how we work."
                 },
                 {
                     "name": "Sarah Miller",
@@ -2258,8 +2262,8 @@
             "sub": "Answers to common questions",
             "items": [
                 {
-                    "q": "What is QRATEX?",
-                    "a": "QRATEX is a platform that collects customer feedback via QR codes, analyzes it with AI, and boosts loyalty with gamification."
+                    "q": "What is QRateX?",
+                    "a": "QRateX is a platform that collects customer feedback via QR codes, analyzes it with AI, and boosts loyalty with gamification."
                 },
                 {
                     "q": "What are the limits of the free plan?",
@@ -2377,7 +2381,7 @@
         "noAccount": "Don't have an account?",
         "registerLink": "Sign up",
         "registerTitle": "Create an account",
-        "registerSubtitle": "Join QRATEX and enjoy the benefits",
+        "registerSubtitle": "Join QRateX and enjoy the benefits",
         "inviteBonusLine": "You'll earn bonus points with a referral code",
         "accountTypeAria": "Choose account type",
         "accountTypeOptionAria": "Account type: {{label}}. {{description}}",
@@ -2438,6 +2442,22 @@
         "errorRetry": "Try again",
         "errorLogin": "Login"
     },
+    "sidebarNavGroups": {
+        "customer": {
+            "card": "My Card",
+            "analytics": "Analytics",
+            "feedback": "My Feedback",
+            "trends": "Trends",
+            "rewards": "Rewards & Shop",
+            "games": "QGameX"
+        },
+        "dealer": {
+            "business": "Business",
+            "analytics": "Analytics",
+            "feedback": "My Feedback",
+            "system": "System"
+        }
+    },
     "sidebarNav": {
         "admin": {
             "dashboard": "Dashboard",
@@ -2482,6 +2502,7 @@
             "avatar_shop": "Shop management",
             "design_language": "Design language",
             "menu_order": "Menu order",
+            "menu_groups": "Menu groups",
             "experience_pulse": "Pulse studio",
             "accessibility": "Accessibility",
             "features": "Features",
@@ -2567,6 +2588,7 @@
             "surprise_boxes": "My Surprise Boxes",
             "games_hub": "Game Center",
             "campaigns": "Campaigns & Referral",
+            "referral": "Invite & Earn",
             "donations": "Social Impact",
             "leaderboard": "Leaderboard",
             "discover": "Discover",
@@ -3344,8 +3366,8 @@
         "loadError": "Failed to load referral info",
         "loading": "Loading referral info...",
         "codeCopied": "Referral code copied!",
-        "shareTitle": "Join QRATEX!",
-        "shareText": "Join QRATEX and earn bonus points! My referral code:",
+        "shareTitle": "Join QRateX!",
+        "shareText": "Join QRateX and earn bonus points! My referral code:",
         "codeApplied": "Referral code applied!",
         "codeApplyError": "Could not apply code",
         "connectionError": "Connection error",

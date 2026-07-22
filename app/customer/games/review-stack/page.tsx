@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { ReviewStackGame } from '@/components/customer/games/review-stack-game';
 
-export const metadata = { title: 'Yorum İstifi | QRATEX' };
+export const metadata = { title: 'Yorum İstifi | QRateX' };
 
 export default async function ReviewStackPage() {
   const session = await getServerSession(authOptions);

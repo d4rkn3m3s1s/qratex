@@ -3,13 +3,13 @@ import { OG_IMAGE_BACKGROUND_GRADIENT, OG_IMAGE_TITLE_HEX } from '@/lib/brand-co
 import { getSeoSettings } from '@/lib/seo-settings';
 import { CHART_HEX } from '@/lib/chart-palette';
 
-export const alt = 'QRATEX - QR Tabanlı Geri Bildirim Platformu';
+export const alt = 'QRateX - QR Tabanlı Geri Bildirim Platformu';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 export const revalidate = 3600;
 export const dynamic = 'force-dynamic';
 
-const defaultTitle = 'QRATEX';
+const defaultTitle = 'QRateX';
 const defaultDesc = 'QR tabanlı geri bildirim ve gamification platformu. Müşteri deneyimini dönüştürün.';
 
 export default async function Image() {
@@ -54,7 +54,7 @@ export default async function Image() {
               marginBottom: 24,
             }}
           >
-            {title.replace(' | QRATEX', '').split(' - ')[0] || title}
+            {title.replace(' | QRateX', '').split(' - ')[0] || title}
           </div>
           <div style={{ fontSize: 28, color: CHART_HEX.slateLight, maxWidth: 900 }}>{desc}</div>
           <div style={{ marginTop: 40, fontSize: 22, color: CHART_HEX.slate }}>qratex.com</div>

@@ -204,7 +204,8 @@ export function SpamBreakerGame() {
         haptic([20, 40]);
         shakeRef.current = 10;
         if (livesRef.current <= 0) {
-          endGame(scoreRef.current >= DEF.rewardThreshold);
+          // Tüm toplar düştü = KAYIP (ödül yok). Tuğla temizleme kazanımı yukarıda ayrı.
+          endGame(false);
           return false;
         }
         resetBall();

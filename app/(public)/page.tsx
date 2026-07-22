@@ -3,6 +3,7 @@ import { getSeoSettings, getCanonicalBase, getPageSeo, sanitizeSeoString } from 
 import { getBackgroundEffect } from '@/lib/get-background-effect';
 import { getMessages } from '@/i18n/request';
 import { getServerLocale } from '@/lib/server-locale';
+import { getModuleControls } from '@/lib/module-gate';
 import HomeClient from './home-client';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,13 +18,18 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const [seo, backgroundEffect, locale] = await Promise.all([
+  const [seo, backgroundEffect, locale, moduleControls] = await Promise.all([
     getSeoSettings(),
     getBackgroundEffect(),
     getServerLocale(),
+    getModuleControls(),
   ]);
   const base = getCanonicalBase(seo);
   const landing = getMessages(locale).landing;
+  // Ana sayfa fiyatlandırma modülü admin'den kapatılabilir; kapalıysa bölüm + şema gizlenir.
+  const pricingEnabled = moduleControls.landing_pricing !== false;
+  // Ana sayfa reklam şeridi (marquee) admin'den kapatılabilir.
+  const marqueeEnabled = moduleControls.landing_marquee !== false;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -69,40 +75,43 @@ export default async function HomePage() {
 
   const plans = landing.pricing.plans;
   const priceValidUntil = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const pricingLd = {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    itemListElement: [
-      {
-        '@type': 'Product',
-        name: plans.free.name,
-        description: plans.free.description,
-        offers: { '@type': 'Offer', price: '0', priceCurrency: 'TRY' },
-      },
-      {
-        '@type': 'Product',
-        name: plans.starter.name,
-        description: plans.starter.description,
-        offers: {
-          '@type': 'Offer',
-          price: '299',
-          priceCurrency: 'TRY',
-          priceValidUntil,
-        },
-      },
-      {
-        '@type': 'Product',
-        name: plans.professional.name,
-        description: plans.professional.description,
-        offers: {
-          '@type': 'Offer',
-          price: '699',
-          priceCurrency: 'TRY',
-          priceValidUntil,
-        },
-      },
-    ],
-  };
+  // Pricing JSON-LD yalnızca modül açıkken yayınlanır.
+  const pricingLd = pricingEnabled
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'ItemList',
+        itemListElement: [
+          {
+            '@type': 'Product',
+            name: plans.free.name,
+            description: plans.free.description,
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'TRY' },
+          },
+          {
+            '@type': 'Product',
+            name: plans.starter.name,
+            description: plans.starter.description,
+            offers: {
+              '@type': 'Offer',
+              price: '299',
+              priceCurrency: 'TRY',
+              priceValidUntil,
+            },
+          },
+          {
+            '@type': 'Product',
+            name: plans.professional.name,
+            description: plans.professional.description,
+            offers: {
+              '@type': 'Offer',
+              price: '699',
+              priceCurrency: 'TRY',
+              priceValidUntil,
+            },
+          },
+        ],
+      }
+    : null;
 
   const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL;
   const videoLd = demoVideoUrl
@@ -126,17 +135,19 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingLd) }}
-      />
+      {pricingLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingLd) }}
+        />
+      )}
       {videoLd && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(videoLd) }}
         />
       )}
-      <HomeClient initialBackgroundEffect={backgroundEffect} />
+      <HomeClient pricingEnabled={pricingEnabled} marqueeEnabled={marqueeEnabled} />
     </>
   );
 }

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { SpamDefenseGame } from '@/components/customer/games/spam-defense-game';
 
-export const metadata = { title: 'Spam Savunması | QRATEX' };
+export const metadata = { title: 'Spam Savunması | QRateX' };
 
 export default async function SpamDefensePage() {
   const session = await getServerSession(authOptions);

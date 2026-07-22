@@ -292,7 +292,7 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
                             Kozmetik Hediye Et
                         </DialogTitle>
                         <DialogDescription className="text-slate-400">
-                            <strong>{giftItem?.name}</strong> ögesini başka bir QRATEX kullanıcısına hediye edin.
+                            <strong>{giftItem?.name}</strong> ögesini başka bir QRateX kullanıcısına hediye edin.
                         </DialogDescription>
                     </DialogHeader>
 

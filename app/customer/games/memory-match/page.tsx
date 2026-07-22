@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { MemoryMatchGame } from '@/components/customer/games/memory-match-game';
 
-export const metadata = { title: 'Hafıza Eşleştir | QRATEX' };
+export const metadata = { title: 'Hafıza Eşleştir | QRateX' };
 
 export default async function MemoryMatchPage() {
   const session = await getServerSession(authOptions);

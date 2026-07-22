@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { WifiOff } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Çevrimdışısınız — QRATEX',
+  title: 'Çevrimdışısınız — QRateX',
   robots: { index: false, follow: false },
 };
 

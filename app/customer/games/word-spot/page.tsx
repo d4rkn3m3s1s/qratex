@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { WordSpotGame } from '@/components/customer/games/word-spot-game';
 
-export const metadata = { title: 'Sahteyi Yakala | QRATEX' };
+export const metadata = { title: 'Sahteyi Yakala | QRateX' };
 
 export default async function WordSpotPage() {
   const session = await getServerSession(authOptions);

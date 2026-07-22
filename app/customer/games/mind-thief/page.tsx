@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { MindThiefGame } from '@/components/customer/games/mind-thief-game';
 
-export const metadata = { title: 'Zihin Hırsızı | QRATEX' };
+export const metadata = { title: 'Zihin Hırsızı | QRateX' };
 
 export default async function MindThiefPage() {
   const session = await getServerSession(authOptions);

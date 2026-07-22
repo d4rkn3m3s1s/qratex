@@ -166,7 +166,7 @@ export default function CustomerDashboard() {
         showcaseResult
       ] = await Promise.all([
         safeFetch('/api/customer/stats'),
-        safeFetch('/api/leaderboard?limit=4'),
+        safeFetch('/api/leaderboard?limit=5'),
         safeFetch('/api/gamification/rewards'),
         safeFetch('/api/gamification/spin'),
         safeFetch('/api/customer/discovery'),
@@ -244,22 +244,31 @@ export default function CustomerDashboard() {
     }
 
     // 2. Leaderboard
-    const leaderResult = leaderData as { success?: boolean; data?: { leaderboard?: LeaderboardEntry[]; userRank?: number } };
+    const leaderResult = leaderData as {
+      success?: boolean;
+      data?: { leaderboard?: (LeaderboardEntry & { id?: string; isCurrentUser?: boolean })[]; userRank?: number };
+    };
     if (leaderResult?.success && Array.isArray(leaderResult.data?.leaderboard)) {
-      const lb: LeaderboardEntry[] = leaderResult.data.leaderboard.slice(0, 3).map((u: LeaderboardEntry, i: number) => ({
+      const raw = leaderResult.data.leaderboard;
+      const lb: LeaderboardEntry[] = raw.slice(0, 5).map((u, i) => ({
         rank: i + 1,
         name: u.name,
         points: u.points,
         level: u.level,
         avatar: u.image,
+        isCurrentUser: Boolean(u.isCurrentUser),
       }));
-      lb.push({
-        rank: leaderResult.data.userRank ?? 99,
-        name: 'Siz',
-        points: user?.points ?? 0,
-        level: user?.level ?? 1,
-        isCurrentUser: true,
-      });
+      // Kullanıcı ilk 5'te değilse, kendi sırasını en alta ekle (aksi halde tekrar etme).
+      const userInTop = lb.some((e) => e.isCurrentUser);
+      if (!userInTop && leaderResult.data?.userRank) {
+        lb.push({
+          rank: leaderResult.data.userRank,
+          name: 'Siz',
+          points: user?.points ?? 0,
+          level: user?.level ?? 1,
+          isCurrentUser: true,
+        });
+      }
       setLeaderboard(lb);
     }
 
@@ -667,10 +676,10 @@ export default function CustomerDashboard() {
                     Sosyal sorumluluk
                   </div>
                   <h2 className="mt-2 text-lg sm:text-xl font-bold tracking-tight text-balance">
-                    Puanlarını gerçek etkiye donustur
+                    Puanlarını gerçek etkiye dönüştür
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-                    Su, egitim, cevre ve hayvan projelerine destek ol. SSP liderliginde yerini gor.
+                    Su, eğitim, çevre ve hayvan projelerine destek ol. Bağış liderliğinde yerini gör.
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -987,8 +996,9 @@ export default function CustomerDashboard() {
           </m.section>
         )}
 
-        {/* ─── Oyunlaştırma Özeti ─── */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* ─── Oyunlaştırma Özeti (Aktif Görevler) ─── */}
+        {/* "Son Rozetler" kartı kaldırıldı — rozetler artık yalnızca profil/rozetler sayfasında. */}
+        <div className="grid gap-6">
           {/* Aktif Görevler */}
           <m.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}>
             <Card className="rounded-3xl border border-border/60 shadow-md h-full bg-gradient-to-b from-card to-muted/10">
@@ -1034,73 +1044,13 @@ export default function CustomerDashboard() {
             </Card>
           </m.div>
 
-          {/* Rozetlerim + Kişisel Analitik kısayolu */}
-          <m.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }}>
-            <Card className="rounded-3xl border border-border/60 shadow-md h-full bg-gradient-to-b from-card to-muted/10">
-              <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 pb-4">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-xl bg-primary/10 p-2">
-                    <Trophy className="h-5 w-5 text-primary" />
-                  </div>
-                  <CardTitle className="text-lg">Son Rozetler</CardTitle>
-                </div>
-                <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-primary hover:text-primary/90">
-                  <Link prefetch={false} href="/customer/badges">Tümü ({stats.badgeCount})</Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {userBadges.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {userBadges.slice(0, 4).map((badge) => {
-                      const rColor = getRarityColor(badge.rarity);
-                      const rBg = getRarityBgColor(badge.rarity);
-                      return (
-                        <div
-                          key={badge.id}
-                          className={`flex items-center gap-3 p-3 rounded-2xl border bg-card ${rBg} border-border/60 hover:shadow-md transition-shadow`}
-                        >
-                          <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-background shadow-sm bg-muted flex items-center justify-center p-2">
-                            {badge.icon ? (
-                              <Image src={badge.icon} alt={badge.name} width={32} height={32} className="object-cover" />
-                            ) : (
-                              <Trophy className={`w-5 h-5 ${rColor}`} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold truncate leading-tight">{badge.name}</p>
-                            <span className={`text-[10px] font-semibold tracking-wider uppercase mt-1 inline-block ${rColor}`}>
-                              {badge.rarity}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 bg-muted/30 rounded-2xl border border-dashed border-border/60">
-                    <Trophy className="w-10 h-10 mx-auto text-muted-foreground/40 mb-3" />
-                    <p className="text-sm font-medium text-foreground">Henüz rozet kazanmadın.</p>
-                    <p className="text-xs text-muted-foreground mt-1">QR taratarak ilk rozetini al!</p>
-                  </div>
-                )}
-                <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl bg-muted/50 px-3 py-2.5">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <BarChart3 className="h-4 w-4 text-primary" />
-                    <span>Kişisel analitiklerini detaylı görmek için tıkla.</span>
-                  </div>
-                  <Button asChild size="sm" variant="outline" className="h-7 px-3 rounded-xl text-xs">
-                    <Link prefetch={false} href="/customer/analytics">Kişisel Analitiğim</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </m.div>
         </div>
 
-        {/* ─── Lig ve Liderlik ─── */}
+        {/* ─── Liderlik ─── */}
+        {/* "Lig Durumu" kartı kaldırıldı — lig bilgisi profil sayfasında görülebilir. */}
         <div className="grid gap-6 lg:grid-cols-12">
-          {/* Lig Durumu */}
-          <div className="lg:col-span-5">
+          {/* Lig Durumu (KALDIRILDI) */}
+          <div className="hidden">
             <m.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="h-full">
               <Card className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent h-full shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -1161,8 +1111,8 @@ export default function CustomerDashboard() {
             </m.div>
           </div>
 
-          {/* Liderlik Tablosu Gözat */}
-          <div className="lg:col-span-7">
+          {/* Liderlik Tablosu Gözat — Lig Durumu kaldırıldığı için tam genişlik */}
+          <div className="lg:col-span-12">
             <m.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="h-full">
               <Card className="rounded-2xl border border-border/60 shadow-sm h-full flex flex-col">
                 <CardHeader className="flex flex-row items-center justify-between pb-2 border-b">

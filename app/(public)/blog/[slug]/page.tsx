@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSeoSettings, getCanonicalBase } from '@/lib/seo-settings';
-import { getPostBySlug, BLOG_POSTS } from '@/lib/blog-posts';
+import { getPostBySlug, BLOG_POSTS, formatBlogDate } from '@/lib/blog-posts';
 import { BreadcrumbNav } from '@/components/seo/breadcrumb-nav';
 
 export async function generateStaticParams() {
@@ -76,21 +76,11 @@ export default async function BlogPostPage({
           <header className="mb-8">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-muted-foreground">
               <time dateTime={post.datePublished}>
-                Yayın{' '}
-                {new Date(post.datePublished).toLocaleDateString('tr-TR', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+                Yayın {formatBlogDate(post.datePublished)}
               </time>
               {showModified ? (
                 <time dateTime={post.dateModified}>
-                  Güncellenme{' '}
-                  {new Date(post.dateModified).toLocaleDateString('tr-TR', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
+                  Güncellenme {formatBlogDate(post.dateModified)}
                 </time>
               ) : null}
             </div>
@@ -104,10 +94,21 @@ export default async function BlogPostPage({
             </p>
           </header>
           <div className="prose prose-neutral max-w-none dark:prose-invert">
-            <p>{post.description}</p>
-            <p>
-              Bu yazı QRATEX blog serisinin bir parçasıdır. Geri bildirim ve müşteri deneyimi hakkında daha fazla içerik
-              için{' '}
+            {post.content.map((block, i) => {
+              if (block.type === 'h2') return <h2 key={i}>{block.text}</h2>;
+              if (block.type === 'ul')
+                return (
+                  <ul key={i}>
+                    {block.items.map((item, j) => (
+                      <li key={j}>{item}</li>
+                    ))}
+                  </ul>
+                );
+              return <p key={i}>{block.text}</p>;
+            })}
+            <hr />
+            <p className="text-sm text-muted-foreground">
+              Bu yazı QRateX blog serisinin bir parçasıdır. Daha fazla içerik için{' '}
               <Link
                 href="/blog"
                 className="text-primary underline decoration-primary/60 underline-offset-2 outline-none transition-colors hover:decoration-primary focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

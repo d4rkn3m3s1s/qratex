@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { GamesHub } from '@/components/customer/games/games-hub';
 
-export const metadata = { title: 'Oyun Merkezi | QRATEX' };
+export const metadata = { title: 'Oyun Merkezi | QRateX' };
 
 export default async function GamesHubPage() {
   const session = await getServerSession(authOptions);

@@ -16,7 +16,7 @@ export default function PricingSection() {
   const plans = m.landing.pricing.plans;
 
   return (
-    <section id="pricing" className="py-20 lg:py-32 bg-muted/20 dark:bg-muted/30 scroll-mt-20 [content-visibility:auto]">
+    <section id="pricing" className="py-20 lg:py-32 scroll-mt-20 [content-visibility:auto]">
       <div className="container px-4">
         <motion.div
           className="text-center mb-16"

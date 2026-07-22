@@ -88,7 +88,8 @@ export function DataMinerGame() {
         fxRef.current?.shockwave(px, py, '#f43f5e', 150);
         fxRef.current?.floatText(px, py, 'Tuzak! -1', '#fca5a5');
         if (livesRef.current <= 0) {
-          setTimeout(() => endGame(scoreRef.current >= DEF.rewardThreshold), 700);
+          // Tüm canlar bot tuzağında bitti = KAYIP (ödül yok). Güvenli-hücre temizleme/cashOut ayrı.
+          setTimeout(() => endGame(false), 700);
         }
         return;
       }

@@ -921,3 +921,31 @@ html.colorblind .text-emerald-500 {
 #qr-reader__dashboard_section_fsr {
   display: none !important;
 }
+
+/* Sayfa geçiş fade — styled-jsx yerine burada (SSR/hydration güvenli). */
+.qx-page-fade {
+  animation: qx-page-fade 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes qx-page-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Landing reklam şeridi (AdMarquee) — sonsuz kayan; hover'da durur. */
+.qx-marquee-track {
+  animation: qx-marquee 32s linear infinite;
+}
+.group:hover .qx-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes qx-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qx-page-fade,
+  .qx-marquee-track {
+    animation: none;
+  }
+}

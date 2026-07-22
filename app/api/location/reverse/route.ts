@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(endpoint.toString(), {
       headers: {
-        'User-Agent': `QRATEX/1.0 (reverse geocode; +${appOrigin})`,
+        'User-Agent': `QRateX/1.0 (reverse geocode; +${appOrigin})`,
         Referer: `${appOrigin}/`,
         'Accept-Language': 'tr,en;q=0.8',
       },

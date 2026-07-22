@@ -39,10 +39,10 @@ export interface SeoGlobalSettings {
 }
 
 const defaults: SeoGlobalSettings = {
-  defaultTitle: 'QRATEX - QR Tabanlı Geri Bildirim Platformu',
+  defaultTitle: 'QRateX - QR Tabanlı Geri Bildirim Platformu',
   defaultDescription:
-    'QRATEX ile müşteri geri bildirimlerini QR kodlar üzerinden toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın. Ücretsiz deneyin.',
-  siteName: 'QRATEX',
+    'QRateX ile müşteri geri bildirimlerini QR kodlar üzerinden toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın. Ücretsiz deneyin.',
+  siteName: 'QRateX',
   siteUrl: siteUrl,
   ogImageUrl: `${siteUrl}/logo/logo.png`,
   ogImageWidth: 1200,
@@ -51,7 +51,7 @@ const defaults: SeoGlobalSettings = {
   twitterCard: 'summary_large_image',
   locale: 'tr_TR',
   keywords: ['QR kod', 'geri bildirim', 'müşteri deneyimi', 'gamification', 'AI analizi', 'işletme yönetimi'],
-  organizationName: 'QRATEX',
+  organizationName: 'QRateX',
   organizationDescription: 'QR tabanlı geri bildirim ve gamification platformu. Müşteri deneyimini AI ve gamification ile dönüştürün.',
   websiteDescription: 'Müşteri geri bildirimlerini QR kodlar üzerinden toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın.',
   robotsIndex: true,

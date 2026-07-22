@@ -35,7 +35,7 @@ export function MatrixBackground({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789QRATEX';
+    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789QRateX';
     const charArray = chars.split('');
     const fontSize = 14;
     const columns = Math.floor(canvas.width / fontSize);

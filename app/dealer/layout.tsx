@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/dashboard/sidebar';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
+import { OnboardingGateBanner } from '@/components/onboarding/onboarding-gate-banner';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { RealtimeNotifications } from '@/components/dashboard/realtime-notifications';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -38,6 +39,7 @@ export default async function DealerLayout({
           tabIndex={-1}
           className="flex-1 min-w-0 w-full max-w-[100vw] break-words py-3 sm:py-5 lg:py-6 overflow-x-hidden overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
+          <OnboardingGateBanner />
           {children}
         </main>
       </div>

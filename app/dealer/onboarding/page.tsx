@@ -84,7 +84,7 @@ export default function DealerOnboardingPage() {
     <div className="flex flex-1 flex-col gap-6 p-6">
       <DashboardPageHero
         title="Kurulum Sihirbazı"
-        description="Birkaç adımda QRATEX’i işletmen için hazır hale getir"
+        description="Birkaç adımda QRateX’i işletmen için hazır hale getir"
         icon={<Rocket className="text-white" />}
       />
 

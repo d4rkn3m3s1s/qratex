@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { NetworkDefenderGame } from '@/components/customer/games/network-defender-game';
 
-export const metadata = { title: 'Ağ Savunucusu | QRATEX' };
+export const metadata = { title: 'Ağ Savunucusu | QRateX' };
 
 export default async function NetworkDefenderPage() {
   const session = await getServerSession(authOptions);

@@ -405,7 +405,7 @@ export default function AdminSeoPage() {
                   <Input
                     value={g.siteName}
                     onChange={(e) => updateGlobal({ siteName: e.target.value })}
-                    placeholder="QRATEX"
+                    placeholder="QRateX"
                   />
                 </div>
               </div>
