@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/api-auth';
+import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -21,7 +21,7 @@ const createSchema = z.object({
 
 /** GET: departmanlar + her birindeki üye sayısı + ekip üyeleri (atama için). */
 export async function GET() {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
 
   const [departments, members] = await Promise.all([
@@ -52,7 +52,7 @@ const DEFAULT_DEPARTMENTS: { name: string; color: string }[] = [
 
 /** POST: yeni departman oluşturur. ?seed=1 → varsayılan 8 departmanı ekler (idempotent). */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
 
   if (req.nextUrl.searchParams.get('seed') === '1') {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
 /** DELETE ?slug=: departman siler. */
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
   const slug = req.nextUrl.searchParams.get('slug');
   if (!slug) return NextResponse.json({ success: false, error: 'slug gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/api-auth';
+import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -26,7 +26,7 @@ const updateSchema = createSchema.partial();
 
 /** GET: görevleri listeler. ?department=, ?weekKey=, ?status=, ?mine=1 filtreleri. */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
   const sp = req.nextUrl.searchParams;
 
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
 /** POST: yeni görev oluşturur. */
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
 
   const raw = await req.json().catch(() => ({}));
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
 /** PUT ?id=: görev günceller (durum/atama/vb.). Kanban sürükle-bırak da bunu kullanır. */
 export async function PUT(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
@@ -149,7 +149,7 @@ export async function PUT(req: NextRequest) {
 
 /** DELETE ?id=: görev siler. */
 export async function DELETE(req: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

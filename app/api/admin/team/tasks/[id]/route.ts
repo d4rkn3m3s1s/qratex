@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/api-auth';
+import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 /** GET: tek görev + checklist + yorumlar + aktivite geçmişi (detay modalı için). */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
   const { id } = await params;
 
@@ -43,7 +43,7 @@ const actionSchema = z.discriminatedUnion('op', [
 
 /** POST: detay alt-işlemleri (checklist ekle/işaretle/sil, yorum ekle/sil). Aktivite kaydı yazar. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(['ADMIN']);
+  const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
   const { id: taskId } = await params;
   const userId = auth.session.user.id;

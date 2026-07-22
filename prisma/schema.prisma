@@ -2685,6 +2685,7 @@ model CompanyTask {
   priority     String    @default("medium") // low | medium | high
   department   String?   // Department.slug (null = genel)
   weekKey      String? // "YYYY-Www" (haftalık pano; null = bu haftaya bağlı değil)
+  tags         String? // virgülle ayrık etiketler ("acil,tasarım")
   assignedToId String?
   createdById  String
   dueAt        DateTime?

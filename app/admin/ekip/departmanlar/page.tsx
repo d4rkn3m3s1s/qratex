@@ -20,6 +20,31 @@ export default function TeamDepartmentsPage() {
   const [loading, setLoading] = useState(true);
   const [newDep, setNewDep] = useState('');
   const [savingDep, setSavingDep] = useState(false);
+  const [addEmail, setAddEmail] = useState('');
+  const [addDep, setAddDep] = useState('');
+  const [addingMember, setAddingMember] = useState(false);
+
+  const addMember = async () => {
+    if (!addEmail.trim()) return;
+    setAddingMember(true);
+    try {
+      const res = await fetch('/api/admin/team/members', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: addEmail.trim(), department: addDep || null, teamRole: 'uye' }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Eklenemedi');
+      toast.success('Üye ekibe eklendi');
+      setAddEmail(''); setAddDep('');
+      load();
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Hata'); }
+    finally { setAddingMember(false); }
+  };
+  const removeMember = async (userId: string) => {
+    setMembers((p) => p.map((m) => m.id === userId ? { ...m, adminDepartment: null, adminTeamRole: null } : m));
+    await fetch(`/api/admin/team/members?id=${userId}`, { method: 'DELETE' }).catch(() => {});
+    load();
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -147,8 +172,21 @@ export default function TeamDepartmentsPage() {
 
           {/* Ekip üyeleri (admin'ler) */}
           <Card>
-            <CardHeader><CardTitle className="text-lg">Ekip Üyeleri (Adminler)</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg">Ekip Üyeleri</CardTitle></CardHeader>
             <CardContent className="space-y-2">
+              {/* E-posta ile mevcut kullanıcıyı ekibe ekle */}
+              <div className="mb-3 flex flex-wrap gap-2 rounded-xl border border-dashed border-border/60 p-3">
+                <Input placeholder="E-posta ile ekle…" value={addEmail} onChange={(e) => setAddEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addMember()} className="h-9 min-w-[160px] flex-1" />
+                <Select value={addDep || 'none'} onValueChange={(v) => setAddDep(v === 'none' ? '' : v)}>
+                  <SelectTrigger className="h-9 w-32"><SelectValue placeholder="Departman" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Departmansız</SelectItem>
+                    {departments.map((d) => <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" onClick={addMember} disabled={addingMember || !addEmail.trim()}>{addingMember ? '…' : 'Ekle'}</Button>
+              </div>
               {members.map((m) => (
                 <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 p-3">
                   <Avatar className="h-9 w-9">
@@ -174,6 +212,11 @@ export default function TeamDepartmentsPage() {
                       <SelectItem value="uye">Üye</SelectItem>
                     </SelectContent>
                   </Select>
+                  {m.adminDepartment && (
+                    <button onClick={() => removeMember(m.id)} aria-label="Ekipten çıkar" title="Ekipten çıkar">
+                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  )}
                 </div>
               ))}
               {members.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Admin bulunamadı</p>}
