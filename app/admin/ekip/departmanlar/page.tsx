@@ -54,6 +54,17 @@ export default function TeamDepartmentsPage() {
     await fetch(`/api/admin/team/departments?slug=${slug}`, { method: 'DELETE' }).catch(() => {});
   };
 
+  const seedDefaults = async () => {
+    setSavingDep(true);
+    try {
+      const res = await fetch('/api/admin/team/departments?seed=1', { method: 'POST' });
+      if (!res.ok) throw new Error();
+      toast.success('Varsayılan departmanlar yüklendi');
+      load();
+    } catch { toast.error('Yüklenemedi'); }
+    finally { setSavingDep(false); }
+  };
+
   // Üyeye departman/rol ata → users PUT
   const updateMember = async (userId: string, patch: { adminDepartment?: string | null; adminTeamRole?: string | null }) => {
     setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, ...patch } : m)));
@@ -92,19 +103,44 @@ export default function TeamDepartmentsPage() {
                 <Button onClick={addDepartment} disabled={savingDep}><Plus className="h-4 w-4" /></Button>
               </div>
               <div className="space-y-2">
-                {departments.map((d) => (
-                  <div key={d.slug} className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2">
-                    <span className="flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-full" style={{ background: d.color }} />
-                      <span className="font-medium">{d.name}</span>
-                      <span className="text-xs text-muted-foreground">{d.slug}</span>
-                    </span>
-                    <button onClick={() => deleteDepartment(d.slug)} aria-label="Sil">
-                      <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                    </button>
+                {departments.map((d) => {
+                  const depMembers = members.filter((m) => m.adminDepartment === d.slug);
+                  return (
+                    <div key={d.slug} className="group flex items-center gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:border-border">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white" style={{ background: d.color }}>
+                        {d.name.charAt(0)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{d.name}</p>
+                        <p className="text-xs text-muted-foreground">{depMembers.length} üye</p>
+                      </div>
+                      <div className="flex -space-x-2">
+                        {depMembers.slice(0, 4).map((m) => (
+                          <Avatar key={m.id} className="h-6 w-6 ring-2 ring-background">
+                            {m.image ? <AvatarImage src={m.image} /> : null}
+                            <AvatarFallback className="text-[8px]">{getInitials(m.name || m.email)}</AvatarFallback>
+                          </Avatar>
+                        ))}
+                        {depMembers.length > 4 && (
+                          <span className="grid h-6 w-6 place-items-center rounded-full bg-muted text-[9px] font-semibold ring-2 ring-background">
+                            +{depMembers.length - 4}
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={() => deleteDepartment(d.slug)} className="opacity-0 group-hover:opacity-100" aria-label="Sil">
+                        <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {departments.length === 0 && (
+                  <div className="py-6 text-center">
+                    <p className="mb-3 text-sm text-muted-foreground">Henüz departman yok</p>
+                    <Button variant="outline" size="sm" onClick={seedDefaults} disabled={savingDep}>
+                      Varsayılan departmanları yükle (8)
+                    </Button>
                   </div>
-                ))}
-                {departments.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Henüz departman yok</p>}
+                )}
               </div>
             </CardContent>
           </Card>

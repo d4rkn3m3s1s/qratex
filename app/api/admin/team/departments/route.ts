@@ -38,10 +38,37 @@ export async function GET() {
   return NextResponse.json({ success: true, departments, members }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
-/** POST: yeni departman oluşturur. */
+// Şirketin gerçek departmanları (varsayılan seed).
+const DEFAULT_DEPARTMENTS: { name: string; color: string }[] = [
+  { name: 'Dizayn ve Kullanıcı Deneyimi', color: '#8b5cf6' },
+  { name: 'İş Geliştirme, Strateji ve Büyüme', color: '#3b82f6' },
+  { name: 'Üretim ve Geliştirme', color: '#10b981' },
+  { name: 'Satış, Sponsorluk ve Pazarlama', color: '#f59e0b' },
+  { name: 'Ar-Ge', color: '#06b6d4' },
+  { name: 'Finans ve Hukuk', color: '#ef4444' },
+  { name: 'Sosyal Medya Yönetimi', color: '#ec4899' },
+  { name: 'Rehberlik danışmanlığı', color: '#a855f7' },
+];
+
+/** POST: yeni departman oluşturur. ?seed=1 → varsayılan 8 departmanı ekler (idempotent). */
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
+
+  if (req.nextUrl.searchParams.get('seed') === '1') {
+    let created = 0;
+    for (let i = 0; i < DEFAULT_DEPARTMENTS.length; i++) {
+      const dep = DEFAULT_DEPARTMENTS[i];
+      const slug = slugify(dep.name);
+      await prisma.department.upsert({
+        where: { slug },
+        update: {},
+        create: { slug, name: dep.name, color: dep.color, order: i },
+      });
+      created++;
+    }
+    return NextResponse.json({ success: true, seeded: created }, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
 
   const raw = await req.json().catch(() => ({}));
   const parsed = createSchema.safeParse(raw);

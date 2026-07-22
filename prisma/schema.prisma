@@ -152,6 +152,8 @@ model User {
   staffTasksAssigned        StaffTask[]                @relation("StaffTaskAssignments")
   companyTasksAssigned      CompanyTask[]              @relation("CompanyTaskAssignments")
   companyTasksCreated       CompanyTask[]              @relation("CompanyTaskCreator")
+  taskCommentsAuthored      TaskComment[]              @relation("TaskCommentAuthor")
+  taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2692,10 +2694,54 @@ model CompanyTask {
 
   assignedTo User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdBy  User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  checklist  TaskChecklistItem[]
+  comments   TaskComment[]
+  activities TaskActivity[]
 
   @@index([status])
   @@index([department])
   @@index([weekKey])
   @@index([assignedToId])
   @@index([createdAt])
+}
+
+// Ekip görev detayları: alt-görev (checklist), yorum, aktivite geçmişi.
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  text      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  task CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  authorId  String
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+
+  task   CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User        @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String
+  action    String   // "created" | "status" | "assigned" | "commented" | "checklist" | "priority"
+  detail    String?  // insan-okunur özet
+  createdAt DateTime @default(now())
+
+  task  CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User        @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
 }

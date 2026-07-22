@@ -17,6 +17,7 @@ import {
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
 import { weekKeyOf, shiftWeekKey, weekKeyLabel } from '@/lib/team-week';
+import { TaskDetailSheet } from '@/components/admin/team/task-detail-sheet';
 
 type Member = { id: string; name: string | null; email: string; image: string | null; adminDepartment: string | null; adminTeamRole: string | null };
 type Department = { id: string; slug: string; name: string; color: string };
@@ -51,6 +52,7 @@ export default function TeamPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Yeni görev diyaloğu
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -262,7 +264,7 @@ export default function TeamPage() {
                   >
                     <div className="flex items-start gap-2">
                       {isManager && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setDetailId(task.id)}>
                         <p className="text-sm font-medium leading-snug">{task.title}</p>
                         {task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -337,6 +339,14 @@ export default function TeamPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Görev detay paneli (checklist + yorum + aktivite) */}
+      <TaskDetailSheet
+        taskId={detailId}
+        open={detailId !== null}
+        onOpenChange={(o) => { if (!o) setDetailId(null); }}
+        onChanged={loadTasks}
+      />
     </div>
   );
 }
