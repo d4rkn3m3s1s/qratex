@@ -26,9 +26,11 @@ export async function GET() {
 
   const [departments, members] = await Promise.all([
     prisma.department.findMany({ orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }),
-    // Ekip üyeleri = admin alt-rolü atanmış ADMIN'ler (atanabilir kişiler)
+    // Ekip üyeleri = ekip rolü (adminTeamRole) atanmış herkes. Rol ADMIN olmak ZORUNDA DEĞİL:
+    // üyeler CUSTOMER kalır, müşteri panelinden erişir. (Eskiden where role:'ADMIN' idi → yeni
+    // eklenen CUSTOMER üyeler listede görünmüyordu.)
     prisma.user.findMany({
-      where: { role: 'ADMIN' },
+      where: { adminTeamRole: { not: null } },
       select: { id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true },
       orderBy: { name: 'asc' },
       take: 200,
