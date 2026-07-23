@@ -57,7 +57,8 @@ export async function POST(req: NextRequest) {
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
-      role: 'ADMIN', // admin, ekibe eklediği kişiyi ADMIN yapar
+      // Rol DEĞİŞTİRİLMEZ: üye normal panelinden (müşteri/bayi) girer, ekip kısmına
+      // adminTeamRole ile erişir. ADMIN yapmak /customer/* middleware guard'ıyla çelişirdi.
       adminDepartment: department ?? null,
       adminTeamRole: teamRole,
     },
@@ -74,7 +75,45 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, member: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
-/** DELETE ?id=: kişiyi ekipten çıkar (departman/rol temizlenir; ADMIN rolü korunur). */
+const updateSchema = z.object({
+  id: z.string(),
+  department: z.string().max(50).optional().nullable(),
+  teamRole: z.enum(['yonetici', 'uye']).optional(),
+});
+
+/** PUT: mevcut üyenin departman/ekip rolünü güncelle. Yönetici (ekip) yetkisiyle. */
+export async function PUT(req: NextRequest) {
+  const auth = await requireTeamAccess({ manager: true });
+  if ('error' in auth) return auth.error;
+
+  const raw = await req.json().catch(() => ({}));
+  const parsed = updateSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+  const { id, department, teamRole } = parsed.data;
+
+  const data: Prisma.UserUpdateInput = {};
+  if (department !== undefined) data.adminDepartment = department;
+  if (teamRole !== undefined) data.adminTeamRole = teamRole;
+
+  const updated = await prisma.user.update({
+    where: { id }, data,
+    select: { id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true },
+  }).catch(() => null);
+  if (!updated) return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: auth.session.user.id, action: 'update_team_member', entity: 'admin_team_member', entityId: id,
+      newData: { department, teamRole } as Prisma.InputJsonValue, ...getAuditRequestMeta(req),
+    },
+  });
+
+  return NextResponse.json({ success: true, member: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
+}
+
+/** DELETE ?id=: kişiyi ekipten çıkar (departman/rol temizlenir). */
 export async function DELETE(req: NextRequest) {
   const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;

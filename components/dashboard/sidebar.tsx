@@ -107,6 +107,8 @@ export interface NavItem {
   moduleKey?: string;
   /** Ait olduğu grup anahtarı (NAV_GROUPS içindeki bir grup). Yoksa üst düzey öğe. */
   groupKey?: string;
+  /** Yalnızca kendisine bir ekip rolü (adminTeamRole) atanmış kullanıcılara görünür. */
+  teamOnly?: boolean;
 }
 
 /** Katlanabilir sol menü grubu. Sırası ait olduğu ilk öğenin konumuna göredir. */
@@ -194,7 +196,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'design_language', href: '/admin/design-language', icon: LayoutTemplate },
   { labelKey: 'menu_order', href: '/admin/sidebar-order', icon: GripVertical },
   { labelKey: 'menu_groups', href: '/admin/menu-groups', icon: LayoutTemplate },
-  { key: 'team', labelKey: 'team', href: '/admin/ekip', icon: Users2 },
+  // Ekip Yönetimi müşteri paneline taşındı (/customer/ekip, ekip rolü olanlara görünür).
   { labelKey: 'experience_pulse', href: '/admin/experience-pulse', icon: Wand2 },
   { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
@@ -265,6 +267,8 @@ const dealerNavItems: NavItem[] = [
 const customerNavItems: NavItem[] = [
   // 1) Dashboard (grupsuz)
   { key: 'dashboard', labelKey: 'dashboard', href: '/customer', icon: LayoutDashboard },
+  // Ekip Yönetimi — yalnızca ekip rolü atanmış kullanıcılara görünür (grupsuz, üst düzey)
+  { key: 'team', labelKey: 'team', href: '/customer/ekip', icon: Users2, teamOnly: true },
   // 2) Kartım
   { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard, groupKey: 'card' },
   { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History, groupKey: 'card' },
@@ -417,9 +421,14 @@ export function Sidebar({ role, siteName = 'QRateX' }: SidebarProps) {
     : role === 'DEALER'
       ? dealerNavItems
       : customerNavItems;
+  // Ekip rolü — teamOnly menü öğeleri için (session'dan; ADMIN her zaman görür).
+  const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
+  const canSeeTeam = role === 'ADMIN' || !!teamRole;
   const filteredNavItemsBase = role === 'ADMIN'
-    ? navItems
+    ? navItems.filter((item) => !item.teamOnly || canSeeTeam)
     : navItems.filter((item) => {
+      // Sadece ekip rolü olanlara açık öğeler (ör. Ekip Yönetimi).
+      if (item.teamOnly && !canSeeTeam) return false;
       const menuKey = item.key ?? item.href;
       const menuEnabled = menuVisibility[menuKey] !== false;
       const fk = item.featureKey ?? item.key;

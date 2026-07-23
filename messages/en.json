@@ -2566,6 +2566,7 @@
         },
         "customer": {
             "dashboard": "Dashboard",
+            "team": "Team Management",
             "progress_hub": "Progress hub",
             "my_year": "My Year",
             "category_leaderboard": "Top Businesses",

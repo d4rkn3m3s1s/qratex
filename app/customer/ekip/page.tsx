@@ -20,9 +20,9 @@ import {
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
 import { weekKeyOf, shiftWeekKey, weekKeyLabel, mondayFromWeekKey } from '@/lib/team-week';
-import { TaskDetailSheet } from '@/components/admin/team/task-detail-sheet';
-import { TemplatesDialog } from '@/components/admin/team/templates-dialog';
-import { AiSummaryDialog } from '@/components/admin/team/ai-summary-dialog';
+import { TaskDetailSheet } from '@/components/customer/team/task-detail-sheet';
+import { TemplatesDialog } from '@/components/customer/team/templates-dialog';
+import { AiSummaryDialog } from '@/components/customer/team/ai-summary-dialog';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
 import { MiniSparkline } from '@/components/charts/mini-sparkline';
@@ -487,7 +487,7 @@ export default function TeamPage() {
             </>
           )}
           <Button asChild variant="outline" size="sm">
-            <a href="/admin/ekip/departmanlar">Departmanlar</a>
+            <a href="/customer/ekip/departmanlar">Departmanlar</a>
           </Button>
           {isManager && (
             <Button size="sm" onClick={() => setDialogOpen(true)}>

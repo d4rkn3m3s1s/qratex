@@ -21,7 +21,7 @@ export async function sendTaskAssignedEmail(opts: {
 }): Promise<void> {
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/admin/ekip`;
+    const link = `${origin}/customer/ekip`;
     const prio = opts.priority === 'high' ? 'Yüksek' : opts.priority === 'low' ? 'Düşük' : 'Orta';
     const due = opts.dueAt ? new Date(opts.dueAt).toLocaleDateString('tr-TR') : null;
     const bodyLines = [
@@ -46,7 +46,7 @@ export async function sendMentionEmail(opts: {
 }): Promise<void> {
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/admin/ekip`;
+    const link = `${origin}/customer/ekip`;
     const snippet = opts.commentText.length > 240 ? `${opts.commentText.slice(0, 240)}…` : opts.commentText;
     const bodyLines = [
       opts.mentionName ? `Merhaba ${opts.mentionName},` : 'Merhaba,',
@@ -76,7 +76,7 @@ export async function sendWeeklyReminderEmail(opts: {
   if (opts.openTasks.length === 0) return;
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/admin/ekip`;
+    const link = `${origin}/customer/ekip`;
     const list = opts.openTasks.slice(0, 10).map((t) => `• ${t.title}`).join('<br>');
     const bodyLines = [
       opts.name ? `Merhaba ${opts.name},` : 'Merhaba,',

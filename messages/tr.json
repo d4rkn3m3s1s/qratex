@@ -2566,6 +2566,7 @@
         },
         "customer": {
             "dashboard": "Dashboard",
+            "team": "Ekip Yönetimi",
             "progress_hub": "Gelişim merkezi",
             "my_year": "QRateX'te Yılım",
             "category_leaderboard": "En İyi İşletmeler",

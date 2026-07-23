@@ -90,13 +90,17 @@ export default function TeamDepartmentsPage() {
     finally { setSavingDep(false); }
   };
 
-  // Üyeye departman/rol ata → users PUT
+  // Üyeye departman/rol ata → ekip members PUT (ADMIN-only users route yerine; ekip yöneticisi de kullanabilir)
   const updateMember = async (userId: string, patch: { adminDepartment?: string | null; adminTeamRole?: string | null }) => {
     setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, ...patch } : m)));
     try {
-      const res = await fetch(`/api/admin/users?id=${userId}`, {
+      const res = await fetch('/api/admin/team/members', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({
+          id: userId,
+          ...(patch.adminDepartment !== undefined ? { department: patch.adminDepartment } : {}),
+          ...(patch.adminTeamRole !== undefined ? { teamRole: patch.adminTeamRole } : {}),
+        }),
       });
       if (!res.ok) throw new Error();
       toast.success('Güncellendi');

@@ -33,7 +33,7 @@ export async function notifyTaskAssigned(opts: {
     title: '📋 Yeni görev atandı',
     message: opts.taskTitle,
     type: opts.priority === 'high' ? 'warning' : 'info',
-    data: { kind: 'team-task-assigned', taskId: opts.taskId, href: `/admin/ekip?task=${opts.taskId}` },
+    data: { kind: 'team-task-assigned', taskId: opts.taskId, href: `/customer/ekip?task=${opts.taskId}` },
   });
 }
 
@@ -46,7 +46,7 @@ export async function notifyMention(opts: {
     title: '💬 Bir yorumda etiketlendin',
     message: `${opts.byName || 'Bir ekip üyesi'} · ${opts.taskTitle}`,
     type: 'info',
-    data: { kind: 'team-task-mention', taskId: opts.taskId, href: `/admin/ekip?task=${opts.taskId}` },
+    data: { kind: 'team-task-mention', taskId: opts.taskId, href: `/customer/ekip?task=${opts.taskId}` },
   });
 }
 
@@ -59,6 +59,6 @@ export async function notifyDeadline(opts: {
     title: opts.overdue ? '⏰ Görev süresi doldu' : '⏳ Görev yaklaşıyor',
     message: opts.taskTitle,
     type: opts.overdue ? 'error' : 'warning',
-    data: { kind: 'team-task-deadline', taskId: opts.taskId, overdue: opts.overdue, href: `/admin/ekip?task=${opts.taskId}` },
+    data: { kind: 'team-task-deadline', taskId: opts.taskId, overdue: opts.overdue, href: `/customer/ekip?task=${opts.taskId}` },
   });
 }
