@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks, Paperclip, FileText, Download } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks, Paperclip, FileText, Download, Timer, Link2, Repeat, X, Pencil, Sparkles } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 import { toast } from '@/lib/admin-toast';
 
@@ -42,16 +43,24 @@ function renderCommentText(text: string, members: TeamMember[]): React.ReactNode
 }
 
 type ChecklistItem = { id: string; text: string; done: boolean };
-type Comment = { id: string; text: string; createdAt: string; author: { id: string; name: string | null; email: string; image: string | null } };
+type Comment = { id: string; text: string; createdAt: string; editedAt: string | null; author: { id: string; name: string | null; email: string; image: string | null } };
 type Activity = { id: string; action: string; detail: string | null; createdAt: string; actor: { name: string | null } };
 type Attachment = { id: string; filename: string; path: string; mime: string; size: number; createdAt: string; uploadedBy: { name: string | null } };
 type TaskDetail = {
   id: string; title: string; description: string | null; status: string; priority: string;
   department: string | null; dueAt: string | null;
+  estimateMin: number | null; spentMin: number; recurrence: string | null; blockedById: string | null;
   assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
+  blockedBy: { id: string; title: string; status: string } | null;
   createdBy: { name: string | null } | null;
   checklist: ChecklistItem[]; comments: Comment[]; activities: Activity[]; attachments: Attachment[];
 };
+
+function fmtDuration(min: number): string {
+  if (min < 60) return `${min}dk`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? `${h}s ${m}dk` : `${h}s`;
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -73,14 +82,21 @@ function fmt(iso: string): string {
   return `${d.getUTCDate()} ${TR_MONTHS[d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
-export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members = [] }: {
+export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members = [], allTasks = [], isManager = false }: {
   taskId: string | null; open: boolean; onOpenChange: (o: boolean) => void; onChanged?: () => void;
   members?: TeamMember[];
+  allTasks?: { id: string; title: string }[];
+  isManager?: boolean;
 }) {
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [newComment, setNewComment] = useState('');
+  // Yorum düzenleme
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  // Zaman takibi girişi
+  const [addMin, setAddMin] = useState('');
 
   // Dosya eki yükleme durumu
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -185,6 +201,54 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
     onChanged?.();
   };
 
+  // Görev alanı güncelle (zaman takibi, bağımlılık) — tasks PUT.
+  const patchTask = async (body: Record<string, unknown>) => {
+    if (!taskId) return;
+    const res = await fetch(`/api/admin/team/tasks?id=${taskId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).catch(() => null);
+    if (res && !res.ok) {
+      const j = await res.json().catch(() => null);
+      toast.error(j?.error || 'Güncellenemedi');
+      return;
+    }
+    load();
+    onChanged?.();
+  };
+
+  const logTime = () => {
+    const m = Number(addMin);
+    if (!m || m <= 0 || !task) { setAddMin(''); return; }
+    patchTask({ spentMin: (task.spentMin || 0) + m });
+    setAddMin('');
+  };
+
+  const saveEdit = () => {
+    if (!editingId || !editText.trim()) { setEditingId(null); return; }
+    act({ op: 'edit_comment', commentId: editingId, text: editText.trim() });
+    setEditingId(null); setEditText('');
+  };
+
+  // AI ile mevcut göreve alt görev önerisi üret + doğrudan ekle.
+  const [aiBusy, setAiBusy] = useState(false);
+  const suggestChecklistDetail = async () => {
+    if (!task) return;
+    setAiBusy(true);
+    try {
+      const res = await fetch('/api/admin/team/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'suggest_checklist', title: task.title, description: task.description ?? '' }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error);
+      const items: string[] = json.items || [];
+      if (items.length === 0) { toast('AI alt görev önermedi'); return; }
+      await Promise.all(items.map((text) => act({ op: 'add_checklist', text })));
+      toast.success(`${items.length} alt görev eklendi`);
+    } catch (e) { toast.error(e instanceof Error && e.message ? e.message : 'AI önerisi alınamadı'); }
+    finally { setAiBusy(false); }
+  };
+
   const doneCount = task?.checklist.filter((c) => c.done).length ?? 0;
   const totalCount = task?.checklist.length ?? 0;
   const pct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
@@ -222,11 +286,70 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
               </div>
             </SheetHeader>
 
+            {/* Zaman takibi + bağımlılık + tekrar */}
+            <section className="mt-5 grid gap-3 rounded-xl border border-border/60 bg-card/40 p-3 sm:grid-cols-2">
+              {/* Zaman takibi */}
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Timer className="h-3.5 w-3.5" /> Zaman</p>
+                <div className="flex items-baseline gap-1.5 text-sm">
+                  <span className="font-semibold">{fmtDuration(task.spentMin || 0)}</span>
+                  {task.estimateMin != null && <span className="text-xs text-muted-foreground">/ {fmtDuration(task.estimateMin)} tahmini</span>}
+                </div>
+                {task.estimateMin != null && task.estimateMin > 0 && (
+                  <Progress value={Math.min(100, Math.round((task.spentMin / task.estimateMin) * 100))} className="h-1.5" />
+                )}
+                <div className="flex gap-1.5">
+                  <Input type="number" min={0} placeholder="+dk" value={addMin} onChange={(e) => setAddMin(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') logTime(); }} className="h-8 w-20" />
+                  <Button size="sm" variant="outline" onClick={logTime} className="h-8">Süre ekle</Button>
+                </div>
+              </div>
+
+              {/* Bağımlılık */}
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Link2 className="h-3.5 w-3.5" /> Bağımlılık</p>
+                {task.blockedBy ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn('flex-1 truncate rounded-md px-2 py-1 text-xs',
+                      task.blockedBy.status === 'done' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-orange-500/10 text-orange-600 dark:text-orange-400')}>
+                      {task.blockedBy.status === 'done' ? '✓ ' : '⏳ '}{task.blockedBy.title}
+                    </span>
+                    {isManager && (
+                      <button onClick={() => patchTask({ blockedById: null })} aria-label="Kaldır">
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    )}
+                  </div>
+                ) : isManager ? (
+                  <Select onValueChange={(v) => patchTask({ blockedById: v === 'none' ? null : v })}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Bir göreve bağla…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Bağımsız</SelectItem>
+                      {allTasks.filter((t) => t.id !== task.id).slice(0, 50).map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : <p className="text-xs text-muted-foreground/60">Bağımsız</p>}
+                {task.recurrence && (
+                  <p className="flex items-center gap-1 text-[11px] text-violet-500"><Repeat className="h-3 w-3" /> {task.recurrence === 'daily' ? 'Her gün' : task.recurrence === 'weekly' ? 'Her hafta' : 'Her ay'} tekrarlanır</p>
+                )}
+              </div>
+            </section>
+
             {/* Checklist */}
             <section className="mt-6 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="flex items-center gap-2 text-sm font-semibold"><ListChecks className="h-4 w-4" /> Alt Görevler</h4>
-                {totalCount > 0 && <span className="text-xs text-muted-foreground">{doneCount}/{totalCount}</span>}
+                <div className="flex items-center gap-2">
+                  {isManager && (
+                    <button type="button" onClick={suggestChecklistDetail} disabled={aiBusy}
+                      className="flex items-center gap-1 text-[11px] font-medium text-violet-500 hover:underline disabled:opacity-50">
+                      {aiBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} AI öner
+                    </button>
+                  )}
+                  {totalCount > 0 && <span className="text-xs text-muted-foreground">{doneCount}/{totalCount}</span>}
+                </div>
               </div>
               {totalCount > 0 && <Progress value={pct} className="h-1.5" />}
               <div className="space-y-1">
@@ -330,13 +453,33 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                     <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold">{c.author.name || c.author.email}</span>
-                        <span className="text-[10px] text-muted-foreground">{fmt(c.createdAt)}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {fmt(c.createdAt)}{c.editedAt && ' · düzenlendi'}
+                        </span>
                       </div>
-                      <p className="mt-0.5 whitespace-pre-wrap text-sm">{renderCommentText(c.text, members)}</p>
+                      {editingId === c.id ? (
+                        <div className="mt-1 space-y-1.5">
+                          <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="resize-none text-sm"
+                            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditingId(null); }} />
+                          <div className="flex gap-1.5">
+                            <Button size="sm" className="h-7" onClick={saveEdit}>Kaydet</Button>
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => setEditingId(null)}>İptal</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-0.5 whitespace-pre-wrap text-sm">{renderCommentText(c.text, members)}</p>
+                      )}
                     </div>
-                    <button onClick={() => act({ op: 'delete_comment', commentId: c.id })} className="opacity-0 group-hover:opacity-100" aria-label="Sil">
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                    </button>
+                    {editingId !== c.id && (
+                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100">
+                        <button onClick={() => { setEditingId(c.id); setEditText(c.text); }} aria-label="Düzenle">
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                        <button onClick={() => act({ op: 'delete_comment', commentId: c.id })} aria-label="Sil">
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {task.comments.length === 0 && <p className="text-xs text-muted-foreground/60">Henüz yorum yok</p>}

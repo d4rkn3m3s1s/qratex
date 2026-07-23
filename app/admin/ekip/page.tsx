@@ -13,12 +13,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
-  ListChecks, MessageSquare, Paperclip,
+  ListChecks, MessageSquare, Paperclip, Search, Filter, X, CheckSquare, Download,
+  Sparkles, FileText, Zap, Repeat, Clock, Link2, UserCheck,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
 import { weekKeyOf, shiftWeekKey, weekKeyLabel, mondayFromWeekKey } from '@/lib/team-week';
 import { TaskDetailSheet } from '@/components/admin/team/task-detail-sheet';
+import { TemplatesDialog } from '@/components/admin/team/templates-dialog';
+import { AiSummaryDialog } from '@/components/admin/team/ai-summary-dialog';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
 
@@ -27,7 +30,9 @@ type Department = { id: string; slug: string; name: string; color: string };
 type Task = {
   id: string; title: string; description: string | null; status: string; priority: string;
   department: string | null; weekKey: string | null; dueAt: string | null; tags: string | null;
+  estimateMin: number | null; spentMin: number; recurrence: string | null; blockedById: string | null;
   assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
+  blockedBy: { id: string; title: string; status: string } | null;
   _count?: { comments: number; attachments: number; checklist: number };
 };
 
@@ -80,10 +85,40 @@ export default function TeamPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people' | 'calendar'>('kanban');
 
+  // Arama + gelişmiş filtreler
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [fStatus, setFStatus] = useState('all');
+  const [fPriority, setFPriority] = useState('all');
+  const [fAssignee, setFAssignee] = useState('all');
+  const [fTag, setFTag] = useState<string | null>(null);
+  const [mineOnly, setMineOnly] = useState(false);
+
+  // Toplu seçim modu
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Şablon + AI özet diyalogları
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+
   // Yeni görev diyaloğu
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '' });
+  const [form, setForm] = useState({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '', estimateMin: '', recurrence: '' });
   const [saving, setSaving] = useState(false);
+
+  // Arama debounce (300ms)
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  // Derin bağlantı: ?task=<id> ile detay panelini aç (ilk yüklemede).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('task');
+    if (t) setDetailId(t);
+  }, []);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -101,6 +136,12 @@ export default function TeamPage() {
     try {
       const params = new URLSearchParams({ weekKey });
       if (department !== 'all') params.set('department', department);
+      if (fStatus !== 'all') params.set('status', fStatus);
+      if (fPriority !== 'all') params.set('priority', fPriority);
+      if (mineOnly) params.set('mine', '1');
+      else if (fAssignee !== 'all') params.set('assignedTo', fAssignee);
+      if (fTag) params.set('tag', fTag);
+      if (debouncedSearch) params.set('q', debouncedSearch);
       const res = await fetch(`/api/admin/team/tasks?${params}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.success) setTasks(json.tasks);
@@ -109,10 +150,26 @@ export default function TeamPage() {
     } finally {
       setLoading(false);
     }
-  }, [weekKey, department]);
+  }, [weekKey, department, fStatus, fPriority, fAssignee, fTag, mineOnly, debouncedSearch]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  // Detay paneli açık/kapalı durumunu URL'e yansıt (paylaşılabilir derin bağlantı).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (detailId) url.searchParams.set('task', detailId);
+    else url.searchParams.delete('task');
+    window.history.replaceState(null, '', url.toString());
+  }, [detailId]);
+
+  const activeFilterCount =
+    (fStatus !== 'all' ? 1 : 0) + (fPriority !== 'all' ? 1 : 0) +
+    (fAssignee !== 'all' && !mineOnly ? 1 : 0) + (fTag ? 1 : 0) + (mineOnly ? 1 : 0) + (debouncedSearch ? 1 : 0);
+  const clearFilters = () => {
+    setSearch(''); setDebouncedSearch(''); setFStatus('all'); setFPriority('all');
+    setFAssignee('all'); setFTag(null); setMineOnly(false);
+  };
 
   const tasksByCol = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], in_progress: [], done: [] };
@@ -168,13 +225,25 @@ export default function TeamPage() {
           title: form.title, description: form.description || null, priority: form.priority,
           department: form.department || null, assignedToId: form.assignedToId || null, weekKey,
           tags: form.tags || null, dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : null,
+          estimateMin: form.estimateMin ? Number(form.estimateMin) : null,
+          recurrence: form.recurrence || null,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error();
+      // AI'ın önerdiği alt görevler varsa yeni görevin checklist'ine ekle.
+      if (aiChecklist.length > 0 && json.task?.id) {
+        await Promise.all(aiChecklist.map((text) =>
+          fetch(`/api/admin/team/tasks/${json.task.id}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ op: 'add_checklist', text }),
+          }).catch(() => {})
+        ));
+      }
       toast.success('Görev eklendi');
       setDialogOpen(false);
-      setForm({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '' });
+      setForm({ title: '', description: '', priority: 'medium', department: '', assignedToId: '', tags: '', dueAt: '', estimateMin: '', recurrence: '' });
+      setAiChecklist([]);
       loadTasks();
     } catch {
       toast.error('Görev eklenemedi');
@@ -186,6 +255,101 @@ export default function TeamPage() {
   const deleteTask = async (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
     await fetch(`/api/admin/team/tasks?id=${id}`, { method: 'DELETE' }).catch(() => {});
+  };
+
+  // ── AI önerileri (yeni görev modalı) ───────────────────────────
+  const [aiSuggesting, setAiSuggesting] = useState<null | 'assign' | 'checklist'>(null);
+  const [aiChecklist, setAiChecklist] = useState<string[]>([]);
+  const suggestAssignment = async () => {
+    if (!form.title.trim()) { toast.error('Önce başlık gir'); return; }
+    setAiSuggesting('assign');
+    try {
+      const res = await fetch('/api/admin/team/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'suggest_assignment', title: form.title, description: form.description }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error);
+      setForm((f) => ({ ...f, department: json.department || f.department, assignedToId: json.assignedToId || f.assignedToId }));
+      toast.success(json.reason ? `AI önerisi: ${json.reason}` : 'AI önerisi uygulandı');
+    } catch (e) { toast.error(e instanceof Error && e.message ? e.message : 'AI önerisi alınamadı'); }
+    finally { setAiSuggesting(null); }
+  };
+  const suggestChecklist = async () => {
+    if (!form.title.trim()) { toast.error('Önce başlık gir'); return; }
+    setAiSuggesting('checklist');
+    try {
+      const res = await fetch('/api/admin/team/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ op: 'suggest_checklist', title: form.title, description: form.description }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error);
+      setAiChecklist(json.items || []);
+      if (!json.items?.length) toast('AI alt görev önermedi');
+    } catch (e) { toast.error(e instanceof Error && e.message ? e.message : 'AI önerisi alınamadı'); }
+    finally { setAiSuggesting(null); }
+  };
+
+  // ── Toplu seçim ────────────────────────────────────────────────
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const runBulk = async (action: Record<string, unknown>) => {
+    if (selected.size === 0) return;
+    const ids = [...selected];
+    try {
+      const res = await fetch('/api/admin/team/tasks/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error();
+      toast.success(`${json.affected} görev güncellendi`);
+      setSelected(new Set()); setSelectMode(false);
+      loadTasks();
+    } catch { toast.error('Toplu işlem başarısız'); }
+  };
+
+  // ── Otomatik görev üretimi (işletme verisinden) ────────────────
+  const [autoBusy, setAutoBusy] = useState(false);
+  const generateAutoTasks = async () => {
+    setAutoBusy(true);
+    try {
+      const res = await fetch('/api/admin/team/autotask', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error();
+      toast.success(json.total > 0 ? `${json.total} görev üretildi (${json.fromIncidents} olay, ${json.fromActionItems} aksiyon)` : 'Yeni kaynak bulunamadı');
+      if (json.total > 0) loadTasks();
+    } catch { toast.error('Otomatik görev üretilemedi'); }
+    finally { setAutoBusy(false); }
+  };
+
+  // ── CSV dışa aktarma (mevcut görünen görevler) ─────────────────
+  const exportCsv = async () => {
+    const { exportToCSV } = await import('@/lib/export-utils');
+    const rows = tasks.map((t) => ({
+      baslik: t.title,
+      durum: t.status === 'done' ? 'Bitti' : t.status === 'in_progress' ? 'Devam' : 'Yapılacak',
+      oncelik: PRIORITY_LABEL[t.priority] ?? t.priority,
+      departman: departments.find((d) => d.slug === t.department)?.name ?? t.department ?? '',
+      atanan: t.assignedTo?.name || t.assignedTo?.email || '',
+      etiketler: t.tags ?? '',
+      bitis: t.dueAt ? new Date(t.dueAt).toLocaleDateString('tr-TR') : '',
+      tahmini_dk: t.estimateMin ?? '',
+      harcanan_dk: t.spentMin ?? 0,
+    }));
+    if (rows.length === 0) { toast.error('Dışa aktarılacak görev yok'); return; }
+    exportToCSV(rows, `ekip-gorevler-${weekKey}`, [
+      { key: 'baslik', label: 'Başlık' }, { key: 'durum', label: 'Durum' }, { key: 'oncelik', label: 'Öncelik' },
+      { key: 'departman', label: 'Departman' }, { key: 'atanan', label: 'Atanan' }, { key: 'etiketler', label: 'Etiketler' },
+      { key: 'bitis', label: 'Bitiş' }, { key: 'tahmini_dk', label: 'Tahmini (dk)' }, { key: 'harcanan_dk', label: 'Harcanan (dk)' },
+    ]);
+    toast.success('CSV indirildi');
   };
 
   return (
@@ -246,17 +410,118 @@ export default function TeamPage() {
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <Button asChild variant="outline">
-            <a href="/admin/ekip/departmanlar">Departmanlar & Roller</a>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setSummaryOpen(true)} title="AI haftalık özet">
+            <Sparkles className="mr-1.5 h-4 w-4" /> AI Özet
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCsv} title="CSV dışa aktar">
+            <Download className="mr-1.5 h-4 w-4" /> CSV
           </Button>
           {isManager && (
-            <Button onClick={() => setDialogOpen(true)}>
+            <>
+              <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)} title="Görev şablonları">
+                <FileText className="mr-1.5 h-4 w-4" /> Şablonlar
+              </Button>
+              <Button variant="outline" size="sm" onClick={generateAutoTasks} disabled={autoBusy} title="İşletme verisinden görev üret">
+                {autoBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Zap className="mr-1.5 h-4 w-4" />} Otomatik
+              </Button>
+              <Button variant={selectMode ? 'default' : 'outline'} size="sm" onClick={() => { setSelectMode((s) => !s); setSelected(new Set()); }} title="Toplu seçim">
+                <CheckSquare className="mr-1.5 h-4 w-4" /> Seç
+              </Button>
+            </>
+          )}
+          <Button asChild variant="outline" size="sm">
+            <a href="/admin/ekip/departmanlar">Departmanlar</a>
+          </Button>
+          {isManager && (
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" /> Yeni Görev
             </Button>
           )}
         </div>
       </div>
+
+      {/* Arama + gelişmiş filtreler */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Görev ara (başlık, açıklama, etiket)…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-9" />
+        </div>
+        <Button variant={mineOnly ? 'default' : 'outline'} size="sm" onClick={() => { setMineOnly((m) => !m); setFAssignee('all'); }}>
+          <UserCheck className="mr-1.5 h-4 w-4" /> Benim Görevlerim
+        </Button>
+        <Select value={fStatus} onValueChange={setFStatus}>
+          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Durum" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tüm durumlar</SelectItem>
+            <SelectItem value="todo">Yapılacak</SelectItem>
+            <SelectItem value="in_progress">Devam</SelectItem>
+            <SelectItem value="done">Bitti</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={fPriority} onValueChange={setFPriority}>
+          <SelectTrigger className="h-9 w-32"><SelectValue placeholder="Öncelik" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tüm öncelik</SelectItem>
+            <SelectItem value="high">Yüksek</SelectItem>
+            <SelectItem value="medium">Orta</SelectItem>
+            <SelectItem value="low">Düşük</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={mineOnly ? 'all' : fAssignee} onValueChange={(v) => { setFAssignee(v); if (v !== 'all') setMineOnly(false); }} disabled={mineOnly}>
+          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="Atanan" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Herkes</SelectItem>
+            <SelectItem value="unassigned">Atanmamış</SelectItem>
+            {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {fTag && (
+          <button onClick={() => setFTag(null)} className={cn('flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium', tagColor(fTag))}>
+            #{fTag} <X className="h-3 w-3" />
+          </button>
+        )}
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+            <Filter className="mr-1 h-3.5 w-3.5" /> Temizle ({activeFilterCount})
+          </Button>
+        )}
+      </div>
+
+      {/* Toplu işlem çubuğu (seçim modu aktifse) */}
+      {selectMode && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2">
+          <span className="text-sm font-medium">{selected.size} seçili</span>
+          <div className="mx-1 h-4 w-px bg-border" />
+          <Select onValueChange={(v) => runBulk({ op: 'status', value: v })}>
+            <SelectTrigger className="h-8 w-36"><SelectValue placeholder="Durum ata" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todo">Yapılacak</SelectItem>
+              <SelectItem value="in_progress">Devam</SelectItem>
+              <SelectItem value="done">Bitti</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(v) => runBulk({ op: 'priority', value: v })}>
+            <SelectTrigger className="h-8 w-32"><SelectValue placeholder="Öncelik ata" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high">Yüksek</SelectItem>
+              <SelectItem value="medium">Orta</SelectItem>
+              <SelectItem value="low">Düşük</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(v) => runBulk({ op: 'assign', value: v === 'none' ? null : v })}>
+            <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Kişiye ata" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Atamayı kaldır</SelectItem>
+              {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="destructive" size="sm" onClick={() => runBulk({ op: 'delete' })} disabled={selected.size === 0}>
+            <Trash2 className="mr-1 h-3.5 w-3.5" /> Sil
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="ml-auto">Kapat</Button>
+        </div>
+      )}
 
       {/* Durum raporu — grafiklerle */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -349,14 +614,37 @@ export default function TeamPage() {
                     )}
                   >
                     <div className="flex items-start gap-2">
-                      {isManager && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
-                      <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setDetailId(task.id)}>
+                      {selectMode ? (
+                        <input
+                          type="checkbox"
+                          checked={selected.has(task.id)}
+                          onChange={() => toggleSelect(task.id)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                          aria-label="Seç"
+                        />
+                      ) : isManager && <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />}
+                      <div className="min-w-0 flex-1 cursor-pointer" onClick={() => (selectMode ? toggleSelect(task.id) : setDetailId(task.id))}>
                         <p className="text-sm font-medium leading-snug">{task.title}</p>
                         {task.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.description}</p>}
+                        {task.blockedBy && task.blockedBy.status !== 'done' && (
+                          <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                            <Link2 className="h-3 w-3" /> Bağlı: {task.blockedBy.title}
+                          </p>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', PRIORITY_STYLE[task.priority])}>
                             {PRIORITY_LABEL[task.priority]}
                           </span>
+                          {task.recurrence && (
+                            <span className="flex items-center gap-0.5 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-300" title="Tekrarlayan görev">
+                              <Repeat className="h-3 w-3" />
+                            </span>
+                          )}
+                          {task.estimateMin != null && (
+                            <span className="flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground" title="Tahmini süre">
+                              <Clock className="h-3 w-3" />{Math.round(task.estimateMin / 60 * 10) / 10}s
+                            </span>
+                          )}
                           {task.department && (
                             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                               {departments.find((d) => d.slug === task.department)?.name ?? task.department}
@@ -383,9 +671,14 @@ export default function TeamPage() {
                         {parseTags(task.tags).length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {parseTags(task.tags).map((tag) => (
-                              <span key={tag} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', tagColor(tag))}>
+                              <button
+                                key={tag}
+                                onClick={(e) => { e.stopPropagation(); setFTag(tag); }}
+                                className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-transform hover:scale-105', tagColor(tag))}
+                                title={`#${tag} ile filtrele`}
+                              >
                                 #{tag}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -521,7 +814,19 @@ export default function TeamPage() {
 
           <div className="space-y-5 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Başlık</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-muted-foreground">Başlık</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={suggestChecklist} disabled={aiSuggesting !== null}
+                    className="flex items-center gap-1 text-[11px] font-medium text-violet-500 hover:underline disabled:opacity-50">
+                    {aiSuggesting === 'checklist' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} AI alt görev
+                  </button>
+                  <button type="button" onClick={suggestAssignment} disabled={aiSuggesting !== null}
+                    className="flex items-center gap-1 text-[11px] font-medium text-violet-500 hover:underline disabled:opacity-50">
+                    {aiSuggesting === 'assign' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} AI ata
+                  </button>
+                </div>
+              </div>
               <Input
                 placeholder="Ne yapılacak?"
                 value={form.title}
@@ -530,6 +835,28 @@ export default function TeamPage() {
                 autoFocus
               />
             </div>
+
+            {/* AI önerdiği alt görevler */}
+            {aiChecklist.length > 0 && (
+              <div className="space-y-1.5 rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-xs font-semibold text-violet-500"><Sparkles className="h-3.5 w-3.5" /> AI alt görev önerileri</span>
+                  <button type="button" onClick={() => setAiChecklist([])} className="text-[11px] text-muted-foreground hover:underline">Temizle</button>
+                </div>
+                <ul className="space-y-1">
+                  {aiChecklist.map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs">
+                      <ListChecks className="h-3 w-3 shrink-0 text-violet-500" />
+                      <span className="flex-1">{item}</span>
+                      <button type="button" onClick={() => setAiChecklist((prev) => prev.filter((_, j) => j !== i))} aria-label="Kaldır">
+                        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-muted-foreground">Görev oluşturulunca bu maddeler alt görev olarak eklenir.</p>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Açıklama</label>
@@ -626,6 +953,31 @@ export default function TeamPage() {
                 />
               </div>
             </div>
+
+            {/* Tahmini süre + tekrar */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1 text-xs font-semibold text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Tahmini Süre (dk)</label>
+                <Input
+                  type="number" min={0} placeholder="ör. 120"
+                  value={form.estimateMin}
+                  onChange={(e) => setForm({ ...form, estimateMin: e.target.value })}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1 text-xs font-semibold text-muted-foreground"><Repeat className="h-3.5 w-3.5" /> Tekrar</label>
+                <Select value={form.recurrence || 'none'} onValueChange={(v) => setForm({ ...form, recurrence: v === 'none' ? '' : v })}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Tekrar yok" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Tekrar yok</SelectItem>
+                    <SelectItem value="daily">Her gün</SelectItem>
+                    <SelectItem value="weekly">Her hafta</SelectItem>
+                    <SelectItem value="monthly">Her ay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="border-t border-border/50 pt-4">
@@ -644,7 +996,12 @@ export default function TeamPage() {
         onOpenChange={(o) => { if (!o) setDetailId(null); }}
         onChanged={loadTasks}
         members={members}
+        allTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
+        isManager={isManager}
       />
+
+      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} weekKey={weekKey} onApplied={loadTasks} />
+      <AiSummaryDialog open={summaryOpen} onOpenChange={setSummaryOpen} weekKey={weekKey} />
     </div>
   );
 }
