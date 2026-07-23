@@ -72,7 +72,9 @@ const PRIORITY_LABEL: Record<string, string> = { high: 'Yüksek', medium: 'Orta'
 export default function TeamPage() {
   const { data: session } = useSession();
   const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
-  const isManager = teamRole === 'yonetici' || teamRole == null; // rol atanmamışsa tam görünüm (ilk kurulum)
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'ADMIN';
+  // ADMIN her zaman tam yetki; ekip alt-rolü "yönetici" ise ya da hiç atanmamışsa da yönetici.
+  const isManager = isAdmin || teamRole === 'yonetici' || teamRole == null;
 
   const [weekKey, setWeekKey] = useState<string>(() => weekKeyOf());
   const [department, setDepartment] = useState<string>('all');
