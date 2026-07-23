@@ -1,8 +1,19 @@
 import { sendTransactionalEmail } from '@/lib/mail-sender';
-import { buildTransactionalEmailHtml, buildTransactionalPlainText } from '@/lib/transactional-email';
+import { buildTransactionalEmailHtml, buildTransactionalPlainText, getTransactionalEmailLogoUrl } from '@/lib/transactional-email';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
 
 const from = process.env.EMAIL_FROM || 'QRateX <onboarding@resend.dev>';
+
+/**
+ * Tüm ekip maillerinde ortak logo başlığı (koyu gradient şerit üstünde açık logo).
+ * localhost origin'de görsel dış istemcilerce yüklenemez → logoyu atla, metin marka başlığı kullanılır.
+ */
+function brandHeader() {
+  const origin = getPublicAppOrigin();
+  const isLocal = /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(origin);
+  if (isLocal) return {}; // logoUrl yok → şablon "QRateX" metin başlığını gösterir
+  return { logoUrl: getTransactionalEmailLogoUrl(origin), brandLinkHref: origin };
+}
 
 /** Görev atanınca atanan kişiye bildirim maili. RESEND yoksa sessizce atlar. */
 export async function sendTaskAssignedEmail(opts: {
@@ -19,6 +30,7 @@ export async function sendTaskAssignedEmail(opts: {
       `Öncelik: ${prio}${due ? ` · Bitiş: ${due}` : ''}`,
     ];
     const html = buildTransactionalEmailHtml({
+      ...brandHeader(),
       heading: 'Yeni Görev Atandı 📋', bodyHtml: bodyLines.join("<br>"),
       cta: { href: link, label: 'Görevi Aç' },
       footnoteHtml: 'Bu bildirim QRateX ekip yönetiminden gönderildi.',
@@ -43,6 +55,7 @@ export async function sendMentionEmail(opts: {
       `“${snippet}”`,
     ];
     const html = buildTransactionalEmailHtml({
+      ...brandHeader(),
       heading: 'Bir Yorumda Etiketlendin 💬', bodyHtml: bodyLines.join('<br>'),
       cta: { href: link, label: 'Yoruma Git' },
       footnoteHtml: 'QRateX ekip yönetimi bildirimi.',
@@ -71,6 +84,7 @@ export async function sendWeeklyReminderEmail(opts: {
       list,
     ];
     const html = buildTransactionalEmailHtml({
+      ...brandHeader(),
       heading: 'Haftalık Görev Hatırlatması ⏰', bodyHtml: bodyLines.join("<br>"),
       cta: { href: link, label: 'Panoyu Aç' },
       footnoteHtml: 'Haftalık ekip özeti — QRateX.',

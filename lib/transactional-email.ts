@@ -25,11 +25,13 @@ export const TRANSACTIONAL_EMAIL_HEAD = `<head>
   </style>
 </head>`;
 
+// Dış zemin (tüm maili ortalar) + kart. Tablo-tabanlı: tüm mail istemcileriyle uyumlu.
+// Not: font-family içinde ÇİFT tırnak kullanma — inline style attribute'unu erken kapatır. Tek tırnak.
 const TX_BODY_INLINE =
-  'font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 480px; margin: 0 auto; padding: 24px;';
+  "margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
 
 const TX_FOOTER_HTML =
-  '<p class="tx-email-foot" style="font-size: 12px; color: #999; margin-top: 32px;">QRATEX - QR Tabanlı Geri Bildirim Platformu</p>';
+  '<p class="tx-email-foot" style="font-size:12px;color:#94a3b8;margin:0;text-align:center;line-height:1.6;">QRateX · QR Tabanlı Geri Bildirim Platformu<br>Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>';
 
 /** href / metin içi güvenli kaçış (kullanıcı veya DB kaynaklı değerler için). */
 export function escapeEmailHtml(s: string): string {
@@ -41,9 +43,15 @@ export function escapeEmailHtml(s: string): string {
 }
 
 function ctaBlock(cta: TransactionalCta): string {
-  return `<p style="margin: 24px 0;">
-    <a href="${escapeEmailHtml(cta.href)}" style="display: inline-block; background: linear-gradient(to right, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX}); color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">${escapeEmailHtml(cta.label)}</a>
-  </p>`;
+  // Ortalanmış, "bulletproof" buton (tablo hücresi + yuvarlak köşe + gölge yerine düz dolgu).
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0;">
+  <tr><td align="center">
+    <a href="${escapeEmailHtml(cta.href)}" target="_blank" rel="noopener noreferrer"
+       style="display:inline-block;background:${BRAND_PRIMARY_HEX};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX});color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:10px;font-weight:700;font-size:15px;letter-spacing:0.2px;">
+      ${escapeEmailHtml(cta.label)}
+    </a>
+  </td></tr>
+</table>`;
 }
 
 /** Açık arka planlı üst şerit — `logo-light` ile uyumlu (paneldeki `/logo/logo-light.png`). */
@@ -85,23 +93,48 @@ export function buildTransactionalEmailHtml(input: {
   const h = escapeEmailHtml(input.heading);
   const extra = input.extraHtml ?? '';
   const cta = input.cta ? ctaBlock(input.cta) : '';
-  const foot = input.footnoteHtml ?? '';
-  const logo =
+  const foot = input.footnoteHtml
+    ? `<p class="tx-email-muted" style="font-size:13px;color:#94a3b8;margin:20px 0 0;line-height:1.6;">${input.footnoteHtml}</p>`
+    : '';
+  // Logo verildiyse görsel; verilmediyse metin marka başlığı (ekip mailleri gibi).
+  const brandMark =
     input.logoUrl && input.brandLinkHref
-      ? logoHeaderBlock(input.logoUrl, input.brandLinkHref)
-      : '';
+      ? `<a href="${escapeEmailHtml(input.brandLinkHref.replace(/\/$/, ''))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+           <img src="${escapeEmailHtml(input.logoUrl)}" width="150" alt="QRateX" style="display:block;margin:0 auto;max-width:150px;height:auto;border:0;" />
+         </a>`
+      : `<span style="display:inline-block;font-size:22px;font-weight:800;letter-spacing:0.5px;color:#ffffff;">QRate<span style="color:#e9d5ff;">X</span></span>`;
+
   return `
 <!DOCTYPE html>
 <html lang="tr">
 ${TRANSACTIONAL_EMAIL_HEAD}
 <body class="tx-email-body" style="${TX_BODY_INLINE}">
-  ${logo}
-  <h2 class="tx-email-h2" style="color: ${BRAND_PRIMARY_HEX_DEEP}; margin-top: 0;">${h}</h2>
-  ${input.bodyHtml}
-  ${extra}
-  ${cta}
-  ${foot}
-  ${TX_FOOTER_HTML}
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f1f5f9;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;margin:0 auto;">
+        <!-- Gradient başlık şeridi -->
+        <tr>
+          <td align="center" style="background:${BRAND_PRIMARY_HEX_DEEP};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX});border-radius:16px 16px 0 0;padding:28px 24px;">
+            ${brandMark}
+          </td>
+        </tr>
+        <!-- Beyaz kart gövdesi -->
+        <tr>
+          <td class="tx-email-card" style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:36px 32px;">
+            <h1 class="tx-email-h2" style="margin:0 0 18px;font-size:22px;font-weight:800;color:#0f172a;line-height:1.3;">${h}</h1>
+            <div style="font-size:15px;line-height:1.7;color:#334155;">
+              ${input.bodyHtml}
+            </div>
+            ${extra}
+            ${cta}
+            ${foot}
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr><td style="padding:24px 16px 8px;">${TX_FOOTER_HTML}</td></tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>
   `.trim();
