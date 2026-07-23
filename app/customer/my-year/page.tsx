@@ -5,6 +5,7 @@ import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Sparkles, MessageSquare, Store, Trophy, Flame, Zap, TrendingUp } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 
 interface MyYear {
   period: string;
@@ -46,14 +47,16 @@ export default function CustomerMyYearPage() {
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <DashboardPageHero
-        title="QRATEX'te Yılım"
+        title="QRateX'te Yılım"
         description="Geri bildirimlerinin gerçek etkisi ve bu yılki kilometre taşların"
         icon={<Sparkles className="text-white" />}
       />
 
       {loading ? (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">Yükleniyor...</CardContent>
+          <CardContent className="p-6">
+            <InlineLoadingStatus />
+          </CardContent>
         </Card>
       ) : !data ? (
         <Card>

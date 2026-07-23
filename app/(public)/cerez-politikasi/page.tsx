@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = getCanonicalBase(seo);
   return {
     title: override?.title ?? 'Çerez Politikası',
-    description: override?.description ?? 'QRATEX çerez politikası: zorunlu ve analitik çerezler, kullanım amaçları ve yönetim.',
+    description: override?.description ?? 'QRateX çerez politikası: zorunlu ve analitik çerezler, kullanım amaçları ve yönetim.',
     alternates: { canonical: override?.canonical ?? `${base}/cerez-politikasi` },
   };
 }
@@ -21,7 +21,7 @@ export default async function CerezPolitikasiPage() {
   const base = getCanonicalBase(seo);
   const override = await getPageSeo('/cerez-politikasi');
   const title = override?.title ?? 'Çerez Politikası';
-  const description = override?.description ?? 'QRATEX çerez politikası: zorunlu ve analitik çerezler, kullanım amaçları ve yönetim.';
+  const description = override?.description ?? 'QRateX çerez politikası: zorunlu ve analitik çerezler, kullanım amaçları ve yönetim.';
   return (
     <>
       <WebPageJsonLd name={title} description={description} url={`${base}/cerez-politikasi`} />
@@ -34,7 +34,7 @@ export default async function CerezPolitikasiPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
           <p>
-            Bu politika, QRATEX platformunda kullanılan çerez türlerini ve bu çerezlerin hangi amaçlarla işlendiğini
+            Bu politika, QRateX platformunda kullanılan çerez türlerini ve bu çerezlerin hangi amaçlarla işlendiğini
             açıklar.
           </p>
           <p>

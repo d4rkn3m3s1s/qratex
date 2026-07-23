@@ -66,7 +66,7 @@ export default async function AdminInsightsPage() {
             <AdminPremiumHero
                 eyebrow="Analitik"
                 title="Sektörel karşılaştırma (global insights)"
-                description="QRATEX sistemine kayıtlı tüm bayilerin (anonimleştirilmiş) sektör bazlı performans analizleri. Bu verileri bayilere içgörü veya ekstra abonelik paketi olarak sunabilirsiniz."
+                description="QRateX sistemine kayıtlı tüm bayilerin (anonimleştirilmiş) sektör bazlı performans analizleri. Bu verileri bayilere içgörü veya ekstra abonelik paketi olarak sunabilirsiniz."
                 icon={<TrendingUp className="text-white" />}
                 chips={
                     <div className="flex flex-wrap gap-2">

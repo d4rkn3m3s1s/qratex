@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { BotHunterGame } from '@/components/customer/games/bot-hunter-game';
 
-export const metadata = { title: 'Bot Avcısı | QRATEX' };
+export const metadata = { title: 'Bot Avcısı | QRateX' };
 
 export default async function BotHunterPage() {
   const session = await getServerSession(authOptions);

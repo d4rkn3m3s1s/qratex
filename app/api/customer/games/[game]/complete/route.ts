@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { creditPointsAndXp } from '@/lib/points-wallet';
-import { getMiniGame, computeGameReward } from '@/lib/minigame-config';
+import { getEffectiveMiniGame, computeEffectiveReward } from '@/lib/minigame-config-effective';
 import { computeAchievementStats } from '@/lib/game-achievement-stats';
 import { evaluateAchievements } from '@/lib/game-achievements';
 
@@ -31,7 +32,7 @@ export async function POST(
 ) {
   try {
     const { game: gameType } = await params;
-    const game = getMiniGame(gameType);
+    const game = await getEffectiveMiniGame(gameType);
     if (!game) {
       return NextResponse.json(
         { error: 'Oyun bulunamadı' },
@@ -83,7 +84,7 @@ export async function POST(
 
     // Ödül yalnızca kazanıldıysa, yeterince skor yapıldıysa ve süre makulse.
     const eligible = won && !tooFast;
-    const reward = eligible ? computeGameReward(game, clampedScore) : { points: 0, xp: 0 };
+    const reward = eligible ? computeEffectiveReward(game, clampedScore) : { points: 0, xp: 0 };
 
     // Başarım tespiti için: bu tamamlamadan ÖNCE açık olan başarım id'leri.
     const beforeUnlocked = new Set(
@@ -107,18 +108,26 @@ export async function POST(
         return { credited: false as const, streakBonusXp: 0, streak: 0 };
       }
 
-      // Günlük seri bonusu: yalnızca KAZANILDIYSA ve bu günün İLK tamamlanan
-      // oyunuysa verilir (bir günde tek kez). Seri = bugün + geriye kesintisiz gün.
+      // Günlük seri bonusu: yalnızca ÖDÜLE HAK KAZANILDIYSA (eligible = won &&
+      // !tooFast && eşik geçildi) ve bu günün İLK tamamlanan oyunuysa verilir.
+      // Önceden yalnızca `won` kontrol ediliyordu → {won:true,score:0,durationSec:0}
+      // gönderen bot ödül almadan bile her gün streak XP topluyordu (rank 7).
       let streakBonusXp = 0;
       let streak = 0;
-      if (won) {
+      if (eligible && reward.points > 0) {
         const today = new Date().toISOString().slice(0, 10);
-        const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-        // Bu oturum hariç bugün başka completed var mı? (varsa bonus zaten verildi)
-        const completedTodayElse = await tx.miniGameSession.count({
-          where: { userId, status: 'completed', dayKey: today, id: { not: sessionId } },
-        });
-        if (completedTodayElse === 0) {
+        // ATOMİK günlük tek-claim: (userId, dayKey) UNIQUE kaydını oluşturmayı
+        // dene. Aynı gün başka bir oyun zaten bonus aldıysa P2002 atar → bonus yok.
+        // Önceki count-then-act, Read Committed'da iki eşzamanlı oyunda çift bonus
+        // veriyordu (rank 13). Bu, yarışı DB seviyesinde tek kazanana indirir.
+        let claimedStreakToday = false;
+        try {
+          await tx.gameStreakClaim.create({ data: { userId, dayKey: today } });
+          claimedStreakToday = true;
+        } catch (e) {
+          if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;
+        }
+        if (claimedStreakToday) {
           // Geriye doğru kesintisiz günleri say (son 120 gün penceresi).
           const since = new Date(Date.now() - 120 * 86_400_000);
           const rows = await tx.miniGameSession.findMany({
@@ -135,7 +144,6 @@ export async function POST(
             d.setUTCDate(d.getUTCDate() - 1);
             cur = d.toISOString().slice(0, 10);
           }
-          void yesterday;
           // Her gün +10 XP, her 3. günde ekstra +30 XP milestone.
           streakBonusXp = 10 + (streak % 3 === 0 ? 30 : 0);
         }
@@ -148,6 +156,19 @@ export async function POST(
           points: reward.points,
           xp: totalXp,
         });
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle ki
+        // caps (lib/points-caps) ve velocity dedektörü (lib/points-velocity) oyun
+        // ekonomisini de görsün (önceden tüm oyun puanları bu olaylara görünmezdi).
+        if (reward.points > 0) {
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'game',
+              data: { points: reward.points, gameType: game.gameType, sessionId },
+            },
+          });
+        }
         return { credited: true as const, newPoints: updated.points, streakBonusXp, streak };
       }
       return { credited: true as const, newPoints: null, streakBonusXp, streak };

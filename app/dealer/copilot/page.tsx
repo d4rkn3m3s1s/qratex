@@ -157,6 +157,13 @@ export default function DealerCopilotPage() {
                 {t('dealerCopilot.linkActions')}
               </Link>
             </Button>
+            {/* AI merkezi köprüsü: sürekli sohbet için */}
+            <Button asChild size="lg" variant="outline">
+              <Link href="/dealer/ai-chat">
+                <Sparkles className="h-4 w-4" />
+                AI Sohbet
+              </Link>
+            </Button>
           </>
         }
       />

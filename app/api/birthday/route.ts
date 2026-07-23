@@ -120,10 +120,26 @@ export async function POST(req: NextRequest) {
           { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
-      const birthday = await prisma.userBirthday.upsert({
+
+      // Suistimal önleme: doğum günü BİR KEZ ayarlanır, sonra DEĞİŞTİRİLEMEZ.
+      // Aksi halde kullanıcı doğum günü bonusundan sürekli yararlanmak için tarihi
+      // her seferinde bugüne çekebilir. Değişiklik talebi destek/manuel süreçle yapılır.
+      const existing = await prisma.userBirthday.findUnique({
         where: { userId: session.user.id },
-        update: { birthDate },
-        create: {
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          {
+            error: 'Doğum günü zaten kayıtlı ve değiştirilemez. Hatalıysa destek ile iletişime geçin.',
+            code: 'BIRTHDAY_LOCKED',
+          },
+          { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+
+      const birthday = await prisma.userBirthday.create({
+        data: {
           userId: session.user.id,
           birthDate,
         },
@@ -131,7 +147,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Doğum günü kaydedildi!',
+        message: 'Doğum günü kaydedildi! (Bir daha değiştirilemez.)',
         birthday,
       }, { headers: PRIVATE_NO_STORE_HEADERS });
     }

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { getMiniGame } from '@/lib/minigame-config';
+import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +26,7 @@ export async function GET(
 ) {
   try {
     const { game: gameType } = await params;
-    const game = getMiniGame(gameType);
+    const game = await getEffectiveMiniGame(gameType);
     if (!game) {
       return NextResponse.json(
         { error: 'Oyun bulunamadı', leaderboard: [] },

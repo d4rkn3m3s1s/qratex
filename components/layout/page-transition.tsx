@@ -1,46 +1,29 @@
-'use client';
-
-import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, type ReactNode } from 'react';
 
 interface PageTransitionProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 /**
- * Qratex 2.0 Sayfa Geçiş Motoru
- * Sayfalar arası geçişte Apple tarzı yumuşak bir fade/blur efekti sağlar.
- * Hydration hatalarını önlemek için mounting kontrolü eklenmiştir.
+ * Qratex sayfa kabı.
+ *
+ * Not: Buradaki eski sayfa-geçiş animasyonu (framer-motion → styled-jsx → key'li CSS)
+ * her seferinde HYDRATION uyuşmazlığı çıkardı:
+ *  - `motion.div` SSR'da inline style enjekte ediyordu,
+ *  - `<style jsx>` SSR'da farklı hash üretiyordu,
+ *  - `usePathname()` + `key={pathname}` sunucuda <Suspense>, istemcide <div> farkı yaratıyordu.
+ * Bu yüzden bileşen artık SERVER component (client hook YOK, animasyon YOK) ve DOM'a
+ * sunucu/istemci birebir aynı sabit bir sarmalayıcı üretir.
+ *
+ * Ek olarak: route segment'lerinin `loading.tsx`'i (Next otomatik <Suspense> sınırı)
+ * streaming sırasında sunucuda <Suspense>, istemcide <div> farkı yaratıp "recoverable"
+ * hidrasyon uyarısı çıkarıyordu. Çocukları AÇIKÇA bir <Suspense> ile sarmalayınca
+ * sunucu ve istemci aynı ağaç yapısını görür → uyarı biter.
  */
 export const PageTransition = ({ children }: PageTransitionProps) => {
-  const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Server-side veya hydration sırasında düz render yapıyoruz
-  if (!mounted) {
-    return <div className="w-full h-full min-h-screen">{children}</div>;
-  }
-
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 10, filter: 'blur(10px)' }}
-        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        exit={{ opacity: 0, y: -10, filter: 'blur(10px)' }}
-        transition={{
-          duration: 0.4,
-          ease: [0.22, 1, 0.36, 1], // Custom cubic-bezier for premium feel
-        }}
-        className="w-full h-full min-h-screen"
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div className="w-full h-full min-h-screen">
+      <Suspense fallback={null}>{children}</Suspense>
+    </div>
   );
 };

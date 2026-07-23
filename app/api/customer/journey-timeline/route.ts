@@ -67,7 +67,7 @@ export async function GET() {
       id: `register-${userId}`,
       type: 'register',
       title: 'Yolculuk Başladı',
-      description: `${user.name || 'Müşteri'} QRATEX platformuna katıldı!`,
+      description: `${user.name || 'Müşteri'} QRateX platformuna katıldı!`,
       icon: '🚀',
       date: user.createdAt.toISOString(),
       color: 'primary',

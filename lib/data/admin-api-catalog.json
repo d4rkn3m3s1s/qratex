@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T23:33:05.516Z",
+  "generatedAt": "2026-06-21T13:00:50.967Z",
   "routes": [
     {
       "path": "/api/admin/ab-testing/overview",
@@ -342,6 +342,14 @@
         "DELETE"
       ],
       "file": "app/api/admin/feedbacks/route.ts"
+    },
+    {
+      "path": "/api/admin/games",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "file": "app/api/admin/games/route.ts"
     },
     {
       "path": "/api/admin/gamification/settings",
@@ -814,10 +822,7 @@
     },
     {
       "path": "/api/admin/users/hall-of-fame",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
+      "methods": [],
       "file": "app/api/admin/users/hall-of-fame/route.ts"
     },
     {

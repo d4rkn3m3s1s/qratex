@@ -23,7 +23,7 @@
         "customerAnalytics": "Kişisel analitik",
         "customerAnalyticsDescription": "Ziyaretler, etkileşim ve kişisel trend sinyalleri tek görünümde.",
         "customerAiInsights": "AI analizlerim",
-        "customerAiInsightsDescription": "QRATEX aktivitenizden özet ve sıralı içgörüler.",
+        "customerAiInsightsDescription": "QRateX aktivitenizden özet ve sıralı içgörüler.",
         "customerSettings": "Ayarlar",
         "customerSettingsDescription": "Profil, bildirimler, tema ve hesap tercihleri.",
         "customerScan": "QR tara",
@@ -41,7 +41,7 @@
         "customerRewards": "Ödüller",
         "customerRewardsDescription": "Talep edilebilir ödüller, ilerleme ve kullanım durumu.",
         "customerMyCard": "Kartım",
-        "customerMyCardDescription": "QRATEX kartınız, seviye sinyalleri ve hızlı paylaşım.",
+        "customerMyCardDescription": "QRateX kartınız, seviye sinyalleri ve hızlı paylaşım.",
         "dealerProducts": "Ürünlerim",
         "dealerProductsDescription": "QR akışlarına bağlı katalog, stok ve tüketimler.",
         "dealerVocWall": "VoC Wall",
@@ -125,7 +125,7 @@
         "dealerInnovation": "İnovasyon",
         "dealerInnovationDescription": "Deneyler, betalar ve hesabınız için yol haritası önizlemeleri.",
         "customerDashboard": "Panel",
-        "customerDashboardDescription": "QRATEX ana ekranınız: ilerleme, kısayollar ve canlı sinyaller.",
+        "customerDashboardDescription": "QRateX ana ekranınız: ilerleme, kısayollar ve canlı sinyaller.",
         "customerFeedbackJourney": "Geri bildirim yolculuğu",
         "customerFeedbackJourneyDescription": "Tek bir geri bildirim konusunun adım adım akışı ve sonuçları.",
         "dealerDashboard": "Panel",
@@ -139,13 +139,13 @@
         "authLogin": "Giriş yap",
         "authLoginDescription": "Müşteri, bayi, yönetim veya personel alanına güvenli erişim.",
         "authRegister": "Hesap oluştur",
-        "authRegisterDescription": "E-posta doğrulaması ve role göre onboarding ile QRATEX'e katılın.",
+        "authRegisterDescription": "E-posta doğrulaması ve role göre onboarding ile QRateX'e katılın.",
         "authForgotPassword": "Şifremi unuttum",
         "authForgotPasswordDescription": "E-postanıza güvenli sıfırlama bağlantısı isteyin.",
         "authResetPassword": "Şifre sıfırla",
         "authResetPasswordDescription": "Hesap kurtarmayı tamamlamak için yeni şifre belirleyin.",
         "authMagicLink": "Sihirli bağlantı",
-        "authMagicLinkDescription": "QRATEX hesabınız için şifresiz giriş bağlantısı.",
+        "authMagicLinkDescription": "QRateX hesabınız için şifresiz giriş bağlantısı.",
         "authVerifyEmail": "E-postayı doğrula",
         "authVerifyEmailDescription": "Erişimi etkinleştirmek için adresinizi onaylayın.",
         "authComplete": "Profili tamamla",
@@ -212,7 +212,7 @@
         "dailyRewardMessage": "Her gün giriş yaparak yeni sürprizler kazanabilirsin! Bugünün ödülü seninle."
     },
     "common": {
-        "appName": "QRATEX",
+        "appName": "QRateX",
         "loading": "Yükleniyor...",
         "error": "Bir hata oluştu",
         "save": "Kaydet",
@@ -293,7 +293,7 @@
     "dealerDashboard": {
         "gettingStarted": {
             "title": "Hadi başlayalım",
-            "subtitle": "QRATEX’ten ilk değeri almak için şu adımları tamamla",
+            "subtitle": "QRateX’ten ilk değeri almak için şu adımları tamamla",
             "qrTitle": "İlk QR kodunu oluştur",
             "qrDesc": "Müşterilerin tarayıp geri bildirim bırakacağı QR kodunu oluştur.",
             "qrCta": "QR oluştur",
@@ -1685,7 +1685,7 @@
         "firstBadgeHint": "İlk rozetin 1 QR uzağında.",
         "firstQuest": "İlk Görevin",
         "welcome": {
-            "title": "QRATEX’e hoş geldin! 🎉",
+            "title": "QRateX’e hoş geldin! 🎉",
             "subtitle": "Geri bildirimlerin işletmeleri geliştirir, sen de puan ve rozet kazanırsın. İlk 3 adımla başla:",
             "step1": "Bir işletmedeki QR kodunu tara",
             "step2": "Deneyimini puanla ve yorumunu bırak",
@@ -1745,7 +1745,7 @@
         "loading": "Yolculuk puanı yükleniyor",
         "eyebrow": "Müşteri alanı",
         "title": "Zaman Çizelgem",
-        "description": "QRATEX ile yaşadığınız tüm eşsiz maceralar, kazançlarınız ve geri bildirimleriniz.",
+        "description": "QRateX ile yaşadığınız tüm eşsiz maceralar, kazançlarınız ve geri bildirimleriniz.",
         "feedbackJourneyDesc": "İşletme yanıtı ve telafi adımları için her QR geri bildiriminize özel zaman çizelgesi.",
         "feedbackJourneyBtn": "Geri bildirim yolculukları",
         "score": "Skor",
@@ -1854,7 +1854,7 @@
         "navFeatures": "Özellikler",
         "navPricing": "Fiyatlandırma",
         "navBlog": "Blog",
-        "navWhyQratex": "Neden QRATEX?",
+        "navWhyQratex": "Neden QRateX?",
         "pageLoading": "Sayfa yükleniyor",
         "globalSearchResultsRegion": "Arama sonuçları",
         "globalSearchSearching": "Aranıyor…",
@@ -2039,7 +2039,7 @@
         "anonFingerprint": "Anon · parmak izi:"
     },
     "pwaInstall": {
-        "title": "QRATEX'i Yükle",
+        "title": "QRateX'i Yükle",
         "subtitle": "Ana ekranınıza ekleyin, daha hızlı erişin!",
         "install": "Yükle",
         "later": "Sonra",
@@ -2052,7 +2052,7 @@
         "iosStep2Before": "Açılan menüde ",
         "iosStep2After": " Ana Ekrana Ekle'yi bulun",
         "iosStep3Title": "\"Ekle\" butonuna tıklayın",
-        "iosStep3Desc": "QRATEX ana ekranınıza eklenecek",
+        "iosStep3Desc": "QRateX ana ekranınıza eklenecek",
         "iosGotIt": "Anladım"
     },
     "onboarding": {
@@ -2064,7 +2064,7 @@
         "dealer": {
             "welcome": {
                 "title": "Hoş geldin!",
-                "desc": "QRATEX ile müşteri geri bildirimlerini tek panelden yönetin."
+                "desc": "QRateX ile müşteri geri bildirimlerini tek panelden yönetin."
             },
             "qr": {
                 "title": "İlk QR kodunu oluştur",
@@ -2109,7 +2109,7 @@
             "badge": "Yeni: AI Destekli Duygu Analizi",
             "headlineLine1": "Müşteri Deneyimini",
             "headlineAccent": "Dönüştürün",
-            "sub": "QRATEX ile QR kodlar üzerinden geri bildirim toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın.",
+            "sub": "QRateX ile QR kodlar üzerinden geri bildirim toplayın, AI ile analiz edin ve gamification ile müşteri bağlılığını artırın.",
             "ctaStart": "Ücretsiz Başla",
             "ctaDemo": "Demo İzle",
             "scrollHint": "İçeriğe kaydır",
@@ -2158,12 +2158,16 @@
             "primary": "Ücretsiz Deneyin",
             "sales": "Satış ile Görüşün"
         },
+        "adMarquee": {
+            "title": "Bize güvenen işletmeler",
+            "aria": "Kayan işletme ve reklam şeridi"
+        },
         "demo": {
             "badge": "Demo",
             "heading": "Nasıl Çalıştığını Görün",
             "sub": "QR kod ile geri bildirim toplama, puanlama ve anlık analiz akışını keşfedin.",
-            "videoTitle": "QRATEX demo",
-            "videoAria": "QRATEX ürün demo videosu",
+            "videoTitle": "QRateX demo",
+            "videoAria": "QRateX ürün demo videosu",
             "placeholder": "Demo video veya canlı önizleme burada yer alabilir.",
             "ctaFeatures": "Özellikleri İncele"
         },
@@ -2233,12 +2237,12 @@
         "testimonials": {
             "badge": "Müşteri Yorumları",
             "heading": "İşletmeler Ne Diyor?",
-            "sub": "QRATEX kullanan işletmelerden geri bildirimler",
+            "sub": "QRateX kullanan işletmelerden geri bildirimler",
             "items": [
                 {
                     "name": "Ahmet Yılmaz",
                     "role": "Cafe Sahibi",
-                    "content": "QRATEX sayesinde müşteri memnuniyetimizi %40 artırdık. Gerçek zamanlı geri bildirimler işimizi dönüştürdü."
+                    "content": "QRateX sayesinde müşteri memnuniyetimizi %40 artırdık. Gerçek zamanlı geri bildirimler işimizi dönüştürdü."
                 },
                 {
                     "name": "Elif Kaya",
@@ -2258,8 +2262,8 @@
             "sub": "Merak ettiklerinizin yanıtları",
             "items": [
                 {
-                    "q": "QRATEX nedir?",
-                    "a": "QRATEX, müşteri geri bildirimlerini QR kodlar üzerinden toplayan, AI ile analiz eden ve gamification ile müşteri bağlılığını artıran bir platformdur."
+                    "q": "QRateX nedir?",
+                    "a": "QRateX, müşteri geri bildirimlerini QR kodlar üzerinden toplayan, AI ile analiz eden ve gamification ile müşteri bağlılığını artıran bir platformdur."
                 },
                 {
                     "q": "Ücretsiz planın limitleri neler?",
@@ -2377,7 +2381,7 @@
         "noAccount": "Hesabınız yok mu?",
         "registerLink": "Kayıt Olun",
         "registerTitle": "Hesap Oluşturun",
-        "registerSubtitle": "QRATEX'e katılın ve avantajlardan yararlanın",
+        "registerSubtitle": "QRateX'e katılın ve avantajlardan yararlanın",
         "inviteBonusLine": "Davet kodu ile bonus puan kazanacaksınız",
         "accountTypeAria": "Hesap türü seçin",
         "accountTypeOptionAria": "Hesap türü: {{label}}. {{description}}",
@@ -2438,6 +2442,22 @@
         "errorRetry": "Tekrar dene",
         "errorLogin": "Giriş"
     },
+    "sidebarNavGroups": {
+        "customer": {
+            "card": "Kartım",
+            "analytics": "Analizler",
+            "feedback": "Geri bildirimlerim",
+            "trends": "Trend Analiz",
+            "rewards": "Ödüller & Mağaza",
+            "games": "QGameX"
+        },
+        "dealer": {
+            "business": "İşletme",
+            "analytics": "Analitik",
+            "feedback": "Geri bildirimlerim",
+            "system": "Sistem"
+        }
+    },
     "sidebarNav": {
         "admin": {
             "dashboard": "Dashboard",
@@ -2482,6 +2502,8 @@
             "avatar_shop": "Dükkan yönetimi",
             "design_language": "Tasarım dili",
             "menu_order": "Menü sırası",
+            "menu_groups": "Menü grupları",
+            "team": "Ekip Yönetimi",
             "experience_pulse": "Ritim stüdyosu",
             "accessibility": "Erişilebilirlik",
             "features": "Özellikler",
@@ -2489,6 +2511,7 @@
             "privacy_requests": "KVKK Talepleri",
             "points_matrix": "Puan Matrisi",
             "league_settings": "Lig Ayarları",
+            "mini_games": "Mini Oyunlar",
             "gamification_settings": "Oyunlaştırma Ayarları",
             "discovery": "Discovery",
             "seo": "SEO Motoru",
@@ -2543,8 +2566,9 @@
         },
         "customer": {
             "dashboard": "Dashboard",
+            "team": "Ekip Yönetimi",
             "progress_hub": "Gelişim merkezi",
-            "my_year": "QRATEX'te Yılım",
+            "my_year": "QRateX'te Yılım",
             "category_leaderboard": "En İyi İşletmeler",
             "my_card": "Kartım",
             "consumptions": "Tüketimlerim",
@@ -2566,6 +2590,7 @@
             "surprise_boxes": "Sürpriz Kutularım",
             "games_hub": "Oyun Merkezi",
             "campaigns": "Kampanyalar & Davet",
+            "referral": "Davet Et Kazan",
             "donations": "Sosyal Sorumluluk",
             "leaderboard": "Liderlik",
             "discover": "Keşfet",
@@ -3343,8 +3368,8 @@
         "loadError": "Davet bilgileri yüklenemedi",
         "loading": "Davet bilgileri yükleniyor...",
         "codeCopied": "Davet kodu kopyalandı!",
-        "shareTitle": "QRATEX'e Katıl!",
-        "shareText": "QRATEX'e katıl ve bonus puan kazan! Davet kodum:",
+        "shareTitle": "QRateX'e Katıl!",
+        "shareText": "QRateX'e katıl ve bonus puan kazan! Davet kodum:",
         "codeApplied": "Davet kodu uygulandı!",
         "codeApplyError": "Kod uygulanamadı",
         "connectionError": "Bağlantı hatası",

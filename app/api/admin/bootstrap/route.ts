@@ -17,7 +17,8 @@ type BootstrapAction =
   | 'clear_insights_categories'
   | 'clear_suspicious_activities'
   | 'clear_ai_quality_samples'
-  | 'seed_achievements';
+  | 'seed_achievements'
+  | 'seed_demo_cafes';
 
 const BOOTSTRAP_TRACKER_KEY = 'admin_bootstrap_tracker_v1';
 
@@ -118,7 +119,8 @@ export async function POST(request: NextRequest) {
     action !== 'clear_insights_categories' &&
     action !== 'clear_suspicious_activities' &&
     action !== 'clear_ai_quality_samples' &&
-    action !== 'seed_achievements'
+    action !== 'seed_achievements' &&
+    action !== 'seed_demo_cafes'
   ) {
     return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
@@ -127,6 +129,20 @@ export async function POST(request: NextRequest) {
     const { seedAchievements } = await import('@/lib/achievements');
     await seedAchievements();
     return NextResponse.json({ success: true, action, message: 'Başarım görevleri eklendi.' }, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  if (action === 'seed_demo_cafes') {
+    const { seedDemoCafes } = await import('@/lib/demo-cafes-seed');
+    const result = await seedDemoCafes(auth.session.user.id);
+    return NextResponse.json(
+      {
+        success: true,
+        action,
+        message: `${result.cafes} demo kafe eklendi (${result.feedbacks} geri bildirim, ${result.consumptions} tüketim).`,
+        result,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   }
 
   if (action === 'quests_defaults') {

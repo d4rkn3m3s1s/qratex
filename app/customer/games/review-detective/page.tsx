@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { ReviewDetectiveGame } from '@/components/customer/games/review-detective-game';
 
-export const metadata = { title: 'Yorum Dedektifi | QRATEX' };
+export const metadata = { title: 'Yorum Dedektifi | QRateX' };
 
 export default async function ReviewDetectivePage() {
   const session = await getServerSession(authOptions);

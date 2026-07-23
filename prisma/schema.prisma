@@ -31,6 +31,9 @@ model User {
   phone         String?
   password      String?
   role          Role      @default(CUSTOMER)
+  // İç ekip yönetimi — yalnızca role=ADMIN için anlamlı (nullable = mevcut satırları etkilemez)
+  adminDepartment String? // "pazarlama" | "gelistirme" | "destek" | ... (Department.slug)
+  adminTeamRole   String? // "yonetici" | "uye"
   points        Int       @default(0)
   level         Int       @default(1)
   xp            Int       @default(0)
@@ -147,6 +150,12 @@ model User {
   checklistTemplates        ChecklistTemplate[]        @relation("DealerChecklistTemplates")
   // Staff: tasks/shifts/leave assigned to this user
   staffTasksAssigned        StaffTask[]                @relation("StaffTaskAssignments")
+  companyTasksAssigned      CompanyTask[]              @relation("CompanyTaskAssignments")
+  companyTasksCreated       CompanyTask[]              @relation("CompanyTaskCreator")
+  taskCommentsAuthored      TaskComment[]              @relation("TaskCommentAuthor")
+  taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
+  taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
+  taskTemplatesCreated      TaskTemplate[]             @relation("TaskTemplateCreator")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -406,6 +415,12 @@ model SquadBattle {
   squad2Score Int      @default(0)
   winnerId    String?
   rewardPool  Int      @default(0)
+  /// Ödül havuzu meydan okuyandan TAHSİL EDİLDİ mi (escrow). true ise kazanana
+  /// ödenir / kazanan yoksa veya savaş iptal/ret olursa challenger'a iade edilir.
+  /// false = eski/admin savaşları (escrow yok → ödeme yapılmaz, mint engellenir).
+  rewardFunded   Boolean  @default(false)
+  /// Escrow iade edildi mi (idempotent refund guard).
+  rewardRefunded Boolean  @default(false)
   /// Meydan okumayı başlatan kullanıcı (challenge akışı). null = admin oluşturdu.
   challengedById String?
   /// Rakip klan kabul ettiğinde dolar (status: pending → active).
@@ -417,7 +432,12 @@ model SquadBattle {
   squad2 Squad @relation("Squad2Battles", fields: [squad2Id], references: [id], onDelete: Cascade)
   participants SquadBattleParticipant[]
 
-  @@index([status])
+  // Cron süresi-dolan taraması (status='active'/'pending' + endTime<=now) en hot
+  // sorgu; status tek-sütun prefix'i de bu composite'ten faydalanır.
+  @@index([status, endTime])
+  // Challenge "açık savaş var mı" kontrolü squad1Id/squad2Id + status filtreler.
+  @@index([squad1Id, status])
+  @@index([squad2Id, status])
 }
 
 model SquadBattleParticipant {
@@ -452,6 +472,40 @@ model MiniGameSession {
 
   @@unique([userId, gameType, dayKey])
   @@index([userId])
+  // Leaderboard groupBy: gameType + status (userId YOK) → tek-sütun userId index'i
+  // bu sorguda işe yaramıyordu, tam-tablo taraması oluyordu.
+  @@index([gameType, status])
+  // Streak / achievement-stats: userId + status filtreler (status='completed').
+  @@index([userId, status])
+}
+
+/// Admin'in mini oyun registry'sini (lib/minigame-config.ts MINI_GAMES) ezdiği
+/// override katmanı. gameType UNIQUE; her satır TEK bir oyunu temsil eder.
+/// Override alanları NULL ise registry varsayılanı kullanılır (effective-config
+/// birleştirmesi lib/minigame-config-effective.ts'de). enabled=false → oyun
+/// hub'da gizlenir ve server start'ı reddeder. Ödül/eşik/süre DAİMA sunucuda
+/// bu effective değerlerden hesaplanır (client'a güvenilmez).
+model MiniGameConfig {
+  id        String  @id @default(cuid())
+  gameType  String  @unique
+  /// Oyun açık mı (hub'da görünür + oynanabilir).
+  enabled   Boolean @default(true)
+
+  // --- Ödül & anti-cheat override'ları (null = registry varsayılanı) ---
+  rewardPoints    Int?
+  rewardXp        Int?
+  rewardThreshold Int?
+  minDurationSec  Int?
+  maxScore        Int?
+
+  // --- Görsel override'lar (null/boş = registry varsayılanı) ---
+  title       String?
+  description String?
+  emoji       String?
+  accent      String?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 model GamificationSettings {
@@ -893,6 +947,20 @@ model DailySpin {
   @@index([userId])
 }
 
+/// Mini oyun günlük seri (streak) bonusunun günde tek kez verilmesini ATOMİK
+/// garanti eder. (userId, dayKey) UNIQUE → aynı gün iki farklı oyunun eşzamanlı
+/// tamamlanmasında yalnızca biri bu kaydı oluşturabilir, diğeri P2002 alır ve
+/// bonus verilmez (önceden count-then-act idi → Read Committed'da çift bonus).
+model GameStreakClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  dayKey    String // "YYYY-MM-DD" (UTC)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dayKey])
+  @@index([userId])
+}
+
 /// DB-backed rate limiter / login lockout. Serverless'te her Lambda kendi
 /// belleğinde olduğu ve cold start sayaçları sıfırladığı için in-memory Map
 /// güvenilir değildi; brute-force/flood koruması bu tabloya taşındı.
@@ -1285,6 +1353,19 @@ model Coupon {
 
   @@index([code])
   @@index([isActive])
+}
+
+/// Kupon kullanımı: kullanıcı başına tek kullanım garantisi. (userId, couponId)
+/// UNIQUE → eşzamanlı çift-kullanım transaction içinde DB seviyesinde reddedilir
+/// (AnalyticsEvent okuması racy idi; DailySpin/UserCosmetic ile aynı atomik desen).
+model CouponRedemption {
+  id        String   @id @default(cuid())
+  userId    String
+  couponId  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, couponId])
+  @@index([couponId])
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -2579,3 +2660,144 @@ model DataSubjectRequest {
 }
 
 
+
+// ─────────────────────────────────────────────────────────────
+// İç Ekip Yönetimi (Notion/Asana tarzı) — yalnızca ADMIN alt-rolleri kullanır.
+// ─────────────────────────────────────────────────────────────
+
+model Department {
+  id          String   @id @default(cuid())
+  slug        String   @unique // "pazarlama", "gelistirme" — User.adminDepartment ile eşleşir
+  name        String
+  description String?
+  color       String   @default("#8b5cf6")
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model CompanyTask {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?   @db.Text
+  status       String    @default("todo")   // todo | in_progress | done
+  priority     String    @default("medium") // low | medium | high
+  department   String?   // Department.slug (null = genel)
+  weekKey      String? // "YYYY-Www" (haftalık pano; null = bu haftaya bağlı değil)
+  tags         String? // virgülle ayrık etiketler ("acil,tasarım")
+  assignedToId String?
+  createdById  String
+  dueAt        DateTime?
+  completedAt  DateTime?
+  // Zaman takibi (dakika cinsinden tahmini + harcanan)
+  estimateMin  Int? // tahmini süre (dk)
+  spentMin     Int      @default(0) // harcanan süre (dk)
+  // Bağımlılık: bu görev başka bir göreve bağlı (o bitmeden başlanamaz)
+  blockedById  String?
+  // Tekrar: null|daily|weekly|monthly (weekKey bazlı cron ile klonlanır)
+  recurrence   String?
+  recurrenceParentId String? // bu tekrar örneğinin şablon görevi
+  // Otomatik üretim izi (işletme verisinden gelen görevler)
+  sourceType   String? // "manual" | "incident" | "churn" | "action-item" | "ai"
+  sourceRef    String? // kaynak entity id (idempotent üretim için)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignedTo  User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdBy   User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  blockedBy   CompanyTask?  @relation("TaskDependency", fields: [blockedById], references: [id], onDelete: SetNull)
+  blocking    CompanyTask[] @relation("TaskDependency")
+  checklist   TaskChecklistItem[]
+  comments    TaskComment[]
+  activities  TaskActivity[]
+  attachments TaskAttachment[]
+
+  @@index([status])
+  @@index([department])
+  @@index([weekKey])
+  @@index([assignedToId])
+  @@index([createdAt])
+  @@index([blockedById])
+  @@index([sourceType, sourceRef])
+}
+
+// Yeniden kullanılabilir görev şablonu (başlık/açıklama/öncelik/checklist iskeleti).
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  name        String   // şablon adı (ör. "Yeni özellik lansmanı")
+  title       String   // üretilecek görev başlığı
+  description String?  @db.Text
+  priority    String   @default("medium")
+  department  String?
+  tags        String?
+  estimateMin Int?
+  checklist   String?  @db.Text // satır-ayrık alt görev metinleri
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User @relation("TaskTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
+}
+
+// Ekip görev detayları: alt-görev (checklist), yorum, aktivite geçmişi.
+model TaskChecklistItem {
+  id        String   @id @default(cuid())
+  taskId    String
+  text      String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  task CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskComment {
+  id        String    @id @default(cuid())
+  taskId    String
+  authorId  String
+  text      String    @db.Text
+  editedAt  DateTime? // düzenlenmişse damgalanır
+  createdAt DateTime  @default(now())
+
+  task   CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author User        @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskActivity {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String
+  action    String   // "created" | "status" | "assigned" | "commented" | "checklist" | "priority" | "mentioned" | "attachment"
+  detail    String?  // insan-okunur özet
+  createdAt DateTime @default(now())
+
+  task  CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User        @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+// Ekip görevine yüklenen dosya eki (resim/PDF/belge). Dosya public/images/uploads/tasks altında.
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String
+  uploadedById String
+  filename   String   // orijinal ad (gösterim)
+  path       String   // public URL yolu
+  mime       String
+  size       Int      // bayt
+  createdAt  DateTime @default(now())
+
+  task       CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation("TaskAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}

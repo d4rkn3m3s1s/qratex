@@ -5,8 +5,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 
 export const dynamic = 'force-dynamic';
+
+/** Açık savaş zaten varken transaction'ı geri almak için sentinel. */
+class BattleConflictError extends Error {}
 
 const bodySchema = z.object({
   targetSquadId: z.string().min(1),
@@ -76,39 +80,72 @@ export async function POST(req: Request) {
         { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-
-    // İki klandan biri zaten açık (pending/active) savaştaysa engelle.
-    const existing = await prisma.squadBattle.findFirst({
-      where: {
-        status: { in: ['pending', 'active'] },
-        OR: [
-          { squad1Id: mySquad.id },
-          { squad2Id: mySquad.id },
-          { squad1Id: target.id },
-          { squad2Id: target.id },
-        ],
-      },
-      select: { id: true },
-    });
-    if (existing) {
+    // Aynı kişi her iki klanın da sahibiyse (self-vs-self) ödül havuzunu kendine
+    // mint etmesini engelle. Bu, escrow ile birlikte bedava-puan istismarını kapatır.
+    if (target.ownerId === session.user.id) {
       return NextResponse.json(
-        { error: 'Klanlardan biri zaten bir savaşta veya bekleyen meydan okuması var' },
-        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        { error: 'Aynı kişinin sahibi olduğu iki klan birbirine meydan okuyamaz' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
 
     const now = new Date();
-    const battle = await prisma.squadBattle.create({
-      data: {
-        squad1Id: mySquad.id,
-        squad2Id: target.id,
-        status: 'pending',
-        startTime: now, // kabul edilince güncellenir
-        endTime: new Date(now.getTime() + durationHours * 60 * 60 * 1000),
-        rewardPool,
-        challengedById: session.user.id,
-      },
-    });
+    let battle: { id: string };
+    try {
+      // Açık-savaş kontrolü + escrow tahsilatı + savaş oluşturma TEK transaction'da:
+      // (a) TOCTOU kapanır (iki eşzamanlı meydan okuma ikisi birden geçemez),
+      // (b) ödül havuzu meydan okuyandan ATOMİK olarak tahsil edilir (escrow) —
+      //     böylece sonlandırmada "yoktan" puan basılmaz, sadece tahsil edilen
+      //     havuz kazanana ödenir / kazanan yoksa iade edilir.
+      battle = await prisma.$transaction(async (tx) => {
+        const existing = await tx.squadBattle.findFirst({
+          where: {
+            status: { in: ['pending', 'active'] },
+            OR: [
+              { squad1Id: mySquad.id },
+              { squad2Id: mySquad.id },
+              { squad1Id: target.id },
+              { squad2Id: target.id },
+            ],
+          },
+          select: { id: true },
+        });
+        if (existing) throw new BattleConflictError();
+
+        // Ödül havuzunu meydan okuyandan tahsil et (atomik; bakiye yetersizse atar).
+        if (rewardPool > 0) {
+          await debitPoints(tx, { userId: session.user.id, points: rewardPool });
+        }
+
+        return tx.squadBattle.create({
+          data: {
+            squad1Id: mySquad.id,
+            squad2Id: target.id,
+            status: 'pending',
+            startTime: now, // kabul edilince güncellenir
+            endTime: new Date(now.getTime() + durationHours * 60 * 60 * 1000),
+            rewardPool,
+            rewardFunded: rewardPool > 0,
+            challengedById: session.user.id,
+          },
+          select: { id: true },
+        });
+      });
+    } catch (e) {
+      if (e instanceof BattleConflictError) {
+        return NextResponse.json(
+          { error: 'Klanlardan biri zaten bir savaşta veya bekleyen meydan okuması var' },
+          { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      if (e instanceof InsufficientPointsError) {
+        return NextResponse.json(
+          { error: `Ödül havuzu için yeterli puanınız yok. Gerekli: ${rewardPool} puan.` },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      throw e;
+    }
 
     // Rakip klan sahibine bildirim.
     await prisma.notification.create({

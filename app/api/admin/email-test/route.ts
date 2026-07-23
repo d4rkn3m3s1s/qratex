@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   const { html, text } = buildAdminTestEmail(base);
   const result = await sendTransactionalEmail({
     to,
-    subject: 'QRATEX — E-posta testi',
+    subject: 'QRateX — E-posta testi',
     html,
     text,
   });

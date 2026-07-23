@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { DataSnakeGame } from '@/components/customer/games/data-snake-game';
 
-export const metadata = { title: 'Veri Yılanı | QRATEX' };
+export const metadata = { title: 'Veri Yılanı | QRateX' };
 
 export default async function DataSnakePage() {
   const session = await getServerSession(authOptions);

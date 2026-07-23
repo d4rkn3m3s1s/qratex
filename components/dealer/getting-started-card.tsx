@@ -28,7 +28,7 @@ const ICONS = {
 export function GettingStartedCard({
   steps,
   title = 'Hadi başlayalım',
-  subtitle = 'QRATEX’ten ilk değeri almak için şu adımları tamamla',
+  subtitle = 'QRateX’ten ilk değeri almak için şu adımları tamamla',
 }: {
   steps: GettingStartedStep[];
   title?: string;

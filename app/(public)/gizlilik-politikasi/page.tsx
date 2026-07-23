@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = getCanonicalBase(seo);
   return {
     title: override?.title ?? 'Gizlilik Politikası',
-    description: override?.description ?? 'QRATEX gizlilik politikası: hangi verileri neden işlediğimiz, kimlerle paylaştığımız ve saklama süreleri.',
+    description: override?.description ?? 'QRateX gizlilik politikası: hangi verileri neden işlediğimiz, kimlerle paylaştığımız ve saklama süreleri.',
     alternates: { canonical: override?.canonical ?? `${base}/gizlilik-politikasi` },
   };
 }
@@ -22,7 +22,7 @@ export default async function GizlilikPolitikasiPage() {
   const base = getCanonicalBase(seo);
   const override = await getPageSeo('/gizlilik-politikasi');
   const title = override?.title ?? 'Gizlilik Politikası';
-  const description = override?.description ?? 'QRATEX gizlilik politikası: hangi verileri neden işlediğimiz, kimlerle paylaştığımız ve saklama süreleri.';
+  const description = override?.description ?? 'QRateX gizlilik politikası: hangi verileri neden işlediğimiz, kimlerle paylaştığımız ve saklama süreleri.';
   return (
     <>
       <WebPageJsonLd name={title} description={description} url={`${base}/gizlilik-politikasi`} />
@@ -35,7 +35,7 @@ export default async function GizlilikPolitikasiPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm leading-6 text-muted-foreground">
           <p>
-            QRATEX, kişisel verilerin korunmasına önem verir. Bu politika; hangi verileri neden işlediğimizi, kimlerle
+            QRateX, kişisel verilerin korunmasına önem verir. Bu politika; hangi verileri neden işlediğimizi, kimlerle
             paylaştığımızı ve ne kadar süre sakladığımızı açıklar.
           </p>
           <p>

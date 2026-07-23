@@ -84,17 +84,52 @@ export async function advanceVisitMissions(userId: string, dealerId: string): Pr
     if (existing?.completedAt) continue;
 
     const isComplete = progress >= req.count;
-    await prisma.userQuest.upsert({
-      where: { userId_questId: { userId, questId: quest.id } },
-      update: { progress, ...(isComplete ? { completedAt: new Date() } : {}) },
-      create: { userId, questId: quest.id, progress, ...(isComplete ? { completedAt: new Date() } : {}) },
+
+    if (!isComplete) {
+      // Henüz tamamlanmadı: sadece ilerlemeyi yaz (ödül yok, yarış riski yok).
+      await prisma.userQuest.upsert({
+        where: { userId_questId: { userId, questId: quest.id } },
+        update: { progress },
+        create: { userId, questId: quest.id, progress },
+      });
+      continue;
+    }
+
+    const reward = parseReward(quest.reward);
+
+    // ATOMİK tamamlama: ödülü yalnızca completedAt'i null'dan now'a İLK çeviren
+    // çağrı verir. Önceden findUnique-then-upsert idi → iki eşzamanlı ziyaret
+    // ikisi de completedAt=null görüp ödülü ÇİFT kredilendiriyordu (rank 12).
+    const claimed = await prisma.$transaction(async (tx) => {
+      // Kayıt yoksa önce oluştur (henüz tamamlanmamış olarak), sonra guard'la claim et.
+      await tx.userQuest.upsert({
+        where: { userId_questId: { userId, questId: quest.id } },
+        update: { progress },
+        create: { userId, questId: quest.id, progress },
+      });
+      const claim = await tx.userQuest.updateMany({
+        where: { userId, questId: quest.id, completedAt: null },
+        data: { completedAt: new Date(), progress },
+      });
+      if (claim.count === 0) return false;
+
+      if (reward.points > 0 || reward.xp > 0) {
+        await creditPointsAndXp(tx, { userId, points: reward.points, xp: reward.xp });
+        if (reward.points > 0) {
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'quest',
+              data: { points: reward.points, questId: quest.id },
+            },
+          });
+        }
+      }
+      return true;
     });
 
-    if (isComplete) {
-      const reward = parseReward(quest.reward);
-      if (reward.points > 0 || reward.xp > 0) {
-        await creditPointsAndXp(prisma, { userId, points: reward.points, xp: reward.xp });
-      }
+    if (claimed) {
       await prisma.notification.create({
         data: {
           userId,

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { startOfDayUTC, startOfWeekUTC as startOfWeek } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,16 @@ export async function GET(request: NextRequest) {
   }
   if (session.user.role === 'DEALER' && dealerId !== session.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  // Platform-ölçekli ağır sorgu (en fazla 25k feedback taraması) — kötüye
+  // kullanım/DoS amplifikasyonunu sınırla.
+  const rl = await checkRateLimitDb(`benchmark:${session.user.id}`, 12, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Çok fazla istek. Lütfen biraz bekleyin.' },
+      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    );
   }
 
   const now = new Date();
@@ -83,16 +94,21 @@ export async function GET(request: NextRequest) {
       where: { id: { in: qrIds } },
       select: { id: true, dealerId: true },
     });
+    // qrId → dealerId O(1) arama haritası. Önceden döngü içinde qrCodes.find(...)
+    // çağrılıyordu → O(feedback × qrCode) (25k × binlerce QR'da on milyonlarca
+    // karşılaştırma, event-loop'u kilitliyordu). Map ile O(feedback)'e iner.
+    const qrToDealer = new Map<string, string>();
+    for (const q of qrCodes) qrToDealer.set(q.id, q.dealerId);
     const dealerMap = new Map<string, { sum: number; count: number }>();
     for (const f of allFeedbacks) {
-      const qr = qrCodes.find((q) => q.id === f.qrCodeId);
-      if (!qr) continue;
-      const existing = dealerMap.get(qr.dealerId);
+      const did = qrToDealer.get(f.qrCodeId);
+      if (!did) continue;
+      const existing = dealerMap.get(did);
       if (existing) {
         existing.sum += f.rating;
         existing.count += 1;
       } else {
-        dealerMap.set(qr.dealerId, { sum: f.rating, count: 1 });
+        dealerMap.set(did, { sum: f.rating, count: 1 });
       }
     }
     const dealerAvgs = Array.from(dealerMap.values()).map((v) => v.count > 0 ? v.sum / v.count : 0);

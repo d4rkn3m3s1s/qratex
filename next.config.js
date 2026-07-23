@@ -5,6 +5,10 @@ const withPWA = require('next-pwa')({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
+  // Ağ yokken ve istenen sayfa cache'te değilken gösterilecek yedek (app/offline).
+  fallbacks: {
+    document: '/offline',
+  },
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,

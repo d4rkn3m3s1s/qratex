@@ -1,14 +1,18 @@
 import crypto from 'crypto';
+import type * as forge from 'node-forge';
 import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
 
 // ─────────────────────────────────────────────────────────────
 // APPLE WALLET PASS GENERATION
 // ─────────────────────────────────────────────────────────────
 //
-// Canlıda gerekli env: APPLE_PASS_TYPE_IDENTIFIER, APPLE_TEAM_IDENTIFIER,
-// APPLE_WALLET_CERT_* (sertifika ve key). APPLE_TEAM_IDENTIFIER yoksa
-// 'XXXXXXXXXX' placeholder kullanılır; imza üretimi production'da gerçek
-// Apple sertifikası ile yapılmalı. Bkz. IMPROVEMENTS.md "Apple Wallet".
+// Canlıda gerekli env (hepsi zorunlu, aksi halde route 503 döner):
+//  - APPLE_PASS_TYPE_IDENTIFIER : pass type id (pass.com.qratex.card)
+//  - APPLE_TEAM_IDENTIFIER      : Apple Developer Team ID (yoksa 'XXXXXXXXXX')
+//  - APPLE_PASS_CERT_P12_BASE64 : Pass Type sertifikası + key (.p12, base64)
+//  - APPLE_PASS_CERT_PASSWORD   : .p12 parolası
+//  - APPLE_WWDR_CERT_BASE64     : Apple WWDR ara sertifikası (PEM/DER base64)
+// İmza node-forge ile gerçek detached PKCS#7/CMS olarak üretilir (signManifest).
 //
 
 interface PassData {
@@ -128,34 +132,77 @@ export function generateManifest(files: Map<string, Buffer>): object {
 }
 
 /**
- * Sign the manifest with Apple certificate
- * Note: This requires proper Apple certificates
+ * manifest.json'ı Apple sertifikasıyla DETACHED PKCS#7 (CMS) olarak imzalar.
+ * Apple Wallet, .pkpass içindeki "signature" dosyasının manifest üzerinde bu
+ * formatta bir imza olmasını şart koşar; aksi halde iOS pass'i reddeder.
+ *
+ * Gerekli env:
+ *  - APPLE_PASS_CERT_P12_BASE64   : Pass Type ID sertifikası + private key (.p12, base64)
+ *  - APPLE_PASS_CERT_PASSWORD     : .p12 parolası
+ *  - APPLE_WWDR_CERT_BASE64       : Apple WWDR ara sertifikası (PEM veya DER, base64)
+ *
+ * node-forge ile: .p12'den signer cert + key çıkarılır, WWDR zincire eklenir,
+ * manifest üzerinde detached imza DER olarak üretilir. Yapılandırma eksik veya
+ * sertifika ayrıştırılamazsa NET hata fırlatır (sessizce imzasız dönmez).
  */
 export async function signManifest(manifest: Buffer): Promise<Buffer> {
-  // Get certificates from environment
   const certP12Base64 = process.env.APPLE_PASS_CERT_P12_BASE64;
   const certPassword = process.env.APPLE_PASS_CERT_PASSWORD;
   const wwdrCertBase64 = process.env.APPLE_WWDR_CERT_BASE64;
-  
+
   if (!certP12Base64 || !certPassword) {
-    throw new Error('Apple Pass certificates not configured');
+    throw new Error('Apple Pass certificates not configured (APPLE_PASS_CERT_P12_BASE64 / APPLE_PASS_CERT_PASSWORD eksik)');
   }
-  
-  // For production, you would use a library like 'node-forge' or 'pkcs7'
-  // to create a proper PKCS#7 signature. Here's a placeholder:
-  
-  // const forge = require('node-forge');
-  // const p12Buffer = Buffer.from(certP12Base64, 'base64');
-  // const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'));
-  // const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, certPassword);
-  // ... signing logic ...
-  
-  // TODO: Gerçek PKCS#7 imzalama (node-forge) burada uygulanmalı. Şu an
-  // imzasız manifest dönüyor — bu yüzden API route sertifika yoksa zaten 503
-  // döndürür; bu fonksiyon yalnızca imzalama implemente edildiğinde geçerli
-  // pkpass üretir. Sahte "başarı" akışı kaldırıldı.
-  console.warn('Apple Pass PKCS#7 signing not implemented - pass will not be valid until implemented');
-  return manifest;
+  if (!wwdrCertBase64) {
+    throw new Error('Apple WWDR ara sertifikası yapılandırılmamış (APPLE_WWDR_CERT_BASE64 eksik)');
+  }
+
+  const f = (await import('node-forge')).default;
+
+  // 1) .p12'yi aç → signer sertifikası + private key.
+  const p12Der = f.util.decode64(certP12Base64);
+  const p12Asn1 = f.asn1.fromDer(p12Der);
+  const p12 = f.pkcs12.pkcs12FromAsn1(p12Asn1, certPassword);
+
+  const certBags = p12.getBags({ bagType: f.pki.oids.certBag });
+  const keyBags = p12.getBags({ bagType: f.pki.oids.pkcs8ShroudedKeyBag });
+  const certBag = certBags[f.pki.oids.certBag]?.[0];
+  const keyBag = keyBags[f.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+  if (!certBag?.cert || !keyBag?.key) {
+    throw new Error('Apple .p12 içinden sertifika/anahtar çıkarılamadı (parola yanlış olabilir)');
+  }
+
+  // 2) WWDR ara sertifikasını yükle (PEM ya da DER base64).
+  let wwdrCert: forge.pki.Certificate;
+  const wwdrRaw = f.util.decode64(wwdrCertBase64);
+  if (wwdrRaw.includes('-----BEGIN CERTIFICATE-----')) {
+    wwdrCert = f.pki.certificateFromPem(wwdrRaw);
+  } else {
+    wwdrCert = f.pki.certificateFromAsn1(f.asn1.fromDer(wwdrRaw));
+  }
+
+  // 3) Detached PKCS#7/CMS imzası üret.
+  const p7 = f.pkcs7.createSignedData();
+  p7.content = f.util.createBuffer(manifest.toString('binary'));
+  p7.addCertificate(certBag.cert);
+  p7.addCertificate(wwdrCert);
+  p7.addSigner({
+    // PEM string olarak ver — forge'un iki ayrı PrivateKey tipi arasındaki
+    // uyumsuzluğunu aşar ve addSigner'ın kabul ettiği biçimdir.
+    key: f.pki.privateKeyToPem(keyBag.key as forge.pki.PrivateKey),
+    certificate: certBag.cert,
+    digestAlgorithm: f.pki.oids.sha256,
+    authenticatedAttributes: [
+      { type: f.pki.oids.contentType, value: f.pki.oids.data },
+      { type: f.pki.oids.messageDigest },
+      { type: f.pki.oids.signingTime, value: new Date().toISOString() },
+    ],
+  });
+  p7.sign({ detached: true });
+
+  // 4) DER'e çevir → "signature" dosyası içeriği.
+  const der = f.asn1.toDer(p7.toAsn1()).getBytes();
+  return Buffer.from(der, 'binary');
 }
 
 /**

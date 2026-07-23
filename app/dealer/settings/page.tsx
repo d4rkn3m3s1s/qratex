@@ -47,6 +47,7 @@ import { Badge } from '@/components/ui/badge';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { toast } from '@/lib/admin-toast';
 import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
+import { AccessibilityToggles } from '@/components/settings/accessibility-toggles';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
 import { useAppT } from '@/lib/app-locale';
@@ -980,6 +981,14 @@ export default function DealerSettingsPage() {
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {saving ? t('common.processing') : t('dealerSettings.saveAppearance')}
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Erişilebilirlik — paylaşılan toggle bileşeni (anında uygulanır,
+                localStorage'da saklanır). Önceden yalnızca müşteri ayarlarındaydı. */}
+            <Card className="mt-6 border-border/60 bg-card/50 backdrop-blur-sm">
+              <CardContent className="pt-6">
+                <AccessibilityToggles />
               </CardContent>
             </Card>
           </motion.div>

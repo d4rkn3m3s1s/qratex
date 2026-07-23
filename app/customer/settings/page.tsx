@@ -15,8 +15,6 @@ import {
   Globe,
   Check,
   Camera,
-  Eye,
-  ZapOff,
   Database,
   FileDown,
   Trash2,
@@ -51,6 +49,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/lib/admin-toast';
 import { applyAccessibilityPrefs } from '@/lib/accessibility-prefs';
+import { AccessibilityToggles } from '@/components/settings/accessibility-toggles';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
 import { useAppLocale } from '@/lib/app-locale';
@@ -896,75 +895,17 @@ export default function CustomerSettingsPage() {
                   </div>
                 </div>
 
-                {/* Accessibility Settings (S6-T8) */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-primary">Erişilebilirlik</h4>
-                  <div className="space-y-4 pl-4 border-l-2 border-primary/20">
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-3">
-                        <div className="mt-1"><Eye className="h-5 w-5 text-muted-foreground" /></div>
-                        <div>
-                          <p className="font-medium">Yüksek Kontrast Modu</p>
-                          <p className="text-sm text-muted-foreground">Metinler ve arka planlar arasındaki zıtlığı artırır</p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={preferences.highContrast}
-                        onCheckedChange={(checked) => {
-                          const next = { ...preferences, highContrast: checked };
-                          setPreferences(next);
-                          applyAccessibilityPrefs({
-                            colorblindMode: next.colorblindMode,
-                            highContrast: next.highContrast,
-                            reduceAnimations: next.reduceAnimations,
-                          });
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-3">
-                        <div className="mt-1"><ZapOff className="h-5 w-5 text-muted-foreground" /></div>
-                        <div>
-                          <p className="font-medium">Animasyonları Azalt</p>
-                          <p className="text-sm text-muted-foreground">Görsel geçişleri ve hareket efektlerini en aza indirir</p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={preferences.reduceAnimations}
-                        onCheckedChange={(checked) => {
-                          const next = { ...preferences, reduceAnimations: checked };
-                          setPreferences(next);
-                          applyAccessibilityPrefs({
-                            colorblindMode: next.colorblindMode,
-                            highContrast: next.highContrast,
-                            reduceAnimations: next.reduceAnimations,
-                          });
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-3">
-                        <div className="mt-1"><Eye className="h-5 w-5 text-muted-foreground" /></div>
-                        <div>
-                          <p className="font-medium">Renk Körü Modu</p>
-                          <p className="text-sm text-muted-foreground">Kırmızı/yeşil göstergeleri renk körü-güvenli renklere çevirir</p>
-                        </div>
-                      </div>
-                      <Switch
-                        checked={preferences.colorblindMode}
-                        onCheckedChange={(checked) => {
-                          const next = { ...preferences, colorblindMode: checked };
-                          setPreferences(next);
-                          applyAccessibilityPrefs({
-                            colorblindMode: next.colorblindMode,
-                            highContrast: next.highContrast,
-                            reduceAnimations: next.reduceAnimations,
-                          });
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                {/* Accessibility Settings (S6-T8) — paylaşılan bileşen (müşteri+bayi). */}
+                <AccessibilityToggles
+                  onChange={(a11y) =>
+                    setPreferences((prev) => ({
+                      ...prev,
+                      highContrast: a11y.highContrast,
+                      reduceAnimations: a11y.reduceAnimations,
+                      colorblindMode: a11y.colorblindMode,
+                    }))
+                  }
+                />
 
                 <Button onClick={handleSavePreferences} disabled={saving} className="gap-2 w-full touch-manipulation sm:w-auto mt-4 min-h-10">
                   <Save className="h-4 w-4" />

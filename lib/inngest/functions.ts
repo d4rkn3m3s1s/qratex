@@ -75,6 +75,34 @@ export const churnPlaybookFn = inngest.createFunction(
   }
 );
 
+// "Ayın İşletmesi" — her ayın 1'i 03:00 UTC'de bir önceki ayın kazananına ROZET verir.
+// Puan değil rozet olduğu için idempotent + fail-closed yeterli (worker'da).
+export const businessOfMonthFn = inngest.createFunction(
+  { id: 'business-of-month', retries: 2 },
+  { cron: '0 3 1 * *' },
+  async ({ step }) => {
+    return step.run('delegate-business-of-month', () => invokeInternalCron('/api/internal/inngest/business-of-month'));
+  }
+);
+
+// Ekip haftalık hatırlatma — Pazartesi 09:00 UTC, açık görevi olanlara mail.
+export const teamWeeklyReminderFn = inngest.createFunction(
+  { id: 'team-weekly-reminder', retries: 2 },
+  { cron: '0 9 * * 1' },
+  async ({ step }) => {
+    return step.run('delegate-team-weekly-reminder', () => invokeInternalCron('/api/internal/inngest/team-weekly-reminder'));
+  }
+);
+
+// Ekip günlük bakım — 06:00 UTC: tekrarlayan görevleri klonla + yaklaşan/geçmiş deadline in-app bildirimi.
+export const teamDailyMaintenanceFn = inngest.createFunction(
+  { id: 'team-daily-maintenance', retries: 2 },
+  { cron: '0 6 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-team-daily-maintenance', () => invokeInternalCron('/api/internal/inngest/team-daily-maintenance'));
+  }
+);
+
 export const calculateClvFn = inngest.createFunction(
   { id: 'calculate-clv', retries: 2 },
   { cron: '0 2 * * *' },

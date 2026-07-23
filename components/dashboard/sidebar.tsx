@@ -23,6 +23,7 @@ import {
   Menu,
   X,
   ChevronLeft,
+  ChevronDown,
   Shield,
   Sparkles,
   Ticket,
@@ -104,7 +105,46 @@ export interface NavItem {
   featureKey?: string;
   /** Küresel `moduleControls` anahtarı — genelde `featureKey` veya modül anahtarı */
   moduleKey?: string;
+  /** Ait olduğu grup anahtarı (NAV_GROUPS içindeki bir grup). Yoksa üst düzey öğe. */
+  groupKey?: string;
+  /** Yalnızca kendisine bir ekip rolü (adminTeamRole) atanmış kullanıcılara görünür. */
+  teamOnly?: boolean;
 }
+
+/** Katlanabilir sol menü grubu. Sırası ait olduğu ilk öğenin konumuna göredir. */
+export interface NavGroup {
+  key: string;
+  /** `sidebarNavGroups.{customer|dealer}.{key}` */
+  labelKey: string;
+  icon: React.ElementType;
+}
+
+/**
+ * Grup katalogları (rol bazlı). Öğeler `groupKey` ile bir gruba bağlanır.
+ * Grubu olmayan öğeler üst düzeyde (grupsuz) render edilir.
+ * Bu yapı order/visibility sistemini BOZMAZ — gruplama render katmanındadır.
+ */
+const customerNavGroups: NavGroup[] = [
+  { key: 'card', labelKey: 'card', icon: CreditCard },
+  { key: 'analytics', labelKey: 'analytics', icon: BarChart3 },
+  { key: 'feedback', labelKey: 'feedback', icon: MessageSquare },
+  { key: 'trends', labelKey: 'trends', icon: TrendingUp },
+  { key: 'rewards', labelKey: 'rewards', icon: Gift },
+  { key: 'games', labelKey: 'games', icon: Gamepad2 },
+];
+
+const dealerNavGroups: NavGroup[] = [
+  { key: 'business', labelKey: 'business', icon: Package },
+  { key: 'analytics', labelKey: 'analytics', icon: BarChart3 },
+  { key: 'feedback', labelKey: 'feedback', icon: MessageSquare },
+  { key: 'system', labelKey: 'system', icon: Cpu },
+];
+
+const NAV_GROUPS_BY_ROLE: Record<'admin' | 'dealer' | 'customer', NavGroup[]> = {
+  admin: [],
+  dealer: dealerNavGroups,
+  customer: customerNavGroups,
+};
 
 interface SidebarProps {
   role: 'ADMIN' | 'DEALER' | 'CUSTOMER';
@@ -155,6 +195,8 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'avatar_shop', href: '/admin/shop', icon: ShoppingBag },
   { labelKey: 'design_language', href: '/admin/design-language', icon: LayoutTemplate },
   { labelKey: 'menu_order', href: '/admin/sidebar-order', icon: GripVertical },
+  { labelKey: 'menu_groups', href: '/admin/menu-groups', icon: LayoutTemplate },
+  // Ekip Yönetimi müşteri paneline taşındı (/customer/ekip, ekip rolü olanlara görünür).
   { labelKey: 'experience_pulse', href: '/admin/experience-pulse', icon: Wand2 },
   { labelKey: 'accessibility', href: '/admin/accessibility', icon: Accessibility },
   { labelKey: 'features', href: '/admin/features', icon: ToggleLeft },
@@ -162,6 +204,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'privacy_requests', href: '/admin/privacy-requests', icon: Shield },
   { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
   { labelKey: 'league_settings', href: '/admin/league-settings', icon: Trophy },
+  { labelKey: 'mini_games', href: '/admin/games', icon: Gamepad2 },
   { labelKey: 'gamification_settings', href: '/admin/gamification-settings', icon: Zap },
   { labelKey: 'discovery', href: '/admin/discovery', icon: MapPin },
   { labelKey: 'seo', href: '/admin/seo', icon: Search },
@@ -175,77 +218,93 @@ const adminNavItems: NavItem[] = [
   { key: 'settings', labelKey: 'settings', href: '/admin/settings', icon: Settings },
 ];
 
+// Bayi menüsü — 6 üst düzey blok (raporlanan yapı). `discover` (Keşfet), `ask_analytics`
+// (Veriye Sor → AI sohbete birleşir), `action_items` (Aksiyonlar), `operations_brief`
+// menüden çıkarıldı. Onboarding (Kurulum) en başta. Abonelik/faturalama → Sistem sonu.
 const dealerNavItems: NavItem[] = [
+  // 1) Dashboard + Kurulum (grupsuz, en üst)
   { key: 'dashboard', labelKey: 'dashboard', href: '/dealer', icon: LayoutDashboard },
   { key: 'onboarding', labelKey: 'onboarding', href: '/dealer/onboarding', icon: Rocket },
-  { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target },
-  { key: 'growth_hub', labelKey: 'growth_hub', href: '/dealer/growth-hub', icon: Sprout },
-  { key: 'scan', labelKey: 'scan_card', href: '/dealer/scan', icon: ScanLine },
-  { key: 'products', labelKey: 'products', href: '/dealer/products', icon: Package },
-  { key: 'qr_codes', labelKey: 'qr_codes', href: '/dealer/qr-codes', icon: QrCode },
-  { key: 'consumptions', labelKey: 'consumptions', href: '/dealer/consumptions', icon: History },
-  { key: 'feedbacks', labelKey: 'feedbacks', href: '/dealer/feedbacks', icon: MessageSquare },
-  { key: 'reviews', labelKey: 'reviews', href: '/dealer/reviews', icon: Star },
-  { key: 'remedy_queue', labelKey: 'remedy_queue', href: '/dealer/remedy-queue', icon: ClipboardList, featureKey: 'remedy_offers', moduleKey: 'remedy_offers' },
-  { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap, featureKey: 'remedy_offers', moduleKey: 'remedy_offers' },
-  { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3 },
-  { key: 'operations_brief', labelKey: 'operations_brief', href: '/dealer/operations-brief', icon: ClipboardList },
-  { key: 'weekly_brief', labelKey: 'weekly_brief', href: '/dealer/weekly-brief', icon: ClipboardList },
-  { key: 'campaigns', labelKey: 'campaigns', href: '/dealer/campaigns', icon: Megaphone },
-  { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles, featureKey: 'dealer_innovation', moduleKey: 'dealer_innovation' },
-  { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText, featureKey: 'dealer_surveys', moduleKey: 'dealer_surveys' },
-  { key: 'incidents', labelKey: 'incidents', href: '/dealer/incidents', icon: AlertTriangle },
-  { key: 'action_items', labelKey: 'action_items', href: '/dealer/action-items', icon: ListChecks },
-  { key: 'churn_risk', labelKey: 'churn_risk', href: '/dealer/churn-risk', icon: TrendingDown },
-  { key: 'roi', labelKey: 'roi', href: '/dealer/roi', icon: PieChart },
-  { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3 },
-  { key: 'copilot', labelKey: 'copilot', href: '/dealer/copilot', icon: Bot },
-  { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features' },
-  { key: 'ask_analytics', labelKey: 'ask_analytics', href: '/dealer/ask-analytics', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features' },
-  { key: 'voc_wall', labelKey: 'voc_wall', href: '/dealer/voc-wall', icon: MessageSquare },
-  { key: 'heatmap', labelKey: 'heatmap', href: '/dealer/heatmap', icon: MapPin },
-  { key: 'radar', labelKey: 'radar', href: '/dealer/radar', icon: Radar },
-  { key: 'customers', labelKey: 'customers', href: '/dealer/customers', icon: Users },
-  { key: 'ai_insights', labelKey: 'ai_insights', href: '/dealer/ai-insights', icon: Sparkles, featureKey: 'ai_features', moduleKey: 'ai_features' },
-  { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain, featureKey: 'ai_features', moduleKey: 'ai_features' },
-  { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users, featureKey: 'staff_management', moduleKey: 'staff_management' },
-  { key: 'discover', labelKey: 'discover', href: '/dealer/discover', icon: LayoutGrid },
-  { key: 'billing', labelKey: 'billing', href: '/dealer/billing', icon: CreditCard },
+  // 2) İşletme
+  { key: 'products', labelKey: 'products', href: '/dealer/products', icon: Package, groupKey: 'business' },
+  { key: 'qr_codes', labelKey: 'qr_codes', href: '/dealer/qr-codes', icon: QrCode, groupKey: 'business' },
+  { key: 'scan', labelKey: 'scan_card', href: '/dealer/scan', icon: ScanLine, groupKey: 'business' },
+  { key: 'campaigns', labelKey: 'campaigns', href: '/dealer/campaigns', icon: Megaphone, groupKey: 'business' },
+  { key: 'innovation_hub', labelKey: 'innovation_hub', href: '/dealer/innovation', icon: Sparkles, featureKey: 'dealer_innovation', moduleKey: 'dealer_innovation', groupKey: 'business' },
+  { key: 'team', labelKey: 'team', href: '/dealer/team', icon: Users, featureKey: 'staff_management', moduleKey: 'staff_management', groupKey: 'business' },
+  { key: 'customers', labelKey: 'customers', href: '/dealer/customers', icon: Users, groupKey: 'business' },
+  // 3) Analitik (Büyüme Merkezi)
+  { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3, groupKey: 'analytics' },
+  { key: 'growth_hub', labelKey: 'growth_hub', href: '/dealer/growth-hub', icon: Sprout, groupKey: 'analytics' },
+  { key: 'churn_risk', labelKey: 'churn_risk', href: '/dealer/churn-risk', icon: TrendingDown, groupKey: 'analytics' },
+  { key: 'roi', labelKey: 'roi', href: '/dealer/roi', icon: PieChart, groupKey: 'analytics' },
+  { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3, groupKey: 'analytics' },
+  { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target, groupKey: 'analytics' },
+  // 4) Geri bildirimlerim
+  { key: 'feedbacks', labelKey: 'feedbacks', href: '/dealer/feedbacks', icon: MessageSquare, groupKey: 'feedback' },
+  { key: 'reviews', labelKey: 'reviews', href: '/dealer/reviews', icon: Star, groupKey: 'feedback' },
+  { key: 'remedy_queue', labelKey: 'remedy_queue', href: '/dealer/remedy-queue', icon: ClipboardList, featureKey: 'remedy_offers', moduleKey: 'remedy_offers', groupKey: 'feedback' },
+  { key: 'remedy_automation', labelKey: 'remedy_automation', href: '/dealer/remedy-automation', icon: Zap, featureKey: 'remedy_offers', moduleKey: 'remedy_offers', groupKey: 'feedback' },
+  { key: 'consumptions', labelKey: 'consumptions', href: '/dealer/consumptions', icon: History, groupKey: 'feedback' },
+  { key: 'surveys', labelKey: 'surveys', href: '/dealer/surveys', icon: FileText, featureKey: 'dealer_surveys', moduleKey: 'dealer_surveys', groupKey: 'feedback' },
+  // 5) Sistem
+  { key: 'incidents', labelKey: 'incidents', href: '/dealer/incidents', icon: AlertTriangle, groupKey: 'system' },
+  { key: 'ai_chat', labelKey: 'ai_chat', href: '/dealer/ai-chat', icon: MessageCircle, featureKey: 'ai_features', moduleKey: 'ai_features', groupKey: 'system' },
+  { key: 'copilot', labelKey: 'copilot', href: '/dealer/copilot', icon: Bot, groupKey: 'system' },
+  { key: 'voc_wall', labelKey: 'voc_wall', href: '/dealer/voc-wall', icon: MessageSquare, groupKey: 'system' },
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/dealer/ai-insights', icon: Sparkles, featureKey: 'ai_features', moduleKey: 'ai_features', groupKey: 'system' },
+  { key: 'radar', labelKey: 'radar', href: '/dealer/radar', icon: Radar, groupKey: 'system' },
+  { key: 'heatmap', labelKey: 'heatmap', href: '/dealer/heatmap', icon: MapPin, groupKey: 'system' },
+  { key: 'ai_settings', labelKey: 'ai_settings', href: '/dealer/ai-settings', icon: Brain, featureKey: 'ai_features', moduleKey: 'ai_features', groupKey: 'system' },
+  { key: 'billing', labelKey: 'billing', href: '/dealer/billing', icon: CreditCard, groupKey: 'system' },
+  // 6) Ayarlar (grupsuz, en alt)
   { key: 'settings', labelKey: 'settings', href: '/dealer/settings', icon: Settings },
 ];
 
+// Müşteri menüsü — 9 üst düzey blok (raporlanan yapı). Sıra bu dizideki sıradır;
+// gruba ait öğeler grup başlığı altında toplanır. `experiences` ve `discover` (Keşfet)
+// menüden çıkarıldı (rapor kararı: Keşfet → chat bot; deneyimler menüde değil).
 const customerNavItems: NavItem[] = [
+  // 1) Dashboard (grupsuz)
   { key: 'dashboard', labelKey: 'dashboard', href: '/customer', icon: LayoutDashboard },
-  { key: 'progress_hub', labelKey: 'progress_hub', href: '/customer/progress-hub', icon: Gauge },
-  { key: 'my_year', labelKey: 'my_year', href: '/customer/my-year', icon: Sparkles },
-  { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard },
-  { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History },
-  { key: 'scan', labelKey: 'scan', href: '/customer/scan', icon: QrCode },
-  { key: 'feedbacks', labelKey: 'feedbacks', href: '/customer/feedbacks', icon: MessageSquare },
-  { key: 'remedy', labelKey: 'remedy', href: '/customer/remedy', icon: Gift },
-  { key: 'ai_insights', labelKey: 'ai_insights', href: '/customer/ai-insights', icon: Sparkles, featureKey: 'customer_ai_insights', moduleKey: 'customer_ai_insights' },
-  { key: 'trends', labelKey: 'trends', href: '/customer/trends', icon: TrendingUp },
-  { key: 'journey_score', labelKey: 'journey_score', href: '/customer/journey-score', icon: Compass },
+  // Ekip Yönetimi — yalnızca ekip rolü atanmış kullanıcılara görünür (grupsuz, üst düzey)
+  { key: 'team', labelKey: 'team', href: '/customer/ekip', icon: Users2, teamOnly: true },
+  // 2) Kartım
+  { key: 'my_card', labelKey: 'my_card', href: '/customer/my-card', icon: CreditCard, groupKey: 'card' },
+  { key: 'consumptions', labelKey: 'consumptions', href: '/customer/consumptions', icon: History, groupKey: 'card' },
+  { key: 'spending_overview', labelKey: 'spending_overview', href: '/customer/spending-overview', icon: Wallet, groupKey: 'card' },
+  // 3) Analizler
+  { key: 'ai_insights', labelKey: 'ai_insights', href: '/customer/ai-insights', icon: Sparkles, featureKey: 'customer_ai_insights', moduleKey: 'customer_ai_insights', groupKey: 'analytics' },
+  { key: 'progress_hub', labelKey: 'progress_hub', href: '/customer/progress-hub', icon: Gauge, groupKey: 'analytics' },
+  { key: 'journey_score', labelKey: 'journey_score', href: '/customer/journey-score', icon: Compass, groupKey: 'analytics' },
+  { key: 'analytics', labelKey: 'analytics', href: '/customer/analytics', icon: BarChart3, groupKey: 'analytics' },
+  { key: 'my_year', labelKey: 'my_year', href: '/customer/my-year', icon: Sparkles, groupKey: 'analytics' },
+  // 4) Geri bildirimlerim
+  { key: 'feedbacks', labelKey: 'feedbacks', href: '/customer/feedbacks', icon: MessageSquare, groupKey: 'feedback' },
+  { key: 'remedy', labelKey: 'remedy', href: '/customer/remedy', icon: Gift, groupKey: 'feedback' },
+  // 5) Trend Analiz
+  { key: 'trends', labelKey: 'trends', href: '/customer/trends', icon: TrendingUp, groupKey: 'trends' },
+  { key: 'category_leaderboard', labelKey: 'category_leaderboard', href: '/customer/category-leaderboard', icon: Trophy, groupKey: 'trends' },
+  { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone, featureKey: 'customer_campaigns', moduleKey: 'customer_campaigns', groupKey: 'trends' },
+  // 6) Yakınımdakiler (grupsuz)
   { key: 'nearby', labelKey: 'nearby', href: '/customer/nearby', icon: MapPin, featureKey: 'discovery', moduleKey: 'discovery' },
-  { key: 'category_leaderboard', labelKey: 'category_leaderboard', href: '/customer/category-leaderboard', icon: Trophy },
-  { key: 'experiences', labelKey: 'experiences', href: '/customer/experiences', icon: Share2 },
-  { key: 'analytics', labelKey: 'analytics', href: '/customer/analytics', icon: BarChart3 },
-  { key: 'spending_overview', labelKey: 'spending_overview', href: '/customer/spending-overview', icon: Wallet },
-  { key: 'badges', labelKey: 'badges', href: '/customer/badges', icon: Trophy },
-  { key: 'shop', labelKey: 'shop', href: '/customer/shop', icon: ShoppingBag },
-  { key: 'squads', labelKey: 'squads', href: '/customer/squads', icon: Users2 },
-  { key: 'quests', labelKey: 'quests', href: '/customer/quests', icon: Target },
-  { key: 'rewards', labelKey: 'rewards', href: '/customer/rewards', icon: Gift },
-  { key: 'surprise_boxes', labelKey: 'surprise_boxes', href: '/customer/surprise-boxes', icon: Box },
-  { key: 'games_hub', labelKey: 'games_hub', href: '/customer/games', icon: Gamepad2 },
-  { key: 'campaigns', labelKey: 'campaigns', href: '/customer/campaigns', icon: Megaphone, featureKey: 'customer_campaigns', moduleKey: 'customer_campaigns' },
-  { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart },
-  { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy },
-  { key: 'discover', labelKey: 'discover', href: '/customer/discover', icon: LayoutGrid, featureKey: 'discovery', moduleKey: 'discovery' },
+  // 7) Ödüller & Mağaza
+  { key: 'badges', labelKey: 'badges', href: '/customer/badges', icon: Trophy, groupKey: 'rewards' },
+  { key: 'shop', labelKey: 'shop', href: '/customer/shop', icon: ShoppingBag, groupKey: 'rewards' },
+  { key: 'quests', labelKey: 'quests', href: '/customer/quests', icon: Target, groupKey: 'rewards' },
+  { key: 'surprise_boxes', labelKey: 'surprise_boxes', href: '/customer/surprise-boxes', icon: Box, groupKey: 'rewards' },
+  { key: 'referral', labelKey: 'referral', href: '/customer/referral', icon: Share2, groupKey: 'rewards' },
+  { key: 'rewards', labelKey: 'rewards', href: '/customer/rewards', icon: Gift, groupKey: 'rewards' },
+  { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart, groupKey: 'rewards' },
+  // 8) QGameX
+  { key: 'games_hub', labelKey: 'games_hub', href: '/customer/games', icon: Gamepad2, groupKey: 'games' },
+  { key: 'squads', labelKey: 'squads', href: '/customer/squads', icon: Users2, groupKey: 'games' },
+  { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy, groupKey: 'games' },
+  // 9) Ayarlar (grupsuz)
   { key: 'settings', labelKey: 'settings', href: '/customer/settings', icon: Settings },
 ];
 
-export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
+export function Sidebar({ role, siteName = 'QRateX' }: SidebarProps) {
   const t = useAppT();
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -258,6 +317,20 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
   const [featureVisibility, setFeatureVisibility] = useState<Record<string, boolean>>({});
   const [moduleControls, setModuleControls] = useState<Record<string, boolean>>({});
   const [sidebarOrder, setSidebarOrder] = useState<string[] | null>(null);
+  // Admin grup override'ı: { groupLabels?, itemGroups? } — kodda tanımlı grupların üstüne oturur.
+  const [groupOverride, setGroupOverride] = useState<{
+    groupLabels?: Record<string, string>;
+    itemGroups?: Record<string, string>;
+  } | null>(null);
+  // Katlanabilir menü grupları — açık olanların key seti. null iken aktif sayfanın grubu açılır.
+  const [openGroups, setOpenGroups] = useState<Set<string> | null>(null);
+  const toggleGroup = (key: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +343,27 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
       })
       .catch(() => {
         if (!cancelled) setSidebarOrder(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
+
+  // Grup override (yalnızca dealer/customer). Admin menüsünde grup yok.
+  useEffect(() => {
+    if (role === 'ADMIN') {
+      setGroupOverride(null);
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/settings/sidebar-groups', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        setGroupOverride(data?.success && data.groups ? data.groups : null);
+      })
+      .catch(() => {
+        if (!cancelled) setGroupOverride(null);
       });
     return () => {
       cancelled = true;
@@ -327,9 +421,14 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
     : role === 'DEALER'
       ? dealerNavItems
       : customerNavItems;
+  // Ekip rolü — teamOnly menü öğeleri için (session'dan; ADMIN her zaman görür).
+  const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
+  const canSeeTeam = role === 'ADMIN' || !!teamRole;
   const filteredNavItemsBase = role === 'ADMIN'
-    ? navItems
+    ? navItems.filter((item) => !item.teamOnly || canSeeTeam)
     : navItems.filter((item) => {
+      // Sadece ekip rolü olanlara açık öğeler (ör. Ekip Yönetimi).
+      if (item.teamOnly && !canSeeTeam) return false;
       const menuKey = item.key ?? item.href;
       const menuEnabled = menuVisibility[menuKey] !== false;
       const fk = item.featureKey ?? item.key;
@@ -350,6 +449,48 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
     ...item,
     label: t(`sidebarNav.${navNs}.${item.labelKey}`),
   }));
+
+  // Gruplu render için öğeleri sıralı bloklara ayır: her blok ya tek bir üst düzey öğe
+  // (grupsuz) ya da bir grup (başlık + alt öğeler). Grubun konumu, o gruba ait ilk
+  // öğenin sıradaki yeridir — böylece admin'in order düzenlemesi gruplarda da korunur.
+  const navGroups = NAV_GROUPS_BY_ROLE[navNs];
+  const itemGroupsOverride = groupOverride?.itemGroups ?? {};
+  const groupLabelsOverride = groupOverride?.groupLabels ?? {};
+  // Admin override'lı grup label'ı çözer (override varsa onu, yoksa i18n'i kullanır).
+  const resolveGroupLabel = (g: NavGroup) =>
+    groupLabelsOverride[g.key] ?? t(`sidebarNavGroups.${navNs}.${g.labelKey}`);
+  type NavBlock =
+    | { kind: 'item'; item: (typeof visibleNavItems)[number] }
+    | { kind: 'group'; group: NavGroup; label: string; items: typeof visibleNavItems };
+  const navBlocks: NavBlock[] = [];
+  const groupBlockIndex = new Map<string, number>();
+  for (const item of visibleNavItems) {
+    // Admin, bir öğenin grubunu itemGroups ile değiştirebilir ('' = grupsuz üst düzey).
+    const itemId = getNavOrderId(item);
+    const overriddenGk = Object.prototype.hasOwnProperty.call(itemGroupsOverride, itemId)
+      ? itemGroupsOverride[itemId]
+      : item.groupKey;
+    const gk = overriddenGk || undefined;
+    const group = gk ? navGroups.find((g) => g.key === gk) : undefined;
+    if (!group) {
+      navBlocks.push({ kind: 'item', item });
+      continue;
+    }
+    const existingIdx = groupBlockIndex.get(group.key);
+    if (existingIdx == null) {
+      const block: NavBlock = {
+        kind: 'group',
+        group,
+        label: resolveGroupLabel(group),
+        items: [item],
+      };
+      groupBlockIndex.set(group.key, navBlocks.length);
+      navBlocks.push(block);
+    } else {
+      const block = navBlocks[existingIdx];
+      if (block.kind === 'group') block.items.push(item);
+    }
+  }
 
   const levelProgress = calculateLevelProgress(session?.user?.points || 0);
 
@@ -434,50 +575,92 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-4 no-scrollbar" aria-label={t('appShell.sidebarAppMenu')}>
-        {visibleNavItems.map((item) => {
-          const isActive = pathname === item.href ||
-            (item.href !== `/${role.toLowerCase()}` && pathname.startsWith(item.href));
-          const badgeNum = item.href === '/dealer/feedbacks' && feedbackBadge != null
-            ? feedbackBadge
-            : item.badge;
-          const showBadge = typeof badgeNum === 'number' && badgeNum > 0;
-          return (
-            <Link
-              prefetch={false}
-              key={item.href}
-              href={item.href}
-              onClick={() => mobile && setIsMobileOpen(false)}
-              className={cn(
-                'group relative flex min-h-11 cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] duration-200 ease-out',
-                isActive
-                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 border border-transparent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/80 border border-transparent hover:border-border/50'
-              )}
-            >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
-              {(!isCollapsed || mobile) && (
-                <>
-                  <span className="flex-1">{item.label}</span>
-                  {showBadge && (
-                    <span className={cn(
-                      'px-2 py-0.5 text-xs rounded-full min-w-[1.25rem] text-center',
-                      isActive
-                        ? 'bg-primary-foreground/20 text-primary-foreground'
-                        : 'bg-primary text-primary-foreground'
-                    )}>
-                      {badgeNum > 99 ? '99+' : badgeNum}
-                    </span>
+        {(() => {
+          const showLabels = !isCollapsed || mobile;
+          // Tek bir nav link'i render eder (grup içinde `nested` girinti alır).
+          const renderNavLink = (item: (typeof visibleNavItems)[number], nested = false) => {
+            const isActive = pathname === item.href ||
+              (item.href !== `/${role.toLowerCase()}` && pathname.startsWith(item.href));
+            const badgeNum = item.href === '/dealer/feedbacks' && feedbackBadge != null
+              ? feedbackBadge
+              : item.badge;
+            const showBadge = typeof badgeNum === 'number' && badgeNum > 0;
+            return (
+              <Link
+                prefetch={false}
+                key={item.href}
+                href={item.href}
+                onClick={() => mobile && setIsMobileOpen(false)}
+                className={cn(
+                  'group relative flex min-h-11 cursor-pointer touch-manipulation items-center gap-3 rounded-lg px-3 py-2.5 transition-[color,background-color,border-color,box-shadow] duration-200 ease-out',
+                  nested && showLabels && 'ml-3 border-l border-border/40 pl-4',
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 border border-transparent'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/80 border border-transparent hover:border-border/50'
+                )}
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                {showLabels && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className={cn(
+                        'px-2 py-0.5 text-xs rounded-full min-w-[1.25rem] text-center',
+                        isActive
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
+                          : 'bg-primary text-primary-foreground'
+                      )}>
+                        {badgeNum > 99 ? '99+' : badgeNum}
+                      </span>
+                    )}
+                  </>
+                )}
+                {isCollapsed && !mobile && showBadge && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
+                    {badgeNum > 99 ? '99+' : badgeNum}
+                  </span>
+                )}
+              </Link>
+            );
+          };
+
+          return navBlocks.map((block) => {
+            if (block.kind === 'item') return renderNavLink(block.item);
+
+            // Grup bloğu: katlanabilir başlık + alt öğeler.
+            const { group, label, items } = block;
+            // Grubun herhangi bir öğesi aktifse grup açık sayılır (state null ise otomatik).
+            const hasActiveChild = items.some(
+              (it) => pathname === it.href || (it.href !== `/${role.toLowerCase()}` && pathname.startsWith(it.href))
+            );
+            const isOpen = openGroups ? openGroups.has(group.key) : hasActiveChild;
+            const GroupIcon = group.icon;
+
+            // Daraltılmış (collapsed) durumda grup başlığı yok — öğeler düz gösterilir (ikon tooltip).
+            if (isCollapsed && !mobile) {
+              return <div key={`group-${group.key}`}>{items.map((it) => renderNavLink(it))}</div>;
+            }
+
+            return (
+              <div key={`group-${group.key}`} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  aria-expanded={isOpen}
+                  className={cn(
+                    'group flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 font-semibold transition-colors',
+                    hasActiveChild ? 'text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                   )}
-                </>
-              )}
-              {isCollapsed && !mobile && showBadge && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] rounded-full flex items-center justify-center">
-                  {badgeNum > 99 ? '99+' : badgeNum}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+                >
+                  <GroupIcon className="h-5 w-5 flex-shrink-0" />
+                  <span className="flex-1 text-left">{label}</span>
+                  <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', isOpen ? 'rotate-180' : '')} />
+                </button>
+                {isOpen && <div className="space-y-1">{items.map((it) => renderNavLink(it, true))}</div>}
+              </div>
+            );
+          });
+        })()}
       </nav>
 
       <Separator />
@@ -564,6 +747,11 @@ export function Sidebar({ role, siteName = 'QRATEX' }: SidebarProps) {
 
 export function getNavOrderId(item: NavItem): string {
   return item.key ?? item.href;
+}
+
+/** Rol bazlı grup kataloğunu döndürür (admin grup düzenleyici için). */
+export function getNavGroups(role: 'admin' | 'dealer' | 'customer'): NavGroup[] {
+  return NAV_GROUPS_BY_ROLE[role];
 }
 
 export { adminNavItems, dealerNavItems, customerNavItems };

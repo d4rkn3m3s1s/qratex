@@ -33,6 +33,7 @@ const navigation = [
 export function Header() {
   const t = useAppT();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
@@ -70,12 +71,39 @@ export function Header() {
   }, []);
 
   useEffect(() => {
+    // QNB tarzı: aşağı kaydırınca üst bar gizlenir, yukarı kaydırınca geri gelir.
+    // rAF ile throttle; küçük hareketleri yok say; sayfa başında her zaman görünür.
+    let lastY = window.scrollY;
+    let ticking = false;
+    const THRESHOLD = 10; // titremeyi önlemek için minimum hareket
+    const update = () => {
+      const y = Math.max(0, window.scrollY);
+      setIsScrolled(y > 10);
+      const delta = y - lastY;
+      if (y <= 80) {
+        // sayfa tepesine yakınken daima göster
+        setIsHidden(false);
+        lastY = y;
+      } else if (Math.abs(delta) > THRESHOLD) {
+        setIsHidden(delta > 0); // aşağı => gizle, yukarı => göster
+        lastY = y;
+      }
+      ticking = false;
+    };
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
+      if (!ticking) {
+        window.requestAnimationFrame(update);
+        ticking = true;
+      }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Mobil menü açıldığında üst bar asla gizli kalmasın
+  useEffect(() => {
+    if (isMobileMenuOpen) setIsHidden(false);
+  }, [isMobileMenuOpen]);
 
   const getDashboardLink = () => {
     if (!session?.user) return '/auth/login';
@@ -130,10 +158,12 @@ export function Header() {
   return (
     <header
       className={cn(
-        'safe-top fixed left-0 right-0 top-0 z-50 transition-all duration-300',
+        'safe-top fixed left-0 right-0 top-0 z-50 transition-all duration-300 will-change-transform',
+        // QNB tarzı gizlen/göster (reduced-motion tercihinde CSS transition devre dışı kalır)
+        isHidden ? '-translate-y-full' : 'translate-y-0',
         isScrolled
-          ? 'border-b border-border/50 bg-background/85 shadow-sm backdrop-blur-xl'
-          : 'border-b border-transparent bg-background/50 backdrop-blur-md supports-[backdrop-filter]:bg-background/35'
+          ? 'border-b border-border/40 bg-background/60 shadow-sm backdrop-blur-xl'
+          : 'border-b border-transparent bg-background/20 backdrop-blur-md supports-[backdrop-filter]:bg-background/10'
       )}
     >
       <nav className="container mx-auto flex h-20 items-center justify-between px-4" aria-label={t('appShell.siteMenu')}>
@@ -152,7 +182,7 @@ export function Header() {
                 {/* Dark theme logo (light/white colored) */}
                 <Image
                   src="/logo/logo.png"
-                  alt="QRATEX Logo"
+                  alt="QRateX Logo"
                   width={56}
                   height={56}
                   className="object-contain hidden dark:block"
@@ -161,7 +191,7 @@ export function Header() {
                 {/* Light theme logo (dark colored) */}
                 <Image
                   src="/logo/logo-light.png"
-                  alt="QRATEX Logo"
+                  alt="QRateX Logo"
                   width={56}
                   height={56}
                   className="object-contain block dark:hidden"
@@ -176,7 +206,7 @@ export function Header() {
                 {/* Dark theme font (light/white colored) */}
                 <Image
                   src="/logo/font.png"
-                  alt="QRATEX"
+                  alt="QRateX"
                   width={150}
                   height={40}
                   className="object-contain hidden dark:block"
@@ -186,7 +216,7 @@ export function Header() {
                 {/* Light theme font (dark colored) */}
                 <Image
                   src="/logo/font-light.png"
-                  alt="QRATEX"
+                  alt="QRateX"
                   width={150}
                   height={40}
                   className="object-contain block dark:hidden"
@@ -288,7 +318,7 @@ export function Header() {
                       {/* Dark theme logo */}
                       <Image
                         src="/logo/logo.png"
-                        alt="QRATEX Logo"
+                        alt="QRateX Logo"
                         width={56}
                         height={56}
                         className="object-contain hidden dark:block"
@@ -296,7 +326,7 @@ export function Header() {
                       {/* Light theme logo */}
                       <Image
                         src="/logo/logo-light.png"
-                        alt="QRATEX Logo"
+                        alt="QRateX Logo"
                         width={56}
                         height={56}
                         className="object-contain block dark:hidden"
@@ -304,7 +334,7 @@ export function Header() {
                       {/* Dark theme font */}
                       <Image
                         src="/logo/font.png"
-                        alt="QRATEX"
+                        alt="QRateX"
                         width={150}
                         height={40}
                         className="object-contain hidden dark:block"
@@ -313,7 +343,7 @@ export function Header() {
                       {/* Light theme font */}
                       <Image
                         src="/logo/font-light.png"
-                        alt="QRATEX"
+                        alt="QRateX"
                         width={150}
                         height={40}
                         className="object-contain block dark:hidden"

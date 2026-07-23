@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { LuckyWheelGame } from '@/components/customer/games/lucky-wheel-game';
 
-export const metadata = { title: 'Şans Çarkı | QRATEX' };
+export const metadata = { title: 'Şans Çarkı | QRateX' };
 
 export default async function LuckyWheelPage() {
   const session = await getServerSession(authOptions);

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { TrollSlayerGame } from '@/components/customer/games/troll-slayer-game';
 
-export const metadata = { title: 'Troll Avcısı Arena | QRATEX' };
+export const metadata = { title: 'Troll Avcısı Arena | QRateX' };
 
 export default async function TrollSlayerPage() {
   const session = await getServerSession(authOptions);

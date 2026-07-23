@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 import {
   CreditCard,
   History,
+  Wallet,
   Star,
   Calendar,
   Store,
@@ -24,7 +25,6 @@ import {
   Shield,
   Zap,
   Award,
-  ChevronRight,
   Wifi,
   Crown,
 } from 'lucide-react';
@@ -601,11 +601,35 @@ export default function CustomerMyCardPage() {
                     Paylaş
                   </Button>
                 </div>
-                <Button type="button" variant="default" className="mt-3 w-full min-h-11 touch-manipulation gap-2 sm:mt-4" onClick={() => openQr(card)}>
-                  <QrCode className="h-4 w-4" />
-                  Büyük QR göster
-                  <ChevronRight className="ml-auto h-4 w-4 opacity-80" />
-                </Button>
+                {/* "Büyük QR göster" butonu kaldırıldı — QR koduna dokununca zaten büyüyor (openQr). */}
+              </div>
+
+              {/* Tüketimlerim + Harcama Özetim — kartın altında kısayol (menüden Kartım grubuna taşındı) */}
+              <div className="grid grid-cols-2 gap-3">
+                <Link
+                  href="/customer/consumptions"
+                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition-all hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <History className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold group-hover:text-primary">Tüketimlerim</span>
+                    <span className="block text-xs text-muted-foreground">Geçmiş & kayıtlar</span>
+                  </span>
+                </Link>
+                <Link
+                  href="/customer/spending-overview"
+                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition-all hover:border-primary/40 hover:bg-primary/5"
+                >
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <Wallet className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold group-hover:text-primary">Harcama Özetim</span>
+                    <span className="block text-xs text-muted-foreground">Aylık trend & analiz</span>
+                  </span>
+                </Link>
               </div>
 
               <Card className="border-border/70">

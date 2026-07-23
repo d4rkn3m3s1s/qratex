@@ -38,7 +38,7 @@ export default async function StaffLayout({
       <header className="sticky top-0 z-10 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
         <div className="flex h-14 items-center justify-between px-3 sm:px-4 md:px-6">
           <Link href="/staff" className="font-semibold text-base sm:text-lg tracking-tight hover:text-primary transition-colors">
-            {seo?.siteName ?? 'QRATEX'} · Personel
+            {seo?.siteName ?? 'QRateX'} · Personel
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-sm text-muted-foreground hidden sm:inline max-w-[200px] truncate">

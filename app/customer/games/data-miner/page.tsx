@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { DataMinerGame } from '@/components/customer/games/data-miner-game';
 
-export const metadata = { title: 'Veri Madencisi | QRATEX' };
+export const metadata = { title: 'Veri Madencisi | QRateX' };
 
 export default async function DataMinerPage() {
   const session = await getServerSession(authOptions);

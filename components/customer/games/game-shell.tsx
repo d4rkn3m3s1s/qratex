@@ -1,12 +1,13 @@
 'use client';
 
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Loader2, Trophy, Lock, RotateCcw, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GameLeaderboard } from './game-leaderboard';
 import type { MiniGamePhase, MiniGameResult } from '@/lib/use-mini-game';
+import { pickVariant, type GameCopy } from '@/lib/minigame-copy';
 
 function reducedMotion(): boolean {
   if (typeof document === 'undefined') return true;
@@ -45,6 +46,8 @@ export interface GameShellProps {
   onStart: () => void;
   /** Liderlik tablosu için oyun anahtarı (verilmezse tablo gizlenir). */
   gameType?: string;
+  /** Oyuna özel kişilik metinleri (verilmezse genel varsayılanlar). */
+  copy?: GameCopy;
   /** Oynanış alanı — sadece phase==='playing' iken görünür. */
   children: ReactNode;
 }
@@ -60,12 +63,24 @@ export function GameShell({
   rewardThreshold,
   onStart,
   gameType,
+  copy,
   children,
 }: GameShellProps) {
   const playing = phase === 'playing';
   const loading = phase === 'starting' || phase === 'submitting';
   const showResult = phase === 'done' && !!result;
   const showLocked = phase === 'done' && alreadyPlayed && !result;
+
+  // Kazanma/kaybetme başlığı: varyant dizisinden bir kez seç (her render'da
+  // titremesin diye sonuç kimliğine bağlı memo). Aynı oyunu tekrar oynayınca
+  // farklı başlık çıkar → tekdüzelik kırılır.
+  const resultTitle = useMemo(() => {
+    if (!result) return '';
+    return result.won
+      ? pickVariant(copy?.winTitles, 'Kazandın! 🎉')
+      : pickVariant(copy?.loseTitles, 'Bu sefer olmadı');
+    // result objesi her tamamlamada yenilenir → o zaman yeni varyant seçilir.
+  }, [result, copy]);
 
   // Ödül kazanıldığında bir kez konfeti patlat.
   const celebratedRef = useRef(false);
@@ -138,7 +153,9 @@ export function GameShell({
             >
               <Loader2 className="h-8 w-8 animate-spin" style={{ color: accent }} />
               <p className="text-sm">
-                {phase === 'submitting' ? 'Sonuç kaydediliyor…' : 'Oyun başlatılıyor…'}
+                {phase === 'submitting'
+                  ? copy?.loadingSubmit ?? 'Sonuç kaydediliyor…'
+                  : copy?.loadingStart ?? 'Oyun başlatılıyor…'}
               </p>
             </motion.div>
           )}
@@ -166,7 +183,7 @@ export function GameShell({
               <p className="text-sm leading-relaxed text-white/70">{description}</p>
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-white/60">
                 <Sparkles className="h-3.5 w-3.5" style={{ color: accent }} />
-                Günde 1 hak — kazan, puan + XP kap!
+                {copy?.startHint ?? 'Günde 1 hak — kazan, puan + XP kap!'}
               </div>
               <motion.div
                 className="relative mt-2"
@@ -185,7 +202,7 @@ export function GameShell({
                   className="relative px-9 py-6 text-base font-bold"
                   style={{ background: accent, boxShadow: `0 0 30px ${accent}88` }}
                 >
-                  ▶ Oyna
+                  {copy?.startCta ?? '▶ Oyna'}
                 </Button>
               </motion.div>
 
@@ -242,11 +259,11 @@ export function GameShell({
                 className="text-2xl font-bold text-white"
                 style={{ textShadow: result.won ? `0 0 22px ${accent}99` : 'none' }}
               >
-                {result.won ? 'Kazandın! 🎉' : 'Bu sefer olmadı'}
+                {resultTitle}
               </motion.h2>
 
               <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-1.5 text-sm text-white/80">
-                <Star className="h-4 w-4" style={{ color: accent }} /> Skorun:{' '}
+                <Star className="h-4 w-4" style={{ color: accent }} /> {copy?.scoreLabel ?? 'Skorun'}:{' '}
                 <span className="font-bold tabular-nums text-white">{result.score}</span>
               </div>
 
@@ -267,10 +284,13 @@ export function GameShell({
                 </motion.div>
               ) : (
                 <p className="text-xs text-white/50">
-                  Ödül için {rewardThreshold ?? '—'} skor gerekiyordu. Yarın yeni hakla tekrar dene!
+                  {copy?.rewardMissNote ??
+                    `Ödül için ${rewardThreshold ?? '—'} skor gerekiyordu. Yarın yeni hakla tekrar dene!`}
                 </p>
               )}
-              <p className="mt-1 text-xs text-white/40">Yarın yeni bir hak için tekrar gel. 🌙</p>
+              <p className="mt-1 text-xs text-white/40">
+                {copy?.comeBackNote ?? 'Yarın yeni bir hak için tekrar gel. 🌙'}
+              </p>
 
               {gameType && (
                 <div className="mt-3 w-full border-t border-white/10 pt-4">
@@ -289,8 +309,12 @@ export function GameShell({
               className="flex max-w-md flex-col items-center gap-4 text-center"
             >
               <Lock className="h-12 w-12 text-white/50" />
-              <h2 className="text-xl font-bold text-white">Bugünün oyununu oynadın</h2>
-              <p className="text-sm text-white/60">Yarın yeni bir hakla tekrar gel. 🌙</p>
+              <h2 className="text-xl font-bold text-white">
+                {copy?.lockedTitle ?? 'Bugünün oyununu oynadın'}
+              </h2>
+              <p className="text-sm text-white/60">
+                {copy?.lockedNote ?? copy?.comeBackNote ?? 'Yarın yeni bir hakla tekrar gel. 🌙'}
+              </p>
               <div className="flex items-center gap-1.5 text-xs text-white/40">
                 <RotateCcw className="h-3.5 w-3.5" /> Her gün 00:00 (UTC) sıfırlanır
               </div>

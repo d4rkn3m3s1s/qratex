@@ -45,6 +45,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/lib/admin-toast';
 import { CHART_HEX } from '@/lib/chart-palette';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { RecommendationsSection } from '@/components/customer/recommendations-section';
+import { BusinessOfMonthBadge } from '@/components/customer/business-of-month-badge';
 
 interface TrendData {
   summary: {
@@ -399,6 +401,12 @@ export default function CustomerTrendsPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Ayın İşletmesi — cron rozeti (kazanan yoksa gizlenir) */}
+      <BusinessOfMonthBadge />
+
+      {/* Sen Seversin — co-occurrence öneri motoru (yeterli veri yoksa kendini gizler) */}
+      <RecommendationsSection />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

@@ -8,6 +8,7 @@ import { Boss3D } from './boss-3d';
 import { FxLayer, type FxHandle } from './fx-layer';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import {
   sfxCollectStar,
   sfxHit,
@@ -332,6 +333,7 @@ export function MindThiefGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       {/* HUD */}
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">

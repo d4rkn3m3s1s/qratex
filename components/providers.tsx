@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'framer-motion';
 import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
+import { OfflineBanner } from '@/components/layout/offline-banner';
 import { applyRuntimeThemeToRoot, type RuntimeThemeHex } from '@/lib/apply-runtime-theme';
 import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, type ThemePresetId } from '@/lib/theme-presets';
 import {
@@ -236,6 +237,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
                 <ConfettiProvider>
                   {children}
                   <InstallBanner />
+                  <OfflineBanner />
                 </ConfettiProvider>
               </ThemeColorsProvider>
             </MotionConfig>

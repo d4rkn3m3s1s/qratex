@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { SignalPipeGame } from '@/components/customer/games/signal-pipe-game';
 
-export const metadata = { title: 'Sinyal Bağla | QRATEX' };
+export const metadata = { title: 'Sinyal Bağla | QRateX' };
 
 export default async function SignalPipePage() {
   const session = await getServerSession(authOptions);

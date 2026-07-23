@@ -7,6 +7,7 @@ import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxPowerUp, sfxWin, sfxFanfare, sfxBoom, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('data-miner')!;
@@ -87,7 +88,8 @@ export function DataMinerGame() {
         fxRef.current?.shockwave(px, py, '#f43f5e', 150);
         fxRef.current?.floatText(px, py, 'Tuzak! -1', '#fca5a5');
         if (livesRef.current <= 0) {
-          setTimeout(() => endGame(scoreRef.current >= DEF.rewardThreshold), 700);
+          // Tüm canlar bot tuzağında bitti = KAYIP (ödül yok). Güvenli-hücre temizleme/cashOut ayrı.
+          setTimeout(() => endGame(false), 700);
         }
         return;
       }
@@ -145,6 +147,7 @@ export function DataMinerGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1">

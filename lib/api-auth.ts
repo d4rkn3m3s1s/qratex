@@ -12,7 +12,7 @@ import { checkTokenReplay } from '@/lib/token-replay';
 import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import type { Session } from 'next-auth';
 
-type AllowedRole = 'ADMIN' | 'DEALER' | 'CUSTOMER' | 'STAFF';
+export type AllowedRole = 'ADMIN' | 'DEALER' | 'CUSTOMER' | 'STAFF';
 
 /**
  * Get session or return 401. Use in API routes for server-side auth.

@@ -7,6 +7,7 @@ import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxHit, sfxPowerUp, sfxWin, sfxCombo, sfxFanfare, sfxBoom, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('speed-order')!;
@@ -168,6 +169,7 @@ export function SpeedOrderGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="rounded-full bg-white/10 px-3 py-0.5 text-xs text-white/80">Tur {round}</div>

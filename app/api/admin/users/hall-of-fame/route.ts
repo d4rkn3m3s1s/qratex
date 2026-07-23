@@ -1,47 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { createApiRoute, jsonOk, jsonError } from '@/lib/api-route';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  try {
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
+/** Hiçbir handler ham User satırı döndürmemeli — yalnızca bu güvenli alanlar. */
+const PUBLIC_USER_SELECT = {
+  id: true,
+  name: true,
+  isHallOfFame: true,
+} as const;
 
-    const users = await prisma.user.findMany({
-      where: { isHallOfFame: true },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        level: true,
-        xp: true,
-        biography: true,
-      },
-    });
+export const GET = createApiRoute(['ADMIN'], async () => {
+  const users = await prisma.user.findMany({
+    where: { isHallOfFame: true },
+    select: { id: true, name: true, email: true, level: true, xp: true, biography: true },
+  });
+  return jsonOk({ success: true, users });
+});
 
-    return NextResponse.json({ success: true, users });
-  } catch (error) {
-    return NextResponse.json({ error: 'Kullanıcılar getirilemedi' }, { status: 500 });
-  }
-}
+const patchSchema = z.object({
+  userId: z.string().min(1),
+  isHallOfFame: z.boolean(),
+});
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
+export const PATCH = createApiRoute(['ADMIN'], async ({ request }) => {
+  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return jsonError(parsed.error.errors[0].message, 400);
+  const { userId, isHallOfFame } = parsed.data;
 
-    const body = await request.json();
-    const { userId, isHallOfFame } = body;
-
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { isHallOfFame },
-    });
-
-    return NextResponse.json({ success: true, user: updated });
-  } catch (error) {
-    return NextResponse.json({ error: 'Kullanıcı güncellenemedi' }, { status: 500 });
-  }
-}
+  // Açık select: ham User satırı (password hash, twoFactorSecret, stripe*,
+  // fraud/trust internals) ASLA yanıta sızmamalı.
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { isHallOfFame },
+    select: PUBLIC_USER_SELECT,
+  });
+  return jsonOk({ success: true, user: updated });
+});

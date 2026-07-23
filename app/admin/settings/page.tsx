@@ -249,10 +249,10 @@ export default function AdminSettingsPage() {
   });
 
   const [settings, setSettings] = useState<SiteSettings>({
-    siteName: 'QRATEX',
+    siteName: 'QRateX',
     siteDescription: 'QR Kod Tabanlı Müşteri Geri Bildirim Platformu',
     siteUrl: 'https://qratex.com',
-    logoUrl: '/logo/icon.png',
+    logoUrl: '/logo/logo.png',
     faviconUrl: '/favicon.ico',
     primaryColor: BRAND_PRIMARY_HEX.toUpperCase(),
     defaultTheme: 'dark',
@@ -829,6 +829,7 @@ export default function AdminSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
+          <BootstrapActionButton action="seed_demo_cafes" label="3 Demo Kafe Ekle" />
           <BootstrapActionButton action="seed_insights_categories" label="Sektör verisi üret" />
           <BootstrapActionButton action="seed_suspicious_activities" label="Şüpheli aktivite üret" />
           <BootstrapActionButton action="seed_ai_quality_samples" label="AI kalite örneği üret" />
@@ -1541,7 +1542,7 @@ export default function AdminSettingsPage() {
                   </li>
                   <li>
                     Gönderen başlığı: <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">EMAIL_FROM</code> (örn.{' '}
-                    <span className="font-mono text-xs">QRATEX &lt;noreply@alanadiniz.com&gt;</span>)
+                    <span className="font-mono text-xs">QRateX &lt;noreply@alanadiniz.com&gt;</span>)
                   </li>
                   <li>
                     Alternatif: <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">RESEND_API_KEY</code> (SMTP yoksa

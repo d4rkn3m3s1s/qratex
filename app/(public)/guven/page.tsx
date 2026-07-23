@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const base = getCanonicalBase(seo);
   return {
     title: override?.title ?? 'Güven ve Güvenilirlik',
-    description: override?.description ?? 'QRATEX güvenlik kontrolleri, uptime SLO ve veri politikaları. KVKK uyumlu, şifreli altyapı.',
+    description: override?.description ?? 'QRateX güvenlik kontrolleri, uptime SLO ve veri politikaları. KVKK uyumlu, şifreli altyapı.',
     alternates: { canonical: override?.canonical ?? `${base}/guven` },
   };
 }
@@ -23,7 +23,7 @@ export default async function GuvenPage() {
   const base = getCanonicalBase(seo);
   const override = await getPageSeo('/guven');
   const title = override?.title ?? 'Güven ve Güvenilirlik';
-  const description = override?.description ?? 'QRATEX güvenlik kontrolleri, uptime SLO ve veri politikaları. KVKK uyumlu, şifreli altyapı.';
+  const description = override?.description ?? 'QRateX güvenlik kontrolleri, uptime SLO ve veri politikaları. KVKK uyumlu, şifreli altyapı.';
   return (
     <>
       <WebPageJsonLd name={title} description={description} url={`${base}/guven`} type="AboutPage" />

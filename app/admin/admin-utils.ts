@@ -35,6 +35,7 @@ import {
     Accessibility,
     Radio,
     Mail,
+    Gamepad2,
     type LucideIcon,
 } from 'lucide-react';
 import type { FeatureNavItem, QuickAccessItem } from './types';
@@ -107,6 +108,7 @@ export const HIZLI_ERISIM: QuickAccessItem[] = [
     { href: '/admin/features', label: 'Özellikler', icon: ToggleLeft },
     { href: '/admin/points-matrix', label: 'Puan Matrisi', icon: SlidersHorizontal },
     { href: '/admin/league-settings', label: 'Lig Ayarları', icon: Trophy },
+    { href: '/admin/games', label: 'Mini Oyunlar', icon: Gamepad2 },
     { href: '/admin/discovery', label: 'Discovery', icon: MapPin },
     { href: '/admin/audit', label: 'Denetim Günlüğü', icon: History },
     { href: '/admin/webhooks', label: "Webhook'lar", icon: Link2 },

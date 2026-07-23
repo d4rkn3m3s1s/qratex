@@ -35,6 +35,11 @@ export function GamesHub() {
   const [loaded, setLoaded] = useState(false);
   const [streak, setStreak] = useState<{ current: number; longest: number; playedToday: boolean } | null>(null);
 
+  // Aktif oyunların etkin (admin override sonrası) hub kartları. Server'dan gelene
+  // kadar registry varsayılanı gösterilir (flicker önler); status yüklenince
+  // pasifleştirilmiş oyunlar listeden düşer ve güncel görseller uygulanır.
+  const [activeGames, setActiveGames] = useState<Omit<HubCard, 'href'>[] | null>(null);
+
   useEffect(() => {
     let alive = true;
     Promise.all([
@@ -44,6 +49,17 @@ export function GamesHub() {
       .then(([status, st]) => {
         if (!alive) return;
         if (status && Array.isArray(status.playedToday)) setPlayedToday(status.playedToday);
+        if (status && Array.isArray(status.games)) {
+          setActiveGames(
+            status.games.map((g: { gameType: string; title: string; description: string; emoji: string; accent: string }) => ({
+              gameType: g.gameType,
+              title: g.title,
+              description: g.description,
+              emoji: g.emoji,
+              accent: g.accent,
+            }))
+          );
+        }
         if (st && typeof st.current === 'number') {
           setStreak({ current: st.current, longest: st.longest ?? 0, playedToday: !!st.playedToday });
         }
@@ -54,9 +70,18 @@ export function GamesHub() {
     };
   }, []);
 
+  // Server listesi geldiyse onu, gelmediyse registry varsayılanını kullan.
+  const gameList = activeGames ?? MINI_GAMES.map((g) => ({
+    gameType: g.gameType,
+    title: g.title,
+    description: g.description,
+    emoji: g.emoji,
+    accent: g.accent,
+  }));
+
   const cards: HubCard[] = [
     PACMAN,
-    ...MINI_GAMES.map((g) => ({
+    ...gameList.map((g) => ({
       gameType: g.gameType,
       href: `/customer/games/${g.gameType}`,
       title: g.title,

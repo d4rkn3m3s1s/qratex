@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
 import { TruthVsFakeGame } from '@/components/customer/games/truth-vs-fake-game';
 
-export const metadata = { title: 'Gerçek mi Sahte mi | QRATEX' };
+export const metadata = { title: 'Gerçek mi Sahte mi | QRateX' };
 
 export default async function TruthVsFakePage() {
   const session = await getServerSession(authOptions);

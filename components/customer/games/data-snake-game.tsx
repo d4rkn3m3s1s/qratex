@@ -5,6 +5,7 @@ import { Zap, Gauge } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
+import { getGameCopy } from '@/lib/minigame-copy';
 import { sfxCollectStar, sfxHit, sfxWin, sfxFanfare, haptic } from '@/lib/game-sounds';
 
 const DEF = getMiniGame('data-snake')!;
@@ -165,17 +166,17 @@ export function DataSnakeGame() {
       const nx = head.x + d.x;
       const ny = head.y + d.y;
 
-      // duvar / kendine çarpma
+      // duvar / kendine çarpma = ÖLÜM → kayıp (ödül YOK, 💀 ekranı tutarlı olsun)
       if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) {
         sfxHit();
         haptic([30, 50]);
-        endGame(scoreRef.current >= DEF.rewardThreshold);
+        endGame(false);
         return;
       }
       if (snakeRef.current.some((s, i) => i < snakeRef.current.length - 1 && s.x === nx && s.y === ny)) {
         sfxHit();
         haptic([30, 50]);
-        endGame(scoreRef.current >= DEF.rewardThreshold);
+        endGame(false);
         return;
       }
 
@@ -294,6 +295,8 @@ export function DataSnakeGame() {
       draw();
       rafRef.current = requestAnimationFrame(loop);
     };
+    // Guard: retry/StrictMode remount'ta eski döngü hâlâ canlıysa iptal et → çift hız önlenir.
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {
@@ -315,6 +318,7 @@ export function DataSnakeGame() {
       rewardThreshold={DEF.rewardThreshold}
       gameType={DEF.gameType}
       onStart={game.start}
+      copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1.5" style={{ color: DEF.accent }}>

@@ -840,6 +840,15 @@ export async function askAI(
   const client = getAIClient();
   if (!client) return 'AI asistanı şu anda kullanılamıyor.';
 
+  // Prompt-injection koruması: kardeş fonksiyonlar (runChatCompletion/chatWithQRA)
+  // gibi kullanıcı sorusunu modele vermeden önce filtrele. Soru, güvenilir veri
+  // bloğundan SONRA eklendiği için "ignore previous instructions" türü saldırılara
+  // açıktı; bu koruma jailbreak denemelerini reddeder.
+  if (detectPromptInjection(question)) {
+    console.warn('[AI] Prompt injection detected in askAI input');
+    return 'Bu mesaj güvenlik nedeniyle işlenemiyor.';
+  }
+
   const startTime = Date.now();
 
   try {

@@ -42,7 +42,7 @@ const WELCOME_MESSAGE: Message = {
 };
 
 const QUICK_ACTIONS = [
-  { label: 'QRATEX nedir?', message: 'QRATEX nedir ve nasıl çalışır?', icon: Rocket },
+  { label: 'QRateX nedir?', message: 'QRateX nedir ve nasıl çalışır?', icon: Rocket },
   { label: 'Puan & rozet', message: 'Puan ve rozet sistemi nasıl çalışıyor?', icon: Star },
   { label: 'QR oluşturma', message: 'QR kod nasıl oluşturabilirim?', icon: Zap },
   { label: 'Yardım iste', message: 'Bana yardım eder misin?', icon: Heart },
@@ -540,7 +540,7 @@ export function Chatbot() {
                     </h3>
                     {!isMinimized && (
                       <>
-                        <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">QRATEX için yapay zeka yardımcısı</p>
+                        <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">QRateX için yapay zeka yardımcısı</p>
                         <motion.p
                           className="mt-1 flex min-h-[1.125rem] items-center gap-1.5 truncate text-[11px] text-muted-foreground sm:mt-1.5 sm:text-xs"
                           key={isLoading ? typingMessage : 'idle'}

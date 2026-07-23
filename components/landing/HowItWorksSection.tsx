@@ -8,7 +8,7 @@ import { useAppT } from '@/lib/app-locale';
 export default function HowItWorksSection() {
   const t = useAppT();
   return (
-    <section className="py-20 lg:py-32 bg-muted/20 dark:bg-muted/30 [content-visibility:auto]">
+    <section className="py-20 lg:py-32 [content-visibility:auto]">
       <div className="container px-4">
         <motion.div
           className="text-center mb-16"

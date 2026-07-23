@@ -132,14 +132,23 @@ export async function GET(req: NextRequest) {
       }
       return sum;
     };
+    // points_credited olayları artık oyun/görev/savaş kredilerini de içeriyor →
+    // satır sayısı kullanıcı başına büyüyebilir. Sınırsız findMany yerine makul
+    // bir tavanla (en yeni 20k) çek; bu, bir özet sayısı için fazlasıyla yeterli
+    // ve bellekte sınırsız büyümeyi engeller (rank 15).
+    const POINTS_EVENT_CAP = 20_000;
     const [pointsThisPeriodRows, pointsPrevPeriodRows] = await Promise.all([
       prisma.analyticsEvent.findMany({
         where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: startDate } },
         select: { data: true },
+        orderBy: { createdAt: 'desc' },
+        take: POINTS_EVENT_CAP,
       }),
       prisma.analyticsEvent.findMany({
         where: { userId: session.user.id, event: 'points_credited', createdAt: { gte: prevStartDate, lt: startDate } },
         select: { data: true },
+        orderBy: { createdAt: 'desc' },
+        take: POINTS_EVENT_CAP,
       }),
     ]);
     const pointsThisPeriod = sumCreditedPoints(pointsThisPeriodRows);
