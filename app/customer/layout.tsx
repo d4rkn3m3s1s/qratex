@@ -4,7 +4,6 @@ import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { CustomerBirthdayBonusHost } from '@/components/customer/customer-birthday-bonus-host';
-import { QrScanFab } from '@/components/customer/qr-scan-fab';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
@@ -43,7 +42,6 @@ export default async function CustomerLayout({
           {children}
         </main>
       </div>
-      <QrScanFab />
       <OnboardingSheet />
       <CustomerBirthdayBonusHost />
       <WebVitalsReporter />
