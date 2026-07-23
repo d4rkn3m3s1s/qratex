@@ -94,6 +94,15 @@ export const teamWeeklyReminderFn = inngest.createFunction(
   }
 );
 
+// Ekip günlük bakım — 06:00 UTC: tekrarlayan görevleri klonla + yaklaşan/geçmiş deadline in-app bildirimi.
+export const teamDailyMaintenanceFn = inngest.createFunction(
+  { id: 'team-daily-maintenance', retries: 2 },
+  { cron: '0 6 * * *' },
+  async ({ step }) => {
+    return step.run('delegate-team-daily-maintenance', () => invokeInternalCron('/api/internal/inngest/team-daily-maintenance'));
+  }
+);
+
 export const calculateClvFn = inngest.createFunction(
   { id: 'calculate-clv', retries: 2 },
   { cron: '0 2 * * *' },

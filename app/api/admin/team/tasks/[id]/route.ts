@@ -17,6 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: {
       assignedTo: { select: { id: true, name: true, email: true, image: true } },
       createdBy: { select: { id: true, name: true } },
+      blockedBy: { select: { id: true, title: true, status: true } },
       checklist: { orderBy: { order: 'asc' } },
       comments: {
         orderBy: { createdAt: 'asc' },
@@ -42,6 +43,7 @@ const actionSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('toggle_checklist'), itemId: z.string(), done: z.boolean() }),
   z.object({ op: z.literal('delete_checklist'), itemId: z.string() }),
   z.object({ op: z.literal('add_comment'), text: z.string().min(1).max(2000), mentions: z.array(z.string()).max(20).optional() }),
+  z.object({ op: z.literal('edit_comment'), commentId: z.string(), text: z.string().min(1).max(2000) }),
   z.object({ op: z.literal('delete_comment'), commentId: z.string() }),
 ]);
 
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (mentionIds.length > 0) {
         const [task, mentioned, actor] = await Promise.all([
           prisma.companyTask.findUnique({ where: { id: taskId }, select: { title: true } }),
-          prisma.user.findMany({ where: { id: { in: mentionIds } }, select: { name: true, email: true } }),
+          prisma.user.findMany({ where: { id: { in: mentionIds } }, select: { id: true, name: true, email: true } }),
           prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
         ]);
         const names = mentioned.map((u) => u.name || u.email).join(', ');
@@ -93,10 +95,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               to: u.email, mentionName: u.name, byName: actor?.name, taskTitle: task.title, commentText: d.text,
             })))
           ).catch(() => {});
+          import('@/lib/team-notify').then((m) =>
+            Promise.all(mentioned.map((u) => m.notifyMention({
+              userId: u.id, taskId, taskTitle: task.title, byName: actor?.name,
+            })))
+          ).catch(() => {});
         }
       } else {
         await logActivity('commented', 'Yorum yaptı');
       }
+      break;
+    }
+    case 'edit_comment': {
+      // Sadece yorumun yazarı düzenleyebilir.
+      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true } });
+      if (!comment || comment.authorId !== userId) {
+        return NextResponse.json({ success: false, error: 'Bu yorumu düzenleyemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+      }
+      await prisma.taskComment.update({ where: { id: d.commentId }, data: { text: d.text, editedAt: new Date() } });
       break;
     }
     case 'delete_comment':

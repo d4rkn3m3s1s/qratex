@@ -155,6 +155,7 @@ model User {
   taskCommentsAuthored      TaskComment[]              @relation("TaskCommentAuthor")
   taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
   taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
+  taskTemplatesCreated      TaskTemplate[]             @relation("TaskTemplateCreator")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2691,11 +2692,24 @@ model CompanyTask {
   createdById  String
   dueAt        DateTime?
   completedAt  DateTime?
+  // Zaman takibi (dakika cinsinden tahmini + harcanan)
+  estimateMin  Int? // tahmini süre (dk)
+  spentMin     Int      @default(0) // harcanan süre (dk)
+  // Bağımlılık: bu görev başka bir göreve bağlı (o bitmeden başlanamaz)
+  blockedById  String?
+  // Tekrar: null|daily|weekly|monthly (weekKey bazlı cron ile klonlanır)
+  recurrence   String?
+  recurrenceParentId String? // bu tekrar örneğinin şablon görevi
+  // Otomatik üretim izi (işletme verisinden gelen görevler)
+  sourceType   String? // "manual" | "incident" | "churn" | "action-item" | "ai"
+  sourceRef    String? // kaynak entity id (idempotent üretim için)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   assignedTo  User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdBy   User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  blockedBy   CompanyTask?  @relation("TaskDependency", fields: [blockedById], references: [id], onDelete: SetNull)
+  blocking    CompanyTask[] @relation("TaskDependency")
   checklist   TaskChecklistItem[]
   comments    TaskComment[]
   activities  TaskActivity[]
@@ -2706,6 +2720,27 @@ model CompanyTask {
   @@index([weekKey])
   @@index([assignedToId])
   @@index([createdAt])
+  @@index([blockedById])
+  @@index([sourceType, sourceRef])
+}
+
+// Yeniden kullanılabilir görev şablonu (başlık/açıklama/öncelik/checklist iskeleti).
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  name        String   // şablon adı (ör. "Yeni özellik lansmanı")
+  title       String   // üretilecek görev başlığı
+  description String?  @db.Text
+  priority    String   @default("medium")
+  department  String?
+  tags        String?
+  estimateMin Int?
+  checklist   String?  @db.Text // satır-ayrık alt görev metinleri
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User @relation("TaskTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdById])
 }
 
 // Ekip görev detayları: alt-görev (checklist), yorum, aktivite geçmişi.
@@ -2723,11 +2758,12 @@ model TaskChecklistItem {
 }
 
 model TaskComment {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   taskId    String
   authorId  String
-  text      String   @db.Text
-  createdAt DateTime @default(now())
+  text      String    @db.Text
+  editedAt  DateTime? // düzenlenmişse damgalanır
+  createdAt DateTime  @default(now())
 
   task   CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author User        @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
