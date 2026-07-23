@@ -257,8 +257,22 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         {loading || !task ? (
-          <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
-            <Loader2 className="size-6 animate-spin" /> Yükleniyor…
+          <div className="space-y-5 py-4">
+            <div className="flex gap-2">
+              <div className="h-6 w-20 animate-pulse rounded-full bg-muted" />
+              <div className="h-6 w-16 animate-pulse rounded-full bg-muted" />
+            </div>
+            <div className="h-7 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="h-24 animate-pulse rounded-xl bg-muted" />
+              <div className="h-24 animate-pulse rounded-xl bg-muted" />
+            </div>
+            <div className="space-y-2 pt-2">
+              <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded bg-muted" />
+              <div className="h-9 w-full animate-pulse rounded bg-muted" />
+            </div>
           </div>
         ) : (
           <>
@@ -538,23 +552,38 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
               </div>
             </section>
 
-            {/* Aktivite */}
-            <section className="mt-6 space-y-2">
+            {/* Aktivite — dikey zaman tüneli (timeline) */}
+            <section className="mt-6 space-y-3">
               <h4 className="flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4" /> Aktivite</h4>
-              <div className="space-y-1.5">
-                {task.activities.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {a.action === 'attachment' ? <Paperclip className="h-3 w-3 shrink-0" />
-                      : a.action === 'mentioned' ? <MessageSquare className="h-3 w-3 shrink-0" />
-                        : a.action === 'commented' ? <MessageSquare className="h-3 w-3 shrink-0" />
-                          : <CheckSquare className="h-3 w-3 shrink-0" />}
-                    <span className="font-medium text-foreground/80">{a.actor.name || 'Biri'}</span>
-                    <span>{a.detail || a.action}</span>
-                    <span className="ml-auto shrink-0 opacity-60">{fmt(a.createdAt)}</span>
-                  </div>
-                ))}
-                {task.activities.length === 0 && <p className="text-xs text-muted-foreground/60">Aktivite yok</p>}
-              </div>
+              {task.activities.length === 0 ? (
+                <p className="text-xs text-muted-foreground/60">Aktivite yok</p>
+              ) : (
+                <div className="relative space-y-3 pl-1">
+                  {/* dikey bağlayıcı çizgi */}
+                  <span className="absolute left-[11px] top-1 bottom-1 w-px bg-border" aria-hidden />
+                  {task.activities.map((a) => {
+                    const Icon = a.action === 'attachment' ? Paperclip
+                      : a.action === 'mentioned' || a.action === 'commented' ? MessageSquare
+                        : a.action === 'status' ? CheckSquare : CheckSquare;
+                    const tone = a.action === 'attachment' ? 'text-sky-500 bg-sky-500/10'
+                      : a.action === 'mentioned' ? 'text-violet-500 bg-violet-500/10'
+                        : a.action === 'commented' ? 'text-blue-500 bg-blue-500/10'
+                          : 'text-emerald-500 bg-emerald-500/10';
+                    return (
+                      <div key={a.id} className="relative flex gap-3">
+                        <span className={cn('z-10 grid h-6 w-6 shrink-0 place-items-center rounded-full ring-4 ring-background', tone)}>
+                          <Icon className="h-3 w-3" />
+                        </span>
+                        <div className="min-w-0 flex-1 pt-0.5 text-xs">
+                          <span className="font-medium text-foreground/80">{a.actor.name || 'Biri'}</span>{' '}
+                          <span className="text-muted-foreground">{a.detail || a.action}</span>
+                          <div className="text-[10px] text-muted-foreground/60">{fmt(a.createdAt)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </>
         )}

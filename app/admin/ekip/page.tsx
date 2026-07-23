@@ -11,10 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
   ListChecks, MessageSquare, Paperclip, Search, Filter, X, CheckSquare, Download,
-  Sparkles, FileText, Zap, Repeat, Clock, Link2, UserCheck,
+  Sparkles, FileText, Zap, Repeat, Clock, Link2, UserCheck, Inbox, TrendingUp, ClipboardList,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
@@ -24,6 +25,13 @@ import { TemplatesDialog } from '@/components/admin/team/templates-dialog';
 import { AiSummaryDialog } from '@/components/admin/team/ai-summary-dialog';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
+import { MiniSparkline } from '@/components/charts/mini-sparkline';
+import { AnimatedNumber } from '@/components/customer/animated-number';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ProgressRing } from '@/components/ui/progress-ring';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { useConfetti } from '@/components/providers/confetti-provider';
+import { StatsGridSkeleton } from '@/components/dashboard/dashboard-skeletons';
 
 type Member = { id: string; name: string | null; email: string; image: string | null; adminDepartment: string | null; adminTeamRole: string | null };
 type Department = { id: string; slug: string; name: string; color: string };
@@ -86,6 +94,8 @@ export default function TeamPage() {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people' | 'calendar'>('kanban');
+  const [trend, setTrend] = useState<{ weekKey: string; total: number; done: number; pct: number }[]>([]);
+  const { fireStars, fireFireworks } = useConfetti();
 
   // Arama + gelişmiş filtreler
   const [search, setSearch] = useState('');
@@ -133,6 +143,17 @@ export default function TeamPage() {
     } catch { /* sessiz */ }
   }, []);
 
+  // Son 6 haftanın tamamlanma trendi (KPI sparkline).
+  const loadTrend = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ weeks: '6' });
+      if (department !== 'all') params.set('department', department);
+      const res = await fetch(`/api/admin/team/trend?${params}`, { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) setTrend(json.series);
+    } catch { /* sessiz */ }
+  }, [department]);
+
   const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
@@ -156,6 +177,7 @@ export default function TeamPage() {
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
+  useEffect(() => { loadTrend(); }, [loadTrend, tasks.length]);
 
   // Detay paneli açık/kapalı durumunu URL'e yansıt (paylaşılabilir derin bağlantı).
   useEffect(() => {
@@ -200,9 +222,23 @@ export default function TeamPage() {
     return { total, done, pct: total ? Math.round((done / total) * 100) : 0, members: memberList, statusDonut, memberBars };
   }, [tasks, tasksByCol]);
 
+  // Hafta %100 tamamlanınca (en az 1 görevle) havai fişek — hafta başına bir kez.
+  const celebratedWeekRef = useState<{ key: string | null }>(() => ({ key: null }))[0];
+  useEffect(() => {
+    if (!loading && report.total > 0 && report.pct === 100 && celebratedWeekRef.key !== weekKey) {
+      celebratedWeekRef.key = weekKey;
+      fireFireworks();
+      import('@/lib/game-sounds').then((m) => m.sfxFanfare()).catch(() => {});
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([30, 40, 60]);
+    }
+    // Hafta değiştiğinde/görev eklenince kutlama kilidini sıfırla.
+    if (report.pct < 100 && celebratedWeekRef.key === weekKey) celebratedWeekRef.key = null;
+  }, [loading, report.total, report.pct, weekKey, celebratedWeekRef, fireFireworks]);
+
   const moveTask = async (taskId: string, newStatus: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
+    const prevStatus = task.status;
     // Optimistik
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
     try {
@@ -210,12 +246,29 @@ export default function TeamPage() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        // Bağımlılık engeli vb. — optimistik değişikliği geri al.
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: prevStatus } : t)));
+        toast.error(j?.error || 'Taşınamadı');
+        return;
+      }
+      // Kutlama: göreve "Bitti"ye geçince yıldız + ses + titreşim.
+      if (newStatus === 'done' && prevStatus !== 'done') {
+        celebrateTaskDone();
+      }
     } catch {
       toast.error('Taşınamadı');
       loadTasks();
     }
   };
+
+  // Kutlama efektleri (görev bitti / hafta %100). reduce-motion'a saygılı (game-sounds içinde).
+  const celebrateTaskDone = useCallback(() => {
+    fireStars();
+    import('@/lib/game-sounds').then((m) => m.sfxWin()).catch(() => {});
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(40);
+  }, [fireStars]);
 
   const createTask = async () => {
     if (!form.title.trim()) { toast.error('Başlık gerekli'); return; }
@@ -355,6 +408,7 @@ export default function TeamPage() {
   };
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="space-y-7 pb-16">
       <AdminPremiumHero
         eyebrow="Ekip Yönetimi"
@@ -527,27 +581,31 @@ export default function TeamPage() {
 
       {/* Durum raporu — grafiklerle */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* KPI'lar */}
+        {/* KPI'lar — animasyonlu sayaç + dairesel ilerleme + trend sparkline */}
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Bu Hafta</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-bold">{report.total}</span>
-              <span className="mb-1 text-sm text-muted-foreground">görev</span>
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Tamamlanma</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">%{report.pct}</span>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-end gap-2">
+                  <AnimatedNumber value={report.total} className="text-4xl font-bold" />
+                  <span className="mb-1 text-sm text-muted-foreground">görev</span>
+                </div>
+                {trend.length > 1 && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <MiniSparkline values={trend.map((t) => t.pct)} color="hsl(var(--primary))" height={26} width={90} />
+                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                      <TrendingUp className="h-3 w-3" /> 6 hafta
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all" style={{ width: `${report.pct}%` }} />
-              </div>
+              <ProgressRing value={report.pct} size={78} stroke={8} sublabel="tamam" />
             </div>
-            <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-              <div><p className="text-lg font-bold text-slate-500">{tasksByCol.todo.length}</p><p className="text-[10px] text-muted-foreground">Yapılacak</p></div>
-              <div><p className="text-lg font-bold text-amber-500">{tasksByCol.in_progress.length}</p><p className="text-[10px] text-muted-foreground">Devam</p></div>
-              <div><p className="text-lg font-bold text-emerald-500">{tasksByCol.done.length}</p><p className="text-[10px] text-muted-foreground">Bitti</p></div>
+            <div className="grid grid-cols-3 gap-2 border-t border-border/50 pt-3 text-center">
+              <div><AnimatedNumber value={tasksByCol.todo.length} className="block text-lg font-bold text-slate-500" /><p className="text-[10px] text-muted-foreground">Yapılacak</p></div>
+              <div><AnimatedNumber value={tasksByCol.in_progress.length} className="block text-lg font-bold text-amber-500" /><p className="text-[10px] text-muted-foreground">Devam</p></div>
+              <div><AnimatedNumber value={tasksByCol.done.length} className="block text-lg font-bold text-emerald-500" /><p className="text-[10px] text-muted-foreground">Bitti</p></div>
             </div>
           </CardContent>
         </Card>
@@ -575,8 +633,27 @@ export default function TeamPage() {
 
       {/* İçerik: yükleniyor / kanban / liste / kişiler */}
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-          <Loader2 className="size-6 animate-spin" /> Yükleniyor…
+        <div className="grid gap-5 lg:grid-cols-3">
+          {[0, 1, 2].map((col) => (
+            <div key={col} className="rounded-2xl border-2 border-dashed border-border/50 bg-card/40 p-3">
+              <div className="mb-3 flex items-center justify-between px-1">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
+              </div>
+              <div className="space-y-2.5">
+                {Array.from({ length: 3 - col === 0 ? 3 : 2 }).map((_, i) => (
+                  <div key={i} className="space-y-2 rounded-xl border border-border/60 bg-background p-3.5">
+                    <div className="h-3.5 w-3/4 animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+                    <div className="flex gap-1.5 pt-1">
+                      <div className="h-4 w-12 animate-pulse rounded-full bg-muted" />
+                      <div className="h-4 w-16 animate-pulse rounded-full bg-muted" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : viewMode === 'kanban' ? (
         <div className="grid gap-5 lg:grid-cols-3">
@@ -603,16 +680,22 @@ export default function TeamPage() {
                 </span>
               </div>
               <div className="space-y-2.5">
+                <AnimatePresence mode="popLayout" initial={false}>
                 {tasksByCol[col.key].map((task) => (
-                  <div
+                  <motion.div
                     key={task.id}
+                    layout={dragId === null}
+                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                    animate={{ opacity: dragId === task.id ? 0.4 : 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 34 }}
                     draggable={isManager}
                     onDragStart={() => setDragId(task.id)}
                     onDragEnd={() => { setDragId(null); setDragOverCol(null); }}
                     className={cn(
-                      'group rounded-xl border border-border/60 bg-background p-3.5 shadow-sm transition-all duration-200',
-                      isManager && 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg',
-                      dragId === task.id && 'rotate-1 opacity-40 shadow-xl'
+                      'group rounded-xl border border-border/60 bg-background p-3.5 shadow-sm',
+                      isManager && 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-lg',
+                      dragId === task.id && 'rotate-1 shadow-xl'
                     )}
                   >
                     <div className="flex items-start gap-2">
@@ -684,12 +767,18 @@ export default function TeamPage() {
                             ))}
                           </div>
                         )}
-                        {/* Meta göstergeleri: alt görev / yorum / ek sayısı */}
+                        {/* Meta göstergeleri: alt görev / yorum / ek sayısı (tooltip'li) */}
                         {task._count && (task._count.checklist > 0 || task._count.comments > 0 || task._count.attachments > 0) && (
                           <div className="mt-2 flex items-center gap-2.5 text-[10px] text-muted-foreground">
-                            {task._count.checklist > 0 && <span className="flex items-center gap-0.5"><ListChecks className="h-3 w-3" />{task._count.checklist}</span>}
-                            {task._count.comments > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span>}
-                            {task._count.attachments > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{task._count.attachments}</span>}
+                            {task._count.checklist > 0 && (
+                              <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-0.5"><ListChecks className="h-3 w-3" />{task._count.checklist}</span></TooltipTrigger><TooltipContent>{task._count.checklist} alt görev</TooltipContent></Tooltip>
+                            )}
+                            {task._count.comments > 0 && (
+                              <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span></TooltipTrigger><TooltipContent>{task._count.comments} yorum</TooltipContent></Tooltip>
+                            )}
+                            {task._count.attachments > 0 && (
+                              <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{task._count.attachments}</span></TooltipTrigger><TooltipContent>{task._count.attachments} ek</TooltipContent></Tooltip>
+                            )}
                           </div>
                         )}
                       </div>
@@ -699,10 +788,11 @@ export default function TeamPage() {
                         </button>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
+                </AnimatePresence>
                 {tasksByCol[col.key].length === 0 && (
-                  <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border/40 py-8 text-muted-foreground/50">
+                  <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border/40 py-8 text-muted-foreground/40">
                     <span className="text-2xl opacity-40">{col.emoji}</span>
                     <p className="text-xs">Buraya sürükle</p>
                   </div>
@@ -716,7 +806,7 @@ export default function TeamPage() {
         <Card>
           <CardContent className="p-0">
             <div className="divide-y divide-border/60">
-              {tasks.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Bu hafta görev yok</p>}
+              {tasks.length === 0 && <EmptyState icon={ClipboardList} title="Bu hafta görev yok" description={activeFilterCount > 0 ? 'Filtreleri temizlemeyi dene.' : 'Yeni bir görev ekleyerek başla.'} />}
               {tasks.map((task) => (
                 <button
                   key={task.id}
@@ -790,7 +880,7 @@ export default function TeamPage() {
               </Card>
             ));
           })()}
-          {tasks.length === 0 && <p className="col-span-full py-12 text-center text-sm text-muted-foreground">Bu hafta görev yok</p>}
+          {tasks.length === 0 && <div className="col-span-full"><EmptyState icon={Users2} title="Bu hafta kimseye görev atanmamış" description="Görev oluşturup ekip üyelerine atayınca burada görünür." /></div>}
         </div>
       ) : (
         /* Takvim görünümü — haftanın 7 günü, göreve dueAt bazlı yerleşim */
@@ -1005,6 +1095,7 @@ export default function TeamPage() {
       <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} weekKey={weekKey} onApplied={loadTasks} />
       <AiSummaryDialog open={summaryOpen} onOpenChange={setSummaryOpen} weekKey={weekKey} />
     </div>
+    </TooltipProvider>
   );
 }
 
