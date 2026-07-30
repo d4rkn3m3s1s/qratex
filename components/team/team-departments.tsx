@@ -216,7 +216,8 @@ export function TeamDepartments() {
                       <SelectItem value="uye">Üye</SelectItem>
                     </SelectContent>
                   </Select>
-                  {m.adminDepartment && (
+                  {/* Çıkar butonu: ekipte olma ölçütü rol (departmansız üye de çıkarılabilir). */}
+                  {m.adminTeamRole && (
                     <button onClick={() => removeMember(m.id)} aria-label="Ekipten çıkar" title="Ekipten çıkar">
                       <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                     </button>

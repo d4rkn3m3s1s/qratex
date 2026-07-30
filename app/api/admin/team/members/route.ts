@@ -16,9 +16,9 @@ export async function GET(req: NextRequest) {
 
   const users = await prisma.user.findMany({
     where: {
-      // Ekibe henüz atanmamış (departmanı yok) VEYA arama eşleşmesi
       ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] } : {}),
-      adminDepartment: null, // ekipte olmayanlar
+      // Ekipte olma ölçütü = ekip rolü (adminTeamRole). Departmansız ama rollü üye de "ekipte" sayılır.
+      adminTeamRole: null,
     },
     select: { id: true, name: true, email: true, image: true, role: true },
     orderBy: { name: 'asc' },
