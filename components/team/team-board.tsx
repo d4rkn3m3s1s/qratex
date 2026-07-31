@@ -16,6 +16,7 @@ import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
   ListChecks, MessageSquare, Paperclip, Search, Filter, X, CheckSquare, Download,
   Sparkles, FileText, Zap, Repeat, Clock, Link2, UserCheck, Inbox, TrendingUp, ClipboardList,
+  Copy, Archive, ArchiveRestore,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
@@ -23,9 +24,13 @@ import { weekKeyOf, shiftWeekKey, weekKeyLabel, mondayFromWeekKey } from '@/lib/
 import { TaskDetailSheet } from '@/components/team/task-detail-sheet';
 import { TemplatesDialog } from '@/components/team/templates-dialog';
 import { AiSummaryDialog } from '@/components/team/ai-summary-dialog';
+import { TeamFiles } from '@/components/team/team-files';
+import { TeamActivity } from '@/components/team/team-activity';
+import { TeamPerformance } from '@/components/team/team-performance';
 import { DonutChart } from '@/components/charts/donut-chart';
 import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
 import { MiniSparkline } from '@/components/charts/mini-sparkline';
+import { SimpleAreaChart } from '@/components/charts/simple-area-chart';
 import { AnimatedNumber } from '@/components/customer/animated-number';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProgressRing } from '@/components/ui/progress-ring';
@@ -93,8 +98,8 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people' | 'calendar'>('kanban');
-  const [trend, setTrend] = useState<{ weekKey: string; total: number; done: number; pct: number }[]>([]);
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'people' | 'calendar' | 'files' | 'activity' | 'performance'>('kanban');
+  const [trend, setTrend] = useState<{ weekKey: string; total: number; done: number; pct: number; spentHours?: number }[]>([]);
   const { fireStars, fireFireworks } = useConfetti();
 
   // Arama + gelişmiş filtreler
@@ -105,6 +110,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   const [fAssignee, setFAssignee] = useState('all');
   const [fTag, setFTag] = useState<string | null>(null);
   const [mineOnly, setMineOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   // Toplu seçim modu
   const [selectMode, setSelectMode] = useState(false);
@@ -165,6 +171,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
       else if (fAssignee !== 'all') params.set('assignedTo', fAssignee);
       if (fTag) params.set('tag', fTag);
       if (debouncedSearch) params.set('q', debouncedSearch);
+      if (showArchived) params.set('archived', '1');
       const res = await fetch(`/api/admin/team/tasks?${params}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.success) setTasks(json.tasks);
@@ -173,7 +180,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     } finally {
       setLoading(false);
     }
-  }, [weekKey, department, fStatus, fPriority, fAssignee, fTag, mineOnly, debouncedSearch]);
+  }, [weekKey, department, fStatus, fPriority, fAssignee, fTag, mineOnly, debouncedSearch, showArchived]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
@@ -318,6 +325,28 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     await fetch(`/api/admin/team/tasks?id=${id}`, { method: 'DELETE' }).catch(() => {});
   };
 
+  // Görevi kopyala (checklist iskeletiyle).
+  const duplicateTask = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/team/tasks/${id}/duplicate`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      toast.success('Görev kopyalandı');
+      loadTasks();
+    } catch { toast.error('Kopyalanamadı'); }
+  };
+
+  // Görevi arşivle / arşivden çıkar.
+  const archiveTask = async (id: string, archived: boolean) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    try {
+      const res = await fetch(`/api/admin/team/tasks?id=${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(archived ? 'Görev arşivlendi' : 'Arşivden çıkarıldı');
+    } catch { toast.error('İşlem başarısız'); loadTasks(); }
+  };
+
   // ── AI önerileri (yeni görev modalı) ───────────────────────────
   const [aiSuggesting, setAiSuggesting] = useState<null | 'assign' | 'checklist'>(null);
   const [aiChecklist, setAiChecklist] = useState<string[]>([]);
@@ -458,7 +487,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
 
         {/* Görünüm modu geçişi */}
         <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/50 p-1">
-          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler'], ['calendar', 'Takvim']] as const).map(([mode, label]) => (
+          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler'], ['calendar', 'Takvim'], ['files', 'Dosyalar'], ['activity', 'Akış'], ['performance', 'Performans']] as const).map(([mode, label]) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -489,6 +518,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
               </Button>
               <Button variant={selectMode ? 'default' : 'outline'} size="sm" onClick={() => { setSelectMode((s) => !s); setSelected(new Set()); }} title="Toplu seçim">
                 <CheckSquare className="mr-1.5 h-4 w-4" /> Seç
+              </Button>
+              <Button variant={showArchived ? 'default' : 'outline'} size="sm" onClick={() => setShowArchived((a) => !a)} title="Arşiv">
+                <Archive className="mr-1.5 h-4 w-4" /> {showArchived ? 'Arşiv (açık)' : 'Arşiv'}
               </Button>
             </>
           )}
@@ -578,6 +610,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
               {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => runBulk({ op: 'archive', value: !showArchived })} disabled={selected.size === 0}>
+            <Archive className="mr-1 h-3.5 w-3.5" /> {showArchived ? 'Çıkar' : 'Arşivle'}
+          </Button>
           <Button variant="destructive" size="sm" onClick={() => runBulk({ op: 'delete' })} disabled={selected.size === 0}>
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Sil
           </Button>
@@ -636,6 +671,28 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           </CardContent>
         </Card>
       </div>
+
+      {/* Haftalık Tempo (velocity) — biten görev + harcanan saat trendi */}
+      {trend.length > 1 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+              <TrendingUp className="h-4 w-4" /> Haftalık Tempo (son {trend.length} hafta)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SimpleAreaChart
+              data={trend.map((t) => ({ name: weekKeyLabel(t.weekKey).split(' –')[0], value: t.done }))}
+              dataKey="value" height={160} color="hsl(var(--primary))"
+            />
+            <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span>Toplam biten: <strong className="text-foreground">{trend.reduce((a, t) => a + t.done, 0)}</strong></span>
+              <span>Toplam süre: <strong className="text-foreground">{trend.reduce((a, t) => a + (t.spentHours ?? 0), 0).toFixed(1)}s</strong></span>
+              <span>Ort. tamamlanma: <strong className="text-foreground">%{Math.round(trend.reduce((a, t) => a + t.pct, 0) / trend.length)}</strong></span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* İçerik: yükleniyor / kanban / liste / kişiler */}
       {loading ? (
@@ -789,9 +846,19 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                         )}
                       </div>
                       {isManager && (
-                        <button onClick={() => deleteTask(task.id)} className="opacity-0 transition-opacity group-hover:opacity-100" aria-label="Sil">
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                        </button>
+                        <div className="flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Tooltip><TooltipTrigger asChild>
+                            <button onClick={() => duplicateTask(task.id)} aria-label="Kopyala"><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                          </TooltipTrigger><TooltipContent>Kopyala</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                            <button onClick={() => archiveTask(task.id, !showArchived)} aria-label={showArchived ? 'Arşivden çıkar' : 'Arşivle'}>
+                              {showArchived ? <ArchiveRestore className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /> : <Archive className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />}
+                            </button>
+                          </TooltipTrigger><TooltipContent>{showArchived ? 'Arşivden çıkar' : 'Arşivle'}</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild>
+                            <button onClick={() => deleteTask(task.id)} aria-label="Sil"><Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" /></button>
+                          </TooltipTrigger><TooltipContent>Sil</TooltipContent></Tooltip>
+                        </div>
                       )}
                     </div>
                   </motion.div>
@@ -888,7 +955,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           })()}
           {tasks.length === 0 && <div className="col-span-full"><EmptyState icon={Users2} title="Bu hafta kimseye görev atanmamış" description="Görev oluşturup ekip üyelerine atayınca burada görünür." /></div>}
         </div>
-      ) : (
+      ) : viewMode === 'calendar' ? (
         /* Takvim görünümü — haftanın 7 günü, göreve dueAt bazlı yerleşim */
         <CalendarView
           tasks={tasks}
@@ -896,6 +963,15 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           departments={departments}
           onOpenTask={setDetailId}
         />
+      ) : viewMode === 'files' ? (
+        /* Dosyalar görünümü — tüm görev ekleri tek yerde */
+        <TeamFiles departments={departments} onOpenTask={setDetailId} />
+      ) : viewMode === 'activity' ? (
+        /* Aktivite akışı — tüm ekip aktivitesi */
+        <TeamActivity onOpenTask={setDetailId} />
+      ) : (
+        /* Üye performans paneli */
+        <TeamPerformance />
       )}
 
       {/* Yeni görev diyaloğu — ferah, etiketli, öncelik renk butonlu */}

@@ -27,7 +27,9 @@ const createSchema = z.object({
   recurrence: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.partial().extend({
+  archived: z.boolean().optional(), // true=arşivle, false=arşivden çıkar
+});
 
 /** GET: görevleri listeler. ?department=, ?weekKey=, ?status=, ?mine=1 filtreleri. */
 export async function GET(req: NextRequest) {
@@ -43,6 +45,8 @@ export async function GET(req: NextRequest) {
   const assignee = sp.get('assignedTo');
   const tag = sp.get('tag');
   const q = sp.get('q')?.trim();
+  // Arşiv: varsayılan sadece aktif (archivedAt null); ?archived=1 ile sadece arşivlenenler.
+  where.archivedAt = sp.get('archived') === '1' ? { not: null } : null;
   if (dep) where.department = dep;
   if (week) where.weekKey = week;
   if (status && (STATUSES as readonly string[]).includes(status)) where.status = status;
@@ -115,6 +119,10 @@ export async function POST(req: NextRequest) {
       ...getAuditRequestMeta(req),
     },
   });
+  // Aktivite feed için "created" kaydı.
+  await prisma.taskActivity.create({
+    data: { taskId: task.id, actorId: auth.session.user.id, action: 'created', detail: 'Görevi oluşturdu' },
+  }).catch(() => {});
 
   // Atama varsa bildirim maili + in-app bildirim (fire-and-forget)
   if (task.assignedTo?.email && task.assignedToId) {
@@ -158,6 +166,7 @@ export async function PUT(req: NextRequest) {
   if (d.estimateMin !== undefined) data.estimateMin = d.estimateMin;
   if (d.spentMin !== undefined) data.spentMin = d.spentMin;
   if (d.recurrence !== undefined) data.recurrence = d.recurrence;
+  if (d.archived !== undefined) data.archivedAt = d.archived ? new Date() : null;
   if (d.assignedToId !== undefined) {
     data.assignedTo = d.assignedToId ? { connect: { id: d.assignedToId } } : { disconnect: true };
   }
@@ -228,6 +237,23 @@ export async function PUT(req: NextRequest) {
       completedById: auth.session.user.id, completedByName: actor?.name,
       createdById: existing.createdById,
     })).catch(() => {});
+  }
+
+  // Aktivite feed için TaskActivity kayıtları (status/atama/öncelik değişimleri).
+  const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', done: 'Bitti' };
+  const PRIO_LABEL: Record<string, string> = { low: 'Düşük', medium: 'Orta', high: 'Yüksek' };
+  const activityRows: { taskId: string; actorId: string; action: string; detail: string }[] = [];
+  if (d.status !== undefined && d.status !== existing.status) {
+    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'status', detail: `Durumu "${STATUS_LABEL[d.status] ?? d.status}" yaptı` });
+  }
+  if (d.assignedToId !== undefined && d.assignedToId !== existing.assignedToId) {
+    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'assigned', detail: task.assignedTo ? `${task.assignedTo.name || task.assignedTo.email} kişisine atadı` : 'Atamayı kaldırdı' });
+  }
+  if (d.priority !== undefined && d.priority !== existing.priority) {
+    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'priority', detail: `Önceliği "${PRIO_LABEL[d.priority] ?? d.priority}" yaptı` });
+  }
+  if (activityRows.length > 0) {
+    await prisma.taskActivity.createMany({ data: activityRows }).catch(() => {});
   }
 
   await prisma.auditLog.create({

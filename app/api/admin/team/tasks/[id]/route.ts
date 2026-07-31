@@ -21,7 +21,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       checklist: { orderBy: { order: 'asc' } },
       comments: {
         orderBy: { createdAt: 'asc' },
-        include: { author: { select: { id: true, name: true, email: true, image: true } } },
+        include: {
+          author: { select: { id: true, name: true, email: true, image: true } },
+          reactions: { select: { emoji: true, userId: true } },
+        },
       },
       activities: {
         orderBy: { createdAt: 'desc' },
@@ -42,9 +45,16 @@ const actionSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('add_checklist'), text: z.string().min(1).max(300) }),
   z.object({ op: z.literal('toggle_checklist'), itemId: z.string(), done: z.boolean() }),
   z.object({ op: z.literal('delete_checklist'), itemId: z.string() }),
-  z.object({ op: z.literal('add_comment'), text: z.string().min(1).max(2000), mentions: z.array(z.string()).max(20).optional() }),
+  z.object({
+    op: z.literal('add_comment'), text: z.string().min(1).max(2000),
+    mentions: z.array(z.string()).max(20).optional(),
+    parentId: z.string().optional().nullable(), // yanıt (thread)
+    attachmentPath: z.string().max(500).optional().nullable(), // yoruma iliştirilmiş dosya (R2 URL)
+    attachmentName: z.string().max(200).optional().nullable(),
+  }),
   z.object({ op: z.literal('edit_comment'), commentId: z.string(), text: z.string().min(1).max(2000) }),
   z.object({ op: z.literal('delete_comment'), commentId: z.string() }),
+  z.object({ op: z.literal('toggle_reaction'), commentId: z.string(), emoji: z.string().min(1).max(8) }),
 ]);
 
 /** POST: detay alt-işlemleri (checklist ekle/işaretle/sil, yorum ekle/sil). Aktivite kaydı yazar. */
@@ -78,7 +88,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await prisma.taskChecklistItem.delete({ where: { id: d.itemId } }).catch(() => null);
       break;
     case 'add_comment': {
-      await prisma.taskComment.create({ data: { taskId, authorId: userId, text: d.text } });
+      await prisma.taskComment.create({ data: {
+        taskId, authorId: userId, text: d.text,
+        parentId: d.parentId || null,
+        attachmentPath: d.attachmentPath || null,
+        attachmentName: d.attachmentName || null,
+      } });
       // @bahsedilenlere bildirim (kendini etiketleme sayılmaz).
       const mentionIds = [...new Set((d.mentions ?? []).filter((m) => m && m !== userId))];
       if (mentionIds.length > 0) {
@@ -118,6 +133,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     case 'delete_comment':
       await prisma.taskComment.delete({ where: { id: d.commentId } }).catch(() => null);
       break;
+    case 'toggle_reaction': {
+      // Aynı (yorum,kullanıcı,emoji) varsa kaldır, yoksa ekle (toggle).
+      const existing = await prisma.taskCommentReaction.findUnique({
+        where: { commentId_userId_emoji: { commentId: d.commentId, userId, emoji: d.emoji } },
+      }).catch(() => null);
+      if (existing) {
+        await prisma.taskCommentReaction.delete({ where: { id: existing.id } }).catch(() => null);
+      } else {
+        await prisma.taskCommentReaction.create({ data: { commentId: d.commentId, userId, emoji: d.emoji } }).catch(() => null);
+      }
+      break;
+    }
   }
 
   return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });

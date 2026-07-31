@@ -18,6 +18,8 @@ const bulkSchema = z.object({
     z.object({ op: z.literal('priority'), value: z.enum(PRIORITIES) }),
     z.object({ op: z.literal('assign'), value: z.string().nullable() }),
     z.object({ op: z.literal('department'), value: z.string().nullable() }),
+    z.object({ op: z.literal('archive'), value: z.boolean() }), // true=arşivle, false=çıkar
+    z.object({ op: z.literal('tag_add'), value: z.string().max(50) }), // toplu etiket ekle
     z.object({ op: z.literal('delete') }),
   ]),
 });
@@ -39,6 +41,15 @@ export async function POST(req: NextRequest) {
   if (action.op === 'delete') {
     const res = await prisma.companyTask.deleteMany({ where });
     affected = res.count;
+  } else if (action.op === 'tag_add') {
+    // Her göreve etiketi ekle (mevcut CSV'ye, tekrar yoksa). updateMany ile yapılamaz.
+    const rows = await prisma.companyTask.findMany({ where, select: { id: true, tags: true } });
+    for (const r of rows) {
+      const set = new Set((r.tags ?? '').split(',').map((t) => t.trim()).filter(Boolean));
+      set.add(action.value.trim());
+      await prisma.companyTask.update({ where: { id: r.id }, data: { tags: [...set].join(',') } }).catch(() => {});
+      affected++;
+    }
   } else {
     const data: Prisma.CompanyTaskUncheckedUpdateManyInput = {};
     if (action.op === 'status') {
@@ -50,6 +61,8 @@ export async function POST(req: NextRequest) {
       data.assignedToId = action.value || null;
     } else if (action.op === 'department') {
       data.department = action.value || null;
+    } else if (action.op === 'archive') {
+      data.archivedAt = action.value ? new Date() : null;
     }
     const res = await prisma.companyTask.updateMany({ where, data });
     affected = res.count;

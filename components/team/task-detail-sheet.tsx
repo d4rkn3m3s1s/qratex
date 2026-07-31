@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo, Fragment } from 'react';
+import { useSession } from 'next-auth/react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks, Paperclip, FileText, Download, Timer, Link2, Repeat, X, Pencil, Sparkles } from 'lucide-react';
+import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListChecks, Paperclip, FileText, Download, Timer, Link2, Repeat, X, Pencil, Sparkles, SmilePlus } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn, getInitials } from '@/lib/utils';
 import { toast } from '@/lib/admin-toast';
 
@@ -43,7 +45,14 @@ function renderCommentText(text: string, members: TeamMember[]): React.ReactNode
 }
 
 type ChecklistItem = { id: string; text: string; done: boolean };
-type Comment = { id: string; text: string; createdAt: string; editedAt: string | null; author: { id: string; name: string | null; email: string; image: string | null } };
+type Reaction = { emoji: string; userId: string };
+type Comment = {
+  id: string; text: string; createdAt: string; editedAt: string | null;
+  parentId: string | null; attachmentPath: string | null; attachmentName: string | null;
+  reactions: Reaction[];
+  author: { id: string; name: string | null; email: string; image: string | null };
+};
+const REACTION_EMOJIS = ['👍', '❤️', '🎉', '🚀', '👀'];
 type Activity = { id: string; action: string; detail: string | null; createdAt: string; actor: { name: string | null } };
 type Attachment = { id: string; filename: string; path: string; mime: string; size: number; createdAt: string; uploadedBy: { name: string | null } };
 type TaskDetail = {
@@ -95,6 +104,13 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
   // Yorum düzenleme
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  // Yorum yanıtı (thread) + yoruma dosya
+  const [replyTo, setReplyTo] = useState<{ id: string; author: string } | null>(null);
+  const commentFileRef = useRef<HTMLInputElement>(null);
+  const [commentFile, setCommentFile] = useState<{ path: string; name: string } | null>(null);
+  const [uploadingComment, setUploadingComment] = useState(false);
+  const { data: sessionData } = useSession();
+  const myId = (sessionData?.user as { id?: string } | undefined)?.id ?? '';
   // Zaman takibi girişi
   const [addMin, setAddMin] = useState('');
 
@@ -199,6 +215,40 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
     }).catch(() => {});
     load();
     onChanged?.();
+  };
+
+  // Yoruma emoji reaksiyonu ekle/kaldır (toggle).
+  const toggleReaction = (commentId: string, emoji: string) => act({ op: 'toggle_reaction', commentId, emoji });
+
+  // Yoruma iliştirilecek dosyayı R2'ye yükle (attachments endpoint'i kullanır, path döner).
+  const uploadCommentFile = async (file: File) => {
+    if (!taskId) return;
+    setUploadingComment(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/admin/team/tasks/${taskId}/attachments`, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Yüklenemedi');
+      // attachments endpoint eki DB'ye de yazdı; yorumda referans için path/ad kullan.
+      setCommentFile({ path: json.attachment.path, name: json.attachment.filename });
+      toast.success('Dosya hazır — yorumu gönder');
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Yüklenemedi'); }
+    finally { setUploadingComment(false); }
+  };
+
+  // Yorum gönder (yanıt + dosya + mention dahil).
+  const submitComment = () => {
+    if (!newComment.trim() && !commentFile) return;
+    act({
+      op: 'add_comment',
+      text: newComment.trim() || (commentFile ? `📎 ${commentFile.name}` : ''),
+      mentions: resolveMentions(newComment),
+      parentId: replyTo?.id ?? null,
+      attachmentPath: commentFile?.path ?? null,
+      attachmentName: commentFile?.name ?? null,
+    });
+    setNewComment(''); setReplyTo(null); setCommentFile(null); setMentionQuery(null);
   };
 
   // Görev alanı güncelle (zaman takibi, bağımlılık) — tasks PUT.
@@ -458,51 +508,115 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
             <section className="mt-6 space-y-3">
               <h4 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="h-4 w-4" /> Yorumlar</h4>
               <div className="space-y-3">
-                {task.comments.map((c) => (
-                  <div key={c.id} className="group flex gap-2.5">
-                    <Avatar className="h-7 w-7 shrink-0">
-                      {c.author.image ? <AvatarImage src={c.author.image} /> : null}
-                      <AvatarFallback className="text-[10px]">{getInitials(c.author.name || c.author.email)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1 rounded-lg bg-muted/50 px-3 py-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold">{c.author.name || c.author.email}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {fmt(c.createdAt)}{c.editedAt && ' · düzenlendi'}
-                        </span>
-                      </div>
-                      {editingId === c.id ? (
-                        <div className="mt-1 space-y-1.5">
-                          <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="resize-none text-sm"
-                            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditingId(null); }} />
-                          <div className="flex gap-1.5">
-                            <Button size="sm" className="h-7" onClick={saveEdit}>Kaydet</Button>
-                            <Button size="sm" variant="ghost" className="h-7" onClick={() => setEditingId(null)}>İptal</Button>
+                {(() => {
+                  // Thread: ana yorumlar + altında yanıtları.
+                  const roots = task.comments.filter((c) => !c.parentId);
+                  const repliesOf = (id: string) => task.comments.filter((c) => c.parentId === id);
+                  const renderComment = (c: Comment, isReply = false) => (
+                    <div key={c.id} className={cn('group flex gap-2.5', isReply && 'ml-8 mt-2')}>
+                      <Avatar className={cn('shrink-0', isReply ? 'h-6 w-6' : 'h-7 w-7')}>
+                        {c.author.image ? <AvatarImage src={c.author.image} /> : null}
+                        <AvatarFallback className="text-[10px]">{getInitials(c.author.name || c.author.email)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="rounded-lg bg-muted/50 px-3 py-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold">{c.author.name || c.author.email}</span>
+                            <span className="text-[10px] text-muted-foreground">{fmt(c.createdAt)}{c.editedAt && ' · düzenlendi'}</span>
                           </div>
+                          {editingId === c.id ? (
+                            <div className="mt-1 space-y-1.5">
+                              <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="resize-none text-sm"
+                                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditingId(null); }} />
+                              <div className="flex gap-1.5">
+                                <Button size="sm" className="h-7" onClick={saveEdit}>Kaydet</Button>
+                                <Button size="sm" variant="ghost" className="h-7" onClick={() => setEditingId(null)}>İptal</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="mt-0.5 whitespace-pre-wrap text-sm">{renderCommentText(c.text, members)}</p>
+                              {c.attachmentPath && (
+                                <a href={c.attachmentPath} target="_blank" rel="noopener noreferrer"
+                                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-2 py-1 text-[11px] text-primary hover:underline">
+                                  <Paperclip className="h-3 w-3" /> {c.attachmentName || 'Dosya'}
+                                </a>
+                              )}
+                            </>
+                          )}
                         </div>
-                      ) : (
-                        <p className="mt-0.5 whitespace-pre-wrap text-sm">{renderCommentText(c.text, members)}</p>
-                      )}
-                    </div>
-                    {editingId !== c.id && (
-                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100">
-                        <button onClick={() => { setEditingId(c.id); setEditText(c.text); }} aria-label="Düzenle">
-                          <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                        </button>
-                        <button onClick={() => act({ op: 'delete_comment', commentId: c.id })} aria-label="Sil">
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                        </button>
+                        {/* Reaksiyon barı + aksiyon butonları */}
+                        {editingId !== c.id && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {/* Mevcut reaksiyonlar (gruplu) */}
+                            {Object.entries(c.reactions.reduce<Record<string, { count: number; mine: boolean }>>((acc, r) => {
+                              acc[r.emoji] = acc[r.emoji] || { count: 0, mine: false };
+                              acc[r.emoji].count++; if (r.userId === myId) acc[r.emoji].mine = true; return acc;
+                            }, {})).map(([emoji, info]) => (
+                              <button key={emoji} onClick={() => toggleReaction(c.id, emoji)}
+                                className={cn('flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] transition-colors',
+                                  info.mine ? 'border-primary/40 bg-primary/10' : 'border-border/60 hover:bg-muted')}>
+                                {emoji} <span className="text-[10px] text-muted-foreground">{info.count}</span>
+                              </button>
+                            ))}
+                            {/* Reaksiyon ekle + yanıtla + düzenle/sil (hover) */}
+                            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Reaksiyon">
+                                    <SmilePlus className="h-3.5 w-3.5" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-1"><div className="flex gap-0.5">
+                                  {REACTION_EMOJIS.map((e) => (
+                                    <button key={e} onClick={() => toggleReaction(c.id, e)} className="rounded-md px-1.5 py-1 text-base transition-transform hover:scale-125">{e}</button>
+                                  ))}
+                                </div></PopoverContent>
+                              </Popover>
+                              {!isReply && (
+                                <button onClick={() => setReplyTo({ id: c.id, author: c.author.name || c.author.email.split('@')[0] })} className="text-[10px] text-muted-foreground hover:text-foreground" aria-label="Yanıtla">
+                                  Yanıtla
+                                </button>
+                              )}
+                              <button onClick={() => { setEditingId(c.id); setEditText(c.text); }} aria-label="Düzenle"><Pencil className="h-3 w-3 text-muted-foreground hover:text-foreground" /></button>
+                              <button onClick={() => act({ op: 'delete_comment', commentId: c.id })} aria-label="Sil"><Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" /></button>
+                            </div>
+                          </div>
+                        )}
+                        {/* Yanıtlar */}
+                        {repliesOf(c.id).map((r) => renderComment(r, true))}
                       </div>
-                    )}
-                  </div>
-                ))}
-                {task.comments.length === 0 && <p className="text-xs text-muted-foreground/60">Henüz yorum yok</p>}
+                    </div>
+                  );
+                  return roots.length > 0 ? roots.map((c) => renderComment(c)) : <p className="text-xs text-muted-foreground/60">Henüz yorum yok</p>;
+                })()}
               </div>
+              {/* Yanıt bandı */}
+              {replyTo && (
+                <div className="flex items-center gap-2 rounded-md bg-primary/5 px-2.5 py-1.5 text-xs">
+                  <span className="text-muted-foreground">Yanıtlanıyor: <strong className="text-foreground">{replyTo.author}</strong></span>
+                  <button onClick={() => setReplyTo(null)} className="ml-auto"><X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                </div>
+              )}
+              {/* İliştirilen dosya bandı */}
+              {commentFile && (
+                <div className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
+                  <Paperclip className="h-3.5 w-3.5 text-primary" />
+                  <span className="truncate">{commentFile.name}</span>
+                  <button onClick={() => setCommentFile(null)} className="ml-auto"><X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                </div>
+              )}
               <div className="relative flex gap-2">
+                <input ref={commentFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
+                <button type="button" onClick={() => commentFileRef.current?.click()} disabled={uploadingComment}
+                  className="self-end grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50" aria-label="Dosya iliştir">
+                  {uploadingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                </button>
                 <div className="relative flex-1">
                   <Textarea
                     ref={commentRef}
-                    placeholder="Yorum yaz… (@ ile birini etiketle)"
+                    placeholder={replyTo ? 'Yanıt yaz…' : 'Yorum yaz… (@ ile birini etiketle)'}
                     value={newComment}
                     onChange={(e) => onCommentChange(e.target.value)}
                     onKeyDown={(e) => {
@@ -541,12 +655,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                     </div>
                   )}
                 </div>
-                <Button size="sm" className="self-end" onClick={() => {
-                  if (newComment.trim()) {
-                    act({ op: 'add_comment', text: newComment, mentions: resolveMentions(newComment) });
-                    setNewComment(''); setMentionQuery(null);
-                  }
-                }}>
+                <Button size="sm" className="self-end" onClick={submitComment} disabled={!newComment.trim() && !commentFile}>
                   <Send className="h-4 w-4" />
                 </Button>
               </div>

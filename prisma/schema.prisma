@@ -157,6 +157,7 @@ model User {
   taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
   taskTemplatesCreated      TaskTemplate[]             @relation("TaskTemplateCreator")
   teamDepartments           UserDepartment[]           @relation("UserDepartments")
+  taskCommentReactions      TaskCommentReaction[]      @relation("TaskReactionUser")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2722,6 +2723,8 @@ model CompanyTask {
   // Otomatik üretim izi (işletme verisinden gelen görevler)
   sourceType   String? // "manual" | "incident" | "churn" | "action-item" | "ai"
   sourceRef    String? // kaynak entity id (idempotent üretim için)
+  archivedAt   DateTime? // arşivlenmiş görev (panoda gizli)
+  boardOrder   Int      @default(0) // kanban kolon içi manuel sıra
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -2782,12 +2785,34 @@ model TaskComment {
   authorId  String
   text      String    @db.Text
   editedAt  DateTime? // düzenlenmişse damgalanır
+  parentId  String?   // yanıt (thread) — hangi yoruma cevap
+  attachmentPath String? // yoruma iliştirilmiş dosya (R2 URL)
+  attachmentName String?
   createdAt DateTime  @default(now())
 
-  task   CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  author User        @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  task      CompanyTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author    User          @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parent    TaskComment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   TaskComment[] @relation("CommentThread")
+  reactions TaskCommentReaction[]
 
   @@index([taskId])
+  @@index([parentId])
+}
+
+// Yorum reaksiyonları (emoji). Bir kullanıcı bir yoruma bir emoji ile bir kez.
+model TaskCommentReaction {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  emoji     String   // "👍" | "❤️" | "🎉" | "👀" | "🚀"
+  createdAt DateTime @default(now())
+
+  comment TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation("TaskReactionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+  @@index([commentId])
 }
 
 model TaskActivity {
