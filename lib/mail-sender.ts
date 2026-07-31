@@ -196,18 +196,19 @@ export async function sendTransactionalEmail(params: {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'SMTP gönderilemedi';
       console.warn('[mail-sender] SMTP error:', e);
-      if (isSmtpAuthFailure(e) && resendConfigured() && smtpFallbackToResendEnabled()) {
-        console.warn(
-          '[mail-sender] SMTP giriş reddedildi (535/EAUTH). Resend ile yeniden deneniyor. Gmail düzeltmek için: yeni uygulama şifresi, SMTP_USER eşleşmesi. Kapatmak için: SMTP_FALLBACK_RESEND=false'
-        );
+      // HERHANGİ bir SMTP hatasında Resend'e düş (sadece auth değil: timeout/bağlantı/rate-limit de).
+      // "Herkese mail gitmiyor"un ana nedeni buydu — auth-dışı hatada fallback yoktu.
+      if (resendConfigured() && smtpFallbackToResendEnabled()) {
+        if (isSmtpAuthFailure(e)) {
+          console.warn('[mail-sender] SMTP giriş reddedildi (535/EAUTH). Gmail app password yenile / SMTP_USER eşleştir. Resend yedeğe geçiliyor.');
+        } else {
+          console.warn('[mail-sender] SMTP hatası (auth-dışı). Resend yedeğe geçiliyor:', message);
+        }
         const r = await sendViaResend({ ...params, from });
         if (r.ok) {
           return { ...r, usedResendAfterSmtpFailure: true };
         }
-        return {
-          ok: false,
-          error: `SMTP: ${message} | Resend yedek: ${r.error}`,
-        };
+        return { ok: false, error: `SMTP: ${message} | Resend yedek: ${r.error}` };
       }
       return { ok: false, error: message };
     }

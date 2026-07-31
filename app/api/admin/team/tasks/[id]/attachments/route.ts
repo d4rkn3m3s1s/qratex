@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { mkdir, writeFile, unlink } from 'fs/promises';
 import path from 'path';
+import { isR2Configured, uploadToR2, deleteFromR2, keyFromPublicUrl } from '@/lib/r2-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +26,7 @@ function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 }
 
-/** POST: göreve dosya eki yükler (resim/PDF). Magic-byte doğrulamalı. */
+/** POST: göreve dosya eki yükler (resim/PDF). Magic-byte doğrulamalı. R2 (prod) veya yerel disk (dev). */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
@@ -53,13 +53,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const base = sanitize(path.parse(file.name).name || 'ek') || 'ek';
   const filename = `${base}-${Date.now()}${kind.ext}`;
-  const absoluteDir = path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks');
-  await mkdir(absoluteDir, { recursive: true });
-  await writeFile(path.join(absoluteDir, filename), bytes);
-  const publicPath = `/images/uploads/tasks/${filename}`;
+
+  let storedPath: string;
+  if (isR2Configured()) {
+    // Cloudflare R2 (S3) — Vercel'de kalıcı ve read-only fs sorununu çözer.
+    try {
+      storedPath = await uploadToR2(`tasks/${filename}`, bytes, kind.mime);
+    } catch {
+      return NextResponse.json({ success: false, error: 'Dosya depolamaya yüklenemedi (R2)' }, { status: 502, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+  } else {
+    // Yerel geliştirme fallback: public/ altına yaz (yalnızca localhost'ta çalışır).
+    const { mkdir, writeFile } = await import('fs/promises');
+    const absoluteDir = path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks');
+    await mkdir(absoluteDir, { recursive: true });
+    await writeFile(path.join(absoluteDir, filename), bytes);
+    storedPath = `/images/uploads/tasks/${filename}`;
+  }
 
   const attachment = await prisma.taskAttachment.create({
-    data: { taskId, uploadedById: userId, filename: file.name.slice(0, 200), path: publicPath, mime: kind.mime, size: file.size },
+    data: { taskId, uploadedById: userId, filename: file.name.slice(0, 200), path: storedPath, mime: kind.mime, size: file.size },
   });
   await prisma.taskActivity.create({
     data: { taskId, actorId: userId, action: 'attachment', detail: `Dosya ekledi: ${file.name.slice(0, 40)}` },
@@ -68,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({ success: true, attachment }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
-/** DELETE ?attachmentId=: eki siler (DB + disk). */
+/** DELETE ?attachmentId=: eki siler (DB + R2/disk). */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
@@ -82,9 +95,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   await prisma.taskAttachment.delete({ where: { id: attachmentId } }).catch(() => null);
-  // Diskten sil (yol her zaman /images/uploads/tasks altında — path traversal yok).
-  const safe = path.basename(att.path);
-  await unlink(path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks', safe)).catch(() => {});
+
+  // R2'deyse (http URL) R2'den sil; yerel diskteyse dosyayı sil.
+  if (/^https?:\/\//.test(att.path)) {
+    const key = keyFromPublicUrl(att.path);
+    if (key) await deleteFromR2(key);
+  } else {
+    const { unlink } = await import('fs/promises');
+    const safe = path.basename(att.path);
+    await unlink(path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks', safe)).catch(() => {});
+  }
+
   await prisma.taskActivity.create({
     data: { taskId, actorId: auth.session.user.id, action: 'attachment', detail: `Dosya kaldırdı: ${att.filename.slice(0, 40)}` },
   });

@@ -24,6 +24,33 @@ async function createNotification(opts: {
   } catch { /* bildirim hatası akışı bozmasın */ }
 }
 
+/**
+ * Görev tamamlandığında (üye done'a taşıyınca) YÖNETİCİLERE + görevi oluşturana bildirim.
+ * Tamamlayan kişinin kendisine bildirim gitmez.
+ */
+export async function notifyTaskCompleted(opts: {
+  taskId: string; taskTitle: string; completedById: string; completedByName?: string | null; createdById?: string | null;
+}): Promise<void> {
+  try {
+    // Bildirim alacaklar: tüm ADMIN'ler + ekip yöneticileri + görevi oluşturan (tamamlayan hariç, tekilleştir).
+    const managers = await prisma.user.findMany({
+      where: { OR: [{ role: 'ADMIN' }, { adminTeamRole: 'yonetici' }] },
+      select: { id: true },
+    });
+    const recipientIds = new Set<string>(managers.map((m) => m.id));
+    if (opts.createdById) recipientIds.add(opts.createdById);
+    recipientIds.delete(opts.completedById); // tamamlayana bildirim yok
+
+    await Promise.all([...recipientIds].map((userId) => createNotification({
+      userId,
+      title: '✅ Görev tamamlandı',
+      message: `${opts.completedByName || 'Bir üye'} "${opts.taskTitle}" görevini tamamladı`,
+      type: 'success',
+      data: { kind: 'team-task-completed', taskId: opts.taskId, href: `/admin/ekip?task=${opts.taskId}` },
+    })));
+  } catch { /* sessiz */ }
+}
+
 /** Görev atandığında atanan kişiye in-app bildirim. */
 export async function notifyTaskAssigned(opts: {
   userId: string; taskId: string; taskTitle: string; priority?: string;

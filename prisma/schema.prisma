@@ -156,6 +156,7 @@ model User {
   taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
   taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
   taskTemplatesCreated      TaskTemplate[]             @relation("TaskTemplateCreator")
+  teamDepartments           UserDepartment[]           @relation("UserDepartments")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2676,7 +2677,25 @@ model Department {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  members     UserDepartment[]
+
   @@index([isActive])
+}
+
+// Ekip üyesi ↔ departman (çoklu). Bir kişi birden fazla departmanda olabilir.
+// slug bazlı: mevcut adminDepartment (birincil/tekil) kodu uyumlu kalır; çoklu üyelik burada.
+model UserDepartment {
+  id             String   @id @default(cuid())
+  userId         String
+  departmentSlug String
+  createdAt      DateTime @default(now())
+
+  user       User       @relation("UserDepartments", fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentSlug], references: [slug], onDelete: Cascade)
+
+  @@unique([userId, departmentSlug])
+  @@index([userId])
+  @@index([departmentSlug])
 }
 
 model CompanyTask {

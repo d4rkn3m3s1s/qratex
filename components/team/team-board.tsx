@@ -248,9 +248,15 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
       });
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        // Bağımlılık engeli vb. — optimistik değişikliği geri al.
+        // Optimistik değişikliği geri al.
         setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: prevStatus } : t)));
-        toast.error(j?.error || 'Taşınamadı');
+        // Zorunlu tamamlama: kanıt (not/döküman) yoksa detay panelini aç, kullanıcı ekleyebilsin.
+        if (j?.code === 'PROOF_REQUIRED') {
+          toast.error(j.error);
+          setDetailId(taskId);
+        } else {
+          toast.error(j?.error || 'Taşınamadı');
+        }
         return;
       }
       // Kutlama: göreve "Bitti"ye geçince yıldız + ses + titreşim.

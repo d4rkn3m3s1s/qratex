@@ -31,13 +31,24 @@ export async function GET() {
     // eklenen CUSTOMER üyeler listede görünmüyordu.)
     prisma.user.findMany({
       where: { adminTeamRole: { not: null } },
-      select: { id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true },
+      select: {
+        id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true,
+        teamDepartments: { select: { departmentSlug: true } }, // çoklu departman
+      },
       orderBy: { name: 'asc' },
       take: 200,
     }),
   ]);
 
-  return NextResponse.json({ success: true, departments, members }, { headers: PRIVATE_NO_STORE_HEADERS });
+  // Her üyeye departmentSlugs dizisi ekle (çoklu). Junction boşsa birincil adminDepartment'a düş.
+  const membersOut = members.map((m) => {
+    const slugs = m.teamDepartments.map((d) => d.departmentSlug);
+    const departmentSlugs = slugs.length > 0 ? slugs : (m.adminDepartment ? [m.adminDepartment] : []);
+    const { teamDepartments: _omit, ...rest } = m;
+    return { ...rest, departmentSlugs };
+  });
+
+  return NextResponse.json({ success: true, departments, members: membersOut }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 // Şirketin gerçek departmanları (varsayılan seed).

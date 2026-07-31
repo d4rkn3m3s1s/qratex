@@ -175,12 +175,27 @@ export async function PUT(req: NextRequest) {
       data.blockedBy = { connect: { id: d.blockedById } };
     }
   }
+  const movingToDone = d.status === 'done' && existing.status !== 'done';
   if (d.status !== undefined) {
     // Bağlı olduğu görev bitmeden "done"a geçişi engelle.
     if (d.status === 'done' && existing.blockedById) {
       const blocker = await prisma.companyTask.findUnique({ where: { id: existing.blockedById }, select: { status: true } });
       if (blocker && blocker.status !== 'done') {
         return NextResponse.json({ success: false, error: 'Önce bağlı olduğu görev tamamlanmalı' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
+      }
+    }
+    // ZORUNLU TAMAMLAMA: "done"a geçmek için görevde en az bir yorum (not) VEYA dosya eki olmalı.
+    // İstemci `forceDone` göndermez; kanıt yoksa 409 + gereken bilgi döner (UI modal açar).
+    if (movingToDone) {
+      const counts = await prisma.companyTask.findUnique({
+        where: { id }, select: { _count: { select: { comments: true, attachments: true } } },
+      });
+      const hasProof = (counts?._count.comments ?? 0) > 0 || (counts?._count.attachments ?? 0) > 0;
+      if (!hasProof) {
+        return NextResponse.json(
+          { success: false, error: 'Görevi bitirmek için ne yaptığını not olarak yaz veya bir döküman ekle.', code: 'PROOF_REQUIRED' },
+          { status: 409, headers: PRIVATE_NO_STORE_HEADERS },
+        );
       }
     }
     data.status = d.status;
@@ -202,6 +217,16 @@ export async function PUT(req: NextRequest) {
     })).catch(() => {});
     import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
       userId: d.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
+    })).catch(() => {});
+  }
+
+  // Görev tamamlandıysa yöneticilere + oluşturana bildirim (fire-and-forget).
+  if (movingToDone) {
+    const actor = await prisma.user.findUnique({ where: { id: auth.session.user.id }, select: { name: true } }).catch(() => null);
+    import('@/lib/team-notify').then((m) => m.notifyTaskCompleted({
+      taskId: task.id, taskTitle: task.title,
+      completedById: auth.session.user.id, completedByName: actor?.name,
+      createdById: existing.createdById,
     })).catch(() => {});
   }
 
