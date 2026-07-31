@@ -16,14 +16,18 @@ import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
   ListChecks, MessageSquare, Paperclip, Search, Filter, X, CheckSquare, Download,
   Sparkles, FileText, Zap, Repeat, Clock, Link2, UserCheck, Inbox, TrendingUp, ClipboardList,
-  Copy, Archive, ArchiveRestore,
+  Copy, Archive, ArchiveRestore, Tag, Bookmark,
 } from 'lucide-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { toast } from '@/lib/admin-toast';
 import { cn, getInitials } from '@/lib/utils';
 import { weekKeyOf, shiftWeekKey, weekKeyLabel, mondayFromWeekKey } from '@/lib/team-week';
 import { TaskDetailSheet } from '@/components/team/task-detail-sheet';
 import { TemplatesDialog } from '@/components/team/templates-dialog';
 import { AiSummaryDialog } from '@/components/team/ai-summary-dialog';
+import { AiQaDialog } from '@/components/team/ai-qa-dialog';
+import { AutomationsDialog } from '@/components/team/automations-dialog';
+import { TagsDialog } from '@/components/team/tags-dialog';
 import { TeamFiles } from '@/components/team/team-files';
 import { TeamActivity } from '@/components/team/team-activity';
 import { TeamPerformance } from '@/components/team/team-performance';
@@ -119,6 +123,14 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   // Şablon + AI özet diyalogları
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [qaOpen, setQaOpen] = useState(false);
+  const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  // Sıralama + gruplama (Notion tarzı)
+  const [sortBy, setSortBy] = useState('default');
+  const [groupBy, setGroupBy] = useState<'none' | 'assignee' | 'priority' | 'department'>('none');
+  // Kaydedilmiş görünümler
+  const [savedViews, setSavedViews] = useState<{ id: string; name: string; config: Record<string, unknown> }[]>([]);
 
   // Yeni görev diyaloğu
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -172,6 +184,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
       if (fTag) params.set('tag', fTag);
       if (debouncedSearch) params.set('q', debouncedSearch);
       if (showArchived) params.set('archived', '1');
+      if (sortBy !== 'default') params.set('sort', sortBy);
       const res = await fetch(`/api/admin/team/tasks?${params}`, { cache: 'no-store' });
       const json = await res.json();
       if (json.success) setTasks(json.tasks);
@@ -180,7 +193,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     } finally {
       setLoading(false);
     }
-  }, [weekKey, department, fStatus, fPriority, fAssignee, fTag, mineOnly, debouncedSearch, showArchived]);
+  }, [weekKey, department, fStatus, fPriority, fAssignee, fTag, mineOnly, debouncedSearch, showArchived, sortBy]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { loadTasks(); }, [loadTasks]);
@@ -202,11 +215,68 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     setFAssignee('all'); setFTag(null); setMineOnly(false);
   };
 
+  // Kaydedilmiş görünümler: yükle, kaydet, uygula.
+  const loadViews = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/team/views', { cache: 'no-store' });
+      const json = await res.json();
+      if (json.success) setSavedViews(json.views);
+    } catch { /* sessiz */ }
+  }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+
+  const saveCurrentView = async () => {
+    const name = window.prompt('Görünüm adı:');
+    if (!name?.trim()) return;
+    const config = { viewMode, department, fStatus, fPriority, fAssignee, fTag, sortBy, groupBy, mineOnly, showArchived };
+    try {
+      const res = await fetch('/api/admin/team/views', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), config }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Görünüm kaydedildi'); loadViews();
+    } catch { toast.error('Kaydedilemedi'); }
+  };
+  const applyView = (config: Record<string, unknown>) => {
+    if (config.viewMode) setViewMode(config.viewMode as typeof viewMode);
+    if (config.department !== undefined) setDepartment(config.department as string);
+    if (config.fStatus !== undefined) setFStatus(config.fStatus as string);
+    if (config.fPriority !== undefined) setFPriority(config.fPriority as string);
+    if (config.fAssignee !== undefined) setFAssignee(config.fAssignee as string);
+    if (config.fTag !== undefined) setFTag(config.fTag as string | null);
+    if (config.sortBy !== undefined) setSortBy(config.sortBy as string);
+    if (config.groupBy !== undefined) setGroupBy(config.groupBy as typeof groupBy);
+    if (config.mineOnly !== undefined) setMineOnly(!!config.mineOnly);
+    if (config.showArchived !== undefined) setShowArchived(!!config.showArchived);
+    toast.success('Görünüm uygulandı');
+  };
+  const deleteView = async (id: string) => {
+    setSavedViews((p) => p.filter((v) => v.id !== id));
+    await fetch(`/api/admin/team/views?id=${id}`, { method: 'DELETE' }).catch(() => {});
+  };
+
   const tasksByCol = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], in_progress: [], done: [] };
     for (const t of tasks) (map[t.status] ?? map.todo).push(t);
     return map;
   }, [tasks]);
+
+  // Gruplama (Notion tarzı): görevleri seçilen alana göre grupla → [{ key, label, tasks }].
+  const groupedTasks = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const groups = new Map<string, { label: string; tasks: Task[] }>();
+    const PRIO = { high: 'Yüksek Öncelik', medium: 'Orta Öncelik', low: 'Düşük Öncelik' };
+    for (const t of tasks) {
+      let key = 'none', label = 'Diğer';
+      if (groupBy === 'assignee') { key = t.assignedTo?.id ?? 'none'; label = t.assignedTo ? (t.assignedTo.name || t.assignedTo.email) : 'Atanmamış'; }
+      else if (groupBy === 'priority') { key = t.priority; label = PRIO[t.priority as keyof typeof PRIO] ?? t.priority; }
+      else if (groupBy === 'department') { key = t.department ?? 'none'; label = departments.find((d) => d.slug === t.department)?.name ?? 'Departmansız'; }
+      if (!groups.has(key)) groups.set(key, { label, tasks: [] });
+      groups.get(key)!.tasks.push(t);
+    }
+    return [...groups.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.tasks.length - a.tasks.length);
+  }, [tasks, groupBy, departments]);
 
   // Durum raporu: kolon dağılımı + kişi başı yük + grafik verileri
   const report = useMemo(() => {
@@ -502,6 +572,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => setQaOpen(true)} title="AI'ya sor" className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700">
+            <Sparkles className="mr-1.5 h-4 w-4" /> AI'ya Sor
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setSummaryOpen(true)} title="AI haftalık özet">
             <Sparkles className="mr-1.5 h-4 w-4" /> AI Özet
           </Button>
@@ -510,6 +583,12 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           </Button>
           {isManager && (
             <>
+              <Button variant="outline" size="sm" onClick={() => setAutomationsOpen(true)} title="Otomasyon kuralları">
+                <Zap className="mr-1.5 h-4 w-4" /> Otomasyon
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setTagsOpen(true)} title="Etiket havuzu">
+                <Tag className="mr-1.5 h-4 w-4" /> Etiketler
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)} title="Görev şablonları">
                 <FileText className="mr-1.5 h-4 w-4" /> Şablonlar
               </Button>
@@ -570,6 +649,29 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
             {members.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.email}</SelectItem>)}
           </SelectContent>
         </Select>
+        {/* Sırala (Notion tarzı) */}
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Sırala" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Varsayılan sıra</SelectItem>
+            <SelectItem value="priority">Önceliğe göre</SelectItem>
+            <SelectItem value="due">Bitiş tarihine</SelectItem>
+            <SelectItem value="title">Başlığa göre (A-Z)</SelectItem>
+            <SelectItem value="created">Yeni eklenen</SelectItem>
+            <SelectItem value="updated">Son güncellenen</SelectItem>
+            <SelectItem value="spent">Harcanan süreye</SelectItem>
+          </SelectContent>
+        </Select>
+        {/* Grupla */}
+        <Select value={groupBy} onValueChange={(v) => setGroupBy(v as typeof groupBy)}>
+          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="Grupla" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Gruplama yok</SelectItem>
+            <SelectItem value="assignee">Kişiye göre</SelectItem>
+            <SelectItem value="priority">Önceliğe göre</SelectItem>
+            <SelectItem value="department">Departmana göre</SelectItem>
+          </SelectContent>
+        </Select>
         {fTag && (
           <button onClick={() => setFTag(null)} className={cn('flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium', tagColor(fTag))}>
             #{fTag} <X className="h-3 w-3" />
@@ -580,6 +682,24 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
             <Filter className="mr-1 h-3.5 w-3.5" /> Temizle ({activeFilterCount})
           </Button>
         )}
+        {/* Kaydedilmiş görünümler */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm"><Bookmark className="mr-1.5 h-4 w-4" /> Görünümler</Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-60 p-1">
+            <button onClick={saveCurrentView} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-primary hover:bg-muted/60">
+              <Plus className="h-4 w-4" /> Mevcut görünümü kaydet
+            </button>
+            {savedViews.length > 0 && <div className="my-1 border-t border-border/50" />}
+            {savedViews.map((v) => (
+              <div key={v.id} className="group flex items-center gap-1 rounded-md px-2 py-1.5 hover:bg-muted/60">
+                <button onClick={() => applyView(v.config)} className="min-w-0 flex-1 truncate text-left text-sm">{v.name}</button>
+                <button onClick={() => deleteView(v.id)} className="opacity-0 group-hover:opacity-100" aria-label="Sil"><X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" /></button>
+              </div>
+            ))}
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Toplu işlem çubuğu (seçim modu aktifse) */}
@@ -715,6 +835,31 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                   </div>
                 ))}
               </div>
+            </div>
+          ))}
+        </div>
+      ) : groupedTasks && (viewMode === 'kanban' || viewMode === 'list') ? (
+        /* Gruplu görünüm (Notion tarzı) — kişi/öncelik/departman başlıklarıyla */
+        <div className="space-y-5">
+          {groupedTasks.map((g) => (
+            <div key={g.key}>
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <h3 className="text-sm font-bold">{g.label}</h3>
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-muted px-1.5 text-xs font-semibold text-muted-foreground">{g.tasks.length}</span>
+              </div>
+              <Card><CardContent className="divide-y divide-border/50 p-0">
+                {g.tasks.map((task) => (
+                  <button key={task.id} onClick={() => setDetailId(task.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40">
+                    <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', task.status === 'done' ? 'bg-emerald-500' : task.status === 'in_progress' ? 'bg-amber-500' : 'bg-slate-400')} />
+                    <span className={cn('min-w-0 flex-1 truncate text-sm', task.status === 'done' && 'text-muted-foreground line-through')}>{task.title}</span>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', PRIORITY_STYLE[task.priority])}>{PRIORITY_LABEL[task.priority]}</span>
+                    {task.dueAt && <span className="hidden text-[11px] text-muted-foreground sm:inline">{new Date(task.dueAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}</span>}
+                    {task.assignedTo && (
+                      <Avatar className="h-6 w-6"><AvatarFallback className="text-[9px]">{getInitials(task.assignedTo.name || task.assignedTo.email)}</AvatarFallback></Avatar>
+                    )}
+                  </button>
+                ))}
+              </CardContent></Card>
             </div>
           ))}
         </div>
@@ -1176,6 +1321,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
 
       <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} weekKey={weekKey} onApplied={loadTasks} />
       <AiSummaryDialog open={summaryOpen} onOpenChange={setSummaryOpen} weekKey={weekKey} />
+      <AiQaDialog open={qaOpen} onOpenChange={setQaOpen} />
+      <AutomationsDialog open={automationsOpen} onOpenChange={setAutomationsOpen} departments={departments} members={members} />
+      <TagsDialog open={tagsOpen} onOpenChange={setTagsOpen} onChanged={loadTasks} />
     </div>
     </TooltipProvider>
   );

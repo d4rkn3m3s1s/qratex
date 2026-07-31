@@ -158,6 +158,9 @@ model User {
   taskTemplatesCreated      TaskTemplate[]             @relation("TaskTemplateCreator")
   teamDepartments           UserDepartment[]           @relation("UserDepartments")
   taskCommentReactions      TaskCommentReaction[]      @relation("TaskReactionUser")
+  checklistAssignments      TaskChecklistItem[]        @relation("ChecklistAssignee")
+  teamSavedViews            TeamSavedView[]            @relation("TeamSavedViewUser")
+  teamAutomationsCreated    TeamAutomation[]           @relation("TeamAutomationCreator")
   staffShifts               StaffShift[]
   staffLeaveRequests        StaffLeaveRequest[]
   staffTrainingCompletions  StaffTrainingCompletion[]
@@ -2724,6 +2727,8 @@ model CompanyTask {
   sourceType   String? // "manual" | "incident" | "churn" | "action-item" | "ai"
   sourceRef    String? // kaynak entity id (idempotent üretim için)
   archivedAt   DateTime? // arşivlenmiş görev (panoda gizli)
+  coverColor   String?   // kart kapak rengi (görsel)
+  coverIcon    String?   // kart ikonu (emoji)
   boardOrder   Int      @default(0) // kanban kolon içi manuel sıra
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -2767,14 +2772,17 @@ model TaskTemplate {
 
 // Ekip görev detayları: alt-görev (checklist), yorum, aktivite geçmişi.
 model TaskChecklistItem {
-  id        String   @id @default(cuid())
-  taskId    String
-  text      String
-  done      Boolean  @default(false)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  taskId       String
+  text         String
+  done         Boolean   @default(false)
+  order        Int       @default(0)
+  assignedToId String?   // alt görev atanan kişi (zengin alt-görev)
+  dueAt        DateTime? // alt görev bitiş tarihi
+  createdAt    DateTime  @default(now())
 
-  task CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task       CompanyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignedTo User?       @relation("ChecklistAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
 
   @@index([taskId])
 }
@@ -2813,6 +2821,51 @@ model TaskCommentReaction {
 
   @@unique([commentId, userId, emoji])
   @@index([commentId])
+}
+
+// Kaydedilmiş görünüm: kullanıcının filtre+sıralama+grup setini adlandırıp saklar.
+model TeamSavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  config    Json     // { viewMode, department, status, priority, assignedTo, tag, q, sort, groupBy, mineOnly }
+  isShared  Boolean  @default(false) // ekip geneline açık mı
+  createdAt DateTime @default(now())
+
+  user User @relation("TeamSavedViewUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Otomasyon kuralı: bir tetikleyici olayında bir aksiyon çalıştırır (durum→aksiyon).
+model TeamAutomation {
+  id         String   @id @default(cuid())
+  name       String
+  enabled    Boolean  @default(true)
+  // Tetik: "status_changed" | "assigned" | "created" | "overdue"
+  triggerType  String
+  triggerValue String? // ör. status_changed için "done"
+  // Aksiyon: "notify" | "add_tag" | "set_priority" | "assign" | "set_status"
+  actionType   String
+  actionValue  String? // ör. add_tag için "acil", assign için userId
+  department   String?  // yalnız bu departman görevlerine (null=hepsi)
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  createdBy User @relation("TeamAutomationCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([triggerType, enabled])
+}
+
+// Yönetilen etiket havuzu: renkli, merkezi etiketler (serbest CSV yerine).
+model TeamTag {
+  id        String   @id @default(cuid())
+  slug      String   @unique // normalize etiket ("acil")
+  label     String   // görünen ad
+  color     String   @default("#8b5cf6")
+  createdAt DateTime @default(now())
+
+  @@index([slug])
 }
 
 model TaskActivity {

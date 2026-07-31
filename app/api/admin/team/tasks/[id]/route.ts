@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       assignedTo: { select: { id: true, name: true, email: true, image: true } },
       createdBy: { select: { id: true, name: true } },
       blockedBy: { select: { id: true, title: true, status: true } },
-      checklist: { orderBy: { order: 'asc' } },
+      checklist: { orderBy: { order: 'asc' }, include: { assignedTo: { select: { id: true, name: true, email: true, image: true } } } },
       comments: {
         orderBy: { createdAt: 'asc' },
         include: {
@@ -42,8 +42,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 const actionSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('add_checklist'), text: z.string().min(1).max(300) }),
+  z.object({ op: z.literal('add_checklist'), text: z.string().min(1).max(300), assignedToId: z.string().optional().nullable(), dueAt: z.string().datetime().optional().nullable() }),
   z.object({ op: z.literal('toggle_checklist'), itemId: z.string(), done: z.boolean() }),
+  z.object({ op: z.literal('update_checklist'), itemId: z.string(), assignedToId: z.string().optional().nullable(), dueAt: z.string().datetime().optional().nullable(), text: z.string().max(300).optional() }),
   z.object({ op: z.literal('delete_checklist'), itemId: z.string() }),
   z.object({
     op: z.literal('add_comment'), text: z.string().min(1).max(2000),
@@ -77,13 +78,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   switch (d.op) {
     case 'add_checklist': {
       const count = await prisma.taskChecklistItem.count({ where: { taskId } });
-      await prisma.taskChecklistItem.create({ data: { taskId, text: d.text, order: count } });
+      await prisma.taskChecklistItem.create({ data: {
+        taskId, text: d.text, order: count,
+        assignedToId: d.assignedToId || null,
+        dueAt: d.dueAt ? new Date(d.dueAt) : null,
+      } });
       await logActivity('checklist', `Alt görev eklendi: ${d.text.slice(0, 40)}`);
       break;
     }
     case 'toggle_checklist':
       await prisma.taskChecklistItem.update({ where: { id: d.itemId }, data: { done: d.done } });
       break;
+    case 'update_checklist': {
+      const upd: { assignedToId?: string | null; dueAt?: Date | null; text?: string } = {};
+      if (d.assignedToId !== undefined) upd.assignedToId = d.assignedToId || null;
+      if (d.dueAt !== undefined) upd.dueAt = d.dueAt ? new Date(d.dueAt) : null;
+      if (d.text !== undefined) upd.text = d.text;
+      await prisma.taskChecklistItem.update({ where: { id: d.itemId }, data: upd }).catch(() => null);
+      break;
+    }
     case 'delete_checklist':
       await prisma.taskChecklistItem.delete({ where: { id: d.itemId } }).catch(() => null);
       break;

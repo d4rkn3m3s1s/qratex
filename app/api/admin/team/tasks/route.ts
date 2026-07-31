@@ -63,9 +63,22 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  // Kullanıcı sıralaması (?sort=). Varsayılan: durum→öncelik→oluşturma.
+  const sort = sp.get('sort');
+  const orderByMap: Record<string, Prisma.CompanyTaskOrderByWithRelationInput[]> = {
+    manual: [{ boardOrder: 'asc' }, { createdAt: 'desc' }],
+    priority: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    due: [{ dueAt: 'asc' }],
+    title: [{ title: 'asc' }],
+    created: [{ createdAt: 'desc' }],
+    updated: [{ updatedAt: 'desc' }],
+    spent: [{ spentMin: 'desc' }],
+  };
+  const orderBy = orderByMap[sort ?? ''] ?? [{ status: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }];
+
   const tasks = await prisma.companyTask.findMany({
     where,
-    orderBy: [{ status: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }],
+    orderBy,
     take: 500,
     include: {
       assignedTo: { select: { id: true, name: true, email: true, image: true } },
@@ -254,6 +267,22 @@ export async function PUT(req: NextRequest) {
   }
   if (activityRows.length > 0) {
     await prisma.taskActivity.createMany({ data: activityRows }).catch(() => {});
+  }
+
+  // Otomasyon motoru: status/atama değişince kuralları çalıştır (fire-and-forget).
+  if (d.status !== undefined && d.status !== existing.status) {
+    import('@/lib/team-automation-engine').then((m) => m.runAutomations({
+      trigger: 'status_changed', triggerValue: d.status,
+      task: { id: task.id, title: task.title, department: task.department, assignedToId: task.assignedToId, tags: task.tags },
+      actorId: auth.session.user.id,
+    })).catch(() => {});
+  }
+  if (d.assignedToId !== undefined && d.assignedToId !== existing.assignedToId && d.assignedToId) {
+    import('@/lib/team-automation-engine').then((m) => m.runAutomations({
+      trigger: 'assigned', triggerValue: d.assignedToId ?? undefined,
+      task: { id: task.id, title: task.title, department: task.department, assignedToId: task.assignedToId, tags: task.tags },
+      actorId: auth.session.user.id,
+    })).catch(() => {});
   }
 
   await prisma.auditLog.create({

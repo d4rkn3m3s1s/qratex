@@ -44,7 +44,10 @@ function renderCommentText(text: string, members: TeamMember[]): React.ReactNode
   return parts;
 }
 
-type ChecklistItem = { id: string; text: string; done: boolean };
+type ChecklistItem = {
+  id: string; text: string; done: boolean; dueAt: string | null;
+  assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
+};
 type Reaction = { emoji: string; userId: string };
 type Comment = {
   id: string; text: string; createdAt: string; editedAt: string | null;
@@ -421,6 +424,35 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                   <div key={item.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50">
                     <Checkbox checked={item.done} onCheckedChange={(v) => act({ op: 'toggle_checklist', itemId: item.id, done: !!v })} />
                     <span className={cn('flex-1 text-sm', item.done && 'text-muted-foreground line-through')}>{item.text}</span>
+                    {/* Bitiş tarihi */}
+                    {item.dueAt && (
+                      <span className={cn('text-[10px]', new Date(item.dueAt) < new Date() && !item.done ? 'text-red-500' : 'text-muted-foreground')}>
+                        {new Date(item.dueAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+                      </span>
+                    )}
+                    {/* Atanan avatarı + atama popover */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button aria-label="Ata" className="shrink-0">
+                          {item.assignedTo ? (
+                            <Avatar className="h-5 w-5"><AvatarFallback className="text-[8px]">{getInitials(item.assignedTo.name || item.assignedTo.email)}</AvatarFallback></Avatar>
+                          ) : (
+                            <span className="grid h-5 w-5 place-items-center rounded-full border border-dashed border-border/70 text-muted-foreground opacity-0 group-hover:opacity-100"><Plus className="h-3 w-3" /></span>
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-56 p-1">
+                        <div className="max-h-52 overflow-y-auto">
+                          <button onClick={() => act({ op: 'update_checklist', itemId: item.id, assignedToId: null })} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60">Atamayı kaldır</button>
+                          {members.map((mem) => (
+                            <button key={mem.id} onClick={() => act({ op: 'update_checklist', itemId: item.id, assignedToId: mem.id })} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60">
+                              <Avatar className="h-5 w-5"><AvatarFallback className="text-[8px]">{getInitials(mem.name || mem.email)}</AvatarFallback></Avatar>
+                              <span className="truncate">{mem.name || mem.email.split('@')[0]}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                     <button onClick={() => act({ op: 'delete_checklist', itemId: item.id })} className="opacity-0 group-hover:opacity-100" aria-label="Sil">
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </button>
