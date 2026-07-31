@@ -25,13 +25,19 @@ export const TRANSACTIONAL_EMAIL_HEAD = `<head>
   </style>
 </head>`;
 
+// Landing kimliği: koyu mor-lacivert zemin, fuchsia aksan, ışıltı.
+const LANDING_BG_DARK = '#0f0f0f';
+const LANDING_BG_MID = '#1a0a2e';
+const LANDING_BG_DEEP = '#16213e';
+const BRAND_FUCHSIA = '#e879f9';
+
 // Dış zemin (tüm maili ortalar) + kart. Tablo-tabanlı: tüm mail istemcileriyle uyumlu.
 // Not: font-family içinde ÇİFT tırnak kullanma — inline style attribute'unu erken kapatır. Tek tırnak.
 const TX_BODY_INLINE =
-  "margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
+  "margin:0;padding:0;background-color:#0b0713;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;";
 
 const TX_FOOTER_HTML =
-  '<p class="tx-email-foot" style="font-size:12px;color:#94a3b8;margin:0;text-align:center;line-height:1.6;">QRateX · QR Tabanlı Geri Bildirim Platformu<br>Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>';
+  '<p class="tx-email-foot" style="font-size:12px;color:#8b7ba8;margin:0;text-align:center;line-height:1.7;">QRate<span style="color:#e879f9;">X</span> · QR Tabanlı Geri Bildirim Platformu<br>Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>';
 
 /** href / metin içi güvenli kaçış (kullanıcı veya DB kaynaklı değerler için). */
 export function escapeEmailHtml(s: string): string {
@@ -43,12 +49,12 @@ export function escapeEmailHtml(s: string): string {
 }
 
 function ctaBlock(cta: TransactionalCta): string {
-  // Ortalanmış, "bulletproof" buton (tablo hücresi + yuvarlak köşe + gölge yerine düz dolgu).
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0;">
+  // Landing CTA kimliği: mor→fuchsia gradient, ortalanmış "bulletproof" buton.
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
   <tr><td align="center">
     <a href="${escapeEmailHtml(cta.href)}" target="_blank" rel="noopener noreferrer"
-       style="display:inline-block;background:${BRAND_PRIMARY_HEX};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX});color:#ffffff;text-decoration:none;padding:14px 34px;border-radius:10px;font-weight:700;font-size:15px;letter-spacing:0.2px;">
-      ${escapeEmailHtml(cta.label)}
+       style="display:inline-block;background:${BRAND_PRIMARY_HEX};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP} 0%, ${BRAND_PRIMARY_HEX} 55%, ${BRAND_FUCHSIA} 100%);color:#ffffff;text-decoration:none;padding:15px 38px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:0.3px;box-shadow:0 6px 18px rgba(147,51,234,0.35);">
+      ${escapeEmailHtml(cta.label)} &rarr;
     </a>
   </td></tr>
 </table>`;
@@ -102,27 +108,32 @@ export function buildTransactionalEmailHtml(input: {
       ? `<a href="${escapeEmailHtml(input.brandLinkHref.replace(/\/$/, ''))}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
            <img src="${escapeEmailHtml(input.logoUrl)}" width="150" alt="QRateX" style="display:block;margin:0 auto;max-width:150px;height:auto;border:0;" />
          </a>`
-      : `<span style="display:inline-block;font-size:22px;font-weight:800;letter-spacing:0.5px;color:#ffffff;">QRate<span style="color:#e9d5ff;">X</span></span>`;
+      : `<span style="display:inline-block;font-size:26px;font-weight:800;letter-spacing:0.5px;color:#ffffff;">QRate<span style="color:${BRAND_FUCHSIA};">X</span></span>`;
 
   return `
 <!DOCTYPE html>
 <html lang="tr">
 ${TRANSACTIONAL_EMAIL_HEAD}
 <body class="tx-email-body" style="${TX_BODY_INLINE}">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f1f5f9;padding:32px 12px;">
+  <!-- Dış zemin: landing'in koyu mor-lacivert atmosferi -->
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#0b0713;background-image:linear-gradient(160deg, ${LANDING_BG_DARK} 0%, ${LANDING_BG_MID} 55%, ${LANDING_BG_DEEP} 100%);padding:40px 12px;">
     <tr><td align="center">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;margin:0 auto;">
-        <!-- Gradient başlık şeridi -->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:520px;margin:0 auto;border-radius:18px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <!-- Koyu gradient hero (landing zemini) + logo -->
         <tr>
-          <td align="center" style="background:${BRAND_PRIMARY_HEX_DEEP};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX});border-radius:16px 16px 0 0;padding:28px 24px;">
+          <td align="center" style="background:${LANDING_BG_MID};background-image:linear-gradient(135deg, ${LANDING_BG_DARK} 0%, ${LANDING_BG_MID} 60%, ${LANDING_BG_DEEP} 100%);padding:34px 24px 30px;">
             ${brandMark}
           </td>
         </tr>
-        <!-- Beyaz kart gövdesi -->
+        <!-- Işıltılı aksan şeridi: mor → fuchsia -->
         <tr>
-          <td class="tx-email-card" style="background-color:#ffffff;border-radius:0 0 16px 16px;padding:36px 32px;">
-            <h1 class="tx-email-h2" style="margin:0 0 18px;font-size:22px;font-weight:800;color:#0f172a;line-height:1.3;">${h}</h1>
-            <div style="font-size:15px;line-height:1.7;color:#334155;">
+          <td style="height:4px;line-height:4px;font-size:0;background:${BRAND_PRIMARY_HEX};background-image:linear-gradient(90deg, ${BRAND_PRIMARY_HEX_DEEP}, ${BRAND_PRIMARY_HEX}, ${BRAND_FUCHSIA});">&nbsp;</td>
+        </tr>
+        <!-- Kart gövdesi -->
+        <tr>
+          <td class="tx-email-card" style="background-color:#ffffff;padding:38px 34px;">
+            <h1 class="tx-email-h2" style="margin:0 0 18px;font-size:23px;font-weight:800;color:#160a24;line-height:1.3;letter-spacing:-0.01em;">${h}</h1>
+            <div style="font-size:15px;line-height:1.75;color:#3b3450;">
               ${input.bodyHtml}
             </div>
             ${extra}
@@ -131,7 +142,7 @@ ${TRANSACTIONAL_EMAIL_HEAD}
           </td>
         </tr>
         <!-- Footer -->
-        <tr><td style="padding:24px 16px 8px;">${TX_FOOTER_HTML}</td></tr>
+        <tr><td style="background-color:#0b0713;padding:22px 16px;">${TX_FOOTER_HTML}</td></tr>
       </table>
     </td></tr>
   </table>
