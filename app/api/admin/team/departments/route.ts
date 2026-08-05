@@ -19,9 +19,13 @@ const createSchema = z.object({
   color: z.string().max(20).optional(),
 });
 
-/** GET: departmanlar + her birindeki üye sayısı + ekip üyeleri (atama için). */
+/**
+ * GET: departmanlar + ekip üyeleri (atama/rozet/filtre için).
+ * Salt-OKUMA olduğu için her ekip üyesine açık (Pano'da departman rozeti ve
+ * filtre gösterebilmek için gerekli). Yazma işlemleri (POST/DELETE) yönetici ister.
+ */
 export async function GET() {
-  const auth = await requireTeamAccess({ manager: true });
+  const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
 
   const [departments, members] = await Promise.all([

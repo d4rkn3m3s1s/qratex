@@ -109,6 +109,15 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   const [trend, setTrend] = useState<{ weekKey: string; total: number; done: number; pct: number; spentHours?: number }[]>([]);
   const { fireStars, fireFireworks } = useConfetti();
 
+  // Yönetici-özel görünümler (Kişiler/Akış/Performans) üyeye kapalı. Üye bu
+  // görünümlerden birine (kayıtlı görünüm/eski state ile) düşerse Pano'ya al —
+  // hem yetkisiz veriyi (403) çekmeyi hem render çökmesini önler.
+  useEffect(() => {
+    if (!isManager && (['people', 'activity', 'performance'] as string[]).includes(viewMode)) {
+      setViewMode('kanban');
+    }
+  }, [isManager, viewMode]);
+
   // Arama + gelişmiş filtreler
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -158,8 +167,8 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
       const res = await fetch('/api/admin/team/departments', { cache: 'no-store' });
       const json = await res.json();
       if (json.success) {
-        setDepartments(json.departments);
-        setMembers(json.members);
+        setDepartments(json.departments ?? []);
+        setMembers(json.members ?? []);
       }
     } catch { /* sessiz */ }
   }, []);
@@ -590,9 +599,11 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           </SelectContent>
         </Select>
 
-        {/* Görünüm modu geçişi */}
+        {/* Görünüm modu geçişi — yönetici-özel sekmeler (Kişiler/Akış/Performans) üyede gizli. */}
         <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/50 p-1">
-          {([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler'], ['calendar', 'Takvim'], ['files', 'Dosyalar'], ['activity', 'Akış'], ['performance', 'Performans']] as const).map(([mode, label]) => (
+          {(([['kanban', 'Pano'], ['list', 'Liste'], ['people', 'Kişiler'], ['calendar', 'Takvim'], ['files', 'Dosyalar'], ['activity', 'Akış'], ['performance', 'Performans']] as const)
+            .filter(([mode]) => isManager || !(['people', 'activity', 'performance'] as string[]).includes(mode))
+          ).map(([mode, label]) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}

@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  * Filtreler: ?actor=userId, ?action=status|commented|...
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireTeamAccess();
+  // Tüm-ekip aktivite akışı yönetici-özeldir (üye sekmesi gizli).
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
   const sp = req.nextUrl.searchParams;
   const actor = sp.get('actor');

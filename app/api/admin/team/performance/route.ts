@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  * ortalama döngü süresi (createdAt→completedAt), gecikmiş görev sayısı.
  */
 export async function GET() {
-  const auth = await requireTeamAccess();
+  // Ekip performans panosu yönetici-özel gözetim verisidir (üye sekmesi gizli).
+  const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
 
   const [members, tasks] = await Promise.all([
