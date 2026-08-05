@@ -60,7 +60,12 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
           treeColor: 'rgba(20,10,4,0.72)', treeGlow: 'hsla(28,90%,55%,0.35)',
           groundLeaf: 'rgba(60,24,8,0.55)', dustHue: 34, dustL: 66, dustAlpha: 0.85,
           steam: 'rgba(255,220,170,0.20)', mist: 'rgba(120,50,15,0.22)',
-          bloom: 'rgba(234,120,40,0.06)', vignette: 0.6, horizonGlow: 'rgba(234,88,12,0.28)',
+          // Koyu modda bloom ay merkezli → daha soğuk-gümüşi sıcak tint
+          bloom: 'rgba(220,205,180,0.055)', vignette: 0.6, horizonGlow: 'rgba(234,88,12,0.28)',
+          // Kuş silüetleri koyu modda daha koyu
+          bird: 'rgba(18,10,4,0.7)',
+          // Gökcismi yansıma sütunu (moonpath) sıcak-gümüşi — "r,g,b" gövdesi
+          reflRGB: '240,232,214',
         }
       : {
           // Sonbahar gündüzü: krem-altın berrak gökyüzü.
@@ -74,6 +79,8 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
           groundLeaf: 'rgba(180,83,9,0.4)', dustHue: 44, dustL: 74, dustAlpha: 0.6,
           steam: 'rgba(255,255,255,0.24)', mist: 'rgba(255,225,170,0.2)',
           bloom: 'rgba(255,220,150,0.055)', vignette: 0.3, horizonGlow: 'rgba(251,191,36,0.22)',
+          bird: 'rgba(90,50,20,0.4)',
+          reflRGB: '255,225,160',
         };
 
     const sunPos = () => ({ x: W * 0.74, y: H * (isDark ? 0.4 : 0.24) });
@@ -170,6 +177,29 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       };
     });
 
+    // ── Göç eden kuş sürüsü (turna katarı) — uzakta silüet, "V" formasyonu ──
+    // Sürü bir bütün olarak soldan sağa yavaş süzülür; sağdan çıkınca soldan döner.
+    // Her kuş V dizilimindeki ofsetiyle konumlanır; kanatlar bağımsız fazla çırpar.
+    interface Bird { ox: number; oy: number; size: number; flap: number; flapSpeed: number; }
+    const flockCount = 5 + Math.floor(Math.random() * 3); // 5-7 kuş
+    const flock = {
+      x: -W * 0.2,
+      y: H * (0.16 + Math.random() * 0.12),
+      speed: 0.24 + Math.random() * 0.18,
+      birds: Array.from({ length: flockCount }, (_, i): Bird => {
+        // V formasyonu: merkez lider (i=0), diğerleri simetrik iki kola açılır.
+        const side = i % 2 === 0 ? 1 : -1;
+        const rank = Math.ceil(i / 2);
+        return {
+          ox: -rank * 26,                 // geride kalanlar sola (arka) kayar
+          oy: rank * 15 * side,           // iki kola simetrik açılım
+          size: 7 + Math.random() * 4,
+          flap: Math.random() * Math.PI * 2,
+          flapSpeed: 0.09 + Math.random() * 0.05,
+        };
+      }),
+    };
+
     let animationId = 0;
     let t = 0;
 
@@ -249,23 +279,104 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       hg.addColorStop(0, 'transparent'); hg.addColorStop(0.6, P.horizonGlow); hg.addColorStop(1, 'transparent');
       ctx.fillStyle = hg; ctx.fillRect(0, horizonY - H * 0.22, W, H * 0.32);
 
-      // 3) Ana gökcismi — puslu sonbahar güneşi (halo + disk)
+      // 3) Ana gökcismi — koyu modda DOLUNAY (gümüşi-krem, kraterli),
+      //    açık modda sıcak sonbahar GÜNEŞİ (halo + disk). Diğer mevsim
+      //    temalarıyla tutarlılık için koyu mod her zaman ay gösterir.
       const pulse = 1 + Math.sin(t * 0.018) * (isDark ? 0.04 : 0.06);
       const sunR = Math.min(W, H) * 0.078 * pulse;
-      const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 7);
-      halo.addColorStop(0, `rgba(255,200,120,${P.sunHaloA})`);
-      halo.addColorStop(0.25, `rgba(240,150,70,${P.sunHaloA * 0.4})`);
-      halo.addColorStop(1, 'transparent');
-      ctx.beginPath(); ctx.arc(s.x, s.y, sunR * 7, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
-      const disk = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR);
-      disk.addColorStop(0, P.sunCore); disk.addColorStop(0.55, P.sunMid); disk.addColorStop(1, P.sunEdge);
-      ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = disk;
-      ctx.shadowColor = P.sunGlow; ctx.shadowBlur = 55; ctx.fill(); ctx.shadowBlur = 0;
+      if (isDark) {
+        // Dolunay: gümüşi-sıcak hale + offset merkezli disk + clip'li kraterler.
+        // Sonbahar akşamı hissi için soğuk gümüşe hafif sıcak-krem tint katılır.
+        const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 7);
+        halo.addColorStop(0, 'rgba(255,244,224,0.5)');
+        halo.addColorStop(0.28, 'rgba(226,214,190,0.2)');
+        halo.addColorStop(1, 'transparent');
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR * 7, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
+        // ay diski — offset merkezli radial gradient (sol-üst aydınlık)
+        const moon = ctx.createRadialGradient(s.x - sunR * 0.3, s.y - sunR * 0.3, sunR * 0.1, s.x, s.y, sunR);
+        moon.addColorStop(0, '#fff6ec'); moon.addColorStop(0.55, '#e8dcc8'); moon.addColorStop(1, '#c9b89e');
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = moon;
+        ctx.shadowColor = 'rgba(240,228,205,0.85)'; ctx.shadowBlur = 42; ctx.fill(); ctx.shadowBlur = 0;
+        // kraterler (ay yüzeyi dokusu) — diskin içinde clip'li, sıcak-gri gölge
+        ctx.save();
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.clip();
+        const craters = [
+          { dx: -0.28, dy: -0.15, r: 0.18 }, { dx: 0.22, dy: 0.1, r: 0.24 }, { dx: 0.05, dy: -0.35, r: 0.12 },
+          { dx: -0.15, dy: 0.32, r: 0.15 }, { dx: 0.38, dy: -0.28, r: 0.1 }, { dx: -0.4, dy: 0.15, r: 0.09 },
+        ];
+        craters.forEach((c) => {
+          const cx = s.x + c.dx * sunR, cy = s.y + c.dy * sunR, cr = c.r * sunR;
+          const cg = ctx.createRadialGradient(cx - cr * 0.3, cy - cr * 0.3, 0, cx, cy, cr);
+          cg.addColorStop(0, 'rgba(150,138,116,0.35)'); cg.addColorStop(0.7, 'rgba(120,108,88,0.28)'); cg.addColorStop(1, 'transparent');
+          ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
+        });
+        ctx.restore();
+      } else {
+        // Güneş: sıcak sonbahar halosu + disk
+        const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 7);
+        halo.addColorStop(0, `rgba(255,200,120,${P.sunHaloA})`);
+        halo.addColorStop(0.25, `rgba(240,150,70,${P.sunHaloA * 0.4})`);
+        halo.addColorStop(1, 'transparent');
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR * 7, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
+        const disk = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR);
+        disk.addColorStop(0, P.sunCore); disk.addColorStop(0.55, P.sunMid); disk.addColorStop(1, P.sunEdge);
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = disk;
+        ctx.shadowColor = P.sunGlow; ctx.shadowBlur = 55; ctx.fill(); ctx.shadowBlur = 0;
+      }
+
+      // 3b) Gökcismi yansıması — aşağı doğru yumuşak dikey ışık sütunu.
+      //     Koyu mod: puslu sıcak-gümüşi ay huzmesi (moonpath mantığı, dikey).
+      //     Açık mod: hafif sıcak güneş parlaklığı (abartmadan).
+      {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const startY = s.y + sunR;
+        const shimAmp = isDark ? 5 : 3;            // koyu modda daha puslu titreşim
+        const colAlpha = isDark ? 0.16 : 0.1;
+        for (let y = startY; y < H; y += 5) {
+          const prog = (y - startY) / (H - startY);
+          const halfW = sunR * (0.45 + prog * 2.6);   // aşağı indikçe genişler
+          const shimmer = reduceMotion ? 0 : Math.sin(y * 0.13 + t * 0.04) * shimAmp * prog;
+          const cx = s.x + shimmer;
+          const flick = reduceMotion ? 0.7 : (0.55 + Math.abs(Math.sin(y * 0.28 + t * 0.035)) * 0.45);
+          const alpha = colAlpha * (1 - prog) * flick;
+          const g = ctx.createLinearGradient(cx - halfW, y, cx + halfW, y);
+          g.addColorStop(0, 'transparent');
+          g.addColorStop(0.5, `rgba(${P.reflRGB},${alpha.toFixed(3)})`);
+          g.addColorStop(1, 'transparent');
+          ctx.fillStyle = g;
+          ctx.fillRect(cx - halfW, y, halfW * 2, 2.5);
+        }
+        ctx.restore();
+      }
 
       // 4) Atmosferik sonbahar pusu (ufuk derinliği, yumuşak)
       const mist = ctx.createLinearGradient(0, H * 0.48, 0, H * 0.74);
       mist.addColorStop(0, 'transparent'); mist.addColorStop(0.5, P.mist); mist.addColorStop(1, 'transparent');
       ctx.fillStyle = mist; ctx.fillRect(0, H * 0.48, W, H * 0.28);
+
+      // 4b) Göç eden kuş sürüsü (turna katarı) — uzak silüet "V" formasyonu,
+      //     gökyüzünde ağaçların arkasında yavaşça soldan sağa süzülür.
+      if (!reduceMotion) flock.x += flock.speed;
+      // sürü tamamen sağdan çıkınca soldan (yeni yükseklikte) geri döner
+      if (flock.x > W + W * 0.25) { flock.x = -W * 0.25; flock.y = H * (0.14 + Math.random() * 0.14); }
+      ctx.save();
+      ctx.strokeStyle = P.bird;
+      ctx.lineCap = 'round';
+      flock.birds.forEach((bd) => {
+        if (!reduceMotion) bd.flap += bd.flapSpeed;
+        const bx = flock.x + bd.ox;
+        const by = flock.y + bd.oy;
+        // kanat çırpma: "M/kavis" — sin ile yukarı-aşağı açılan iki kanat
+        const wing = (reduceMotion ? 0.35 : (0.25 + Math.abs(Math.sin(bd.flap)) * 0.65)) * bd.size;
+        ctx.lineWidth = Math.max(1, bd.size * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(bx - bd.size, by + wing);
+        ctx.quadraticCurveTo(bx, by - bd.size * 0.35, bx, by);
+        ctx.quadraticCurveTo(bx, by - bd.size * 0.35, bx + bd.size, by + wing);
+        ctx.stroke();
+      });
+      ctx.restore();
 
       // 5) Uzak ağaç silüetleri (parallax arka plan — dallı, sonbahar)
       trees.forEach((tr) => {
@@ -420,7 +531,8 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       }
       ctx.restore();
 
-      // 10) Bloom — tüm sahneye sıcak altın ışık yıkaması (güneş merkezli)
+      // 10) Bloom — tüm sahneye ışık yıkaması, gökcismi merkezli (açık: sıcak
+      //     altın güneş; koyu: soğutulmuş gümüşi-krem ay bloom'u — P.bloom moda göre)
       const bloom = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, Math.max(W, H) * 0.95);
       bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();

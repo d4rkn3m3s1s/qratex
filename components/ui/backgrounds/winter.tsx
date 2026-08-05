@@ -62,8 +62,8 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
           pine: '#0b5c3f', pineHi: '#10B981', pineAlpha: 0.9,
           snowmanBody: '#e9f0fb', snowmanShade: '#b9c8e6', snowmanLine: 'rgba(20,30,55,0.8)',
           scarf: '#10B981', carrot: '#f97316', coal: '#0b1020',
-          cupBody: '#e7edf7', cupShade: '#b6c2da', coffee: '#5b3a24', steam: '255,255,255',
           crystalHue: 200, crystalL: 82, stars: true, aurora: true,
+          reflA: 0.16, reflHue: 215, reflL: 88,
           bloom: 'rgba(80,140,220,0.06)', vignette: 0.55,
         }
       : {
@@ -79,8 +79,8 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
           pine: '#0f7a55', pineHi: '#10B981', pineAlpha: 0.85,
           snowmanBody: '#ffffff', snowmanShade: '#cfe0ef', snowmanLine: 'rgba(60,90,130,0.55)',
           scarf: '#38BDF8', carrot: '#f97316', coal: '#1e293b',
-          cupBody: '#ffffff', cupShade: '#c9d8e8', coffee: '#6b4326', steam: '255,255,255',
           crystalHue: 198, crystalL: 88, stars: false, aurora: false,
+          reflA: 0.2, reflHue: 48, reflL: 80,
           bloom: 'rgba(255,255,255,0.06)', vignette: 0.24,
         };
 
@@ -441,6 +441,30 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       ctx.strokeStyle = P.groundGlow; ctx.lineWidth = 3;
       ctx.shadowColor = P.groundGlow; ctx.shadowBlur = 16; ctx.stroke(); ctx.shadowBlur = 0;
       ctx.restore();
+
+      // 7b) Gökcismi yansıması — kar örtüsüne düşen yumuşak ışık sütunu.
+      //     Gece: soğuk gümüşi ay ışığı; gündüz: sıcak altın güneş parıltısı.
+      //     Örtü üzerinde dikey, aşağı indikçe genişleyip hafifçe titreşen huzme.
+      {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const startY = gy;
+        for (let y = startY; y < H; y += 5) {
+          const prog = (y - startY) / (H - startY);
+          const halfW = orbR * (0.45 + prog * 2.6);
+          const shimmer = reduceMotion ? 0 : Math.sin(y * 0.14 + t * 0.05) * (2 + prog * 5);
+          const cx = o.x + shimmer;
+          const flick = reduceMotion ? 1 : (0.6 + Math.abs(Math.sin(y * 0.3 + t * 0.04)) * 0.4);
+          const alpha = P.reflA * (1 - prog) * flick;
+          const g = ctx.createLinearGradient(cx - halfW, y, cx + halfW, y);
+          g.addColorStop(0, 'transparent');
+          g.addColorStop(0.5, `hsla(${P.reflHue},90%,${P.reflL}%,${alpha})`);
+          g.addColorStop(1, 'transparent');
+          ctx.fillStyle = g;
+          ctx.fillRect(cx - halfW, y, halfW * 2, 2.5);
+        }
+        ctx.restore();
+      }
 
       // 8) Kardan adam (alt-sol)
       const smScale = Math.min(1.3, Math.max(0.8, W / 1300));

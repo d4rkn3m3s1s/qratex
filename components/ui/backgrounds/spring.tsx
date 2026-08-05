@@ -54,8 +54,9 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
             { at: 0, c: '#03130f' }, { at: 0.3, c: '#064E3B' }, { at: 0.56, c: '#0f3d55' },
             { at: 0.78, c: '#3b1f6b' }, { at: 1, c: '#160a2e' },
           ],
-          // Yumuşak ay (soğuk gümüşi)
-          sunCore: '#ffffff', sunMid: '#eef2ff', sunEdge: '#c7d0ea', sunHaloA: 0.5, sunGlow: 'rgba(190,205,255,0.85)',
+          // Yumuşak ay (soğuk gümüşi-mor tint — ilkbahar gecesi)
+          sunCore: '#ffffff', sunMid: '#eef0ff', sunEdge: '#c9c7ec', sunHaloA: 0.5, sunGlow: 'rgba(198,196,255,0.85)',
+          moonReflA: 0.14,   // ay ışığı huzmesi yoğunluğu (yumuşak)
           // Taç yaprak renkleri (koyu modda ışıltılı mor + kırık beyaz)
           petalHues: [{ h: 271, s: 78, l: 62 }, { h: 291, s: 70, l: 68 }, { h: 320, s: 60, l: 74 }, { h: 60, s: 8, l: 96 }],
           petalAlpha: 0.7, glowPetal: 0.35,
@@ -74,6 +75,7 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
           ],
           // Parlak neşeli güneş (yeşil-altın sıcaklık)
           sunCore: '#ffffff', sunMid: '#fef9c3', sunEdge: '#a3e635', sunHaloA: 0.68, sunGlow: 'rgba(190,242,140,0.95)',
+          moonReflA: 0,      // açık modda ay huzmesi yok
           // Taç yaprak renkleri (açık modda canlı pembe-mor + beyaz)
           petalHues: [{ h: 291, s: 80, l: 70 }, { h: 330, s: 78, l: 76 }, { h: 271, s: 74, l: 66 }, { h: 45, s: 30, l: 98 }],
           petalAlpha: 0.82, glowPetal: 0.18,
@@ -116,6 +118,7 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
     interface Flower {
       x: number; yBase: number; stem: number; size: number;
       sway: number; swaySpeed: number; petalHue: { h: number; s: number; l: number }; centerHue: number;
+      breath: number; breathSpeed: number;
     }
     const flowerCount = 7;
     const flowers: Flower[] = Array.from({ length: flowerCount }, (_, i) => {
@@ -129,6 +132,8 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         swaySpeed: 0.01 + Math.random() * 0.015,
         petalHue: hue,
         centerHue: 48,
+        breath: Math.random() * Math.PI * 2,        // "nefes" fazı (her çiçek farklı)
+        breathSpeed: 0.02 + Math.random() * 0.02,
       };
     });
 
@@ -147,20 +152,21 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
     })) : [];
 
     // ── Parlak polen / ışıltı toz (twinkle, yukarı süzülür) ──
-    interface Pollen { x: number; y: number; radius: number; speed: number; wobble: number; wobbleSpeed: number; hue: number; }
-    const pollen: Pollen[] = Array.from({ length: 50 }, () => {
-      const depth = Math.random();
+    interface Pollen { x: number; y: number; radius: number; speed: number; wobble: number; wobbleSpeed: number; hue: number; depth: number; twPhase: number; }
+    const pollen: Pollen[] = Array.from({ length: 58 }, () => {
+      const depth = Math.random();                  // 0 uzak/soluk, 1 yakın/parlak
       return {
         x: Math.random() * W, y: Math.random() * H,
-        radius: 0.6 + depth * 2.2, speed: 0.15 + depth * 0.6,
+        radius: 0.6 + depth * 2.4, speed: 0.15 + depth * 0.6,
         wobble: Math.random() * Math.PI * 2, wobbleSpeed: 0.014 + Math.random() * 0.03,
         hue: Math.random() < 0.5 ? P.pollenHue : (isDark ? 158 : 90),
+        depth, twPhase: Math.random() * Math.PI * 2,  // ayrı twinkle fazı → katmanlı kıvılcım
       };
     });
 
     // ── Kelebekler (uçan, kanat çırpan) ──
     interface Butterfly { x: number; y: number; speed: number; size: number; flap: number; flapSpeed: number; phase: number; hue: number; }
-    const butterflies: Butterfly[] = Array.from({ length: 3 }, () => ({
+    const butterflies: Butterfly[] = Array.from({ length: 4 }, () => ({
       x: Math.random() * W, y: H * (0.35 + Math.random() * 0.4),
       speed: 0.35 + Math.random() * 0.4, size: 7 + Math.random() * 6,
       flap: Math.random() * Math.PI * 2, flapSpeed: 0.18 + Math.random() * 0.12,
@@ -245,6 +251,50 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         moon.addColorStop(0, P.sunCore); moon.addColorStop(0.55, P.sunMid); moon.addColorStop(1, P.sunEdge);
         ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = moon;
         ctx.shadowColor = P.sunGlow; ctx.shadowBlur = 38; ctx.fill(); ctx.shadowBlur = 0;
+        // Kraterler (ay yüzeyi dokusu) — diskin içinde clip'li, hafif mor-gri gölge
+        ctx.save();
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.clip();
+        const craters = [
+          { dx: -0.30, dy: -0.14, r: 0.17 }, { dx: 0.24, dy: 0.12, r: 0.23 }, { dx: 0.03, dy: -0.36, r: 0.11 },
+          { dx: -0.16, dy: 0.34, r: 0.14 }, { dx: 0.38, dy: -0.26, r: 0.10 }, { dx: -0.42, dy: 0.16, r: 0.09 },
+        ];
+        craters.forEach((c) => {
+          const cx = s.x + c.dx * sunR, cy = s.y + c.dy * sunR, cr = c.r * sunR;
+          // ışık aşağı-sağdan geldiği için gölge sol-üste düşer (radial offset)
+          const cg = ctx.createRadialGradient(cx - cr * 0.3, cy - cr * 0.3, 0, cx, cy, cr);
+          cg.addColorStop(0, 'rgba(158,150,192,0.34)'); cg.addColorStop(0.7, 'rgba(130,124,168,0.24)'); cg.addColorStop(1, 'transparent');
+          ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
+        });
+        ctx.restore();
+        // Ay ışığı huzmesi — çimen/sahneye düşen YUMUŞAK dikey gümüşi-mor sütun (deniz yok)
+        if (P.moonReflA > 0) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          // 1) Ana dikey huzme: aydan aşağı doğru genişleyip zayıflar, hafif titreşir
+          const beamTop = s.y + sunR * 0.6;
+          const beamBot = H;
+          for (let y = beamTop; y < beamBot; y += 6) {
+            const prog = (y - beamTop) / (beamBot - beamTop);   // 0 üst, 1 alt
+            const halfW = sunR * (0.6 + prog * 2.6);            // aşağı indikçe yumuşakça genişler
+            const shimmer = reduceMotion ? 0 : Math.sin(y * 0.05 + t * 0.02) * (1.5 + prog * 4);
+            const cx = s.x + shimmer;
+            const alpha = P.moonReflA * (1 - prog * 0.85)
+              * (0.7 + (reduceMotion ? 0.3 : Math.abs(Math.sin(y * 0.12 + t * 0.03)) * 0.3));
+            const g = ctx.createLinearGradient(cx - halfW, y, cx + halfW, y);
+            g.addColorStop(0, 'transparent');
+            g.addColorStop(0.5, `hsla(258,80%,90%,${alpha})`);
+            g.addColorStop(1, 'transparent');
+            ctx.fillStyle = g;
+            ctx.fillRect(cx - halfW, y, halfW * 2, 3);
+          }
+          // 2) Sahneye yayılan çok yumuşak gümüşi-mor ışık yıkaması (ferahlık için hafif)
+          const wash = ctx.createRadialGradient(s.x, s.y, sunR, s.x, H, Math.max(W, H) * 0.85);
+          wash.addColorStop(0, `hsla(250,70%,86%,${P.moonReflA * 0.5})`);
+          wash.addColorStop(0.5, `hsla(268,60%,74%,${P.moonReflA * 0.18})`);
+          wash.addColorStop(1, 'transparent');
+          ctx.fillStyle = wash; ctx.fillRect(0, 0, W, H);
+          ctx.restore();
+        }
       } else {
         // Neşeli güneş: yeşil-altın halo + disk
         const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 6);
@@ -302,7 +352,7 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         ctx.strokeStyle = `hsla(${b.hue},40%,${isDark ? 30 : 25}%,${bodyA})`;
         ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.moveTo(b.x, b.y - b.size * 0.5); ctx.lineTo(b.x, b.y + b.size * 0.5); ctx.stroke();
-        // kanatlar (yansımalı çift, çırpan)
+        // kanatlar (yansımalı çift, çırpan) + desen noktaları
         [-1, 1].forEach((dir) => {
           const g = ctx.createRadialGradient(b.x, b.y, 0, b.x + dir * bw, b.y, bw * 1.2);
           g.addColorStop(0, `hsla(${b.hue},80%,${isDark ? 70 : 74}%,0.95)`);
@@ -313,6 +363,21 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
           ctx.quadraticCurveTo(b.x + dir * bw, b.y - b.size, b.x + dir * bw * 1.1, b.y - b.size * 0.1);
           ctx.quadraticCurveTo(b.x + dir * bw * 0.9, b.y + b.size * 0.8, b.x, b.y + b.size * 0.2);
           ctx.closePath(); ctx.fill();
+          // kanat üzeri desen: üst kanatta koyu benek + parlak highlight nokta (kanat açıklığıyla ölçekli)
+          if (wing > 0.25) {
+            const upX = b.x + dir * bw * 0.62, upY = b.y - b.size * 0.32;
+            const spot = b.size * 0.16 * (0.6 + wing * 0.6);
+            // koyu benek (kontrast desen)
+            ctx.beginPath(); ctx.arc(upX, upY, spot, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${b.hue - 30},70%,${isDark ? 32 : 30}%,0.55)`; ctx.fill();
+            // parlak highlight (canlılık)
+            ctx.beginPath(); ctx.arc(upX - dir * spot * 0.5, upY - spot * 0.4, spot * 0.5, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(50,100%,${isDark ? 88 : 96}%,0.75)`; ctx.fill();
+            // alt kanatta küçük ikinci benek
+            const loX = b.x + dir * bw * 0.5, loY = b.y + b.size * 0.42;
+            ctx.beginPath(); ctx.arc(loX, loY, spot * 0.62, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${b.hue + 40},75%,${isDark ? 78 : 82}%,0.6)`; ctx.fill();
+          }
         });
       });
 
@@ -353,10 +418,13 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
 
       // 10) Açan ÇİÇEKLER (çimen üstünde, hafif sallanır)
       flowers.forEach((fl) => {
-        if (!reduceMotion) fl.sway += fl.swaySpeed;
+        if (!reduceMotion) { fl.sway += fl.swaySpeed; fl.breath += fl.breathSpeed; }
         const swayX = Math.sin(fl.sway) * 6;
         const topX = fl.x + swayX;
         const topY = fl.yBase - fl.stem;
+        // çok hafif "nefes" — taç açılıp kapanır gibi (abartısız)
+        const breathe = 1 + (reduceMotion ? 0 : Math.sin(fl.breath) * 0.06);
+        const fsize = fl.size * breathe;
         // sap
         ctx.beginPath();
         ctx.moveTo(fl.x, fl.yBase);
@@ -376,22 +444,22 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         const ph = fl.petalHue;
         for (let k = 0; k < 5; k++) {
           const ang = (Math.PI * 2 * k) / 5 - Math.PI / 2 + Math.sin(fl.sway) * 0.05;
-          const px = topX + Math.cos(ang) * fl.size * 0.62;
-          const py = topY + Math.sin(ang) * fl.size * 0.62;
-          const grad = ctx.createRadialGradient(px, py, 0, px, py, fl.size * 0.7);
+          const px = topX + Math.cos(ang) * fsize * 0.62;
+          const py = topY + Math.sin(ang) * fsize * 0.62;
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, fsize * 0.7);
           grad.addColorStop(0, `hsla(${ph.h},${ph.s}%,${ph.l + 8}%,0.98)`);
           grad.addColorStop(1, `hsla(${ph.h - 8},${ph.s}%,${ph.l - 8}%,0.85)`);
           ctx.beginPath();
-          ctx.ellipse(px, py, fl.size * 0.5, fl.size * 0.36, ang, 0, Math.PI * 2);
+          ctx.ellipse(px, py, fsize * 0.5, fsize * 0.36, ang, 0, Math.PI * 2);
           ctx.fillStyle = grad;
           ctx.shadowColor = `hsla(${ph.h},90%,72%,${isDark ? 0.5 : 0.3})`;
           ctx.shadowBlur = isDark ? 10 : 6;
           ctx.fill(); ctx.shadowBlur = 0;
         }
         // sarı orta
-        const cg = ctx.createRadialGradient(topX, topY, 0, topX, topY, fl.size * 0.42);
+        const cg = ctx.createRadialGradient(topX, topY, 0, topX, topY, fsize * 0.42);
         cg.addColorStop(0, '#fffbeb'); cg.addColorStop(0.6, P.bloomCenter); cg.addColorStop(1, `hsla(${fl.centerHue},90%,50%,0.9)`);
-        ctx.beginPath(); ctx.arc(topX, topY, fl.size * 0.4, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
+        ctx.beginPath(); ctx.arc(topX, topY, fsize * 0.4, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
       });
 
       // 11) Yakın taç yapraklar (derinlik >= 0.4) — çimen ve çiçeklerin önünde
@@ -411,12 +479,22 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
 
       // 12) Parlak polen / ışıltı toz (parallax + twinkle, yukarı süzülür)
       pollen.forEach((pl) => {
-        if (!reduceMotion) { pl.y -= pl.speed; pl.wobble += pl.wobbleSpeed; pl.x += Math.sin(pl.wobble) * 0.4; }
+        if (!reduceMotion) { pl.y -= pl.speed; pl.wobble += pl.wobbleSpeed; pl.twPhase += pl.wobbleSpeed * 1.7; pl.x += Math.sin(pl.wobble) * 0.4; }
         if (pl.y < -pl.radius) { pl.y = H + pl.radius; pl.x = Math.random() * W; }
-        const twinkle = 0.35 + Math.abs(Math.sin(pl.wobble)) * 0.55;
+        // iki fazlı twinkle → daha canlı, düzensiz kıvılcım; derinlikle parlaklık kademeli
+        const twinkle = 0.3 + Math.abs(Math.sin(pl.wobble)) * 0.4 + Math.abs(Math.sin(pl.twPhase)) * 0.28;
+        const depthA = 0.45 + pl.depth * 0.55;        // uzak = soluk, yakın = parlak
+        const L = pl.hue === 55 ? 70 : 78;
+        // yakın (parlak) parçacıklarda yumuşak dış hale → katmanlı derinlik
+        if (pl.depth > 0.55) {
+          const halo = ctx.createRadialGradient(pl.x, pl.y, 0, pl.x, pl.y, pl.radius * 3.2);
+          halo.addColorStop(0, `hsla(${pl.hue},100%,${L}%,${twinkle * P.pollenAlpha * depthA * 0.5})`);
+          halo.addColorStop(1, 'transparent');
+          ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.radius * 3.2, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
+        }
         ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${pl.hue},100%,${pl.hue === 55 ? 70 : 78}%,${twinkle * P.pollenAlpha})`;
-        ctx.shadowColor = `hsla(${pl.hue},100%,72%,0.7)`; ctx.shadowBlur = 7; ctx.fill(); ctx.shadowBlur = 0;
+        ctx.fillStyle = `hsla(${pl.hue},100%,${L}%,${twinkle * P.pollenAlpha * depthA})`;
+        ctx.shadowColor = `hsla(${pl.hue},100%,72%,0.7)`; ctx.shadowBlur = 5 + pl.depth * 5; ctx.fill(); ctx.shadowBlur = 0;
       });
 
       // 13) Bloom — tüm sahneye yumuşak ışık yıkaması (kaynaktan)
