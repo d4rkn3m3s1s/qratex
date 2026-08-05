@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { useSceneInteraction } from './use-scene-interaction';
 
 /**
  * Kış teması — sinematik, "efsanevi" seviye animasyonlu arka plan.
@@ -26,14 +27,18 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
+  // reduceMotion'ı gövdeye taşıdık ki etkileşim hook'unu koşulsuz çağırabilelim.
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  // Paylaşılan etkileşim + atmosfer altyapısı (fare parallax, itiş, tıklama dalgası, açılış fade-in).
+  const scene = useSceneInteraction({ reduceMotion });
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const reduceMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     // Retina keskinliği için DPR ölçekleme.
     let W = 0, H = 0, dpr = 1;
@@ -132,8 +137,123 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       sway: Math.random() * Math.PI * 2,
     }));
 
+    // ── Uzak kulübe (atmosfer öğesi) — kar örtüsü üstünde küçük ev silüeti ──
+    //    Koyu modda parlayan sarı pencere + bacadan sin-dalgalı yükselen duman.
+    const cabin = {
+      x: W * 0.66,          // uzakta, sağ-orta
+      w: 46 + Math.random() * 10,
+      smoke: Math.random() * Math.PI * 2, // duman faz kaydırması
+    };
+
     let animationId = 0;
     let t = 0;
+
+    // Uzak kulübe çiz — gövde + karlı üçgen çatı + baca + (gece) parlayan pencere + yükselen duman.
+    // groundY: kar örtüsünün o noktadaki yüzey y'si. mx: parallax kaydırma.
+    const drawCabin = (groundY: number, mx: number) => {
+      const bw = cabin.w;                 // gövde genişliği
+      const bh = bw * 0.62;               // gövde yüksekliği
+      const cx = cabin.x + mx;            // parallax'lı yatay konum
+      const by = groundY;                 // taban (kar örtüsüne oturur)
+      const roofH = bw * 0.5;             // çatı yüksekliği
+      const roofOverhang = bw * 0.12;
+
+      ctx.save();
+
+      // Gövde
+      ctx.fillStyle = isDark ? '#1a2135' : '#8fa6bd';
+      ctx.fillRect(cx - bw / 2, by - bh, bw, bh);
+      // gövde alt gölge (hacim)
+      ctx.fillStyle = isDark ? 'rgba(6,10,22,0.5)' : 'rgba(70,95,125,0.35)';
+      ctx.fillRect(cx - bw / 2, by - bh * 0.28, bw, bh * 0.28);
+
+      // Çatı (üçgen) — koyu silüet
+      ctx.beginPath();
+      ctx.moveTo(cx - bw / 2 - roofOverhang, by - bh);
+      ctx.lineTo(cx, by - bh - roofH);
+      ctx.lineTo(cx + bw / 2 + roofOverhang, by - bh);
+      ctx.closePath();
+      ctx.fillStyle = isDark ? '#0d1324' : '#5b7089';
+      ctx.fill();
+
+      // Çatıda kar örtüsü (üçgenin üstüne oturan beyaz)
+      ctx.beginPath();
+      ctx.moveTo(cx - bw / 2 - roofOverhang, by - bh);
+      ctx.lineTo(cx, by - bh - roofH);
+      ctx.lineTo(cx + bw / 2 + roofOverhang, by - bh);
+      ctx.lineTo(cx + bw / 2 + roofOverhang, by - bh - roofH * 0.14);
+      ctx.quadraticCurveTo(cx, by - bh - roofH * 0.78, cx - bw / 2 - roofOverhang, by - bh - roofH * 0.14);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.72 : 0.95})`;
+      ctx.fill();
+
+      // Baca (çatının sağ omzunda)
+      const chW = bw * 0.14, chH = roofH * 0.62;
+      const chX = cx + bw * 0.24;
+      const chY = by - bh - roofH * 0.42;
+      ctx.fillStyle = isDark ? '#141a2d' : '#4a5d73';
+      ctx.fillRect(chX, chY, chW, chH);
+      // baca üstü kar
+      ctx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.7 : 0.95})`;
+      ctx.fillRect(chX - 1, chY - chW * 0.3, chW + 2, chW * 0.4);
+
+      // Pencere — gece SICAK parlayan sarı, gündüz koyu cam
+      const winW = bw * 0.26, winH = bh * 0.4;
+      const winX = cx - winW / 2;
+      const winY = by - bh * 0.72;
+      if (isDark) {
+        // pencere halesi (sıcak ışık taşması)
+        const flick = reduceMotion ? 1 : 0.85 + Math.sin(t * 0.08 + cabin.smoke) * 0.15;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const wg = ctx.createRadialGradient(winX + winW / 2, winY + winH / 2, 0, winX + winW / 2, winY + winH / 2, winW * 2.2);
+        wg.addColorStop(0, `rgba(255,214,130,${0.5 * flick})`);
+        wg.addColorStop(0.5, `rgba(255,190,90,${0.16 * flick})`);
+        wg.addColorStop(1, 'transparent');
+        ctx.fillStyle = wg;
+        ctx.beginPath();
+        ctx.arc(winX + winW / 2, winY + winH / 2, winW * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // parlak cam
+        ctx.fillStyle = `rgba(255,206,120,${0.95 * flick})`;
+        ctx.fillRect(winX, winY, winW, winH);
+      } else {
+        ctx.fillStyle = 'rgba(40,60,85,0.75)';
+        ctx.fillRect(winX, winY, winW, winH);
+      }
+      // pencere çerçeve haçı
+      ctx.strokeStyle = isDark ? 'rgba(20,26,45,0.9)' : 'rgba(35,50,70,0.8)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(winX, winY, winW, winH);
+      ctx.beginPath();
+      ctx.moveTo(winX + winW / 2, winY); ctx.lineTo(winX + winW / 2, winY + winH);
+      ctx.moveTo(winX, winY + winH / 2); ctx.lineTo(winX + winW, winY + winH / 2);
+      ctx.stroke();
+
+      // Bacadan yükselen duman — sin-dalgalı, yükseldikçe genişleyip solan
+      if (!reduceMotion) {
+        ctx.save();
+        ctx.globalCompositeOperation = isDark ? 'lighter' : 'source-over';
+        const puffs = 6;
+        for (let i = 0; i < puffs; i++) {
+          const prog = i / puffs;
+          const rise = prog * chH * 3.2;
+          const sway = Math.sin(t * 0.03 + cabin.smoke + prog * 2.2) * (4 + prog * 12);
+          const px = chX + chW / 2 + sway;
+          const py = chY - rise;
+          const pr = chW * (0.5 + prog * 1.4);
+          const a = (isDark ? 0.12 : 0.2) * (1 - prog);
+          ctx.beginPath();
+          ctx.arc(px, py, pr, 0, Math.PI * 2);
+          ctx.fillStyle = isDark ? `rgba(200,210,230,${a})` : `rgba(230,236,245,${a})`;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    };
 
     // Bir çam ağacı çiz (katmanlı üçgen dallar + kar tepesi).
     const drawPine = (px: number, base: number, h: number, w: number, sway: number) => {
@@ -289,19 +409,27 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
     };
 
     const draw = () => {
+      // Etkileşim durumunu bir adım ilerlet (parallax yumuşatma, ripple ömrü, açılış fade-in).
+      scene.step();
+      // Fare parallax (-1..1) ve piksel konum (itiş için).
+      const mx = scene.pointer.x, my = scene.pointer.y;
+      const pxp = scene.pointer.px, pyp = scene.pointer.py, pActive = scene.pointer.active;
+
       const o = orbPos();
+      // Gökcismi parallax kaydırması (derinliğe göre en çok gökcismi/uzak katmanlar kayar).
+      const ox = o.x + mx * 10, oy = o.y + my * 6;
 
       // 1) Gökyüzü
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       for (const stop of P.sky) sky.addColorStop(stop.at, stop.c);
       ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-      // 2) Yıldızlar (gece)
+      // 2) Yıldızlar (gece) — uzak katman, hafif parallax (mx*7)
       if (P.stars) {
         stars.forEach((st) => {
           if (!reduceMotion) st.tw += st.twSpeed;
           const a = 0.3 + Math.abs(Math.sin(st.tw)) * 0.65;
-          ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+          ctx.beginPath(); ctx.arc(st.x + mx * 7, st.y + my * 4, st.r, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
         });
       }
@@ -345,23 +473,25 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       }
 
       // 3) Aurora (gece) — yeşil-mavi ışık perdesi, yumuşak dalgalanan bantlar
+      //    Uzak-orta katman: parallax mx*14 (yıldızlardan biraz daha belirgin kayar).
       if (P.aurora) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
+        const aShift = mx * 14;
         const bands = 3;
         for (let b = 0; b < bands; b++) {
-          const baseY = H * (0.14 + b * 0.09);
+          const baseY = H * (0.14 + b * 0.09) + my * 5;
           const hue = b % 2 === 0 ? 160 : 195; // zümrüt ↔ buz mavisi
           ctx.beginPath();
-          ctx.moveTo(0, baseY);
+          ctx.moveTo(0 + aShift, baseY);
           for (let x = 0; x <= W; x += 14) {
             const y = baseY
               + Math.sin(x * 0.004 + t * 0.006 + b) * 34
               + Math.sin(x * 0.011 - t * 0.004 + b * 2) * 16;
-            ctx.lineTo(x, y);
+            ctx.lineTo(x + aShift, y);
           }
-          ctx.lineTo(W, baseY - 90);
-          ctx.lineTo(0, baseY - 90);
+          ctx.lineTo(W + aShift, baseY - 90);
+          ctx.lineTo(0 + aShift, baseY - 90);
           ctx.closePath();
           const ag = ctx.createLinearGradient(0, baseY - 90, 0, baseY + 40);
           ag.addColorStop(0, 'transparent');
@@ -373,29 +503,30 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       }
 
       // 4) Gökcismi — gece: parlak ay (soğuk gümüşi), gündüz: yumuşak güneş (altın)
+      //    En uzak öğe → en belirgin parallax (ox/oy = o + mx*10, my*6).
       const pulse = 1 + Math.sin(t * 0.02) * (isDark ? 0.025 : 0.05);
       const orbR = Math.min(W, H) * 0.075 * pulse;
       // hale
-      const glow = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, orbR * 6);
+      const glow = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR * 6);
       glow.addColorStop(0, isDark ? `hsla(220,70%,88%,${P.orbGlowA})` : `hsla(48,100%,82%,${P.orbGlowA})`);
       glow.addColorStop(0.3, isDark ? 'hsla(225,55%,78%,0.16)' : 'hsla(48,100%,70%,0.28)');
       glow.addColorStop(1, 'transparent');
-      ctx.beginPath(); ctx.arc(o.x, o.y, orbR * 6, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
+      ctx.beginPath(); ctx.arc(ox, oy, orbR * 6, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
       // disk
-      const disk = ctx.createRadialGradient(o.x - orbR * 0.3, o.y - orbR * 0.3, orbR * 0.1, o.x, o.y, orbR);
+      const disk = ctx.createRadialGradient(ox - orbR * 0.3, oy - orbR * 0.3, orbR * 0.1, ox, oy, orbR);
       disk.addColorStop(0, P.orbCore); disk.addColorStop(0.6, P.orbMid); disk.addColorStop(1, P.orbEdge);
-      ctx.beginPath(); ctx.arc(o.x, o.y, orbR, 0, Math.PI * 2); ctx.fillStyle = disk;
+      ctx.beginPath(); ctx.arc(ox, oy, orbR, 0, Math.PI * 2); ctx.fillStyle = disk;
       ctx.shadowColor = P.orbShadow; ctx.shadowBlur = 42; ctx.fill(); ctx.shadowBlur = 0;
       // ay kraterleri (yalnız gece)
       if (isDark) {
         ctx.save();
-        ctx.beginPath(); ctx.arc(o.x, o.y, orbR, 0, Math.PI * 2); ctx.clip();
+        ctx.beginPath(); ctx.arc(ox, oy, orbR, 0, Math.PI * 2); ctx.clip();
         const craters = [
           { dx: -0.25, dy: -0.12, r: 0.16 }, { dx: 0.2, dy: 0.14, r: 0.2 }, { dx: 0.08, dy: -0.32, r: 0.1 },
           { dx: -0.18, dy: 0.3, r: 0.13 }, { dx: 0.36, dy: -0.24, r: 0.09 },
         ];
         craters.forEach((c) => {
-          const cx = o.x + c.dx * orbR, cy = o.y + c.dy * orbR, cr = c.r * orbR;
+          const cx = ox + c.dx * orbR, cy = oy + c.dy * orbR, cr = c.r * orbR;
           const cg = ctx.createRadialGradient(cx - cr * 0.3, cy - cr * 0.3, 0, cx, cy, cr);
           cg.addColorStop(0, 'rgba(150,165,200,0.4)'); cg.addColorStop(0.7, 'rgba(120,135,175,0.28)'); cg.addColorStop(1, 'transparent');
           ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
@@ -403,8 +534,8 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
         ctx.restore();
       }
 
-      // 5) Arka çam ağaçları (uzak silüetler → derinlik)
-      pines.forEach((p) => drawPine(p.x, p.base, p.h, p.w, p.sway));
+      // 5) Arka çam ağaçları (uzak silüetler → derinlik) — hafif parallax (mx*5)
+      pines.forEach((p) => drawPine(p.x + mx * 5, p.base, p.h, p.w, p.sway));
 
       // 6) UZAK kar katmanı (küçük/yavaş) — ağaçların önünde, örtünün arkasında
       flakes.filter((f) => f.depth < 0.4).forEach((f) => {
@@ -453,7 +584,7 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
           const prog = (y - startY) / (H - startY);
           const halfW = orbR * (0.45 + prog * 2.6);
           const shimmer = reduceMotion ? 0 : Math.sin(y * 0.14 + t * 0.05) * (2 + prog * 5);
-          const cx = o.x + shimmer;
+          const cx = ox + shimmer;
           const flick = reduceMotion ? 1 : (0.6 + Math.abs(Math.sin(y * 0.3 + t * 0.04)) * 0.4);
           const alpha = P.reflA * (1 - prog) * flick;
           const g = ctx.createLinearGradient(cx - halfW, y, cx + halfW, y);
@@ -466,17 +597,37 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
         ctx.restore();
       }
 
+      // 7c) Uzak kulübe — kar örtüsü yüzeyine oturur (çam ile aynı derinlik: mx*5).
+      //     Kulübenin taban x'inde örtü yüzey y'sini hesapla, hafif içeri göm.
+      {
+        const cbx = cabin.x;
+        const surfY = gy + Math.sin(cbx * 0.006 + t * 0.004) * 14 + Math.sin(cbx * 0.017 - t * 0.002) * 6;
+        drawCabin(surfY + 4, mx * 5);
+      }
+
       // 8) Kardan adam (alt-sol)
       const smScale = Math.min(1.3, Math.max(0.8, W / 1300));
       drawSnowman(W * 0.15, gy + 24, smScale);
 
       // 9) YAKIN kar katmanları (orta + büyük/hızlı) — ön planda, örtünün önünde
+      //    + Fare "rüzgar" hissi (mx) ve fareye yakın tanelerin İTİLMESİ (kaçış).
       flakes.filter((f) => f.depth >= 0.4).forEach((f) => {
         if (!reduceMotion) {
           f.y += f.speed;
           f.phase += f.phaseSpeed;
-          // rüzgar salınımı: yatay sin drift
-          f.x += Math.sin(f.phase) * f.drift + Math.sin(t * 0.005) * 0.4 * f.depth;
+          // rüzgar salınımı: yatay sin drift + fare parallax'ı (yakın katmana küçük rüzgar)
+          f.x += Math.sin(f.phase) * f.drift + Math.sin(t * 0.005) * 0.4 * f.depth + mx * 0.6 * f.depth;
+          // FARE İTİŞİ: sadece en yakın kar (depth>=0.6) ve fare aktifken, ucuz hesap.
+          if (pActive && f.depth >= 0.6) {
+            const dx = f.x - pxp, dy = f.y - pyp;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < 90 * 90 && d2 > 0.01) {
+              const d = Math.sqrt(d2);
+              const force = (1 - d / 90) * 2.2; // yakınlaştıkça güçlenen ters kuvvet
+              f.x += (dx / d) * force;
+              f.y += (dy / d) * force;
+            }
+          }
         }
         if (f.y > H + f.r) { f.y = -f.r; f.x = Math.random() * W; }
         if (f.x > W + f.r) f.x = -f.r; if (f.x < -f.r) f.x = W + f.r;
@@ -510,14 +661,58 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       });
 
       // 11) Bloom — soğuk ışık yıkaması (gökcisminden yayılan)
-      const bloom = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, Math.max(W, H) * 0.9);
+      const bloom = ctx.createRadialGradient(ox, oy, 0, ox, oy, Math.max(W, H) * 0.9);
       bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();
+
+      // 11b) TIKLAMA DALGASI — tıklanan noktada genişleyen SOĞUK/buz-mavisi ışık halkası
+      //      + birkaç savrulan kar taneciği. Vinyet ÖNCESİ, additive.
+      if (scene.ripples.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        scene.ripples.forEach((rp) => {
+          const lifeT = rp.life / rp.maxLife;        // 1→0
+          const a = lifeT * 0.55;
+          // ana halka (buz mavisi) — dış hafif glow'lu çember
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(198,95%,${isDark ? 78 : 70}%,${a})`;
+          ctx.lineWidth = 2 + lifeT * 2;
+          ctx.shadowColor = 'hsla(200,95%,80%,0.9)';
+          ctx.shadowBlur = 14 * lifeT;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          // ikinci ince iç halka (gecikmeli, daha küçük)
+          ctx.beginPath();
+          ctx.arc(rp.x, rp.y, rp.r * 0.62, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(210,100%,88%,${a * 0.6})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          // savrulan kar taneciği saçılması (halka çevresinde 6 kıvılcım)
+          const sparks = 6;
+          for (let i = 0; i < sparks; i++) {
+            const ang = (i / sparks) * Math.PI * 2 + rp.maxLife * 0.4;
+            const sx = rp.x + Math.cos(ang) * rp.r;
+            const sy = rp.y + Math.sin(ang) * rp.r;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 1.4 * lifeT + 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${P.snowColor},${a * 1.2})`;
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      }
 
       // 12) Sinematik vinyet (kenar koyulaşma → odak)
       const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
       vig.addColorStop(0, 'transparent'); vig.addColorStop(1, `rgba(0,0,0,${P.vignette})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      // 12b) AÇILIŞ FADE-IN — sahne ilk belirene kadar siyah örtü (vinyet sonrası).
+      if (scene.intro.v < 1) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (1 - scene.intro.v) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
 
       t++;
       if (!reduceMotion) animationId = requestAnimationFrame(draw);
@@ -525,7 +720,7 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
 
     draw();
     return () => { cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); };
-  }, [isDark]);
+  }, [isDark, reduceMotion, scene]);
 
   return (
     <>

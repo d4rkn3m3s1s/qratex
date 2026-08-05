@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { useSceneInteraction } from './use-scene-interaction';
 
 /**
  * Sonbahar teması — sinematik, "efsanevi" seviye animasyonlu arka plan.
@@ -25,14 +26,17 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
+  // reduceMotion gövdeye taşındı — hook opsiyonu olarak da geçiyoruz.
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // Paylaşılan etkileşim altyapısı: fare parallax + itiş + tıklama dalgası + fade-in.
+  const scene = useSceneInteraction({ reduceMotion });
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const reduceMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     // Retina keskinliği için DPR ölçekleme.
     let W = 0, H = 0, dpr = 1;
@@ -162,6 +166,22 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       };
     });
 
+    // ── BAYKUŞ silüeti (bir ağacın dalında oturan, deterministik konum) ──
+    // Sonbahar akşamına yakışan zarif detay: koyu silüet, ara sıra kafasını çevirir
+    // ve göz kırpar; koyu modda gözleri hafif amber parlar. Statik konumlu, ince animasyon.
+    // Konum: ikinci ağacın (trees[1]) gövde-üstü çatalına oturtulur.
+    const owlTree = trees[Math.min(1, trees.length - 1)];
+    const owl = {
+      // ağacın taban çizgisi H*0.86; gövde -70 ölçekli → dal seviyesine oturt
+      x: owlTree.x + 8,
+      y: H * 0.86 - 70 * owlTree.scale - 6,
+      scale: owlTree.scale * 0.9,
+      // kafa çevirme fazı (yavaş salınım) + göz kırpma zamanlayıcısı
+      headPhase: Math.random() * Math.PI * 2,
+      blink: 0,            // 0 = açık, 1 = kapalı (kısa süreli)
+      nextBlink: 120 + Math.random() * 260,
+    };
+
     // ── Altın toz parçacıkları (güneş ışığında süzülen, twinkle) ──
     interface Dust { x: number; y: number; r: number; speed: number; wobble: number; wobbleSpeed: number; drift: number; }
     const dust: Dust[] = Array.from({ length: 60 }, () => {
@@ -263,7 +283,15 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
     };
 
     const draw = () => {
-      const s = sunPos();
+      // Etkileşim durumunu bir adım ilerlet (parallax/ripple/fade-in).
+      scene.step();
+      // Fare parallax (-1..1) ve piksel konum (yaprak itişi için).
+      const mx = scene.pointer.x, my = scene.pointer.y;
+      const pxr = scene.pointer.px, pyr = scene.pointer.py, pActive = scene.pointer.active;
+
+      const sBase = sunPos();
+      // Gökcismi uzak katman → fareyle hafif kayar (mx*10, my*6).
+      const s = { x: sBase.x + mx * 10, y: sBase.y + my * 6 };
       if (!reduceMotion) windPhase += 0.008;
       // Yumuşak esen rüzgar (0..1 arası dalgalanır → estikçe yapraklar hızlanır)
       const gust = 0.5 + Math.sin(windPhase) * 0.5 + Math.sin(windPhase * 0.37) * 0.3;
@@ -365,8 +393,9 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       ctx.lineCap = 'round';
       flock.birds.forEach((bd) => {
         if (!reduceMotion) bd.flap += bd.flapSpeed;
-        const bx = flock.x + bd.ox;
-        const by = flock.y + bd.oy;
+        // uzak sürü → fareyle hafif parallax (mx*8, my*5)
+        const bx = flock.x + bd.ox + mx * 8;
+        const by = flock.y + bd.oy + my * 5;
         // kanat çırpma: "M/kavis" — sin ile yukarı-aşağı açılan iki kanat
         const wing = (reduceMotion ? 0.35 : (0.25 + Math.abs(Math.sin(bd.flap)) * 0.65)) * bd.size;
         ctx.lineWidth = Math.max(1, bd.size * 0.18);
@@ -379,10 +408,12 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       ctx.restore();
 
       // 5) Uzak ağaç silüetleri (parallax arka plan — dallı, sonbahar)
+      // ağaç silüetleri uzak katman → fareyle hafif kayar (mx*6, my*4)
+      const treeShiftX = mx * 6, treeShiftY = my * 4;
       trees.forEach((tr) => {
         const baseY = H * 0.86;
         ctx.save();
-        ctx.translate(tr.x, baseY);
+        ctx.translate(tr.x + treeShiftX, baseY + treeShiftY);
         ctx.scale(tr.scale, tr.scale);
         // gövde
         ctx.strokeStyle = P.treeColor;
@@ -418,6 +449,66 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
         ctx.restore();
       });
 
+      // 5b) BAYKUŞ silüeti — bir dalda oturan zarif koyu figür.
+      //     Ağaçla aynı parallax'ı paylaşır (aynı uzak katman). Kafasını yavaşça
+      //     çevirir, ara sıra göz kırpar; koyu modda gözleri amber parlar.
+      {
+        if (!reduceMotion) {
+          owl.headPhase += 0.012;
+          // göz kırpma zamanlayıcısı: nextBlink'e ulaşınca kısa bir kırpma başlat
+          owl.nextBlink -= 1;
+          if (owl.nextBlink <= 0) { owl.blink = 1; owl.nextBlink = 160 + Math.random() * 300; }
+          if (owl.blink > 0) owl.blink = Math.max(0, owl.blink - 0.12); // kırpma hızla açılır
+        }
+        const ox = owl.x + treeShiftX;
+        const oy = owl.y + treeShiftY;
+        const sc = owl.scale;
+        // kafa çevirme: yavaş sin salınımı ile küçük yatay ofset
+        const headTurn = reduceMotion ? 0 : Math.sin(owl.headPhase) * 2.2;
+        ctx.save();
+        ctx.translate(ox, oy);
+        // gövde silüeti (yumuşak armut biçimi)
+        ctx.fillStyle = isDark ? 'rgba(14,8,3,0.88)' : 'rgba(70,40,16,0.62)';
+        ctx.beginPath();
+        ctx.moveTo(0, -14 * sc);
+        ctx.quadraticCurveTo(9 * sc, -13 * sc, 9 * sc, -2 * sc);
+        ctx.quadraticCurveTo(9 * sc, 12 * sc, 0, 13 * sc);
+        ctx.quadraticCurveTo(-9 * sc, 12 * sc, -9 * sc, -2 * sc);
+        ctx.quadraticCurveTo(-9 * sc, -13 * sc, 0, -14 * sc);
+        ctx.closePath();
+        ctx.fill();
+        // kafa + kulak tüyleri (kafa hafifçe çevrilir)
+        ctx.save();
+        ctx.translate(headTurn, -13 * sc);
+        ctx.beginPath();
+        ctx.arc(0, 0, 7.5 * sc, 0, Math.PI * 2);
+        ctx.fill();
+        // kulak tüyleri (iki üçgen)
+        ctx.beginPath();
+        ctx.moveTo(-6 * sc, -4 * sc); ctx.lineTo(-8.5 * sc, -11 * sc); ctx.lineTo(-3 * sc, -6 * sc);
+        ctx.moveTo(6 * sc, -4 * sc); ctx.lineTo(8.5 * sc, -11 * sc); ctx.lineTo(3 * sc, -6 * sc);
+        ctx.closePath();
+        ctx.fill();
+        // gözler — kırparken (blink→1) yatay çizgiye iner; koyu modda amber parlar
+        const eyeR = 2.1 * sc * (1 - owl.blink);
+        if (eyeR > 0.2) {
+          ctx.save();
+          if (isDark) {
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.fillStyle = 'rgba(245,170,60,0.9)';
+            ctx.shadowColor = 'rgba(245,158,11,0.85)';
+            ctx.shadowBlur = 6;
+          } else {
+            ctx.fillStyle = 'rgba(30,16,6,0.85)';
+          }
+          ctx.beginPath(); ctx.arc(-3 * sc, 0, eyeR, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(3 * sc, 0, eyeR, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore(); // kafa
+        ctx.restore(); // baykuş
+      }
+
       // 6) Altın toz parçacıkları (arka orta katman, twinkle + süzülme)
       dust.forEach((d) => {
         if (!reduceMotion) {
@@ -428,7 +519,8 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
         if (d.y < -4) { d.y = H + 4; d.x = Math.random() * W; }
         if (d.x < -4) d.x = W + 4; if (d.x > W + 4) d.x = -4;
         const twinkle = 0.35 + Math.abs(Math.sin(d.wobble)) * 0.55;
-        ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        // altın toz uzak-orta katman → fareyle hafif parallax (mx*4, my*3)
+        ctx.beginPath(); ctx.arc(d.x + mx * 4, d.y + my * 3, d.r, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${P.dustHue},95%,${P.dustL}%,${twinkle * P.dustAlpha})`;
         ctx.shadowColor = `hsla(${P.dustHue},100%,65%,0.7)`; ctx.shadowBlur = 6; ctx.fill(); ctx.shadowBlur = 0;
       });
@@ -447,6 +539,19 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
           lf.y += lf.vy + gust * lf.depth * 0.5;
           lf.x += Math.cos(lf.sway) * (lf.swayAmp * lf.swaySpeed) + lf.drift * gust * 0.6;
           lf.rot += lf.rotSpeed;
+          // FARE İTİŞİ: fareye yakın (<~100px) ön-plan yaprakları (depth>0.5)
+          // fareden uzağa hafifçe savrulur → yapraklar fareyle dağılıyormuş gibi.
+          // Ucuz tutmak için yalnız aktif+yakın+ön-plan yapraklara uygulanır.
+          if (pActive && lf.depth > 0.5) {
+            const dxp = lf.x - pxr, dyp = lf.y - pyr;
+            const d2 = dxp * dxp + dyp * dyp;
+            if (d2 < 100 * 100 && d2 > 1) {
+              const dist = Math.sqrt(d2);
+              const force = (1 - dist / 100) * 2.4;   // yakınlaştıkça artan küçük kuvvet
+              lf.x += (dxp / dist) * force;
+              lf.y += (dyp / dist) * force;
+            }
+          }
         }
         // ekrandan çıkınca üstten geri döngü
         if (lf.y > H + lf.size * 2) { lf.y = -lf.size * 2; lf.x = Math.random() * W; }
@@ -537,10 +642,48 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();
 
+      // 10b) TIKLAMA DALGASI — tıklanan noktada genişleyen SICAK amber/turuncu
+      //      ışık halkası (birkaç yaprak savrulması hissiyle). Vinyet ÖNCESİ,
+      //      lighter modda çizilir; alpha ömürle sönümlenir.
+      if (scene.ripples.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        scene.ripples.forEach((rp) => {
+          const a = rp.life / rp.maxLife;          // ömür → sönümlenen alpha
+          // ana sıcak halka
+          const ring = ctx.createRadialGradient(rp.x, rp.y, rp.r * 0.6, rp.x, rp.y, rp.r);
+          ring.addColorStop(0, 'transparent');
+          ring.addColorStop(0.72, `rgba(251,146,60,${(a * 0.5).toFixed(3)})`);
+          ring.addColorStop(0.9, `rgba(234,88,12,${(a * 0.38).toFixed(3)})`);
+          ring.addColorStop(1, 'transparent');
+          ctx.fillStyle = ring;
+          ctx.beginPath(); ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2); ctx.fill();
+          // savrulan birkaç yaprak/kıvılcım hissi — halka çevresine küçük amber noktalar
+          const sparks = 6;
+          for (let k = 0; k < sparks; k++) {
+            const ang = (k / sparks) * Math.PI * 2 + rp.maxLife * 0.1;
+            const sr = rp.r * (0.82 + (k % 2) * 0.12);
+            const spx = rp.x + Math.cos(ang) * sr;
+            const spy = rp.y + Math.sin(ang) * sr;
+            ctx.beginPath();
+            ctx.arc(spx, spy, 1.6 + a * 1.8, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(253,186,116,${(a * 0.6).toFixed(3)})`;
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      }
+
       // 11) Sinematik vinyet (kenar koyulaşma → odak)
       const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
       vig.addColorStop(0, 'transparent'); vig.addColorStop(1, `rgba(0,0,0,${P.vignette})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      // 12) AÇILIŞ FADE-IN — sahne belirene kadar üstüne kararan örtü (vinyet sonrası).
+      if (scene.intro.v < 1) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (1 - scene.intro.v) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
 
       t++;
       if (!reduceMotion) animationId = requestAnimationFrame(draw);
@@ -548,7 +691,7 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
 
     draw();
     return () => { cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); };
-  }, [isDark]);
+  }, [isDark, reduceMotion, scene]);
 
   return (
     <>

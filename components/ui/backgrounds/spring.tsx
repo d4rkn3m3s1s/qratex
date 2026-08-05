@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { useSceneInteraction } from './use-scene-interaction';
 
 /**
  * İlkbahar teması — sinematik, "efsanevi" seviye animasyonlu arka plan.
@@ -25,14 +26,18 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
+  // Hareket azaltma tercihi — gövdede (hem effect hem hook aynı değeri kullansın)
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  // Paylaşılan etkileşim altyapısı (fare parallax + itiş, tıklama dalgası, açılış fade-in)
+  const scene = useSceneInteraction({ reduceMotion });
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const reduceMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     // Retina keskinliği için DPR ölçekleme.
     let W = 0, H = 0, dpr = 1;
@@ -173,6 +178,24 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
       phase: Math.random() * Math.PI * 2, hue: P.petalHues[Math.floor(Math.random() * 3)].h,
     }));
 
+    // ── Arılar (çiçekten çiçeğe zigzag uçan, küçük sarı-siyah) ──
+    // Çiçek tepeleri arasında dolaşırlar; hedef çiçeğe yaklaşınca yeni hedef seçerler.
+    interface Bee {
+      x: number; y: number; vx: number; vy: number;
+      target: number;            // hedef çiçek indeksi
+      wing: number; wingSpeed: number; // kanat titreşim fazı
+      zig: number; zigSpeed: number;   // zigzag salınım fazı
+      size: number; speed: number;
+    }
+    const bees: Bee[] = Array.from({ length: 2 }, () => ({
+      x: Math.random() * W, y: H * (0.55 + Math.random() * 0.25),
+      vx: 0, vy: 0,
+      target: Math.floor(Math.random() * flowerCount),
+      wing: Math.random() * Math.PI * 2, wingSpeed: 0.9 + Math.random() * 0.4,
+      zig: Math.random() * Math.PI * 2, zigSpeed: 0.12 + Math.random() * 0.08,
+      size: 4.5 + Math.random() * 2, speed: 1.4 + Math.random() * 0.6,
+    }));
+
     // ── Güneş huzmeleri (açık mod) ──
     const rayCount = 14;
     const rays = Array.from({ length: rayCount }, (_, i) => ({
@@ -201,18 +224,25 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
     };
 
     const draw = () => {
-      const s = sunPos();
+      // Etkileşim durumunu bir adım ilerlet (parallax, ripple, intro)
+      scene.step();
+      // Fare parallax (-1..1) — uzak katmanları hafifçe kaydırmak için
+      const mx = scene.pointer.x, my = scene.pointer.y;
+
+      // Gökcismi (güneş/ay) uzak katman — parallax ile hafifçe kayar
+      const sBase = sunPos();
+      const s = { x: sBase.x - mx * 10, y: sBase.y - my * 6 };
 
       // 1) Gökyüzü (dikey atmosfer gradyanı)
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       for (const stop of P.sky) sky.addColorStop(stop.at, stop.c);
       ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-      // 2) Yıldızlar (koyu mod, twinkle)
+      // 2) Yıldızlar (koyu mod, twinkle) — en uzak katman, hafif parallax
       if (P.stars) stars.forEach((st) => {
         if (!reduceMotion) st.tw += st.twSpeed;
         const a = 0.25 + Math.abs(Math.sin(st.tw)) * 0.6;
-        ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(st.x - mx * 7, st.y - my * 4, st.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(230,240,255,${a})`; ctx.fill();
       });
 
@@ -335,7 +365,8 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         if (p.x < -p.size) p.x = W + p.size;
         const sx = p.spin * (0.5 + Math.abs(Math.sin(p.sway * 1.3)) * 0.7);   // 3B dönme
         const c = `hsla(${p.hue.h},${p.hue.s}%,${p.hue.l}%,${P.petalAlpha * (0.5 + p.depth)})`;
-        drawPetal(p.x, p.y, p.size, p.rot, sx, c, P.glowPetal, `hsla(${p.hue.h},90%,70%,0.6)`);
+        // uzak taç yapraklar hafif parallax ile kayar (derinlikle ölçekli)
+        drawPetal(p.x - mx * 5, p.y - my * 3, p.size, p.rot, sx, c, P.glowPetal, `hsla(${p.hue.h},90%,70%,0.6)`);
       });
 
       // 8) Kelebekler (çimenin arkasında, sahne ortasında uçar)
@@ -343,6 +374,16 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         if (!reduceMotion) {
           b.x += b.speed; b.flap += b.flapSpeed; b.phase += 0.02;
           b.y += Math.sin(b.phase) * 0.8;                 // dalgalı uçuş
+          // KELEBEK MERAKI: fare yakınsa yönünü hafifçe fareye doğru bük ("merak ediyor")
+          if (scene.pointer.active) {
+            const ddx = scene.pointer.px - b.x, ddy = scene.pointer.py - b.y;
+            const dist = Math.hypot(ddx, ddy);
+            if (dist < 180 && dist > 1) {
+              // yatayda hıza az kuvvet, dikeyde konumu nazikçe fareye kaydır (doğal kalsın)
+              b.speed += ((ddx > 0 ? 0.5 : 0.2) - b.speed) * 0.02;
+              b.y += (ddy / dist) * 0.5;
+            }
+          }
         }
         if (b.x > W + 20) { b.x = -20; b.y = H * (0.35 + Math.random() * 0.4); }
         const wing = Math.abs(Math.sin(b.flap));           // 0..1 kanat açıklığı
@@ -462,12 +503,74 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         ctx.beginPath(); ctx.arc(topX, topY, fsize * 0.4, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
       });
 
+      // 10.5) ARILAR — çiçek tepeleri arasında zigzag uçan küçük sarı-siyah karakter
+      bees.forEach((b) => {
+        if (!reduceMotion) {
+          // hedef çiçeğin tepe noktasına yönel
+          const fl = flowers[b.target];
+          const tx = fl.x + Math.sin(fl.sway) * 6;
+          const ty = fl.yBase - fl.stem;
+          let dx = tx - b.x, dy = ty - b.y;
+          const d = Math.hypot(dx, dy) || 1;
+          // hedefe doğru hızlanma + zigzag salınımı (dik yönde ekle)
+          b.zig += b.zigSpeed;
+          const perpX = -dy / d, perpY = dx / d;           // hareket yönüne dik
+          const wobble = Math.sin(b.zig) * b.speed * 1.3;  // zigzag genliği
+          b.vx += ((dx / d) * b.speed + perpX * wobble - b.vx) * 0.12;
+          b.vy += ((dy / d) * b.speed + perpY * wobble - b.vy) * 0.12;
+          b.x += b.vx; b.y += b.vy;
+          b.wing += b.wingSpeed;
+          // hedefe ulaşınca yeni çiçek seç ("çiçekten çiçeğe")
+          if (d < 26) { b.target = Math.floor(Math.random() * flowerCount); }
+        }
+        const angle = Math.atan2(b.vy, b.vx);
+        const wingOpen = 0.35 + Math.abs(Math.sin(b.wing)) * 0.65; // titreşen kanat
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(angle);
+        // kanatlar (üstte, yarı saydam, hızlı titreşen çift)
+        ctx.fillStyle = `hsla(210,30%,${isDark ? 82 : 92}%,${0.35 + wingOpen * 0.25})`;
+        [-1, 1].forEach((dir) => {
+          ctx.beginPath();
+          ctx.ellipse(-b.size * 0.1, dir * b.size * 0.5 * wingOpen, b.size * 0.7, b.size * 0.34, dir * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        // gövde: sarı taban + siyah şeritler (oval)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, b.size, b.size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(48,95%,${isDark ? 60 : 55}%,0.96)`;
+        ctx.fill();
+        ctx.fillStyle = `hsla(30,20%,${isDark ? 12 : 8}%,0.9)`;
+        for (let sgi = -1; sgi <= 1; sgi++) {
+          ctx.beginPath();
+          ctx.ellipse(sgi * b.size * 0.42, 0, b.size * 0.16, b.size * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // baş (ön uçta koyu nokta)
+        ctx.beginPath();
+        ctx.arc(b.size * 0.9, 0, b.size * 0.34, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(30,20%,${isDark ? 14 : 10}%,0.92)`;
+        ctx.fill();
+        ctx.restore();
+      });
+
       // 11) Yakın taç yapraklar (derinlik >= 0.4) — çimen ve çiçeklerin önünde
       petals.forEach((p) => {
         if (p.depth < 0.4) return;
         if (!reduceMotion) {
           p.y += p.speedY; p.sway += p.swaySpeed; p.rot += p.rotSpeed;
           p.x += Math.sin(p.sway) * 0.6 + p.drift;
+          // FARE İTİŞİ: fareye yakın uçan yakın taç yapraklar hafifçe savrulur (ucuz)
+          if (scene.pointer.active) {
+            const ddx = p.x - scene.pointer.px, ddy = p.y - scene.pointer.py;
+            const d2 = ddx * ddx + ddy * ddy;
+            if (d2 < 10000 && d2 > 1) {                    // < ~100px
+              const dist = Math.sqrt(d2);
+              const force = (1 - dist / 100) * 2.4;        // yakınlıkla artan itiş
+              p.x += (ddx / dist) * force;
+              p.y += (ddy / dist) * force;
+            }
+          }
         }
         if (p.y > H + p.size) { p.y = -p.size; p.x = Math.random() * W; }
         if (p.x > W + p.size) p.x = -p.size;
@@ -485,14 +588,17 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
         const twinkle = 0.3 + Math.abs(Math.sin(pl.wobble)) * 0.4 + Math.abs(Math.sin(pl.twPhase)) * 0.28;
         const depthA = 0.45 + pl.depth * 0.55;        // uzak = soluk, yakın = parlak
         const L = pl.hue === 55 ? 70 : 78;
+        // hafif parallax (uzak polen daha çok kayar → derinlik hissi)
+        const plx = pl.x - mx * 4 * (1 - pl.depth * 0.5);
+        const ply = pl.y - my * 2.5 * (1 - pl.depth * 0.5);
         // yakın (parlak) parçacıklarda yumuşak dış hale → katmanlı derinlik
         if (pl.depth > 0.55) {
-          const halo = ctx.createRadialGradient(pl.x, pl.y, 0, pl.x, pl.y, pl.radius * 3.2);
+          const halo = ctx.createRadialGradient(plx, ply, 0, plx, ply, pl.radius * 3.2);
           halo.addColorStop(0, `hsla(${pl.hue},100%,${L}%,${twinkle * P.pollenAlpha * depthA * 0.5})`);
           halo.addColorStop(1, 'transparent');
-          ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.radius * 3.2, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
+          ctx.beginPath(); ctx.arc(plx, ply, pl.radius * 3.2, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
         }
-        ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.radius, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(plx, ply, pl.radius, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${pl.hue},100%,${L}%,${twinkle * P.pollenAlpha * depthA})`;
         ctx.shadowColor = `hsla(${pl.hue},100%,72%,0.7)`; ctx.shadowBlur = 5 + pl.depth * 5; ctx.fill(); ctx.shadowBlur = 0;
       });
@@ -502,10 +608,47 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
       bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();
 
+      // 13.5) TIKLAMA DALGASI — taze yeşil/mor ışık halkası + kısa saçılma hissi (vinyet öncesi)
+      if (scene.ripples.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        scene.ripples.forEach((rp) => {
+          const a = rp.life / rp.maxLife;              // ömürle sönen alpha
+          // ana genişleyen halka (ilkbahar: taze yeşil + mor iki tonlu)
+          ctx.lineWidth = 2.5 * a + 0.5;
+          ctx.strokeStyle = `hsla(140,80%,66%,${a * 0.55})`;
+          ctx.beginPath(); ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = `hsla(285,80%,72%,${a * 0.4})`;
+          ctx.beginPath(); ctx.arc(rp.x, rp.y, rp.r * 0.72, 0, Math.PI * 2); ctx.stroke();
+          // merkez taze parıltı
+          const cg = ctx.createRadialGradient(rp.x, rp.y, 0, rp.x, rp.y, rp.r * 0.6);
+          cg.addColorStop(0, `hsla(90,95%,80%,${a * 0.3})`);
+          cg.addColorStop(1, 'transparent');
+          ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(rp.x, rp.y, rp.r * 0.6, 0, Math.PI * 2); ctx.fill();
+          // taç yaprak/polen saçılması hissi — halka çevresinde birkaç kıvılcım
+          const sparks = 6;
+          for (let i = 0; i < sparks; i++) {
+            const ang = (Math.PI * 2 * i) / sparks + rp.r * 0.03;
+            const sr = rp.r * (0.85 + (i % 2) * 0.2);
+            const sxp = rp.x + Math.cos(ang) * sr, syp = rp.y + Math.sin(ang) * sr;
+            ctx.beginPath(); ctx.arc(sxp, syp, 1.4 + a * 1.6, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${i % 2 ? 285 : 120},95%,74%,${a * 0.55})`;
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      }
+
       // 14) Sinematik vinyet (kenar koyulaşma → odak)
       const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
       vig.addColorStop(0, 'transparent'); vig.addColorStop(1, `rgba(0,0,0,${P.vignette})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      // 15) AÇILIŞ FADE-IN — ilk karelerde sahne siyahtan yumuşakça belirir (vinyet sonrası)
+      if (scene.intro.v < 1) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (1 - scene.intro.v) + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
 
       t++;
       if (!reduceMotion) animationId = requestAnimationFrame(draw);
@@ -513,7 +656,7 @@ export function SpringBackground({ children, className }: SpringBackgroundProps)
 
     draw();
     return () => { cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); };
-  }, [isDark]);
+  }, [isDark, reduceMotion, scene]);
 
   return (
     <>

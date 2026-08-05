@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
+import { useSceneInteraction } from './use-scene-interaction';
 
 /**
  * Yaz teması — sinematik, "efsanevi" seviye animasyonlu arka plan.
@@ -25,14 +26,18 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
 
+  // reduceMotion'ı gövdede hesapla — hook çağrısı için gerekli (useEffect'ten önce).
+  const reduceMotion = typeof window !== 'undefined'
+    && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  // Paylaşılan etkileşim + atmosfer altyapısı (fare parallax, tıklama dalgası, açılış fade-in).
+  const scene = useSceneInteraction({ reduceMotion });
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const reduceMotion = typeof window !== 'undefined'
-      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     // Retina keskinliği için DPR ölçekleme.
     let W = 0, H = 0, dpr = 1;
@@ -103,19 +108,52 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
 
     const gulls = Array.from({ length: 4 }, () => ({ x: Math.random() * W, y: H * (0.1 + Math.random() * 0.2), speed: 0.18 + Math.random() * 0.3, size: 8 + Math.random() * 9, flap: Math.random() * Math.PI * 2 }));
 
+    // ── YENİ GÖRSEL ÖĞELER ────────────────────────────────────────
+    // Yelkenli: ufukta, denizde yavaşça yatay süzülen küçük silüet (dalga hattının üstünde).
+    interface Sail { x: number; baseY: number; speed: number; scale: number; bob: number; }
+    const sailboats: Sail[] = Array.from({ length: 2 }, (_, i) => ({
+      x: Math.random() * W,
+      baseY: H * (0.665 + i * 0.02),   // ufuk/deniz hattı seviyesi
+      speed: 0.14 + Math.random() * 0.12,
+      scale: 0.8 + Math.random() * 0.5,
+      bob: Math.random() * Math.PI * 2,
+    }));
+
+    // Sıcak hava balonu: gökyüzünde yavaşça süzülen renkli küre + sepet (bulut orb'ları seviyesi).
+    interface Balloon { x: number; y: number; speedX: number; speedY: number; scale: number; hue: number; sway: number; }
+    const balloons: Balloon[] = Array.from({ length: 2 }, (_, i) => ({
+      x: W * (0.2 + i * 0.5) + (Math.random() - 0.5) * W * 0.2,
+      y: H * (0.2 + Math.random() * 0.24),
+      speedX: (0.1 + Math.random() * 0.12) * (i % 2 === 0 ? 1 : -1),
+      speedY: -(0.01 + Math.random() * 0.02),   // hafif yükseliş
+      scale: 0.85 + Math.random() * 0.5,
+      hue: i === 0 ? (isDark ? 330 : 12) : (isDark ? 200 : 45),
+      sway: Math.random() * Math.PI * 2,
+    }));
+
     let animationId = 0;
     let t = 0;
 
     const draw = () => {
-      const s = sunPos();
+      // Etkileşim durumunu bir adım ilerlet (parallax yumuşatma, ripple ömrü, açılış).
+      scene.step();
+      const mx = scene.pointer.x, my = scene.pointer.y;   // -1..1 fare parallax
+
+      // Gökcismi konumu — fareye göre çok az kayar (derinlik hissi).
+      const sBase = sunPos();
+      const s = { x: sBase.x + mx * 10, y: sBase.y + my * 6 };
+
+      // AÇILIŞ FADE-IN: tüm sahne intro.v (0→1) ile yumuşak belirsin.
+      ctx.save();
+      ctx.globalAlpha = scene.intro.v;
 
       // 1) Gökyüzü
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       for (const stop of P.sky) sky.addColorStop(stop.at, stop.c);
       ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-      // 2) Yıldızlar
-      if (P.stars) stars.forEach((st) => { if (!reduceMotion) st.tw += st.twSpeed; const a = 0.3 + Math.abs(Math.sin(st.tw)) * 0.65; ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill(); });
+      // 2) Yıldızlar — en uzak katman, en az kayar (parallax mx*8)
+      if (P.stars) stars.forEach((st) => { if (!reduceMotion) st.tw += st.twSpeed; const a = 0.3 + Math.abs(Math.sin(st.tw)) * 0.65; ctx.beginPath(); ctx.arc(st.x + mx * 8, st.y + my * 5, st.r, 0, Math.PI * 2); ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill(); });
 
       // 2b) Meteor
       if (P.meteor && !reduceMotion) {
@@ -134,8 +172,50 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
       mist.addColorStop(0, 'transparent'); mist.addColorStop(0.5, P.mist); mist.addColorStop(1, 'transparent');
       ctx.fillStyle = mist; ctx.fillRect(0, H * 0.55, W, H * 0.2);
 
-      // 5) Bulut orb'ları
-      orbs.forEach((orb) => { if (!reduceMotion) { orb.x += orb.speedX; orb.pulse += 0.014; } if (orb.x < -orb.radius) orb.x = W + orb.radius; if (orb.x > W + orb.radius) orb.x = -orb.radius; const pr = orb.radius * (1 + Math.sin(orb.pulse) * 0.14); const g = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, pr); g.addColorStop(0, `hsla(${P.orbHue},85%,${isDark ? 70 : 85}%,${P.orbAlpha})`); g.addColorStop(0.6, `hsla(${P.orbHue + 10},75%,72%,${P.orbAlpha * 0.4})`); g.addColorStop(1, 'transparent'); ctx.beginPath(); ctx.arc(orb.x, orb.y, pr, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); });
+      // 5) Bulut orb'ları — orta katman, fareye göre daha belirgin kayar (parallax mx*18)
+      orbs.forEach((orb) => { if (!reduceMotion) { orb.x += orb.speedX; orb.pulse += 0.014; } if (orb.x < -orb.radius) orb.x = W + orb.radius; if (orb.x > W + orb.radius) orb.x = -orb.radius; const ox = orb.x + mx * 18, oy = orb.y + my * 10; const pr = orb.radius * (1 + Math.sin(orb.pulse) * 0.14); const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, pr); g.addColorStop(0, `hsla(${P.orbHue},85%,${isDark ? 70 : 85}%,${P.orbAlpha})`); g.addColorStop(0.6, `hsla(${P.orbHue + 10},75%,72%,${P.orbAlpha * 0.4})`); g.addColorStop(1, 'transparent'); ctx.beginPath(); ctx.arc(ox, oy, pr, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); });
+
+      // 5b) Sıcak hava balonları — bulut orb'ları seviyesinde, orta parallax (mx*16)
+      balloons.forEach((b) => {
+        if (!reduceMotion) {
+          b.x += b.speedX; b.y += b.speedY; b.sway += 0.01;
+          // ekran dışına çıkınca karşı kenardan tekrar gir; çok yükselirse alta sar
+          if (b.x < -80) b.x = W + 80; if (b.x > W + 80) b.x = -80;
+          if (b.y < -100) b.y = H * (0.42 + Math.random() * 0.06);
+        }
+        const bx = b.x + mx * 16 + Math.sin(b.sway) * 6, by = b.y + my * 9;
+        const R = 26 * b.scale;                 // balon yarıçapı
+        ctx.save();
+        // Balon zarfı — dikey dilimli renk gradyanı (küre hissi)
+        const bg = ctx.createRadialGradient(bx - R * 0.3, by - R * 0.35, R * 0.1, bx, by, R);
+        bg.addColorStop(0, `hsla(${b.hue},85%,${isDark ? 70 : 78}%,0.95)`);
+        bg.addColorStop(0.6, `hsla(${b.hue + 8},80%,${isDark ? 52 : 60}%,0.92)`);
+        bg.addColorStop(1, `hsla(${b.hue + 16},75%,${isDark ? 38 : 46}%,0.9)`);
+        // gözyaşı (teardrop) zarf şekli
+        ctx.beginPath();
+        ctx.moveTo(bx, by + R * 1.35);
+        ctx.bezierCurveTo(bx - R * 0.9, by + R * 0.7, bx - R, by - R * 0.4, bx, by - R);
+        ctx.bezierCurveTo(bx + R, by - R * 0.4, bx + R * 0.9, by + R * 0.7, bx, by + R * 1.35);
+        ctx.closePath();
+        ctx.fillStyle = bg; ctx.fill();
+        // dikey aydınlık dilim (parlama)
+        ctx.beginPath();
+        ctx.moveTo(bx, by + R * 1.3);
+        ctx.bezierCurveTo(bx - R * 0.22, by + R * 0.6, bx - R * 0.24, by - R * 0.3, bx, by - R);
+        ctx.bezierCurveTo(bx + R * 0.24, by - R * 0.3, bx + R * 0.22, by + R * 0.6, bx, by + R * 1.3);
+        ctx.closePath();
+        ctx.fillStyle = `hsla(${b.hue},100%,90%,0.28)`; ctx.fill();
+        // ipler + sepet
+        ctx.strokeStyle = isDark ? 'rgba(230,225,255,0.5)' : 'rgba(80,60,40,0.55)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bx - R * 0.35, by + R * 1.2); ctx.lineTo(bx - R * 0.22, by + R * 1.75);
+        ctx.moveTo(bx + R * 0.35, by + R * 1.2); ctx.lineTo(bx + R * 0.22, by + R * 1.75);
+        ctx.stroke();
+        ctx.fillStyle = isDark ? 'rgba(120,80,50,0.9)' : 'rgba(120,80,45,0.85)';
+        ctx.fillRect(bx - R * 0.24, by + R * 1.72, R * 0.48, R * 0.34);
+        ctx.restore();
+      });
 
       // 6) Martılar
       gulls.forEach((gl) => { if (!reduceMotion) { gl.x += gl.speed; gl.flap += 0.08; } if (gl.x > W + 20) { gl.x = -20; gl.y = H * (0.1 + Math.random() * 0.2); } const wing = Math.sin(gl.flap) * gl.size * 0.5; ctx.beginPath(); ctx.moveTo(gl.x - gl.size, gl.y + wing); ctx.quadraticCurveTo(gl.x, gl.y - gl.size * 0.4, gl.x, gl.y); ctx.quadraticCurveTo(gl.x, gl.y - gl.size * 0.4, gl.x + gl.size, gl.y + wing); ctx.strokeStyle = isDark ? 'rgba(15,8,35,0.6)' : 'rgba(40,40,60,0.35)'; ctx.lineWidth = 2; ctx.stroke(); });
@@ -219,11 +299,50 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
         ctx.save(); ctx.beginPath(); ctx.moveTo(s.x - sunR * 0.6, H * 0.6); ctx.lineTo(s.x + sunR * 0.6, H * 0.6); ctx.lineTo(s.x + sunR * 2.8, H); ctx.lineTo(s.x - sunR * 2.8, H); ctx.closePath(); ctx.fillStyle = refl; ctx.fill(); ctx.restore();
       }
 
+      // 9b) Yelkenliler — ufuk/deniz hattında yavaşça süzülen küçük silüetler.
+      //     Dalgalardan ÖNCE çizilir ki ön dalga katmanları gövdenin dibini örtsün (z-sıra).
+      sailboats.forEach((b) => {
+        if (!reduceMotion) { b.x += b.speed; b.bob += 0.02; if (b.x > W + 60) { b.x = -60; } }
+        const sx = b.x + mx * 6;                       // uzak katman → az parallax
+        const sy = b.baseY + Math.sin(b.bob) * 2;      // hafif deniz sallanması
+        const sc = b.scale;
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        const hull = isDark ? 'rgba(20,14,40,0.85)' : 'rgba(45,55,75,0.7)';
+        const sailC = isDark ? 'rgba(210,205,235,0.85)' : 'rgba(255,255,255,0.9)';
+        // gövde (kavisli tekne silüeti)
+        ctx.beginPath();
+        ctx.moveTo(sx - 16 * sc, sy);
+        ctx.quadraticCurveTo(sx, sy + 7 * sc, sx + 16 * sc, sy);
+        ctx.closePath();
+        ctx.fillStyle = hull; ctx.fill();
+        // direk
+        ctx.strokeStyle = hull; ctx.lineWidth = 1.2 * sc;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - 26 * sc); ctx.stroke();
+        // ana yelken (üçgen)
+        ctx.beginPath();
+        ctx.moveTo(sx + 1 * sc, sy - 25 * sc);
+        ctx.lineTo(sx + 1 * sc, sy - 2 * sc);
+        ctx.lineTo(sx + 13 * sc, sy - 2 * sc);
+        ctx.closePath();
+        ctx.fillStyle = sailC; ctx.fill();
+        // ön yelken (küçük üçgen)
+        ctx.beginPath();
+        ctx.moveTo(sx - 1 * sc, sy - 22 * sc);
+        ctx.lineTo(sx - 1 * sc, sy - 2 * sc);
+        ctx.lineTo(sx - 11 * sc, sy - 2 * sc);
+        ctx.closePath();
+        ctx.fillStyle = isDark ? 'rgba(180,175,210,0.75)' : 'rgba(235,240,250,0.85)'; ctx.fill();
+        ctx.restore();
+      });
+
       // 10) Deniz dalgaları (4 katman parallax)
       waveLayers.forEach((layer, li) => {
         if (!reduceMotion) layer.phase += layer.speed;
+        // Ön dalga katmanları fareye çok az tepki verir (yakın katman → küçük parallax mx*4).
+        const wpx = mx * 4 * (li + 1) * 0.4, wpy = my * 3;
         const pts: { x: number; y: number }[] = [];
-        for (let x = -10; x <= W + 10; x += 3) { let y = H * layer.baseY; y += Math.sin(x * layer.frequency + layer.phase) * layer.amplitude; layer.sw.forEach((sw, i) => { y += Math.sin(x * sw.freq + layer.phase * sw.speed * 50 + i) * sw.amp; }); pts.push({ x, y }); }
+        for (let x = -10; x <= W + 10; x += 3) { let y = H * layer.baseY + wpy; y += Math.sin(x * layer.frequency + layer.phase) * layer.amplitude; layer.sw.forEach((sw, i) => { y += Math.sin(x * sw.freq + layer.phase * sw.speed * 50 + i) * sw.amp; }); pts.push({ x: x + wpx, y }); }
         ctx.beginPath(); ctx.moveTo(pts[0].x, H);
         for (let i = 0; i < pts.length; i++) { if (i === 0) ctx.lineTo(pts[i].x, pts[i].y); else { const xc = (pts[i - 1].x + pts[i].x) / 2, yc = (pts[i - 1].y + pts[i].y) / 2; ctx.quadraticCurveTo(pts[i - 1].x, pts[i - 1].y, xc, yc); } }
         ctx.lineTo(W + 10, H); ctx.closePath();
@@ -247,10 +366,39 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
       bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();
 
+      // 12b) TIKLAMA DALGALARI — tıklanan noktada genişleyen sıcak/turkuaz ışık halkaları.
+      if (scene.ripples.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        scene.ripples.forEach((r) => {
+          const a = Math.max(0, r.life / r.maxLife);
+          // yaz paleti: açık modda altın-turkuaz, koyu modda sıcak turuncu-turkuaz
+          const hue = isDark ? 30 : 175;
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(${hue},100%,72%,${a * 0.6})`;
+          ctx.lineWidth = 2.4;
+          ctx.shadowColor = `hsla(${hue},100%,70%,${a * 0.8})`;
+          ctx.shadowBlur = 16;
+          ctx.stroke();
+          // ikinci ince iç halka (derinlik)
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r * 0.62, 0, Math.PI * 2);
+          ctx.strokeStyle = `hsla(${hue + 20},100%,80%,${a * 0.35})`;
+          ctx.lineWidth = 1.2; ctx.shadowBlur = 8;
+          ctx.stroke();
+        });
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+
       // 13) Sinematik vinyet (kenar koyulaşma → odak)
       const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
       vig.addColorStop(0, 'transparent'); vig.addColorStop(1, `rgba(0,0,0,${P.vignette})`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      // Açılış fade-in save'ini kapat.
+      ctx.restore();
 
       t++;
       if (!reduceMotion) animationId = requestAnimationFrame(draw);
@@ -258,7 +406,7 @@ export function SummerBackground({ children, className }: SummerBackgroundProps)
 
     draw();
     return () => { cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); };
-  }, [isDark]);
+  }, [isDark, reduceMotion, scene]);
 
   return (
     <>
