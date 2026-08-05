@@ -84,8 +84,11 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       size: number; depth: number;         // depth → parallax hız/boyut
       color: string; shape: number;        // 0: quadratic yaprak, 1: akçaağaç benzeri
       vy: number; drift: number;           // düşme hızı + rüzgar sürüklenme
-      rot: number; rotSpeed: number;       // eksen dönüşü
-      sway: number; swaySpeed: number; swayAmp: number; // yatay salınım (sin)
+      rot: number; rotSpeed: number;       // düzlem-içi dönüş (yaprak kendi ekseninde)
+      // Gerçekçi düşüş için ayrı 3B eksenler:
+      sway: number; swaySpeed: number; swayAmp: number;   // helezonik yatay salınım
+      flip: number; flipSpeed: number;     // ön/arka yüz devrilmesi (perspektif yassılaşma)
+      tilt: number; tiltSpeed: number;     // yana yatma (pandül)
     }
     const leaves: Leaf[] = Array.from({ length: 40 }, () => {
       const depth = Math.random();
@@ -96,13 +99,17 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
         depth,
         color: P.leafHues[Math.floor(Math.random() * P.leafHues.length)],
         shape: Math.random() < 0.5 ? 0 : 1,
-        vy: 0.3 + depth * 1.1,
-        drift: (0.3 + depth * 0.9) * (Math.random() < 0.5 ? 1 : 0.6),
+        vy: 0.28 + depth * 0.95,
+        drift: (0.2 + depth * 0.7) * (Math.random() < 0.5 ? 1 : -1),
         rot: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 0.04,
+        rotSpeed: (Math.random() - 0.5) * 0.02,
         sway: Math.random() * Math.PI * 2,
-        swaySpeed: 0.01 + Math.random() * 0.025,
-        swayAmp: 12 + Math.random() * 26,
+        swaySpeed: 0.012 + Math.random() * 0.02,
+        swayAmp: 18 + Math.random() * 34,
+        flip: Math.random() * Math.PI * 2,
+        flipSpeed: 0.02 + Math.random() * 0.05,
+        tilt: Math.random() * Math.PI * 2,
+        tiltSpeed: 0.015 + Math.random() * 0.03,
       };
     });
 
@@ -118,8 +125,12 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
       color: P.leafHues[Math.floor(Math.random() * P.leafHues.length)],
     }));
 
-    // ── Uzak ağaç silüetleri (dallı, birkaç yaprak dökülen) ──────
-    interface Tree { x: number; scale: number; branches: { ang: number; len: number; sub: { ang: number; len: number }[] }[]; }
+    // ── Uzak ağaç silüetleri (dallı, dal uçlarında SABİT asılı yapraklar) ──
+    // Yapraklar bir kez üretilir (deterministik) — her karede random ÜRETİLMEZ,
+    // böylece "yanıp sönme/titreme" olmaz; yalnızca rüzgarla hafifçe sallanır.
+    interface HangLeaf { ox: number; oy: number; r: number; color: string; phase: number; }
+    interface Sub { ang: number; len: number; hang: HangLeaf[]; }
+    interface Tree { x: number; scale: number; branches: { ang: number; len: number; sub: Sub[] }[]; }
     const trees: Tree[] = Array.from({ length: 5 }, (_, i) => {
       const branchCount = 3 + Math.floor(Math.random() * 3);
       return {
@@ -131,6 +142,14 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
           sub: Array.from({ length: 2 + Math.floor(Math.random() * 2) }, () => ({
             ang: (Math.random() - 0.5) * 1.1,
             len: 18 + Math.random() * 30,
+            // dal ucunda 2-4 sabit yaprak (konum/renk baştan belirlenir)
+            hang: Array.from({ length: 2 + Math.floor(Math.random() * 3) }, () => ({
+              ox: (Math.random() - 0.5) * 10,
+              oy: (Math.random() - 0.5) * 8,
+              r: 2.5 + Math.random() * 2.5,
+              color: P.leafHues[Math.floor(Math.random() * P.leafHues.length)],
+              phase: Math.random() * Math.PI * 2,
+            })),
           })),
         })),
       };
@@ -165,12 +184,25 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
         ctx.quadraticCurveTo(-size * 0.85, -size * 0.2, 0, -size);
         ctx.closePath();
         ctx.fill();
-        // Orta damar (biraz koyu çizgi)
-        ctx.strokeStyle = 'rgba(60,24,8,0.35)';
-        ctx.lineWidth = Math.max(0.6, size * 0.08);
+        // Damar ağı: orta damar + simetrik yan damarlar (gerçekçilik).
+        ctx.strokeStyle = 'rgba(60,24,8,0.32)';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(0.6, size * 0.07);
         ctx.beginPath();
         ctx.moveTo(0, -size * 0.85);
         ctx.lineTo(0, size * 0.85);
+        ctx.stroke();
+        // yan damarlar (orta damardan dışa doğru 3 çift)
+        ctx.lineWidth = Math.max(0.4, size * 0.04);
+        ctx.beginPath();
+        for (let v = 1; v <= 3; v++) {
+          const vy = -size * 0.6 + v * size * 0.4;
+          const reach = size * (0.55 - v * 0.08);
+          ctx.moveTo(0, vy);
+          ctx.lineTo(reach, vy - reach * 0.5);
+          ctx.moveTo(0, vy);
+          ctx.lineTo(-reach, vy - reach * 0.5);
+        }
         ctx.stroke();
       } else {
         // Akçaağaç benzeri: 5 dilim çıkıntı (basit ama tanınır).
@@ -257,16 +289,18 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
             const sy = by + Math.sin(b.ang + sb.ang) * sb.len;
             ctx.lineWidth = 2.5;
             ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(sx, sy); ctx.stroke();
-            // dal ucunda birkaç asılı yaprak (turuncu nokta) — hafif sallanır
-            if (Math.random() < 0.6 || reduceMotion) {
-              const wob = reduceMotion ? 0 : Math.sin(t * 0.03 + sx) * 2 * gust;
+            // dal ucunda SABİT asılı yapraklar — random üretilmez, sadece
+            // rüzgarla küçük genlikte sallanır (yanıp sönme/titreme yok).
+            sb.hang.forEach((hl) => {
+              const wob = reduceMotion ? 0 : Math.sin(t * 0.022 + hl.phase) * 1.6 * gust;
+              const wy = reduceMotion ? 0 : Math.cos(t * 0.02 + hl.phase) * 0.7 * gust;
               ctx.beginPath();
-              ctx.arc(sx + wob, sy, 3 + Math.random() * 2, 0, Math.PI * 2);
-              ctx.fillStyle = P.leafHues[Math.floor(Math.random() * P.leafHues.length)];
-              ctx.globalAlpha = 0.75;
+              ctx.arc(sx + hl.ox + wob, sy + hl.oy + wy, hl.r, 0, Math.PI * 2);
+              ctx.fillStyle = hl.color;
+              ctx.globalAlpha = 0.8;
               ctx.fill();
               ctx.globalAlpha = 1;
-            }
+            });
           });
         });
         // ağaç etrafında sıcak glow
@@ -288,13 +322,20 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
         ctx.shadowColor = `hsla(${P.dustHue},100%,65%,0.7)`; ctx.shadowBlur = 6; ctx.fill(); ctx.shadowBlur = 0;
       });
 
-      // 7) DÜŞEN YAPRAKLAR — çok katmanlı parallax, dönerek + rüzgarla sürüklenerek
+      // 7) DÜŞEN YAPRAKLAR — gerçekçi 3B düşüş fiziği:
+      //    • Helezonik yatay salınım (sway) — yaprak sağa-sola süzülür.
+      //    • Yatay hız salınıma bağlı (düşüş yolu S çizer, düz düşmez).
+      //    • flip → ön/arka yüz devrilmesi ⇒ yatayda genişlik daralır (perspektif).
+      //    • tilt → yana yatma (pandül), düzlem-içi rot ile birleşir.
       leaves.forEach((lf) => {
         if (!reduceMotion) {
-          lf.y += lf.vy + gust * lf.depth * 0.6;
           lf.sway += lf.swaySpeed;
-          lf.x += Math.sin(lf.sway) * (lf.swayAmp * 0.04) + lf.drift * gust;
-          lf.rot += lf.rotSpeed + Math.sin(lf.sway) * 0.01;
+          lf.flip += lf.flipSpeed;
+          lf.tilt += lf.tiltSpeed;
+          // düşerken S-yörüngesi: yatay hız salınımın türevine bağlı
+          lf.y += lf.vy + gust * lf.depth * 0.5;
+          lf.x += Math.cos(lf.sway) * (lf.swayAmp * lf.swaySpeed) + lf.drift * gust * 0.6;
+          lf.rot += lf.rotSpeed;
         }
         // ekrandan çıkınca üstten geri döngü
         if (lf.y > H + lf.size * 2) { lf.y = -lf.size * 2; lf.x = Math.random() * W; }
@@ -303,11 +344,15 @@ export function AutumnBackground({ children, className }: AutumnBackgroundProps)
 
         ctx.save();
         ctx.translate(lf.x, lf.y);
-        ctx.rotate(lf.rot);
-        // derinliğe göre hafif ölçek nefesi (dönerken yaprak yassılaşır hissi)
-        const flatten = 0.7 + Math.abs(Math.cos(lf.sway)) * 0.3;
-        ctx.scale(1, flatten);
-        ctx.globalAlpha = 0.55 + lf.depth * 0.45;
+        // düzlem-içi dönüş + yana yatma birlikte
+        ctx.rotate(lf.rot + Math.sin(lf.tilt) * 0.5);
+        // flip → yatayda daralma (yaprağın kenarına dönüp tekrar açılması).
+        // |cos| kullanınca genişlik 0'a yaklaşır ama negatife düşmez → doğal çevrilme.
+        const faceX = 0.25 + Math.abs(Math.cos(lf.flip)) * 0.75;
+        const faceY = 0.8 + Math.abs(Math.sin(lf.sway)) * 0.2;
+        ctx.scale(faceX, faceY);
+        // yaprak kenara döndüğünde (faceX küçük) hafif kararsın → hacim hissi
+        ctx.globalAlpha = (0.55 + lf.depth * 0.45) * (0.7 + faceX * 0.3);
         ctx.shadowColor = 'rgba(60,24,8,0.4)';
         ctx.shadowBlur = 4 + lf.depth * 4;
         drawLeafShape(lf.size, lf.shape, lf.color);

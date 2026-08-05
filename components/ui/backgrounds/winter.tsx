@@ -112,6 +112,9 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       ? Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H * 0.55, r: Math.random() * 1.4 + 0.3, tw: Math.random() * Math.PI * 2, twSpeed: 0.02 + Math.random() * 0.04 }))
       : [];
 
+    // ── Kuyruklu yıldız (comet) — gece, ara sıra geçen, uzun ışıltılı kuyruk ──
+    const comet = { active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, timer: 120 + Math.random() * 260 };
+
     // ── Buz kristali parıltıları (twinkle, tüm sahne) ──────────────
     interface Crystal { x: number; y: number; r: number; tw: number; twSpeed: number; }
     const crystals: Crystal[] = Array.from({ length: 34 }, () => ({
@@ -169,139 +172,120 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       }
     };
 
-    // Kardan adam çiz (3 kar topu + göz + havuç + dal kollar + atkı).
-    const drawSnowman = (cx: number, groundY: number, scale: number) => {
-      const r1 = 34 * scale, r2 = 25 * scale, r3 = 18 * scale;
-      const y1 = groundY - r1;                 // alt top
-      const y2 = y1 - r1 - r2 + 6 * scale;     // orta
-      const y3 = y2 - r2 - r3 + 5 * scale;     // baş
-      const balls = [
-        { x: cx, y: y1, r: r1 }, { x: cx, y: y2, r: r2 }, { x: cx, y: y3, r: r3 },
-      ];
-      // gölge
+    // Kardan adam çiz — gerçekçi + canlı: nefes bob, göz kırpma, rüzgarda atkı,
+    // sallanan dal kollar, kar dokusu, silindir şapka.
+    const drawSnowman = (cx0: number, groundY: number, scale: number) => {
+      // Idle "nefes" — hafif yukarı-aşağı + minik eğilme (rüzgar).
+      const bob = reduceMotion ? 0 : Math.sin(t * 0.03) * 1.6 * scale;
+      const lean = reduceMotion ? 0 : Math.sin(t * 0.012) * 0.02;
+      const wind = reduceMotion ? 0 : (0.6 + Math.sin(t * 0.02) * 0.4); // rüzgar şiddeti 0.2..1
+      const cx = cx0;
+      const r1 = 36 * scale, r2 = 26 * scale, r3 = 19 * scale;
+      const y1 = groundY - r1;
+      const y2 = y1 - r1 - r2 + 6 * scale + bob;
+      const y3 = y2 - r2 - r3 + 5 * scale + bob * 0.5;
+
+      ctx.save();
+      // Bütün kardan adamı hafif eğ (rüzgar)
+      ctx.translate(cx, groundY); ctx.rotate(lean); ctx.translate(-cx, -groundY);
+
+      const balls = [{ x: cx, y: y1, r: r1 }, { x: cx, y: y2, r: r2 }, { x: cx, y: y3, r: r3 }];
+
+      // Gölge (yumuşak)
       ctx.beginPath();
-      ctx.ellipse(cx, groundY + 4 * scale, r1 * 1.2, r1 * 0.28, 0, 0, Math.PI * 2);
-      ctx.fillStyle = isDark ? 'rgba(10,15,30,0.4)' : 'rgba(90,120,160,0.22)';
+      ctx.ellipse(cx, groundY + 4 * scale, r1 * 1.25, r1 * 0.26, 0, 0, Math.PI * 2);
+      ctx.fillStyle = isDark ? 'rgba(8,12,26,0.42)' : 'rgba(90,120,160,0.2)';
       ctx.fill();
-      // gövde topları (küresel gölgeli)
+
+      // Gövde topları — küresel gölge + üstte parlak "kar" highlight + kenar dokusu
       balls.forEach((b) => {
-        const g = ctx.createRadialGradient(b.x - b.r * 0.35, b.y - b.r * 0.35, b.r * 0.1, b.x, b.y, b.r);
-        g.addColorStop(0, P.snowmanBody);
-        g.addColorStop(0.7, P.snowmanBody);
+        const g = ctx.createRadialGradient(b.x - b.r * 0.4, b.y - b.r * 0.45, b.r * 0.05, b.x, b.y, b.r * 1.05);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.55, P.snowmanBody);
         g.addColorStop(1, P.snowmanShade);
         ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fillStyle = g;
-        ctx.shadowColor = isDark ? 'rgba(150,180,240,0.5)' : 'rgba(255,255,255,0.7)';
-        ctx.shadowBlur = 12 * scale; ctx.fill(); ctx.shadowBlur = 0;
-        ctx.lineWidth = 1; ctx.strokeStyle = P.snowmanLine; ctx.stroke();
+        ctx.shadowColor = isDark ? 'rgba(150,180,240,0.45)' : 'rgba(255,255,255,0.7)';
+        ctx.shadowBlur = 14 * scale; ctx.fill(); ctx.shadowBlur = 0;
+        // alt taraf koyu kontur (hacim)
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, Math.PI * 0.15, Math.PI * 0.85);
+        ctx.strokeStyle = P.snowmanLine; ctx.lineWidth = 1.2; ctx.stroke();
+        // üstte kar birikintisi highlight
+        ctx.beginPath(); ctx.ellipse(b.x - b.r * 0.15, b.y - b.r * 0.6, b.r * 0.5, b.r * 0.22, -0.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
       });
-      // dal kollar
-      ctx.strokeStyle = isDark ? '#3a2a18' : '#5a3d22'; ctx.lineWidth = 2.4 * scale; ctx.lineCap = 'round';
-      const armWave = Math.sin(t * 0.03) * (reduceMotion ? 0 : 3);
-      [-1, 1].forEach((dir) => {
-        const ax = cx + dir * r2 * 0.8, ay = y2 - r2 * 0.1;
-        ctx.beginPath(); ctx.moveTo(ax, ay);
-        const ex = ax + dir * 26 * scale, ey = ay - 16 * scale + armWave * dir;
-        ctx.lineTo(ex, ey);
-        ctx.moveTo(ex, ey); ctx.lineTo(ex + dir * 8 * scale, ey - 8 * scale);
-        ctx.moveTo(ex, ey); ctx.lineTo(ex + dir * 9 * scale, ey + 4 * scale);
-        ctx.stroke();
-      });
-      ctx.lineCap = 'butt';
-      // atkı (renkli aksan)
-      ctx.beginPath();
-      ctx.moveTo(cx - r3 * 0.9, y3 + r3 * 0.7);
-      ctx.quadraticCurveTo(cx, y3 + r3 * 1.05, cx + r3 * 0.9, y3 + r3 * 0.7);
-      ctx.lineTo(cx + r3 * 0.9, y3 + r3 * 1.0);
-      ctx.quadraticCurveTo(cx, y3 + r3 * 1.35, cx - r3 * 0.9, y3 + r3 * 1.0);
-      ctx.closePath();
-      ctx.fillStyle = P.scarf; ctx.fill();
-      // atkının sarkan ucu
-      ctx.beginPath();
-      ctx.moveTo(cx + r3 * 0.55, y3 + r3 * 0.95);
-      ctx.lineTo(cx + r3 * 0.9, y3 + r3 * 2.1);
-      ctx.lineTo(cx + r3 * 0.35, y3 + r3 * 2.0);
-      ctx.closePath();
-      ctx.fillStyle = P.scarf; ctx.fill();
-      // gözler (kömür)
-      ctx.fillStyle = P.coal;
-      [-1, 1].forEach((dir) => {
-        ctx.beginPath(); ctx.arc(cx + dir * r3 * 0.35, y3 - r3 * 0.18, 2.2 * scale, 0, Math.PI * 2); ctx.fill();
-      });
-      // havuç burun
-      ctx.beginPath();
-      ctx.moveTo(cx, y3 + r3 * 0.05);
-      ctx.lineTo(cx + r3 * 0.95, y3 + r3 * 0.22);
-      ctx.lineTo(cx, y3 + r3 * 0.32);
-      ctx.closePath();
-      ctx.fillStyle = P.carrot; ctx.fill();
-      // gülümseme (kömür noktalar)
-      ctx.fillStyle = P.coal;
-      for (let i = -2; i <= 2; i++) {
-        ctx.beginPath();
-        ctx.arc(cx + i * r3 * 0.28, y3 + r3 * 0.55 + Math.abs(i) * 1.4 * scale, 1.3 * scale, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // düğmeler (orta gövde)
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.arc(cx, y2 - r2 * 0.4 + i * r2 * 0.5, 2 * scale, 0, Math.PI * 2);
-        ctx.fillStyle = P.coal; ctx.fill();
-      }
-    };
 
-    // Buğulanan kahve fincanı çiz (fincan + yükselen buhar şeritleri).
-    const drawCoffee = (cx: number, cy: number, scale: number) => {
-      const cw = 46 * scale, ch = 38 * scale;
-      // buhar (sin dalgalı yarı saydam beyaz şeritler yukarı süzülür)
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const steamCount = 3;
-      for (let sIdx = 0; sIdx < steamCount; sIdx++) {
-        const sx = cx - cw * 0.22 + sIdx * (cw * 0.22);
-        ctx.beginPath();
-        for (let yy = 0; yy <= 80 * scale; yy += 4) {
-          const prog = yy / (80 * scale);
-          const wob = Math.sin(yy * 0.06 + t * 0.05 + sIdx * 1.7) * (6 + prog * 14) * scale;
-          const x = sx + wob;
-          const y = cy - ch * 0.5 - yy;
-          if (yy === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        const sg = ctx.createLinearGradient(sx, cy - ch * 0.5, sx, cy - ch * 0.5 - 80 * scale);
-        sg.addColorStop(0, `rgba(${P.steam},${isDark ? 0.22 : 0.28})`);
-        sg.addColorStop(1, 'transparent');
-        ctx.strokeStyle = sg; ctx.lineWidth = 5 * scale; ctx.lineCap = 'round';
+      // Dal kollar — çok eklemli, rüzgarda sallanan
+      ctx.strokeStyle = isDark ? '#3a2a18' : '#5a3d22'; ctx.lineWidth = 2.6 * scale; ctx.lineCap = 'round';
+      const armWave = Math.sin(t * 0.045) * (reduceMotion ? 0 : 4) * wind;
+      [-1, 1].forEach((dir) => {
+        const ax = cx + dir * r2 * 0.82, ay = y2 - r2 * 0.12;
+        const ex = ax + dir * 30 * scale, ey = ay - 18 * scale + armWave * dir;
+        ctx.beginPath(); ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo(ax + dir * 15 * scale, ay - 6 * scale, ex, ey);
+        // parmak dalları
+        ctx.moveTo(ex, ey); ctx.lineTo(ex + dir * 9 * scale, ey - 9 * scale + armWave * dir * 0.5);
+        ctx.moveTo(ex, ey); ctx.lineTo(ex + dir * 11 * scale, ey + 3 * scale);
         ctx.stroke();
-      }
-      ctx.restore();
+      });
       ctx.lineCap = 'butt';
-      // tabak
+
+      // Atkı — boyun sargısı + rüzgarda DALGALANAN uç
       ctx.beginPath();
-      ctx.ellipse(cx, cy + ch * 0.5, cw * 0.8, cw * 0.16, 0, 0, Math.PI * 2);
-      ctx.fillStyle = P.cupShade; ctx.fill();
-      // fincan gövdesi (yamuk)
-      ctx.beginPath();
-      ctx.moveTo(cx - cw * 0.5, cy - ch * 0.5);
-      ctx.lineTo(cx + cw * 0.5, cy - ch * 0.5);
-      ctx.lineTo(cx + cw * 0.38, cy + ch * 0.42);
-      ctx.quadraticCurveTo(cx, cy + ch * 0.56, cx - cw * 0.38, cy + ch * 0.42);
+      ctx.moveTo(cx - r3 * 0.95, y3 + r3 * 0.7);
+      ctx.quadraticCurveTo(cx, y3 + r3 * 1.08, cx + r3 * 0.95, y3 + r3 * 0.7);
+      ctx.lineTo(cx + r3 * 0.95, y3 + r3 * 1.02);
+      ctx.quadraticCurveTo(cx, y3 + r3 * 1.4, cx - r3 * 0.95, y3 + r3 * 1.02);
       ctx.closePath();
-      const bg = ctx.createLinearGradient(cx - cw * 0.5, cy, cx + cw * 0.5, cy);
-      bg.addColorStop(0, P.cupShade); bg.addColorStop(0.4, P.cupBody); bg.addColorStop(1, P.cupShade);
-      ctx.fillStyle = bg;
-      ctx.shadowColor = isDark ? 'rgba(120,150,220,0.4)' : 'rgba(120,150,180,0.4)';
-      ctx.shadowBlur = 10 * scale; ctx.fill(); ctx.shadowBlur = 0;
-      // kahve yüzeyi
+      ctx.fillStyle = P.scarf; ctx.fill();
+      // sarkan uç — rüzgarla dalgalanır
+      const sw1 = Math.sin(t * 0.05) * 6 * scale * wind;
+      const sw2 = Math.sin(t * 0.05 + 1) * 9 * scale * wind;
       ctx.beginPath();
-      ctx.ellipse(cx, cy - ch * 0.5, cw * 0.5, cw * 0.12, 0, 0, Math.PI * 2);
-      ctx.fillStyle = P.coffee; ctx.fill();
+      ctx.moveTo(cx + r3 * 0.5, y3 + r3 * 0.98);
+      ctx.quadraticCurveTo(cx + r3 * 0.9 + sw1, y3 + r3 * 1.6, cx + r3 * 0.75 + sw2, y3 + r3 * 2.3);
+      ctx.lineTo(cx + r3 * 0.3 + sw2, y3 + r3 * 2.25);
+      ctx.quadraticCurveTo(cx + r3 * 0.4 + sw1, y3 + r3 * 1.55, cx + r3 * 0.2, y3 + r3 * 0.95);
+      ctx.closePath();
+      ctx.fillStyle = P.scarf; ctx.fill();
+      // atkı püskülleri
+      ctx.strokeStyle = P.scarf; ctx.lineWidth = 1.5 * scale;
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(cx + r3 * (0.35 + i * 0.08) + sw2, y3 + r3 * 2.25); ctx.lineTo(cx + r3 * (0.35 + i * 0.08) + sw2 * 1.2, y3 + r3 * 2.55); ctx.stroke(); }
+
+      // Silindir şapka (gerçekçilik)
+      const hatW = r3 * 1.5, hatH = r3 * 1.3, hy = y3 - r3 * 0.92;
+      ctx.fillStyle = isDark ? '#12182b' : '#1e293b';
+      ctx.beginPath(); ctx.ellipse(cx, hy, hatW * 0.75, hatW * 0.18, 0, 0, Math.PI * 2); ctx.fill(); // kenar
+      ctx.fillRect(cx - hatW * 0.42, hy - hatH, hatW * 0.84, hatH); // silindir
+      ctx.beginPath(); ctx.ellipse(cx, hy - hatH, hatW * 0.42, hatW * 0.1, 0, 0, Math.PI * 2); ctx.fill(); // üst
+      // şapka bandı (aksan)
+      ctx.fillStyle = P.scarf; ctx.fillRect(cx - hatW * 0.42, hy - hatH * 0.32, hatW * 0.84, hatH * 0.16);
+
+      // Gözler (kömür) — periyodik GÖZ KIRPMA
+      const blink = !reduceMotion && (Math.sin(t * 0.06) > 0.985); // ara ara kırp
+      ctx.fillStyle = P.coal;
+      [-1, 1].forEach((dir) => {
+        const ex = cx + dir * r3 * 0.36, ey = y3 - r3 * 0.2;
+        if (blink) { ctx.strokeStyle = P.coal; ctx.lineWidth = 1.6 * scale; ctx.beginPath(); ctx.moveTo(ex - 2.4 * scale, ey); ctx.lineTo(ex + 2.4 * scale, ey); ctx.stroke(); }
+        else { ctx.beginPath(); ctx.arc(ex, ey, 2.4 * scale, 0, Math.PI * 2); ctx.fill(); const hl = ctx.fillStyle; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(ex - 0.8 * scale, ey - 0.8 * scale, 0.8 * scale, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = hl; }
+      });
+
+      // Havuç burun (3D gölgeli)
       ctx.beginPath();
-      ctx.ellipse(cx - cw * 0.12, cy - ch * 0.52, cw * 0.18, cw * 0.05, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,240,220,0.18)'; ctx.fill();
-      // kulp
-      ctx.beginPath();
-      ctx.arc(cx + cw * 0.55, cy - ch * 0.02, cw * 0.22, Math.PI * 1.4, Math.PI * 0.55, false);
-      ctx.lineWidth = 5 * scale; ctx.strokeStyle = P.cupBody; ctx.stroke();
+      ctx.moveTo(cx, y3 + r3 * 0.02); ctx.lineTo(cx + r3 * 1.0, y3 + r3 * 0.24); ctx.lineTo(cx, y3 + r3 * 0.34);
+      ctx.closePath();
+      const cg = ctx.createLinearGradient(cx, y3, cx + r3, y3 + r3 * 0.3);
+      cg.addColorStop(0, '#fb923c'); cg.addColorStop(1, P.carrot);
+      ctx.fillStyle = cg; ctx.fill();
+
+      // Gülümseme (kömür noktalar, kavisli)
+      ctx.fillStyle = P.coal;
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(cx + i * r3 * 0.3, y3 + r3 * 0.58 + Math.abs(i) * 1.5 * scale, 1.4 * scale, 0, Math.PI * 2); ctx.fill(); }
+
+      // Düğmeler
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(cx, y2 - r2 * 0.4 + i * r2 * 0.5, 2.2 * scale, 0, Math.PI * 2); ctx.fillStyle = P.coal; ctx.fill(); }
+
+      ctx.restore();
     };
 
     const draw = () => {
@@ -320,6 +304,44 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
           ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255,255,255,${a})`; ctx.fill();
         });
+      }
+
+      // 2b) Kuyruklu yıldız (gece) — parlak baş + uzun ışıltılı kuyruk
+      if (isDark && !reduceMotion) {
+        if (!comet.active) {
+          comet.timer--;
+          if (comet.timer <= 0) {
+            comet.active = true;
+            comet.x = -60; comet.y = H * (0.08 + Math.random() * 0.25);
+            const ang = 0.22 + Math.random() * 0.14;
+            const spd = 3.4 + Math.random() * 1.8;
+            comet.vx = Math.cos(ang) * spd; comet.vy = Math.sin(ang) * spd;
+            comet.maxLife = (W + 200) / comet.vx; comet.life = comet.maxLife;
+          }
+        } else {
+          comet.x += comet.vx; comet.y += comet.vy; comet.life--;
+          const tailLen = 220;
+          const tx = comet.x - (comet.vx / Math.hypot(comet.vx, comet.vy)) * tailLen;
+          const ty = comet.y - (comet.vy / Math.hypot(comet.vx, comet.vy)) * tailLen;
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          // kuyruk (geniş → ince, ışıltılı)
+          const tg = ctx.createLinearGradient(comet.x, comet.y, tx, ty);
+          tg.addColorStop(0, 'rgba(190,225,255,0.9)');
+          tg.addColorStop(0.4, 'rgba(120,180,255,0.35)');
+          tg.addColorStop(1, 'transparent');
+          ctx.strokeStyle = tg; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(comet.x, comet.y); ctx.lineTo(tx, ty); ctx.stroke();
+          // ince iç kuyruk (parlak çekirdek)
+          ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1.4;
+          ctx.beginPath(); ctx.moveTo(comet.x, comet.y); ctx.lineTo((comet.x + tx) / 2, (comet.y + ty) / 2); ctx.stroke();
+          // baş (parlak nokta + glow)
+          const hg = ctx.createRadialGradient(comet.x, comet.y, 0, comet.x, comet.y, 10);
+          hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.5, 'rgba(200,225,255,0.8)'); hg.addColorStop(1, 'transparent');
+          ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(comet.x, comet.y, 10, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+          if (comet.x > W + tailLen || comet.life <= 0) { comet.active = false; comet.timer = 260 + Math.random() * 520; }
+        }
       }
 
       // 3) Aurora (gece) — yeşil-mavi ışık perdesi, yumuşak dalgalanan bantlar
@@ -420,11 +442,9 @@ export function WinterBackground({ children, className }: WinterBackgroundProps)
       ctx.shadowColor = P.groundGlow; ctx.shadowBlur = 16; ctx.stroke(); ctx.shadowBlur = 0;
       ctx.restore();
 
-      // 8) Kardan adam (alt-sol) + kahve fincanı (alt-sağ)
-      const smScale = Math.min(1.15, Math.max(0.72, W / 1400));
-      drawSnowman(W * 0.16, gy + 24, smScale);
-      const cfScale = Math.min(1.15, Math.max(0.72, W / 1400));
-      drawCoffee(W * 0.86, gy + 34, cfScale);
+      // 8) Kardan adam (alt-sol)
+      const smScale = Math.min(1.3, Math.max(0.8, W / 1300));
+      drawSnowman(W * 0.15, gy + 24, smScale);
 
       // 9) YAKIN kar katmanları (orta + büyük/hızlı) — ön planda, örtünün önünde
       flakes.filter((f) => f.depth >= 0.4).forEach((f) => {
