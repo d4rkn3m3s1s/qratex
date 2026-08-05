@@ -38,15 +38,18 @@ function getClient(): S3Client {
 
 /**
  * Dosyayı R2'ye yükler. `key` = bucket içi tam yol (ör. "tasks/abc-123.pdf").
+ * `contentDisposition` verilirse (ör. 'attachment; filename="x"') nesneye yazılır;
+ * indirilmesi gereken (tarayıcıda çalıştırılmaması gereken) türler için kullanılır.
  * Döner: public URL (R2_PUBLIC_URL/key). R2_PUBLIC_URL yoksa key döner (uyarı).
  */
-export async function uploadToR2(key: string, body: Buffer, contentType: string): Promise<string> {
+export async function uploadToR2(key: string, body: Buffer, contentType: string, contentDisposition?: string): Promise<string> {
   const bucket = env('R2_BUCKET')!;
   await getClient().send(new PutObjectCommand({
     Bucket: bucket,
     Key: key,
     Body: body,
     ContentType: contentType,
+    ContentDisposition: contentDisposition,
   }));
   const publicBase = env('R2_PUBLIC_URL');
   if (!publicBase) {

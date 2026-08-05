@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Loader2, Search, FileText, Download, ImageIcon, FolderOpen, HardDrive } from 'lucide-react';
+import { Loader2, Search, FileText, Download, ImageIcon, FolderOpen, HardDrive, FileArchive, FileSpreadsheet, FileType, FileCode } from 'lucide-react';
 import { cn, getInitials } from '@/lib/utils';
 
 type FileItem = {
@@ -25,6 +25,22 @@ const TR_MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Ey
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getUTCDate()} ${TR_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/** MIME türüne göre ikon + renk sınıfı (Belgeler listesinde tür ayrımı). */
+function fileIcon(mime: string): { icon: typeof FileText; cls: string } {
+  if (mime === 'application/pdf') return { icon: FileText, cls: 'bg-red-500/10 text-red-500' };
+  if (mime.includes('spreadsheet') || mime === 'application/vnd.ms-excel' || mime === 'text/csv')
+    return { icon: FileSpreadsheet, cls: 'bg-emerald-500/10 text-emerald-500' };
+  if (mime.includes('word') || mime === 'application/msword')
+    return { icon: FileType, cls: 'bg-sky-500/10 text-sky-500' };
+  if (mime.includes('presentation') || mime === 'application/vnd.ms-powerpoint')
+    return { icon: FileType, cls: 'bg-orange-500/10 text-orange-500' };
+  if (mime === 'application/json' || mime === 'text/markdown')
+    return { icon: FileCode, cls: 'bg-violet-500/10 text-violet-500' };
+  if (mime === 'application/zip' || mime === 'application/x-rar-compressed' || mime === 'application/x-7z-compressed')
+    return { icon: FileArchive, cls: 'bg-amber-500/10 text-amber-500' };
+  return { icon: FileText, cls: 'bg-primary/10 text-primary' };
 }
 
 /** Ekip Dosyalar görünümü: tüm görev eklerini tek yerde (grid önizleme + filtre). */
@@ -82,6 +98,9 @@ export function TeamFiles({ departments, onOpenTask }: { departments: Dept[]; on
             <SelectItem value="all">Tüm türler</SelectItem>
             <SelectItem value="image">Görseller</SelectItem>
             <SelectItem value="pdf">PDF</SelectItem>
+            <SelectItem value="office">Office (Word/Excel/PPT)</SelectItem>
+            <SelectItem value="text">Metin (TXT/CSV/JSON/MD)</SelectItem>
+            <SelectItem value="archive">Arşiv (ZIP/RAR/7z)</SelectItem>
           </SelectContent>
         </Select>
         <Select value={dept} onValueChange={setDept}>
@@ -136,11 +155,12 @@ export function TeamFiles({ departments, onOpenTask }: { departments: Dept[]; on
               <Card><CardContent className="divide-y divide-border/60 p-0">
                 {docs.map((f) => {
                   const d = departments.find((x) => x.slug === f.task.department);
+                  const fi = fileIcon(f.mime);
+                  const Icon = fi.icon;
                   return (
                     <div key={f.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
-                      <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-lg',
-                        f.mime === 'application/pdf' ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary')}>
-                        <FileText className="h-5 w-5" />
+                      <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-lg', fi.cls)}>
+                        <Icon className="h-5 w-5" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{f.filename}</p>

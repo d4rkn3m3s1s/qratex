@@ -7,19 +7,109 @@ import { isR2Configured, uploadToR2, deleteFromR2, keyFromPublicUrl } from '@/li
 
 export const dynamic = 'force-dynamic';
 
-const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
-// İzinli tipler + magic-byte imzaları (Content-Type'a güvenme).
-const SIGNATURES: { mime: string; ext: string; test: (b: Buffer) => boolean }[] = [
-  { mime: 'image/png', ext: '.png', test: (b) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
-  { mime: 'image/jpeg', ext: '.jpg', test: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
-  { mime: 'image/webp', ext: '.webp', test: (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
-  { mime: 'image/gif', ext: '.gif', test: (b) => b.length > 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a') },
-  { mime: 'application/pdf', ext: '.pdf', test: (b) => b.length > 4 && b.toString('ascii', 0, 4) === '%PDF' },
+// ── Dosya türü doğrulama ────────────────────────────────────────────────
+// Strateji: mümkün olan her yerde MAGIC-BYTE (dosyanın gerçek imzası) ile
+// doğrula — Content-Type'a asla güvenme. İmzası olmayan düz-metin türleri
+// (txt/csv/json/md) için uzantı + içeriğin "yazdırılabilir metin" olması
+// kontrol edilir. ZIP-tabanlı türler (Office docx/xlsx/pptx ve zip) aynı PK
+// imzasını paylaşır; bunları uzantı ile ayırırız (imza yine PK olmalı).
+
+type Kind = { mime: string; ext: string; inline: boolean };
+
+// PK (ZIP) imzası: 50 4B 03 04  (veya boş/spanned varyantları 05 06 / 07 08)
+const isZipContainer = (b: Buffer) =>
+  b.length > 4 && b[0] === 0x50 && b[1] === 0x4b &&
+  ((b[2] === 0x03 && b[3] === 0x04) || (b[2] === 0x05 && b[3] === 0x06) || (b[2] === 0x07 && b[3] === 0x08));
+
+// OLE2 (eski Office doc/xls/ppt) imzası: D0 CF 11 E0 A1 B1 1A E1
+const isOle2 = (b: Buffer) =>
+  b.length > 8 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x11 && b[3] === 0xe0 &&
+  b[4] === 0xa1 && b[5] === 0xb1 && b[6] === 0x1a && b[7] === 0xe1;
+
+// Binary imzalı türler (uzantıdan bağımsız, doğrudan magic-byte).
+const BINARY_SIGNATURES: { mime: string; ext: string; inline: boolean; test: (b: Buffer) => boolean }[] = [
+  // Görseller (tarayıcıda gösterilebilir → inline)
+  { mime: 'image/png', ext: '.png', inline: true, test: (b) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { mime: 'image/jpeg', ext: '.jpg', inline: true, test: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: 'image/webp', ext: '.webp', inline: true, test: (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
+  { mime: 'image/gif', ext: '.gif', inline: true, test: (b) => b.length > 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a') },
+  { mime: 'application/pdf', ext: '.pdf', inline: true, test: (b) => b.length > 4 && b.toString('ascii', 0, 4) === '%PDF' },
+  // Arşivler (indirilir → asla inline)
+  { mime: 'application/x-rar-compressed', ext: '.rar', inline: false, test: (b) => b.length > 7 && b.toString('ascii', 0, 4) === 'Rar!' && b[4] === 0x1a && b[5] === 0x07 },
+  { mime: 'application/x-7z-compressed', ext: '.7z', inline: false, test: (b) => b.length > 6 && b[0] === 0x37 && b[1] === 0x7a && b[2] === 0xbc && b[3] === 0xaf && b[4] === 0x27 && b[5] === 0x1c },
 ];
 
-function detect(bytes: Buffer): { mime: string; ext: string } | null {
-  return SIGNATURES.find((s) => s.test(bytes)) ?? null;
+// ZIP-tabanlı türler: imza PK olmalı, uzantı hangi Office türü olduğunu belirler.
+const ZIP_EXT: Record<string, { mime: string; ext: string }> = {
+  '.docx': { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: '.docx' },
+  '.xlsx': { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: '.xlsx' },
+  '.pptx': { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: '.pptx' },
+  '.zip': { mime: 'application/zip', ext: '.zip' },
+};
+
+// OLE2-tabanlı eski Office: imza OLE olmalı, uzantı türü belirler.
+const OLE_EXT: Record<string, { mime: string; ext: string }> = {
+  '.doc': { mime: 'application/msword', ext: '.doc' },
+  '.xls': { mime: 'application/vnd.ms-excel', ext: '.xls' },
+  '.ppt': { mime: 'application/vnd.ms-powerpoint', ext: '.ppt' },
+};
+
+// Düz-metin türleri: binary imza yok. Uzantı + içeriğin yazdırılabilir metin
+// olması ile doğrulanır. Güvenlik için ASLA inline servis edilmez (indirilir),
+// böylece .html/.svg gibi tarayıcıda çalışan içerik riski oluşmaz.
+const TEXT_EXT: Record<string, { mime: string; ext: string }> = {
+  '.txt': { mime: 'text/plain', ext: '.txt' },
+  '.csv': { mime: 'text/csv', ext: '.csv' },
+  '.json': { mime: 'application/json', ext: '.json' },
+  '.md': { mime: 'text/markdown', ext: '.md' },
+};
+
+// İçeriğin makul biçimde "metin" olup olmadığını sezgisel kontrol:
+// baştaki örnekte NUL bulunmamalı ve yazdırılamayan bayt oranı düşük olmalı.
+function looksLikeText(b: Buffer): boolean {
+  const sample = b.subarray(0, Math.min(b.length, 8192));
+  if (sample.length === 0) return false;
+  let bad = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample[i];
+    if (c === 0) return false; // NUL → binary
+    // izinli: TAB(9) LF(10) CR(13) ve 32..255 (UTF-8 çok baytlılar dahil)
+    if (c < 9 || (c > 13 && c < 32)) bad++;
+  }
+  return bad / sample.length < 0.05;
+}
+
+function extname(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i >= 0 ? name.slice(i).toLowerCase() : '';
+}
+
+/**
+ * Dosyayı doğrular: önce binary imzalar, sonra ZIP/OLE (uzantı+imza),
+ * en son düz-metin (uzantı+içerik). Geçersizse null.
+ */
+function detect(bytes: Buffer, filename: string): Kind | null {
+  // 1) Doğrudan imzalı binary türler (görsel/pdf/arşiv)
+  const bin = BINARY_SIGNATURES.find((s) => s.test(bytes));
+  if (bin) return { mime: bin.mime, ext: bin.ext, inline: bin.inline };
+
+  const ext = extname(filename);
+
+  // 2) ZIP-tabanlı (Office OOXML + zip): imza PK olmalı, uzantı türü belirler
+  if (ZIP_EXT[ext] && isZipContainer(bytes)) {
+    return { ...ZIP_EXT[ext], inline: false };
+  }
+  // 3) OLE2-tabanlı eski Office: imza OLE olmalı
+  if (OLE_EXT[ext] && isOle2(bytes)) {
+    return { ...OLE_EXT[ext], inline: false };
+  }
+  // 4) Düz-metin: imzasız, uzantı + "metin gibi görünme" ile
+  if (TEXT_EXT[ext] && looksLikeText(bytes)) {
+    return { ...TEXT_EXT[ext], inline: false };
+  }
+  return null;
 }
 
 function sanitize(name: string): string {
@@ -46,19 +136,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const kind = detect(bytes);
+  const kind = detect(bytes, file.name);
   if (!kind) {
-    return NextResponse.json({ success: false, error: 'Sadece resim (PNG/JPG/WEBP/GIF) veya PDF yüklenebilir' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: false, error: 'İzinli türler: resim (PNG/JPG/WEBP/GIF), PDF, Office (Word/Excel/PowerPoint), metin (TXT/CSV/JSON/MD), arşiv (ZIP/RAR/7z)' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   const base = sanitize(path.parse(file.name).name || 'ek') || 'ek';
   const filename = `${base}-${Date.now()}${kind.ext}`;
+  // Güvenlik: yalnızca güvenle gösterilebilen türler (görsel/pdf) tarayıcıda
+  // açılır; Office/metin/arşiv indirmeye zorlanır (attachment) — böylece public
+  // bucket üzerinden XSS/aktif içerik çalıştırma riski engellenir.
+  const disposition = kind.inline
+    ? 'inline'
+    : `attachment; filename="${encodeURIComponent(file.name.slice(0, 100))}"`;
 
   let storedPath: string;
   if (isR2Configured()) {
     // Cloudflare R2 (S3) — Vercel'de kalıcı ve read-only fs sorununu çözer.
     try {
-      storedPath = await uploadToR2(`tasks/${filename}`, bytes, kind.mime);
+      storedPath = await uploadToR2(`tasks/${filename}`, bytes, kind.mime, disposition);
     } catch {
       return NextResponse.json({ success: false, error: 'Dosya depolamaya yüklenemedi (R2)' }, { status: 502, headers: PRIVATE_NO_STORE_HEADERS });
     }

@@ -8,20 +8,37 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET: tüm görev eklerini listeler (Dosyalar bölümü).
- * Filtreler: ?q (dosya adı/görev), ?type=image|pdf, ?department=slug, ?uploadedBy=id
+ * Filtreler: ?q (dosya adı/görev), ?type=image|pdf|office|text|archive,
+ *            ?department=slug, ?uploadedBy=id
  */
+
+// Filtre türü → eşleşecek MIME kümesi (upload route'undaki türlerle uyumlu).
+const TYPE_MIMES: Record<string, string[]> = {
+  pdf: ['application/pdf'],
+  office: [
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+  ],
+  text: ['text/plain', 'text/csv', 'application/json', 'text/markdown'],
+  archive: ['application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed'],
+};
+
 export async function GET(req: NextRequest) {
   const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
   const sp = req.nextUrl.searchParams;
   const q = sp.get('q')?.trim();
-  const type = sp.get('type'); // image | pdf
+  const type = sp.get('type'); // image | pdf | office | text | archive
   const department = sp.get('department');
   const uploadedBy = sp.get('uploadedBy');
 
   const where: Prisma.TaskAttachmentWhereInput = {};
   if (type === 'image') where.mime = { startsWith: 'image/' };
-  else if (type === 'pdf') where.mime = 'application/pdf';
+  else if (type && TYPE_MIMES[type]) where.mime = { in: TYPE_MIMES[type] };
   if (uploadedBy) where.uploadedById = uploadedBy;
   if (department) where.task = { department };
   if (q) {

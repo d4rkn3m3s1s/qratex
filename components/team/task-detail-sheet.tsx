@@ -520,7 +520,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z"
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }}
               />
@@ -532,7 +532,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                 disabled={uploading}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 py-3 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-60"
               >
-                {uploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…</> : <><Plus className="h-4 w-4" /> Dosya ekle (resim/PDF, max 8MB)</>}
+                {uploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…</> : <><Plus className="h-4 w-4" /> Dosya ekle (resim, PDF, Office, metin, arşiv — max 50MB)</>}
               </button>
             </section>
 
@@ -639,7 +639,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                 </div>
               )}
               <div className="relative flex gap-2">
-                <input ref={commentFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" className="hidden"
+                <input ref={commentFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
                 <button type="button" onClick={() => commentFileRef.current?.click()} disabled={uploadingComment}
                   className="self-end grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50" aria-label="Dosya iliştir">
