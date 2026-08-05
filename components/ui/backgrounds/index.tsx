@@ -12,5 +12,6 @@ export { SummerBackground } from './summer';
 export { WinterBackground } from './winter';
 export { AutumnBackground } from './autumn';
 export { SpringBackground } from './spring';
+export { IceKingdomBackground } from './ice-kingdom';
 export { DynamicBackground, type BackgroundVariant } from './dynamic-background';
 

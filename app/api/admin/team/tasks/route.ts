@@ -8,8 +8,11 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = ['todo', 'in_progress', 'done'] as const;
+const STATUSES = ['todo', 'in_progress', 'review', 'done'] as const;
 const PRIORITIES = ['low', 'medium', 'high'] as const;
+// Üyenin (yönetici olmayan) kendi taşıyabileceği durumlar. "done"a yalnızca
+// yönetici onayıyla geçilir; üye en fazla "review" (Onayda) durumuna gönderebilir.
+const MEMBER_ALLOWED_STATUSES = ['todo', 'in_progress', 'review'] as const;
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -29,6 +32,7 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial().extend({
   archived: z.boolean().optional(), // true=arşivle, false=arşivden çıkar
+  reviewNote: z.string().max(2000).optional().nullable(), // yönetici onay/red notu
 });
 
 /** GET: görevleri listeler. ?department=, ?weekKey=, ?status=, ?mine=1 filtreleri. */
@@ -151,9 +155,18 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
 
-/** PUT ?id=: görev günceller (durum/atama/vb.). Kanban sürükle-bırak da bunu kullanır. */
+/**
+ * PUT ?id=: görev günceller (durum/atama/vb.). Kanban sürükle-bırak da bunu kullanır.
+ *
+ * YETKİ MODELİ (onay akışı):
+ *  • Yönetici (isManager): her alanı düzenler; durumu her yöne taşıyabilir.
+ *    "review → done" = ONAY, "review → in_progress" = RED (reviewNote ile geri bildirim).
+ *  • Üye (non-manager): yalnızca KENDİNE ATANMIŞ görevin DURUMUNU
+ *    todo/in_progress/review arasında taşıyabilir. "done"a geçemez (onay yöneticide),
+ *    başka alanları (atama/öncelik/başlık/arşiv...) düzenleyemez.
+ */
 export async function PUT(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
+  const auth = await requireTeamAccess();
   if ('error' in auth) return auth.error;
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
@@ -167,6 +180,28 @@ export async function PUT(req: NextRequest) {
 
   const existing = await prisma.companyTask.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+
+  const userId = auth.session.user.id;
+  const isManager = auth.isManager;
+
+  // ── Üye (yönetici olmayan) kısıtları ───────────────────────────────
+  if (!isManager) {
+    // Yalnızca kendine atanmış görevi ilerletebilir.
+    if (existing.assignedToId !== userId) {
+      return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevleri ilerletebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    // Üye yalnızca DURUM değiştirebilir; başka alan gönderirse reddet.
+    const allowedKeys = new Set(['status']);
+    const sentKeys = Object.keys(d).filter((k) => (d as Record<string, unknown>)[k] !== undefined);
+    const illegal = sentKeys.filter((k) => !allowedKeys.has(k));
+    if (illegal.length > 0) {
+      return NextResponse.json({ success: false, error: 'Yalnızca görevin durumunu değiştirebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    // Üye "done"a (veya izinsiz duruma) geçemez — en fazla "review" (Onayda).
+    if (d.status !== undefined && !(MEMBER_ALLOWED_STATUSES as readonly string[]).includes(d.status)) {
+      return NextResponse.json({ success: false, error: 'Görevi bitmiş olarak işaretleyemezsiniz; yöneticinin onayına gönderin.', code: 'NEEDS_APPROVAL' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+  }
 
   const data: Prisma.CompanyTaskUpdateInput = {};
   if (d.title !== undefined) data.title = d.title;
@@ -198,32 +233,53 @@ export async function PUT(req: NextRequest) {
     }
   }
   const movingToDone = d.status === 'done' && existing.status !== 'done';
+  const movingToReview = d.status === 'review' && existing.status !== 'review';
+  const approving = movingToDone && existing.status === 'review';   // review → done (onay)
+  const rejecting = d.status === 'in_progress' && existing.status === 'review'; // review → devam (red)
   if (d.status !== undefined) {
-    // Bağlı olduğu görev bitmeden "done"a geçişi engelle.
+    // Bağlı olduğu görev bitmeden "done"a geçişi engelle (yalnız yönetici done'a geçebilir).
     if (d.status === 'done' && existing.blockedById) {
       const blocker = await prisma.companyTask.findUnique({ where: { id: existing.blockedById }, select: { status: true } });
       if (blocker && blocker.status !== 'done') {
         return NextResponse.json({ success: false, error: 'Önce bağlı olduğu görev tamamlanmalı' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
-    // ZORUNLU TAMAMLAMA: "done"a geçmek için görevde en az bir yorum (not) VEYA dosya eki olmalı.
-    // İstemci `forceDone` göndermez; kanıt yoksa 409 + gereken bilgi döner (UI modal açar).
-    if (movingToDone) {
+    // ZORUNLU KANIT: "review"e (Onaya) göndermek için görevde en az bir yorum (not)
+    // VEYA dosya eki olmalı. Kanıt yoksa 409 + kod döner (UI modal açar).
+    // (Yönetici doğrudan done'a geçiriyorsa da kanıt aranır — atlanmasın.)
+    if (movingToReview || (movingToDone && existing.status !== 'review')) {
       const counts = await prisma.companyTask.findUnique({
         where: { id }, select: { _count: { select: { comments: true, attachments: true } } },
       });
       const hasProof = (counts?._count.comments ?? 0) > 0 || (counts?._count.attachments ?? 0) > 0;
       if (!hasProof) {
         return NextResponse.json(
-          { success: false, error: 'Görevi bitirmek için ne yaptığını not olarak yaz veya bir döküman ekle.', code: 'PROOF_REQUIRED' },
+          { success: false, error: 'Onaya göndermek için ne yaptığını not olarak yaz veya bir döküman ekle.', code: 'PROOF_REQUIRED' },
           { status: 409, headers: PRIVATE_NO_STORE_HEADERS },
         );
       }
     }
     data.status = d.status;
-    // "done"a geçince completedAt damgala; geri alınca temizle.
-    data.completedAt = d.status === 'done' ? new Date() : null;
+    // Onaya gönderim damgası (review'e ilk geçiş).
+    if (movingToReview) data.submittedForReviewAt = new Date();
+    // Onay (review → done): onaylayan + zaman damgası.
+    if (approving) {
+      data.approvedBy = { connect: { id: userId } };
+      data.approvedAt = new Date();
+    }
+    // "done"dan çıkılıyorsa (geri alma) onay izlerini temizle.
+    if (existing.status === 'done' && d.status !== 'done') {
+      data.approvedBy = { disconnect: true };
+      data.approvedAt = null;
+    }
+    // Red (review → in_progress): onaya gönderim damgasını sıfırla.
+    if (rejecting) data.submittedForReviewAt = null;
+    // "done"a geçince completedAt damgala; done'dan çıkınca temizle.
+    if (d.status === 'done') data.completedAt = new Date();
+    else if (existing.status === 'done') data.completedAt = null;
   }
+  // Yönetici onay/red notu (varsa) yaz.
+  if (isManager && d.reviewNote !== undefined) data.reviewNote = d.reviewNote || null;
 
   const task = await prisma.companyTask.update({
     where: { id },
@@ -242,18 +298,41 @@ export async function PUT(req: NextRequest) {
     })).catch(() => {});
   }
 
-  // Görev tamamlandıysa yöneticilere + oluşturana bildirim (fire-and-forget).
+  // Onay akışı bildirimleri (fire-and-forget).
+  const actorName = (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null))?.name;
+  // 1) Üye onaya gönderdi (review'e ilk geçiş) → yöneticilere "onay bekliyor".
+  if (movingToReview) {
+    import('@/lib/team-notify').then((m) => m.notifyTaskSubmittedForReview({
+      taskId: task.id, taskTitle: task.title,
+      submittedById: userId, submittedByName: actorName,
+      createdById: existing.createdById,
+    })).catch(() => {});
+  }
+  // 2) Yönetici onayladı (review → done) → gönderen üyeye "onaylandı".
+  if (approving && existing.assignedToId && existing.assignedToId !== userId) {
+    import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
+      userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
+      approved: true, byName: actorName,
+    })).catch(() => {});
+  }
+  // 3) Yönetici reddetti (review → in_progress) → gönderen üyeye "revizyona döndü".
+  if (rejecting && existing.assignedToId && existing.assignedToId !== userId) {
+    import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
+      userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
+      approved: false, byName: actorName, note: d.reviewNote,
+    })).catch(() => {});
+  }
+  // 4) Görev tamamlandıysa yöneticilere + oluşturana genel bildirim.
   if (movingToDone) {
-    const actor = await prisma.user.findUnique({ where: { id: auth.session.user.id }, select: { name: true } }).catch(() => null);
     import('@/lib/team-notify').then((m) => m.notifyTaskCompleted({
       taskId: task.id, taskTitle: task.title,
-      completedById: auth.session.user.id, completedByName: actor?.name,
+      completedById: userId, completedByName: actorName,
       createdById: existing.createdById,
     })).catch(() => {});
   }
 
   // Aktivite feed için TaskActivity kayıtları (status/atama/öncelik değişimleri).
-  const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', done: 'Bitti' };
+  const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', review: 'Onayda', done: 'Bitti' };
   const PRIO_LABEL: Record<string, string> = { low: 'Düşük', medium: 'Orta', high: 'Yüksek' };
   const activityRows: { taskId: string; actorId: string; action: string; detail: string }[] = [];
   if (d.status !== undefined && d.status !== existing.status) {

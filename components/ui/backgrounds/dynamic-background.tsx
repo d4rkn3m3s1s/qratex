@@ -26,6 +26,7 @@ import { SummerBackground } from './summer';
 import { WinterBackground } from './winter';
 import { AutumnBackground } from './autumn';
 import { SpringBackground } from './spring';
+import { IceKingdomBackground } from './ice-kingdom';
 
 export type BackgroundVariant =
   | 'original'
@@ -54,6 +55,7 @@ export type BackgroundVariant =
   | 'winter'
   | 'autumn'
   | 'spring'
+  | 'ice-kingdom'
   | 'none';
 
 interface DynamicBackgroundProps {
@@ -290,6 +292,13 @@ export function DynamicBackground({
         <SpringBackground className={className}>
           {children}
         </SpringBackground>
+      );
+
+    case 'ice-kingdom':
+      return (
+        <IceKingdomBackground className={className}>
+          {children}
+        </IceKingdomBackground>
       );
 
     case 'none':

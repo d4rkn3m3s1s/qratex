@@ -25,6 +25,7 @@ const VALID_VARIANTS = [
   'winter',
   'autumn',
   'spring',
+  'ice-kingdom',
   'none',
 ] as const;
 

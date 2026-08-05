@@ -22,6 +22,7 @@ export const SEASONAL_BACKGROUND_OPTIONS: { value: string; label: string }[] = [
   { value: 'winter', label: '❄️ Kış (kar + kahve)' },
   { value: 'autumn', label: '🍂 Sonbahar (yapraklar)' },
   { value: 'spring', label: '🌸 İlkbahar (çiçekler)' },
+  { value: 'ice-kingdom', label: '❄️ Buzul Krallığı (buz kalesi)' },
 ];
 
 /** Dönemsel konseptler için tema paleti seçenekleri (theme-presets anahtarları). */
@@ -81,6 +82,14 @@ export const SEASONAL_TEMPLATES: SeasonalTemplate[] = [
     bannerText: 'İlkbahar tazeliği! Yeni görevler çiçek açıyor.',
     backgroundEffect: 'spring',
     themePresetId: 'forestNight',
+  },
+  {
+    key: 'ice-kingdom',
+    name: 'Buzul Krallığı',
+    emoji: '❄️',
+    bannerText: "Buzul Krallığı'na hoş geldin! Buz kalesi, aurora ve efsanevi kış büyüsü.",
+    backgroundEffect: 'ice-kingdom',
+    themePresetId: 'arctic',
   },
   {
     key: 'halloween',

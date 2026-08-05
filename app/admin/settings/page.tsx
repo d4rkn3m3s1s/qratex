@@ -155,6 +155,7 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
   { id: 'winter', name: '❄️ Kış', description: 'Kar taneleri, kardan adam ve buğulanan kahve', legendary: true },
   { id: 'autumn', name: '🍂 Sonbahar', description: 'Düşen yapraklar, sıcak turuncu tonlar ve kahve', legendary: true },
   { id: 'spring', name: '🌸 İlkbahar', description: 'Açan çiçekler, taze yeşillik ve bahar yağmuru', legendary: true },
+  { id: 'ice-kingdom', name: '❄️ Buzul Krallığı', description: 'Buz kalesi, aurora ışıkları ve efsanevi kış büyüsü', legendary: true },
   // Özel Gün Efektleri
   { id: 'christmas', name: '🎄 Yılbaşı', description: 'Kar, ışıklar ve Noel ruhu', special: true },
   { id: 'valentine', name: '💕 Sevgililer Günü', description: 'Romantik kalpler ve parıltılar', special: true },

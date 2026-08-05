@@ -152,6 +152,7 @@ model User {
   staffTasksAssigned        StaffTask[]                @relation("StaffTaskAssignments")
   companyTasksAssigned      CompanyTask[]              @relation("CompanyTaskAssignments")
   companyTasksCreated       CompanyTask[]              @relation("CompanyTaskCreator")
+  companyTasksApproved      CompanyTask[]              @relation("CompanyTaskApprover")
   taskCommentsAuthored      TaskComment[]              @relation("TaskCommentAuthor")
   taskActivitiesActed       TaskActivity[]             @relation("TaskActivityActor")
   taskAttachmentsUploaded   TaskAttachment[]           @relation("TaskAttachmentUploader")
@@ -2706,7 +2707,7 @@ model CompanyTask {
   id           String    @id @default(cuid())
   title        String
   description  String?   @db.Text
-  status       String    @default("todo")   // todo | in_progress | done
+  status       String    @default("todo")   // todo | in_progress | review | done
   priority     String    @default("medium") // low | medium | high
   department   String?   // Department.slug (null = genel)
   weekKey      String? // "YYYY-Www" (haftalık pano; null = bu haftaya bağlı değil)
@@ -2715,6 +2716,12 @@ model CompanyTask {
   createdById  String
   dueAt        DateTime?
   completedAt  DateTime?
+  // Onay akışı: üye görevi "review"e (Onayda) gönderir; yalnızca yönetici
+  // onaylayıp "done" yapabilir. Reddedilirse "in_progress"e döner.
+  submittedForReviewAt DateTime? // üye onaya gönderdiğinde damgalanır
+  approvedById         String?   // onaylayan yönetici (done'a geçiren)
+  approvedAt           DateTime? // onay zamanı
+  reviewNote           String?   @db.Text // onay/red notu (yönetici geri bildirimi)
   // Zaman takibi (dakika cinsinden tahmini + harcanan)
   estimateMin  Int? // tahmini süre (dk)
   spentMin     Int      @default(0) // harcanan süre (dk)
@@ -2735,6 +2742,7 @@ model CompanyTask {
 
   assignedTo  User? @relation("CompanyTaskAssignments", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdBy   User  @relation("CompanyTaskCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  approvedBy  User? @relation("CompanyTaskApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   blockedBy   CompanyTask?  @relation("TaskDependency", fields: [blockedById], references: [id], onDelete: SetNull)
   blocking    CompanyTask[] @relation("TaskDependency")
   checklist   TaskChecklistItem[]

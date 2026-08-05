@@ -80,10 +80,11 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', done: 'Bitti' };
+const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', review: 'Onayda', done: 'Bitti' };
 const STATUS_STYLE: Record<string, string> = {
   todo: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',
   in_progress: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  review: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
   done: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
 };
 const PRIORITY_LABEL: Record<string, string> = { high: 'Yüksek', medium: 'Orta', low: 'Düşük' };

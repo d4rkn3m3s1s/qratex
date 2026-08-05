@@ -48,6 +48,7 @@ type Task = {
   id: string; title: string; description: string | null; status: string; priority: string;
   department: string | null; weekKey: string | null; dueAt: string | null; tags: string | null;
   estimateMin: number | null; spentMin: number; recurrence: string | null; blockedById: string | null;
+  submittedForReviewAt?: string | null; approvedById?: string | null; reviewNote?: string | null;
   assignedTo: { id: string; name: string | null; email: string; image: string | null } | null;
   blockedBy: { id: string; title: string; status: string } | null;
   _count?: { comments: number; attachments: number; checklist: number };
@@ -56,6 +57,7 @@ type Task = {
 const COLUMNS = [
   { key: 'todo', label: 'Yapılacak', emoji: '📋', dot: 'bg-slate-400', ring: 'ring-slate-400/30', head: 'text-slate-600 dark:text-slate-300' },
   { key: 'in_progress', label: 'Devam Ediyor', emoji: '⚡', dot: 'bg-amber-400', ring: 'ring-amber-400/40', head: 'text-amber-600 dark:text-amber-400' },
+  { key: 'review', label: 'Onayda', emoji: '⏳', dot: 'bg-sky-400', ring: 'ring-sky-400/40', head: 'text-sky-600 dark:text-sky-400' },
   { key: 'done', label: 'Bitti', emoji: '✅', dot: 'bg-emerald-400', ring: 'ring-emerald-400/40', head: 'text-emerald-600 dark:text-emerald-400' },
 ] as const;
 
@@ -90,8 +92,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   const { data: session } = useSession();
   const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'ADMIN';
-  // ADMIN her zaman tam yetki; ekip alt-rolü "yönetici" ise ya da hiç atanmamışsa da yönetici.
-  const isManager = isAdmin || teamRole === 'yonetici' || teamRole == null;
+  // ADMIN her zaman tam yetki; ekip alt-rolü "yönetici" ise yönetici. (Backend ile
+  // aynı: rolü olmayan/üye onay veremez, görevi "Bitti"ye kendi taşıyamaz.)
+  const isManager = isAdmin || teamRole === 'yonetici';
 
   const [weekKey, setWeekKey] = useState<string>(() => weekKeyOf());
   const [department, setDepartment] = useState<string>('all');
@@ -327,21 +330,53 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
         const j = await res.json().catch(() => null);
         // Optimistik değişikliği geri al.
         setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: prevStatus } : t)));
-        // Zorunlu tamamlama: kanıt (not/döküman) yoksa detay panelini aç, kullanıcı ekleyebilsin.
+        // Zorunlu kanıt: not/döküman yoksa detay panelini aç, kullanıcı ekleyebilsin.
         if (j?.code === 'PROOF_REQUIRED') {
           toast.error(j.error);
           setDetailId(taskId);
+        } else if (j?.code === 'NEEDS_APPROVAL') {
+          // Üye "Bitti"ye kendi taşıyamaz — bunun yerine onaya (review) gönder.
+          toast.error(j.error);
         } else {
           toast.error(j?.error || 'Taşınamadı');
         }
         return;
       }
-      // Kutlama: göreve "Bitti"ye geçince yıldız + ses + titreşim.
+      // Kutlama: yalnız gerçekten "Bitti"ye geçince (yönetici onayı). Onaya
+      // gönderince (review) daha hafif geri bildirim.
       if (newStatus === 'done' && prevStatus !== 'done') {
         celebrateTaskDone();
+      } else if (newStatus === 'review' && prevStatus !== 'review') {
+        toast.success('Görev onaya gönderildi ⏳');
       }
     } catch {
       toast.error('Taşınamadı');
+      loadTasks();
+    }
+  };
+
+  // Yönetici reddi: görevi "Devam Ediyor"a döndür + opsiyonel geri bildirim notu.
+  const rejectTask = async (taskId: string) => {
+    const note = typeof window !== 'undefined'
+      ? window.prompt('Red nedeni / düzeltilecekler (opsiyonel):') ?? ''
+      : '';
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'in_progress' } : t)));
+    try {
+      const res = await fetch(`/api/admin/team/tasks?id=${taskId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'in_progress', reviewNote: note || null }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'review' } : t)));
+        toast.error(j?.error || 'İşlem başarısız');
+        return;
+      }
+      toast.success('Görev revizyona döndürüldü');
+    } catch {
+      toast.error('İşlem başarısız');
       loadTasks();
     }
   };
@@ -986,6 +1021,43 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                             )}
                             {task._count.attachments > 0 && (
                               <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{task._count.attachments}</span></TooltipTrigger><TooltipContent>{task._count.attachments} ek</TooltipContent></Tooltip>
+                            )}
+                          </div>
+                        )}
+                        {/* Onay akışı aksiyonları (rol + duruma göre). Sürükle-bırak
+                            yalnız yöneticide olduğundan üye görevini bu butonlarla ilerletir. */}
+                        {!selectMode && (
+                          <div className="mt-2.5 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {/* Üye: kendi görevini ilerletir (Bitti'ye kendi geçemez) */}
+                            {!isManager && task.assignedTo?.id === session?.user?.id && (
+                              <>
+                                {task.status === 'todo' && (
+                                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => moveTask(task.id, 'in_progress')}>
+                                    <Zap className="h-3 w-3" /> Başla
+                                  </Button>
+                                )}
+                                {task.status === 'in_progress' && (
+                                  <Button size="sm" className="h-7 gap-1 bg-sky-600 text-xs hover:bg-sky-700" onClick={() => moveTask(task.id, 'review')}>
+                                    <UserCheck className="h-3 w-3" /> Onaya gönder
+                                  </Button>
+                                )}
+                                {task.status === 'review' && (
+                                  <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                                    <Clock className="h-3 w-3" /> Yönetici onayı bekleniyor
+                                  </span>
+                                )}
+                              </>
+                            )}
+                            {/* Yönetici: onaya düşen görevi onaylar/reddeder */}
+                            {isManager && task.status === 'review' && (
+                              <>
+                                <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700" onClick={() => moveTask(task.id, 'done')}>
+                                  <CheckSquare className="h-3 w-3" /> Onayla
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-amber-600" onClick={() => rejectTask(task.id)}>
+                                  <X className="h-3 w-3" /> Reddet
+                                </Button>
+                              </>
                             )}
                           </div>
                         )}

@@ -8,7 +8,7 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = ['todo', 'in_progress', 'done'] as const;
+const STATUSES = ['todo', 'in_progress', 'review', 'done'] as const;
 const PRIORITIES = ['low', 'medium', 'high'] as const;
 
 const bulkSchema = z.object({
@@ -55,6 +55,15 @@ export async function POST(req: NextRequest) {
     if (action.op === 'status') {
       data.status = action.value;
       data.completedAt = action.value === 'done' ? new Date() : null;
+      // Toplu onay (done): onaylayan yönetici + zaman damgası. done değilse temizle.
+      if (action.value === 'done') {
+        data.approvedById = auth.session.user.id;
+        data.approvedAt = new Date();
+      } else {
+        data.approvedById = null;
+        data.approvedAt = null;
+        if (action.value === 'review') data.submittedForReviewAt = new Date();
+      }
     } else if (action.op === 'priority') {
       data.priority = action.value;
     } else if (action.op === 'assign') {

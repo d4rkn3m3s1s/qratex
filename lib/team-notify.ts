@@ -51,6 +51,50 @@ export async function notifyTaskCompleted(opts: {
   } catch { /* sessiz */ }
 }
 
+/**
+ * Görev ONAYA gönderildiğinde (üye review'e taşıyınca) YÖNETİCİLERE + oluşturana bildirim.
+ * Onay kuyruğuna düştüğünü haber verir. Gönderen kişiye bildirim gitmez.
+ */
+export async function notifyTaskSubmittedForReview(opts: {
+  taskId: string; taskTitle: string; submittedById: string; submittedByName?: string | null; createdById?: string | null;
+}): Promise<void> {
+  try {
+    const managers = await prisma.user.findMany({
+      where: { OR: [{ role: 'ADMIN' }, { adminTeamRole: 'yonetici' }] },
+      select: { id: true },
+    });
+    const recipientIds = new Set<string>(managers.map((m) => m.id));
+    if (opts.createdById) recipientIds.add(opts.createdById);
+    recipientIds.delete(opts.submittedById);
+
+    await Promise.all([...recipientIds].map((userId) => createNotification({
+      userId,
+      title: '⏳ Onay bekliyor',
+      message: `${opts.submittedByName || 'Bir üye'} "${opts.taskTitle}" görevini onaya gönderdi`,
+      type: 'warning',
+      data: { kind: 'team-task-review', taskId: opts.taskId, href: `/admin/ekip?task=${opts.taskId}` },
+    })));
+  } catch { /* sessiz */ }
+}
+
+/**
+ * Yönetici görevi onayladı/reddetti — görevi ONAYA GÖNDEREN üyeye bildirim.
+ * approved=true → onaylandı (done), false → reddedildi (devam'a döndü).
+ */
+export async function notifyTaskReviewed(opts: {
+  userId: string; taskId: string; taskTitle: string; approved: boolean; byName?: string | null; note?: string | null;
+}): Promise<void> {
+  await createNotification({
+    userId: opts.userId,
+    title: opts.approved ? '✅ Görevin onaylandı' : '↩️ Görevin revizyona döndü',
+    message: opts.approved
+      ? `"${opts.taskTitle}" onaylandı ve tamamlandı`
+      : `"${opts.taskTitle}" reddedildi${opts.note ? `: ${opts.note.slice(0, 80)}` : ' — düzeltip tekrar gönder'}`,
+    type: opts.approved ? 'success' : 'warning',
+    data: { kind: 'team-task-reviewed', taskId: opts.taskId, href: `/customer/ekip?task=${opts.taskId}` },
+  });
+}
+
 /** Görev atandığında atanan kişiye in-app bildirim. */
 export async function notifyTaskAssigned(opts: {
   userId: string; taskId: string; taskTitle: string; priority?: string;
