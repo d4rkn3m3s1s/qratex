@@ -66,9 +66,9 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       canvas.width = W * dpr; canvas.height = H * dpr;
       canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Boyut değişince statik kale offscreen cache'ini yeniden üret.
+      buildCastle();
     };
-    resize();
-    window.addEventListener('resize', resize);
 
     // ── Moda göre KESKİN palet ────────────────────────────────────
     const P = isDark
@@ -208,124 +208,284 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       }
     };
 
-    // Tek bir kristal buz kulesi çiz (dikdörtgen gövde + sivri üçgen tepe + pencereler).
-    const drawTower = (bx: number, baseY: number, tw: number, th: number, spireH: number) => {
-      // Gövde
-      const g = ctx.createLinearGradient(bx - tw / 2, baseY - th, bx + tw / 2, baseY);
-      g.addColorStop(0, P.castleHi);
-      g.addColorStop(0.5, P.castleFill);
-      g.addColorStop(1, P.castleShade);
-      ctx.fillStyle = g;
-      ctx.fillRect(bx - tw / 2, baseY - th, tw, th);
-      // Sol kenar highlight (buz parıltısı)
-      ctx.fillStyle = P.castleHi;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(bx - tw / 2, baseY - th, tw * 0.18, th);
-      ctx.globalAlpha = 1;
-      // Sivri kristal çatı (üçgen)
-      ctx.beginPath();
-      ctx.moveTo(bx - tw * 0.62, baseY - th);
-      ctx.lineTo(bx, baseY - th - spireH);
-      ctx.lineTo(bx + tw * 0.62, baseY - th);
-      ctx.closePath();
-      const sg = ctx.createLinearGradient(bx, baseY - th - spireH, bx, baseY - th);
+    // ══════════════════════════════════════════════════════════════
+    //  BUZ KALESİ — OFFSCREEN CACHE MİMARİSİ
+    //  Kale statiktir (yalnız parallax kayar). Her karede baştan çizmek
+    //  (5+ kule × pencere gradyanları + save/restore + composite) takılma
+    //  yapar. Bu yüzden kaleyi BİR KEZ yüksek detayla offscreen canvas'a
+    //  çizip draw()'da tek drawImage ile blit ederiz. Pencere parıltısı
+    //  cache'e girmez; blit'ten sonra birkaç noktaya animasyonlu glow eklenir.
+    // ══════════════════════════════════════════════════════════════
+    let castleCanvas: HTMLCanvasElement | null = null;
+    // Kalenin sahnedeki oturduğu taban y'si (blit hizası için) ve merkez x.
+    let castleBaseY = 0, castleCenterX = 0;
+    // Animasyonlu pencere/kapı parıltı noktaları (DÜNYA koordinatı, cache'e gömülmez).
+    interface GlowPt { x: number; y: number; r: number; hue: number; sat: number; light: number; base: number; }
+    let glowPoints: GlowPt[] = [];
+
+    // Yardımcı: bir kule çiz (offscreen ctx'e). Zarif, ince, kristal buz kule:
+    //  dikey buz damarları + sivri içbükey kristal külah + tepe karı + pencereler.
+    //  octx: offscreen 2D bağlamı. bx: kule merkez x. baseY: kule tabanı (duvar üstü).
+    //  tw: gövde genişliği. th: gövde yüksekliği. spireH: külah yüksekliği.
+    const drawTowerOff = (
+      octx: CanvasRenderingContext2D, bx: number, baseY: number,
+      tw: number, th: number, spireH: number,
+    ) => {
+      const topY = baseY - th;             // gövde tepesi (külah başlangıcı)
+      const hw = tw / 2;
+      const L = bx - hw, R = bx + hw;
+
+      // ── GÖVDE — yatay gradyan ile sol ışık kenarı → sağ gölge (hacim) ──
+      const bodyG = octx.createLinearGradient(L, 0, R, 0);
+      bodyG.addColorStop(0, P.castleHi);
+      bodyG.addColorStop(0.16, P.castleFill);
+      bodyG.addColorStop(0.62, P.castleFill);
+      bodyG.addColorStop(1, P.castleShade);
+      octx.fillStyle = bodyG;
+      octx.fillRect(L, topY, tw, th);
+
+      // ── DİKEY BUZ KRİSTALİ DAMARLARI — birkaç ince saydam açık şerit ──
+      octx.save();
+      octx.beginPath(); octx.rect(L, topY, tw, th); octx.clip();
+      octx.globalCompositeOperation = isDark ? 'lighter' : 'source-over';
+      const veins = 4;
+      for (let v = 0; v < veins; v++) {
+        const vx = L + tw * (0.2 + (v / (veins - 1)) * 0.62);
+        const vw = tw * (v % 2 === 0 ? 0.05 : 0.03);
+        const vg = octx.createLinearGradient(vx, topY, vx, baseY);
+        const va = isDark ? 0.16 : 0.28;
+        vg.addColorStop(0, `rgba(210,240,255,${va})`);
+        vg.addColorStop(0.5, `rgba(190,230,255,${va * 0.5})`);
+        vg.addColorStop(1, 'rgba(190,230,255,0)');
+        octx.fillStyle = vg;
+        octx.fillRect(vx - vw / 2, topY, vw, th);
+      }
+      // hafif buzul çatlak (ince eğik çizgi)
+      octx.strokeStyle = isDark ? 'rgba(150,215,255,0.14)' : 'rgba(120,165,200,0.22)';
+      octx.lineWidth = 1;
+      octx.beginPath();
+      octx.moveTo(L + tw * 0.34, topY + th * 0.12);
+      octx.lineTo(L + tw * 0.5, topY + th * 0.5);
+      octx.lineTo(L + tw * 0.42, baseY - th * 0.08);
+      octx.stroke();
+      octx.restore();
+
+      // sağ kenar gölge şeridi (hacim vurgusu)
+      octx.fillStyle = P.castleShade;
+      octx.globalAlpha = isDark ? 0.5 : 0.35;
+      octx.fillRect(R - tw * 0.12, topY, tw * 0.12, th);
+      // sol kenar parlak ışık şeridi
+      octx.fillStyle = P.castleHi;
+      octx.globalAlpha = isDark ? 0.55 : 0.7;
+      octx.fillRect(L, topY, tw * 0.1, th);
+      octx.globalAlpha = 1;
+
+      // ── SİVRİ KRİSTAL KÜLAH — içbükey kenarlı, zarif sivrilen (quadratic) ──
+      const tipX = bx, tipY = topY - spireH;
+      const sg = octx.createLinearGradient(0, tipY, 0, topY);
       sg.addColorStop(0, P.castleHi);
+      sg.addColorStop(0.45, P.castleFill);
       sg.addColorStop(1, P.castleShade);
-      ctx.fillStyle = sg; ctx.fill();
-      // Çatı ucunda kar
-      ctx.beginPath();
-      ctx.moveTo(bx, baseY - th - spireH);
-      ctx.lineTo(bx - tw * 0.16, baseY - th - spireH * 0.6);
-      ctx.lineTo(bx + tw * 0.16, baseY - th - spireH * 0.6);
-      ctx.closePath();
-      ctx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.7 : 0.9})`;
-      ctx.fill();
-      // Pencereler (gece hafif mavi parıltılı)
-      const rows = Math.max(1, Math.floor(th / 26));
+      octx.fillStyle = sg;
+      octx.beginPath();
+      octx.moveTo(L - tw * 0.08, topY);
+      // sol kenar: hafif içbükey (kontrol noktası içeride)
+      octx.quadraticCurveTo(bx - tw * 0.14, topY - spireH * 0.55, tipX, tipY);
+      // sağ kenar
+      octx.quadraticCurveTo(bx + tw * 0.14, topY - spireH * 0.55, R + tw * 0.08, topY);
+      octx.closePath();
+      octx.fill();
+      // külah sol yüz highlight (kristal parıltı)
+      octx.save();
+      octx.clip();
+      octx.fillStyle = P.castleHi;
+      octx.globalAlpha = isDark ? 0.4 : 0.55;
+      octx.beginPath();
+      octx.moveTo(L - tw * 0.08, topY);
+      octx.quadraticCurveTo(bx - tw * 0.14, topY - spireH * 0.55, tipX, tipY);
+      octx.lineTo(bx - tw * 0.03, tipY + spireH * 0.12);
+      octx.quadraticCurveTo(bx - tw * 0.2, topY - spireH * 0.4, L + tw * 0.06, topY);
+      octx.closePath();
+      octx.fill();
+      octx.restore();
+
+      // külah tepe karı — yumuşak yastık (quadratic), düz çizgi değil
+      const capY = topY - spireH * 0.62;
+      const capHw = tw * 0.2;
+      octx.beginPath();
+      octx.moveTo(tipX - capHw * 0.4, capY + capHw * 0.5);
+      octx.quadraticCurveTo(tipX, capY - capHw * 0.5, tipX + capHw * 0.4, capY + capHw * 0.5);
+      octx.quadraticCurveTo(tipX, capY + capHw * 0.9, tipX - capHw * 0.4, capY + capHw * 0.5);
+      octx.closePath();
+      octx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.75 : 0.92})`;
+      octx.fill();
+
+      // külah ucunda küçük parlak buz noktası (statik parıltı)
+      octx.save();
+      octx.globalCompositeOperation = 'lighter';
+      const tipG = octx.createRadialGradient(tipX, tipY, 0, tipX, tipY, tw * 0.28);
+      tipG.addColorStop(0, isDark ? 'rgba(200,240,255,0.9)' : 'rgba(255,255,255,0.9)');
+      tipG.addColorStop(1, 'transparent');
+      octx.fillStyle = tipG;
+      octx.beginPath(); octx.arc(tipX, tipY, tw * 0.28, 0, Math.PI * 2); octx.fill();
+      octx.restore();
+
+      // ── PENCERELER — ince kemerli buz pencereleri; konumları glow için kaydedilir ──
+      const rows = Math.max(1, Math.floor(th / 30));
+      const ww = Math.max(4, tw * 0.16), wh = ww * 1.9;
       for (let r = 0; r < rows; r++) {
-        const wy = baseY - th + 12 + r * 24;
-        if (wy > baseY - 8) break;
-        const wx = bx - 2.5;
-        if (isDark) {
-          // pencere halesi
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const flick = reduceMotion ? 1 : 0.7 + Math.sin(t * 0.05 + bx + r) * 0.3;
-          const wg = ctx.createRadialGradient(wx + 2.5, wy + 5, 0, wx + 2.5, wy + 5, 9);
-          wg.addColorStop(0, `rgba(120,210,255,${0.5 * flick})`);
-          wg.addColorStop(1, 'transparent');
-          ctx.fillStyle = wg;
-          ctx.beginPath(); ctx.arc(wx + 2.5, wy + 5, 9, 0, Math.PI * 2); ctx.fill();
-          ctx.restore();
-        }
-        ctx.fillStyle = P.castleWin;
-        ctx.fillRect(wx, wy, 5, 9);
+        const wy = topY + 16 + r * (th - 22) / rows;
+        if (wy > baseY - wh - 4) break;
+        const wx = bx - ww / 2;
+        // kemerli pencere gövdesi
+        octx.beginPath();
+        octx.moveTo(wx, wy + wh);
+        octx.lineTo(wx, wy + ww * 0.5);
+        octx.arc(bx, wy + ww * 0.5, ww / 2, Math.PI, 0);
+        octx.lineTo(wx + ww, wy + wh);
+        octx.closePath();
+        octx.fillStyle = P.castleWin;
+        octx.fill();
+        // pencere kaydı (dünya koordinatı — blit'te taban hizalanır)
+        glowPoints.push({
+          x: bx, y: wy + wh * 0.5, r: ww * 1.7,
+          hue: 205, sat: 90, light: isDark ? 65 : 78,
+          base: isDark ? 0.5 : 0.22,
+        });
       }
     };
 
-    // BUZ KALESİ — ufuk hattında görkemli donmuş kale silüeti (temanın imzası).
-    // groundY: kar örtüsü yüzey y'si (kalenin oturduğu). shift: parallax kaydırma.
-    const drawCastle = (groundY: number, shift: number) => {
-      const cx = W * 0.5 + shift;      // merkez (biraz sağa kaydırılabilir)
-      const scale = Math.min(1.15, Math.max(0.7, W / 1400));
-      const baseY = groundY + 6;
+    // BUZ KALESİ — offscreen canvas'a bir kez çizen ana kurulum.
+    // Kaleyi tam W×H boyutunda bir offscreen'e DPR ölçekli çizer; draw()'da
+    // parallax kayması için yalnız x-shift ile blit edilir.
+    const buildCastle = () => {
+      if (!W || !H) return;
+      glowPoints = [];
+      const off = document.createElement('canvas');
+      off.width = Math.max(1, Math.floor(W * dpr));
+      off.height = Math.max(1, Math.floor(H * dpr));
+      const octx = off.getContext('2d');
+      if (!octx) return;
+      // Ana ctx gibi CSS px uzayında çalış (keskinlik için DPR ölçekle).
+      octx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.save();
+      // Kalenin oturduğu taban — kar örtüsü dalgasının ortalama seviyesi (gy≈H*0.82).
+      const gy = H * 0.82;
+      const baseY = gy + 6;
+      const cx = W * 0.5;
+      castleBaseY = baseY;
+      castleCenterX = cx;
+      const scale = Math.min(1.05, Math.max(0.66, W / 1500));
 
-      // Alt gövde (kale duvarı) — geniş dikdörtgen taban
-      const wallW = 240 * scale, wallH = 70 * scale;
+      // ── ALT SUR (bağlayıcı duvar) — buz dokulu, zarif mazgallı ──
+      const wallW = 250 * scale, wallH = 62 * scale;
       const wallX = cx - wallW / 2;
       const wallY = baseY - wallH;
-      const wg = ctx.createLinearGradient(wallX, wallY, wallX, baseY);
-      wg.addColorStop(0, P.castleFill);
+      const wg = octx.createLinearGradient(wallX, 0, wallX + wallW, 0);
+      wg.addColorStop(0, P.castleHi);
+      wg.addColorStop(0.14, P.castleFill);
+      wg.addColorStop(0.7, P.castleFill);
       wg.addColorStop(1, P.castleShade);
-      ctx.fillStyle = wg;
-      ctx.fillRect(wallX, wallY, wallW, wallH);
-      // Duvar üstü mazgal (crenellation)
-      ctx.fillStyle = P.castleFill;
-      const merlonW = 12 * scale;
-      for (let mx2 = wallX; mx2 < wallX + wallW; mx2 += merlonW * 2) {
-        ctx.fillRect(mx2, wallY - 8 * scale, merlonW, 8 * scale);
+      octx.fillStyle = wg;
+      octx.fillRect(wallX, wallY, wallW, wallH);
+      // sur alt gölge (zemine oturma) + üst ışık
+      const wgv = octx.createLinearGradient(0, wallY, 0, baseY);
+      wgv.addColorStop(0, isDark ? 'rgba(120,200,255,0.12)' : 'rgba(255,255,255,0.3)');
+      wgv.addColorStop(1, isDark ? 'rgba(5,15,30,0.4)' : 'rgba(120,160,200,0.28)');
+      octx.fillStyle = wgv;
+      octx.fillRect(wallX, wallY, wallW, wallH);
+      // sur dikey buz damarları
+      octx.save();
+      octx.beginPath(); octx.rect(wallX, wallY, wallW, wallH); octx.clip();
+      octx.strokeStyle = isDark ? 'rgba(160,220,255,0.1)' : 'rgba(130,170,205,0.2)';
+      octx.lineWidth = 1;
+      for (let vx = wallX + 14 * scale; vx < wallX + wallW; vx += 22 * scale) {
+        octx.beginPath(); octx.moveTo(vx, wallY); octx.lineTo(vx, baseY); octx.stroke();
       }
-      // Duvar üstü kar
-      ctx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.5 : 0.85})`;
-      ctx.fillRect(wallX, wallY - 2, wallW, 3 * scale);
+      octx.restore();
+      // zarif mazgallar (ince crenellation)
+      octx.fillStyle = P.castleFill;
+      const merlonW = 10 * scale, merlonH = 9 * scale;
+      for (let mx2 = wallX + 4 * scale; mx2 < wallX + wallW - merlonW; mx2 += merlonW * 2.1) {
+        octx.fillRect(mx2, wallY - merlonH, merlonW, merlonH);
+        // mazgal sol ışık kenarı
+        octx.fillStyle = P.castleHi; octx.globalAlpha = 0.5;
+        octx.fillRect(mx2, wallY - merlonH, merlonW * 0.3, merlonH);
+        octx.globalAlpha = 1; octx.fillStyle = P.castleFill;
+      }
+      // sur üstü yumuşak kar örtüsü (dalgalı yastık)
+      octx.beginPath();
+      octx.moveTo(wallX, wallY - merlonH + 1);
+      for (let x = wallX; x <= wallX + wallW; x += 16 * scale) {
+        const dip = Math.sin(x * 0.08) * 1.5 * scale;
+        octx.quadraticCurveTo(x + 4 * scale, wallY - merlonH - 3 * scale + dip, x + 8 * scale, wallY - merlonH + 1);
+      }
+      octx.lineTo(wallX + wallW, wallY - merlonH + 4 * scale);
+      octx.lineTo(wallX, wallY - merlonH + 4 * scale);
+      octx.closePath();
+      octx.fillStyle = `rgba(${P.snowColor},${isDark ? 0.55 : 0.88})`;
+      octx.fill();
 
-      // Kapı (kemerli koyu giriş)
-      const gw = 32 * scale, gh = 44 * scale;
+      // ── KEMERLİ ANA KAPI — gece içten mavi parıltı ──
+      const gw = 34 * scale, gh = 46 * scale;
       const gx = cx - gw / 2;
-      const gyTop = baseY - gh;
-      ctx.beginPath();
-      ctx.moveTo(gx, baseY);
-      ctx.lineTo(gx, gyTop + gw * 0.5);
-      ctx.arc(cx, gyTop + gw * 0.5, gw / 2, Math.PI, 0);
-      ctx.lineTo(gx + gw, baseY);
-      ctx.closePath();
-      ctx.fillStyle = isDark ? '#050c17' : '#6a93b8';
-      ctx.fill();
+      const gTop = baseY - gh;
+      octx.beginPath();
+      octx.moveTo(gx, baseY);
+      octx.lineTo(gx, gTop + gw * 0.5);
+      octx.arc(cx, gTop + gw * 0.5, gw / 2, Math.PI, 0);
+      octx.lineTo(gx + gw, baseY);
+      octx.closePath();
+      const doorG = octx.createLinearGradient(0, gTop, 0, baseY);
       if (isDark) {
-        // kapı içi hafif mavi parıltı
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const dg = ctx.createRadialGradient(cx, baseY - gh * 0.4, 0, cx, baseY - gh * 0.4, gw);
-        dg.addColorStop(0, P.castleWinGlow);
-        dg.addColorStop(1, 'transparent');
-        ctx.fillStyle = dg;
-        ctx.fillRect(gx - gw, baseY - gh - gw, gw * 3, gh + gw * 2);
-        ctx.restore();
+        doorG.addColorStop(0, '#123a5c');
+        doorG.addColorStop(0.5, '#0a2540');
+        doorG.addColorStop(1, '#04101f');
+      } else {
+        doorG.addColorStop(0, '#89b3d6');
+        doorG.addColorStop(1, '#5c86ac');
       }
+      octx.fillStyle = doorG;
+      octx.fill();
+      // kapı kemeri buz kenarı (highlight çerçeve)
+      octx.strokeStyle = isDark ? 'rgba(140,215,255,0.4)' : 'rgba(255,255,255,0.6)';
+      octx.lineWidth = 1.5 * scale;
+      octx.beginPath();
+      octx.moveTo(gx, baseY);
+      octx.lineTo(gx, gTop + gw * 0.5);
+      octx.arc(cx, gTop + gw * 0.5, gw / 2, Math.PI, 0);
+      octx.lineTo(gx + gw, baseY);
+      octx.stroke();
+      // kapı iç parıltısı için glow noktası kaydet (gece belirgin, gündüz soluk)
+      glowPoints.push({
+        x: cx, y: baseY - gh * 0.42, r: gw * 1.1,
+        hue: 205, sat: 92, light: isDark ? 60 : 80,
+        base: isDark ? 0.7 : 0.18,
+      });
 
-      // Kuleler — merkez büyük ana kule + yanlarda kademeli daha küçük kuleler.
-      // (arkadan öne: önce yan kuleler, sonra ana kule ki üstte kalsın)
-      drawTower(cx - 92 * scale, wallY, 30 * scale, 66 * scale, 34 * scale);
-      drawTower(cx + 92 * scale, wallY, 30 * scale, 66 * scale, 34 * scale);
-      drawTower(cx - 54 * scale, wallY, 26 * scale, 100 * scale, 40 * scale);
-      drawTower(cx + 54 * scale, wallY, 26 * scale, 100 * scale, 40 * scale);
-      // Ana (en yüksek) kule
-      drawTower(cx, wallY, 40 * scale, 140 * scale, 60 * scale);
+      // ── KADEMELİ KULE SİLÜETİ — merkeze doğru artan piramidal, zarif/ince ──
+      //    Arkadan öne: en dış kısa kuleler → içteki uzun kuleler → ana kule.
+      //    (5 kule; simetrik, yükseklikler merkeze doğru artar)
+      drawTowerOff(octx, cx - 100 * scale, wallY + 6 * scale, 26 * scale, 64 * scale, 40 * scale);
+      drawTowerOff(octx, cx + 100 * scale, wallY + 6 * scale, 26 * scale, 64 * scale, 40 * scale);
+      drawTowerOff(octx, cx - 56 * scale, wallY, 30 * scale, 104 * scale, 56 * scale);
+      drawTowerOff(octx, cx + 56 * scale, wallY, 30 * scale, 104 * scale, 56 * scale);
+      // ANA (en yüksek, en zarif) kule — ince gövde, uzun kristal külah
+      drawTowerOff(octx, cx, wallY - 4 * scale, 40 * scale, 150 * scale, 84 * scale);
 
-      ctx.restore();
+      // ── AY IŞIĞI / GÜN IŞIĞI KENAR HIGHLIGHT — sol siluet kenarına ince parlaklık ──
+      octx.save();
+      octx.globalCompositeOperation = 'lighter';
+      octx.fillStyle = isDark ? 'rgba(150,210,255,0.05)' : 'rgba(255,255,255,0.08)';
+      octx.fillRect(wallX - 4, wallY - 200 * scale, 6, baseY - (wallY - 200 * scale));
+      octx.restore();
+
+      castleCanvas = off;
     };
+
+    // Kurulum: ilk boyutlandırma (kaleyi de üretir) + resize dinleyici.
+    resize();
+    window.addEventListener('resize', resize);
 
     // Donmuş köprü — kalenin önünde, kar örtüsü üstüne uzanan kemerli buz köprü.
     const drawBridge = (groundY: number, shift: number) => {
@@ -335,23 +495,43 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       const bw = 180 * scale;
       const arcH = 26 * scale;
       ctx.save();
-      // Köprü tablası (hafif kemerli)
+      // Köprü tablası (hafif kemerli, buz dokulu)
       ctx.beginPath();
       ctx.moveTo(cx - bw / 2, by);
       ctx.quadraticCurveTo(cx, by - arcH, cx + bw / 2, by);
-      ctx.lineTo(cx + bw / 2, by + 8 * scale);
-      ctx.quadraticCurveTo(cx, by - arcH + 8 * scale, cx - bw / 2, by + 8 * scale);
+      ctx.lineTo(cx + bw / 2, by + 9 * scale);
+      ctx.quadraticCurveTo(cx, by - arcH + 9 * scale, cx - bw / 2, by + 9 * scale);
       ctx.closePath();
-      const bg = ctx.createLinearGradient(cx, by - arcH, cx, by + 8 * scale);
+      const bg = ctx.createLinearGradient(cx, by - arcH, cx, by + 9 * scale);
       bg.addColorStop(0, P.castleHi);
+      bg.addColorStop(0.5, P.castleFill);
       bg.addColorStop(1, P.castleShade);
       ctx.fillStyle = bg; ctx.fill();
-      // Üst kar örtüsü
+      // İnce korkuluk direkleri (buz balustrad)
+      ctx.strokeStyle = P.castleShade;
+      ctx.lineWidth = 1.4 * scale;
+      for (let i = 1; i < 8; i++) {
+        const px = cx - bw / 2 + (i / 8) * bw;
+        const arc = by - Math.sin((i / 8) * Math.PI) * arcH;
+        ctx.beginPath();
+        ctx.moveTo(px, arc);
+        ctx.lineTo(px, arc - 6 * scale);
+        ctx.stroke();
+      }
+      // Korkuluk üst rayı
+      ctx.beginPath();
+      ctx.moveTo(cx - bw / 2, by - 6 * scale);
+      ctx.quadraticCurveTo(cx, by - arcH - 6 * scale, cx + bw / 2, by - 6 * scale);
+      ctx.strokeStyle = P.castleHi;
+      ctx.lineWidth = 1.6 * scale;
+      ctx.stroke();
+      // Üst yumuşak kar örtüsü
       ctx.beginPath();
       ctx.moveTo(cx - bw / 2, by);
       ctx.quadraticCurveTo(cx, by - arcH, cx + bw / 2, by);
       ctx.strokeStyle = `rgba(${P.snowColor},${isDark ? 0.55 : 0.9})`;
-      ctx.lineWidth = 3 * scale;
+      ctx.lineWidth = 3.2 * scale;
+      ctx.lineCap = 'round';
       ctx.stroke();
       ctx.restore();
     };
@@ -535,12 +715,39 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
 
       // 6) BUZ KALESİ + köprü — ufuk hattı (kar örtüsünün hemen üstüne oturur).
       //    Dağlardan biraz daha belirgin parallax (mx*6).
+      //    Kale STATİK offscreen cache'ten TEK drawImage ile blit edilir (ucuz);
+      //    yalnız parallax x-shift + yüzey dalgası y-offset uygulanır.
       const gy = H * 0.82;
       const castleShift = mx * 6;
       {
         const cbx = W * 0.5;
+        // Kalenin oturduğu yüzey y'si (dalgalı) ve cache'in üretildiği taban farkı.
         const surfY = gy + Math.sin(cbx * 0.006 + t * 0.004) * 14 + Math.sin(cbx * 0.017 - t * 0.002) * 6;
-        drawCastle(surfY, castleShift);
+        const dy = (surfY + 6) - castleBaseY; // cache tabanını canlı yüzeye hizala
+
+        // ── STATİK KALE BLİT (offscreen cache) ──
+        if (castleCanvas) {
+          ctx.drawImage(castleCanvas, castleShift, dy, W, H);
+        }
+
+        // ── ANİMASYONLU PENCERE/KAPI PARILTISI — blit'ten SONRA, birkaç nokta ──
+        //    (statik cache'e gömülmez; ucuz ~her nokta için küçük radial glow)
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < glowPoints.length; i++) {
+          const gp = glowPoints[i];
+          // reduceMotion'da flicker sabit; aksi halde sin ile hafif titreşim.
+          const flick = reduceMotion ? 1 : 0.72 + Math.sin(t * 0.05 + i * 1.7) * 0.28;
+          const px = gp.x + castleShift, py = gp.y + dy;
+          const gg = ctx.createRadialGradient(px, py, 0, px, py, gp.r);
+          gg.addColorStop(0, `hsla(${gp.hue},${gp.sat}%,${gp.light}%,${gp.base * flick})`);
+          gg.addColorStop(0.6, `hsla(${gp.hue},${gp.sat}%,${gp.light}%,${gp.base * flick * 0.35})`);
+          gg.addColorStop(1, 'transparent');
+          ctx.fillStyle = gg;
+          ctx.beginPath(); ctx.arc(px, py, gp.r, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+
         drawBridge(surfY, castleShift);
       }
 
