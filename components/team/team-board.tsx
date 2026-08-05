@@ -269,7 +269,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   };
 
   const tasksByCol = useMemo(() => {
-    const map: Record<string, Task[]> = { todo: [], in_progress: [], done: [] };
+    const map: Record<string, Task[]> = { todo: [], in_progress: [], review: [], done: [] };
     for (const t of tasks) (map[t.status] ?? map.todo).push(t);
     return map;
   }, [tasks]);
@@ -305,6 +305,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     const statusDonut = [
       { name: 'Yapılacak', value: tasksByCol.todo.length, color: '#94a3b8' },
       { name: 'Devam', value: tasksByCol.in_progress.length, color: '#f59e0b' },
+      { name: 'Onayda', value: tasksByCol.review.length, color: '#38bdf8' },
       { name: 'Bitti', value: tasksByCol.done.length, color: '#10b981' },
     ];
     const memberBars = memberList.slice(0, 8).map((m) => ({ name: m.name.split(' ')[0], value: m.count }));
@@ -366,9 +367,11 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
 
   // Yönetici reddi: görevi "Devam Ediyor"a döndür + opsiyonel geri bildirim notu.
   const rejectTask = async (taskId: string) => {
+    // İptal (Esc/Vazgeç) gerçekten iptal etsin: prompt null dönerse hiçbir şey yapma.
     const note = typeof window !== 'undefined'
-      ? window.prompt('Red nedeni / düzeltilecekler (opsiyonel):') ?? ''
+      ? window.prompt('Red nedeni / düzeltilecekler (opsiyonel, boş bırakılabilir):')
       : '';
+    if (note === null) return; // kullanıcı vazgeçti
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: 'in_progress' } : t)));
@@ -538,7 +541,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
     const { exportToCSV } = await import('@/lib/export-utils');
     const rows = tasks.map((t) => ({
       baslik: t.title,
-      durum: t.status === 'done' ? 'Bitti' : t.status === 'in_progress' ? 'Devam' : 'Yapılacak',
+      durum: t.status === 'done' ? 'Bitti' : t.status === 'review' ? 'Onayda' : t.status === 'in_progress' ? 'Devam' : 'Yapılacak',
       oncelik: PRIORITY_LABEL[t.priority] ?? t.priority,
       departman: departments.find((d) => d.slug === t.department)?.name ?? t.department ?? '',
       atanan: t.assignedTo?.name || t.assignedTo?.email || '',
@@ -675,6 +678,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
             <SelectItem value="all">Tüm durumlar</SelectItem>
             <SelectItem value="todo">Yapılacak</SelectItem>
             <SelectItem value="in_progress">Devam</SelectItem>
+            <SelectItem value="review">Onayda</SelectItem>
             <SelectItem value="done">Bitti</SelectItem>
           </SelectContent>
         </Select>
@@ -758,6 +762,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
             <SelectContent>
               <SelectItem value="todo">Yapılacak</SelectItem>
               <SelectItem value="in_progress">Devam</SelectItem>
+              <SelectItem value="review">Onayda</SelectItem>
               <SelectItem value="done">Bitti</SelectItem>
             </SelectContent>
           </Select>
@@ -809,9 +814,10 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
               </div>
               <ProgressRing value={report.pct} size={78} stroke={8} sublabel="tamam" />
             </div>
-            <div className="grid grid-cols-3 gap-2 border-t border-border/50 pt-3 text-center">
+            <div className="grid grid-cols-4 gap-2 border-t border-border/50 pt-3 text-center">
               <div><AnimatedNumber value={tasksByCol.todo.length} className="block text-lg font-bold text-slate-500" /><p className="text-[10px] text-muted-foreground">Yapılacak</p></div>
               <div><AnimatedNumber value={tasksByCol.in_progress.length} className="block text-lg font-bold text-amber-500" /><p className="text-[10px] text-muted-foreground">Devam</p></div>
+              <div><AnimatedNumber value={tasksByCol.review.length} className="block text-lg font-bold text-sky-500" /><p className="text-[10px] text-muted-foreground">Onayda</p></div>
               <div><AnimatedNumber value={tasksByCol.done.length} className="block text-lg font-bold text-emerald-500" /><p className="text-[10px] text-muted-foreground">Bitti</p></div>
             </div>
           </CardContent>
@@ -862,7 +868,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
 
       {/* İçerik: yükleniyor / kanban / liste / kişiler */}
       {loading ? (
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-4">
           {[0, 1, 2].map((col) => (
             <div key={col} className="rounded-2xl border-2 border-dashed border-border/50 bg-card/40 p-3">
               <div className="mb-3 flex items-center justify-between px-1">
@@ -910,7 +916,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           ))}
         </div>
       ) : viewMode === 'kanban' ? (
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-4">
           {COLUMNS.map((col) => (
             <div
               key={col.key}
@@ -930,12 +936,12 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                   {col.label}
                 </h3>
                 <span className={cn('grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-bold text-white', col.dot)}>
-                  {tasksByCol[col.key].length}
+                  {(tasksByCol[col.key] ?? []).length}
                 </span>
               </div>
               <div className="space-y-2.5">
                 <AnimatePresence mode="popLayout" initial={false}>
-                {tasksByCol[col.key].map((task) => (
+                {(tasksByCol[col.key] ?? []).map((task) => (
                   <motion.div
                     key={task.id}
                     layout={dragId === null}
@@ -1092,7 +1098,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                   </motion.div>
                 ))}
                 </AnimatePresence>
-                {tasksByCol[col.key].length === 0 && (
+                {(tasksByCol[col.key] ?? []).length === 0 && (
                   <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border/40 py-8 text-muted-foreground/40">
                     <span className="text-2xl opacity-40">{col.emoji}</span>
                     <p className="text-xs">Buraya sürükle</p>

@@ -121,6 +121,31 @@ export async function notifyMention(opts: {
   });
 }
 
+/**
+ * Görev BİTİŞ TARİHİNDE OTOMATİK ONAYLANDI (yönetici zamanında onaylamadı).
+ * Sessizce olmasın: hem onaya gönderen üyeye hem yöneticilere bildirir.
+ */
+export async function notifyTaskAutoApproved(opts: {
+  taskId: string; taskTitle: string; assignedToId?: string | null;
+}): Promise<void> {
+  try {
+    const managers = await prisma.user.findMany({
+      where: { OR: [{ role: 'ADMIN' }, { adminTeamRole: 'yonetici' }] },
+      select: { id: true },
+    });
+    const recipientIds = new Set<string>(managers.map((m) => m.id));
+    if (opts.assignedToId) recipientIds.add(opts.assignedToId);
+
+    await Promise.all([...recipientIds].map((userId) => createNotification({
+      userId,
+      title: '⏱️ Görev otomatik onaylandı',
+      message: `"${opts.taskTitle}" bitiş tarihi geçtiği için otomatik onaylandı (yönetici onayı gelmedi)`,
+      type: 'warning',
+      data: { kind: 'team-task-auto-approved', taskId: opts.taskId, href: `/admin/ekip?task=${opts.taskId}` },
+    })));
+  } catch { /* sessiz */ }
+}
+
 /** Yaklaşan/geçmiş bitiş tarihi hatırlatması (cron'dan). */
 export async function notifyDeadline(opts: {
   userId: string; taskId: string; taskTitle: string; overdue: boolean;

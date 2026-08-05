@@ -64,6 +64,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if ('error' in auth) return auth.error;
   const { id: taskId } = await params;
   const userId = auth.session.user.id;
+  const isManager = auth.isManager;
+
+  // Görev var mı + ERİŞİM: yönetici her göreve; üye YALNIZ kendine atanmış göreve
+  // alt-işlem yapabilir (başkasının görevini yorumlayarak/kanıt enjekte ederek
+  // onay akışını kirletmesini engeller).
+  const task = await prisma.companyTask.findUnique({ where: { id: taskId }, select: { id: true, assignedToId: true } });
+  if (!task) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+  if (!isManager && task.assignedToId !== userId) {
+    return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevlerde işlem yapabilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+  }
 
   const raw = await req.json().catch(() => ({}));
   const parsed = actionSchema.safeParse(raw);
@@ -74,6 +84,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const logActivity = (action: string, detail: string) =>
     prisma.taskActivity.create({ data: { taskId, actorId: userId, action, detail } });
+
+  // Bir checklist item / yorumun gerçekten BU göreve ait olduğunu doğrula (IDOR koruması).
+  const checklistBelongs = async (itemId: string) =>
+    (await prisma.taskChecklistItem.findUnique({ where: { id: itemId }, select: { taskId: true } }))?.taskId === taskId;
+  const commentBelongs = async (commentId: string) =>
+    (await prisma.taskComment.findUnique({ where: { id: commentId }, select: { taskId: true } }))?.taskId === taskId;
+  const NOT_FOUND = NextResponse.json({ success: false, error: 'Kayıt bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
 
   switch (d.op) {
     case 'add_checklist': {
@@ -87,9 +104,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       break;
     }
     case 'toggle_checklist':
+      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
       await prisma.taskChecklistItem.update({ where: { id: d.itemId }, data: { done: d.done } });
       break;
     case 'update_checklist': {
+      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
       const upd: { assignedToId?: string | null; dueAt?: Date | null; text?: string } = {};
       if (d.assignedToId !== undefined) upd.assignedToId = d.assignedToId || null;
       if (d.dueAt !== undefined) upd.dueAt = d.dueAt ? new Date(d.dueAt) : null;
@@ -98,6 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       break;
     }
     case 'delete_checklist':
+      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
       await prisma.taskChecklistItem.delete({ where: { id: d.itemId } }).catch(() => null);
       break;
     case 'add_comment': {
@@ -135,18 +155,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       break;
     }
     case 'edit_comment': {
-      // Sadece yorumun yazarı düzenleyebilir.
-      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true } });
-      if (!comment || comment.authorId !== userId) {
+      // Yorum bu göreve ait olmalı + yalnızca yazarı düzenleyebilir.
+      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true, taskId: true } });
+      if (!comment || comment.taskId !== taskId) return NOT_FOUND;
+      if (comment.authorId !== userId) {
         return NextResponse.json({ success: false, error: 'Bu yorumu düzenleyemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
       }
       await prisma.taskComment.update({ where: { id: d.commentId }, data: { text: d.text, editedAt: new Date() } });
       break;
     }
-    case 'delete_comment':
+    case 'delete_comment': {
+      // Yorum bu göreve ait olmalı + yalnızca YAZARI veya YÖNETİCİ silebilir.
+      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true, taskId: true } });
+      if (!comment || comment.taskId !== taskId) return NOT_FOUND;
+      if (comment.authorId !== userId && !isManager) {
+        return NextResponse.json({ success: false, error: 'Bu yorumu silemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+      }
       await prisma.taskComment.delete({ where: { id: d.commentId } }).catch(() => null);
       break;
+    }
     case 'toggle_reaction': {
+      // Yorum bu göreve ait olmalı (IDOR koruması).
+      if (!(await commentBelongs(d.commentId))) return NOT_FOUND;
       // Aynı (yorum,kullanıcı,emoji) varsa kaldır, yoksa ekle (toggle).
       const existing = await prisma.taskCommentReaction.findUnique({
         where: { commentId_userId_emoji: { commentId: d.commentId, userId, emoji: d.emoji } },

@@ -123,8 +123,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id: taskId } = await params;
   const userId = auth.session.user.id;
 
-  const task = await prisma.companyTask.findUnique({ where: { id: taskId }, select: { id: true } });
+  // ERİŞİM: yönetici her göreve; üye YALNIZ kendine atanmış göreve dosya ekler
+  // (başkasının görevine kanıt enjekte etmesini engeller).
+  const task = await prisma.companyTask.findUnique({ where: { id: taskId }, select: { id: true, assignedToId: true } });
   if (!task) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+  if (!auth.isManager && task.assignedToId !== userId) {
+    return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevlere dosya ekleyebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+  }
 
   const formData = await req.formData().catch(() => null);
   const file = formData?.get('file');
@@ -188,6 +193,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const att = await prisma.taskAttachment.findUnique({ where: { id: attachmentId } });
   if (!att || att.taskId !== taskId) {
     return NextResponse.json({ success: false, error: 'Ek bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+  // Yalnızca yükleyen kişi veya yönetici silebilir (başkasının kanıtını silmeyi engeller).
+  if (att.uploadedById !== auth.session.user.id && !auth.isManager) {
+    return NextResponse.json({ success: false, error: 'Bu eki silemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   await prisma.taskAttachment.delete({ where: { id: attachmentId } }).catch(() => null);

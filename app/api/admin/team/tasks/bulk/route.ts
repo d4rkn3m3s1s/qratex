@@ -50,20 +50,36 @@ export async function POST(req: NextRequest) {
       await prisma.companyTask.update({ where: { id: r.id }, data: { tags: [...set].join(',') } }).catch(() => {});
       affected++;
     }
+  } else if (action.op === 'status' && action.value === 'done') {
+    // Toplu ONAY (done): PUT ile aynı iş kuralları — her görev için kanıt (yorum/ek)
+    // ve bağımlılık (blocker bitmiş mi) kontrolü. Uymayan görevler ATLANIR (sessizce
+    // done yapılmaz). Bu yüzden updateMany değil, tek tek işlenir.
+    const rows = await prisma.companyTask.findMany({
+      where, select: { id: true, blockedById: true, _count: { select: { comments: true, attachments: true } } },
+    });
+    const now = new Date();
+    for (const r of rows) {
+      const hasProof = r._count.comments > 0 || r._count.attachments > 0;
+      if (!hasProof) continue; // kanıtsız görev done yapılmaz
+      if (r.blockedById) {
+        const blocker = await prisma.companyTask.findUnique({ where: { id: r.blockedById }, select: { status: true } });
+        if (blocker && blocker.status !== 'done') continue; // bağlı görev bitmemiş
+      }
+      await prisma.companyTask.update({
+        where: { id: r.id },
+        data: { status: 'done', completedAt: now, approvedById: auth.session.user.id, approvedAt: now },
+      }).catch(() => {});
+      affected++;
+    }
   } else {
     const data: Prisma.CompanyTaskUncheckedUpdateManyInput = {};
     if (action.op === 'status') {
+      // (done buraya düşmez — yukarıda özel işlenir.) todo/in_progress/review:
       data.status = action.value;
-      data.completedAt = action.value === 'done' ? new Date() : null;
-      // Toplu onay (done): onaylayan yönetici + zaman damgası. done değilse temizle.
-      if (action.value === 'done') {
-        data.approvedById = auth.session.user.id;
-        data.approvedAt = new Date();
-      } else {
-        data.approvedById = null;
-        data.approvedAt = null;
-        if (action.value === 'review') data.submittedForReviewAt = new Date();
-      }
+      data.completedAt = null;
+      data.approvedById = null;
+      data.approvedAt = null;
+      if (action.value === 'review') data.submittedForReviewAt = new Date();
     } else if (action.op === 'priority') {
       data.priority = action.value;
     } else if (action.op === 'assign') {

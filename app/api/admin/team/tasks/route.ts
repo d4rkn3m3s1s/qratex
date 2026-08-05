@@ -244,17 +244,21 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Önce bağlı olduğu görev tamamlanmalı' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
       }
     }
-    // ZORUNLU KANIT: "review"e (Onaya) göndermek için görevde en az bir yorum (not)
-    // VEYA dosya eki olmalı. Kanıt yoksa 409 + kod döner (UI modal açar).
-    // (Yönetici doğrudan done'a geçiriyorsa da kanıt aranır — atlanmasın.)
-    if (movingToReview || (movingToDone && existing.status !== 'review')) {
+    // ZORUNLU KANIT: hem "review"e (Onaya) göndermede hem "done"a (Bitti) geçişte
+    // görevde en az bir yorum (not) VEYA dosya eki olmalı. done'da HER ZAMAN
+    // yeniden kontrol edilir (review'e girerken vardı ama sonradan silinmiş olabilir)
+    // → kanıtsız/sahte-kanıtlı done engellenir. Kanıt yoksa 409 + kod (UI modal açar).
+    if (movingToReview || movingToDone) {
       const counts = await prisma.companyTask.findUnique({
         where: { id }, select: { _count: { select: { comments: true, attachments: true } } },
       });
       const hasProof = (counts?._count.comments ?? 0) > 0 || (counts?._count.attachments ?? 0) > 0;
       if (!hasProof) {
         return NextResponse.json(
-          { success: false, error: 'Onaya göndermek için ne yaptığını not olarak yaz veya bir döküman ekle.', code: 'PROOF_REQUIRED' },
+          { success: false, error: movingToDone && !movingToReview
+              ? 'Bitmiş işaretlemek için görevde en az bir not veya belge olmalı.'
+              : 'Onaya göndermek için ne yaptığını not olarak yaz veya bir döküman ekle.',
+            code: 'PROOF_REQUIRED' },
           { status: 409, headers: PRIVATE_NO_STORE_HEADERS },
         );
       }
@@ -262,8 +266,10 @@ export async function PUT(req: NextRequest) {
     data.status = d.status;
     // Onaya gönderim damgası (review'e ilk geçiş).
     if (movingToReview) data.submittedForReviewAt = new Date();
-    // Onay (review → done): onaylayan + zaman damgası.
-    if (approving) {
+    // Onay damgası: "done"a geçen HER durumda (review→done onayı VEYA yönetici
+    // doğrudan done yapması) onaylayan + zaman yazılır → "done = onaylanmış"
+    // tutarlılığı korunur (approvedById hep dolu olur).
+    if (movingToDone) {
       data.approvedBy = { connect: { id: userId } };
       data.approvedAt = new Date();
     }
