@@ -18,6 +18,10 @@ export const SEASONAL_BACKGROUND_OPTIONS: { value: string; label: string }[] = [
   { value: 'nebula', label: '☁️ Nebula' },
   { value: 'meteors', label: '☄️ Meteorlar' },
   { value: 'waves', label: '🌊 Dalgalar' },
+  { value: 'summer', label: '☀️ Yaz (güneş + deniz)' },
+  { value: 'winter', label: '❄️ Kış (kar + kahve)' },
+  { value: 'autumn', label: '🍂 Sonbahar (yapraklar)' },
+  { value: 'spring', label: '🌸 İlkbahar (çiçekler)' },
 ];
 
 /** Dönemsel konseptler için tema paleti seçenekleri (theme-presets anahtarları). */
@@ -51,23 +55,31 @@ export const SEASONAL_TEMPLATES: SeasonalTemplate[] = [
     name: 'Yaz Festivali',
     emoji: '☀️',
     bannerText: 'Yaz Festivali başladı! Bol puan, sıcak sürprizler seni bekliyor.',
-    backgroundEffect: 'waves',
-    themePresetId: 'orange',
+    backgroundEffect: 'summer',
+    themePresetId: 'amethyst',
   },
   {
     key: 'winter',
     name: 'Kış Sezonu',
     emoji: '❄️',
     bannerText: 'Kış geldi! Sıcacık ödüller ve kar temalı sürprizler.',
-    backgroundEffect: 'christmas',
+    backgroundEffect: 'winter',
     themePresetId: 'arctic',
+  },
+  {
+    key: 'autumn',
+    name: 'Sonbahar',
+    emoji: '🍂',
+    bannerText: 'Sonbahar esintisi! Sıcak renkler ve yeni sürprizler.',
+    backgroundEffect: 'autumn',
+    themePresetId: 'orange',
   },
   {
     key: 'spring',
     name: 'İlkbahar',
     emoji: '🌸',
     bannerText: 'İlkbahar tazeliği! Yeni görevler çiçek açıyor.',
-    backgroundEffect: 'fireflies',
+    backgroundEffect: 'spring',
     themePresetId: 'forestNight',
   },
   {

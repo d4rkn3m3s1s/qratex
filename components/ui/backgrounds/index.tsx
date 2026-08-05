@@ -8,5 +8,9 @@ export { NebulaBackground } from './nebula';
 export { NorthernLightsBackground } from './northern-lights';
 export { HolographicBackground } from './holographic';
 export { GalaxyBackground } from './galaxy';
+export { SummerBackground } from './summer';
+export { WinterBackground } from './winter';
+export { AutumnBackground } from './autumn';
+export { SpringBackground } from './spring';
 export { DynamicBackground, type BackgroundVariant } from './dynamic-background';
 

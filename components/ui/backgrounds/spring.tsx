@@ -1,0 +1,446 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { useTheme } from 'next-themes';
+import { cn } from '@/lib/utils';
+
+/**
+ * İlkbahar teması — sinematik, "efsanevi" seviye animasyonlu arka plan.
+ * Açık ve koyu modlar KESKİN ayrışır:
+ *  • Açık mod (ilkbahar gündüzü): taze açık yeşil-beyaz gökyüzü + parlak neşeli güneş + bol çiçek.
+ *  • Koyu mod (ilkbahar gecesi/alacakaranlık): koyu zümrüt-mor gökyüzü + yumuşak ay + ışıltılı çiçek tozu.
+ * Katmanlar: atmosfer gradyanı, yıldız/çiçek tozu, gökcismi (güneş/ay) + huzmeler,
+ *   uçuşan taç yapraklar (sakura, çok katmanlı parallax), bahar yağmuru, açan çiçekler,
+ *   dalgalı çimen silüeti, kelebekler, parlak polen ışıltısı, bloom, sinematik vinyet.
+ * Palet: #064E3B koyu zümrüt, #FAFAF9 kırık beyaz, #A855F7 mor aksan, #22C55E taze yeşil.
+ * prefers-reduced-motion'a saygılı; DPR-ölçekli (retina keskinliği).
+ */
+interface SpringBackgroundProps {
+  children?: React.ReactNode;
+  className?: string;
+}
+
+export function SpringBackground({ children, className }: SpringBackgroundProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const reduceMotion = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    // Retina keskinliği için DPR ölçekleme.
+    let W = 0, H = 0, dpr = 1;
+    const resize = () => {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // ── Moda göre KESKİN palet ────────────────────────────────────
+    const P = isDark
+      ? {
+          // İlkbahar gecesi: koyu zümrüt → mor alacakaranlık gökyüzü
+          sky: [
+            { at: 0, c: '#03130f' }, { at: 0.3, c: '#064E3B' }, { at: 0.56, c: '#0f3d55' },
+            { at: 0.78, c: '#3b1f6b' }, { at: 1, c: '#160a2e' },
+          ],
+          // Yumuşak ay (soğuk gümüşi)
+          sunCore: '#ffffff', sunMid: '#eef2ff', sunEdge: '#c7d0ea', sunHaloA: 0.5, sunGlow: 'rgba(190,205,255,0.85)',
+          // Taç yaprak renkleri (koyu modda ışıltılı mor + kırık beyaz)
+          petalHues: [{ h: 271, s: 78, l: 62 }, { h: 291, s: 70, l: 68 }, { h: 320, s: 60, l: 74 }, { h: 60, s: 8, l: 96 }],
+          petalAlpha: 0.7, glowPetal: 0.35,
+          grassHue: 158, grassS: 60, grassL: 26, grassAlpha: 0.9,
+          bloomPetalHue: 285, bloomCenter: '#c4b5fd',
+          rainAlpha: 0.14, rainHue: 200,
+          rays: false, sunBeams: false,
+          stars: true, pollenHue: 285, pollenAlpha: 0.85,
+          mist: 'rgba(40,90,70,0.2)', bloom: 'rgba(120,90,200,0.05)', vignette: 0.52, butterflyDark: true,
+        }
+      : {
+          // İlkbahar gündüzü: taze açık yeşil → kırık beyaz gökyüzü
+          sky: [
+            { at: 0, c: '#b6ecd0' }, { at: 0.28, c: '#d6f5df' }, { at: 0.54, c: '#eefbf1' },
+            { at: 0.76, c: '#FAFAF9' }, { at: 1, c: '#e6f7ea' },
+          ],
+          // Parlak neşeli güneş (yeşil-altın sıcaklık)
+          sunCore: '#ffffff', sunMid: '#fef9c3', sunEdge: '#a3e635', sunHaloA: 0.68, sunGlow: 'rgba(190,242,140,0.95)',
+          // Taç yaprak renkleri (açık modda canlı pembe-mor + beyaz)
+          petalHues: [{ h: 291, s: 80, l: 70 }, { h: 330, s: 78, l: 76 }, { h: 271, s: 74, l: 66 }, { h: 45, s: 30, l: 98 }],
+          petalAlpha: 0.82, glowPetal: 0.18,
+          grassHue: 142, grassS: 68, grassL: 48, grassAlpha: 0.85,
+          bloomPetalHue: 291, bloomCenter: '#facc15',
+          rainAlpha: 0.1, rainHue: 190,
+          rays: true, sunBeams: true,
+          stars: false, pollenHue: 55, pollenAlpha: 0.7,
+          mist: 'rgba(255,255,255,0.22)', bloom: 'rgba(200,255,190,0.05)', vignette: 0.26, butterflyDark: false,
+        };
+
+    // Güneş/ay konumu (açık mod biraz daha yüksek/parlak)
+    const sunPos = () => ({ x: W * 0.74, y: H * (isDark ? 0.28 : 0.22) });
+
+    // ── Uçuşan taç yapraklar (sakura) — 3 derinlik katmanı, parallax ──
+    interface Petal {
+      x: number; y: number; size: number; speedY: number; drift: number;
+      sway: number; swaySpeed: number; rot: number; rotSpeed: number;
+      spin: number; hue: { h: number; s: number; l: number }; depth: number;
+    }
+    const petals: Petal[] = Array.from({ length: 45 }, () => {
+      const depth = Math.random();                 // 0 uzak, 1 yakın
+      const hue = P.petalHues[Math.floor(Math.random() * P.petalHues.length)];
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        size: 5 + depth * 11,                       // yakın = büyük
+        speedY: 0.25 + depth * 0.9,                 // yakın = hızlı düşer
+        drift: (Math.random() - 0.5) * 0.5,         // yatay sürüklenme
+        sway: Math.random() * Math.PI * 2,
+        swaySpeed: 0.012 + Math.random() * 0.03,
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.04,
+        spin: 0.4 + Math.random() * 0.9,            // 3B dönme hissi (ölçek)
+        hue, depth,
+      };
+    });
+
+    // ── Açan çiçekler (alt köşeler, çimen üstünde) ──
+    interface Flower {
+      x: number; yBase: number; stem: number; size: number;
+      sway: number; swaySpeed: number; petalHue: { h: number; s: number; l: number }; centerHue: number;
+    }
+    const flowerCount = 7;
+    const flowers: Flower[] = Array.from({ length: flowerCount }, (_, i) => {
+      const hue = P.petalHues[i % 3];               // beyazı çiçek gövdesine kullanma
+      return {
+        x: (i + 0.5) / flowerCount * W + (Math.random() - 0.5) * 60,
+        yBase: H * (0.9 + Math.random() * 0.05),
+        stem: 55 + Math.random() * 70,
+        size: 10 + Math.random() * 8,
+        sway: Math.random() * Math.PI * 2,
+        swaySpeed: 0.01 + Math.random() * 0.015,
+        petalHue: hue,
+        centerHue: 48,
+      };
+    });
+
+    // ── Bahar yağmuru damlaları (ince, hafif eğik) ──
+    interface Drop { x: number; y: number; len: number; speed: number; slant: number; alpha: number; }
+    const drops: Drop[] = Array.from({ length: 40 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      len: 8 + Math.random() * 16, speed: 5 + Math.random() * 7,
+      slant: 1.4 + Math.random() * 0.8, alpha: 0.3 + Math.random() * 0.5,
+    }));
+
+    // ── Yıldızlar (koyu mod) ──
+    const stars = P.stars ? Array.from({ length: 90 }, () => ({
+      x: Math.random() * W, y: Math.random() * H * 0.6,
+      r: Math.random() * 1.4 + 0.3, tw: Math.random() * Math.PI * 2, twSpeed: 0.02 + Math.random() * 0.04,
+    })) : [];
+
+    // ── Parlak polen / ışıltı toz (twinkle, yukarı süzülür) ──
+    interface Pollen { x: number; y: number; radius: number; speed: number; wobble: number; wobbleSpeed: number; hue: number; }
+    const pollen: Pollen[] = Array.from({ length: 50 }, () => {
+      const depth = Math.random();
+      return {
+        x: Math.random() * W, y: Math.random() * H,
+        radius: 0.6 + depth * 2.2, speed: 0.15 + depth * 0.6,
+        wobble: Math.random() * Math.PI * 2, wobbleSpeed: 0.014 + Math.random() * 0.03,
+        hue: Math.random() < 0.5 ? P.pollenHue : (isDark ? 158 : 90),
+      };
+    });
+
+    // ── Kelebekler (uçan, kanat çırpan) ──
+    interface Butterfly { x: number; y: number; speed: number; size: number; flap: number; flapSpeed: number; phase: number; hue: number; }
+    const butterflies: Butterfly[] = Array.from({ length: 3 }, () => ({
+      x: Math.random() * W, y: H * (0.35 + Math.random() * 0.4),
+      speed: 0.35 + Math.random() * 0.4, size: 7 + Math.random() * 6,
+      flap: Math.random() * Math.PI * 2, flapSpeed: 0.18 + Math.random() * 0.12,
+      phase: Math.random() * Math.PI * 2, hue: P.petalHues[Math.floor(Math.random() * 3)].h,
+    }));
+
+    // ── Güneş huzmeleri (açık mod) ──
+    const rayCount = 14;
+    const rays = Array.from({ length: rayCount }, (_, i) => ({
+      angle: (Math.PI * 2 * i) / rayCount, length: 0.5 + Math.random() * 0.55, width: 0.022 + Math.random() * 0.045,
+    }));
+
+    let animationId = 0;
+    let t = 0;
+
+    // Bir taç yaprağı çizen yardımcı (yumuşak damla/yürek formu)
+    const drawPetal = (cx: number, cy: number, size: number, rot: number, sx: number, color: string, glow: number, glowColor: string) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      ctx.scale(sx, 1);                             // 3B dönme için yatay ölçek
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.bezierCurveTo(size * 0.85, -size * 0.6, size * 0.7, size * 0.5, 0, size);
+      ctx.bezierCurveTo(-size * 0.7, size * 0.5, -size * 0.85, -size * 0.6, 0, -size);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      if (glow > 0) { ctx.shadowColor = glowColor; ctx.shadowBlur = 8; }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    };
+
+    const draw = () => {
+      const s = sunPos();
+
+      // 1) Gökyüzü (dikey atmosfer gradyanı)
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      for (const stop of P.sky) sky.addColorStop(stop.at, stop.c);
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
+      // 2) Yıldızlar (koyu mod, twinkle)
+      if (P.stars) stars.forEach((st) => {
+        if (!reduceMotion) st.tw += st.twSpeed;
+        const a = 0.25 + Math.abs(Math.sin(st.tw)) * 0.6;
+        ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(230,240,255,${a})`; ctx.fill();
+      });
+
+      // 3) Güneş huzmeleri (yalnız açık mod) — yeşil-altın yumuşak ışık
+      if (P.rays) {
+        const rayRot = t * 0.0005;
+        rays.forEach((ray) => {
+          const a = ray.angle + rayRot;
+          const len = Math.max(W, H) * ray.length;
+          const grad = ctx.createLinearGradient(s.x, s.y, s.x + Math.cos(a) * len, s.y + Math.sin(a) * len);
+          grad.addColorStop(0, `hsla(72,90%,72%,0.18)`);
+          grad.addColorStop(1, 'transparent');
+          ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(a);
+          ctx.beginPath(); const w = len * ray.width;
+          ctx.moveTo(0, -w); ctx.lineTo(len, -w * 3.4); ctx.lineTo(len, w * 3.4); ctx.lineTo(0, w);
+          ctx.closePath(); ctx.fillStyle = grad; ctx.fill(); ctx.restore();
+        });
+      }
+
+      // 4) Atmosferik sis (ufuk derinliği — ferahlık)
+      const mist = ctx.createLinearGradient(0, H * 0.5, 0, H * 0.72);
+      mist.addColorStop(0, 'transparent'); mist.addColorStop(0.5, P.mist); mist.addColorStop(1, 'transparent');
+      ctx.fillStyle = mist; ctx.fillRect(0, H * 0.5, W, H * 0.22);
+
+      // 5) Gökcismi — koyu modda YUMUŞAK AY, açık modda parlak GÜNEŞ
+      const pulse = 1 + Math.sin(t * 0.02) * (isDark ? 0.025 : 0.06);
+      const sunR = Math.min(W, H) * 0.078 * pulse;
+      if (isDark) {
+        // Yumuşak ay: gümüşi hale + disk (ilkbahar gecesi hissi)
+        const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 6);
+        glow.addColorStop(0, `hsla(230,60%,90%,${P.sunHaloA})`);
+        glow.addColorStop(0.32, 'hsla(240,50%,82%,0.16)');
+        glow.addColorStop(1, 'transparent');
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR * 6, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
+        const moon = ctx.createRadialGradient(s.x - sunR * 0.3, s.y - sunR * 0.3, sunR * 0.1, s.x, s.y, sunR);
+        moon.addColorStop(0, P.sunCore); moon.addColorStop(0.55, P.sunMid); moon.addColorStop(1, P.sunEdge);
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = moon;
+        ctx.shadowColor = P.sunGlow; ctx.shadowBlur = 38; ctx.fill(); ctx.shadowBlur = 0;
+      } else {
+        // Neşeli güneş: yeşil-altın halo + disk
+        const halo = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR * 6);
+        halo.addColorStop(0, `hsla(72,95%,80%,${P.sunHaloA})`);
+        halo.addColorStop(0.3, `hsla(90,90%,72%,${P.sunHaloA * 0.35})`);
+        halo.addColorStop(1, 'transparent');
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR * 6, 0, Math.PI * 2); ctx.fillStyle = halo; ctx.fill();
+        const disk = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, sunR);
+        disk.addColorStop(0, P.sunCore); disk.addColorStop(0.55, P.sunMid); disk.addColorStop(1, P.sunEdge);
+        ctx.beginPath(); ctx.arc(s.x, s.y, sunR, 0, Math.PI * 2); ctx.fillStyle = disk;
+        ctx.shadowColor = P.sunGlow; ctx.shadowBlur = 48; ctx.fill(); ctx.shadowBlur = 0;
+      }
+
+      // 6) Bahar yağmuru (ince yarı saydam eğik çizgiler, ferah)
+      ctx.save();
+      ctx.lineWidth = 1;
+      drops.forEach((d) => {
+        if (!reduceMotion) { d.y += d.speed; d.x += d.slant; }
+        if (d.y > H + d.len) { d.y = -d.len; d.x = Math.random() * W; }
+        if (d.x > W + 10) d.x = -10;
+        const g = ctx.createLinearGradient(d.x, d.y, d.x - d.slant * 3, d.y - d.len);
+        g.addColorStop(0, `hsla(${P.rainHue},70%,${isDark ? 78 : 88}%,${P.rainAlpha * d.alpha})`);
+        g.addColorStop(1, 'transparent');
+        ctx.strokeStyle = g;
+        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.slant * 3, d.y - d.len); ctx.stroke();
+      });
+      ctx.restore();
+
+      // 7) Uzak taç yapraklar (derinlik < 0.4) — çimenin arkasında kalsın
+      petals.forEach((p) => {
+        if (p.depth >= 0.4) return;
+        if (!reduceMotion) {
+          p.y += p.speedY; p.sway += p.swaySpeed; p.rot += p.rotSpeed;
+          p.x += Math.sin(p.sway) * 0.6 + p.drift;
+        }
+        if (p.y > H + p.size) { p.y = -p.size; p.x = Math.random() * W; }
+        if (p.x > W + p.size) p.x = -p.size;
+        if (p.x < -p.size) p.x = W + p.size;
+        const sx = p.spin * (0.5 + Math.abs(Math.sin(p.sway * 1.3)) * 0.7);   // 3B dönme
+        const c = `hsla(${p.hue.h},${p.hue.s}%,${p.hue.l}%,${P.petalAlpha * (0.5 + p.depth)})`;
+        drawPetal(p.x, p.y, p.size, p.rot, sx, c, P.glowPetal, `hsla(${p.hue.h},90%,70%,0.6)`);
+      });
+
+      // 8) Kelebekler (çimenin arkasında, sahne ortasında uçar)
+      butterflies.forEach((b) => {
+        if (!reduceMotion) {
+          b.x += b.speed; b.flap += b.flapSpeed; b.phase += 0.02;
+          b.y += Math.sin(b.phase) * 0.8;                 // dalgalı uçuş
+        }
+        if (b.x > W + 20) { b.x = -20; b.y = H * (0.35 + Math.random() * 0.4); }
+        const wing = Math.abs(Math.sin(b.flap));           // 0..1 kanat açıklığı
+        const bw = b.size * (0.4 + wing * 0.8);
+        const bodyA = isDark ? 0.85 : 0.9;
+        // gövde
+        ctx.strokeStyle = `hsla(${b.hue},40%,${isDark ? 30 : 25}%,${bodyA})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y - b.size * 0.5); ctx.lineTo(b.x, b.y + b.size * 0.5); ctx.stroke();
+        // kanatlar (yansımalı çift, çırpan)
+        [-1, 1].forEach((dir) => {
+          const g = ctx.createRadialGradient(b.x, b.y, 0, b.x + dir * bw, b.y, bw * 1.2);
+          g.addColorStop(0, `hsla(${b.hue},80%,${isDark ? 70 : 74}%,0.95)`);
+          g.addColorStop(1, `hsla(${b.hue + 20},70%,${isDark ? 55 : 62}%,0.35)`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.moveTo(b.x, b.y);
+          ctx.quadraticCurveTo(b.x + dir * bw, b.y - b.size, b.x + dir * bw * 1.1, b.y - b.size * 0.1);
+          ctx.quadraticCurveTo(b.x + dir * bw * 0.9, b.y + b.size * 0.8, b.x, b.y + b.size * 0.2);
+          ctx.closePath(); ctx.fill();
+        });
+      });
+
+      // 9) Dalgalı ÇİMEN silüeti (alt, esintiyle sallanan) — 2 katman parallax
+      const grassLayers = [
+        { baseY: 0.9, h: 70, freq: 0.02, amp: 8, spd: 0.02, l: P.grassL, a: P.grassAlpha },
+        { baseY: 0.94, h: 95, freq: 0.016, amp: 12, spd: 0.015, l: P.grassL - 8, a: P.grassAlpha * 0.85 },
+      ];
+      grassLayers.forEach((gl, gi) => {
+        const phase = t * gl.spd;
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        for (let x = 0; x <= W; x += 4) {
+          const wobble = Math.sin(x * gl.freq + phase) * gl.amp + Math.sin(x * gl.freq * 2.3 - phase * 1.4) * (gl.amp * 0.4);
+          const y = H * gl.baseY + wobble;
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W, H); ctx.closePath();
+        const g = ctx.createLinearGradient(0, H * gl.baseY - gl.h, 0, H);
+        g.addColorStop(0, `hsla(${P.grassHue},${P.grassS}%,${gl.l + 10}%,${gl.a})`);
+        g.addColorStop(1, `hsla(${P.grassHue + 6},${P.grassS - 8}%,${gl.l - 6}%,${gl.a})`);
+        ctx.fillStyle = g; ctx.fill();
+
+        // ön katmana çim bıçakları (esintiyle eğik)
+        if (gi === 1) {
+          for (let x = 0; x <= W; x += 14) {
+            const sway = Math.sin(x * 0.03 + phase * 1.6) * 6;
+            const bh = 16 + Math.abs(Math.sin(x * 0.7)) * 14;
+            const rootY = H * gl.baseY + Math.sin(x * gl.freq + phase) * gl.amp;
+            ctx.beginPath();
+            ctx.moveTo(x, rootY);
+            ctx.quadraticCurveTo(x + sway * 0.5, rootY - bh * 0.6, x + sway, rootY - bh);
+            ctx.strokeStyle = `hsla(${P.grassHue},${P.grassS}%,${gl.l + 6}%,${gl.a * 0.8})`;
+            ctx.lineWidth = 1.6; ctx.stroke();
+          }
+        }
+      });
+
+      // 10) Açan ÇİÇEKLER (çimen üstünde, hafif sallanır)
+      flowers.forEach((fl) => {
+        if (!reduceMotion) fl.sway += fl.swaySpeed;
+        const swayX = Math.sin(fl.sway) * 6;
+        const topX = fl.x + swayX;
+        const topY = fl.yBase - fl.stem;
+        // sap
+        ctx.beginPath();
+        ctx.moveTo(fl.x, fl.yBase);
+        ctx.quadraticCurveTo(fl.x + swayX * 0.5, fl.yBase - fl.stem * 0.55, topX, topY);
+        ctx.strokeStyle = `hsla(${P.grassHue},${P.grassS + 5}%,${P.grassL + 8}%,0.95)`;
+        ctx.lineWidth = 2.4; ctx.stroke();
+        // yaprak (sapta)
+        ctx.save();
+        ctx.translate(fl.x + swayX * 0.4, fl.yBase - fl.stem * 0.5);
+        ctx.rotate(0.5 + Math.sin(fl.sway) * 0.1);
+        ctx.beginPath();
+        ctx.ellipse(6, 0, 9, 4, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${P.grassHue},${P.grassS}%,${P.grassL + 6}%,0.9)`;
+        ctx.fill();
+        ctx.restore();
+        // 5 taç yaprak (daire düzeni) + sarı orta
+        const ph = fl.petalHue;
+        for (let k = 0; k < 5; k++) {
+          const ang = (Math.PI * 2 * k) / 5 - Math.PI / 2 + Math.sin(fl.sway) * 0.05;
+          const px = topX + Math.cos(ang) * fl.size * 0.62;
+          const py = topY + Math.sin(ang) * fl.size * 0.62;
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, fl.size * 0.7);
+          grad.addColorStop(0, `hsla(${ph.h},${ph.s}%,${ph.l + 8}%,0.98)`);
+          grad.addColorStop(1, `hsla(${ph.h - 8},${ph.s}%,${ph.l - 8}%,0.85)`);
+          ctx.beginPath();
+          ctx.ellipse(px, py, fl.size * 0.5, fl.size * 0.36, ang, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.shadowColor = `hsla(${ph.h},90%,72%,${isDark ? 0.5 : 0.3})`;
+          ctx.shadowBlur = isDark ? 10 : 6;
+          ctx.fill(); ctx.shadowBlur = 0;
+        }
+        // sarı orta
+        const cg = ctx.createRadialGradient(topX, topY, 0, topX, topY, fl.size * 0.42);
+        cg.addColorStop(0, '#fffbeb'); cg.addColorStop(0.6, P.bloomCenter); cg.addColorStop(1, `hsla(${fl.centerHue},90%,50%,0.9)`);
+        ctx.beginPath(); ctx.arc(topX, topY, fl.size * 0.4, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
+      });
+
+      // 11) Yakın taç yapraklar (derinlik >= 0.4) — çimen ve çiçeklerin önünde
+      petals.forEach((p) => {
+        if (p.depth < 0.4) return;
+        if (!reduceMotion) {
+          p.y += p.speedY; p.sway += p.swaySpeed; p.rot += p.rotSpeed;
+          p.x += Math.sin(p.sway) * 0.6 + p.drift;
+        }
+        if (p.y > H + p.size) { p.y = -p.size; p.x = Math.random() * W; }
+        if (p.x > W + p.size) p.x = -p.size;
+        if (p.x < -p.size) p.x = W + p.size;
+        const sx = p.spin * (0.5 + Math.abs(Math.sin(p.sway * 1.3)) * 0.7);
+        const c = `hsla(${p.hue.h},${p.hue.s}%,${p.hue.l}%,${P.petalAlpha})`;
+        drawPetal(p.x, p.y, p.size, p.rot, sx, c, P.glowPetal, `hsla(${p.hue.h},90%,70%,0.7)`);
+      });
+
+      // 12) Parlak polen / ışıltı toz (parallax + twinkle, yukarı süzülür)
+      pollen.forEach((pl) => {
+        if (!reduceMotion) { pl.y -= pl.speed; pl.wobble += pl.wobbleSpeed; pl.x += Math.sin(pl.wobble) * 0.4; }
+        if (pl.y < -pl.radius) { pl.y = H + pl.radius; pl.x = Math.random() * W; }
+        const twinkle = 0.35 + Math.abs(Math.sin(pl.wobble)) * 0.55;
+        ctx.beginPath(); ctx.arc(pl.x, pl.y, pl.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${pl.hue},100%,${pl.hue === 55 ? 70 : 78}%,${twinkle * P.pollenAlpha})`;
+        ctx.shadowColor = `hsla(${pl.hue},100%,72%,0.7)`; ctx.shadowBlur = 7; ctx.fill(); ctx.shadowBlur = 0;
+      });
+
+      // 13) Bloom — tüm sahneye yumuşak ışık yıkaması (kaynaktan)
+      const bloom = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, Math.max(W, H) * 0.9);
+      bloom.addColorStop(0, P.bloom); bloom.addColorStop(1, 'transparent');
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H); ctx.restore();
+
+      // 14) Sinematik vinyet (kenar koyulaşma → odak)
+      const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+      vig.addColorStop(0, 'transparent'); vig.addColorStop(1, `rgba(0,0,0,${P.vignette})`);
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+
+      t++;
+      if (!reduceMotion) animationId = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => { cancelAnimationFrame(animationId); window.removeEventListener('resize', resize); };
+  }, [isDark]);
+
+  return (
+    <>
+      <canvas ref={canvasRef} className={cn('fixed inset-0 z-0 pointer-events-none', className)} />
+      {children}
+    </>
+  );
+}

@@ -22,8 +22,12 @@ import { NebulaBackground } from './nebula';
 import { NorthernLightsBackground } from './northern-lights';
 import { HolographicBackground } from './holographic';
 import { GalaxyBackground } from './galaxy';
+import { SummerBackground } from './summer';
+import { WinterBackground } from './winter';
+import { AutumnBackground } from './autumn';
+import { SpringBackground } from './spring';
 
-export type BackgroundVariant = 
+export type BackgroundVariant =
   | 'original'
   | 'aurora' 
   | 'sparkles' 
@@ -46,6 +50,10 @@ export type BackgroundVariant =
   | 'northern-lights'
   | 'holographic'
   | 'galaxy'
+  | 'summer'
+  | 'winter'
+  | 'autumn'
+  | 'spring'
   | 'none';
 
 interface DynamicBackgroundProps {
@@ -254,6 +262,34 @@ export function DynamicBackground({
         <GalaxyBackground className={className}>
           {children}
         </GalaxyBackground>
+      );
+
+    case 'summer':
+      return (
+        <SummerBackground className={className}>
+          {children}
+        </SummerBackground>
+      );
+
+    case 'winter':
+      return (
+        <WinterBackground className={className}>
+          {children}
+        </WinterBackground>
+      );
+
+    case 'autumn':
+      return (
+        <AutumnBackground className={className}>
+          {children}
+        </AutumnBackground>
+      );
+
+    case 'spring':
+      return (
+        <SpringBackground className={className}>
+          {children}
+        </SpringBackground>
       );
 
     case 'none':

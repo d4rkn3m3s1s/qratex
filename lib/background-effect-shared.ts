@@ -21,6 +21,10 @@ const VALID_VARIANTS = [
   'northern-lights',
   'holographic',
   'galaxy',
+  'summer',
+  'winter',
+  'autumn',
+  'spring',
   'none',
 ] as const;
 

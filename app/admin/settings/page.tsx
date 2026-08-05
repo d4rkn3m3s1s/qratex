@@ -151,6 +151,10 @@ const backgroundOptions: { id: BackgroundVariant; name: string; description: str
   { id: 'northern-lights', name: '🌈 Kuzey Işıkları', description: 'Büyüleyici aurora dalgaları', legendary: true },
   { id: 'holographic', name: '💎 Holografik', description: 'Gökkuşağı prizma efekti', legendary: true },
   { id: 'galaxy', name: '🪐 Galaksi', description: 'Dönen spiral galaksi', legendary: true },
+  { id: 'summer', name: '☀️ Yaz', description: 'Gün batımı, ışıyan güneş ve turkuaz deniz dalgaları', legendary: true },
+  { id: 'winter', name: '❄️ Kış', description: 'Kar taneleri, kardan adam ve buğulanan kahve', legendary: true },
+  { id: 'autumn', name: '🍂 Sonbahar', description: 'Düşen yapraklar, sıcak turuncu tonlar ve kahve', legendary: true },
+  { id: 'spring', name: '🌸 İlkbahar', description: 'Açan çiçekler, taze yeşillik ve bahar yağmuru', legendary: true },
   // Özel Gün Efektleri
   { id: 'christmas', name: '🎄 Yılbaşı', description: 'Kar, ışıklar ve Noel ruhu', special: true },
   { id: 'valentine', name: '💕 Sevgililer Günü', description: 'Romantik kalpler ve parıltılar', special: true },
