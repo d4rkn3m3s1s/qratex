@@ -146,6 +146,7 @@ export async function POST(req: NextRequest) {
     import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
       to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
       taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
+      description: task.description,
     })).catch(() => {});
     import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
       userId: task.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
@@ -298,6 +299,7 @@ export async function PUT(req: NextRequest) {
     import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
       to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
       taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
+      description: task.description,
     })).catch(() => {});
     import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
       userId: d.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,

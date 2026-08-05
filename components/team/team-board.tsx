@@ -88,6 +88,24 @@ const PRIORITY_STYLE: Record<string, string> = {
 };
 const PRIORITY_LABEL: Record<string, string> = { high: 'Yüksek', medium: 'Orta', low: 'Düşük' };
 
+/**
+ * Bitiş tarihine göre canlı geri sayım rozeti: kalan gün + renk.
+ * done görevlerde nötr; geçmiş=kırmızı, ≤2 gün=turuncu, bugün=turuncu, diğer=mavi.
+ */
+function dueBadge(dueAt: string, isDone: boolean): { label: string; cls: string } {
+  const d = new Date(dueAt);
+  const dateStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+  if (isDone) return { label: dateStr, cls: 'bg-muted text-muted-foreground' };
+  // Gün farkı (takvim günü bazlı: bugünün başına göre).
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const startOfDue = new Date(d); startOfDue.setHours(0, 0, 0, 0);
+  const days = Math.round((startOfDue.getTime() - startOfToday.getTime()) / 86400000);
+  if (days < 0) return { label: `${dateStr} · ${Math.abs(days)}g gecikti`, cls: 'bg-red-500/15 text-red-600 dark:text-red-400' };
+  if (days === 0) return { label: `${dateStr} · BUGÜN`, cls: 'bg-orange-500/20 text-orange-600 dark:text-orange-400' };
+  if (days <= 2) return { label: `${dateStr} · ${days}g kaldı`, cls: 'bg-orange-500/15 text-orange-600 dark:text-orange-400' };
+  return { label: `${dateStr} · ${days}g kaldı`, cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400' };
+}
+
 export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }) {
   const { data: session } = useSession();
   const teamRole = (session?.user as { adminTeamRole?: string | null } | undefined)?.adminTeamRole ?? null;
@@ -592,15 +610,18 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           )}
         </div>
 
-        <Select value={department} onValueChange={setDepartment}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="Departman" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tüm departmanlar</SelectItem>
-            {departments.map((d) => (
-              <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Departman filtresi yalnız yöneticide (üye tüm departmanları görmemeli). */}
+        {isManager && (
+          <Select value={department} onValueChange={setDepartment}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Departman" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm departmanlar</SelectItem>
+              {departments.map((d) => (
+                <SelectItem key={d.slug} value={d.slug}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Görünüm modu geçişi — yönetici-özel sekmeler (Kişiler/Akış/Performans) üyede gizli. */}
         <div className="flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/50 p-1">
@@ -621,6 +642,18 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Onay bekleyen rozeti — yalnız yönetici + review'de görev varsa (dikkat çekici). */}
+          {isManager && tasksByCol.review.length > 0 && (
+            <button
+              onClick={() => { setViewMode('kanban'); setFStatus('review'); }}
+              title="Onay bekleyen görevleri gör"
+              className="group relative flex items-center gap-1.5 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md shadow-sky-500/30 transition-all hover:scale-105 hover:shadow-lg hover:shadow-sky-500/50 motion-safe:animate-[pulse_2.2s_ease-in-out_infinite]"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              <Clock className="h-3.5 w-3.5" />
+              {tasksByCol.review.length} görev onayını bekliyor
+            </button>
+          )}
           <Button size="sm" onClick={() => setQaOpen(true)} title="AI'ya sor" className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700">
             <Sparkles className="mr-1.5 h-4 w-4" /> AI'ya Sor
           </Button>
@@ -990,22 +1023,20 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                               <Clock className="h-3 w-3" />{Math.round(task.estimateMin / 60 * 10) / 10}s
                             </span>
                           )}
-                          {task.department && (
+                          {isManager && task.department && (
                             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                               {departments.find((d) => d.slug === task.department)?.name ?? task.department}
                             </span>
                           )}
-                          {task.dueAt && (
-                            <span className={cn(
-                              'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                              new Date(task.dueAt) < new Date() && task.status !== 'done'
-                                ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                                : 'bg-muted text-muted-foreground'
-                            )}>
-                              <CalendarDays className="h-3 w-3" />
-                              {new Date(task.dueAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
-                            </span>
-                          )}
+                          {task.dueAt && (() => {
+                            const b = dueBadge(task.dueAt, task.status === 'done');
+                            return (
+                              <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold', b.cls)}>
+                                <CalendarDays className="h-3 w-3" />
+                                {b.label}
+                              </span>
+                            );
+                          })()}
                           {task.assignedTo && (
                             <Avatar className="h-5 w-5">
                               {task.assignedTo.image ? <AvatarImage src={task.assignedTo.image} /> : null}
@@ -1049,17 +1080,28 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                             {!isManager && task.assignedTo?.id === session?.user?.id && (
                               <>
                                 {task.status === 'todo' && (
-                                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => moveTask(task.id, 'in_progress')}>
-                                    <Zap className="h-3 w-3" /> Başla
+                                  <Button
+                                    size="sm"
+                                    onClick={() => moveTask(task.id, 'in_progress')}
+                                    className="group/start relative h-8 gap-1.5 overflow-hidden rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 bg-[length:200%_auto] px-4 text-xs font-bold text-white shadow-md shadow-orange-500/30 transition-all hover:scale-105 hover:bg-right hover:shadow-lg hover:shadow-orange-500/50 focus-visible:ring-2 focus-visible:ring-orange-400 motion-safe:animate-[pulse_2.4s_ease-in-out_infinite]"
+                                  >
+                                    {/* Işıltı geçişi (hover'da soldan sağa parlar) */}
+                                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover/start:translate-x-full" />
+                                    <Zap className="h-3.5 w-3.5 fill-current" /> Başla
                                   </Button>
                                 )}
                                 {task.status === 'in_progress' && (
-                                  <Button size="sm" className="h-7 gap-1 bg-sky-600 text-xs hover:bg-sky-700" onClick={() => moveTask(task.id, 'review')}>
-                                    <UserCheck className="h-3 w-3" /> Onaya gönder
+                                  <Button
+                                    size="sm"
+                                    onClick={() => moveTask(task.id, 'review')}
+                                    className="group/send relative h-8 gap-1.5 overflow-hidden rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-sky-500 bg-[length:200%_auto] px-4 text-xs font-bold text-white shadow-md shadow-sky-500/30 transition-all hover:scale-105 hover:bg-right hover:shadow-lg hover:shadow-sky-500/50 focus-visible:ring-2 focus-visible:ring-sky-400"
+                                  >
+                                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover/send:translate-x-full" />
+                                    <UserCheck className="h-3.5 w-3.5" /> Onaya gönder
                                   </Button>
                                 )}
                                 {task.status === 'review' && (
-                                  <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                                  <span className="flex items-center gap-1 rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-medium text-sky-600 dark:text-sky-400 motion-safe:animate-pulse">
                                     <Clock className="h-3 w-3" /> Yönetici onayı bekleniyor
                                   </span>
                                 )}
@@ -1068,10 +1110,15 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                             {/* Yönetici: onaya düşen görevi onaylar/reddeder */}
                             {isManager && task.status === 'review' && (
                               <>
-                                <Button size="sm" className="h-7 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700" onClick={() => moveTask(task.id, 'done')}>
-                                  <CheckSquare className="h-3 w-3" /> Onayla
+                                <Button
+                                  size="sm"
+                                  onClick={() => moveTask(task.id, 'done')}
+                                  className="group/approve relative h-8 gap-1.5 overflow-hidden rounded-full bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-500 bg-[length:200%_auto] px-4 text-xs font-bold text-white shadow-md shadow-emerald-500/30 transition-all hover:scale-105 hover:bg-right hover:shadow-lg hover:shadow-emerald-500/50 focus-visible:ring-2 focus-visible:ring-emerald-400"
+                                >
+                                  <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover/approve:translate-x-full" />
+                                  <CheckSquare className="h-3.5 w-3.5" /> Onayla
                                 </Button>
-                                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs text-amber-600" onClick={() => rejectTask(task.id)}>
+                                <Button size="sm" variant="outline" className="h-8 gap-1 rounded-full border-amber-500/40 px-3.5 text-xs font-semibold text-amber-600 transition-all hover:scale-105 hover:border-amber-500 hover:bg-amber-500/10" onClick={() => rejectTask(task.id)}>
                                   <X className="h-3 w-3" /> Reddet
                                 </Button>
                               </>
@@ -1125,7 +1172,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-sm font-medium', task.status === 'done' && 'text-muted-foreground line-through')}>{task.title}</span>
                     <span className="flex flex-wrap items-center gap-1.5">
-                      {task.department && <span className="text-xs text-muted-foreground">{departments.find((d) => d.slug === task.department)?.name ?? task.department}</span>}
+                      {isManager && task.department && <span className="text-xs text-muted-foreground">{departments.find((d) => d.slug === task.department)?.name ?? task.department}</span>}
                       {parseTags(task.tags).map((tag) => (
                         <span key={tag} className={cn('rounded px-1 py-0.5 text-[9px] font-medium', tagColor(tag))}>#{tag}</span>
                       ))}
