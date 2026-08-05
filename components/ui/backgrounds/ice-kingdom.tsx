@@ -136,6 +136,10 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       ...makeFlakes(40, 0.6),
       ...makeFlakes(28, 1.0),
     ];
+    // PERF: draw() içinde her kare filter(...) yeni dizi allocate etmesin diye
+    // taneleri kurulumda BİR KEZ derinliğe göre ayır (depth sabit, güvenli).
+    const flakesFar = flakes.filter((f) => f.depth < 0.4);   // uzak-küçük-yavaş
+    const flakesNear = flakes.filter((f) => f.depth >= 0.4); // orta+yakın
 
     // ── Yıldızlar (yalnız gece) ────────────────────────────────────
     const stars = P.stars
@@ -705,7 +709,7 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       ridges.forEach((rg) => drawRidge(rg, mx * rg.par));
 
       // 5b) UZAK kar katmanı (küçük/yavaş) — dağ ile örtü arasında
-      flakes.filter((f) => f.depth < 0.4).forEach((f) => {
+      flakesFar.forEach((f) => {
         if (!reduceMotion) { f.y += f.speed; f.phase += f.phaseSpeed; f.x += Math.sin(f.phase) * f.drift; }
         if (f.y > H + f.r) { f.y = -f.r; f.x = Math.random() * W; }
         if (f.x > W + f.r) f.x = -f.r; if (f.x < -f.r) f.x = W + f.r;
@@ -773,29 +777,48 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
         const y = gy + Math.sin(x * 0.006 + t * 0.004) * 14 + Math.sin(x * 0.017 - t * 0.002) * 6;
         if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      ctx.strokeStyle = P.groundGlow; ctx.lineWidth = 3;
-      ctx.shadowColor = P.groundGlow; ctx.shadowBlur = 16; ctx.stroke(); ctx.shadowBlur = 0;
+      // PERF: shadowBlur=16 KALDIRILDI (uzun kenar path'inde CPU blur pahalı).
+      //       Glow'suz da güzel duruyor; lineWidth biraz artırılarak parlaklık telafi edildi.
+      ctx.strokeStyle = P.groundGlow; ctx.lineWidth = 4;
+      ctx.stroke();
       ctx.restore();
 
       // 7b) Gökcismi yansıması — kar örtüsüne düşen soğuk mavi ışık sütunu.
+      // PERF: eskiden her 5px'de bir createLinearGradient (kare başına ~150 gradient!)
+      //       yaratılıyordu. Artık ~10 yatay dilim + TEK yatay-simetrik gradient
+      //       (transparent→mavi→transparent) tüm sütun boyunca yeniden kullanılıyor.
+      //       Shimmer (dilim x-kayması) korundu; gradient sayısı ~150 → 1.
       {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         const startY = gy;
-        for (let y = startY; y < H; y += 5) {
+        const SLICES = 10;                 // her 5px yerine 10 dilim yeterli
+        const sliceH = (H - startY) / SLICES;
+        // TEK yatay gradient — genişlik ölçeklemesi transform ile değil, gradient
+        // 0..1 uzayında tanımlanıp her dilimde translate+scale ile yeniden kullanılıyor.
+        // Basitlik için gradient'i [-1,1] biriminde kur, dilimde fillRect'i ölçekle.
+        const g = ctx.createLinearGradient(-1, 0, 1, 0);
+        g.addColorStop(0, 'transparent');
+        g.addColorStop(0.5, `hsla(200,90%,${isDark ? 82 : 90}%,${isDark ? 0.16 : 0.2})`);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        for (let s = 0; s < SLICES; s++) {
+          const y = startY + s * sliceH;
           const prog = (y - startY) / (H - startY);
           const halfW = orbR * (0.45 + prog * 2.6);
           const shimmer = reduceMotion ? 0 : Math.sin(y * 0.14 + t * 0.05) * (2 + prog * 5);
           const cx2 = ox + shimmer;
           const flick = reduceMotion ? 1 : (0.6 + Math.abs(Math.sin(y * 0.3 + t * 0.04)) * 0.4);
-          const alpha = (isDark ? 0.16 : 0.2) * (1 - prog) * flick;
-          const g = ctx.createLinearGradient(cx2 - halfW, y, cx2 + halfW, y);
-          g.addColorStop(0, 'transparent');
-          g.addColorStop(0.5, `hsla(200,90%,${isDark ? 82 : 90}%,${alpha})`);
-          g.addColorStop(1, 'transparent');
-          ctx.fillStyle = g;
-          ctx.fillRect(cx2 - halfW, y, halfW * 2, 2.5);
+          // Üst dilimler parlak, alta doğru soluk (1-prog) + titreşim (flick).
+          ctx.globalAlpha = (1 - prog) * flick;
+          // Gradient [-1,1] uzayında → dilimi o uzaya taşıyıp ölçekle, sonra geri al.
+          ctx.save();
+          ctx.translate(cx2, y);
+          ctx.scale(halfW, 1);
+          ctx.fillRect(-1, 0, 2, sliceH + 1);
+          ctx.restore();
         }
+        ctx.globalAlpha = 1;
         ctx.restore();
       }
 
@@ -808,7 +831,7 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       }
 
       // 8) YAKIN kar katmanları (orta + büyük/hızlı) — ön planda + fare rüzgarı/itişi + döner.
-      flakes.filter((f) => f.depth >= 0.4).forEach((f) => {
+      flakesNear.forEach((f) => {
         if (!reduceMotion) {
           f.y += f.speed;
           f.phase += f.phaseSpeed;
@@ -831,13 +854,13 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
         const a = P.snowAlpha * (0.6 + f.depth * 0.4);
         if (f.depth >= 0.9) {
           // büyük yakın taneler: 6-kollu kristal (döner, parıldar)
+          // PERF: shadowBlur=6 KALDIRILDI (kare başına onlarca öğede CPU blur pahalı).
+          // Parlaklık kaybını stroke alpha'sını hafif artırarak telafi ediyoruz.
           ctx.save();
           ctx.translate(f.x, f.y);
           ctx.rotate(f.spin);
-          ctx.strokeStyle = `rgba(${P.snowColor},${a})`;
+          ctx.strokeStyle = `rgba(${P.snowColor},${Math.min(1, a * 1.25)})`;
           ctx.lineWidth = 1;
-          ctx.shadowColor = `rgba(${P.snowColor},0.8)`;
-          ctx.shadowBlur = 6;
           const rr = f.r * 1.7;
           for (let k = 0; k < 3; k++) {
             const ang = (k / 3) * Math.PI;
@@ -847,7 +870,6 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
             ctx.stroke();
           }
           ctx.restore();
-          ctx.shadowBlur = 0;
         } else {
           ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(${P.snowColor},${a})`;
@@ -856,27 +878,27 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
       });
 
       // 9) Uçuşan buz kristali / frost dust — twinkle + yavaş yörünge (4-kollu kıvılcım)
+      // PERF: shadowBlur=6 KALDIRILDI + TEK save/restore + 'lighter' bir kez set edildi
+      //       (translate yerine mutlak koordinatla çiziliyor; kristal dönmüyor).
+      //       Parlaklık kaybı stroke alpha artışıyla (tw*1.3) telafi edildi.
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineWidth = 1;
       crystals.forEach((c) => {
         if (!reduceMotion) { c.tw += c.twSpeed; c.orb += c.orbSpeed; }
         const tw = 0.25 + Math.abs(Math.sin(c.tw)) * 0.75;
         const cxp = c.x + Math.cos(c.orb) * 8 + mx * 2;
         const cyp = c.y + Math.sin(c.orb) * 6 + my * 2;
-        ctx.save();
-        ctx.translate(cxp, cyp);
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `hsla(${P.crystalHue},90%,${P.crystalL}%,${tw})`;
-        ctx.lineWidth = 1;
-        ctx.shadowColor = `hsla(${P.crystalHue},90%,80%,${tw})`;
-        ctx.shadowBlur = 6;
+        ctx.strokeStyle = `hsla(${P.crystalHue},90%,${P.crystalL}%,${Math.min(1, tw * 1.3)})`;
         const rr = c.r * (0.7 + tw * 0.6);
         ctx.beginPath();
-        ctx.moveTo(-rr * 2.4, 0); ctx.lineTo(rr * 2.4, 0);
-        ctx.moveTo(0, -rr * 2.4); ctx.lineTo(0, rr * 2.4);
-        ctx.moveTo(-rr, -rr); ctx.lineTo(rr, rr);
-        ctx.moveTo(rr, -rr); ctx.lineTo(-rr, rr);
+        ctx.moveTo(cxp - rr * 2.4, cyp); ctx.lineTo(cxp + rr * 2.4, cyp);
+        ctx.moveTo(cxp, cyp - rr * 2.4); ctx.lineTo(cxp, cyp + rr * 2.4);
+        ctx.moveTo(cxp - rr, cyp - rr); ctx.lineTo(cxp + rr, cyp + rr);
+        ctx.moveTo(cxp + rr, cyp - rr); ctx.lineTo(cxp - rr, cyp + rr);
         ctx.stroke();
-        ctx.restore();
       });
+      ctx.restore();
 
       // 9b) FARE FROST İZİ — fare hareket ettikçe o noktaya sönen kristal kıvılcımları bırak.
       if (pActive && !reduceMotion) {
@@ -898,18 +920,18 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
         }
       }
       if (frostPool.length) {
+        // PERF: shadowBlur=6 KALDIRILDI (fare izi parçacıklarında kare başına blur pahalı).
+        //       Parlaklık kaybı stroke alpha artışıyla (a: 0.9→1.15 çarpanı) telafi edildi.
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
+        ctx.lineWidth = 1;
         for (let i = frostPool.length - 1; i >= 0; i--) {
           const fp = frostPool[i];
           if (!reduceMotion) { fp.x += fp.vx; fp.y += fp.vy; fp.life -= 1; }
           const lifeT = Math.max(0, fp.life / fp.maxLife);
           if (fp.life <= 0) { frostPool.splice(i, 1); continue; }
-          const a = lifeT * 0.9;
-          ctx.strokeStyle = `hsla(200,95%,85%,${a})`;
-          ctx.lineWidth = 1;
-          ctx.shadowColor = 'hsla(200,95%,80%,0.9)';
-          ctx.shadowBlur = 6;
+          const a = Math.min(1, lifeT * 1.15);
+          ctx.strokeStyle = `hsla(200,95%,87%,${a})`;
           const rr = fp.r * (0.6 + lifeT * 0.8);
           ctx.beginPath();
           ctx.moveTo(fp.x - rr, fp.y); ctx.lineTo(fp.x + rr, fp.y);
@@ -917,7 +939,6 @@ export function IceKingdomBackground({ children, className }: IceKingdomBackgrou
           ctx.stroke();
         }
         ctx.restore();
-        ctx.shadowBlur = 0;
       }
 
       // 10) Bloom — soğuk mavi ışık yıkaması (gökcisminden yayılan)
