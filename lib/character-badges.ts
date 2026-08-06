@@ -60,6 +60,23 @@ export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string 
   { badgeId: 'badge-martha', name: 'Martha', trait: 'Derin, bağlantı kuran, gizemli; düşündüren' },
 ];
 
+/**
+ * `why` metnini güvenli sınıra indirir AMA cümleyi/kelimeyi ortadan kesmez:
+ * limit içindeki son cümle sonunda (. ! ?), yoksa son boşlukta keser; sonuna
+ * yarım kalırsa "…" ekler. Böylece reveal ekranında yazı asla yarım görünmez.
+ */
+function tidyWhy(raw: string | undefined, limit = 220): string {
+  const s = (raw || '').trim();
+  if (s.length <= limit) return s;
+  const slice = s.slice(0, limit);
+  // Limit içindeki son cümle sonu.
+  const lastSentence = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
+  if (lastSentence > limit * 0.5) return slice.slice(0, lastSentence + 1).trim();
+  // Yoksa son kelime sınırı + üç nokta.
+  const lastSpace = slice.lastIndexOf(' ');
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim().replace(/[,;:]$/, '') + '…';
+}
+
 export type CharacterClassification = {
   badgeId: string;
   name: string;
@@ -112,10 +129,12 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
         '(1) Yorumların genel ÜSLUBUNU en iyi anlatan KATEGORİ\'yi seç (categoryKey). ' +
         '(2) O kategorinin karakterleri arasından kişiliğe EN UYGUN olanı seç (badgeId). ' +
         'badgeId, seçtiğin categoryKey\'in karakterlerinden BİRİ olmak ZORUNDA. ' +
-        'JSON döndür: {"categoryKey":"...","badgeId":"...","why":"tek cümle Türkçe gerekçe"}.',
-      user: `KATEGORİLER VE KARAKTERLERİ:\n${categoryBlock}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nÖnce kategori, sonra o kategoriden karakter seç. JSON:`,
+        'why: kullanıcıya "neden bu rozeti aldın" diye hitap eden, KISA ama TAM biten ' +
+        'tek-iki cümle (EN FAZLA 30 kelime). Cümleyi asla yarım bırakma, mutlaka nokta ile bitir. ' +
+        'JSON döndür: {"categoryKey":"...","badgeId":"...","why":"..."}.',
+      user: `KATEGORİLER VE KARAKTERLERİ:\n${categoryBlock}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nÖnce kategori, sonra o kategoriden karakter seç. why kısa ve tam bitsin. JSON:`,
       temperature: 0.4,
-      maxTokens: 160,
+      maxTokens: 260,
       jsonMode: true,
     });
     const content = res && typeof res !== 'string' ? res.content : (res as string | null);
@@ -144,7 +163,7 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
     return {
       badgeId: match.badgeId,
       name: match.name,
-      why: parsed.why?.slice(0, 200) || '',
+      why: tidyWhy(parsed.why),
       categoryKey: cat?.key,
       categoryName: cat?.name,
     };
