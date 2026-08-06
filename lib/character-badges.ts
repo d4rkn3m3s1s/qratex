@@ -135,8 +135,9 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
         '(1) Yorumların genel ÜSLUBUNU en iyi anlatan KATEGORİ\'yi seç (categoryKey). ' +
         '(2) O kategorinin karakterleri arasından kişiliğe EN UYGUN olanı seç (badgeId). ' +
         'badgeId, seçtiğin categoryKey\'in karakterlerinden BİRİ olmak ZORUNDA. ' +
-        'why: kullanıcıya "neden bu rozeti aldın" diye hitap eden, KISA ama TAM biten ' +
-        'tek-iki cümle (EN FAZLA 30 kelime). Cümleyi asla yarım bırakma, mutlaka nokta ile bitir. ' +
+        'why: kullanıcının YAZIM TARZINI bu karaktere benzeten OLUMLU açıklama. ' +
+        '"Sen ... yazıyorsun, tıpkı ... gibi" tarzında, gurur verici. Yorumları eleştirme, ' +
+        'soru sorma, öneri verme. TAM cümle, en fazla 30 kelime, nokta ile bitir. ' +
         'JSON döndür: {"categoryKey":"...","badgeId":"...","why":"..."}.',
       user: `KATEGORİLER VE KARAKTERLERİ:\n${categoryBlock}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nÖnce kategori, sonra o kategoriden karakter seç. why kısa ve tam bitsin. JSON:`,
       temperature: 0.4,
@@ -316,12 +317,17 @@ export async function pickCharacterInCategory(
     const { runChatCompletion } = await import('@/lib/ai-engine');
     const res = await runChatCompletion({
       system:
-        `Sen bir kişilik analistisin. Kullanıcının "${cat.name}" üslubundaki yorumlarını oku ve ` +
-        'aşağıdaki karakterlerden kişiliğine EN UYGUN olanı seç. why: kullanıcıya "neden bu ' +
-        'rozeti aldın" diye hitap eden, KISA ama TAM biten tek-iki cümle (EN FAZLA 30 kelime), ' +
-        'mutlaka nokta ile bitir. JSON: {"badgeId":"...","why":"..."}.',
-      user: `KARAKTERLER:\n${options}\n\nKULLANICININ YORUMLARI:\n${sample || '(örnek yok)'}\n\nEn uygun karakteri seç. JSON:`,
-      temperature: 0.4,
+        `Sen bir kişilik analistisin. Kullanıcı "${cat.name}" üslubunda yorumlar yazan biri. ` +
+        'Aşağıdaki karakterlerden yazım tarzına EN UYGUN olanı seç (badgeId). ' +
+        'why alanı: kullanıcıyı BU KARAKTERE benzeten OLUMLU bir açıklama. Kullanıcının ' +
+        'yazım tarzının bu karakterin kişiliğiyle (planlı, gözlemci, ironik vb.) nasıl ' +
+        'örtüştüğünü anlat. "Sen ... yazıyorsun, tıpkı ... gibi" tarzında, gurur verici bir ton. ' +
+        'Yorumları ASLA eleştirme, kullanıcıya soru sorma, öneri verme. Sadece neden bu karaktere ' +
+        'benzediğini söyle. TAM cümle, en fazla 30 kelime, nokta ile bitir. ' +
+        'Örnek doğru why: "Yorumlarını ince bir mizah ve keskin gözlemle yazıyorsun; tıpkı her ayrıntıyı yakalayan Sherlock gibi." ' +
+        'JSON: {"badgeId":"...","why":"..."}.',
+      user: `KARAKTERLER:\n${options}\n\nKULLANICININ YAZIM TARZINI GÖSTEREN ÖRNEK YORUMLAR:\n${sample || '(örnek yok)'}\n\nBu yazım tarzına en uygun karakteri seç ve neden benzediğini olumlu anlat. JSON:`,
+      temperature: 0.5,
       maxTokens: 220,
       jsonMode: true,
     });
