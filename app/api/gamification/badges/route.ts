@@ -90,6 +90,13 @@ export async function GET(request: NextRequest) {
       where.category = normalizeBadgeCategory(category);
     }
 
+    // Karakter rozetleri bu genel listeden GİZLENİR — kullanıcı yalnızca kazandığı
+    // karakterleri (CharacterCard koleksiyonunda) görür, kilitli/diğer karakterleri
+    // göremez ve varlıklarından haberdar olmaz. (character-badges tek doğruluk kaynağı.)
+    const { CHARACTER_PROFILES } = await import('@/lib/character-badges');
+    const characterBadgeIds = CHARACTER_PROFILES.map((c) => c.badgeId);
+    (where as { id?: unknown }).id = { notIn: characterBadgeIds };
+
     const badges = await prisma.badge.findMany({
       where,
       include: {

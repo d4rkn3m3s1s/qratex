@@ -7,23 +7,20 @@ import { Button } from '@/components/ui/button';
 import { CharacterReveal, type RevealCharacter } from '@/components/customer/character-reveal';
 
 type Category = { key: string; name: string; emoji: string; accent: string; description: string };
-type Character = { badgeId: string; name: string; icon?: string; description?: string; why?: string; category?: Category | null };
+type Character = { badgeId: string; name: string; icon?: string; description?: string; earnedAt?: string; category?: Category | null };
+type Bar = { current: number; threshold: number; progress: number; remaining: number; ready: boolean };
 type State = {
   character: Character | null;
-  canDiscover: boolean;
-  feedbackCount: number;
-  threshold: number;
-  remaining: number;
-  progress: number;
+  collection: Character[];
+  bar: Bar;
 };
 
 /**
- * "Karakterin" kartı — AI'ın yorumlara göre atadığı dizi/film karakter rozetini gösterir.
- *  • Rozet yoksa + eşik dolmadıysa: ilerleme BARI (kaç yorum kaldı) gösterir.
- *  • Eşik dolduysa: "Karakterimi Keşfet" → SİHİRLİ KÜRE reveal ekranını açar (sürpriz).
- *  • Rozet varsa: karakteri + kategorisini gösterir.
- * Reveal ekranı iki varyantlı (orb/mascot); kullanıcı hangisini beğendiğine karar versin
- * diye küçük bir varyant seçici sunulur.
+ * "Karakterin" kartı — kategori-bazlı GİZLİ ilerleme sistemi.
+ *  • Bar dolar ama kullanıcı HANGİ kategoriyi doldurduğunu BİLMEZ (gizemli).
+ *  • Bar dolunca (ready) → "Karakterini Aç" → sihirli küre/maskot reveal (sürpriz).
+ *  • Sadece KAZANILAN rozetler gösterilir; kilitli/diğer karakterler görünmez.
+ * Reveal iki varyantlı (orb/mascot); kullanıcı beğendiğini seçebilir.
  */
 export function CharacterCard() {
   const [state, setState] = useState<State | null>(null);
@@ -45,21 +42,21 @@ export function CharacterCard() {
 
   if (loading || !state) return null;
 
-  const c = state.character;
-  const cat = c?.category ?? null;
-  const pct = Math.round((state.progress ?? 0) * 100);
+  const bar = state.bar;
+  const collection = state.collection ?? [];
+  const pct = Math.round((bar?.progress ?? 0) * 100);
+  const ready = bar?.ready;
 
   return (
     <>
       <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card/60 to-fuchsia-500/10 p-5 shadow-sm">
-        {/* Üst etiket */}
+        {/* Üst etiket + varyant seçici (reveal'e hazırken) */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
             <Sparkles className="h-4 w-4" />
-            Karakterin
+            Karakter Koleksiyonun
           </div>
-          {/* Varyant seçici (sadece keşif aşamasında görünür) — kullanıcı beğendiğini seçer */}
-          {!c && state.canDiscover && (
+          {ready && (
             <div className="flex items-center gap-0.5 rounded-full border border-border/60 bg-card/60 p-0.5 text-[11px]">
               <button
                 onClick={() => setVariant('orb')}
@@ -77,50 +74,26 @@ export function CharacterCard() {
           )}
         </div>
 
-        {c ? (
-          /* ── Kazanılmış karakter ── */
-          <div className="mt-3 flex items-center gap-4">
-            {c.icon ? (
-              <Image src={c.icon} alt={c.name} width={64} height={64} className="h-16 w-16 shrink-0 object-contain" />
-            ) : (
-              <div
-                className="grid h-16 w-16 shrink-0 place-items-center rounded-full text-3xl"
-                style={{ background: cat ? `${cat.accent}22` : 'hsl(var(--primary)/0.15)' }}
-              >
-                {cat?.emoji ?? '🎭'}
-              </div>
-            )}
-            <div className="min-w-0">
-              {cat && (
-                <span
-                  className="mb-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  style={{ background: `${cat.accent}1f`, color: cat.accent }}
-                >
-                  {cat.emoji} {cat.name}
-                </span>
-              )}
-              <p className="text-xl font-bold leading-tight">{c.name}</p>
-              <p className="text-sm text-muted-foreground">{c.description}</p>
-            </div>
-          </div>
-        ) : state.canDiscover ? (
-          /* ── Eşik doldu: keşfe hazır ── */
+        {/* ── GİZLİ İLERLEME BARI / REVEAL TETİK ── */}
+        {ready ? (
           <div className="mt-3 flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">
-              Yorumların analiz edilmeye hazır! Sihirli {variant === 'orb' ? 'küre' : 'maskot'} sana hangi karakterin
-              uyduğunu açığa çıkaracak. <span className="text-foreground/70">Ne çıkacağını kimse bilmiyor…</span>
+              ✨ Bir karakter senin için hazırlandı! Sihirli {variant === 'orb' ? 'küre' : 'maskot'} onu açığa
+              çıkarmayı bekliyor. <span className="text-foreground/70">Ne çıkacağını kimse bilmiyor…</span>
             </p>
-            <Button onClick={() => setRevealOpen(true)} className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700">
+            <Button
+              onClick={() => setRevealOpen(true)}
+              className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white hover:from-violet-700 hover:to-fuchsia-700 motion-safe:animate-[pulse_2.2s_ease-in-out_infinite]"
+            >
               <Wand2 className="mr-2 h-4 w-4" />
-              Karakterimi Keşfet
+              Karakterini Aç
             </Button>
           </div>
         ) : (
-          /* ── Eşik dolmadı: ilerleme BARI ── */
           <div className="mt-3">
             <p className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">{state.remaining}</span> yorum daha yaz, karakterin
-              belirlensin! Her yorum barı doldurur.
+              Yorumların gizemli bir koleksiyonu besliyor… <span className="font-semibold text-foreground">{bar?.remaining ?? '?'}</span> yorum
+              daha, yeni bir karakter açığa çıkabilir. <span className="text-foreground/60">Hangi karakter? Sürpriz.</span>
             </p>
             <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
               <div
@@ -129,8 +102,45 @@ export function CharacterCard() {
               />
             </div>
             <p className="mt-1 text-right text-xs text-muted-foreground/70">
-              {state.feedbackCount}/{state.threshold} yorum
+              {bar?.current ?? 0}/{bar?.threshold ?? 6}
             </p>
+          </div>
+        )}
+
+        {/* ── KAZANILAN KOLEKSİYON (sadece kazanılanlar; kilitliler gizli) ── */}
+        {collection.length > 0 && (
+          <div className="mt-4 border-t border-border/50 pt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Kazandığın karakterler ({collection.length})
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {collection.map((c) => (
+                <div
+                  key={c.badgeId}
+                  className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 px-2.5 py-1.5"
+                  title={c.description}
+                >
+                  {c.icon ? (
+                    <Image src={c.icon} alt={c.name} width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />
+                  ) : (
+                    <span
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-base"
+                      style={{ background: c.category ? `${c.category.accent}22` : 'hsl(var(--primary)/0.15)' }}
+                    >
+                      {c.category?.emoji ?? '🎭'}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold leading-tight">{c.name}</p>
+                    {c.category && (
+                      <span className="text-[10px] font-medium" style={{ color: c.category.accent }}>
+                        {c.category.emoji} {c.category.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -142,8 +152,8 @@ export function CharacterCard() {
         variant={variant}
         fetchOnOpen
         onReveal={(revealed: NonNullable<RevealCharacter>) => {
-          // Kart durumunu tazele (yeni karakter + kategori görünsün).
-          setState((prev) => (prev ? { ...prev, character: revealed as Character } : prev));
+          // Yeni karakter koleksiyona eklendi; kartı ve barı tazele.
+          void revealed;
           load();
         }}
       />

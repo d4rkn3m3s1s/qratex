@@ -2,21 +2,29 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
-import { CHARACTER_PROFILES, CHARACTER_BADGE_THRESHOLD, assignCharacterBadge } from '@/lib/character-badges';
+import {
+  CHARACTER_PROFILES,
+  getCategoryProgress,
+  revealReadyCategoryBadge,
+} from '@/lib/character-badges';
 import { BADGE_CATALOG } from '@/lib/badge-catalog';
 import { CATEGORY_BY_CHARACTER } from '@/lib/character-categories';
 
 export const dynamic = 'force-dynamic';
 
-/** Bir karakter badgeId'sinin kategorisini (varsa) sadeleştirip döndürür. */
+/** Bir karakter badgeId'sinin kategorisini (varsa) sadeleştirir (UI teması için). */
 function categoryOf(badgeId: string) {
   const c = CATEGORY_BY_CHARACTER[badgeId];
   return c ? { key: c.key, name: c.name, emoji: c.emoji, accent: c.accent, description: c.description } : null;
 }
 
 /**
- * GET: kullanıcının mevcut karakter rozeti (varsa) + ilerleme bar verisi.
- * Bar: bir sonraki "keşif" için kaç yorum kaldığını gösterir (eşik tabanlı).
+ * GET: kullanıcının KAZANDIĞI karakter rozetleri + GİZLİ ilerleme barı.
+ *  • collection: kazanılan karakter rozetleri (kategorileriyle). Kilitli/diğer
+ *    rozetler DÖNMEZ — kullanıcı sadece kazandıklarını görür.
+ *  • bar: en dolu kategorinin ilerlemesi (0..1) + kaç yorum kaldığı. Kategori ADI
+ *    GİZLİDİR — istemciye gönderilmez (kullanıcı hangi kategoriyi doldurduğunu bilmez).
+ *  • ready: eşik dolu → sihirli reveal açılabilir.
  */
 export async function GET() {
   const auth = await requireAuth(['CUSTOMER']);
@@ -24,57 +32,67 @@ export async function GET() {
   const userId = auth.session.user.id;
 
   const characterIds = CHARACTER_PROFILES.map((c) => c.badgeId);
-  const owned = await prisma.userBadge.findFirst({
+
+  // Kazanılan karakter rozetleri (en yeni önce).
+  const owned = await prisma.userBadge.findMany({
     where: { userId, badgeId: { in: characterIds } },
     select: { badgeId: true, earnedAt: true },
     orderBy: { earnedAt: 'desc' },
   });
+  const collection = owned
+    .map((o) => {
+      const cat = BADGE_CATALOG.find((b) => b.id === o.badgeId);
+      if (!cat) return null;
+      return {
+        badgeId: o.badgeId, name: cat.name, icon: cat.icon, description: cat.description,
+        earnedAt: o.earnedAt, category: categoryOf(o.badgeId),
+      };
+    })
+    .filter(Boolean);
 
-  const textCount = await prisma.feedback.count({ where: { userId, deletedAt: null, text: { not: null } } });
-  const catalog = owned ? BADGE_CATALOG.find((b) => b.id === owned.badgeId) : null;
-
-  // İlerleme barı: 0..1 ve "kalan yorum" — eşiğe kadar dolan çubuk için.
-  const remaining = Math.max(0, CHARACTER_BADGE_THRESHOLD - textCount);
-  const progress = Math.min(1, textCount / CHARACTER_BADGE_THRESHOLD);
+  // Gizli ilerleme barı (kategori adı DIŞARI SIZMAZ).
+  const prog = await getCategoryProgress(userId);
 
   return NextResponse.json(
     {
       success: true,
-      character: owned && catalog
-        ? {
-            badgeId: owned.badgeId, name: catalog.name, icon: catalog.icon,
-            description: catalog.description, earnedAt: owned.earnedAt,
-            category: categoryOf(owned.badgeId),
-          }
-        : null,
-      canDiscover: textCount >= CHARACTER_BADGE_THRESHOLD,
-      feedbackCount: textCount,
-      threshold: CHARACTER_BADGE_THRESHOLD,
-      remaining,
-      progress,
+      // Geriye dönük: en son kazanılan karakteri "character" olarak da ver.
+      character: collection[0] ?? null,
+      collection,
+      bar: {
+        current: prog.current,
+        threshold: prog.threshold,
+        progress: prog.progress,
+        remaining: Math.max(0, prog.threshold - prog.current),
+        ready: prog.ready,
+        // NOT: topCategoryKey BİLİNÇLİ olarak gönderilmiyor (gizli).
+      },
     },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );
 }
 
-/** POST: "karakterimi keşfet" — kullanıcı isteğiyle sınıflandırmayı tetikler. */
+/**
+ * POST: "keşfet" — eşiği dolmuş bir kategoride alınmamış karakteri açar (reveal anı).
+ * Hazır kategori yoksa 400. Başarılıysa karakter + kategori + why döner (reveal gösterir).
+ */
 export async function POST() {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
   const userId = auth.session.user.id;
 
-  const textCount = await prisma.feedback.count({ where: { userId, deletedAt: null, text: { not: null } } });
-  if (textCount < CHARACTER_BADGE_THRESHOLD) {
+  const prog = await getCategoryProgress(userId);
+  if (!prog.ready) {
     return NextResponse.json(
-      { success: false, error: `En az ${CHARACTER_BADGE_THRESHOLD} yorum gerekiyor.`, feedbackCount: textCount, threshold: CHARACTER_BADGE_THRESHOLD },
+      { success: false, error: 'Henüz keşfe hazır değilsin, biraz daha yorum yaz.', bar: { current: prog.current, threshold: prog.threshold } },
       { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
 
-  const result = await assignCharacterBadge(userId);
+  const result = await revealReadyCategoryBadge(userId);
   if (!result) {
     return NextResponse.json(
-      { success: false, error: 'Karakter analizi şu an yapılamadı, sonra tekrar deneyin.' },
+      { success: false, error: 'Şu an açılamadı, birazdan tekrar dene.' },
       { status: 503, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

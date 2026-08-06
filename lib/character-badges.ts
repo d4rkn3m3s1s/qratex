@@ -11,7 +11,13 @@ import { prisma } from '@/lib/prisma';
  * Maliyet: kullanıcı başına tek LLM çağrısı (agrege geçmiş üzerinden), her yorumda değil.
  */
 
-export const CHARACTER_BADGE_THRESHOLD = 5; // En az bu kadar yorum sonrası atanır
+export const CHARACTER_BADGE_THRESHOLD = 5; // (Legacy) genel eşik — geriye dönük uyum için tutulur.
+
+/**
+ * Kategori bazlı eşik: bir ÜSLUP kategorisinde bu kadar yorum birikince o kategorinin
+ * bir karakter rozeti açılır. Kullanıcı bu sayıyı bilmez (bar gizli ilerler).
+ */
+export const CATEGORY_BADGE_THRESHOLD = 6;
 
 /** LLM'in seçebileceği karakterler: badge-id → kişilik tanımı (seçim ipucu). */
 export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string }[] = [
@@ -221,25 +227,221 @@ export async function assignCharacterBadge(userId: string): Promise<CharacterCla
  * Feedback POST'undan çağrılır (fire-and-forget). Kullanıcı karakter eşiğine TAM
  * ulaştığında (ilk kez threshold'a değince) bir kez sınıflandırma tetikler — böylece
  * her yorumda LLM çağrılmaz. Zaten karakter rozeti varsa da atlanır.
+ *
+ * @deprecated Kategori-bazlı akış için processFeedbackForCharacterBadge kullanılır.
+ * Bu fonksiyon geriye dönük uyum için tutulur (çağrılırsa yeni akışa yönlendirir).
  */
 export async function maybeAssignCharacterOnThreshold(userId: string): Promise<void> {
+  // Yeni akışta bu no-op'tur; kategori işleme processFeedbackForCharacterBadge içinde.
+  void userId;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KATEGORİ-BAZLI KARAKTER ROZETİ (yeni sistem)
+//  • Her yorum yazıldığında AI o yorumu bir ÜSLUP kategorisine oturtur (gizli).
+//  • Bir kategoride CATEGORY_BADGE_THRESHOLD (6) yorum birikince, o kategorinin
+//    kullanıcıda HENÜZ OLMAYAN bir karakter rozeti sihirli reveal ile açılır.
+//  • Aynı kategori tekrar dolarsa o kategoriden BAŞKA karakter verilir.
+//  • Kullanıcı hangi kategoriyi doldurduğunu bilmez (bar gizli ilerler).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tek bir yorumu ÜSLUP kategorisine sınıflandırır (dram-suc|komedi|fantastik|gizem-gerilim). */
+export async function classifyFeedbackCategory(text: string): Promise<string | null> {
+  const clean = (text || '').trim();
+  if (clean.length < 8) return null; // çok kısa yorum sınıflandırılmaz
+
+  const { CHARACTER_CATEGORIES, CATEGORY_BY_KEY } = await import('@/lib/character-categories');
+  const catLines = CHARACTER_CATEGORIES.map((c) => `- ${c.key} (${c.name}): ${c.aiHint}`).join('\n');
+  const validKeys = CHARACTER_CATEGORIES.map((c) => c.key);
+
   try {
-    const textCount = await prisma.feedback.count({
-      where: { userId, deletedAt: null, text: { not: null } },
+    const { runChatCompletion } = await import('@/lib/ai-engine');
+    const res = await runChatCompletion({
+      system:
+        'Sen bir yorum ÜSLUP sınıflandırıcısısın. Verilen TEK yorumu, aşağıdaki kategorilerden ' +
+        'üslubuna EN UYGUN olanına ata. Yalnızca bir categoryKey döndür. ' +
+        'JSON: {"categoryKey":"..."}.',
+      user: `KATEGORİLER:\n${catLines}\n\nYORUM:\n"${clean.slice(0, 500)}"\n\nEn uygun kategoriyi seç. JSON:`,
+      temperature: 0.2,
+      maxTokens: 40,
+      jsonMode: true,
     });
-    // Yalnızca eşiğe ilk kez ulaşıldığında (tam eşik değeri) çalıştır → tek LLM çağrısı.
-    if (textCount !== CHARACTER_BADGE_THRESHOLD) return;
-
-    // Zaten bir karakter rozeti varsa tekrar analiz etme.
-    const characterIds = CHARACTER_PROFILES.map((c) => c.badgeId);
-    const existing = await prisma.userBadge.findFirst({
-      where: { userId, badgeId: { in: characterIds } },
-      select: { id: true },
-    });
-    if (existing) return;
-
-    await assignCharacterBadge(userId);
-  } catch (err) {
-    console.error('[CHARACTER_BADGE] threshold assign failed:', err);
+    const content = res && typeof res !== 'string' ? res.content : (res as string | null);
+    if (!content) return null;
+    const parsed = JSON.parse(content) as { categoryKey?: string };
+    if (parsed.categoryKey && CATEGORY_BY_KEY[parsed.categoryKey]) return parsed.categoryKey;
+    // Güvenlik: geçersizse null (sayıma dahil edilmez).
+    return validKeys.includes(parsed.categoryKey || '') ? parsed.categoryKey! : null;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * Bir kategoride, kullanıcının HENÜZ ALMADIĞI karakterlerden en uygun olanı seçer.
+ * O kategorideki yorumlarına bakıp AI ile seçer + gerekçe (why) üretir.
+ * Tüm karakterler alınmışsa null (o kategori tükendi).
+ */
+export async function pickCharacterInCategory(
+  userId: string,
+  categoryKey: string,
+): Promise<CharacterClassification> {
+  const { CATEGORY_BY_KEY, charactersInCategory } = await import('@/lib/character-categories');
+  const cat = CATEGORY_BY_KEY[categoryKey];
+  if (!cat) return null;
+
+  // Kullanıcının bu kategoride zaten sahip olduğu karakterleri çıkar.
+  const owned = await prisma.userBadge.findMany({
+    where: { userId, badgeId: { in: cat.characterIds } },
+    select: { badgeId: true },
+  });
+  const ownedSet = new Set(owned.map((b) => b.badgeId));
+  const available = charactersInCategory(categoryKey).filter((c) => !ownedSet.has(c.badgeId));
+  if (available.length === 0) return null; // bu kategorideki tüm karakterler alınmış
+
+  // Bu kategorideki yorumlardan örneklem (AI'ın karakteri seçmesi için).
+  const feedbacks = await prisma.feedback.findMany({
+    where: { userId, deletedAt: null, characterCategory: categoryKey, text: { not: null } },
+    select: { text: true, rating: true },
+    orderBy: { createdAt: 'desc' },
+    take: 12,
+  });
+  const sample = feedbacks
+    .map((f, i) => `${i + 1}. (${f.rating}★) ${f.text!.slice(0, 200)}`)
+    .join('\n');
+
+  const options = available.map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join('\n');
+
+  try {
+    const { runChatCompletion } = await import('@/lib/ai-engine');
+    const res = await runChatCompletion({
+      system:
+        `Sen bir kişilik analistisin. Kullanıcının "${cat.name}" üslubundaki yorumlarını oku ve ` +
+        'aşağıdaki karakterlerden kişiliğine EN UYGUN olanı seç. why: kullanıcıya "neden bu ' +
+        'rozeti aldın" diye hitap eden, KISA ama TAM biten tek-iki cümle (EN FAZLA 30 kelime), ' +
+        'mutlaka nokta ile bitir. JSON: {"badgeId":"...","why":"..."}.',
+      user: `KARAKTERLER:\n${options}\n\nKULLANICININ YORUMLARI:\n${sample || '(örnek yok)'}\n\nEn uygun karakteri seç. JSON:`,
+      temperature: 0.4,
+      maxTokens: 220,
+      jsonMode: true,
+    });
+    const content = res && typeof res !== 'string' ? res.content : (res as string | null);
+    let picked = available[0]; // güvenli varsayılan
+    let why = '';
+    if (content) {
+      const parsed = JSON.parse(content) as { badgeId?: string; why?: string };
+      const match = available.find((c) => c.badgeId === parsed.badgeId);
+      if (match) picked = match;
+      why = tidyWhy(parsed.why);
+    }
+    return { badgeId: picked.badgeId, name: picked.name, why, categoryKey: cat.key, categoryName: cat.name };
+  } catch {
+    // AI yoksa: kategoriden ilk uygun karakteri gerekçesiz ata (sessiz degradasyon).
+    return { badgeId: available[0].badgeId, name: available[0].name, why: '', categoryKey: cat.key, categoryName: cat.name };
+  }
+}
+
+/**
+ * Feedback POST'undan çağrılır (fire-and-forget). Bir yorumu yalnızca KATEGORİYE
+ * sınıflandırıp Feedback.characterCategory'ye yazar. Rozet ATAMASI burada YAPILMAZ —
+ * eşik dolunca kullanıcı badges sayfasında barı dolu görür ve sihirli reveal'i açar;
+ * rozet o an (POST /api/customer/character) atanır. Böylece reveal her zaman gerçek
+ * bir "yeni rozet" anıdır.
+ */
+export async function processFeedbackForCharacterBadge(
+  userId: string,
+  feedbackId: string,
+  text: string,
+): Promise<void> {
+  try {
+    const categoryKey = await classifyFeedbackCategory(text);
+    if (!categoryKey) return;
+    await prisma.feedback.update({
+      where: { id: feedbackId },
+      data: { characterCategory: categoryKey },
+    }).catch(() => {});
+    void userId; // eşik/rozet API tarafında (reveal anında) hesaplanır
+  } catch (err) {
+    console.error('[CHARACTER_BADGE] processFeedback failed:', err);
+  }
+}
+
+/** Bir kullanıcının kategori bazlı ilerleme durumu (bar + hazır rozet için). */
+export interface CategoryProgress {
+  /** En çok "hazır rozete yakın" kategori (adı UI'da GİZLENİR). */
+  topCategoryKey: string | null;
+  /** O kategoride mevcut eşik döngüsündeki yorum sayısı (0..threshold). */
+  current: number;
+  /** Eşik (6). */
+  threshold: number;
+  /** 0..1 ilerleme. */
+  progress: number;
+  /** Eşik dolu VE o kategoride alınmamış karakter var → reveal edilebilir. */
+  ready: boolean;
+}
+
+/**
+ * Kullanıcının kategori sayımlarını çıkarıp BAR için en uygun kategoriyi bulur.
+ * "Hazır" (eşik dolu + alınmamış karakter olan) kategori varsa onu; yoksa eşiğe
+ * en yakın kategoriyi seçer. Kategori ADI döndürülür ama UI'da gösterilmez (gizli).
+ */
+export async function getCategoryProgress(userId: string): Promise<CategoryProgress> {
+  const base: CategoryProgress = { topCategoryKey: null, current: 0, threshold: CATEGORY_BADGE_THRESHOLD, progress: 0, ready: false };
+  try {
+    const { CHARACTER_CATEGORIES } = await import('@/lib/character-categories');
+
+    // Kategori bazlı yorum sayıları.
+    const grouped = await prisma.feedback.groupBy({
+      by: ['characterCategory'],
+      where: { userId, deletedAt: null, characterCategory: { not: null } },
+      _count: { _all: true },
+    });
+    const countByCat = new Map<string, number>();
+    for (const g of grouped) if (g.characterCategory) countByCat.set(g.characterCategory, g._count._all);
+
+    // Kullanıcının sahip olduğu karakter rozetleri (kategori tükenmiş mi?).
+    const allCharIds = CHARACTER_PROFILES.map((c) => c.badgeId);
+    const ownedBadges = await prisma.userBadge.findMany({
+      where: { userId, badgeId: { in: allCharIds } },
+      select: { badgeId: true },
+    });
+    const ownedSet = new Set(ownedBadges.map((b) => b.badgeId));
+
+    let best: CategoryProgress | null = null;
+    for (const cat of CHARACTER_CATEGORIES) {
+      const total = countByCat.get(cat.key) ?? 0;
+      const availableChars = cat.characterIds.filter((id) => !ownedSet.has(id));
+      if (availableChars.length === 0) continue; // bu kategoride alınacak karakter kalmadı
+
+      // Kaç rozet zaten alınmış → o kadar eşik "tüketilmiş" say (aynı kategoride yeni karakter).
+      const takenInCat = cat.characterIds.filter((id) => ownedSet.has(id)).length;
+      const consumed = takenInCat * CATEGORY_BADGE_THRESHOLD;
+      const current = Math.max(0, Math.min(CATEGORY_BADGE_THRESHOLD, total - consumed));
+      const ready = total - consumed >= CATEGORY_BADGE_THRESHOLD;
+      const cand: CategoryProgress = {
+        topCategoryKey: cat.key, current, threshold: CATEGORY_BADGE_THRESHOLD,
+        progress: current / CATEGORY_BADGE_THRESHOLD, ready,
+      };
+      // Öncelik: hazır olan > ilerlemesi yüksek olan.
+      if (!best) best = cand;
+      else if (cand.ready && !best.ready) best = cand;
+      else if (cand.ready === best.ready && cand.current > best.current) best = cand;
+    }
+    return best ?? base;
+  } catch {
+    return base;
+  }
+}
+
+/**
+ * Reveal anında çağrılır: kullanıcının EŞİĞİ DOLMUŞ bir kategorisinde, alınmamış
+ * bir karakter rozeti seçer + atar + sınıflandırma döndürür. Hazır kategori yoksa null.
+ */
+export async function revealReadyCategoryBadge(userId: string): Promise<CharacterClassification> {
+  const prog = await getCategoryProgress(userId);
+  if (!prog.ready || !prog.topCategoryKey) return null;
+  const picked = await pickCharacterInCategory(userId, prog.topCategoryKey);
+  if (!picked) return null;
+  await awardCharacterBadge(userId, picked.badgeId);
+  return picked;
 }

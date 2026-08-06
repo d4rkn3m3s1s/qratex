@@ -519,10 +519,12 @@ export async function POST(request: NextRequest) {
         processAutoReplies(feedback.id).catch(console.error);
       }
 
-      // Karakter rozeti: kullanıcı eşiğe ulaşınca (fire-and-forget, bloke etmez).
-      if (session?.user?.id) {
+      // Karakter rozeti: yorumu kategoriye sınıflandır + eşik dolduysa rozet aç
+      // (fire-and-forget, isteği bloke etmez).
+      if (session?.user?.id && feedback.text) {
+        const uid = session.user.id, fid = feedback.id, ftext = feedback.text;
         import('@/lib/character-badges')
-          .then((m) => m.maybeAssignCharacterOnThreshold(session.user.id))
+          .then((m) => m.processFeedbackForCharacterBadge(uid, fid, ftext))
           .catch(() => {});
       }
 
@@ -531,9 +533,10 @@ export async function POST(request: NextRequest) {
     }
 
     const resBody = { success: true, feedback };
-    if (session?.user?.id) {
+    if (session?.user?.id && feedback.text) {
+      const uid = session.user.id, fid = feedback.id, ftext = feedback.text;
       import('@/lib/character-badges')
-        .then((m) => m.maybeAssignCharacterOnThreshold(session.user.id))
+        .then((m) => m.processFeedbackForCharacterBadge(uid, fid, ftext))
         .catch(() => {});
     }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);

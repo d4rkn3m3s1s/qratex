@@ -768,6 +768,11 @@ model Feedback {
   aiModelUsed   String? // groq/openai + model adi
   aiVersion     String? // AI analiz prompt versiyonu
 
+  // -- Karakter Rozeti: yorumun ÜSLUP kategorisi (dram-suc|komedi|fantastik|gizem-gerilim) --
+  // Her yorum yazıldığında AI belirler; kullanıcıya GÖSTERİLMEZ. Aynı kategoride
+  // eşik (6) yorum birikince o kategorinin karakter rozeti açılır. Bkz. lib/character-categories.
+  characterCategory String?
+
   // -- Dealer Reply --
   dealerReply          String?   @db.Text
   dealerRepliedAt      DateTime?
@@ -812,6 +817,8 @@ model Feedback {
   @@index([qrCodeId, deletedAt, createdAt])
   // Müşteri geçmişi: where userId + createdAt range / orderBy
   @@index([userId, createdAt])
+  // Karakter rozeti kategori sayımı: where userId + characterCategory (deletedAt null).
+  @@index([userId, characterCategory])
 }
 
 // ─────────────────────────────────────────────────────────────
