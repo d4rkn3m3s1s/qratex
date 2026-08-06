@@ -4,10 +4,20 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
 import { CHARACTER_PROFILES, CHARACTER_BADGE_THRESHOLD, assignCharacterBadge } from '@/lib/character-badges';
 import { BADGE_CATALOG } from '@/lib/badge-catalog';
+import { CATEGORY_BY_CHARACTER } from '@/lib/character-categories';
 
 export const dynamic = 'force-dynamic';
 
-/** GET: kullanıcının mevcut karakter rozetini (varsa) döndürür. */
+/** Bir karakter badgeId'sinin kategorisini (varsa) sadeleştirip döndürür. */
+function categoryOf(badgeId: string) {
+  const c = CATEGORY_BY_CHARACTER[badgeId];
+  return c ? { key: c.key, name: c.name, emoji: c.emoji, accent: c.accent, description: c.description } : null;
+}
+
+/**
+ * GET: kullanıcının mevcut karakter rozeti (varsa) + ilerleme bar verisi.
+ * Bar: bir sonraki "keşif" için kaç yorum kaldığını gösterir (eşik tabanlı).
+ */
 export async function GET() {
   const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
@@ -23,13 +33,25 @@ export async function GET() {
   const textCount = await prisma.feedback.count({ where: { userId, deletedAt: null, text: { not: null } } });
   const catalog = owned ? BADGE_CATALOG.find((b) => b.id === owned.badgeId) : null;
 
+  // İlerleme barı: 0..1 ve "kalan yorum" — eşiğe kadar dolan çubuk için.
+  const remaining = Math.max(0, CHARACTER_BADGE_THRESHOLD - textCount);
+  const progress = Math.min(1, textCount / CHARACTER_BADGE_THRESHOLD);
+
   return NextResponse.json(
     {
       success: true,
-      character: owned && catalog ? { badgeId: owned.badgeId, name: catalog.name, icon: catalog.icon, description: catalog.description } : null,
+      character: owned && catalog
+        ? {
+            badgeId: owned.badgeId, name: catalog.name, icon: catalog.icon,
+            description: catalog.description, earnedAt: owned.earnedAt,
+            category: categoryOf(owned.badgeId),
+          }
+        : null,
       canDiscover: textCount >= CHARACTER_BADGE_THRESHOLD,
       feedbackCount: textCount,
       threshold: CHARACTER_BADGE_THRESHOLD,
+      remaining,
+      progress,
     },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );
@@ -61,7 +83,11 @@ export async function POST() {
   return NextResponse.json(
     {
       success: true,
-      character: { badgeId: result.badgeId, name: result.name, why: result.why, icon: catalog?.icon, description: catalog?.description },
+      character: {
+        badgeId: result.badgeId, name: result.name, why: result.why,
+        icon: catalog?.icon, description: catalog?.description,
+        category: categoryOf(result.badgeId),
+      },
     },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );

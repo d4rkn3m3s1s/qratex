@@ -60,11 +60,21 @@ export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string 
   { badgeId: 'badge-martha', name: 'Martha', trait: 'Derin, bağlantı kuran, gizemli; düşündüren' },
 ];
 
-export type CharacterClassification = { badgeId: string; name: string; why: string } | null;
+export type CharacterClassification = {
+  badgeId: string;
+  name: string;
+  why: string;
+  /** Seçilen kategori (2-aşamalı sınıflandırma sonucu). */
+  categoryKey?: string;
+  categoryName?: string;
+} | null;
 
 /**
- * Kullanıcının yorum geçmişini agregeleyip LLM ile en uygun karakteri seçer.
- * LLM yoksa/başarısızsa null döner (rozet atanmaz — sessiz degradasyon).
+ * Kullanıcının yorum geçmişini agregeleyip LLM ile 2 AŞAMADA sınıflandırır:
+ *   1) Yorum üslubuna göre KATEGORİ (Dram/Suç, Komedi, Fantastik, Gizem…).
+ *   2) O kategorinin karakterlerinden en uygun olanı.
+ * Tek LLM çağrısında ikisini de ister (maliyet: 1 çağrı). AI kategoriyi şaşırırsa
+ * güvenli fallback devreye girer. LLM yoksa/başarısızsa null (sessiz degradasyon).
  */
 export async function classifyCharacter(userId: string): Promise<CharacterClassification> {
   const feedbacks = await prisma.feedback.findMany({
@@ -82,27 +92,62 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
     .map((f, i) => `${i + 1}. (${f.rating}★, ${f.sentiment || '?'}) ${f.text!.slice(0, 200)}`)
     .join('\n');
 
-  const options = CHARACTER_PROFILES.map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join('\n');
+  // Kategori altyapısı burada TÜKETİLİR (genişletilebilir): kategoriler + her
+  // kategorinin karakterleri prompt'a otomatik yansır.
+  const { CHARACTER_CATEGORIES, CATEGORY_BY_KEY, charactersInCategory, FALLBACK_CATEGORY_KEY } =
+    await import('@/lib/character-categories');
+
+  const categoryBlock = CHARACTER_CATEGORIES.map((cat) => {
+    const chars = charactersInCategory(cat.key)
+      .map((c) => `    - ${c.badgeId} = ${c.name}: ${c.trait}`)
+      .join('\n');
+    return `• KATEGORİ "${cat.key}" (${cat.name}) — ${cat.aiHint}\n  Bu kategorinin karakterleri:\n${chars}`;
+  }).join('\n\n');
 
   try {
     const { runChatCompletion } = await import('@/lib/ai-engine');
     const res = await runChatCompletion({
       system:
-        'Sen bir kişilik analisti asistanısın. Kullanıcının yorumlarını okuyup, aşağıdaki ' +
-        'dizi/film karakterlerinden kişiliğine EN UYGUN olanı seçeceksin. Yorum tarzına bak: ' +
-        'mizah, analiz, ton, üslup. Yalnızca listeden bir badgeId seç. ' +
-        'JSON döndür: {"badgeId": "...", "why": "tek cümle Türkçe gerekçe"}.',
-      user: `KARAKTERLER:\n${options}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nEn uygun karakteri JSON olarak seç:`,
+        'Sen bir kişilik/üslup analisti asistanısın. Kullanıcının yorumlarını oku ve İKİ AŞAMADA karar ver: ' +
+        '(1) Yorumların genel ÜSLUBUNU en iyi anlatan KATEGORİ\'yi seç (categoryKey). ' +
+        '(2) O kategorinin karakterleri arasından kişiliğe EN UYGUN olanı seç (badgeId). ' +
+        'badgeId, seçtiğin categoryKey\'in karakterlerinden BİRİ olmak ZORUNDA. ' +
+        'JSON döndür: {"categoryKey":"...","badgeId":"...","why":"tek cümle Türkçe gerekçe"}.',
+      user: `KATEGORİLER VE KARAKTERLERİ:\n${categoryBlock}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nÖnce kategori, sonra o kategoriden karakter seç. JSON:`,
       temperature: 0.4,
-      maxTokens: 120,
+      maxTokens: 160,
       jsonMode: true,
     });
     const content = res && typeof res !== 'string' ? res.content : (res as string | null);
     if (!content) return null;
-    const parsed = JSON.parse(content) as { badgeId?: string; why?: string };
-    const match = CHARACTER_PROFILES.find((c) => c.badgeId === parsed.badgeId);
-    if (!match) return null;
-    return { badgeId: match.badgeId, name: match.name, why: parsed.why?.slice(0, 200) || '' };
+    const parsed = JSON.parse(content) as { categoryKey?: string; badgeId?: string; why?: string };
+
+    // Karakter geçerli mi?
+    let match = CHARACTER_PROFILES.find((c) => c.badgeId === parsed.badgeId);
+    // Kategori geçerli mi? (AI uydurmuşsa karakterin gerçek kategorisine düş.)
+    let categoryKey = parsed.categoryKey && CATEGORY_BY_KEY[parsed.categoryKey] ? parsed.categoryKey : undefined;
+
+    if (!match) {
+      // Karakter tutmadı ama kategori tuttuysa, o kategoriden ilk karakteri seç (güvenli).
+      const fallbackCat = categoryKey ?? FALLBACK_CATEGORY_KEY;
+      const inCat = charactersInCategory(fallbackCat);
+      match = inCat[0] ? CHARACTER_PROFILES.find((c) => c.badgeId === inCat[0].badgeId) : undefined;
+      if (!match) return null;
+    }
+    // Kategori yoksa karakterin gerçek kategorisinden türet.
+    if (!categoryKey) {
+      const { CATEGORY_BY_CHARACTER } = await import('@/lib/character-categories');
+      categoryKey = CATEGORY_BY_CHARACTER[match.badgeId]?.key;
+    }
+    const cat = categoryKey ? CATEGORY_BY_KEY[categoryKey] : undefined;
+
+    return {
+      badgeId: match.badgeId,
+      name: match.name,
+      why: parsed.why?.slice(0, 200) || '',
+      categoryKey: cat?.key,
+      categoryName: cat?.name,
+    };
   } catch {
     return null;
   }
@@ -150,7 +195,7 @@ export async function assignCharacterBadge(userId: string): Promise<CharacterCla
   const classification = await classifyCharacter(userId);
   if (!classification) return null;
   await awardCharacterBadge(userId, classification.badgeId);
-  return classification; // sınıflandırma her hâlükârda döner (zaten varsa da gösterilebilir)
+  return classification; // kategori + why içerir (reveal ekranı bunları kullanır)
 }
 
 /**
