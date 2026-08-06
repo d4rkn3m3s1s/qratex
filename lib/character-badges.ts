@@ -185,9 +185,26 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
  * Kullanıcının önceki karakter rozetlerini (varsa) kaldırmaz — koleksiyon olarak birikir.
  */
 export async function awardCharacterBadge(userId: string, badgeId: string): Promise<boolean> {
-  // Badge kaydı DB'de var mı (katalogdan seed edilmiş olmalı)?
-  const badge = await prisma.badge.findUnique({ where: { id: badgeId }, select: { id: true, name: true } });
-  if (!badge) return false;
+  // Badge kaydı DB'de var mı? Yoksa KATALOGDAN otomatik oluştur (seed eksikliğine
+  // dayanıklı — hiçbir karakter "DB'de yok" diye atlanmaz).
+  let badge = await prisma.badge.findUnique({ where: { id: badgeId }, select: { id: true, name: true } });
+  if (!badge) {
+    const { BADGE_CATALOG } = await import('@/lib/badge-catalog');
+    const cat = BADGE_CATALOG.find((b) => b.id === badgeId);
+    if (!cat) return false; // katalogda da yoksa gerçekten geçersiz
+    badge = await prisma.badge.upsert({
+      where: { id: badgeId },
+      update: {},
+      create: {
+        id: cat.id, name: cat.name, description: cat.description ?? '',
+        icon: cat.icon ?? '/logo/logo.png', category: cat.category ?? 'special',
+        rarity: cat.rarity ?? 'legendary', pointCost: cat.pointCost ?? null, isActive: true,
+        requirement: { type: 'character', value: 1 } as object,
+      },
+      select: { id: true, name: true },
+    }).catch(() => null);
+    if (!badge) return false;
+  }
 
   const existing = await prisma.userBadge.findUnique({
     where: { userId_badgeId: { userId, badgeId } },
