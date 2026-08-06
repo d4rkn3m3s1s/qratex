@@ -1,9 +1,10 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Wand2, PartyPopper } from 'lucide-react';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { Sparkles, X, Wand2, PartyPopper, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -35,6 +36,12 @@ export type RevealCharacter = {
   icon?: string;
   description?: string;
   category?: RevealCategory | null;
+  /** Nadirlik seviyesi — reveal görkemini belirler (çoğu karakter epic/legendary). */
+  rarity?: string;
+  /** Bu rozet kaç kullanıcıda var. */
+  holders?: number;
+  /** Kullanıcıların yüzde kaçında (nadir göstergesi). null ise gösterilmez. */
+  ratePct?: number | null;
 } | null;
 
 export interface CharacterRevealProps {
@@ -77,6 +84,45 @@ function hexToRgba(hex: string, alpha: number): string {
 
 const DEFAULT_ACCENT = '#9333ea'; // sistem primary morumsu — kategori gelene kadar
 
+// ── Nadirlik (rarity) teması ─────────────────────────────────────────
+/**
+ * Her rarity için görkem profili. `glow` kategori renginden BAĞIMSIZ bir ışık
+ * rengidir; ikisi birlikte katmanlanır. `intensity` parçacık/konfeti/god-ray
+ * yoğunluğunu ölçeklendirir (0-1). `shake` reveal patlamasında ekran sarsılması.
+ */
+type RarityTheme = {
+  key: 'common' | 'rare' | 'epic' | 'legendary';
+  label: string | null;   // rozet etiketi (common'da yok)
+  glow: string;           // rarity ışık rengi (hex)
+  glow2: string;          // ikincil ton (huzme geçişi için)
+  intensity: number;      // 0-1 görkem ölçeği
+  shake: number;          // reveal sarsılma genliği (px)
+  rays: number;           // god-ray huzme sayısı (0 = kapalı)
+};
+
+const RARITY_THEMES: Record<string, RarityTheme> = {
+  legendary: { key: 'legendary', label: 'EFSANEVİ', glow: '#f59e0b', glow2: '#fde047', intensity: 1, shake: 7, rays: 14 },
+  epic: { key: 'epic', label: 'EPİK', glow: '#c026d3', glow2: '#a855f7', intensity: 0.78, shake: 5, rays: 12 },
+  rare: { key: 'rare', label: 'NADİR', glow: '#3b82f6', glow2: '#60a5fa', intensity: 0.55, shake: 3, rays: 9 },
+  common: { key: 'common', label: null, glow: DEFAULT_ACCENT, glow2: '#c084fc', intensity: 0.4, shake: 0, rays: 0 },
+};
+
+/** Rarity string'ini güvenli biçimde temaya çevirir (bilinmeyen → common). */
+function rarityTheme(rarity?: string): RarityTheme {
+  const key = (rarity || '').toLowerCase();
+  return RARITY_THEMES[key] ?? RARITY_THEMES.common;
+}
+
+/** Rarity etiketi için parıltı gradyan metni (altın/mor/mavi). */
+function rarityLabelStyle(theme: RarityTheme): CSSProperties {
+  return {
+    color: theme.glow,
+    borderColor: hexToRgba(theme.glow, 0.55),
+    background: `linear-gradient(120deg, ${hexToRgba(theme.glow, 0.18)}, ${hexToRgba(theme.glow2, 0.1)})`,
+    textShadow: `0 0 12px ${hexToRgba(theme.glow, 0.6)}`,
+  };
+}
+
 export function CharacterReveal({
   open,
   onClose,
@@ -90,33 +136,72 @@ export function CharacterReveal({
   const [error, setError] = useState<string | null>(null);
   const [lineIdx, setLineIdx] = useState(0);
 
+  // Ekran sarsılması tetikleyicisi (reveal patlamasında kısa titreşim).
+  const [shakeKey, setShakeKey] = useState(0);
+  // Modal içeriğine uygulanan sarsılma kontrolü (giriş spring'iyle çakışmaz — ayrı katman).
+  const shakeControls = useAnimationControls();
+
   // reduceMotion gövdede hesaplanır (koşulsuz), böylece hook sırası bozulmaz.
   const reduceMotion = typeof window !== 'undefined'
     && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+  // Aktif rarity teması (kategori renginden bağımsız görkem profili).
+  const theme = rarityTheme(character?.rarity);
+
   // Konfeti opsiyonel — provider yoksa hata vermesin diye dinamik import edilir.
+  // Rarity'ye göre ölçeklenir: legendary'de daha çok + altın ağırlıklı.
   const fireCelebration = useCallback(() => {
     if (reduceMotion) return;
+    const rt = rarityTheme(character?.rarity);
     import('@/components/providers/confetti-provider')
       .then(() => import('canvas-confetti'))
       .then((m) => {
         const confetti = m.default;
         const accent = character?.category?.accent ?? DEFAULT_ACCENT;
+        // Legendary'de altın öne çıksın, aksi halde rarity + kategori karışımı.
+        const isLegend = rt.key === 'legendary';
+        const baseColors = isLegend
+          ? ['#fde047', '#f59e0b', '#ffffff', accent]
+          : [rt.glow, rt.glow2, accent, '#ffffff'];
+        const scale = 0.85 + rt.intensity * 0.5; // ~1.05 → 1.35
         confetti({
-          particleCount: 120, spread: 90, startVelocity: 42, origin: { y: 0.42 },
-          colors: [accent, '#ffffff', '#facc15', '#c084fc'], scalar: 1.05,
+          particleCount: Math.round(120 * (0.7 + rt.intensity * 0.9)),
+          spread: 90, startVelocity: 42, origin: { y: 0.42 },
+          colors: baseColors, scalar: scale,
         });
         setTimeout(() => confetti({
-          particleCount: 60, spread: 120, startVelocity: 30, origin: { y: 0.5 },
-          colors: [accent, '#ffffff'], shapes: ['star'], scalar: 1.2,
+          particleCount: Math.round(60 * (0.7 + rt.intensity)),
+          spread: 130, startVelocity: 32, origin: { y: 0.5 },
+          colors: [rt.glow, '#ffffff'], shapes: ['star'], scalar: scale + 0.15,
         }), 160);
+        // Legendary/epic'te iki yandan altın/renk fışkırması — büyük an.
+        if (rt.intensity >= 0.75) {
+          setTimeout(() => {
+            confetti({ particleCount: 55, angle: 60, spread: 70, startVelocity: 45, origin: { x: 0, y: 0.6 }, colors: baseColors, scalar: scale });
+            confetti({ particleCount: 55, angle: 120, spread: 70, startVelocity: 45, origin: { x: 1, y: 0.6 }, colors: baseColors, scalar: scale });
+          }, 320);
+        }
       })
       .catch(() => { /* konfeti yoksa sorun değil */ });
   }, [character, reduceMotion]);
 
+  // Reveal anında görkem paketi: konfeti + ses + (rarity yüksekse) ekran sarsılması.
+  const fireReveal = useCallback(() => {
+    fireCelebration();
+    if (reduceMotion) return;
+    const rt = rarityTheme(character?.rarity);
+    // Ses opsiyonel — altyapı yoksa/hata olursa sessizce geç.
+    import('@/lib/game-sounds')
+      .then((m) => { m.sfxWin?.(); if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
+      .catch(() => { /* ses yoksa sorun değil */ });
+    // Sarsılma yalnızca common dışında (shake > 0).
+    if (rt.shake > 0) setShakeKey((k) => k + 1);
+  }, [fireCelebration, character, reduceMotion]);
+
   // Aktif kategori (aşama 2+'de kullanılır). Yoksa varsayılan tema.
   const accent = character?.category?.accent ?? DEFAULT_ACCENT;
   const categoryReady = phase === 'category' || phase === 'reveal' || phase === 'details';
+  const revealed = phase === 'reveal' || phase === 'details';
 
   // ── Açılış efekti: state'i sıfırla, veriyi getir, aşamaları ilerlet ──
   useEffect(() => {
@@ -145,7 +230,7 @@ export function CharacterReveal({
         timers.push(setTimeout(() => {
           if (cancelled) return;
           setPhase('reveal');
-          fireCelebration();
+          fireReveal();
           onReveal?.(data);
           // aşama 4: açıklama.
           timers.push(setTimeout(() => {
@@ -186,7 +271,7 @@ export function CharacterReveal({
       clearInterval(lineTimer);
       timers.forEach(clearTimeout);
     };
-    // fireCelebration/onReveal referansları kararlı; open + kaynak propları tetikler.
+    // fireReveal/onReveal referansları kararlı; open + kaynak propları tetikler.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, characterProp, fetchOnOpen, reduceMotion]);
 
@@ -197,6 +282,21 @@ export function CharacterReveal({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  // ── Ekran sarsılması: shakeKey artınca ~300ms hafif x/y titreşim ───
+  // Ayrı bir sarmalayıcı katmana uygulanır; dış modalın giriş spring'ini bozmaz.
+  useEffect(() => {
+    if (shakeKey === 0 || reduceMotion) return;
+    const amp = theme.shake;
+    if (amp <= 0) return;
+    // Sönümlenen titreşim keyframe'leri (abartısız, ~300ms).
+    shakeControls.start({
+      x: [0, -amp, amp, -amp * 0.7, amp * 0.5, -amp * 0.3, 0],
+      y: [0, amp * 0.5, -amp * 0.6, amp * 0.4, -amp * 0.25, amp * 0.15, 0],
+      transition: { duration: 0.32, ease: 'easeOut' },
+    }).catch(() => { /* animasyon iptali sorun değil */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shakeKey, reduceMotion]);
 
   return (
     <AnimatePresence>
@@ -211,8 +311,8 @@ export function CharacterReveal({
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 backdrop-blur-xl"
           style={{
-            // Kategori rengine hafifçe boyanan koyu radyal overlay.
-            background: `radial-gradient(120% 120% at 50% 35%, ${hexToRgba(accent, 0.22)} 0%, rgba(6,8,18,0.9) 55%, rgba(2,4,10,0.96) 100%)`,
+            // Kategori rengi + rarity ışığı birlikte katmanlanan koyu radyal overlay.
+            background: `radial-gradient(120% 120% at 50% 30%, ${hexToRgba(theme.glow, revealed ? 0.2 : 0.1)} 0%, transparent 45%), radial-gradient(120% 120% at 50% 35%, ${hexToRgba(accent, 0.22)} 0%, rgba(6,8,18,0.9) 55%, rgba(2,4,10,0.96) 100%)`,
           }}
           onClick={onClose}
         >
@@ -222,6 +322,12 @@ export function CharacterReveal({
             exit={{ scale: 0.9, y: 30, opacity: 0 }}
             transition={{ type: 'spring', damping: 24, stiffness: 260 }}
             className="relative w-full max-w-lg my-4 rounded-3xl border border-white/15 bg-white/[0.03] p-6 shadow-2xl sm:p-8"
+            style={{
+              // Rarity ışığını modal kenarına taşır (kategori renginden bağımsız görkem).
+              boxShadow: theme.key === 'common'
+                ? undefined
+                : `0 0 60px ${hexToRgba(theme.glow, 0.28)}, 0 0 120px ${hexToRgba(theme.glow2, 0.14)}`,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Kapat butonu */}
@@ -238,7 +344,7 @@ export function CharacterReveal({
             {error ? (
               <ErrorState message={error} onClose={onClose} />
             ) : (
-              <div className="flex flex-col items-center text-center">
+              <motion.div className="flex flex-col items-center text-center" animate={shakeControls}>
                 {/* SAHNE: küre veya maskot (aşama 1-3) */}
                 <RevealStage
                   variant={variant}
@@ -247,6 +353,7 @@ export function CharacterReveal({
                   revealed={phase === 'reveal' || phase === 'details'}
                   character={character}
                   reduceMotion={reduceMotion}
+                  theme={theme}
                 />
 
                 {/* METİN KATMANI: aşamaya göre değişir */}
@@ -263,13 +370,14 @@ export function CharacterReveal({
                         key="details"
                         character={character}
                         accent={accent}
+                        theme={theme}
                         showWhy={phase === 'details'}
                         onClose={onClose}
                       />
                     )}
                   </AnimatePresence>
                 </div>
-              </div>
+              </motion.div>
             )}
           </motion.div>
         </motion.div>
@@ -330,18 +438,28 @@ function CategoryText({ category }: { category: RevealCategory }) {
   );
 }
 
-// ── Aşama 3-4 metni: rozet adı + kategori + AI açıklaması ─────────────
+// ── Aşama 3-4 metni: rozet adı + kategori + rarity + AI açıklaması ────
 function DetailsText({
   character,
   accent,
+  theme,
   showWhy,
   onClose,
 }: {
   character: NonNullable<RevealCharacter>;
   accent: string;
+  theme: RarityTheme;
   showWhy: boolean;
   onClose: () => void;
 }) {
+  // Nadir oran rozeti verisi: ratePct varsa göster; düşükse "çok nadir" vurgusu.
+  const ratePct = typeof character.ratePct === 'number' ? character.ratePct : null;
+  const veryRare = ratePct !== null && ratePct <= 5;
+  // Yüzdeyi okunur biçimle (çok küçükse ondalık göster).
+  const rateLabel = ratePct === null
+    ? null
+    : ratePct < 1 ? ratePct.toFixed(1) : String(Math.round(ratePct));
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -350,23 +468,40 @@ function DetailsText({
       transition={{ duration: 0.4 }}
       className="flex flex-col items-center gap-3"
     >
-      {character.category && (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-semibold"
-          style={{
-            color: character.category.accent,
-            borderColor: hexToRgba(character.category.accent, 0.5),
-            backgroundColor: hexToRgba(character.category.accent, 0.12),
-          }}
-        >
-          <span>{character.category.emoji}</span>
-          {character.category.name}
-        </span>
-      )}
+      {/* Kategori + rarity etiketleri (yan yana, sarmalar) */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        {character.category && (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-semibold"
+            style={{
+              color: character.category.accent,
+              borderColor: hexToRgba(character.category.accent, 0.5),
+              backgroundColor: hexToRgba(character.category.accent, 0.12),
+            }}
+          >
+            <span>{character.category.emoji}</span>
+            {character.category.name}
+          </span>
+        )}
+
+        {/* RARITY etiketi — altın/mor/mavi parıltıyla (common'da yok) */}
+        {theme.label && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', delay: 0.15, damping: 14 }}
+            className="inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-xs font-extrabold uppercase tracking-wider"
+            style={rarityLabelStyle(theme)}
+          >
+            <Sparkles className="h-3 w-3" />
+            {theme.label}
+          </motion.span>
+        )}
+      </div>
 
       <h2
         className="text-3xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-4xl"
-        style={{ textShadow: `0 0 24px ${hexToRgba(accent, 0.5)}` }}
+        style={{ textShadow: `0 0 24px ${hexToRgba(theme.key === 'common' ? accent : theme.glow, 0.55)}` }}
       >
         {character.name}
       </h2>
@@ -398,13 +533,35 @@ function DetailsText({
         )}
       </AnimatePresence>
 
+      {/* NADİR ORAN rozeti — ratePct varsa şık bir "seyreklik" göstergesi */}
+      {showWhy && rateLabel !== null && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.4 }}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
+          style={{
+            color: veryRare ? theme.glow : '#facc15',
+            borderColor: hexToRgba(veryRare ? theme.glow : '#facc15', 0.45),
+            background: hexToRgba(veryRare ? theme.glow : '#facc15', 0.1),
+          }}
+        >
+          <span aria-hidden="true">🏆</span>
+          <span className="truncate">
+            Oyuncuların yalnızca %{rateLabel}&apos;inde
+            {veryRare && <span className="ml-1 font-extrabold">— çok nadir!</span>}
+          </span>
+        </motion.div>
+      )}
+
       {showWhy && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', delay: 0.25, damping: 18 }}
-          className="mt-2"
+          className="mt-2 flex flex-wrap items-center justify-center gap-2"
         >
+          <ShareButton character={character} theme={theme} />
           <Button
             onClick={onClose}
             className="gap-2 text-white"
@@ -419,6 +576,71 @@ function DetailsText({
   );
 }
 
+// ── Paylaş butonu: navigator.share → yoksa panoya kopyala + toast ─────
+function ShareButton({
+  character,
+  theme,
+}: {
+  character: NonNullable<RevealCharacter>;
+  theme: RarityTheme;
+}) {
+  const [copied, setCopied] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
+  const handleShare = useCallback(async () => {
+    const title = `QRateX karakterim: ${character.name}!`;
+    const rar = theme.label ? `${theme.label} ` : '';
+    const text = `QRateX'te ${rar}karakter rozetimi kazandım: ${character.name} 🎭`;
+    // 1) Native paylaşım (mobil/destekli tarayıcı)
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title, text });
+        return;
+      }
+    } catch {
+      // Kullanıcı iptal etti ya da paylaşım başarısız — panoya düşmeyi dene.
+    }
+    // 2) Panoya kopyala fallback + "Kopyalandı" toast
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopied(true);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* pano da yoksa sessizce geç — hata verme */
+    }
+  }, [character, theme]);
+
+  return (
+    <div className="relative">
+      <Button
+        variant="secondary"
+        onClick={handleShare}
+        className="gap-2"
+        aria-label="Karakterini paylaş"
+      >
+        <Share2 className="h-4 w-4" />
+        Paylaş
+      </Button>
+      <AnimatePresence>
+        {copied && (
+          <motion.span
+            initial={{ opacity: 0, y: 6, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.9 }}
+            role="status"
+            className="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg"
+          >
+            Kopyalandı ✓
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ── SAHNE: varyantı ve rozet ikonunu barındıran kap ──────────────────
 function RevealStage({
   variant,
@@ -427,6 +649,7 @@ function RevealStage({
   revealed,
   character,
   reduceMotion,
+  theme,
 }: {
   variant: 'orb' | 'mascot';
   accent: string;
@@ -434,9 +657,18 @@ function RevealStage({
   revealed: boolean;
   character: RevealCharacter;
   reduceMotion: boolean;
+  theme: RarityTheme;
 }) {
   return (
     <div className="relative grid h-56 w-56 place-items-center sm:h-64 sm:w-64">
+      {/* IŞIK HUZMELERİ (god rays) — reveal anında rozetin arkasından yayılır.
+          Rarity yüksekse daha belirgin; reduceMotion'da dönmez. */}
+      <AnimatePresence>
+        {revealed && theme.rays > 0 && (
+          <GodRays theme={theme} reduceMotion={reduceMotion} />
+        )}
+      </AnimatePresence>
+
       {/* Prosedürel canvas sahne (küre veya maskot) — reveal sonrası solar */}
       <motion.div
         className="absolute inset-0"
@@ -453,10 +685,54 @@ function RevealStage({
       {/* Rozet — reveal anında ışık patlamasıyla belirir */}
       <AnimatePresence>
         {revealed && (
-          <RevealedBadge accent={accent} character={character} reduceMotion={reduceMotion} />
+          <RevealedBadge accent={accent} character={character} reduceMotion={reduceMotion} theme={theme} />
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ── IŞIK HUZMELERİ (god rays) — conic-gradient tabanlı dönen ışın demeti ──
+function GodRays({ theme, reduceMotion }: { theme: RarityTheme; reduceMotion: boolean }) {
+  // Işınları conic-gradient'te tekrarlayan renkli/şeffaf dilimlerle üretiriz.
+  // Dilim sayısı rarity'nin `rays` değerine bağlı; legendary'de en yoğun.
+  const slices = theme.rays;
+  const step = 360 / slices;
+  const stops: string[] = [];
+  for (let i = 0; i < slices; i++) {
+    const a0 = i * step;
+    stops.push(
+      `transparent ${a0}deg`,
+      `${hexToRgba(theme.glow, 0.55)} ${a0 + step * 0.22}deg`,
+      `${hexToRgba(theme.glow2, 0.32)} ${a0 + step * 0.42}deg`,
+      `transparent ${a0 + step * 0.5}deg`,
+    );
+  }
+  const cone = `conic-gradient(from 0deg, ${stops.join(', ')})`;
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute inset-0 z-0 grid place-items-center"
+      initial={{ opacity: 0, scale: 0.6 }}
+      animate={{ opacity: theme.key === 'legendary' ? 0.85 : 0.6, scale: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+      aria-hidden="true"
+    >
+      <motion.div
+        className="h-[150%] w-[150%] rounded-full"
+        style={{
+          background: cone,
+          // Merkeze doğru soluklaşan maske — ışınlar dışarı doğru yayılır gibi.
+          WebkitMaskImage: 'radial-gradient(closest-side, transparent 26%, #000 42%, transparent 78%)',
+          maskImage: 'radial-gradient(closest-side, transparent 26%, #000 42%, transparent 78%)',
+          filter: 'blur(2px)',
+          mixBlendMode: 'screen',
+        }}
+        animate={reduceMotion ? undefined : { rotate: 360 }}
+        transition={{ duration: theme.key === 'legendary' ? 14 : 22, repeat: Infinity, ease: 'linear' }}
+      />
+    </motion.div>
   );
 }
 
@@ -465,71 +741,100 @@ function RevealedBadge({
   accent,
   character,
   reduceMotion,
+  theme,
 }: {
   accent: string;
   character: RevealCharacter;
   reduceMotion: boolean;
+  theme: RarityTheme;
 }) {
   const emoji = character?.category?.emoji || '🎭';
+  // Rarity ışığı gövde/halka glow'unda kullanılır (kategori renginden bağımsız).
+  const glow = theme.key === 'common' ? accent : theme.glow;
+  // Patlama halkası sayısı rarity yoğunluğuna göre (legendary'de ekstra halka).
+  const strongBurst = theme.intensity >= 0.75;
+
   return (
     <motion.div
       className="relative z-10 grid place-items-center"
+      style={{ perspective: 800 }}
       initial={{ scale: 0, rotate: reduceMotion ? 0 : -25, opacity: 0 }}
       animate={{ scale: 1, rotate: 0, opacity: 1 }}
       exit={{ scale: 0, opacity: 0 }}
       transition={{ type: 'spring', damping: 12, stiffness: 200 }}
     >
-      {/* Işık patlaması halkaları */}
+      {/* Işık patlaması halkaları (rarity rengiyle) */}
       {!reduceMotion && (
         <>
           <motion.span
             className="absolute rounded-full"
-            style={{ border: `2px solid ${hexToRgba(accent, 0.7)}` }}
+            style={{ border: `2px solid ${hexToRgba(glow, 0.75)}` }}
             initial={{ width: 40, height: 40, opacity: 0.9 }}
-            animate={{ width: 240, height: 240, opacity: 0 }}
+            animate={{ width: 260, height: 260, opacity: 0 }}
             transition={{ duration: 0.9, ease: 'easeOut' }}
           />
           <motion.span
             className="absolute rounded-full"
             style={{ border: `1px solid ${hexToRgba('#ffffff', 0.6)}` }}
             initial={{ width: 40, height: 40, opacity: 0.8 }}
-            animate={{ width: 180, height: 180, opacity: 0 }}
+            animate={{ width: 190, height: 190, opacity: 0 }}
             transition={{ duration: 0.7, ease: 'easeOut', delay: 0.08 }}
           />
+          {/* Legendary/epic'te ekstra ikinci renk halkası — daha görkemli patlama */}
+          {strongBurst && (
+            <motion.span
+              className="absolute rounded-full"
+              style={{ border: `2px solid ${hexToRgba(theme.glow2, 0.6)}` }}
+              initial={{ width: 40, height: 40, opacity: 0.8 }}
+              animate={{ width: 320, height: 320, opacity: 0 }}
+              transition={{ duration: 1.1, ease: 'easeOut', delay: 0.02 }}
+            />
+          )}
         </>
       )}
 
-      {/* Rarity-benzeri dönen altın/renk halkası */}
+      {/* Rarity dönen renk halkası — rarity glow + altın karışımı */}
       <motion.div
         className="absolute -inset-3 rounded-full"
         style={{
-          background: `conic-gradient(from 0deg, ${accent}, #facc15, #ffffff, ${accent})`,
-          filter: 'blur(6px)', opacity: 0.55,
+          background: `conic-gradient(from 0deg, ${glow}, ${theme.glow2}, #ffffff, ${glow})`,
+          filter: 'blur(6px)', opacity: strongBurst ? 0.7 : 0.55,
         }}
         animate={reduceMotion ? undefined : { rotate: 360 }}
-        transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+        transition={{ duration: theme.key === 'legendary' ? 4.5 : 6, repeat: Infinity, ease: 'linear' }}
       />
 
-      {/* Rozet gövdesi */}
-      <div
-        className="relative grid h-28 w-28 place-items-center rounded-full ring-2 sm:h-32 sm:w-32"
-        style={{
-          background: `radial-gradient(circle at 35% 30%, ${hexToRgba('#ffffff', 0.9)}, ${hexToRgba(accent, 0.35)})`,
-          boxShadow: `0 0 40px ${hexToRgba(accent, 0.7)}, inset 0 2px 12px rgba(255,255,255,0.5)`,
+      {/* 3D salınım katmanı: rozet gövdesi yumuşakça sallanır (canlı dursun) */}
+      <motion.div
+        style={{ transformStyle: 'preserve-3d' }}
+        initial={reduceMotion ? undefined : { rotateY: -180 }}
+        animate={reduceMotion ? undefined : { rotateY: [0, 12, 0, -12, 0], rotateX: [0, -4, 0, 4, 0] }}
+        transition={reduceMotion ? undefined : {
+          rotateY: { duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.5 },
+          rotateX: { duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 0.5 },
         }}
       >
-        {character?.icon ? (
-          <Image
-            src={character.icon}
-            alt={character.name}
-            width={96}
-            height={96}
-            className="h-20 w-20 object-contain drop-shadow sm:h-24 sm:w-24"
-          />
-        ) : (
-          <span className="text-5xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] sm:text-6xl">{emoji}</span>
-        )}
-      </div>
+        {/* Rozet gövdesi */}
+        <div
+          className="relative grid h-28 w-28 place-items-center rounded-full ring-2 sm:h-32 sm:w-32"
+          style={{
+            background: `radial-gradient(circle at 35% 30%, ${hexToRgba('#ffffff', 0.9)}, ${hexToRgba(glow, 0.35)})`,
+            boxShadow: `0 0 ${strongBurst ? 56 : 40}px ${hexToRgba(glow, 0.75)}, inset 0 2px 12px rgba(255,255,255,0.5)`,
+          }}
+        >
+          {character?.icon ? (
+            <Image
+              src={character.icon}
+              alt={character.name}
+              width={96}
+              height={96}
+              className="h-20 w-20 object-contain drop-shadow sm:h-24 sm:w-24"
+            />
+          ) : (
+            <span className="text-5xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] sm:text-6xl">{emoji}</span>
+          )}
+        </div>
+      </motion.div>
 
       {/* Parıltı süsü */}
       {!reduceMotion && (
@@ -538,7 +843,7 @@ function RevealedBadge({
           animate={{ rotate: 360, scale: [1, 1.25, 1] }}
           transition={{ rotate: { duration: 5, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.6, repeat: Infinity } }}
         >
-          <Sparkles className="h-7 w-7" style={{ color: '#facc15', filter: 'drop-shadow(0 0 8px rgba(250,204,21,0.6))' }} />
+          <Sparkles className="h-7 w-7" style={{ color: theme.glow2, filter: `drop-shadow(0 0 8px ${hexToRgba(theme.glow, 0.7)})` }} />
         </motion.div>
       )}
     </motion.div>

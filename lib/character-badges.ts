@@ -366,7 +366,37 @@ export async function processFeedbackForCharacterBadge(
       where: { id: feedbackId },
       data: { characterCategory: categoryKey },
     }).catch(() => {});
-    void userId; // eşik/rozet API tarafında (reveal anında) hesaplanır
+
+    // Bar YENİ dolduysa (bu yorumla eşiğe/ katına ulaşıldı) VE o kategoride alınmamış
+    // karakter varsa → kullanıcıya "karakterin hazır" bildirimi (sürpriz: hangi
+    // karakter/kategori olduğu SÖYLENMEZ). Rozet reveal anında atanır.
+    const prog = await getCategoryProgress(userId);
+    if (!prog.ready) return; // eşik dolmadı → bildirim yok
+    // Kullanıcı zaten "hazır" durumu görmüşse tekrar bildirme: son bildirimden bu
+    // yana yeni eşiğe geçildi mi? Basit yaklaşım: bu kategoride tam-katına ulaşıldıysa bildir.
+    const total = await prisma.feedback.count({
+      where: { userId, deletedAt: null, characterCategory: categoryKey },
+    });
+    // Bu kategoride alınmış rozet sayısı kadar eşik tüketilmiş; yeni katına TAM ulaştıysa bildir.
+    const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
+    const cat = CATEGORY_BY_KEY[categoryKey];
+    if (cat) {
+      const takenInCat = await prisma.userBadge.count({
+        where: { userId, badgeId: { in: cat.characterIds } },
+      });
+      const justCrossed = total === (takenInCat + 1) * CATEGORY_BADGE_THRESHOLD;
+      if (justCrossed) {
+        await prisma.notification.create({
+          data: {
+            userId,
+            type: 'badge',
+            title: '✨ Yeni bir karakter hazır!',
+            message: 'Gizemli kürende bir karakter belirdi — açıp kim olduğunu keşfet!',
+            data: { kind: 'character-ready', href: '/customer/badges' } as object,
+          },
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
     console.error('[CHARACTER_BADGE] processFeedback failed:', err);
   }
