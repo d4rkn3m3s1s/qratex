@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CharacterReveal, type RevealCharacter } from '@/components/customer/character-reveal';
+import { MysteryBar } from '@/components/customer/mystery-bar';
 
 type Category = { key: string; name: string; emoji: string; accent: string; description: string };
 type Character = { badgeId: string; name: string; icon?: string; description?: string; earnedAt?: string; category?: Category | null };
@@ -44,7 +45,6 @@ export function CharacterCard() {
 
   const bar = state.bar;
   const collection = state.collection ?? [];
-  const pct = Math.round((bar?.progress ?? 0) * 100);
   const ready = bar?.ready;
 
   return (
@@ -95,15 +95,15 @@ export function CharacterCard() {
               Yorumların gizemli bir koleksiyonu besliyor… <span className="font-semibold text-foreground">{bar?.remaining ?? '?'}</span> yorum
               daha, yeni bir karakter açığa çıkabilir. <span className="text-foreground/60">Hangi karakter? Sürpriz.</span>
             </p>
-            <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-primary transition-[width] duration-700 ease-out"
-                style={{ width: `${pct}%` }}
+            {/* Gizemli merak-bar: akışkan renk + rozet yuvaları + kader küresi şarjı */}
+            <div className="mt-3">
+              <MysteryBar
+                progress={bar?.progress ?? 0}
+                current={bar?.current ?? 0}
+                threshold={bar?.threshold ?? 6}
+                ready={false}
               />
             </div>
-            <p className="mt-1 text-right text-xs text-muted-foreground/70">
-              {bar?.current ?? 0}/{bar?.threshold ?? 6}
-            </p>
           </div>
         )}
 
