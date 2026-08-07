@@ -45,6 +45,16 @@ model User {
   xp            Int       @default(0)
   isHallOfFame  Boolean   @default(false)
   biography     String?   @db.Text
+
+  // ── GÜNLÜK GİRİŞ SERİSİ (login/aktivite streak) ──────────────────────────
+  // MİNİ OYUN streak'inden (MiniGameSession/GameStreakClaim) ve UserStreak
+  // loyalty tablosundan BAĞIMSIZ. Kullanıcı customer paneline her "dokunduğu"
+  // gün (touchLoginStreak, lib/login-streak.ts) günde bir kez ilerler.
+  // Hepsi nullable/default → mevcut satırları bozmaz.
+  loginStreakCount              Int       @default(0) // mevcut ardışık gün sayısı
+  loginStreakLongest            Int       @default(0) // ulaşılan en uzun seri
+  loginStreakLastDay            DateTime? // son sayılan günün tarihi (gün bazlı karşılaştırma)
+  loginStreakClaimedMilestones  Json?     // idempotent ödül bayrağı, ör. [3, 7]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

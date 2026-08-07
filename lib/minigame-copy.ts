@@ -207,6 +207,15 @@ export const GAME_COPY: Record<string, GameCopy> = {
     scoreLabel: 'Kırılan tuğla',
     comeBackNote: 'Yeni tahta yarın diziliyor. 🧊',
   },
+  'frost-catcher': {
+    startCta: '❄️ Eldiveni Tak',
+    startHint: 'Eldiveni kaydır, düşen kar tanelerini yakala! Kombo yap, altın kristali kaçırma.',
+    loadingStart: 'Kar fırtınası hazırlanıyor…',
+    winTitles: ['Buzul Ustası! ❄️', 'Kar Fırtınası Fethedildi!', 'Kusursuz Yakalayış!'],
+    loseTitles: ['Buz Eridi 💧', 'Kar Elinden Kaçtı', 'Fırtına Bastırdı'],
+    scoreLabel: 'Yakalanan',
+    comeBackNote: 'Kar yarın yeniden yağacak. ❄️',
+  },
 };
 
 /** Deterministik olmayan ama tek seçim: bir varyant dizisinden rastgele biri. */

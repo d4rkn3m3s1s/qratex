@@ -4,3 +4,4 @@ export { AnimatedNumber } from './animated-number';
 export { TiltCard } from './tilt-card';
 export { FloatingOrbs } from './floating-orbs';
 export { ShimmerCard } from './shimmer-card';
+export { LoginStreakCard } from './login-streak-card';

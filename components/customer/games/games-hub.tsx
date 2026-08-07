@@ -9,8 +9,9 @@ import { AchievementsPanel } from './achievements-panel';
 
 /**
  * Oyun lobisi: Pacman + registry'deki tüm yeni mini oyunları kart olarak listeler.
- * Yeni oyun eklemek = MINI_GAMES'e satır; burada otomatik görünür. Bugün
- * tamamlanan oyunlar /api/customer/games/status'tan çekilip "oynandı" işaretlenir.
+ * Yeni oyun eklemek = MINI_GAMES'e satır; burada otomatik görünür (ör. "Kar Tanesi
+ * Yakala" ❄️ frost-catcher). Bugün tamamlanan oyunlar /api/customer/games/status'tan
+ * çekilip "oynandı" işaretlenir.
  */
 interface HubCard {
   gameType: string;

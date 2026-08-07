@@ -336,6 +336,22 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardXp: 85,
     minDurationSec: 12,
   },
+  {
+    gameType: 'frost-catcher',
+    labelKey: 'frost_catcher_game',
+    title: 'Kar Tanesi Yakala',
+    description:
+      'Buzul Krallığı’nda gökten düşen kar tanelerini eldivenle yakala! Kombo yap, altın kristali kaçırma, buzu eritme.',
+    emoji: '❄️',
+    accent: '#38bdf8',
+    // Skor = yakalanan kar tanesi + kombo/bonus katkısı. 40 sn'de ~40+ yakalama olası;
+    // altın kristal +5, kombo +ekstra → üst sınır cömert tutuldu (cap: anti-cheat).
+    maxScore: 60,
+    rewardThreshold: 22,
+    rewardPoints: 120,
+    rewardXp: 60,
+    minDurationSec: 10,
+  },
 ];
 
 /** gameType → tanım. Bilinmeyen tip için undefined. */

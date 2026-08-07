@@ -59,7 +59,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { SpinWheel } from '@/components/gamification/spin-wheel';
 
 // Components
-import { AnimatedNumber, GlowCard, FloatingOrbs } from '@/components/customer';
+import { AnimatedNumber, GlowCard, FloatingOrbs, LoginStreakCard } from '@/components/customer';
 import { CustomerDashboardSkeleton } from '@/components/customer/dashboard/customer-dashboard-skeleton';
 import { useCustomerT } from '@/lib/use-customer-locale';
 
@@ -603,6 +603,15 @@ export default function CustomerDashboard() {
           </div>
           </m.div>
         </DashboardPageHeroChrome>
+
+        {/* ─── Günlük Giriş Serisi (login streak) ─── */}
+        <m.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06 }}
+        >
+          <LoginStreakCard />
+        </m.section>
 
         {((weeklyCardData?.quests && weeklyCardData.quests.length > 0) ||
           (weeklyCardData as { weeklyVictory?: { eligible?: boolean } })?.weeklyVictory?.eligible) && (
