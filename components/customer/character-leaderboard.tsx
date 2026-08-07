@@ -199,7 +199,8 @@ export function CharacterLeaderboard() {
 function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
   const theme = rarityTheme(row.rarity);
   const pct = rateLabel(row.ratePct);
-  const accent = row.category?.accent ?? theme.glow;
+  // Kategori rengi KULLANILMAZ (kategori de karakteri ele verebilir) — yalnız nadirlik rengi.
+  const accent = theme.glow;
   const { color: rankColor } = rankStyle(rank);
 
   const frame: CSSProperties =
@@ -220,21 +221,30 @@ function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
         {rank}
       </span>
 
-      {/* Rozet görseli */}
+      {/* Rozet görseli — GİZLİ (sürpriz): blurlu görsel + üstünde "?". Hangi karakter
+          olduğu ele verilmez; yalnızca nadirlik (rarity + %) gösterilir. */}
       <span
-        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full ring-1"
+        className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full ring-1"
         style={{
-          background: `radial-gradient(circle at 35% 30%, ${rgba('#ffffff', 0.85)}, ${rgba(accent, 0.28)})`,
-          boxShadow: `inset 0 1px 6px ${rgba('#ffffff', 0.4)}`,
+          background: `radial-gradient(circle at 35% 30%, ${rgba('#ffffff', 0.5)}, ${rgba(accent, 0.3)})`,
+          boxShadow: `inset 0 1px 6px ${rgba('#ffffff', 0.3)}`,
         }}
+        aria-hidden
       >
-        <Image src={row.icon} alt={row.name} width={32} height={32} className="h-7 w-7 object-contain drop-shadow" />
+        <Image
+          src={row.icon}
+          alt=""
+          width={32}
+          height={32}
+          className="h-7 w-7 object-contain opacity-60 blur-[6px] saturate-150"
+        />
+        <span className="absolute inset-0 grid place-items-center text-lg font-black text-white/90 drop-shadow">?</span>
       </span>
 
-      {/* Ad + kategori */}
+      {/* Ad GİZLİ + yalnızca nadirlik rozeti (kategori de ipucu verdiği için gizli). */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-bold text-foreground">{row.name}</p>
+          <p className="truncate text-sm font-bold text-muted-foreground">Gizli Karakter</p>
           {theme.label && (
             <span
               className="shrink-0 rounded-full border px-1.5 py-px text-[8px] font-extrabold uppercase tracking-wider"
@@ -244,11 +254,9 @@ function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
             </span>
           )}
         </div>
-        {row.category && (
-          <p className="mt-0.5 truncate text-[11px] font-medium" style={{ color: accent }}>
-            {row.category.emoji} {row.category.name}
-          </p>
-        )}
+        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground/70">
+          ❔ Kim olduğu sürpriz — kazananları merak et
+        </p>
       </div>
 
       {/* Nadir % + holder sayısı */}
