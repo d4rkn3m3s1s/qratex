@@ -1508,6 +1508,9 @@ model ConsumptionReview {
   dimensions      Json? // { taste: 5, service: 4, ambiance: 5, value: 4 }
   dealerReply     String?   @db.Text
   dealerRepliedAt DateTime?
+  // Karakter rozeti: yorumun ÜSLUP kategorisi (dram-suc|komedi|fantastik|gizem-gerilim).
+  // AI belirler; kullanıcıya gösterilmez. Karakter barı bu alanı sayar. Bkz. character-categories.
+  characterCategory String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1521,6 +1524,8 @@ model ConsumptionReview {
   @@index([createdAt])
   // Müşteri yorum geçmişi: where customerId + createdAt range / orderBy
   @@index([customerId, createdAt])
+  // Karakter rozeti kategori sayımı: where customerId + characterCategory.
+  @@index([customerId, characterCategory])
 }
 
 model CardAuditLog {

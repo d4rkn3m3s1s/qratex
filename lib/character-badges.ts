@@ -317,14 +317,14 @@ export async function pickCharacterInCategory(
   const available = charactersInCategory(categoryKey).filter((c) => !ownedSet.has(c.badgeId));
   if (available.length === 0) return null; // bu kategorideki tüm karakterler alınmış
 
-  // Bu kategorideki yorumlardan örneklem (AI'ın karakteri seçmesi için).
-  const feedbacks = await prisma.feedback.findMany({
-    where: { userId, deletedAt: null, characterCategory: categoryKey, text: { not: null } },
+  // Bu kategorideki TÜKETİM YORUMLARINDAN örneklem (AI'ın karakteri seçmesi için).
+  const reviews = await prisma.consumptionReview.findMany({
+    where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
     select: { text: true, rating: true },
     orderBy: { createdAt: 'desc' },
     take: 12,
   });
-  const sample = feedbacks
+  const sample = reviews
     .map((f, i) => `${i + 1}. (${f.rating}★) ${f.text!.slice(0, 200)}`)
     .join('\n');
 
@@ -365,22 +365,22 @@ export async function pickCharacterInCategory(
 }
 
 /**
- * Feedback POST'undan çağrılır (fire-and-forget). Bir yorumu yalnızca KATEGORİYE
- * sınıflandırıp Feedback.characterCategory'ye yazar. Rozet ATAMASI burada YAPILMAZ —
- * eşik dolunca kullanıcı badges sayfasında barı dolu görür ve sihirli reveal'i açar;
- * rozet o an (POST /api/customer/character) atanır. Böylece reveal her zaman gerçek
- * bir "yeni rozet" anıdır.
+ * Tüketim yorumu (ConsumptionReview) POST/PUT'undan çağrılır (fire-and-forget).
+ * KARAKTER ROZETİ SİSTEMİ ARTIK YALNIZCA TÜKETİM YORUMLARINI baz alır (QR feedback
+ * değil). Yorumu KATEGORİYE sınıflandırıp ConsumptionReview.characterCategory'ye yazar.
+ * Rozet ATAMASI burada YAPILMAZ — eşik dolunca kullanıcı badges'te barı dolu görür ve
+ * sihirli reveal'i açar; rozet o an (POST /api/customer/character) atanır.
  */
-export async function processFeedbackForCharacterBadge(
+export async function processConsumptionReviewForCharacterBadge(
   userId: string,
-  feedbackId: string,
+  reviewId: string,
   text: string,
 ): Promise<void> {
   try {
     const categoryKey = await classifyFeedbackCategory(text);
     if (!categoryKey) return;
-    await prisma.feedback.update({
-      where: { id: feedbackId },
+    await prisma.consumptionReview.update({
+      where: { id: reviewId },
       data: { characterCategory: categoryKey },
     }).catch(() => {});
 
@@ -389,10 +389,9 @@ export async function processFeedbackForCharacterBadge(
     // karakter/kategori olduğu SÖYLENMEZ). Rozet reveal anında atanır.
     const prog = await getCategoryProgress(userId);
     if (!prog.ready) return; // eşik dolmadı → bildirim yok
-    // Kullanıcı zaten "hazır" durumu görmüşse tekrar bildirme: son bildirimden bu
-    // yana yeni eşiğe geçildi mi? Basit yaklaşım: bu kategoride tam-katına ulaşıldıysa bildir.
-    const total = await prisma.feedback.count({
-      where: { userId, deletedAt: null, characterCategory: categoryKey },
+    // Bu kategoride tam-katına ulaşıldıysa bir kez bildir.
+    const total = await prisma.consumptionReview.count({
+      where: { customerId: userId, characterCategory: categoryKey },
     });
     // Bu kategoride alınmış rozet sayısı kadar eşik tüketilmiş; yeni katına TAM ulaştıysa bildir.
     const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
@@ -438,7 +437,7 @@ export async function processFeedbackForCharacterBadge(
       }
     }
   } catch (err) {
-    console.error('[CHARACTER_BADGE] processFeedback failed:', err);
+    console.error('[CHARACTER_BADGE] processConsumptionReview failed:', err);
   }
 }
 
@@ -466,10 +465,10 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
   try {
     const { CHARACTER_CATEGORIES } = await import('@/lib/character-categories');
 
-    // Kategori bazlı yorum sayıları.
-    const grouped = await prisma.feedback.groupBy({
+    // Kategori bazlı TÜKETİM YORUMU sayıları (karakter barı tüketim yorumlarını sayar).
+    const grouped = await prisma.consumptionReview.groupBy({
       by: ['characterCategory'],
-      where: { userId, deletedAt: null, characterCategory: { not: null } },
+      where: { customerId: userId, characterCategory: { not: null } },
       _count: { _all: true },
     });
     const countByCat = new Map<string, number>();

@@ -32,9 +32,9 @@ export async function GET(req: NextRequest) {
   if ('error' in auth) return auth.error;
   const userId = await resolveUserId(auth, req.nextUrl.searchParams.get('userId'));
 
-  const grouped = await prisma.feedback.groupBy({
+  const grouped = await prisma.consumptionReview.groupBy({
     by: ['characterCategory'],
-    where: { userId, deletedAt: null, characterCategory: { not: null } },
+    where: { customerId: userId, characterCategory: { not: null } },
     _count: { _all: true },
   });
   const owned = await prisma.userBadge.findMany({
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'clearCategories') {
-    const upd = await prisma.feedback.updateMany({ where: { userId }, data: { characterCategory: null } });
+    const upd = await prisma.consumptionReview.updateMany({ where: { customerId: userId }, data: { characterCategory: null } });
     return NextResponse.json({ success: true, action, cleared: upd.count }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
@@ -80,14 +80,14 @@ export async function POST(req: NextRequest) {
     }
     // Kaç yorum bu kategoriye atansın (varsayılan: eşik = bar tam dolu).
     const n = Math.max(1, Math.min(50, Number(body.n) || CATEGORY_BADGE_THRESHOLD));
-    const fbs = await prisma.feedback.findMany({
-      where: { userId, deletedAt: null, text: { not: null } },
+    const fbs = await prisma.consumptionReview.findMany({
+      where: { customerId: userId, text: { not: null } },
       select: { id: true },
       orderBy: { createdAt: 'asc' },
       take: n,
     });
     for (const f of fbs) {
-      await prisma.feedback.update({ where: { id: f.id }, data: { characterCategory: category } }).catch(() => {});
+      await prisma.consumptionReview.update({ where: { id: f.id }, data: { characterCategory: category } }).catch(() => {});
     }
     return NextResponse.json({ success: true, action, category, filled: fbs.length, threshold: CATEGORY_BADGE_THRESHOLD }, { headers: PRIVATE_NO_STORE_HEADERS });
   }

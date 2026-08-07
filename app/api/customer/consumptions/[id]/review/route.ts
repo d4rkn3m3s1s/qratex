@@ -237,6 +237,15 @@ export async function POST(
       console.error('Consumption review analysis failed:', err);
     });
 
+    // Karakter rozeti: tüketim yorumunu kategoriye sınıflandır + eşik dolduysa
+    // "karakterin hazır" bildirimi (fire-and-forget; rozet reveal anında atanır).
+    if (text && text.trim().length >= 8) {
+      const uid = session.user.id, rid = review.id, rtext = text;
+      import('@/lib/character-badges')
+        .then((m) => m.processConsumptionReviewForCharacterBadge(uid, rid, rtext))
+        .catch(() => {});
+    }
+
     const resBody = {
       success: true,
       message: 'Yorumunuz kaydedildi!',

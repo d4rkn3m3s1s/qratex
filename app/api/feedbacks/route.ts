@@ -519,26 +519,14 @@ export async function POST(request: NextRequest) {
         processAutoReplies(feedback.id).catch(console.error);
       }
 
-      // Karakter rozeti: yorumu kategoriye sınıflandır + eşik dolduysa rozet aç
-      // (fire-and-forget, isteği bloke etmez).
-      if (session?.user?.id && feedback.text) {
-        const uid = session.user.id, fid = feedback.id, ftext = feedback.text;
-        import('@/lib/character-badges')
-          .then((m) => m.processFeedbackForCharacterBadge(uid, fid, ftext))
-          .catch(() => {});
-      }
+      // NOT: Karakter rozeti sistemi artık YALNIZCA tüketim yorumlarını (ConsumptionReview)
+      // baz alır — QR feedback'i saymaz. Tetikleme review route'unda.
 
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
       return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const resBody = { success: true, feedback };
-    if (session?.user?.id && feedback.text) {
-      const uid = session.user.id, fid = feedback.id, ftext = feedback.text;
-      import('@/lib/character-badges')
-        .then((m) => m.processFeedbackForCharacterBadge(uid, fid, ftext))
-        .catch(() => {});
-    }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
