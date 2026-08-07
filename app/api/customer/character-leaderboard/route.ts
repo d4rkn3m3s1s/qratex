@@ -97,14 +97,17 @@ export async function GET(request: NextRequest) {
     }
 
     // ── mode === 'rarest' ──
-    const [grouped, totalCustomers] = await Promise.all([
+    const [grouped, totalCustomers, myBadges] = await Promise.all([
       prisma.userBadge.groupBy({
         by: ['badgeId'],
         where: { badgeId: { in: CHAR_IDS } },
         _count: { _all: true },
       }),
       prisma.user.count({ where: { role: 'CUSTOMER' } }),
+      // Mevcut kullanıcının sahip olduğu karakterler — SADECE onlar açık gösterilir.
+      prisma.userBadge.findMany({ where: { userId, badgeId: { in: CHAR_IDS } }, select: { badgeId: true } }),
     ]);
+    const mineSet = new Set(myBadges.map((b) => b.badgeId));
 
     // Yalnızca en az 1 kişide olan karakterler (hiç kimsede olmayan listelenmez).
     const rows = grouped
@@ -112,18 +115,22 @@ export async function GET(request: NextRequest) {
         const cat = BADGE_CATALOG.find((b) => b.id === g.badgeId);
         const holders = g._count._all;
         const ratePct = totalCustomers > 0 ? Math.round((holders / totalCustomers) * 1000) / 10 : null;
+        const isMine = mineSet.has(g.badgeId);
         return {
           badgeId: g.badgeId,
-          name: cat?.name ?? g.badgeId,
-          icon: cat?.icon ?? '/logo/logo.png',
-          category: categoryOf(g.badgeId),
+          // Sürpriz: kullanıcının SAHİP OLMADIĞI karakterlerin adı/görseli/kategorisi
+          // istemciye SIZMAZ (UI gizli gösterse de veri de sızmasın). Kendi rozetin açık.
+          name: isMine ? (cat?.name ?? g.badgeId) : null,
+          icon: isMine ? (cat?.icon ?? '/logo/logo.png') : null,
+          category: isMine ? categoryOf(g.badgeId) : null,
           rarity: rarityOf(g.badgeId),
           holders,
           ratePct, // "oyuncuların %X'inde"
+          isMine,
         };
       })
-      // En nadir (en az holder) önce; eşitlikte ada göre stabil.
-      .sort((a, b) => a.holders - b.holders || a.name.localeCompare(b.name, 'tr'));
+      // En nadir (en az holder) önce; eşitlikte badgeId ile stabil (name gizli olabilir).
+      .sort((a, b) => a.holders - b.holders || a.badgeId.localeCompare(b.badgeId, 'tr'));
 
     return NextResponse.json(
       { success: true, mode, totalCustomers, leaderboard: rows },

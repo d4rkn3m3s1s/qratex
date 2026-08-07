@@ -43,12 +43,14 @@ function initials(name?: string | null): string {
 
 type RarestRow = {
   badgeId: string;
-  name: string;
-  icon: string;
+  // name/icon/category yalnızca KENDİ karakterin için dolu (isMine=true); başkalarınınki null (sürpriz).
+  name: string | null;
+  icon: string | null;
   category: { key: string; name: string; emoji: string; accent: string } | null;
   rarity: Rarity;
   holders: number;
   ratePct: number | null;
+  isMine: boolean;
 };
 type WeeklyRow = {
   rank: number;
@@ -199,8 +201,9 @@ export function CharacterLeaderboard() {
 function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
   const theme = rarityTheme(row.rarity);
   const pct = rateLabel(row.ratePct);
-  // Kategori rengi KULLANILMAZ (kategori de karakteri ele verebilir) — yalnız nadirlik rengi.
-  const accent = theme.glow;
+  // Kendi rozetin için kategori rengi (açık); başkasınınki için nötr nadirlik rengi
+  // (kategori rengi de karakteri ele verebilir → gizli satırlarda kullanma).
+  const accent = row.isMine ? (row.category?.accent ?? theme.glow) : theme.glow;
   const { color: rankColor } = rankStyle(rank);
 
   const frame: CSSProperties =
@@ -221,30 +224,35 @@ function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
         {rank}
       </span>
 
-      {/* Rozet görseli — GİZLİ (sürpriz): blurlu görsel + üstünde "?". Hangi karakter
-          olduğu ele verilmez; yalnızca nadirlik (rarity + %) gösterilir. */}
+      {/* Rozet görseli — SENİNKİ açık, başkasınınki GİZLİ (sürpriz: blur + "?"). */}
       <span
         className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full ring-1"
         style={{
-          background: `radial-gradient(circle at 35% 30%, ${rgba('#ffffff', 0.5)}, ${rgba(accent, 0.3)})`,
-          boxShadow: `inset 0 1px 6px ${rgba('#ffffff', 0.3)}`,
+          background: `radial-gradient(circle at 35% 30%, ${rgba('#ffffff', row.isMine ? 0.85 : 0.5)}, ${rgba(accent, 0.3)})`,
+          boxShadow: `inset 0 1px 6px ${rgba('#ffffff', 0.35)}`,
         }}
         aria-hidden
       >
-        <Image
-          src={row.icon}
-          alt=""
-          width={32}
-          height={32}
-          className="h-7 w-7 object-contain opacity-60 blur-[6px] saturate-150"
-        />
-        <span className="absolute inset-0 grid place-items-center text-lg font-black text-white/90 drop-shadow">?</span>
+        {row.isMine && row.icon ? (
+          <Image src={row.icon} alt="" width={32} height={32} className="h-7 w-7 object-contain drop-shadow" />
+        ) : (
+          <>
+            {/* Placeholder blur (gerçek görsel sızmaz — icon null) + "?" */}
+            <span
+              className="h-7 w-7 rounded-full opacity-50 blur-[5px]"
+              style={{ background: `radial-gradient(circle, ${rgba(accent, 0.7)}, transparent)` }}
+            />
+            <span className="absolute inset-0 grid place-items-center text-lg font-black text-white/90 drop-shadow">?</span>
+          </>
+        )}
       </span>
 
-      {/* Ad GİZLİ + yalnızca nadirlik rozeti (kategori de ipucu verdiği için gizli). */}
+      {/* Ad: SENİNKİ açık (+ ⭐ Sende), başkasınınki "Gizli Karakter". Nadirlik her zaman görünür. */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-bold text-muted-foreground">Gizli Karakter</p>
+          <p className={`truncate text-sm font-bold ${row.isMine ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {row.isMine && row.name ? row.name : 'Gizli Karakter'}
+          </p>
           {theme.label && (
             <span
               className="shrink-0 rounded-full border px-1.5 py-px text-[8px] font-extrabold uppercase tracking-wider"
@@ -253,10 +261,21 @@ function RarestItem({ row, rank }: { row: RarestRow; rank: number }) {
               {theme.label}
             </span>
           )}
+          {row.isMine && (
+            <span className="shrink-0 rounded-full border border-amber-400/50 bg-amber-400/15 px-1.5 py-px text-[8px] font-extrabold uppercase tracking-wider text-amber-500">
+              ⭐ Sende
+            </span>
+          )}
         </div>
-        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground/70">
-          ❔ Kim olduğu sürpriz — kazananları merak et
-        </p>
+        {row.isMine && row.category ? (
+          <p className="mt-0.5 truncate text-[11px] font-medium" style={{ color: row.category.accent }}>
+            {row.category.emoji} {row.category.name}
+          </p>
+        ) : (
+          <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground/70">
+            ❔ Kim olduğu sürpriz — kazananları merak et
+          </p>
+        )}
       </div>
 
       {/* Nadir % + holder sayısı */}
