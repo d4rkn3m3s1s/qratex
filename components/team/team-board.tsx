@@ -81,6 +81,15 @@ function tagColor(tag: string): string {
   return TAG_PALETTE[h % TAG_PALETTE.length];
 }
 
+/**
+ * Bir görev için izinli "taşı" hedefleri (mobil taşı menüsü). Mevcut durum hariç.
+ * Üye "Bitti"ye kendi taşıyamaz (backend NEEDS_APPROVAL) — UI'da da gizlenir; asıl
+ * yetki backend'de. Yönetici tüm kolonlara taşıyabilir.
+ */
+function moveTargets(currentStatus: string, isManager: boolean): typeof COLUMNS[number][] {
+  return COLUMNS.filter((c) => c.key !== currentStatus && (isManager || c.key !== 'done'));
+}
+
 const PRIORITY_STYLE: Record<string, string> = {
   high: 'bg-red-500/15 text-red-600 dark:text-red-400',
   medium: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
@@ -901,9 +910,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
 
       {/* İçerik: yükleniyor / kanban / liste / kişiler */}
       {loading ? (
-        <div className="grid gap-5 lg:grid-cols-4">
+        <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-5 lg:overflow-visible lg:px-0 lg:pb-0">
           {[0, 1, 2].map((col) => (
-            <div key={col} className="rounded-2xl border-2 border-dashed border-border/50 bg-card/40 p-3">
+            <div key={col} className="w-[82vw] min-w-[82vw] shrink-0 rounded-2xl border-2 border-dashed border-border/50 bg-card/40 p-3 sm:w-[46vw] sm:min-w-[46vw] lg:w-auto lg:min-w-0 lg:shrink">
               <div className="mb-3 flex items-center justify-between px-1">
                 <div className="h-4 w-24 animate-pulse rounded bg-muted" />
                 <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
@@ -949,7 +958,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
           ))}
         </div>
       ) : viewMode === 'kanban' ? (
-        <div className="grid gap-5 lg:grid-cols-4">
+        /* Mobil/tablet: kolonlar yan yana yatay kaydırma (snap) — masaüstünde (lg) 4'lü grid.
+           Yatay scroll'da negatif margin + padding ile kolonlar ekran kenarına yaslanır. */
+        <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:gap-5 lg:overflow-visible lg:px-0 lg:pb-0 [scrollbar-width:thin]">
           {COLUMNS.map((col) => (
             <div
               key={col.key}
@@ -957,13 +968,14 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
               onDragLeave={() => setDragOverCol((c) => (c === col.key ? null : c))}
               onDrop={() => { if (dragId) moveTask(dragId, col.key); setDragId(null); setDragOverCol(null); }}
               className={cn(
-                'rounded-2xl border-2 bg-card/40 p-3 transition-all duration-200',
+                'w-[82vw] min-w-[82vw] shrink-0 snap-start rounded-2xl border-2 bg-card/40 p-3 transition-all duration-200 sm:w-[46vw] sm:min-w-[46vw] lg:w-auto lg:min-w-0 lg:shrink',
                 dragOverCol === col.key && dragId
                   ? cn('border-solid ring-2 scale-[1.01]', col.ring, 'bg-card/70')
                   : 'border-dashed border-border/50'
               )}
             >
-              <div className="mb-3 flex items-center justify-between px-1">
+              {/* Kolon başlığı mobilde yapışkan (uzun listede görünür kalır). */}
+              <div className="sticky top-0 z-10 mb-3 -mx-3 flex items-center justify-between rounded-t-2xl bg-card/40 px-4 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-card/40 lg:static lg:mx-0 lg:bg-transparent lg:px-1 lg:py-0 lg:backdrop-blur-none">
                 <h3 className={cn('flex items-center gap-2 text-sm font-bold', col.head)}>
                   <span className="text-base">{col.emoji}</span>
                   {col.label}
@@ -1123,6 +1135,39 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                                 </Button>
                               </>
                             )}
+                            {/* Mobil taşı menüsü: dokunmatikte HTML5 drag çalışmadığından
+                                kartı popover ile hedef kolona taşıma kolaylığı. Yalnız mobil/tablet
+                                (lg:hidden); yönetici tüm görevlerde, üye yalnız kendi görevinde.
+                                İzinli hedefler role göre filtreli — asıl yetki backend'de. */}
+                            {(isManager || task.assignedTo?.id === session?.user?.id) &&
+                              moveTargets(task.status, isManager).length > 0 && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 gap-1 rounded-full px-3 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground lg:hidden"
+                                    aria-label="Görevi taşı"
+                                  >
+                                    <GripVertical className="h-3.5 w-3.5" /> Taşı
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="start" className="w-52 p-1.5">
+                                  <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Taşı:</p>
+                                  {moveTargets(task.status, isManager).map((t) => (
+                                    <button
+                                      key={t.key}
+                                      onClick={() => moveTask(task.id, t.key)}
+                                      className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                    >
+                                      <span className="text-base">{t.emoji}</span>
+                                      <span className="min-w-0 flex-1 truncate font-medium">{t.label}</span>
+                                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                                    </button>
+                                  ))}
+                                </PopoverContent>
+                              </Popover>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1148,7 +1193,9 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                 {(tasksByCol[col.key] ?? []).length === 0 && (
                   <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border/40 py-8 text-muted-foreground/40">
                     <span className="text-2xl opacity-40">{col.emoji}</span>
-                    <p className="text-xs">Buraya sürükle</p>
+                    {/* Masaüstünde sürükle-bırak ipucu; mobilde "Taşı" menüsü kullanılır. */}
+                    <p className="hidden text-xs lg:block">Buraya sürükle</p>
+                    <p className="text-xs lg:hidden">Boş</p>
                   </div>
                 )}
               </div>
