@@ -519,5 +519,13 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
   const picked = await pickCharacterInCategory(userId, prog.topCategoryKey);
   if (!picked) return null;
   await awardCharacterBadge(userId, picked.badgeId);
+  // Yeni karakter eklendi → koleksiyon başarımlarını kontrol et (idempotent, fire-and-forget;
+  // hata reveal akışını bozmaz). Hak edilen meta rozetleri verir + bildirim gönderir.
+  try {
+    const { checkCollectionAchievements } = await import('@/lib/character-achievements');
+    await checkCollectionAchievements(userId);
+  } catch {
+    /* başarım kontrolü başarısız olsa da karakter atandı */
+  }
   return picked;
 }

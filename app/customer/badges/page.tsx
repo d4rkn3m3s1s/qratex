@@ -33,6 +33,7 @@ import { BADGE_RARITY_DARK } from '@/lib/badge-rarity-surfaces';
 import { TW_BRAND_GRADIENT_STOPS_SOFT } from '@/lib/tw-brand-classes';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { CharacterCard } from '@/components/customer/character-card';
+import { CharacterLeaderboard } from '@/components/customer/character-leaderboard';
 
 interface BadgeType {
   id: string;
@@ -134,6 +135,7 @@ export default function CustomerBadgesPage() {
 
   useEffect(() => {
     fetchBadges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchBadges = async () => {
@@ -223,6 +225,9 @@ export default function CustomerBadgesPage() {
 
       {/* AI karakter rozeti — yorumlara göre atanan dizi/film karakteri */}
       <CharacterCard />
+
+      {/* Karakter liderliği — en nadir karakterler / bu hafta en çok kazananlar */}
+      <CharacterLeaderboard />
 
       <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 shadow-sm sm:hidden">
         <h1 className="text-xl font-bold tracking-tight text-balance">{t('customerBadges.title')}</h1>

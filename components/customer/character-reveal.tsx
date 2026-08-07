@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { Sparkles, X, Wand2, PartyPopper, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { shareCharacter } from '@/components/customer/character-share-card';
 
 /**
  * KARAKTER ROZETİ REVEAL — göz alıcı, sinematik "sürpriz açığa çıkarma" modalı.
@@ -576,7 +577,9 @@ function DetailsText({
   );
 }
 
-// ── Paylaş butonu: navigator.share → yoksa panoya kopyala + toast ─────
+// ── Paylaş butonu: şık PNG görsel kartı üret → native paylaş / indir ──
+// Görsel üretimi/paylaşımı character-share-card.tsx'e devredilir; başarısızlıkta
+// (görsel taint'lenirse ya da paylaşım desteklenmezse) sessizce metin/panoya düşer.
 function ShareButton({
   character,
   theme,
@@ -584,60 +587,41 @@ function ShareButton({
   character: NonNullable<RevealCharacter>;
   theme: RarityTheme;
 }) {
-  const [copied, setCopied] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Görsel üretilirken kısa "hazırlanıyor" durumu (buton kilidi + geri bildirim).
+  const [busy, setBusy] = useState(false);
+  const mountedRef = useRef(true);
+  // theme yalnızca prop imzasını korumak için — paylaşım metni share-card içinde rarity'den türetilir.
+  void theme;
 
-  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const handleShare = useCallback(async () => {
-    const title = `QRateX karakterim: ${character.name}!`;
-    const rar = theme.label ? `${theme.label} ` : '';
-    const text = `QRateX'te ${rar}karakter rozetimi kazandım: ${character.name} 🎭`;
-    // 1) Native paylaşım (mobil/destekli tarayıcı)
+    if (busy) return;
+    setBusy(true);
     try {
-      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-        await navigator.share({ title, text });
-        return;
-      }
+      // Görsel PNG paylaşımı (mobilde native share, masaüstünde indirme; hata → metin).
+      await shareCharacter(character);
     } catch {
-      // Kullanıcı iptal etti ya da paylaşım başarısız — panoya düşmeyi dene.
+      /* shareCharacter zaten kendi içinde güvenli — yine de akışı bozma */
+    } finally {
+      if (mountedRef.current) setBusy(false);
     }
-    // 2) Panoya kopyala fallback + "Kopyalandı" toast
-    try {
-      await navigator.clipboard?.writeText(text);
-      setCopied(true);
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      toastTimer.current = setTimeout(() => setCopied(false), 1800);
-    } catch {
-      /* pano da yoksa sessizce geç — hata verme */
-    }
-  }, [character, theme]);
+  }, [character, busy]);
 
   return (
-    <div className="relative">
-      <Button
-        variant="secondary"
-        onClick={handleShare}
-        className="gap-2"
-        aria-label="Karakterini paylaş"
-      >
-        <Share2 className="h-4 w-4" />
-        Paylaş
-      </Button>
-      <AnimatePresence>
-        {copied && (
-          <motion.span
-            initial={{ opacity: 0, y: 6, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 6, scale: 0.9 }}
-            role="status"
-            className="absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-900 shadow-lg"
-          >
-            Kopyalandı ✓
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </div>
+    <Button
+      variant="secondary"
+      onClick={handleShare}
+      disabled={busy}
+      className="gap-2"
+      aria-label="Karakterini görsel olarak paylaş"
+    >
+      <Share2 className="h-4 w-4" />
+      {busy ? 'Hazırlanıyor…' : 'Paylaş 📸'}
+    </Button>
   );
 }
 
