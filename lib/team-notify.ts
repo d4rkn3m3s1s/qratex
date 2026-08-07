@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isChannelEnabled, kindToGroup } from '@/lib/notification-prefs';
 
 /**
  * Ekip modülü in-app bildirimleri. Mevcut Notification modeli + /api/notifications
@@ -8,10 +9,26 @@ import { prisma } from '@/lib/prisma';
 
 type NotifyType = 'info' | 'success' | 'warning' | 'error';
 
+/**
+ * Tek in-app bildirim yaratıcısı — TÜM notify* fonksiyonları buradan geçer.
+ * TERCİH KONTROLÜ: data.kind → grup (kindToGroup) → kullanıcının 'app' kanalı KAPALIYSA
+ * bildirim YARATILMAZ. Grubu olmayan/bilinmeyen kind'lar ile prefs'i olmayan kullanıcılar
+ * için varsayılan AÇIK (mevcut davranış korunur). DB hatasında fail-open (bildirim atılır).
+ */
 async function createNotification(opts: {
   userId: string; title: string; message: string; type?: NotifyType; data?: Record<string, unknown>;
 }): Promise<void> {
   try {
+    const kind = typeof opts.data?.kind === 'string' ? (opts.data.kind as string) : null;
+    const group = kindToGroup(kind);
+    if (group) {
+      // Yalnızca gruplu bildirimlerde tercih sorgula (grupsuz kind → daima gönder, DB okuma yok).
+      const user = await prisma.user.findUnique({
+        where: { id: opts.userId },
+        select: { notificationPrefs: true },
+      });
+      if (!isChannelEnabled(user?.notificationPrefs ?? null, group, 'app')) return; // app kapalı → yaratma
+    }
     await prisma.notification.create({
       data: {
         userId: opts.userId,

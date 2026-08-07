@@ -15,6 +15,53 @@ function brandHeader() {
   return { logoUrl: getTransactionalEmailLogoUrl(origin), brandLinkHref: origin };
 }
 
+/**
+ * KARAKTER ROZETİ "hazır" maili. Kullanıcının gizli barı dolup yeni bir karakter
+ * açılabilir hale geldiğinde gönderilir. SÜRPRİZ KORUNUR: hangi karakter veya kategori
+ * olduğu ASLA söylenmez — sadece "gizemli kürende bir karakter belirdi, açıp keşfet".
+ * CTA → /customer/badges. Mail yapılandırılmamışsa (SMTP/RESEND yok) sessizce atlar.
+ */
+export async function sendCharacterReadyEmail(opts: {
+  to: string; name?: string | null;
+}): Promise<void> {
+  try {
+    const origin = getPublicAppOrigin();
+    const link = `${origin}/customer/badges`;
+
+    // Gizemli, merak uyandıran gövde — hiçbir spoiler yok.
+    const teaser = `<div style="margin:16px 0;padding:18px 20px;border-radius:14px;background:linear-gradient(135deg,#1a0a2e 0%,#3b0764 55%,#7e22ce 100%);text-align:center;">
+      <div style="font-size:34px;line-height:1;margin-bottom:8px;">🔮</div>
+      <strong style="display:block;font-size:16px;color:#f5e8ff;">Gizemli kürende bir karakter belirdi</strong>
+      <span style="display:block;margin-top:6px;font-size:13.5px;color:#d8b4fe;">Kim olduğu senin yorumlarına saklı — açıp keşfetmen için seni bekliyor.</span>
+    </div>`;
+
+    const bodyHtml = [
+      opts.name ? `Merhaba ${opts.name},` : 'Merhaba,',
+      'Harika haber! Yazdığın yorumlar yeni bir <strong>karakter rozetini</strong> açığa çıkardı. ✨',
+      teaser,
+      'Küreyi aç, karakterinin kim olduğunu gör ve koleksiyonuna ekle.',
+    ].join('<br>');
+
+    const html = buildTransactionalEmailHtml({
+      ...brandHeader(),
+      heading: '✨ Yeni bir karakterin hazır!',
+      bodyHtml,
+      cta: { href: link, label: 'Küreyi Aç ve Keşfet' },
+      footnoteHtml: 'Bu bildirim QRateX karakter rozeti sisteminden gönderildi.',
+    });
+    const text = buildTransactionalPlainText({
+      heading: 'Yeni bir karakterin hazır!',
+      bodyLines: [
+        opts.name ? `Merhaba ${opts.name},` : 'Merhaba,',
+        'Yorumların yeni bir karakter rozetini açığa çıkardı.',
+        'Gizemli kürende bir karakter belirdi — kim olduğunu açıp keşfet!',
+      ],
+      cta: { href: link, label: 'Küreyi Aç ve Keşfet' },
+    });
+    await sendTransactionalEmail({ to: opts.to, subject: '✨ Yeni bir karakterin hazır!', html, text, from });
+  } catch { /* mail hatası akışı bozmasın */ }
+}
+
 /** Görev atanınca atanan kişiye bildirim maili. RESEND yoksa sessizce atlar. */
 export async function sendTaskAssignedEmail(opts: {
   to: string; assigneeName?: string | null; taskTitle: string; priority?: string;

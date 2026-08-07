@@ -1,12 +1,13 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Sparkles, Wand2, Star, Lock, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CharacterReveal, type RevealCharacter } from '@/components/customer/character-reveal';
 import { MysteryBar } from '@/components/customer/mystery-bar';
+import { useConfetti } from '@/components/providers/confetti-provider';
 
 type Category = { key: string; name: string; emoji: string; accent: string; description?: string };
 type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
@@ -99,6 +100,9 @@ export function CharacterCard() {
   const [variant, setVariant] = useState<'orb' | 'mascot'>('orb');
   // Ana karakter değişimi sırasında hangi rozet işleniyor (butonu kilitlemek için).
   const [featuring, setFeaturing] = useState<string | null>(null);
+  const { fireStars } = useConfetti();
+  // "Hazır oldu" kutlaması yalnızca BİR kez patlasın (her yüklemede/tazelemede değil).
+  const celebratedRef = useRef(false);
 
   const load = () => {
     fetch('/api/customer/character', { cache: 'no-store' })
@@ -111,6 +115,23 @@ export function CharacterCard() {
   useEffect(() => {
     load();
   }, []);
+
+  // Bar DOLDUĞU an (ready) kart üzerinde kutlama: konfeti + ses. Bir kez tetiklenir;
+  // reveal ile karakter açılıp bar sıfırlanınca bayrak resetlenir (yeni dolumda tekrar).
+  useEffect(() => {
+    const isReady = state?.bar?.ready;
+    if (isReady && !celebratedRef.current) {
+      celebratedRef.current = true;
+      const reduce = typeof window !== 'undefined'
+        && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      if (!reduce) {
+        fireStars();
+        import('@/lib/game-sounds').then((m) => m.sfxWin?.()).catch(() => {});
+      }
+    } else if (!isReady) {
+      celebratedRef.current = false; // bar dolmadı → sonraki dolumda tekrar kutla
+    }
+  }, [state?.bar?.ready, fireStars]);
 
   // "Ana karakter yap" — POST feature, iyimser yerel güncelleme + tazele.
   const setFeatured = (badgeId: string) => {
@@ -166,7 +187,14 @@ export function CharacterCard() {
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card/60 to-fuchsia-500/10 p-5 shadow-sm">
+      <div
+        className={
+          'relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-card/60 to-fuchsia-500/10 p-5 shadow-sm transition-shadow ' +
+          (ready
+            ? 'border-fuchsia-400/60 shadow-[0_0_28px_rgba(217,70,239,0.4)] motion-safe:animate-[pulse_2.6s_ease-in-out_infinite]'
+            : 'border-primary/25')
+        }
+      >
         {/* Üst etiket + varyant seçici (reveal'e hazırken) */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">

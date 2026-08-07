@@ -403,15 +403,38 @@ export async function processFeedbackForCharacterBadge(
       });
       const justCrossed = total === (takenInCat + 1) * CATEGORY_BADGE_THRESHOLD;
       if (justCrossed) {
-        await prisma.notification.create({
-          data: {
-            userId,
-            type: 'badge',
-            title: '✨ Yeni bir karakter hazır!',
-            message: 'Gizemli kürende bir karakter belirdi — açıp kim olduğunu keşfet!',
-            data: { kind: 'character-ready', href: '/customer/badges' } as object,
-          },
-        }).catch(() => {});
+        // Kullanıcının e-postası + adı + bildirim tercihleri (tek okuma).
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, name: true, notificationPrefs: true },
+        }).catch(() => null);
+
+        const { isChannelEnabled } = await import('@/lib/notification-prefs');
+        const prefs = user?.notificationPrefs ?? null;
+
+        // (1) Uygulama içi zil bildirimi — 'character' grubu 'app' kanalı açıksa yarat.
+        if (isChannelEnabled(prefs, 'character', 'app')) {
+          await prisma.notification.create({
+            data: {
+              userId,
+              type: 'badge',
+              title: '✨ Yeni bir karakter hazır!',
+              message: 'Gizemli kürende bir karakter belirdi — açıp kim olduğunu keşfet!',
+              data: { kind: 'character-ready', href: '/customer/badges' } as object,
+            },
+          }).catch(() => {});
+        }
+
+        // (2) E-posta bildirimi — kullanıcının e-postası varsa VE 'character'/'email' açıksa,
+        //     sürprizi bozmadan "karakterin hazır" maili (fire-and-forget). Sürpriz: hangi
+        //     karakter/kategori olduğu SÖYLENMEZ.
+        if (user?.email && isChannelEnabled(prefs, 'character', 'email')) {
+          const email = user.email;
+          const name = user.name;
+          import('@/lib/team-email')
+            .then((m) => m.sendCharacterReadyEmail({ to: email, name }))
+            .catch(() => {});
+        }
       }
     }
   } catch (err) {

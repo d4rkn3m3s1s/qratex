@@ -3,6 +3,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import {
+  fullPrefsForUI,
+  sanitizeNotificationPrefs,
+  NOTIFICATION_GROUP_KEYS,
+  type NotificationPrefs,
+} from '@/lib/notification-prefs';
 import { z } from 'zod';
 
 
@@ -55,10 +61,25 @@ const preferencesPatchSchema = z
   })
   .strict();
 
+// Tür bazında bildirim tercihleri (tür × kanal). Her grup için app/email boolean.
+// Yalnızca bilinen gruplar kabul edilir; geçersiz gruplar/kanallar sanitize ile atılır.
+const channelPrefSchema = z
+  .object({ app: z.boolean().optional(), email: z.boolean().optional() })
+  .strict();
+const notificationPrefsSchema = z
+  .object(
+    Object.fromEntries(
+      NOTIFICATION_GROUP_KEYS.map((k) => [k, channelPrefSchema.optional()]),
+    ),
+  )
+  .partial()
+  .strict();
+
 const patchBodySchema = z
   .object({
     notifications: notificationsPatchSchema.optional(),
     preferences: preferencesPatchSchema.optional(),
+    notificationPrefs: notificationPrefsSchema.optional(),
   })
   .strict();
 
@@ -76,15 +97,20 @@ export async function GET() {
     const userId = session.user.id;
     const settingsKey = `user_settings_${userId}`;
 
-    const settings = await prisma.settings.findUnique({
-      where: { key: settingsKey },
-    });
+    // Bildirim tercihleri (tür × kanal) User.notificationPrefs'te saklanır → ayrıca çek.
+    const [settings, user] = await Promise.all([
+      prisma.settings.findUnique({ where: { key: settingsKey } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { notificationPrefs: true } }),
+    ]);
+
+    // UI her grup için app+email dolu (eksikler AÇIK) tam tablo bekler.
+    const notificationPrefs = fullPrefsForUI(user?.notificationPrefs ?? null);
 
     if (!settings) {
       return NextResponse.json(
         {
           success: true,
-          data: defaultSettings,
+          data: { ...defaultSettings, notificationPrefs },
         },
         { headers: PRIVATE_NO_STORE_HEADERS }
       );
@@ -106,6 +132,7 @@ export async function GET() {
             ...defaultSettings.preferences,
             ...(prefParsed.success ? prefParsed.data : {}),
           },
+          notificationPrefs,
         },
       },
       { headers: PRIVATE_NO_STORE_HEADERS }
@@ -186,10 +213,36 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // Bildirim tercihleri (tür × kanal) → User.notificationPrefs. Mevcutla BİRLEŞTİR
+    // (kısmi güncelleme desteklenir) ve sanitize et (geçersiz grup/kanal atılır).
+    let notificationPrefsOut: Record<string, { app: boolean; email: boolean }> | undefined;
+    if (parsed.data.notificationPrefs) {
+      const current = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { notificationPrefs: true },
+      });
+      const existingPrefs = sanitizeNotificationPrefs(current?.notificationPrefs ?? {});
+      const incoming = sanitizeNotificationPrefs(parsed.data.notificationPrefs);
+      // Grup bazında sığ birleştirme: gelen grup, mevcut grubun üstüne yazılır.
+      const merged: NotificationPrefs = { ...existingPrefs };
+      for (const [group, entry] of Object.entries(incoming)) {
+        if (entry) merged[group] = { ...(merged[group] ?? {}), ...entry };
+      }
+      await prisma.user.updateMany({
+        where: { id: userId },
+        // sanitize çıktısı undefined değer üretmez → Prisma Json girişi için güvenli cast.
+        data: { notificationPrefs: merged as object },
+      });
+      notificationPrefsOut = fullPrefsForUI(merged);
+    }
+
     return NextResponse.json(
       {
         success: true,
-        data: settings.value,
+        data: {
+          ...(settings.value as Record<string, unknown>),
+          ...(notificationPrefsOut ? { notificationPrefs: notificationPrefsOut } : {}),
+        },
         message: 'Ayarlar güncellendi',
       },
       { headers: PRIVATE_NO_STORE_HEADERS }

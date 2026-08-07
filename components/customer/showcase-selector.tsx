@@ -8,7 +8,7 @@ import { Plus, X, Award, Sparkles, Sliders, Save, RefreshCw, User } from 'lucide
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { UserAvatarFrame, DiamondBadge, RubyBadge } from '@/components/ui/avatar-frame';
 
 type UserCosmeticWithDetails = {
@@ -365,6 +365,9 @@ export function ShowcaseSelector() {
                                             <Award className="w-5 h-5 text-primary" />
                                             Sergilenecek Öge Seçin
                                         </DialogTitle>
+                                        <DialogDescription className="text-white/60">
+                                            Profilinde sergilemek istediğin rozet veya başarıyı seç.
+                                        </DialogDescription>
                                     </DialogHeader>
 
                                     {/* Choice Lists */}

@@ -52,6 +52,10 @@ import { applyAccessibilityPrefs } from '@/lib/accessibility-prefs';
 import { AccessibilityToggles } from '@/components/settings/accessibility-toggles';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
+import {
+  NOTIFICATION_GROUPS,
+  type NotificationChannel,
+} from '@/lib/notification-prefs';
 import { useAppLocale } from '@/lib/app-locale';
 import { useAppT } from '@/lib/app-locale';
 import {
@@ -113,6 +117,14 @@ export default function CustomerSettingsPage() {
     pushReward: true,
   });
 
+  // TÜR BAZINDA bildirim tercihleri (her grup için app + email). Varsayılan hepsi AÇIK.
+  const [notificationPrefs, setNotificationPrefs] = useState<
+    Record<string, { app: boolean; email: boolean }>
+  >(() =>
+    Object.fromEntries(NOTIFICATION_GROUPS.map((g) => [g.key, { app: true, email: true }])),
+  );
+  const [savingPrefs, setSavingPrefs] = useState(false);
+
   const [security, setSecurity] = useState({
     currentPassword: '',
     newPassword: '',
@@ -151,6 +163,10 @@ export default function CustomerSettingsPage() {
         if (data.success) {
           if (data.data.notifications) {
             setNotifications(data.data.notifications);
+          }
+          if (data.data.notificationPrefs) {
+            // Sunucu her grup için app+email dolu tam tablo döner; eksik gruplar için varsayılanı koru.
+            setNotificationPrefs((prev) => ({ ...prev, ...data.data.notificationPrefs }));
           }
           if (data.data.preferences) {
             const p = data.data.preferences;
@@ -297,6 +313,38 @@ export default function CustomerSettingsPage() {
       toast.error('Bir hata oluştu');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Tür bazında bildirim tercihi toggle'ı (grup + kanal).
+  const toggleNotificationPref = (group: string, channel: NotificationChannel, value: boolean) => {
+    setNotificationPrefs((prev) => ({
+      ...prev,
+      [group]: { ...(prev[group] ?? { app: true, email: true }), [channel]: value },
+    }));
+  };
+
+  const handleSaveNotificationPrefs = async () => {
+    setSavingPrefs(true);
+    try {
+      const res = await fetch('/api/customer/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationPrefs }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.data?.notificationPrefs) {
+          setNotificationPrefs((prev) => ({ ...prev, ...data.data.notificationPrefs }));
+        }
+        toast.success('Bildirim tercihleri güncellendi');
+      } else {
+        toast.error(data.error || 'Bir hata oluştu');
+      }
+    } catch {
+      toast.error('Bir hata oluştu');
+    } finally {
+      setSavingPrefs(false);
     }
   };
 
@@ -681,7 +729,74 @@ export default function CustomerSettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
           >
+            {/* TÜR BAZINDA tercihler: her bildirim türü için Uygulama içi + E-posta ayrı ayrı. */}
+            <Card glass>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary shrink-0" />
+                  Bildirim Türleri
+                </CardTitle>
+                <CardDescription>
+                  Her bildirim türünü Uygulama içi (zil) ve E-posta olarak ayrı ayrı açıp kapatın.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Sütun başlıkları (sm+). */}
+                <div className="hidden sm:flex items-center justify-end gap-8 pr-1 text-xs font-medium text-muted-foreground">
+                  <span className="w-16 text-center">Uygulama</span>
+                  <span className="w-16 text-center">E-posta</span>
+                </div>
+                {NOTIFICATION_GROUPS.map((group) => {
+                  const pref = notificationPrefs[group.key] ?? { app: true, email: true };
+                  return (
+                    <div
+                      key={group.key}
+                      className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{group.label}</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {group.description}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-8 shrink-0 sm:pr-1">
+                        <label className="flex flex-col items-center gap-1">
+                          <span className="text-xs text-muted-foreground sm:hidden">Uygulama</span>
+                          <Switch
+                            checked={pref.app}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPref(group.key, 'app', checked)
+                            }
+                            aria-label={`${group.label} — uygulama içi bildirim`}
+                          />
+                        </label>
+                        <label className="flex flex-col items-center gap-1">
+                          <span className="text-xs text-muted-foreground sm:hidden">E-posta</span>
+                          <Switch
+                            checked={pref.email}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPref(group.key, 'email', checked)
+                            }
+                            aria-label={`${group.label} — e-posta bildirimi`}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+                <Button
+                  onClick={handleSaveNotificationPrefs}
+                  disabled={savingPrefs}
+                  className="gap-2 w-full touch-manipulation sm:w-auto min-h-10"
+                >
+                  <Save className="h-4 w-4" />
+                  {savingPrefs ? 'Kaydediliyor...' : 'Tercihleri Kaydet'}
+                </Button>
+              </CardContent>
+            </Card>
+
             <Card glass>
               <CardHeader>
                 <CardTitle>Bildirim Tercihleri</CardTitle>

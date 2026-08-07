@@ -36,6 +36,10 @@ model User {
   adminTeamRole   String? // "yonetici" | "uye"
   // Profilde vitrin edilen "ana karakter" rozeti (character-badges). Kullanıcı seçer.
   featuredCharacterBadgeId String?
+  // Tür×kanal bildirim tercihleri (JSON). Şekil: { [group]: { app?: boolean; email?: boolean } }
+  // Gruplar: 'character' | 'team' | 'campaign' | 'reminder' (bkz. lib/notification-prefs.ts).
+  // Nullable + boş → HER ŞEY AÇIK varsayılır (mevcut satırları/davranışı etkilemez).
+  notificationPrefs Json?
   points        Int       @default(0)
   level         Int       @default(1)
   xp            Int       @default(0)
