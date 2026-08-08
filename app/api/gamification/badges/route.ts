@@ -6,6 +6,7 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { Prisma } from '@prisma/client';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { sanitizeHexColor } from '@/lib/badge-colors';
+import { trackabilityOf } from '@/lib/badge-trackability';
 
 
 export const dynamic = 'force-dynamic';
@@ -255,6 +256,11 @@ export async function GET(request: NextRequest) {
         isCharacter: adminManage ? charBadgeIdSet.has(badge.id) : undefined,
         seriesCategoryKey: seriesCat?.key ?? null,
         seriesCategoryName: seriesCat?.name ?? null,
+        // İZLENEBİLİRLİK (yalnız admin modu): rozet gerçekten kazanılabilir mi?
+        // character = ayrı motor; exact = gerçek sayaç; approximate = proxy; untrackable = ölü rozet.
+        trackability: adminManage
+          ? (charBadgeIdSet.has(badge.id) ? 'character' : trackabilityOf(requirementType))
+          : undefined,
       };
     });
 
