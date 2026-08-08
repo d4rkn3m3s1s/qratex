@@ -78,12 +78,49 @@ export async function PUT(request: NextRequest) {
  *  - 'test': şablonu testTo adresine gönderir (kendine deneme).
  *  - 'send': şablonu gerçek alıcı(lar)ına gönderir (email alanı virgülle çok alıcı olabilir).
  */
+type SendResult = { to: string; ok: boolean; department?: string; channel?: string; error?: string };
+
+/** Tek bir şablonu verilen alıcı(lar)a gönderir; her alıcı için InternEmailSend kaydı oluşturur. */
+async function sendTemplate(
+  tpl: { id: string; department: string; recipientName: string; email: string; subject: string; body: string; deadline?: string },
+  recipients: string[],
+  kind: 'send' | 'test',
+  userId: string,
+): Promise<SendResult[]> {
+  const out: SendResult[] = [];
+  for (const to of recipients) {
+    // Açılma takibi için benzersiz token + gönderim kaydı (test dahil).
+    const token = makeTrackToken();
+    const { html, text } = renderInternTaskEmailHtml(tpl, token);
+    const subject = kind === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
+    const r = await sendTransactionalEmail({ to, subject, html, text });
+    // Kayıt oluştur — HEM başarı HEM hata (durum panelinde gitti✓/hata✗ görünsün).
+    await prisma.internEmailSend.create({
+      data: {
+        token, templateId: tpl.id, department: tpl.department, recipientName: tpl.recipientName,
+        email: to, subject, kind, sentByUserId: userId,
+        status: r.ok ? 'sent' : 'error',
+        channel: r.ok ? r.channel : null,
+        lastError: r.ok ? null : (r.error ?? 'Bilinmeyen gönderim hatası').slice(0, 300),
+      },
+    }).catch(() => {});
+    out.push({ to, ok: r.ok, department: tpl.department, channel: r.ok ? r.channel : undefined, error: r.ok ? undefined : r.error });
+  }
+  return out;
+}
+
+/**
+ * POST — Mail GÖNDER.
+ *  - { action: 'test', templateId, testTo }      → şablonu test adresine gönder (deneme).
+ *  - { action: 'send', templateId }              → şablonu gerçek alıcı(lar)ına gönder.
+ *  - { action: 'send-bulk', templateIds: [...] } → birden çok şablonu TOPLU gerçek alıcılarına gönder.
+ */
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
   const userId = auth.session.user.id;
 
-  // Kötüye kullanım / kaza koruması: admin başına dk'da 20 gönderim isteği.
+  // Kötüye kullanım / kaza koruması: admin başına dk'da 20 gönderim İSTEĞİ (toplu = 1 istek).
   const rl = await checkRateLimitDb(`intern-email:${userId}`, 20, 60_000);
   if (!rl.ok) {
     return NextResponse.json({ success: false, error: 'Çok fazla gönderim. Biraz bekle.' }, { status: 429, headers: PRIVATE_NO_STORE_HEADERS });
@@ -94,47 +131,51 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const action = body?.action === 'test' ? 'test' : 'send';
+  const action: 'test' | 'send' | 'send-bulk' =
+    body?.action === 'test' ? 'test' : body?.action === 'send-bulk' ? 'send-bulk' : 'send';
+  const templates = await getInternTaskEmails();
+
+  // ── TOPLU GÖNDERİM ──
+  if (action === 'send-bulk') {
+    const ids: string[] = Array.isArray(body?.templateIds)
+      ? body.templateIds.filter((x: unknown): x is string => typeof x === 'string')
+      : [];
+    // ids boşsa → alıcısı olan TÜM şablonlar (galeri toplu gönderim).
+    const chosen = (ids.length ? templates.filter((t) => ids.includes(t.id)) : templates)
+      .filter((t) => t.email.split(',').some((e) => e.trim()));
+    if (chosen.length === 0) {
+      return NextResponse.json({ success: false, error: 'Gönderilecek (alıcısı olan) şablon yok.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    const results: SendResult[] = [];
+    for (const tpl of chosen) {
+      const recipients = tpl.email.split(',').map((s) => s.trim()).filter(Boolean);
+      results.push(...await sendTemplate(tpl, recipients, 'send', userId));
+    }
+    const sent = results.filter((r) => r.ok).length;
+    const allOk = results.every((r) => r.ok);
+    return NextResponse.json(
+      { success: allOk, results, sent, total: results.length, templates: chosen.length },
+      { status: allOk ? 200 : 207, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
+  // ── TEKLİ GÖNDERİM / TEST ──
   const templateId = typeof body?.templateId === 'string' ? body.templateId : '';
   const testTo = typeof body?.testTo === 'string' ? body.testTo.trim() : '';
-
-  const templates = await getInternTaskEmails();
   const tpl = templates.find((t) => t.id === templateId);
   if (!tpl) {
     return NextResponse.json({ success: false, error: 'Şablon bulunamadı.' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  // Hedef adres(ler)i belirle. test → testTo; send → şablonun email alanı (virgülle çok alıcı).
   const recipients = action === 'test'
     ? (testTo ? [testTo] : [])
     : tpl.email.split(',').map((s) => s.trim()).filter(Boolean);
-
   if (recipients.length === 0) {
     return NextResponse.json({ success: false, error: action === 'test' ? 'Test adresi gir.' : 'Şablonda alıcı yok.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  // Her alıcıya ayrı gönder (BCC yerine tek tek — kişisel görünüm + açılma takibi + hata izolasyonu).
-  const results: { to: string; ok: boolean; channel?: string; error?: string }[] = [];
-  for (const to of recipients) {
-    // Açılma takibi için benzersiz token + gönderim kaydı (test dahil).
-    const token = makeTrackToken();
-    const { html, text } = renderInternTaskEmailHtml(tpl, token);
-    const subject = action === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
-    const r = await sendTransactionalEmail({ to, subject, html, text });
-    // Kayıt oluştur — HEM başarı HEM hata (durum panelinde gitti✓/hata✗ görünsün).
-    // Başarılıysa token pixel'iyle eşleşir (açılma takibi); hatalıysa status=error + mesaj.
-    await prisma.internEmailSend.create({
-      data: {
-        token, templateId: tpl.id, department: tpl.department, recipientName: tpl.recipientName,
-        email: to, subject, kind: action, sentByUserId: userId,
-        status: r.ok ? 'sent' : 'error',
-        channel: r.ok ? r.channel : null,
-        lastError: r.ok ? null : (r.error ?? 'Bilinmeyen gönderim hatası').slice(0, 300),
-      },
-    }).catch(() => {});
-    results.push({ to, ok: r.ok, channel: r.ok ? r.channel : undefined, error: r.ok ? undefined : r.error });
-  }
-
+  const results = await sendTemplate(tpl, recipients, action, userId);
   const allOk = results.every((r) => r.ok);
   return NextResponse.json(
     { success: allOk, results, sent: results.filter((r) => r.ok).length, total: results.length },

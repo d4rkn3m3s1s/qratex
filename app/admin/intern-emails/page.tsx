@@ -8,8 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
+import {
   Mail, Send, FlaskConical, Save, Trash2, Plus, Loader2, CheckCircle2,
-  Clock, Users, AlertTriangle, Eye, XCircle, CalendarClock,
+  Clock, Users, AlertTriangle, Eye, XCircle, CalendarClock, SendHorizonal,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
@@ -58,8 +61,10 @@ export default function InternEmailsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [testTo, setTestTo] = useState('');
-  const [busy, setBusy] = useState<'save' | 'send' | 'test' | null>(null);
+  const [busy, setBusy] = useState<'save' | 'send' | 'test' | 'bulk' | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Onay modalı: tekli ('send') veya toplu ('bulk') gönderim öncesi güzel onay.
+  const [confirmModal, setConfirmModal] = useState<null | { mode: 'send' | 'bulk' }>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +93,11 @@ export default function InternEmailsPage() {
     for (const t of templates) (g[t.department] ??= []).push(t);
     return g;
   }, [templates]);
+  // Toplu gönderime dahil olacak (alıcısı olan) şablon sayısı.
+  const bulkCount = useMemo(
+    () => templates.filter((t) => t.email.split(',').some((e) => e.trim())).length,
+    [templates],
+  );
 
   const updateSelected = (patch: Partial<Template>) => {
     if (!selectedId) return;
@@ -112,24 +122,64 @@ export default function InternEmailsPage() {
     } finally { setBusy(null); }
   };
 
-  const doSend = async (action: 'send' | 'test') => {
+  // TEST gönderimi — modal gerekmez (kendine deneme, zararsız).
+  const doTest = async () => {
     if (!selected) return;
-    if (action === 'send' && !confirm(`"${selected.recipientName || selected.email}" adresine gerçek görev maili gönderilsin mi?`)) return;
-    setBusy(action);
+    setBusy('test');
     try {
       const res = await fetch('/api/admin/intern-emails', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, templateId: selected.id, testTo: action === 'test' ? testTo.trim() : undefined }),
+        body: JSON.stringify({ action: 'test', templateId: selected.id, testTo: testTo.trim() }),
       });
       const data = await res.json();
       if (!data.success && !data.results) throw new Error(data?.error || 'Gönderilemedi');
       const sent = data.sent ?? 0, total = data.total ?? 0;
-      if (data.success) toast.success(action === 'test' ? `Test maili gönderildi ✓ (${sent}/${total})` : `Gönderildi ✓ (${sent}/${total})`);
+      if (data.success) toast.success(`Test maili gönderildi ✓ (${sent}/${total})`);
       else toast.error(`Kısmi: ${sent}/${total} gönderildi`);
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Gönderilemedi');
     } finally { setBusy(null); }
+  };
+
+  // GERÇEK gönderim (tekli veya toplu) — modal onayından sonra çağrılır.
+  const confirmSend = async () => {
+    const mode = confirmModal?.mode;
+    setConfirmModal(null);
+    if (mode === 'send') {
+      if (!selected) return;
+      setBusy('send');
+      try {
+        const res = await fetch('/api/admin/intern-emails', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send', templateId: selected.id }),
+        });
+        const data = await res.json();
+        if (!data.success && !data.results) throw new Error(data?.error || 'Gönderilemedi');
+        const sent = data.sent ?? 0, total = data.total ?? 0;
+        if (data.success) toast.success(`Gönderildi ✓ (${sent}/${total})`);
+        else toast.error(`Kısmi: ${sent}/${total} gönderildi`);
+        load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Gönderilemedi');
+      } finally { setBusy(null); }
+    } else if (mode === 'bulk') {
+      setBusy('bulk');
+      try {
+        const res = await fetch('/api/admin/intern-emails', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send-bulk' }), // templateIds boş → alıcısı olan tüm şablonlar
+        });
+        const data = await res.json();
+        if (!data.success && !data.results) throw new Error(data?.error || 'Toplu gönderilemedi');
+        const sent = data.sent ?? 0, total = data.total ?? 0, tpls = data.templates ?? 0;
+        if (data.success) toast.success(`Toplu gönderim tamam ✓ (${tpls} şablon, ${sent}/${total} mail)`);
+        else toast.error(`Kısmi toplu: ${sent}/${total} mail gönderildi`);
+        load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Toplu gönderilemedi');
+      } finally { setBusy(null); }
+    }
   };
 
   const addTemplate = () => {
@@ -169,7 +219,17 @@ export default function InternEmailsPage() {
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         {/* SOL: şablon listesi (departmana göre) */}
         <div className="space-y-4">
-          <Button onClick={addTemplate} variant="outline" className="w-full gap-2"><Plus className="h-4 w-4" /> Yeni şablon</Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={addTemplate} variant="outline" className="gap-2"><Plus className="h-4 w-4" /> Yeni</Button>
+            <Button
+              onClick={() => setConfirmModal({ mode: 'bulk' })}
+              disabled={busy !== null || bulkCount === 0}
+              className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}
+              title={bulkCount === 0 ? 'Alıcısı olan şablon yok' : `${bulkCount} şablonun gerçek alıcılarına gönder`}
+            >
+              {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />} Toplu ({bulkCount})
+            </Button>
+          </div>
           {loading ? (
             <div className="space-y-2">{[...Array(6)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/50" />)}</div>
           ) : (
@@ -311,7 +371,7 @@ export default function InternEmailsPage() {
                     <Label className="text-xs">Test adresi (kendine dene)</Label>
                     <Input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="senin@mailin.com" />
                   </div>
-                  <Button onClick={() => doSend('test')} disabled={busy === 'test' || !testTo.trim()} variant="outline" className="gap-2">
+                  <Button onClick={doTest} disabled={busy === 'test' || !testTo.trim()} variant="outline" className="gap-2">
                     {busy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />} Test gönder
                   </Button>
                 </div>
@@ -361,7 +421,7 @@ export default function InternEmailsPage() {
                 <div className="h-px bg-border" />
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Gerçek alıcı: <b className="text-foreground">{selected.email || '—'}</b></p>
-                  <Button onClick={() => doSend('send')} disabled={busy === 'send' || !selected.email} className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}>
+                  <Button onClick={() => setConfirmModal({ mode: 'send' })} disabled={busy !== null || !selected.email} className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}>
                     {busy === 'send' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Görevi gönder
                   </Button>
                 </div>
@@ -372,6 +432,72 @@ export default function InternEmailsPage() {
           <Card><CardContent className="grid place-items-center py-20 text-muted-foreground">Bir şablon seç veya yeni oluştur.</CardContent></Card>
         )}
       </div>
+
+      {/* ── GÜZEL GÖNDERİM ONAY MODALI (tekli + toplu) ── */}
+      <Dialog open={confirmModal !== null} onOpenChange={(o) => { if (!o) setConfirmModal(null); }}>
+        <DialogContent className="sm:max-w-md overflow-hidden p-0">
+          {/* Dekoratif hero şeridi */}
+          <div className="relative bg-gradient-to-br from-primary via-fuchsia-500 to-primary px-6 py-7 text-center">
+            <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-white/15 backdrop-blur-sm ring-1 ring-white/30">
+              {confirmModal?.mode === 'bulk'
+                ? <SendHorizonal className="h-7 w-7 text-white" />
+                : <Send className="h-7 w-7 text-white" />}
+            </div>
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="text-center text-xl font-extrabold text-white">
+                {confirmModal?.mode === 'bulk' ? 'Toplu görev gönderimi' : 'Görev maili gönder'}
+              </DialogTitle>
+              <DialogDescription className="text-center text-sm text-white/85">
+                {confirmModal?.mode === 'bulk'
+                  ? 'Bu işlem tüm stajyerlere gerçek mail gönderir.'
+                  : 'Bu işlem gerçek alıcıya mail gönderir.'}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          {/* İçerik */}
+          <div className="space-y-4 px-6 py-5">
+            {confirmModal?.mode === 'bulk' ? (
+              <>
+                <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-lg font-black text-primary">{bulkCount}</div>
+                    <div className="min-w-0 text-sm">
+                      <p className="font-semibold text-foreground">şablon gönderilecek</p>
+                      <p className="text-muted-foreground">Her şablon kendi gerçek alıcı(lar)ına iletilir.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Gerçek mail gönderimi. Önce bir şablonu <b>Test</b> ile denemeni öneririz. Bu işlem geri alınamaz.</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /> Alıcı</div>
+                  <p className="mt-1 break-all font-semibold text-foreground">{selected?.email || '—'}</p>
+                  {selected?.recipientName && <p className="text-xs text-muted-foreground">{selected.recipientName} · {selected.department}</p>}
+                </div>
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Gerçek mail gönderimi, geri alınamaz. Emin değilsen önce <b>Test</b> ile dene.</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 border-t border-border bg-muted/20 px-6 py-4 sm:justify-between">
+            <Button variant="ghost" onClick={() => setConfirmModal(null)} className="gap-1.5">Vazgeç</Button>
+            <Button onClick={confirmSend} className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}>
+              {confirmModal?.mode === 'bulk'
+                ? <><SendHorizonal className="h-4 w-4" /> Evet, {bulkCount} şablonu gönder</>
+                : <><Send className="h-4 w-4" /> Evet, gönder</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

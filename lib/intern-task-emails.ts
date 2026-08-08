@@ -9,7 +9,6 @@
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
-import { QRATEX_WORDMARK_DATA_URI } from '@/lib/brand-logo-data';
 
 export const INTERN_EMAILS_SETTING_KEY = 'intern_task_emails';
 export const INTERN_EMAILS_SETTING_CATEGORY = 'email';
@@ -559,9 +558,9 @@ ${EMAIL_HEAD}
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
 
-        <!-- HERO: koyu gradient + gömülü beyaz logo + parıltı şeridi -->
+        <!-- HERO: koyu gradient + logo (HTTPS URL — Gmail data: URI'yi engeller) + parıltı şeridi -->
         <tr><td style="background:#0b0618;background:linear-gradient(135deg,#1a0a2e 0%,#0f0f1e 55%,#16213e 100%);padding:40px 40px 32px;text-align:center;">
-          <img src="${QRATEX_WORDMARK_DATA_URI}" width="180" alt="QRateX" style="display:block;margin:0 auto 20px;width:180px;max-width:60%;height:auto;border:0;" />
+          <img src="${origin}/logo/font-white.png" width="180" alt="QRateX" style="display:block;margin:0 auto 20px;width:180px;max-width:60%;height:auto;border:0;" />
           <div style="display:inline-block;padding:8px 18px;border-radius:999px;background:${theme.soft};border:1px solid ${theme.color}55;">
             <span style="font-size:13px;font-weight:800;letter-spacing:0.6px;color:${theme.color};">${theme.emoji}&nbsp;&nbsp;${escHtml(tpl.department.toUpperCase())} DEPARTMANI</span>
           </div>
@@ -642,6 +641,7 @@ export function renderSimpleBrandedEmail(input: {
   accent?: string;
 }): string {
   const accent = input.accent || '#9333ea';
+  const origin = mailPublicOrigin();
   const cta = input.cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto 4px;"><tr><td style="border-radius:12px;background:linear-gradient(135deg,${accent},#e879f9);">
         <a href="${input.cta.href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 30px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;">${input.cta.label}</a>
@@ -652,7 +652,7 @@ export function renderSimpleBrandedEmail(input: {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;"><tr><td align="center">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
       <tr><td style="background:linear-gradient(135deg,#1a0a2e,#0f0f1e 55%,#16213e);padding:36px 40px 28px;text-align:center;">
-        <img src="${QRATEX_WORDMARK_DATA_URI}" width="170" alt="QRateX" style="display:block;margin:0 auto;width:170px;max-width:60%;height:auto;border:0;" />
+        <img src="${origin}/logo/font-white.png" width="170" alt="QRateX" style="display:block;margin:0 auto;width:170px;max-width:60%;height:auto;border:0;" />
       </td></tr>
       <tr><td style="height:4px;background:linear-gradient(90deg,${accent},#e879f9,${accent});"></td></tr>
       <tr><td style="padding:34px 40px 30px;">
