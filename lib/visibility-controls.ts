@@ -80,6 +80,7 @@ export const CUSTOMER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'my_card', href: '/customer/my-card', label: 'Kartım', role: 'customer' },
   { key: 'consumptions', href: '/customer/consumptions', label: 'Tüketimlerim', role: 'customer' },
   { key: 'scan', href: '/customer/scan', label: 'QR Tara', role: 'customer' },
+  { key: 'event_center', href: '/customer/event', label: 'Etkinlik Merkezi', role: 'customer' },
   { key: 'feedbacks', href: '/customer/feedbacks', label: 'Geri Bildirimlerim', role: 'customer' },
   { key: 'remedy', href: '/customer/remedy', label: 'Telafi Tekliflerim', role: 'customer' },
   { key: 'ai_insights', href: '/customer/ai-insights', label: 'AI Analizlerim', role: 'customer' },

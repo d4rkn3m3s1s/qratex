@@ -1758,6 +1758,12 @@ model SeasonalCampaign {
   discount    Float? // Percentage discount
   imageUrl    String?
   conditions  Json? // Eligibility conditions
+  // Zaman-sınırlı CHALLENGE (opsiyonel): etkinlik penceresinde bir hedefi tamamlayan
+  // kullanıcıya ÖZEL ödül. challengeType null ise kampanya yalnız çarpan/bonus verir.
+  challengeType         String? // games_played | reviews_written (etkinlik penceresinde sayılır)
+  challengeGoal         Int? // hedef adet (ör. 5 oyun)
+  challengeRewardPoints Int? // hedef tamamlanınca verilen özel puan
+  challengeRewardBadgeId String? // opsiyonel özel rozet (Badge.id)
   isActive    Boolean  @default(true)
   startDate   DateTime
   endDate     DateTime
@@ -1767,6 +1773,19 @@ model SeasonalCampaign {
   @@index([isActive])
   @@index([startDate])
   @@index([endDate])
+}
+
+/// Sezonluk etkinlik challenge ödül talebi — bir kullanıcı, bir kampanyanın
+/// challenge ödülünü YALNIZCA BİR KEZ alır (atomik tek-claim).
+model SeasonalChallengeClaim {
+  id         String   @id @default(cuid())
+  userId     String
+  campaignId String
+  points     Int
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, campaignId])
+  @@index([campaignId])
 }
 
 /// Dönemsel konsept: bir tarih penceresinde tek pakette site temasını değiştirir

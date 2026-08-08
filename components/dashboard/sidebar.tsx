@@ -300,6 +300,7 @@ const customerNavItems: NavItem[] = [
   { key: 'donations', labelKey: 'donations', href: '/customer/donations', icon: Heart, groupKey: 'rewards' },
   // 8) QGameX
   { key: 'games_hub', labelKey: 'games_hub', href: '/customer/games', icon: Gamepad2, groupKey: 'games' },
+  { key: 'event_center', labelKey: 'event_center', href: '/customer/event', icon: PartyPopper, groupKey: 'games' },
   { key: 'squads', labelKey: 'squads', href: '/customer/squads', icon: Users2, groupKey: 'games' },
   { key: 'leaderboard', labelKey: 'leaderboard', href: '/customer/leaderboard', icon: Trophy, groupKey: 'games' },
   // 9) Ayarlar (grupsuz)
