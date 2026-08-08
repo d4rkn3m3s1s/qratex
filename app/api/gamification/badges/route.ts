@@ -250,6 +250,7 @@ export async function GET(request: NextRequest) {
         earned: isEarned,
         earnedAt: userBadgeMap.get(badge.id) || null,
         earnedCount: badge._count.users,
+        hiddenUntilEarned: badge.hiddenUntilEarned,
         // Admin yönetim meta: dizi rozeti mi + dizi alt-kategorisi (Normal|Dizi sekmesi).
         isCharacter: adminManage ? charBadgeIdSet.has(badge.id) : undefined,
         seriesCategoryKey: seriesCat?.key ?? null,
@@ -257,17 +258,24 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // SÜRPRİZ ROZET GİZLEME: müşteri modunda (adminManage değil), hiddenUntilEarned=true
+    // olan rozetler KAZANILMADIYSA listeden çıkar → müşteri önden göremez (sürpriz korunur).
+    // Admin yönetim modunda hepsi görünür.
+    const visibleBadges = adminManage
+      ? transformedBadges
+      : transformedBadges.filter((b) => !b.hiddenUntilEarned || b.earned);
+
     // Sort: earned first, then by progress
-    transformedBadges.sort((a, b) => {
+    visibleBadges.sort((a, b) => {
       if (a.earned && !b.earned) return -1;
       if (!a.earned && b.earned) return 1;
       return b.progress - a.progress;
     });
 
     const userPoints = userId ? userProgress.totalPoints : 0;
-    return NextResponse.json({ 
-      success: true, 
-      data: transformedBadges,
+    return NextResponse.json({
+      success: true,
+      data: visibleBadges,
       userProgress,
       userPoints,
     }, { headers: PRIVATE_NO_STORE_HEADERS });
@@ -304,6 +312,7 @@ export async function POST(request: NextRequest) {
         isActive: body.isActive ?? true,
         color: sanitizeHexColor(body.color),
         bgColor: sanitizeHexColor(body.bgColor),
+        hiddenUntilEarned: body.hiddenUntilEarned === true,
       },
     });
 

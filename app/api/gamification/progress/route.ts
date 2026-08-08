@@ -169,6 +169,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sürpriz rozetler client-talebiyle verilemez — yalnız sunucu-award (surprise-badges)
+    // koşul sağlanınca otomatik verir (badgeId tahminiyle sürpriz atlanamasın).
+    if (badge.hiddenUntilEarned) {
+      return NextResponse.json(
+        { success: false, error: 'Bu rozet yalnızca kazanılarak açılır.' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
     // Check if already earned
     const existingBadge = await prisma.userBadge.findUnique({
       where: {

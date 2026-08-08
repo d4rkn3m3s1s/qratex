@@ -522,11 +522,22 @@ export async function POST(request: NextRequest) {
       // NOT: Karakter rozeti sistemi artık YALNIZCA tüketim yorumlarını (ConsumptionReview)
       // baz alır — QR feedback'i saymaz. Tetikleme review route'unda.
 
+      // Sürpriz rozet: yorum sayısı arttı → gizli (hiddenUntilEarned) rozetlerin koşulu
+      // sağlandıysa otomatik ver (fire-and-forget; müşteri göremediği için buton yok).
+      if (session?.user?.id) {
+        const uid = session.user.id;
+        import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+      }
+
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
       return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const resBody = { success: true, feedback };
+    if (session?.user?.id) {
+      const uid = session.user.id;
+      import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+    }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

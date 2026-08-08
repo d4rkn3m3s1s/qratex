@@ -605,6 +605,9 @@ model Badge {
   // böylece admin rozet-başına canlı renk/arka plan verebilir. null = rarity varsayılanı.
   color       String? // vurgu rengi (hex, ör. "#d946ef") — çerçeve/metin/parıltı
   bgColor     String? // arka plan/gradient bitiş rengi (hex) — kart zemini
+  // Sürpriz rozet: true ise müşteride KAZANILANA KADAR GİZLİ (dizi karakterleri gibi).
+  // Kazanılınca koleksiyonda açılır + "sürpriz rozet!" hissi. Admin toggle'ı. false = normal.
+  hiddenUntilEarned Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

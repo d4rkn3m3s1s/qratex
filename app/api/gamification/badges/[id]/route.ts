@@ -77,6 +77,7 @@ export async function PATCH(
         // Renk: alan gövdede varsa güncelle (boş string/null → temizle = rarity varsayılanına dön).
         ...('color' in body ? { color: sanitizeHexColor(body.color) } : {}),
         ...('bgColor' in body ? { bgColor: sanitizeHexColor(body.bgColor) } : {}),
+        ...('hiddenUntilEarned' in body ? { hiddenUntilEarned: body.hiddenUntilEarned === true } : {}),
       },
     });
 

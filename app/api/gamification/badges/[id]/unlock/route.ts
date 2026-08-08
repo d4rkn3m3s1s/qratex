@@ -38,6 +38,13 @@ export async function POST(
         { success: false, error: 'Bu rozet puanla açılamaz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
+    // Sürpriz rozetler puanla SATIN ALINAMAZ — yalnız koşul sağlanınca otomatik açılır
+    // (aksi halde müşteri badgeId tahmin edip sürprizi satın alarak bozabilirdi).
+    if (badge.hiddenUntilEarned) {
+      return NextResponse.json(
+        { success: false, error: 'Bu rozet yalnızca kazanılarak açılır.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
     const existing = await prisma.userBadge.findUnique({
       where: {
         userId_badgeId: { userId: session.user.id, badgeId },

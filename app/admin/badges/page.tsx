@@ -80,6 +80,7 @@ interface BadgeType {
   isActive: boolean;
   color?: string | null;
   bgColor?: string | null;
+  hiddenUntilEarned?: boolean;
   // Admin yönetim meta (?admin=1): dizi rozeti mi + dizi alt-kategorisi.
   isCharacter?: boolean;
   seriesCategoryKey?: string | null;
@@ -305,6 +306,7 @@ export default function AdminBadgesPage() {
     isActive: true,
     color: '' as string,   // '' = rarity varsayılan rengi kullan
     bgColor: '' as string, // '' = rarity varsayılan zemini kullan
+    hiddenUntilEarned: false, // true = müşteride gizli, kazanılınca sürpriz açılır
   });
 
   useEffect(() => {
@@ -519,6 +521,7 @@ export default function AdminBadgesPage() {
       isActive: true,
       color: '',
       bgColor: '',
+      hiddenUntilEarned: false,
     });
     setIconSearch('');
   };
@@ -537,6 +540,7 @@ export default function AdminBadgesPage() {
       isActive: badge.isActive,
       color: badge.color ?? '',
       bgColor: badge.bgColor ?? '',
+      hiddenUntilEarned: badge.hiddenUntilEarned ?? false,
     });
     setIconSearch('');
     setEditDialogOpen(true);
@@ -812,6 +816,19 @@ export default function AdminBadgesPage() {
         <Switch
           checked={formData.isActive}
           onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+        />
+      </div>
+      {/* Sürpriz rozet: müşteride kazanılana kadar gizli (dizi karakterleri gibi). */}
+      <div className="flex items-center justify-between p-3 rounded-lg bg-fuchsia-500/5 border border-fuchsia-500/20">
+        <div>
+          <Label>🎭 Müşteride Gizli (Sürpriz)</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Açıksa müşteri bu rozeti önceden GÖREMEZ; koşulu sağlanınca otomatik açılır + &quot;sürpriz rozet!&quot; bildirimi.
+          </p>
+        </div>
+        <Switch
+          checked={formData.hiddenUntilEarned}
+          onCheckedChange={(checked) => setFormData({ ...formData, hiddenUntilEarned: checked })}
         />
       </div>
       <DialogFooter>
