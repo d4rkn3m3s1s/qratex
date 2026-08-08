@@ -42,7 +42,10 @@ function initials(name?: string | null): string {
 }
 
 type RarestRow = {
-  badgeId: string;
+  // Gerçek badgeId yalnızca isMine satırlarında; başkalarınınki null (kimlik sızmaz).
+  badgeId: string | null;
+  // Stabil React key (gizli satırlarda opak 'rare-N'; kendi rozetinde gerçek badgeId).
+  rowKey: string;
   // name/icon/category yalnızca KENDİ karakterin için dolu (isMine=true); başkalarınınki null (sürpriz).
   name: string | null;
   icon: string | null;
@@ -164,7 +167,7 @@ export function CharacterLeaderboard() {
         ) : isRarest ? (
           <ol className="space-y-2">
             {(rarest ?? []).map((row, i) => (
-              <RarestItem key={row.badgeId} row={row} rank={i + 1} />
+              <RarestItem key={row.rowKey} row={row} rank={i + 1} />
             ))}
           </ol>
         ) : (

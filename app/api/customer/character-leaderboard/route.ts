@@ -117,9 +117,11 @@ export async function GET(request: NextRequest) {
         const ratePct = totalCustomers > 0 ? Math.round((holders / totalCustomers) * 1000) / 10 : null;
         const isMine = mineSet.has(g.badgeId);
         return {
-          badgeId: g.badgeId,
-          // Sürpriz: kullanıcının SAHİP OLMADIĞI karakterlerin adı/görseli/kategorisi
-          // istemciye SIZMAZ (UI gizli gösterse de veri de sızmasın). Kendi rozetin açık.
+          // İç sıralama için gerçek badgeId (yanıttan önce maskelenir).
+          _sortKey: g.badgeId,
+          // Sürpriz: kullanıcının SAHİP OLMADIĞI karakterin KİMLİĞİ (badgeId dahil) istemciye
+          // SIZMAZ — badge-walter-white gibi id'ler adı ele verirdi. Kendi rozetin açık.
+          badgeId: isMine ? g.badgeId : null,
           name: isMine ? (cat?.name ?? g.badgeId) : null,
           icon: isMine ? (cat?.icon ?? '/logo/logo.png') : null,
           category: isMine ? categoryOf(g.badgeId) : null,
@@ -129,11 +131,18 @@ export async function GET(request: NextRequest) {
           isMine,
         };
       })
-      // En nadir (en az holder) önce; eşitlikte badgeId ile stabil (name gizli olabilir).
-      .sort((a, b) => a.holders - b.holders || a.badgeId.localeCompare(b.badgeId, 'tr'));
+      // En nadir (en az holder) önce; eşitlikte gerçek badgeId ile stabil (yanıtta gizli).
+      .sort((a, b) => a.holders - b.holders || a._sortKey.localeCompare(b._sortKey, 'tr'));
+
+    // İstemciye giden liste: gizli satırlar için opak, sıra-tabanlı stabil key (React key +
+    // sürpriz koruması). Gerçek badgeId yalnızca isMine satırlarında kalır.
+    const leaderboard = rows.map(({ _sortKey, ...r }, i) => ({
+      ...r,
+      rowKey: r.isMine ? _sortKey : `rare-${i}`,
+    }));
 
     return NextResponse.json(
-      { success: true, mode, totalCustomers, leaderboard: rows },
+      { success: true, mode, totalCustomers, leaderboard },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (error) {

@@ -184,27 +184,34 @@ export async function classifyCharacter(userId: string): Promise<CharacterClassi
  * İdempotent: aynı rozet ikinci kez atanmaz (@@unique([userId, badgeId])).
  * Kullanıcının önceki karakter rozetlerini (varsa) kaldırmaz — koleksiyon olarak birikir.
  */
+/**
+ * Bir karakter Badge kaydının DB'de var olmasını garanti eder (seed eksikliğine
+ * dayanıklı — yoksa KATALOGDAN otomatik oluşturur). İdempotent (upsert). Rozet
+ * ATAMAZ, yalnızca Badge tanımını hazırlar. Döndürür: badge var/oluşturuldu mu.
+ */
+export async function ensureCharacterBadgeRecord(badgeId: string): Promise<{ id: string; name: string } | null> {
+  const badge = await prisma.badge.findUnique({ where: { id: badgeId }, select: { id: true, name: true } });
+  if (badge) return badge;
+  const { BADGE_CATALOG } = await import('@/lib/badge-catalog');
+  const cat = BADGE_CATALOG.find((b) => b.id === badgeId);
+  if (!cat) return null; // katalogda da yoksa gerçekten geçersiz
+  return prisma.badge.upsert({
+    where: { id: badgeId },
+    update: {},
+    create: {
+      id: cat.id, name: cat.name, description: cat.description ?? '',
+      icon: cat.icon ?? '/logo/logo.png', category: cat.category ?? 'special',
+      rarity: cat.rarity ?? 'legendary', pointCost: cat.pointCost ?? null, isActive: true,
+      requirement: { type: 'character', value: 1 } as object,
+    },
+    select: { id: true, name: true },
+  }).catch(() => null);
+}
+
 export async function awardCharacterBadge(userId: string, badgeId: string): Promise<boolean> {
-  // Badge kaydı DB'de var mı? Yoksa KATALOGDAN otomatik oluştur (seed eksikliğine
-  // dayanıklı — hiçbir karakter "DB'de yok" diye atlanmaz).
-  let badge = await prisma.badge.findUnique({ where: { id: badgeId }, select: { id: true, name: true } });
-  if (!badge) {
-    const { BADGE_CATALOG } = await import('@/lib/badge-catalog');
-    const cat = BADGE_CATALOG.find((b) => b.id === badgeId);
-    if (!cat) return false; // katalogda da yoksa gerçekten geçersiz
-    badge = await prisma.badge.upsert({
-      where: { id: badgeId },
-      update: {},
-      create: {
-        id: cat.id, name: cat.name, description: cat.description ?? '',
-        icon: cat.icon ?? '/logo/logo.png', category: cat.category ?? 'special',
-        rarity: cat.rarity ?? 'legendary', pointCost: cat.pointCost ?? null, isActive: true,
-        requirement: { type: 'character', value: 1 } as object,
-      },
-      select: { id: true, name: true },
-    }).catch(() => null);
-    if (!badge) return false;
-  }
+  // Badge kaydı DB'de var mı? Yoksa KATALOGDAN otomatik oluştur (seed eksikliğine dayanıklı).
+  const badge = await ensureCharacterBadgeRecord(badgeId);
+  if (!badge) return false;
 
   const existing = await prisma.userBadge.findUnique({
     where: { userId_badgeId: { userId, badgeId } },
@@ -515,16 +522,58 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
 export async function revealReadyCategoryBadge(userId: string): Promise<CharacterClassification> {
   const prog = await getCategoryProgress(userId);
   if (!prog.ready || !prog.topCategoryKey) return null;
-  const picked = await pickCharacterInCategory(userId, prog.topCategoryKey);
+  const categoryKey = prog.topCategoryKey;
+  const picked = await pickCharacterInCategory(userId, categoryKey);
   if (!picked) return null;
-  await awardCharacterBadge(userId, picked.badgeId);
-  // Yeni karakter eklendi → koleksiyon başarımlarını kontrol et (idempotent, fire-and-forget;
-  // hata reveal akışını bozmaz). Hak edilen meta rozetleri verir + bildirim gönderir.
+
+  // ── ATOMİK EŞİK TÜKETİMİ (yarış koruması) ──
+  // İki eşzamanlı reveal isteği, tx dışı getCategoryProgress'te aynı "ready" durumunu
+  // okuyup TEK eşik döngüsünden ÇİFT karakter atayabilirdi (LLM temperature>0 farklı
+  // badgeId seçince unique kısıt da çakışmaz). Guard: rozet atamayı tek $transaction
+  // içinde yap; o kategoride TÜKETİLECEK eşik hâlâ geçerli mi tx içinde doğrula.
+  const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
+  const cat = CATEGORY_BY_KEY[categoryKey];
+  if (!cat) return null;
+
+  // Badge kaydını önceden hazırla (upsert tx dışında olabilir — idempotent, yarış yok).
+  await ensureCharacterBadgeRecord(picked.badgeId);
+
+  const created = await prisma.$transaction(async (tx) => {
+    // Bu kategoride ŞU AN sahip olunan rozet sayısı (tx içinde taze okuma).
+    const takenNow = await tx.userBadge.count({
+      where: { userId, badgeId: { in: cat.characterIds } },
+    });
+    // Bu kategorideki toplam (kategorize edilmiş) tüketim yorumu sayısı.
+    const totalReviews = await tx.consumptionReview.count({
+      where: { customerId: userId, characterCategory: categoryKey },
+    });
+    // Eşik hâlâ tüketilebilir mi? (total - takenNow*6 >= 6). Değilse başka istek aldı → iptal.
+    if (totalReviews - takenNow * CATEGORY_BADGE_THRESHOLD < CATEGORY_BADGE_THRESHOLD) {
+      return false;
+    }
+    // Seçilen karakter hâlâ alınmamış mı? (createMany + skipDuplicates atomik son savunma).
+    const res = await tx.userBadge.createMany({
+      data: [{ userId, badgeId: picked.badgeId }],
+      skipDuplicates: true,
+    });
+    if (res.count === 0) return false; // aynı badgeId zaten alınmış (unique guard)
+    return true;
+  });
+
+  if (!created) return null; // eşzamanlı istek eşiği tüketti → bu istek boş döner
+
+  // Bildirim + koleksiyon başarımları (fire-and-forget; hata reveal'i bozmaz).
+  try {
+    await prisma.notification.create({
+      data: {
+        userId, type: 'badge', title: 'Yeni Karakter Rozeti! 🎭',
+        message: `Yorumlarına göre karakterin belirlendi: ${picked.name}`,
+      },
+    });
+  } catch { /* bildirim başarısız olsa da rozet atandı */ }
   try {
     const { checkCollectionAchievements } = await import('@/lib/character-achievements');
     await checkCollectionAchievements(userId);
-  } catch {
-    /* başarım kontrolü başarısız olsa da karakter atandı */
-  }
+  } catch { /* başarım kontrolü başarısız olsa da karakter atandı */ }
   return picked;
 }
