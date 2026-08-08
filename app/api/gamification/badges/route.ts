@@ -258,12 +258,17 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // SÜRPRİZ ROZET GİZLEME: müşteri modunda (adminManage değil), hiddenUntilEarned=true
-    // olan rozetler KAZANILMADIYSA listeden çıkar → müşteri önden göremez (sürpriz korunur).
-    // Admin yönetim modunda hepsi görünür.
+    // TAM SÜRPRİZ POLİTİKASI (Didar kararı): müşteri hiçbir rozeti ÖNDEN göremez —
+    // yalnızca KAZANDIĞI rozetleri görür (kilitli/ilerleme/satın alma yok, hepsi sürpriz).
+    //  - adminManage: hepsi görünür (yönetim).
+    //  - müşteri kendi listesi (userId + admin değil): SADECE earned.
+    //  - userId yok (genel/katalog önizleme, ör. admin olmayan public): eski davranış,
+    //    yalnız hiddenUntilEarned olanları gizle (geriye dönük güvenli).
     const visibleBadges = adminManage
       ? transformedBadges
-      : transformedBadges.filter((b) => !b.hiddenUntilEarned || b.earned);
+      : userId
+        ? transformedBadges.filter((b) => b.earned)
+        : transformedBadges.filter((b) => !b.hiddenUntilEarned);
 
     // Sort: earned first, then by progress
     visibleBadges.sort((a, b) => {

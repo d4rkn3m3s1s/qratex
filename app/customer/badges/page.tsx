@@ -347,7 +347,8 @@ export default function CustomerBadgesPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <div className="flex gap-2">
-          {(['all', 'earned', 'locked'] as const).map((f) => (
+          {/* TAM SÜRPRİZ: kilitli rozet gösterilmez (hepsi sürpriz) → yalnız Tümü/Kazandıklarım. */}
+          {(['all', 'earned'] as const).map((f) => (
             <Button
               key={f}
               variant={filter === f ? 'default' : 'outline'}
@@ -357,7 +358,6 @@ export default function CustomerBadgesPage() {
             >
               {f === 'all' && t('common.all')}
               {f === 'earned' && <><Trophy className="w-4 h-4" /> {t('customerBadges.earned')}</>}
-              {f === 'locked' && <><Lock className="w-4 h-4" /> {t('customerBadges.locked')}</>}
             </Button>
           ))}
         </div>
@@ -405,6 +405,21 @@ export default function CustomerBadgesPage() {
             </Card>
           ))}
         </div>
+      ) : filteredBadges.length === 0 ? (
+        /* TAM SÜRPRİZ boş durum — hiç rozet kazanılmadıysa gizemli davet (rozet listesi
+           gösterilmez; kullanıcı hangi rozetler var bilmez, kazandıkça keşfeder). */
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
+            <div className="grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-primary/15 to-fuchsia-500/15 text-4xl">
+              🎁
+            </div>
+            <p className="text-lg font-bold">Rozet koleksiyonun seni bekliyor</p>
+            <p className="max-w-md text-sm text-muted-foreground">
+              Rozetler bir sürpriz! Yorum yaz, tüket, keşfet — koşulları sağladıkça gizli rozetler
+              kendiliğinden açılır. Hangi rozetlerin olduğunu önceden değil, kazandıkça öğrenirsin. ✨
+            </p>
+          </CardContent>
+        </Card>
       ) : categoryFilter === 'all' ? (
         /* Kategoriler halinde gruplu liste */
         <div className="space-y-10">

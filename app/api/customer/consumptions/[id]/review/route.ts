@@ -260,6 +260,12 @@ export async function POST(
         .catch(() => {});
     }
 
+    // Sürpriz rozet: yorum/puan arttı → koşulu sağlanan gizli rozetleri otomatik aç.
+    {
+      const uid = session.user.id;
+      import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+    }
+
     const resBody = {
       success: true,
       message: 'Yorumunuz kaydedildi!',

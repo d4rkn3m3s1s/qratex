@@ -784,28 +784,50 @@ export default function AdminBadgesPage() {
             </div>
           </div>
         </div>
-        {/* Canlı önizleme — kazanınca görülecek his */}
+        {/* Canlı önizleme — müşteri kartının BÜYÜK/net hâli (gizli rozet için "kazanılınca
+            böyle görünecek" der ki nasıl duracağı önden görülsün). */}
         {(() => {
           const style = badgeColorStyle(formData.color, formData.bgColor);
+          const rk = formData.rarity;
+          const rarityText =
+            rk === 'LEGENDARY' ? 'Efsanevi' : rk === 'EPIC' ? 'Epik' : rk === 'RARE' ? 'Nadir' : 'Yaygın';
           return (
-            <div
-              className="flex items-center gap-3 rounded-xl border p-3"
-              style={style ?? { borderColor: 'hsl(var(--border))' }}
-            >
-              <span
-                className="grid h-10 w-10 place-items-center rounded-lg text-lg"
-                style={style ? { background: style.background, color: style.color } : { background: 'hsl(var(--muted))' }}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                {formData.hiddenUntilEarned ? '🎭 Kazanılınca müşteride böyle görünecek:' : '👁 Müşteride böyle görünecek:'}
+              </p>
+              <div
+                className="mx-auto w-full max-w-[240px] rounded-2xl border-2 p-5 text-center"
+                style={
+                  style
+                    ? { background: style.background, borderColor: style.borderColor, boxShadow: style.boxShadow }
+                    : { borderColor: 'hsl(var(--border))', background: 'hsl(var(--muted) / 0.3)' }
+                }
               >
-                {formData.icon?.startsWith('/') ? '🏅' : '🏅'}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold" style={style ? { color: style.color } : undefined}>
-                  {formData.name || 'Rozet önizleme'}
+                {/* Yuvarlak rozet görseli */}
+                <div className="mx-auto mb-3 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-white ring-2 ring-white/40 shadow-inner">
+                  {formData.icon?.startsWith('/') ? (
+                    <Image src={formData.icon} alt="" width={110} height={110} className="scale-110" />
+                  ) : (
+                    <span className="text-4xl">🏅</span>
+                  )}
+                </div>
+                <p className="font-bold" style={style ? { color: style.color } : undefined}>
+                  {formData.name || 'Rozet Adı'}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {style ? 'Özel renk uygulandı' : 'Nadirlik varsayılan rengi'}
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {formData.description || 'Rozet açıklaması burada görünür.'}
                 </p>
+                <span
+                  className="mt-2 inline-block rounded-full px-3 py-0.5 text-[11px] font-bold text-white"
+                  style={style ? { background: style.color } : { background: 'hsl(var(--muted-foreground))' }}
+                >
+                  {rarityText}
+                </span>
               </div>
+              <p className="text-center text-[11px] text-muted-foreground">
+                {style ? '🎨 Özel renk uygulandı' : 'Nadirlik varsayılan rengi (renk girilmedi)'}
+              </p>
             </div>
           );
         })()}

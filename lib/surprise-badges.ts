@@ -1,11 +1,12 @@
 /**
- * Sürpriz rozet otomatik-award: hiddenUntilEarned=true rozetler müşteriye GİZLİ olduğu
- * için "kazan" butonuyla alınamaz — koşulu sağlanınca SUNUCU otomatik verir + bildirim
- * ("sürpriz rozet kazandın!"). Feedback/consumption/streak gibi olaylardan sonra fire-and-forget
- * çağrılır. İdempotent: zaten sahip olunan rozet tekrar verilmez (unique guard).
+ * Sürpriz rozet otomatik-award. TAM SÜRPRİZ POLİTİKASI (Didar): müşteri hiçbir rozeti
+ * önden görmez, "kazan"/"satın al" butonu yok — koşulu (requirement) sağlanınca SUNUCU
+ * otomatik verir + "sürpriz rozet kazandın!" bildirimi. Feedback/consumption/streak gibi
+ * olaylardan sonra fire-and-forget çağrılır. İdempotent (unique guard).
  *
- * Karakter (dizi) rozetleri buraya DAHİL DEĞİL — onların kendi AI-tabanlı akışı var
- * (character-badges). Bu yalnız requirement-tabanlı gizli rozetler içindir.
+ * TÜM requirement-tabanlı aktif rozetler adaydır (yalnız hiddenUntilEarned değil) — çünkü
+ * artık hepsi müşteride gizli. Karakter (dizi) rozetleri DAHİL DEĞİL — onların kendi
+ * AI-tabanlı akışı var (character-badges).
  */
 import { prisma } from '@/lib/prisma';
 
@@ -74,10 +75,13 @@ export async function awardEligibleSurpriseBadges(
   try {
     const c = counters ?? (await loadUserBadgeCounters(userId));
 
-    // Aday: gizli + aktif rozetler (küçük küme). Kullanıcının sahip olduklarını dışla.
-    const [hidden, owned] = await Promise.all([
+    // Aday: TÜM aktif rozetler (artık hepsi müşteride gizli/sürpriz). Karakter (dizi)
+    // rozetleri hariç — onların kendi AI akışı var. Kullanıcının sahip olduklarını dışla.
+    const { CHARACTER_PROFILES } = await import('@/lib/character-badges');
+    const charIds = new Set(CHARACTER_PROFILES.map((c) => c.badgeId));
+    const [candidates, owned] = await Promise.all([
       prisma.badge.findMany({
-        where: { hiddenUntilEarned: true, isActive: true },
+        where: { isActive: true },
         select: { id: true, name: true, requirement: true },
       }),
       prisma.userBadge.findMany({ where: { userId }, select: { badgeId: true } }),
@@ -85,8 +89,9 @@ export async function awardEligibleSurpriseBadges(
     const ownedSet = new Set(owned.map((o) => o.badgeId));
 
     const awarded: string[] = [];
-    for (const badge of hidden) {
+    for (const badge of candidates) {
       if (ownedSet.has(badge.id)) continue;
+      if (charIds.has(badge.id)) continue; // dizi karakteri → kendi akışı (character-badges)
       const req = (badge.requirement ?? {}) as { type?: string; value?: number };
       const type = typeof req.type === 'string' ? req.type : 'custom';
       const target = typeof req.value === 'number' ? req.value : 0;
