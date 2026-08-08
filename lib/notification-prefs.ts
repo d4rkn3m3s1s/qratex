@@ -13,12 +13,12 @@
  * Böylece mevcut çalışan bildirimler bozulmaz (yeni alan geriye dönük uyumludur).
  */
 
-/** Bir bildirim kanalı: uygulama içi zil (app) veya e-posta (email). */
-export type NotificationChannel = 'app' | 'email';
+/** Bir bildirim kanalı: uygulama içi zil (app), e-posta (email) veya tarayıcı push. */
+export type NotificationChannel = 'app' | 'email' | 'push';
 
 /** Tercih JSON'unun tip şekli (User.notificationPrefs). Tüm alanlar opsiyonel. */
 export type NotificationPrefs = {
-  [group: string]: { app?: boolean; email?: boolean } | undefined;
+  [group: string]: { app?: boolean; email?: boolean; push?: boolean } | undefined;
 };
 
 /** Bir bildirim TÜR GRUBUNUN tanımı (UI + eşleme için). */
@@ -62,7 +62,7 @@ export const NOTIFICATION_GROUPS: NotificationGroupDef[] = [
 export const NOTIFICATION_GROUP_KEYS: string[] = NOTIFICATION_GROUPS.map((g) => g.key);
 
 /** Geçerli kanallar. */
-export const NOTIFICATION_CHANNELS: NotificationChannel[] = ['app', 'email'];
+export const NOTIFICATION_CHANNELS: NotificationChannel[] = ['app', 'email', 'push'];
 
 /** Bir grup anahtarı geçerli mi? */
 export function isValidGroup(group: string): boolean {
@@ -71,7 +71,7 @@ export function isValidGroup(group: string): boolean {
 
 /** Bir kanal geçerli mi? */
 export function isValidChannel(channel: string): channel is NotificationChannel {
-  return channel === 'app' || channel === 'email';
+  return channel === 'app' || channel === 'email' || channel === 'push';
 }
 
 /**
@@ -145,11 +145,13 @@ export function sanitizeNotificationPrefs(input: unknown): NotificationPrefs {
   for (const group of NOTIFICATION_GROUP_KEYS) {
     const raw = (input as Record<string, unknown>)[group];
     if (!raw || typeof raw !== 'object') continue;
-    const entry: { app?: boolean; email?: boolean } = {};
+    const entry: { app?: boolean; email?: boolean; push?: boolean } = {};
     const appVal = (raw as Record<string, unknown>).app;
     const emailVal = (raw as Record<string, unknown>).email;
+    const pushVal = (raw as Record<string, unknown>).push;
     if (typeof appVal === 'boolean') entry.app = appVal;
     if (typeof emailVal === 'boolean') entry.email = emailVal;
+    if (typeof pushVal === 'boolean') entry.push = pushVal;
     if (Object.keys(entry).length > 0) out[group] = entry;
   }
   return out;
@@ -159,12 +161,13 @@ export function sanitizeNotificationPrefs(input: unknown): NotificationPrefs {
  * UI için tam (her grup için app+email dolu) tercih tablosu üretir; eksikler AÇIK (true).
  * Ayar ekranı toggle'ları bu tam tabloyu kullanır.
  */
-export function fullPrefsForUI(prefs: unknown): Record<string, { app: boolean; email: boolean }> {
-  const out: Record<string, { app: boolean; email: boolean }> = {};
+export function fullPrefsForUI(prefs: unknown): Record<string, { app: boolean; email: boolean; push: boolean }> {
+  const out: Record<string, { app: boolean; email: boolean; push: boolean }> = {};
   for (const g of NOTIFICATION_GROUPS) {
     out[g.key] = {
       app: isChannelEnabled(prefs, g.key, 'app'),
       email: isChannelEnabled(prefs, g.key, 'email'),
+      push: isChannelEnabled(prefs, g.key, 'push'),
     };
   }
   return out;

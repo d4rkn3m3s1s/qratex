@@ -21,23 +21,41 @@ async function createNotification(opts: {
   try {
     const kind = typeof opts.data?.kind === 'string' ? (opts.data.kind as string) : null;
     const group = kindToGroup(kind);
+
+    // Grup varsa tercihleri TEK sorguda oku (app + push kanalları). Grupsuz kind → her ikisi de açık.
+    let appEnabled = true;
+    let pushEnabled = true;
     if (group) {
-      // Yalnızca gruplu bildirimlerde tercih sorgula (grupsuz kind → daima gönder, DB okuma yok).
       const user = await prisma.user.findUnique({
         where: { id: opts.userId },
         select: { notificationPrefs: true },
       });
-      if (!isChannelEnabled(user?.notificationPrefs ?? null, group, 'app')) return; // app kapalı → yaratma
+      const prefs = user?.notificationPrefs ?? null;
+      appEnabled = isChannelEnabled(prefs, group, 'app');
+      pushEnabled = isChannelEnabled(prefs, group, 'push');
     }
-    await prisma.notification.create({
-      data: {
-        userId: opts.userId,
-        title: opts.title,
-        message: opts.message,
-        type: opts.type ?? 'info',
-        data: (opts.data ?? {}) as object,
-      },
-    });
+
+    // (1) In-app zil bildirimi — app kanalı açıksa.
+    if (appEnabled) {
+      await prisma.notification.create({
+        data: {
+          userId: opts.userId,
+          title: opts.title,
+          message: opts.message,
+          type: opts.type ?? 'info',
+          data: (opts.data ?? {}) as object,
+        },
+      });
+    }
+
+    // (2) Tarayıcı push — push kanalı açıksa (app'ten BAĞIMSIZ). Kullanıcının aktif
+    // aboneliği yoksa sendPushNotification zaten no-op. href varsa tıklama oraya gider.
+    if (pushEnabled) {
+      const href = typeof opts.data?.href === 'string' ? (opts.data.href as string) : undefined;
+      const { sendPushNotification } = await import('@/lib/push');
+      // Fire-and-forget: push gecikmesi/başarısızlığı bildirim akışını bloke etmesin.
+      void sendPushNotification(opts.userId, opts.title, opts.message, href).catch(() => {});
+    }
   } catch { /* bildirim hatası akışı bozmasın */ }
 }
 

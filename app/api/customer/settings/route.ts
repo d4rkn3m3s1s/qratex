@@ -61,10 +61,10 @@ const preferencesPatchSchema = z
   })
   .strict();
 
-// Tür bazında bildirim tercihleri (tür × kanal). Her grup için app/email boolean.
+// Tür bazında bildirim tercihleri (tür × kanal). Her grup için app/email/push boolean.
 // Yalnızca bilinen gruplar kabul edilir; geçersiz gruplar/kanallar sanitize ile atılır.
 const channelPrefSchema = z
-  .object({ app: z.boolean().optional(), email: z.boolean().optional() })
+  .object({ app: z.boolean().optional(), email: z.boolean().optional(), push: z.boolean().optional() })
   .strict();
 const notificationPrefsSchema = z
   .object(

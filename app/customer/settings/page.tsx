@@ -117,11 +117,11 @@ export default function CustomerSettingsPage() {
     pushReward: true,
   });
 
-  // TÜR BAZINDA bildirim tercihleri (her grup için app + email). Varsayılan hepsi AÇIK.
+  // TÜR BAZINDA bildirim tercihleri (her grup için app + email + push). Varsayılan hepsi AÇIK.
   const [notificationPrefs, setNotificationPrefs] = useState<
-    Record<string, { app: boolean; email: boolean }>
+    Record<string, { app: boolean; email: boolean; push: boolean }>
   >(() =>
-    Object.fromEntries(NOTIFICATION_GROUPS.map((g) => [g.key, { app: true, email: true }])),
+    Object.fromEntries(NOTIFICATION_GROUPS.map((g) => [g.key, { app: true, email: true, push: true }])),
   );
   const [savingPrefs, setSavingPrefs] = useState(false);
 
@@ -320,7 +320,7 @@ export default function CustomerSettingsPage() {
   const toggleNotificationPref = (group: string, channel: NotificationChannel, value: boolean) => {
     setNotificationPrefs((prev) => ({
       ...prev,
-      [group]: { ...(prev[group] ?? { app: true, email: true }), [channel]: value },
+      [group]: { ...(prev[group] ?? { app: true, email: true, push: true }), [channel]: value },
     }));
   };
 
@@ -739,7 +739,7 @@ export default function CustomerSettingsPage() {
                   Bildirim Türleri
                 </CardTitle>
                 <CardDescription>
-                  Her bildirim türünü Uygulama içi (zil) ve E-posta olarak ayrı ayrı açıp kapatın.
+                  Her bildirim türünü Uygulama içi (zil), E-posta ve Tarayıcı bildirimi (push) olarak ayrı ayrı açıp kapatın.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -747,9 +747,10 @@ export default function CustomerSettingsPage() {
                 <div className="hidden sm:flex items-center justify-end gap-8 pr-1 text-xs font-medium text-muted-foreground">
                   <span className="w-16 text-center">Uygulama</span>
                   <span className="w-16 text-center">E-posta</span>
+                  <span className="w-16 text-center">Push</span>
                 </div>
                 {NOTIFICATION_GROUPS.map((group) => {
-                  const pref = notificationPrefs[group.key] ?? { app: true, email: true };
+                  const pref = notificationPrefs[group.key] ?? { app: true, email: true, push: true };
                   return (
                     <div
                       key={group.key}
@@ -780,6 +781,16 @@ export default function CustomerSettingsPage() {
                               toggleNotificationPref(group.key, 'email', checked)
                             }
                             aria-label={`${group.label} — e-posta bildirimi`}
+                          />
+                        </label>
+                        <label className="flex flex-col items-center gap-1">
+                          <span className="text-xs text-muted-foreground sm:hidden">Push</span>
+                          <Switch
+                            checked={pref.push}
+                            onCheckedChange={(checked) =>
+                              toggleNotificationPref(group.key, 'push', checked)
+                            }
+                            aria-label={`${group.label} — tarayıcı push bildirimi`}
                           />
                         </label>
                       </div>
