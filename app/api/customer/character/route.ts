@@ -69,13 +69,16 @@ export async function GET() {
     })
     .filter(Boolean);
 
-  // Kategori vitrini: her kategoride KAÇ karakter toplandı (toplam GİZLİ).
+  // Kategori vitrini: SÜRPRİZ KORUMASI — kategoriler müşteriye ÖNDEN gösterilmez.
+  // Yalnızca kullanıcının EN AZ BİR karakter KAZANDIĞI kategoriler döner (kazandıkça
+  // öğrenilir). Hiç kazanılmamış kategorilerin adı/emoji'si SIZMAZ. total da gizli.
   const ownedSet = new Set(ownedIds);
-  const categoryStats = CHARACTER_CATEGORIES.map((c) => ({
-    key: c.key, name: c.name, emoji: c.emoji, accent: c.accent,
-    collected: c.characterIds.filter((id) => ownedSet.has(id)).length,
-    // total BİLİNÇLİ gönderilmiyor → "kaç tane daha var" gizli (merak korunur).
-  }));
+  const categoryStats = CHARACTER_CATEGORIES
+    .map((c) => ({
+      key: c.key, name: c.name, emoji: c.emoji, accent: c.accent,
+      collected: c.characterIds.filter((id) => ownedSet.has(id)).length,
+    }))
+    .filter((c) => c.collected > 0); // kazanılmamış kategori gösterilmez (kategori listesi gizli)
 
   // Kullanıcının profilinde seçtiği "ana karakter" (varsa).
   const featuredBadgeId = await prisma.user
