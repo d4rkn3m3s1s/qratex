@@ -81,22 +81,40 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
 
     // If userId is 'me', use session user
-    const userId = userIdParam === 'me' && session?.user?.id 
-      ? session.user.id 
+    const userId = userIdParam === 'me' && session?.user?.id
+      ? session.user.id
       : userIdParam;
 
-    const where: Record<string, unknown> = { isActive: true };
-    
+    // ADMIN yönetim modu: ?admin=1 ile YALNIZCA admin, karakter (dizi) rozetlerini de
+    // ve arşivli (isActive:false) rozetleri de görür/yönetir. Müşteriye asla açılmaz.
+    const isAdmin = session?.user?.role === 'ADMIN';
+    const adminManage = isAdmin && searchParams.get('admin') === '1';
+
+    const where: Record<string, unknown> = adminManage ? {} : { isActive: true };
+
     if (category) {
       where.category = normalizeBadgeCategory(category);
     }
 
-    // Karakter rozetleri bu genel listeden GİZLENİR — kullanıcı yalnızca kazandığı
-    // karakterleri (CharacterCard koleksiyonunda) görür, kilitli/diğer karakterleri
-    // göremez ve varlıklarından haberdar olmaz. (character-badges tek doğruluk kaynağı.)
-    const { CHARACTER_PROFILES } = await import('@/lib/character-badges');
-    const characterBadgeIds = CHARACTER_PROFILES.map((c) => c.badgeId);
-    (where as { id?: unknown }).id = { notIn: characterBadgeIds };
+    // Karakter rozetleri genel (müşteri) listesinden GİZLENİR — kullanıcı yalnızca kazandığı
+    // karakterleri (CharacterCard koleksiyonunda) görür. AMA admin yönetim modunda GÖRÜNÜR
+    // (Didar: dizi rozetleri admin panelinde yönetilebilmeli).
+    let charBadgeIdSet = new Set<string>();
+    let charCategoryByBadge = new Map<string, { key: string; name: string }>();
+    if (adminManage) {
+      // Dizi rozeti + alt-kategori haritası (admin sekmeleri için).
+      const { CHARACTER_PROFILES } = await import('@/lib/character-badges');
+      const { CATEGORY_BY_CHARACTER } = await import('@/lib/character-categories');
+      charBadgeIdSet = new Set(CHARACTER_PROFILES.map((c) => c.badgeId));
+      for (const bid of charBadgeIdSet) {
+        const cat = CATEGORY_BY_CHARACTER[bid];
+        if (cat) charCategoryByBadge.set(bid, { key: cat.key, name: cat.name });
+      }
+    } else {
+      const { CHARACTER_PROFILES } = await import('@/lib/character-badges');
+      const characterBadgeIds = CHARACTER_PROFILES.map((c) => c.badgeId);
+      (where as { id?: unknown }).id = { notIn: characterBadgeIds };
+    }
 
     const badges = await prisma.badge.findMany({
       where,
@@ -207,6 +225,8 @@ export async function GET(request: NextRequest) {
       const isEarned = userBadgeMap.has(badge.id);
 
       const normalizedCategory = normalizeBadgeCategory(badge.category);
+      // Dizi (karakter) rozeti mi + hangi dizi alt-kategorisinde (admin sekmeleri için).
+      const seriesCat = adminManage ? charCategoryByBadge.get(badge.id) ?? null : null;
       return {
         id: badge.id,
         name: badge.name,
@@ -217,6 +237,9 @@ export async function GET(request: NextRequest) {
         rarity: (badge.rarity || 'common').toUpperCase() as 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY',
         points: targetValue,
         pointCost: badge.pointCost ?? null,
+        color: badge.color ?? null,
+        bgColor: badge.bgColor ?? null,
+        isActive: badge.isActive,
         requirement: badge.description,
         requirementType,
         requirementPeriod,
@@ -227,6 +250,10 @@ export async function GET(request: NextRequest) {
         earned: isEarned,
         earnedAt: userBadgeMap.get(badge.id) || null,
         earnedCount: badge._count.users,
+        // Admin yönetim meta: dizi rozeti mi + dizi alt-kategorisi (Normal|Dizi sekmesi).
+        isCharacter: adminManage ? charBadgeIdSet.has(badge.id) : undefined,
+        seriesCategoryKey: seriesCat?.key ?? null,
+        seriesCategoryName: seriesCat?.name ?? null,
       };
     });
 

@@ -80,6 +80,10 @@ interface BadgeType {
   isActive: boolean;
   color?: string | null;
   bgColor?: string | null;
+  // Admin yönetim meta (?admin=1): dizi rozeti mi + dizi alt-kategorisi.
+  isCharacter?: boolean;
+  seriesCategoryKey?: string | null;
+  seriesCategoryName?: string | null;
   _count?: {
     userBadges: number;
   };
@@ -257,6 +261,9 @@ export default function AdminBadgesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRarity, setFilterRarity] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // Ana sekme: Normal rozetler vs Dizi (karakter) rozetleri. Dizi seçiliyken alt-kategori.
+  const [mainTab, setMainTab] = useState<'normal' | 'series'>('normal');
+  const [seriesSubCat, setSeriesSubCat] = useState<string>('all');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<BadgeType | null>(null);
@@ -310,9 +317,10 @@ export default function AdminBadgesPage() {
   const fetchBadges = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/gamification/badges');
+      // admin=1: karakter (dizi) rozetleri + arşivli rozetler dahil (yönetim modu).
+      const res = await fetch('/api/gamification/badges?admin=1');
       const data = await res.json();
-      
+
       if (data.success) {
         setBadges(data.data);
       }
@@ -534,10 +542,27 @@ export default function AdminBadgesPage() {
     setEditDialogOpen(true);
   };
 
+  // Dizi alt-kategorileri (character-categories ile aynı sıra). "gizemli" = kategorisiz
+  // dizi rozetleri için yer tutucu (henüz kategoriye atanmamış karakterler).
+  const seriesSubCategories = [
+    { key: 'dram-suc', name: 'Dram / Suç' },
+    { key: 'komedi', name: 'Komedi' },
+    { key: 'fantastik', name: 'Fantastik' },
+    { key: 'gizem-gerilim', name: 'Gizem / Gerilim' },
+    { key: '__none', name: 'Gizemli (kategorisiz)' },
+  ];
+
   const filteredBadges = badges.filter((badge) => {
     const matchesSearch = badge.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRarity = filterRarity === 'all' || badge.rarity === filterRarity;
-    return matchesSearch && matchesRarity;
+    // Ana sekme: Normal (dizi olmayan) vs Dizi (karakter) rozetleri.
+    const isSeries = !!badge.isCharacter;
+    const matchesTab = mainTab === 'series' ? isSeries : !isSeries;
+    // Dizi sekmesinde alt-kategori filtresi.
+    const matchesSub =
+      mainTab !== 'series' || seriesSubCat === 'all' ||
+      (seriesSubCat === '__none' ? !badge.seriesCategoryKey : badge.seriesCategoryKey === seriesSubCat);
+    return matchesSearch && matchesRarity && matchesTab && matchesSub;
   });
 
   // Stats
@@ -1002,6 +1027,48 @@ export default function AdminBadgesPage() {
           );
         })}
       </div>
+
+      {/* Ana sekme: Normal Rozetler | Dizi Rozetleri */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-xl border border-border bg-muted/40 p-1">
+          <button
+            onClick={() => setMainTab('normal')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${mainTab === 'normal' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            🏅 Normal Rozetler
+          </button>
+          <button
+            onClick={() => setMainTab('series')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${mainTab === 'series' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            🎭 Dizi Rozetleri
+          </button>
+        </div>
+        {mainTab === 'series' && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setSeriesSubCat('all')}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${seriesSubCat === 'all' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+            >
+              Tümü
+            </button>
+            {seriesSubCategories.map((sc) => (
+              <button
+                key={sc.key}
+                onClick={() => setSeriesSubCat(sc.key)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${seriesSubCat === sc.key ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+              >
+                {sc.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {mainTab === 'series' && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          🔒 Dizi (karakter) rozetleri müşteride GİZLİDİR — kazandıkça açılır. Buradan renk/açıklama/nadirlik/aktiflik ayarlanır. Silmek yerine pasif yapılabilir (sonra tekrar aktif).
+        </p>
+      )}
 
       {/* Actions */}
       <div className="flex flex-col lg:flex-row gap-4 justify-between">
