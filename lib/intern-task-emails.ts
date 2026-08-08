@@ -8,9 +8,8 @@
  */
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { buildTransactionalEmailHtml, buildTransactionalPlainText } from '@/lib/transactional-email';
-import { getTransactionalEmailLogoUrl } from '@/lib/transactional-email';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { QRATEX_WORDMARK_DATA_URI } from '@/lib/brand-logo-data';
 
 export const INTERN_EMAILS_SETTING_KEY = 'intern_task_emails';
 export const INTERN_EMAILS_SETTING_CATEGORY = 'email';
@@ -437,92 +436,200 @@ export async function saveInternTaskEmails(list: InternTaskEmail[]): Promise<voi
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GÜZEL HTML RENDER — buildTransactionalEmailHtml (2026 redesign) üstüne stajyer
-// görev maili: departman rozeti + kişisel hoş geldin + son teslim uyarı kutusu.
+// ÇOK GÜZEL ÖZEL HTML RENDER — kendi kurumsal tasarımı: koyu gradient hero + GÖMÜLÜ
+// beyaz logo (domain gerekmez) + departman renkli rozet + şık gövde + son teslim kartı.
 // ════════════════════════════════════════════════════════════════════════════
 
-/** Departman → emoji (mailde görsel ipucu). */
-function departmentEmoji(dept: string): string {
+
+/** Departman → { emoji, renk } — mailde görsel kimlik (her departmanın kendi rengi). */
+function departmentTheme(dept: string): { emoji: string; color: string; soft: string } {
   const d = dept.toLowerCase();
-  if (d.includes('hukuk')) return '⚖️';
-  if (d.includes('iş gel') || d.includes('is gel')) return '📊';
-  if (d.includes('pazarlama')) return '🎯';
-  if (d.includes('sosyal')) return '📱';
-  if (d.includes('dizayn') || d.includes('deneyim')) return '🎨';
-  if (d.includes('üretim') || d.includes('gelişt')) return '⚙️';
-  return '✨';
+  if (d.includes('hukuk')) return { emoji: '⚖️', color: '#0ea5e9', soft: '#0ea5e91a' };
+  if (d.includes('iş gel') || d.includes('is gel')) return { emoji: '📊', color: '#10b981', soft: '#10b9811a' };
+  if (d.includes('pazarlama')) return { emoji: '🎯', color: '#f43f5e', soft: '#f43f5e1a' };
+  if (d.includes('sosyal')) return { emoji: '📱', color: '#8b5cf6', soft: '#8b5cf61a' };
+  if (d.includes('dizayn') || d.includes('deneyim')) return { emoji: '🎨', color: '#ec4899', soft: '#ec48991a' };
+  if (d.includes('üretim') || d.includes('gelişt')) return { emoji: '⚙️', color: '#f59e0b', soft: '#f59e0b1a' };
+  return { emoji: '✨', color: '#9333ea', soft: '#9333ea1a' };
 }
 
-/** Düz metin gövdeyi güvenli HTML paragraflarına çevirir (satır sonları korunur). */
-function bodyToHtml(body: string): string {
-  const esc = (s: string) => s
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-  // Boş satırla ayrılmış blokları paragraf, tek satır sonlarını <br> yap.
-  return body
-    .split(/\n{2,}/)
-    .map((para) => `<p style="margin:0 0 16px;line-height:1.7;color:#334155;font-size:15px;">${esc(para).replace(/\n/g, '<br/>')}</p>`)
-    .join('');
+/** HTML-escape (XSS koruması). */
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /**
- * Bir stajyer görev maili için ÇOK GÜZEL HTML üretir. heading = departman rozeti + görev,
- * gövde = kişisel hitap + görev metni, extraHtml = son teslim uyarı kutusu.
- * trackToken verilirse gövde sonuna görünmez tracking pixel eklenir (açılma takibi).
+ * Görev gövdesini ŞIK HTML'e çevirir: "1. Başlık" / "N." ile başlayan satırlar numaralı
+ * bölüm başlığı olur; "•" madde işaretli satırlar şık liste olur; diğerleri paragraf.
+ */
+function prettyBody(body: string, color: string): string {
+  const blocks = body.split(/\n{2,}/);
+  const out: string[] = [];
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    // Numaralı ana başlık (ör. "1. Pazar Analizi") — ilk satır ise vurgulu bölüm.
+    const firstNumbered = /^\s*\d+\.\s/.test(lines[0]);
+    const rows: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const bullet = /^\s*[•\-]\s+/.test(line);
+      const numHead = i === 0 && firstNumbered;
+      if (numHead) {
+        rows.push(`<p style="margin:22px 0 8px;font-size:16px;font-weight:800;color:#0f172a;">${escHtml(line.trim())}</p>`);
+      } else if (bullet) {
+        const txt = line.replace(/^\s*[•\-]\s+/, '');
+        rows.push(`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 6px;"><tr>
+          <td style="vertical-align:top;padding:2px 10px 0 2px;"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};"></span></td>
+          <td style="font-size:14.5px;line-height:1.65;color:#475569;">${escHtml(txt)}</td></tr></table>`);
+      } else {
+        rows.push(`<p style="margin:0 0 12px;font-size:14.5px;line-height:1.7;color:#475569;">${escHtml(line)}</p>`);
+      }
+    }
+    out.push(rows.join(''));
+  }
+  return out.join('');
+}
+
+const EMAIL_HEAD = `<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="x-apple-disable-message-reformatting"/>
+<title>QRateX</title>
+<!--[if mso]><style>* { font-family: Arial, sans-serif !important; }</style><![endif]-->
+</head>`;
+
+/**
+ * Bir stajyer görev maili için ÇOK GÜZEL, modern, kurumsal HTML üretir.
+ * - Koyu gradient hero + GÖMÜLÜ beyaz logo (domain gerekmez, asla kırılmaz).
+ * - Departman renkli rozet + karşılama.
+ * - Şık gövde (numaralı başlıklar + renkli madde işaretleri).
+ * - Dikkat çekici son teslim kartı.
+ * - trackToken verilirse görünmez açılma pixel'i.
  */
 export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: string): { html: string; text: string } {
-  const origin = getPublicAppOrigin();
-  const logoUrl = getTransactionalEmailLogoUrl(origin);
-  const emoji = departmentEmoji(tpl.department);
+  const origin = getPublicAppOrigin().replace(/\/$/, '');
+  const theme = departmentTheme(tpl.department);
+  const greetName = tpl.recipientName ? escHtml(tpl.recipientName) : 'Merhaba';
 
-  // Departman rozeti (renkli pill) — heading'in üstünde görsel kimlik.
-  const deptBadge = `
-    <div style="text-align:center;margin:0 0 18px;">
-      <span style="display:inline-block;padding:7px 16px;border-radius:999px;background:linear-gradient(135deg,#9333ea22,#e879f922);border:1px solid #9333ea44;color:#7c3aed;font-size:13px;font-weight:700;letter-spacing:0.3px;">
-        ${emoji}&nbsp;&nbsp;${tpl.department.toUpperCase()} DEPARTMANI
-      </span>
-    </div>`;
-
-  // Son teslim uyarı kutusu (dikkat çekici, amber).
-  const deadlineBox = `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 4px;">
-      <tr><td style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b55;border-radius:14px;padding:16px 18px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-          <td style="font-size:26px;width:44px;vertical-align:middle;">⏳</td>
-          <td style="vertical-align:middle;">
-            <div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#92400e;text-transform:uppercase;">Son Teslim Tarihi</div>
-            <div style="font-size:18px;font-weight:800;color:#78350f;margin-top:2px;">${INTERN_TASK_DEADLINE_LABEL}</div>
-            <div style="font-size:13px;color:#92400e;margin-top:3px;">Görev sonucunu bu tarih ve saate kadar iletmeni bekliyoruz.</div>
-          </td>
-        </tr></table>
-      </td></tr>
-    </table>`;
-
-  // Açılma takibi: görünmez 1x1 pixel (mail açılınca /api/track/email-open/<token> çağrılır).
   const pixel = trackToken
-    ? `<img src="${origin.replace(/\/$/, '')}/api/track/email-open/${encodeURIComponent(trackToken)}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;border:0;" />`
+    ? `<img src="${origin}/api/track/email-open/${encodeURIComponent(trackToken)}" width="1" height="1" alt="" style="display:none!important;width:1px;height:1px;opacity:0;overflow:hidden;" />`
     : '';
 
-  const heading = `${emoji} ${tpl.recipientName ? tpl.recipientName + ', görevin hazır!' : 'Görev Ataması'}`;
-  const bodyHtml = deptBadge + bodyToHtml(tpl.body) + pixel;
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+${EMAIL_HEAD}
+<body style="margin:0;padding:0;background:#eef2f7;-webkit-font-smoothing:antialiased;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">QRateX ekibinden görev ataması — son teslim ${escHtml(INTERN_TASK_DEADLINE_LABEL)}.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
 
-  const html = buildTransactionalEmailHtml({
-    heading,
-    bodyHtml,
-    extraHtml: deadlineBox,
-    footnoteHtml: 'Bu görev, QRateX ekibine katılım sürecinin bir parçasıdır. Soruların için bize her zaman ulaşabilirsin. 🚀 <b>ReverBot &amp; QRateX Ekibi</b>',
-    logoUrl,
-    brandLinkHref: origin,
-  });
-  const text = buildTransactionalPlainText({
-    heading,
-    bodyLines: [
-      `${tpl.department} Departmanı`,
-      '',
-      tpl.body,
-      '',
-      `⏳ Son teslim: ${INTERN_TASK_DEADLINE_LABEL}`,
-    ],
-  });
+        <!-- HERO: koyu gradient + gömülü beyaz logo + parıltı şeridi -->
+        <tr><td style="background:#0b0618;background:linear-gradient(135deg,#1a0a2e 0%,#0f0f1e 55%,#16213e 100%);padding:40px 40px 32px;text-align:center;">
+          <img src="${QRATEX_WORDMARK_DATA_URI}" width="150" alt="QRateX" style="display:block;margin:0 auto 20px;max-width:150px;height:auto;border:0;" />
+          <div style="display:inline-block;padding:8px 18px;border-radius:999px;background:${theme.soft};border:1px solid ${theme.color}55;">
+            <span style="font-size:13px;font-weight:800;letter-spacing:0.6px;color:${theme.color};">${theme.emoji}&nbsp;&nbsp;${escHtml(tpl.department.toUpperCase())} DEPARTMANI</span>
+          </div>
+        </td></tr>
+        <!-- Işıltı çizgisi -->
+        <tr><td style="height:4px;background:linear-gradient(90deg,${theme.color},#e879f9,${theme.color});"></td></tr>
+
+        <!-- GÖVDE -->
+        <tr><td style="padding:36px 40px 8px;">
+          <h1 style="margin:0 0 4px;font-size:24px;line-height:1.25;font-weight:800;color:#0f172a;">
+            ${theme.emoji} ${greetName}${tpl.recipientName ? ', görevin hazır!' : ''}
+          </h1>
+          <p style="margin:0 0 20px;font-size:14px;color:#94a3b8;">QRateX ekibine katılım sürecinin bir parçası olarak sana özel bir görev.</p>
+          ${prettyBody(tpl.body, theme.color)}
+        </td></tr>
+
+        <!-- SON TESLİM kartı (dikkat çekici) -->
+        <tr><td style="padding:8px 40px 4px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #f59e0b66;border-radius:16px;padding:18px 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td width="52" style="vertical-align:middle;"><div style="width:44px;height:44px;border-radius:12px;background:#f59e0b;text-align:center;line-height:44px;font-size:22px;">⏳</div></td>
+                <td style="vertical-align:middle;padding-left:8px;">
+                  <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:#b45309;text-transform:uppercase;">Son Teslim Tarihi</div>
+                  <div style="font-size:20px;font-weight:900;color:#78350f;margin-top:1px;">${escHtml(INTERN_TASK_DEADLINE_LABEL)}</div>
+                  <div style="font-size:13px;color:#92400e;margin-top:2px;">Görev sonucunu bu tarih ve saate kadar iletmeni bekliyoruz.</div>
+                </td>
+              </tr></table>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- İMZA -->
+        <tr><td style="padding:24px 40px 32px;">
+          <div style="border-top:1px solid #e2e8f0;padding-top:18px;">
+            <p style="margin:0;font-size:13px;line-height:1.7;color:#94a3b8;">
+              Bu görev, QRateX ekibine katılım sürecinin bir parçasıdır. Soruların için bize her zaman ulaşabilirsin. 🚀
+            </p>
+            <p style="margin:8px 0 0;font-size:14px;font-weight:800;color:#7c3aed;">ReverBot &amp; QRateX Ekibi</p>
+          </div>
+        </td></tr>
+
+        <!-- FOOTER -->
+        <tr><td style="background:#0f0f1e;padding:22px 40px;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#64748b;letter-spacing:0.3px;">QRateX · Yapay Zeka Destekli QR Geri Bildirim Platformu</p>
+          <p style="margin:6px 0 0;font-size:11px;color:#475569;">Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>
+        </td></tr>
+
+      </table>
+      ${pixel}
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const textLines = [
+    `${tpl.department} Departmanı`,
+    '',
+    tpl.body,
+    '',
+    `⏳ Son teslim: ${INTERN_TASK_DEADLINE_LABEL}`,
+    '',
+    'ReverBot & QRateX Ekibi',
+  ];
+  const text = textLines.join('\n');
   return { html, text };
+}
+
+/**
+ * Basit ama ŞIK markalı e-posta (cron hatırlatmaları için) — GÖMÜLÜ beyaz logolu koyu hero +
+ * beyaz kart gövdesi + opsiyonel CTA. Domain gerekmez (logo base64). renderInternTaskEmailHtml
+ * ile aynı görsel dil, ama serbest içerik.
+ */
+export function renderSimpleBrandedEmail(input: {
+  heading: string;
+  bodyHtml: string;
+  cta?: { href: string; label: string };
+  accent?: string;
+}): string {
+  const accent = input.accent || '#9333ea';
+  const cta = input.cta
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px auto 4px;"><tr><td style="border-radius:12px;background:linear-gradient(135deg,${accent},#e879f9);">
+        <a href="${input.cta.href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:13px 30px;font-size:15px;font-weight:800;color:#ffffff;text-decoration:none;">${input.cta.label}</a>
+       </td></tr></table>`
+    : '';
+  return `<!DOCTYPE html><html lang="tr">${EMAIL_HEAD}
+<body style="margin:0;padding:0;background:#eef2f7;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;"><tr><td align="center">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
+      <tr><td style="background:linear-gradient(135deg,#1a0a2e,#0f0f1e 55%,#16213e);padding:36px 40px 28px;text-align:center;">
+        <img src="${QRATEX_WORDMARK_DATA_URI}" width="140" alt="QRateX" style="display:block;margin:0 auto;max-width:140px;height:auto;border:0;" />
+      </td></tr>
+      <tr><td style="height:4px;background:linear-gradient(90deg,${accent},#e879f9,${accent});"></td></tr>
+      <tr><td style="padding:34px 40px 30px;">
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0f172a;">${escHtml(input.heading)}</h1>
+        ${input.bodyHtml}
+        ${cta}
+      </td></tr>
+      <tr><td style="background:#0f0f1e;padding:20px 40px;text-align:center;">
+        <p style="margin:0;font-size:12px;color:#64748b;">QRateX · Yapay Zeka Destekli QR Geri Bildirim Platformu</p>
+        <p style="margin:6px 0 0;font-size:11px;color:#475569;">Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>`;
 }

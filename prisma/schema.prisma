@@ -2819,6 +2819,8 @@ model CompanyTask {
   createdById  String
   dueAt        DateTime?
   completedAt  DateTime?
+  // Bitiş-günü hatırlatma maili gönderildi mi (cron çift göndermesin — idempotent).
+  dueReminderSentAt DateTime?
   // Onay akışı: üye görevi "review"e (Onayda) gönderir; yalnızca yönetici
   // onaylayıp "done" yapabilir. Reddedilirse "in_progress"e döner.
   submittedForReviewAt DateTime? // üye onaya gönderdiğinde damgalanır

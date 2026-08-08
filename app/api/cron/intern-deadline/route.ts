@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendTransactionalEmail, isMailConfigured } from '@/lib/mail-sender';
-import { getInternTaskEmails, INTERN_TASK_DEADLINE_LABEL } from '@/lib/intern-task-emails';
-import { buildTransactionalEmailHtml, buildTransactionalPlainText, getTransactionalEmailLogoUrl } from '@/lib/transactional-email';
-import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { getInternTaskEmails, INTERN_TASK_DEADLINE_LABEL, renderSimpleBrandedEmail } from '@/lib/intern-task-emails';
 import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -63,36 +61,22 @@ export async function GET(req: Request) {
       }
     }
 
-    const origin = getPublicAppOrigin();
-    const logoUrl = getTransactionalEmailLogoUrl(origin);
-
     let sent = 0;
     for (const [email, name] of recipients) {
-      const html = buildTransactionalEmailHtml({
-        heading: `⏳ Son gün: Görevini bugün teslim et!`,
+      const html = renderSimpleBrandedEmail({
+        heading: '⏳ Son gün: Görevini bugün teslim et!',
+        accent: '#f59e0b',
         bodyHtml: `
-          <p style="margin:0 0 16px;line-height:1.7;color:#334155;font-size:15px;">Merhaba${name ? ' ' + escapeName(name) : ''},</p>
-          <p style="margin:0 0 16px;line-height:1.7;color:#334155;font-size:15px;">
-            QRateX ekip görevinin son teslim tarihi <b>bugün</b> — <b>${INTERN_TASK_DEADLINE_LABEL}</b>.
+          <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">Merhaba${name ? ' ' + escapeName(name) : ''},</p>
+          <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">
+            QRateX ekip görevinin son teslim tarihi <b style="color:#b45309;">bugün</b> — <b style="color:#b45309;">${INTERN_TASK_DEADLINE_LABEL}</b>.
             Hazırladığın çalışmayı bu saate kadar iletmeni bekliyoruz. 🚀
           </p>
-          <p style="margin:0;line-height:1.7;color:#334155;font-size:15px;">
+          <p style="margin:0;line-height:1.7;color:#475569;font-size:15px;">
             Eğer çoktan tamamladıysan, teşekkürler! Bir sorun yaşarsan bize hemen yaz.
           </p>`,
-        footnoteHtml: 'Başarılar dileriz. <b>ReverBot &amp; QRateX Ekibi</b>',
-        logoUrl,
-        brandLinkHref: origin,
       });
-      const text = buildTransactionalPlainText({
-        heading: 'Son gün: Görevini bugün teslim et!',
-        bodyLines: [
-          `Merhaba${name ? ' ' + name : ''},`,
-          '',
-          `QRateX ekip görevinin son teslim tarihi bugün — ${INTERN_TASK_DEADLINE_LABEL}. Çalışmanı bu saate kadar ilet.`,
-          '',
-          'Başarılar dileriz. ReverBot & QRateX Ekibi',
-        ],
-      });
+      const text = `Merhaba${name ? ' ' + name : ''},\n\nQRateX ekip görevinin son teslim tarihi bugün — ${INTERN_TASK_DEADLINE_LABEL}. Çalışmanı bu saate kadar ilet.\n\nBaşarılar dileriz. ReverBot & QRateX Ekibi`;
       const r = await sendTransactionalEmail({ to: email, subject: '⏳ QRateX — Görev bugün teslim (son gün)', html, text });
       if (r.ok) sent++;
     }
