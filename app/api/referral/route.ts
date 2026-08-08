@@ -9,6 +9,12 @@ import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import {
+  REFERRAL_MILESTONES,
+  parseClaimedReferralMilestones,
+  claimableReferralMilestones,
+  referralProgress,
+} from '@/lib/referral-milestones';
 import { z } from 'zod';
 
 // GET - Get user's referral info
@@ -60,12 +66,34 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Stats
+    // Başarılı davet sayısı — milestone için GERÇEK count (liste take:20 ile sınırlı, o sayılmaz).
+    const completedCount = await prisma.referral.count({
+      where: { referrerId: session.user.id, status: 'COMPLETED' },
+    });
+
+    // Stats (liste 20 ile sınırlı; toplam kazanç için de gerçek toplam kullan).
     const stats = {
-      totalReferrals: referrals.length,
-      completedReferrals: referrals.filter((r) => r.status === 'COMPLETED').length,
+      totalReferrals: await prisma.referral.count({ where: { referrerId: session.user.id } }),
+      completedReferrals: completedCount,
       totalPointsEarned: referrals.reduce((sum, r) => sum + r.pointsEarned, 0),
     };
+
+    // Kademe (milestone) durumu: talep edilebilir kademeler + bir sonraki hedefe ilerleme.
+    const me = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { referralMilestonesClaimed: true },
+    });
+    const claimed = parseClaimedReferralMilestones(me?.referralMilestonesClaimed);
+    const milestones = {
+      all: REFERRAL_MILESTONES,
+      claimed,
+      claimable: claimableReferralMilestones(completedCount, claimed),
+      progress: referralProgress(completedCount),
+    };
+
+    // Gerçek ödül değerleri (UI'deki hardcoded 1000/500 tutarsızlığını gider).
+    const matrix = await getPointsMatrix();
+    const { referredPoints, referrerPoints } = getReferralRewards(matrix);
 
     return NextResponse.json({
       success: true,
@@ -73,6 +101,8 @@ export async function GET(req: NextRequest) {
       referrals,
       referredBy,
       stats,
+      milestones,
+      rewards: { referredPoints, referrerPoints },
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
@@ -249,5 +279,85 @@ export async function POST(req: NextRequest) {
     if (db) return db;
     console.error('Error applying referral code:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+  }
+}
+
+/**
+ * PUT - Ulaşılmış referral KADEME ödüllerini talep eder. Sunucu, başarılı davet sayısını
+ * yeniden sayar (istemciye güvenmez) ve talep edilebilir kademeleri ATOMİK olarak öder:
+ * User.referralMilestonesClaimed guard'lı updateMany ile idempotent (çift ödül imkânsız) +
+ * her kademe için points_credited (invariant #3). Aynı tx.
+ */
+export async function PUT() {
+  try {
+    const gate = await assertModuleEnabled('referrals');
+    if (gate) return gate;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const userId = session.user.id;
+
+    const completedCount = await prisma.referral.count({
+      where: { referrerId: userId, status: 'COMPLETED' },
+    });
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Talep durumunu tx içinde taze oku (yarış: iki eşzamanlı PUT çift ödemesin).
+      const u = await tx.user.findUnique({ where: { id: userId }, select: { referralMilestonesClaimed: true } });
+      const claimed = parseClaimedReferralMilestones(u?.referralMilestonesClaimed);
+      const claimable = claimableReferralMilestones(completedCount, claimed);
+      if (claimable.length === 0) return { awarded: 0, points: 0 };
+
+      const newClaimed = [...claimed, ...claimable.map((m) => m.count)].sort((a, b) => a - b);
+      // Guard: yalnızca claimed JSON'u tx başındaki değerle AYNIYSA güncelle. İki eşzamanlı
+      // PUT'tan biri güncellerse diğerinin `equals` filtresi tutmaz (count=0) → çift ödül yok.
+      const guard = await tx.user.updateMany({
+        where: {
+          id: userId,
+          referralMilestonesClaimed: claimed.length
+            ? { equals: u?.referralMilestonesClaimed as Prisma.InputJsonValue }
+            : { equals: Prisma.AnyNull },
+        },
+        data: { referralMilestonesClaimed: newClaimed },
+      });
+      if (guard.count === 0) return { awarded: 0, points: 0 }; // eşzamanlı istek aldı
+
+      let totalPoints = 0;
+      for (const m of claimable) {
+        await creditPointsAndXp(tx, { userId, points: m.points });
+        await tx.analyticsEvent.create({
+          data: {
+            userId, event: 'points_credited', category: 'referral_milestone',
+            data: { points: m.points, milestone: m.count },
+          },
+        });
+        totalPoints += m.points;
+      }
+      await tx.notification.create({
+        data: {
+          userId, type: 'success', title: '🎁 Davet kademesi ödülü!',
+          message: `${claimable.map((m) => m.label).join(', ')} açıldı — toplam +${totalPoints} puan kazandın!`,
+        },
+      });
+      return { awarded: claimable.length, points: totalPoints };
+    });
+
+    if (result.awarded === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Talep edilebilir kademe ödülü yok.' },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
+    return NextResponse.json(
+      { success: true, awarded: result.awarded, points: result.points, progress: referralProgress(completedCount) },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('Error claiming referral milestones:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

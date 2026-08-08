@@ -51,6 +51,18 @@ interface ReferralData {
     completedReferrals: number;
     totalPointsEarned: number;
   };
+  rewards?: { referredPoints: number; referrerPoints: number };
+  milestones?: {
+    all: { count: number; points: number; label: string }[];
+    claimed: number[];
+    claimable: { count: number; points: number; label: string }[];
+    progress: {
+      next: { count: number; points: number; label: string } | null;
+      current: number;
+      target: number | null;
+      ratio: number;
+    };
+  };
 }
 
 export default function CustomerReferralPage() {
@@ -65,6 +77,8 @@ export default function CustomerReferralPage() {
     fetchReferralData();
   }, []);
 
+  const [claimingMs, setClaimingMs] = useState(false);
+
   const fetchReferralData = async () => {
     try {
       const res = await fetch('/api/referral');
@@ -76,6 +90,22 @@ export default function CustomerReferralPage() {
       toast.error(t('customerReferral.loadError'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Ulaşılmış kademe ödüllerini talep et (sunucu doğrular + atomik öder).
+  const claimMilestones = async () => {
+    setClaimingMs(true);
+    try {
+      const res = await fetch('/api/referral', { method: 'PUT' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result?.error || 'Ödül alınamadı');
+      toast.success(`🎁 +${result.points} puan kazandın!`);
+      fetchReferralData();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Ödül alınamadı');
+    } finally {
+      setClaimingMs(false);
     }
   };
 
@@ -181,12 +211,12 @@ export default function CustomerReferralPage() {
             <div className="grid grid-cols-2 gap-4 mt-6">
               <div className="p-4 rounded-xl bg-primary/10 text-center">
                 <Gift className="h-6 w-6 text-primary mx-auto mb-2" />
-                <p className="text-2xl font-bold text-primary">1000</p>
+                <p className="text-2xl font-bold text-primary">{data?.rewards?.referrerPoints ?? '—'}</p>
                 <p className="text-xs text-muted-foreground">{t('customerReferral.pointsToYou')}</p>
               </div>
               <div className="p-4 rounded-xl bg-violet-500/10 text-center">
                 <Star className="h-6 w-6 text-violet-600 dark:text-violet-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">500</p>
+                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{data?.rewards?.referredPoints ?? '—'}</p>
                 <p className="text-xs text-muted-foreground">{t('customerReferral.pointsToFriend')}</p>
               </div>
             </div>
@@ -257,6 +287,93 @@ export default function CustomerReferralPage() {
           );
         })}
       </div>
+
+      {/* Kademe (milestone) ödülleri: ilerleme çubuğu + talep edilebilir bonuslar */}
+      {data?.milestones && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <Card className="border-border/60 bg-gradient-to-br from-primary/5 to-violet-500/5 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="h-5 w-5 text-primary" /> Davet Kademeleri
+              </CardTitle>
+              <CardDescription>Daha çok davet et, kademe bonusları kazan.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Talep edilebilir ödül(ler) */}
+              {data.milestones.claimable.length > 0 && (
+                <button
+                  onClick={claimMilestones}
+                  disabled={claimingMs}
+                  className="flex w-full items-center justify-between rounded-xl border border-yellow-400/50 bg-yellow-400/10 px-4 py-3 text-left transition-transform hover:scale-[1.01] disabled:opacity-60"
+                >
+                  <div className="flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-yellow-500" />
+                    <div>
+                      <p className="text-sm font-bold">
+                        {data.milestones.claimable.length} kademe ödülü hazır!
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Toplam +{data.milestones.claimable.reduce((s, m) => s + m.points, 0)} puan
+                      </p>
+                    </div>
+                  </div>
+                  {claimingMs ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <span className="text-xs font-bold text-yellow-600">Ödülü al →</span>
+                  )}
+                </button>
+              )}
+
+              {/* İlerleme: bir sonraki kademeye */}
+              {data.milestones.progress.next ? (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      Sonraki: {data.milestones.progress.next.label} (+{data.milestones.progress.next.points}p)
+                    </span>
+                    <span className="font-semibold">
+                      {data.milestones.progress.current}/{data.milestones.progress.target}
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-primary to-violet-500 transition-all"
+                      style={{ width: `${Math.round(data.milestones.progress.ratio * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-sm text-muted-foreground">🏆 Tüm kademeleri tamamladın!</p>
+              )}
+
+              {/* Tüm kademeler (rozet şeridi) */}
+              <div className="flex flex-wrap gap-2">
+                {data.milestones.all.map((m) => {
+                  const done = data.milestones!.claimed.includes(m.count);
+                  const reached = data.milestones!.progress.current >= m.count;
+                  return (
+                    <span
+                      key={m.count}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs font-medium',
+                        done
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : reached
+                            ? 'border-yellow-400/50 bg-yellow-400/10 text-yellow-600'
+                            : 'border-border/60 bg-muted/40 text-muted-foreground'
+                      )}
+                    >
+                      {done ? '✓ ' : reached ? '🎁 ' : ''}
+                      {m.count} davet · {m.points}p
+                    </span>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Referral List - always show; empty state when no referrals */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
