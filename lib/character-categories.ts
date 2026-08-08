@@ -30,7 +30,20 @@ export interface CharacterCategory {
   aiHint: string;
   /** Bu kategoriye ait karakter badgeId'leri (CHARACTER_PROFILES ile eşleşir). */
   characterIds: string[];
+  /**
+   * Bu kategoride bir karakter açmak için gereken yorum sayısı (bar eşiği).
+   * Belirtilmezse DEFAULT_CATEGORY_THRESHOLD (6). Gizemli kategori daha yüksek (zor).
+   */
+  threshold?: number;
+  /**
+   * Bu kategoride bir yorumun SAYILMASI için gereken minimum karakter uzunluğu.
+   * Belirtilmezse 0 (uzunluk şartı yok). Gizemli kategori yalnız DETAYLI yorumları sayar.
+   */
+  minReviewLength?: number;
 }
+
+/** Kategori eşiği belirtilmemişse kullanılan varsayılan (normal kategoriler). */
+export const DEFAULT_CATEGORY_THRESHOLD = 6;
 
 /**
  * KATEGORİLER — sıralama önemsiz. Yeni kategori buraya eklenir.
@@ -40,62 +53,111 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
   {
     key: 'dram-suc',
     name: 'Dram / Suç',
-    description: 'Ciddi, duygusal, olay örgülü anlatılar; haksızlık, ihmal veya hayal kırıklığı hikâyeleri.',
+    description: 'TANIKLIK / DELİL SUNMA: isim vererek, somut kanıt göstererek, dengeli (artı+eksi) hüküm kuran, madde madde/sistematik anlatan yorumlar. Olumlu da olabilir olumsuz da.',
     emoji: '🎭',
     accent: '#dc2626',
     aiHint:
-      'Yorum; mağduriyet, adaletsizlik, saygısızlık, ihmal, hak yeme, güven kaybı veya ciddi hayal kırıklığını ' +
-      'ANLATI/HİKÂYE şeklinde işliyorsa (mizah yok, ciddi ve duygusal ton, geçmiş zaman + olay örgüsü) bu kategoridir.',
+      'TANIKLIK/DELİL kategorisidir (olumsuzluk ŞART DEĞİL — olumlu da olabilir). Yorumcu bir TANIK gibi ' +
+      'yazar: (a) İSİM verir ("özellikle Ayşe Hanım’ın ilgisi"), (b) SOMUT kanıt/olay sunar ("sıramız gelmeden ' +
+      'sonrakiler aldı", "yemediğimiz ürünün parasını ödedik", "menüde 300 hesapta 350"), (c) DENGELİ hüküm kurar ' +
+      '("tek eksiği...", "hakkını yemeyeyim", "ellerine sağlık"+detay, "fiyat performans"), (d) madde madde/sistematik ' +
+      'sıralar ("öncelikle... ilaveten... tüm bunlara ek olarak..."). DELİL→OLAY→HÜKÜM zinciri kurar. AYRIM: Fantastik ' +
+      '"davetiye" gibi biter (tavsiye/uğrayın, kanıtsız his); Dram/Suç "rapor/tanıklık" gibi biter (isim+kanıt+dengeli hüküm).',
     characterIds: [
       'badge-walter-white', 'badge-tommy-shelby', 'badge-sherlock', 'badge-professor',
-      'badge-michael-scofield', 'badge-elizabeth', 'badge-frank-underwood', 'badge-pablo-escobar',
-      'badge-jesse-pinkman', 'badge-spartacus', 'badge-rome-julius', 'badge-tokyo',
+      'badge-michael-scofield', 'badge-elizabeth', 'badge-jesse-pinkman', 'badge-spartacus',
+      'badge-rome-julius', 'badge-tokyo', 'badge-this-is-us',
     ],
   },
   {
     key: 'komedi',
     name: 'Komedi',
-    description: 'Abartılı, esprili, güldürmeye yönelik; ironi ve mizah dolu yorumlar.',
+    description: 'Abartı (hiperbol), gülünç benzetme, "o kadar ... ki ..." kalıbı; sıradan bir gözlemi absürt bir sonuca bağlayan mizah.',
     emoji: '😂',
     accent: '#f59e0b',
     aiHint:
-      'Yorum abartılı, şaka amaçlı, güldürmeye yönelik, ironik/alaycı mizah içeriyorsa bu kategoridir. ' +
-      'Ton eğlenceli, iğneleyici veya absürt.',
+      'HİPERBOL/MİZAH kategorisidir. Neredeyse zorunlu iskelet: "o kadar ... ki ..." yapısı — sıradan bir övgü/şikayet ' +
+      'gerçeklikten kopan ABSÜRT bir sonuca/benzetmeye bağlanır (hayvana dönüşme, Narnia, mikroskop/nanoteknoloji, ' +
+      'bekleme süresini "bir dil öğrendim/tez bitirdim" diye uzatma, kendini alaya alma). Espri altında genelde gerçek ' +
+      'bir yargı saklıdır. Ton eğlenceli/ironik/absürt. AYRIM: Komedi güldürmek için GERÇEKLİKTEN kopar; diğer kategoriler ' +
+      'gerçekçi kalır.',
     characterIds: [
       'badge-chandler', 'badge-barney-stinson', 'badge-the-office', 'badge-rick-morty',
-      'badge-tyrion', 'badge-house-md', 'badge-good-omens', 'badge-crowley', 'badge-dean-winchester',
+      'badge-tyrion', 'badge-good-omens', 'badge-sheldon',
     ],
   },
   {
     key: 'fantastik',
     name: 'Fantastik',
-    description: 'Atmosfer, dekor, hayal gücü ve macera hissi öne çıkan; betimleyici, ilham veren yorumlar.',
+    description: 'KEŞİF / DAVETİYE: mekanı bir keşif/macera/öneri objesi gibi sunan; sıcak, davetkâr, atmosfer ve his ağırlıklı yorumlar. Kanıt sunmaz, hisle konuşur.',
     emoji: '🐉',
     accent: '#8b5cf6',
     aiHint:
-      'Yorum atmosfer, dekor, ambiyans, hayal gücü, macera veya betimleme öne çıkararak yazılmışsa bu kategoridir. ' +
-      'Vizyoner, ilham veren, epik veya destansı bir dil.',
+      'KEŞİF/DAVETİYE kategorisidir (genelde olumlu). Yorumcu mekanı bir KEŞİF/MACERA/ÖNERİ objesi gibi sunar, ' +
+      'başkalarına yol gösterir. Sinyaller: öneri ("gidip deneyin", "keşfedin", "uğrayın", "tavsiye ederim", "iyi bir ' +
+      'alternatif"), atmosfer ("sakin", "dingin", "huzurlu köşe", "aurası harika"), keşif ("gizli bir yer", "saklı ' +
+      'kalmış", "tesadüfen bulduk"), arkadaşlık/paylaşım ("arkadaşlarla vakit", "sevdiklerinizle"). "Davetiye" gibi ' +
+      'biter: kanıt sunmaz, HİSle konuşur, keşif çağrısıyla kapanır. AYRIM: Dram/Suç isim+kanıt+dengeli hüküm verir; ' +
+      'Fantastik his + öneri + davet verir.',
     characterIds: [
       'badge-daenerys', 'badge-jon-snow', 'badge-khalesi', 'badge-witcher', 'badge-ragnar',
-      'badge-eleven', 'badge-the-doctor', 'badge-castiel', 'badge-sam-winchester', 'badge-john-locke',
-      'badge-sheldon', 'badge-carrie',
+      'badge-eleven', 'badge-sam-winchester', 'badge-dean-winchester', 'badge-kelly-yorkie',
     ],
   },
   {
     key: 'gizem-gerilim',
     name: 'Gizem / Gerilim',
-    description: 'Şüphe uyandıran, "bir şeyler dönüyor" hissi veren, tedirginlik verici gözlem yorumları.',
+    description: 'ŞÜPHE / İMA: bir tuhaflık, çelişki veya çözülmemiş gerilim hisseden; olayı doğrudan anlatmak yerine ima ederek/ipucu bırakarak aktaran gözlemci-dedektif yorumlar.',
     emoji: '🕵️',
     accent: '#0ea5e9',
     aiHint:
-      'Yorum şüphe uyandırıyor, "bir şeyler dönüyor" hissi veriyor, tedirgin edici veya gizemli bir gözlem ' +
-      'içeriyorsa bu kategoridir. Karanlık, içe kapanık veya sorgulayıcı ton.',
+      'ŞÜPHE/İMA kategorisidir. Yorumcu bir tuhaflık/çelişki/çözülmemiş gerilim hisseder; olayı DOĞRUDAN anlatmak ' +
+      'yerine İMA ederek/ipucu bırakarak aktarır. Sinyaller: ima/çelişki ("aslında", "sanki", "galiba", "öyle görünüyor ' +
+      'ki"), sorgulama ("neden böyle?", "anlam veremedim"), gizli detay ifşası ("dikkatinizi çekerim", "fark ettim ki", ' +
+      '"meğerse", "menüde yazmıyor ama"), finansal şüphe ("adisyonu inceleyin", "bilerek yapılmış", "kafalarına göre ' +
+      'ekleme"), tedirginlik ("içim rahat etmedi", "bir şeyler tuhaftı"). AYRIM: Dram/Suç AÇIK öfke/mağduriyet + net kanıt; ' +
+      'Gizem/Gerilim BELİRSİZLİK/sorgulama, olay net sonuca bağlanmadan asılı kalır.',
     characterIds: [
-      'badge-hannibal', 'badge-dexter', 'badge-joe', 'badge-villanelle', 'badge-wednesday',
-      'badge-mr-robot', 'badge-dark-jonas', 'badge-martha', 'badge-kelly-yorkie', 'badge-this-is-us',
+      'badge-joe', 'badge-villanelle', 'badge-pablo-escobar', 'badge-dark-jonas',
+      'badge-frank-underwood', 'badge-carrie', 'badge-martha',
     ],
   },
+  {
+    key: 'gizemli',
+    name: 'Gizemli',
+    description: 'ÖZEL/ZOR KATEGORİ: yalnızca çok DÜZENLİ, DERİN ve ÖZENLİ yorumlar. Soğukkanlı analiz, zarif keskinlik, felsefi sorgulama, deadpan ironi gibi ustalık isteyen üsluplar. Kolay kazanılmaz.',
+    emoji: '🕯️',
+    accent: '#7c3aed',
+    aiHint:
+      'ÖZEL/ZOR kategoridir — ustalık isteyen ÖZGÜN ÜSLUPLAR buraya girer. UZUN OLMAK ŞART DEĞİL: kısa ama ' +
+      'ustaca/keskin/derin bir yorum da girer (House’un tek cümlelik teşhisi, Crowley’nin deadpan ironisi, ' +
+      'Villanelle’nin keskin özgünlüğü gibi). Önemli olan uzunluk değil, üslubun USTALIĞI/ÖZGÜNLÜĞÜ. Ustalık üslupları: ' +
+      '(House) keskin teşhis + ironi; (The Doctor) merak + keşif + objektif denge; (Mr. Robot) olayları kayıt/log gibi ' +
+      'zaman+liste+detayla tutma; (Wednesday) "herkes seviyor ben sorguluyorum" ters görüş; (Castiel) eksiği söyle + ' +
+      'hakkını teslim et adaleti; (Dexter) verileri PARÇALA→değerlendir→net sonuca bağla soğukkanlı analiz; (John Locke) ' +
+      'inan→şans ver→deneyimle; (Hannibal) zarif/nazik başla→soğuk keskin final; (Crowley) beklenmedik karşılaştırma + ' +
+      'deadpan kara ironi. Sıradan/düz bir yorumu (özel bir üslup ustalığı yoksa) buraya ATMA.',
+    characterIds: [
+      'badge-house-md', 'badge-the-doctor', 'badge-mr-robot', 'badge-wednesday', 'badge-castiel',
+      'badge-dexter', 'badge-john-locke', 'badge-hannibal', 'badge-crowley',
+    ],
+    // ZOR kategori: 20 yorum gerekir (normal 6 yerine) — herkese kolayca verilmez.
+    // NOT: uzunluk şartı YOK — kısa ama özenli/derin yorum da gizemli olabilir (House'un
+    // tek cümlelik keskin teşhisi, Crowley'nin deadpan ironisi gibi). Zorluk EŞİK sayısında
+    // ve AI'ın "yeterince özenli/derin mi" değerlendirmesinde (aiHint) — metin uzunluğunda değil.
+    threshold: 20,
+  },
 ];
+
+/** Bir kategorinin eşiği (belirtilmemişse varsayılan). */
+export function categoryThreshold(cat: CharacterCategory): number {
+  return cat.threshold && cat.threshold > 0 ? cat.threshold : DEFAULT_CATEGORY_THRESHOLD;
+}
+
+/** Bir kategorinin min. yorum uzunluğu (0 = şart yok). */
+export function categoryMinReviewLength(cat: CharacterCategory): number {
+  return cat.minReviewLength && cat.minReviewLength > 0 ? cat.minReviewLength : 0;
+}
 
 /** key → kategori (hızlı erişim). */
 export const CATEGORY_BY_KEY: Record<string, CharacterCategory> = Object.fromEntries(

@@ -21,35 +21,38 @@ export const CATEGORY_BADGE_THRESHOLD = 6;
 
 /** LLM'in seçebileceği karakterler: badge-id → kişilik tanımı (seçim ipucu). */
 export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string }[] = [
-  { badgeId: 'badge-sheldon', name: 'Sheldon Cooper', trait: 'Analitik zeka, kuralcı, detaycı; her şeyi mantık ve bilgiyle açıklar' },
-  { badgeId: 'badge-chandler', name: 'Chandler Bing', trait: 'Keskin espri, alaycı-ironik mizah; yorumlarında iğneleyici şakalar' },
-  { badgeId: 'badge-barney-stinson', name: 'Barney Stinson', trait: 'Hazır cevap, sosyal enerji, eğlenceli-abartılı; kendinden emin' },
-  { badgeId: 'badge-the-office', name: 'Michael Scott', trait: 'Fazla samimi, çocuksu, onay bekleyen, iyi niyetli; sürprizli mizah' },
+  { badgeId: 'badge-sheldon', name: 'Sheldon Cooper', trait: 'BİLİMSEL/SÜREÇSEL abartı: espriyi sözde bilimsel-analitik mantıkla kurar; olayı adım adım süreç gibi anlatır (tarladan fincana, mikroskop/nanoteknoloji, ölçüm/hesap). "Bunu bilimsel açıklayalım."' },
+  { badgeId: 'badge-chandler', name: 'Chandler Bing', trait: 'TEK VURUŞ iğneleyici mizah: uzun hikaye kurmaz, tek kısa keskin cümlede sert-esprili yargı bırakır ("porsiyon o kadar küçük ki tabağı dekorasyon saydım"). "Buna tek cümle yeter."' },
+  { badgeId: 'badge-barney-stinson', name: 'Barney Stinson', trait: 'HİKAYE KURUCU gösterişli abartı: küçük olayı absürt bir sahneye dönüştürür, kendini hikayenin kahramanı yapar, pop-kültür referansı (Narnia). "Bunu bir hikayeye dönüştüreyim."' },
+  { badgeId: 'badge-the-office', name: 'Michael Scott', trait: 'SOSYAL/DUYGUSAL saf abartı: mizahı insan ilişkisine ve kendi duygusuna bağlar; paylaşımcı, çocuksu, iyi niyetli ("kan kardeş olduk", garsona sarılmak). "Hepimiz birlikte yaşadık, duygulandım."' },
   { badgeId: 'badge-walter-white', name: 'Walter White', trait: 'Stratejik, planlı, hırslı; kriz anında çözüm bulur' },
   { badgeId: 'badge-tommy-shelby', name: 'Tommy Shelby', trait: 'Soğukkanlı, hesapçı, planlı; yorumlarına yön veren lider' },
   { badgeId: 'badge-sherlock', name: 'Sherlock Holmes', trait: 'Analitik, gözlemci, detaycı; en küçük ayrıntıyı yakalar' },
   { badgeId: 'badge-professor', name: 'El Profesor', trait: 'Planlı, stratejik, soğukkanlı; düşünülmüş faydalı yorumlar' },
   { badgeId: 'badge-michael-scofield', name: 'Michael Scofield', trait: 'Stratejik zeka, mantık zinciri kuran, planlı' },
-  { badgeId: 'badge-hannibal', name: 'Hannibal Lecter', trait: 'Zarif ama keskin; yorumlarını çok incelikli yapar' },
-  { badgeId: 'badge-house-md', name: 'Dr. House', trait: 'Alaycı, keskin zeka, gerçekçi ve eleştirel' },
-  { badgeId: 'badge-dexter', name: 'Dexter Morgan', trait: 'Soğukkanlı, planlı; karmaşık durumları netleştirir' },
-  { badgeId: 'badge-joe', name: 'Joe Goldberg', trait: 'Takıntılı ama analitik ve gözlemci; farklı yaklaşımlar' },
-  { badgeId: 'badge-frank-underwood', name: 'Frank Underwood', trait: 'Stratejik, ince hesaplarla tartışmaları yönlendirir' },
-  { badgeId: 'badge-carrie', name: 'Carrie Mathison', trait: 'Sezgileri güçlü, cesur; doğru noktaları yakalar' },
-  { badgeId: 'badge-jon-snow', name: 'Jon Snow', trait: 'Onurlu, sadık, cesur; dürüstlüğüyle saygı uyandırır' },
-  { badgeId: 'badge-daenerys', name: 'Daenerys', trait: 'Vizyoner, idealist, güçlü; ilham veren fikirler' },
-  { badgeId: 'badge-dean-winchester', name: 'Dean Winchester', trait: 'Cesur, eğlenceli, sadık, koruyucu; destekleyici' },
-  { badgeId: 'badge-eleven', name: 'Eleven', trait: 'Sessiz, cesur, arkadaşça; fedakâr ve gizemli' },
-  { badgeId: 'badge-witcher', name: 'Geralt', trait: 'Sessiz ama güçlü; kısa ama etkili, çözüm odaklı' },
-  { badgeId: 'badge-wednesday', name: 'Wednesday Addams', trait: 'Karanlık, bağımsız; alışılmışın dışında yorumlar' },
-  { badgeId: 'badge-mr-robot', name: 'Elliot (Mr. Robot)', trait: 'Gizemli, içe kapanık; ani ama çarpıcı yorumlar' },
-  { badgeId: 'badge-dark-jonas', name: 'Jonas (Dark)', trait: 'Derin düşünceli, sorgulayıcı; merak uyandıran' },
-  { badgeId: 'badge-villanelle', name: 'Villanelle', trait: 'Karizmatik, kurnaz, sıra dışı; farklı enerji' },
-  { badgeId: 'badge-pablo-escobar', name: 'Pablo Escobar', trait: 'Karizmatik, güçlü, korkusuz; iddialı yorumlar' },
-  { badgeId: 'badge-castiel', name: 'Castiel', trait: 'Gizemli, bilge, koruyucu; dinginliğiyle dengeler' },
-  { badgeId: 'badge-john-locke', name: 'John Locke', trait: 'İnançlı, keşifçi; yeni fikirler dener' },
-  { badgeId: 'badge-crowley', name: 'Crowley', trait: 'Kaotik ama eğlenceli; beklenmedik, sürpriz dolu yorumlar' },
-  { badgeId: 'badge-the-doctor', name: 'The Doctor', trait: 'Bilge, maceraperest; keşfetmeyi sever' },
+  // ── GİZEMLİ kategori (en zor): ustalık isteyen üsluplar ──
+  { badgeId: 'badge-hannibal', name: 'Hannibal Lecter', trait: 'ZARİF KESKİNLİK: cümle zarif/nazik başlar, sonra son derece sakin öldürücü bir eleştiriyle biter (kontrast). "Dekorasyon zarifti, keşke yemekler de öyle olsaydı." "Ne kadar nazikçe söyleyebilirim?"' },
+  { badgeId: 'badge-house-md', name: 'Dr. House', trait: 'KESKİN TEŞHİS + ironi: doğrudan, alaycı, acımasızca dürüst tanı koyar ("tek kelimeyle: kötü. servis için ayrıca teşekkürler"). Direkt ve iğneleyici.' },
+  { badgeId: 'badge-dexter', name: 'Dexter Morgan', trait: 'SOĞUKKANLI ANALİZ: verileri ayırır→analiz eder→duyguyu çıkarır→net sonuca bağlar. Düzenli, sakin, sonuç odaklı ("Mekan: başarılı. Servis: yavaş. Sonuç: beklentinin altında"). "Verileri değerlendirdim, sonuç şu."' },
+  { badgeId: 'badge-john-locke', name: 'John Locke', trait: 'İNANÇ/DENEME: yoruma bir inanma/şans verme isteğiyle başlar; önce savunur veya şans verir, sonra deneyimler ("tereddüt ettim ama şans vermek istedim, iyi ki denemişim"). "Bir şans vermeye değer."' },
+  { badgeId: 'badge-crowley', name: 'Crowley', trait: 'KAOTİK İRONİ + deadpan: beklenmedik karşılaştırma, kelime oyunu, kara mizah dokunuşu ("kutsal katmer 550 TL, en azından matematikte tutarlılar"). Absürt hikaye DEĞİL, keskin oyunbaz ironi.' },
+  { badgeId: 'badge-the-doctor', name: 'The Doctor', trait: 'KEŞİF + DENGE: merakla keşfe gider, deneyimi anlatır, objektif dengeli sonuca bağlar ("keşfedelim dedik, bazı şeyler beklentiyi karşılamadı ama atmosferi güzel"). Merak + deneyim + objektif sonuç.' },
+  { badgeId: 'badge-mr-robot', name: 'Elliot (Mr. Robot)', trait: 'KAYIT/LOG: olayları bir tanık gibi zaman + liste + detayla kaydeder ("15:10 giriş, 15:17 sipariş, 15:51 geldi"). Analiz DEĞİL kayıt tutar; sıralı, kronolojik, veri gibi.' },
+  { badgeId: 'badge-wednesday', name: 'Wednesday Addams', trait: 'TERS GÖRÜŞ: genel kanıya meydan okur ("herkes buraya bayılıyor, ben hâlâ nedenini bulamadım"). Karanlık, bağımsız, genel beğeniyi sorgulayan.' },
+  { badgeId: 'badge-castiel', name: 'Castiel', trait: 'ADALET/DENGE: eksiyi açıkça söyler ama hakkını da teslim eder; dingin, adil, dengeleyici bir hüküm kurar. "Eksiği söyle + hakkını teslim et."' },
+  // ── GİZEM/GERİLİM: şüphe/ima ──
+  { badgeId: 'badge-joe', name: 'Joe Goldberg', trait: 'GÖZLEMCİ/DETAY AVCISI: başkalarının fark etmediği küçük detayları tek tek not düşer, takıntı derecesinde ("şunu da fark ettim... bir de..."). "Ne fark ettim?" — saf gözlem, hüküm değil.' },
+  { badgeId: 'badge-frank-underwood', name: 'Frank Underwood', trait: 'HESAP/STRATEJİ ŞÜPHESİ: işletmenin bilinçli bir hesabı olduğundan şüphelenir ("menüde 300 hesapta 350, tesadüf değil; adisyonu inceleyin"). "Burada kimin hesabı var?" — finansal/çıkar şüphesi.' },
+  { badgeId: 'badge-carrie', name: 'Carrie Mathison', trait: 'İZ SÜRÜCÜ: detayları birleştirip şüpheli bir sonuca ulaşmaya çalışır ("önce tesadüf sandım, ikinci kez olunca şüphelendim"). Joe fark eder, Carrie soruşturur. "Gerçekte ne oluyor?"' },
+  { badgeId: 'badge-villanelle', name: 'Villanelle', trait: 'ÇARPICI/ÖZGÜN: sıradan değerlendirme değil, okuyanı şaşırtan keskin-özgün üslup, kendinden emin ("300 TL kahvenin 350’ye dönüşmesi oldukça yaratıcı bir matematik"). Absürt değil, keskin özgünlük.' },
+  { badgeId: 'badge-pablo-escobar', name: 'Pablo Escobar', trait: 'KESİN/İDDİALI: geri adım atmadan net hüküm verir ("hiç tartışmasız en iyilerden biri"). Gizem belirsizlikten değil ÖZGÜVENDEN gelir. "Benim hükmüm ne?"' },
+  { badgeId: 'badge-dark-jonas', name: 'Jonas (Dark)', trait: 'SORGULAYICI/DERİN: cevapsız bir "neden böyle?" sorusu bırakır, olayın arkasındaki sebebi merak eder, felsefi/derin ("bunun bir sebebi olmalı"). "Bunun arkasında ne var?"' },
+  // ── FANTASTİK: keşif/davetiye ──
+  { badgeId: 'badge-jon-snow', name: 'Jon Snow', trait: 'DÜRÜST/DENGELİ: güvenilir değerlendirme, hem artıyı hem küçük bir eksiyi adil ve abartısız sunar ("dürüst olmak gerekirse... ama... genel olarak memnun"). Güven veren ton.' },
+  { badgeId: 'badge-daenerys', name: 'Daenerys', trait: 'KEŞİF/REHBER: mekanı bir keşif/öneri gibi sunar, başkasına yol gösterir ("keşfedilmeyi bekleyen gizli bir yer, yolunuz düşerse mutlaka uğrayın, iyi bir alternatif"). "Burası keşfedilmeli."' },
+  { badgeId: 'badge-dean-winchester', name: 'Dean Winchester', trait: 'KORUYUCU UYARI + TAVSİYE: "şuna dikkat et ama yine de git, pişman olmazsın" tarzı; küçük bir uyarı + genel olumlu tavsiye, enerjik-samimi arkadaş tonu.' },
+  { badgeId: 'badge-eleven', name: 'Eleven', trait: 'ARKADAŞLIK/PAYLAŞIM: "ben geldim"den çok "sevdiklerimle güzel vakit geçirdim"; sıcak ortam, sohbet, samimiyet vurgusu ("arkadaşlarla saatlerce oturduk, evimizde gibi"). "Burada birlikte güzel vakit geçilir."' },
+  { badgeId: 'badge-witcher', name: 'Geralt', trait: 'AZ VE ÖZ: kısa, doğrudan, net yargı + vurucu sonuç, gereksiz hikaye yok ("Kahvesi çok iyi. Ortamı sakin. Tavsiye ederim."). Ama yalnız "iyi/güzel" tek kelime DEĞİL — fantastik öneri de taşımalı. "Kısa söyledim, net söyledim."' },
   { badgeId: 'badge-elizabeth', name: 'Kraliçe Elizabeth', trait: 'Ciddi, sorumluluk sahibi; düzenli, istikrarlı' },
   { badgeId: 'badge-rick-morty', name: 'Rick Sanchez', trait: 'Dahi ama kaotik, alaycı ve umursamaz; sıra dışı bakış' },
   { badgeId: 'badge-sam-winchester', name: 'Sam Winchester', trait: 'Araştırmacı, mantıklı, sadık; detaylı ve düşünceli' },
@@ -396,18 +399,14 @@ export async function processConsumptionReviewForCharacterBadge(
     // karakter/kategori olduğu SÖYLENMEZ). Rozet reveal anında atanır.
     const prog = await getCategoryProgress(userId);
     if (!prog.ready) return; // eşik dolmadı → bildirim yok
-    // Bu kategoride tam-katına ulaşıldıysa bir kez bildir.
-    const total = await prisma.consumptionReview.count({
-      where: { customerId: userId, characterCategory: categoryKey },
-    });
-    // Bu kategoride alınmış rozet sayısı kadar eşik tüketilmiş; yeni katına TAM ulaştıysa bildir.
+    // getCategoryProgress zaten kategori-başına eşik + uzunluk şartını uyguluyor; hazır
+    // olan kategori BU yorumla ilgili mi (spam bildirim önleme). Bar tam dolduysa bildir.
     const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
     const cat = CATEGORY_BY_KEY[categoryKey];
     if (cat) {
-      const takenInCat = await prisma.userBadge.count({
-        where: { userId, badgeId: { in: cat.characterIds } },
-      });
-      const justCrossed = total === (takenInCat + 1) * CATEGORY_BADGE_THRESHOLD;
+      // Bar TAM dolduğu (current === threshold) yorumda bir kez "hazır" bildir. prog.ready
+      // + prog.current === threshold → bu yorum eşiği yeni doldurdu.
+      const justCrossed = prog.topCategoryKey === categoryKey && prog.current >= prog.threshold;
       if (justCrossed) {
         // Kullanıcının e-postası + adı + bildirim tercihleri (tek okuma).
         const user = await prisma.user.findUnique({
@@ -470,9 +469,12 @@ export interface CategoryProgress {
 export async function getCategoryProgress(userId: string): Promise<CategoryProgress> {
   const base: CategoryProgress = { topCategoryKey: null, current: 0, threshold: CATEGORY_BADGE_THRESHOLD, progress: 0, ready: false };
   try {
-    const { CHARACTER_CATEGORIES } = await import('@/lib/character-categories');
+    const { CHARACTER_CATEGORIES, categoryThreshold, categoryMinReviewLength } =
+      await import('@/lib/character-categories');
 
-    // Kategori bazlı TÜKETİM YORUMU sayıları (karakter barı tüketim yorumlarını sayar).
+    // Kategori bazlı yorum sayıları. Genel sayım TÜM yorumları sayar; ama uzunluk-şartı
+    // olan kategoriler (Gizemli) için yalnız DETAYLI (minReviewLength+) yorumlar sayılır.
+    // Uzunluk şartı SQL groupBy'da ifade edilemediğinden, şartlı kategoriler için ayrı sayım.
     const grouped = await prisma.consumptionReview.groupBy({
       by: ['characterCategory'],
       where: { customerId: userId, characterCategory: { not: null } },
@@ -480,6 +482,19 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
     });
     const countByCat = new Map<string, number>();
     for (const g of grouped) if (g.characterCategory) countByCat.set(g.characterCategory, g._count._all);
+
+    // Uzunluk-şartı olan kategoriler için: yalnız minLen+ uzunluktaki (özenli) yorumları say.
+    // Prisma'da metin uzunluğu filtresi yok → o kategorinin metinlerini çekip kod tarafında filtrele.
+    for (const cat of CHARACTER_CATEGORIES) {
+      const minLen = categoryMinReviewLength(cat);
+      if (minLen <= 0) continue;
+      const rows = await prisma.consumptionReview.findMany({
+        where: { customerId: userId, characterCategory: cat.key, text: { not: null } },
+        select: { text: true },
+      });
+      const detailedCount = rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length;
+      countByCat.set(cat.key, detailedCount);
+    }
 
     // Kullanıcının sahip olduğu karakter rozetleri (kategori tükenmiş mi?).
     const allCharIds = CHARACTER_PROFILES.map((c) => c.badgeId);
@@ -491,23 +506,24 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
 
     let best: CategoryProgress | null = null;
     for (const cat of CHARACTER_CATEGORIES) {
+      const threshold = categoryThreshold(cat); // kategori-başına eşik (Gizemli=20, diğer=6)
       const total = countByCat.get(cat.key) ?? 0;
       const availableChars = cat.characterIds.filter((id) => !ownedSet.has(id));
       if (availableChars.length === 0) continue; // bu kategoride alınacak karakter kalmadı
 
       // Kaç rozet zaten alınmış → o kadar eşik "tüketilmiş" say (aynı kategoride yeni karakter).
       const takenInCat = cat.characterIds.filter((id) => ownedSet.has(id)).length;
-      const consumed = takenInCat * CATEGORY_BADGE_THRESHOLD;
-      const current = Math.max(0, Math.min(CATEGORY_BADGE_THRESHOLD, total - consumed));
-      const ready = total - consumed >= CATEGORY_BADGE_THRESHOLD;
+      const consumed = takenInCat * threshold;
+      const current = Math.max(0, Math.min(threshold, total - consumed));
+      const ready = total - consumed >= threshold;
       const cand: CategoryProgress = {
-        topCategoryKey: cat.key, current, threshold: CATEGORY_BADGE_THRESHOLD,
-        progress: current / CATEGORY_BADGE_THRESHOLD, ready,
+        topCategoryKey: cat.key, current, threshold,
+        progress: threshold > 0 ? current / threshold : 0, ready,
       };
-      // Öncelik: hazır olan > ilerlemesi yüksek olan.
+      // Öncelik: hazır olan > ilerlemesi yüksek olan (oransal).
       if (!best) best = cand;
       else if (cand.ready && !best.ready) best = cand;
-      else if (cand.ready === best.ready && cand.current > best.current) best = cand;
+      else if (cand.ready === best.ready && cand.progress > best.progress) best = cand;
     }
     return best ?? base;
   } catch {
@@ -531,9 +547,12 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
   // okuyup TEK eşik döngüsünden ÇİFT karakter atayabilirdi (LLM temperature>0 farklı
   // badgeId seçince unique kısıt da çakışmaz). Guard: rozet atamayı tek $transaction
   // içinde yap; o kategoride TÜKETİLECEK eşik hâlâ geçerli mi tx içinde doğrula.
-  const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
+  const { CATEGORY_BY_KEY, categoryThreshold, categoryMinReviewLength } =
+    await import('@/lib/character-categories');
   const cat = CATEGORY_BY_KEY[categoryKey];
   if (!cat) return null;
+  const threshold = categoryThreshold(cat);
+  const minLen = categoryMinReviewLength(cat);
 
   // Badge kaydını önceden hazırla (upsert tx dışında olabilir — idempotent, yarış yok).
   await ensureCharacterBadgeRecord(picked.badgeId);
@@ -550,12 +569,22 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
     const takenNow = await tx.userBadge.count({
       where: { userId, badgeId: { in: cat.characterIds } },
     });
-    // Bu kategorideki toplam (kategorize edilmiş) tüketim yorumu sayısı.
-    const totalReviews = await tx.consumptionReview.count({
-      where: { customerId: userId, characterCategory: categoryKey },
-    });
-    // Eşik hâlâ tüketilebilir mi? (total - takenNow*6 >= 6). Değilse başka istek aldı → iptal.
-    if (totalReviews - takenNow * CATEGORY_BADGE_THRESHOLD < CATEGORY_BADGE_THRESHOLD) {
+    // Bu kategorideki SAYILAN yorum adedi. Uzunluk-şartlı kategoride (Gizemli) yalnız
+    // minLen+ (özenli) yorumlar sayılır; diğer kategorilerde tüm kategorize yorumlar.
+    let totalReviews: number;
+    if (minLen > 0) {
+      const rows = await tx.consumptionReview.findMany({
+        where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
+        select: { text: true },
+      });
+      totalReviews = rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length;
+    } else {
+      totalReviews = await tx.consumptionReview.count({
+        where: { customerId: userId, characterCategory: categoryKey },
+      });
+    }
+    // Eşik hâlâ tüketilebilir mi? (total - takenNow*threshold >= threshold). Değilse iptal.
+    if (totalReviews - takenNow * threshold < threshold) {
       return false;
     }
     // Seçilen karakter hâlâ alınmamış mı? (createMany + skipDuplicates atomik son savunma).
