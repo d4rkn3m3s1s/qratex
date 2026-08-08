@@ -1,7 +1,10 @@
 {
   "buildCommand": "prisma generate && DISABLE_SENTRY_BUILD=1 next build --webpack && node scripts/ensure-edge-instrumentation.js",
   "framework": "nextjs",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    { "path": "/api/cron/intern-deadline", "schedule": "0 6 * * *" }
+  ]
 }
 
 

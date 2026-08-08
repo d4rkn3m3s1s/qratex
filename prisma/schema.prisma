@@ -896,6 +896,30 @@ model Settings {
   @@index([category])
 }
 
+/// Stajyer görev maili gönderim + AÇILMA takibi. Gönderimde bir kayıt oluşur; alıcı maili
+/// açınca (tracking pixel) firstOpenedAt + openCount güncellenir. Admin panelinde "açıldı mı"
+/// göstergesi bunu okur. token = pixel URL'sindeki opak kimlik (tahmin edilemez).
+model InternEmailSend {
+  id            String    @id @default(cuid())
+  token         String    @unique // pixel URL kimliği (nanoid)
+  templateId    String    // hangi görev şablonu
+  department    String
+  recipientName String
+  email         String
+  subject       String
+  kind          String    @default("send") // send | test
+  sentByUserId  String?   // gönderen admin
+  channel       String?   // smtp | resend
+  firstOpenedAt DateTime? // ilk açılma (null = henüz açılmadı)
+  lastOpenedAt  DateTime?
+  openCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  @@index([templateId])
+  @@index([email])
+  @@index([createdAt])
+}
+
 model FeatureFlag {
   id          String    @id @default(cuid())
   key         String    @unique
