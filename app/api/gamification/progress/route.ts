@@ -206,6 +206,13 @@ export async function POST(request: NextRequest) {
       xp: Math.floor(badgePoints / 2),
     });
 
+    // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle.
+    if (badgePoints > 0) {
+      await prisma.analyticsEvent.create({
+        data: { userId, event: 'points_credited', category: 'badge', data: { points: badgePoints, badgeId: badge.id } },
+      });
+    }
+
     // Create notification
     await prisma.notification.create({
       data: {

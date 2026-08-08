@@ -186,6 +186,17 @@ export async function POST(req: NextRequest) {
           points: bonusEarned,
         });
 
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle
+        // (caps + velocity dedektörü loyalty streak ekonomisini de görsün). Aynı tx.
+        await tx.analyticsEvent.create({
+          data: {
+            userId: session.user.id,
+            event: 'points_credited',
+            category: 'loyalty_streak',
+            data: { points: bonusEarned, milestone: newStreak },
+          },
+        });
+
         await tx.notification.create({
           data: {
             userId: session.user.id,

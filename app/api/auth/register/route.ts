@@ -122,6 +122,13 @@ export async function POST(request: NextRequest) {
             });
             await creditPointsAndXp(tx, { userId: user.id, points: REFERRAL_BONUS });
             await creditPointsAndXp(tx, { userId: referralCodeRow.userId, points: REFERRER_BONUS });
+            // Anti-fraud görünürlüğü: iki referral kredisini de points_credited yaz (aynı tx).
+            await tx.analyticsEvent.createMany({
+              data: [
+                { userId: user.id, event: 'points_credited', category: 'referral', data: { points: REFERRAL_BONUS, role: 'referred' } },
+                { userId: referralCodeRow.userId, event: 'points_credited', category: 'referral', data: { points: REFERRER_BONUS, role: 'referrer' } },
+              ],
+            });
             await tx.referralCode.update({
               where: { id: referralCodeRow.id },
               data: { usageCount: { increment: 1 } },

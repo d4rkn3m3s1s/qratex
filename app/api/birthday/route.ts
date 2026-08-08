@@ -209,6 +209,16 @@ export async function POST(req: NextRequest) {
           points: birthdayBonus,
         });
 
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
+        await tx.analyticsEvent.create({
+          data: {
+            userId: session.user.id,
+            event: 'points_credited',
+            category: 'birthday',
+            data: { points: birthdayBonus },
+          },
+        });
+
         await tx.notification.create({
           data: {
             userId: session.user.id,

@@ -134,6 +134,18 @@ export async function advanceAchievementProgress(
           xp: rewardXp,
         });
 
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
+        if (rewardPoints > 0) {
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'achievement',
+              data: { points: rewardPoints, questId: quest.id },
+            },
+          });
+        }
+
         // Add notification
         await tx.notification.create({
           data: {

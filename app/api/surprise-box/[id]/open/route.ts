@@ -57,6 +57,16 @@ export async function POST(
           points: box.points,
         });
         newPoints = updatedUser.points;
+
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
+        await tx.analyticsEvent.create({
+          data: {
+            userId: session.user.id,
+            event: 'points_credited',
+            category: 'surprise_box',
+            data: { points: box.points },
+          },
+        });
       }
 
       const updated = await tx.userSurpriseBox.findUnique({ where: { id } });

@@ -87,6 +87,12 @@ export async function POST(req: Request) {
           points: reward.points,
           xp: reward.xp,
         });
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited yaz (aynı tx).
+        if (reward.points > 0) {
+          await tx.analyticsEvent.create({
+            data: { userId, event: 'points_credited', category: 'game', data: { points: reward.points, game: 'pacman' } },
+          });
+        }
         return { credited: true as const, newPoints: updated.points };
       }
       return { credited: true as const, newPoints: null };

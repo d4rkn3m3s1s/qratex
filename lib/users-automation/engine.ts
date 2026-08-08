@@ -44,20 +44,37 @@ export function buildUserWhere(condition: AutomationCondition): Prisma.UserWhere
 async function applyAction(userId: string, action: AutomationAction) {
   switch (action.type) {
     case 'add_points': {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { points: { increment: action.amount } },
+      // Pozitif: kanonik creditPointsAndXp (level tutarlılığı) + points_credited event
+      // (anti-fraud görünürlüğü). Negatif (ceza/düzeltme): raw decrement — creditPointsAndXp
+      // yalnızca artırır. İkisi de aynı tx içinde, event ile birlikte.
+      await prisma.$transaction(async (tx) => {
+        if (action.amount > 0) {
+          await creditPointsAndXp(tx, { userId, points: action.amount });
+          await tx.analyticsEvent.create({
+            data: {
+              userId,
+              event: 'points_credited',
+              category: 'automation',
+              data: { points: action.amount, reason: action.reason ?? null },
+            },
+          });
+        } else if (action.amount < 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { points: { increment: action.amount } },
+          });
+        }
+        if (action.reason) {
+          await tx.notification.create({
+            data: {
+              userId,
+              title: action.amount >= 0 ? 'Puan Kazandınız! 🎉' : 'Puan Degisikligi',
+              message: `${action.amount} puan uygulandi: ${action.reason}`,
+              type: action.amount >= 0 ? 'success' : 'warning',
+            },
+          });
+        }
       });
-      if (action.reason) {
-        await prisma.notification.create({
-          data: {
-            userId,
-            title: action.amount >= 0 ? 'Puan Kazandınız! 🎉' : 'Puan Degisikligi',
-            message: `${action.amount} puan uygulandi: ${action.reason}`,
-            type: action.amount >= 0 ? 'success' : 'warning',
-          },
-        });
-      }
       return;
     }
     case 'add_xp': {

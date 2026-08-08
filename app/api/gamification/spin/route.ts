@@ -76,6 +76,13 @@ export async function POST(request: NextRequest) {
 
       if (prize.type === 'points') {
         await creditPointsAndXp(tx, { userId, points: prize.value, xp: 0 });
+        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
+        // NOT: Aşağıdaki gamification_ab_impression AYRI amaç (A/B ölçümü) içindir.
+        if (prize.value > 0) {
+          await tx.analyticsEvent.create({
+            data: { userId, event: 'points_credited', category: 'spin', data: { points: prize.value, prizeId: prize.id } },
+          });
+        }
       } else if (prize.type === 'xp') {
         await creditPointsAndXp(tx, { userId, points: 0, xp: prize.value });
       }

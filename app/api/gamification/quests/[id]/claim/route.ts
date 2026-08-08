@@ -100,6 +100,14 @@ export async function POST(
         xp: reward.xp,
       });
 
+      // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
+      // NOT: Buradaki mevcut gamification_ab_impression event'i AYRI bir amaç (A/B) içindir.
+      if (reward.points > 0) {
+        await tx.analyticsEvent.create({
+          data: { userId, event: 'points_credited', category: 'quest', data: { points: reward.points, questId: quest.id } },
+        });
+      }
+
       if (!userQuest.completedAt) {
         await tx.userQuest.update({
           where: { id: userQuest.id },

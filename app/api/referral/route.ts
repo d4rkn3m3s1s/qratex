@@ -194,6 +194,14 @@ export async function POST(req: NextRequest) {
         points: REFERRER_BONUS,
       });
 
+      // Anti-fraud görünürlüğü: iki referral kredisini de points_credited yaz (aynı tx).
+      await tx.analyticsEvent.createMany({
+        data: [
+          { userId: session.user.id, event: 'points_credited', category: 'referral', data: { points: REFERRAL_BONUS, role: 'referred' } },
+          { userId: referralCode.userId, event: 'points_credited', category: 'referral', data: { points: REFERRER_BONUS, role: 'referrer' } },
+        ],
+      });
+
       // Update usage count
       await tx.referralCode.update({
         where: { id: referralCode.id },
