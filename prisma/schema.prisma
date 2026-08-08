@@ -990,6 +990,23 @@ model GameStreakClaim {
   @@index([userId])
 }
 
+/// Haftalık mini-oyun turnuvası ödül talebi. Bir kullanıcı, bir oyunun bir haftalık
+/// turnuvasından ödülü YALNIZCA BİR KEZ alabilir (atomik tek-claim, GameStreakClaim
+/// deseni). Ödül, hafta KAPANDIKTAN sonra sıralamaya göre verilir.
+model TournamentRewardClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  gameType  String
+  weekKey   String // "YYYY-Www" ISO hafta (UTC), örn "2026-W32" — KAPANMIŞ hafta
+  rank      Int // ödül anındaki sıra (1..3)
+  points    Int // verilen puan
+  createdAt DateTime @default(now())
+
+  @@unique([userId, gameType, weekKey])
+  @@index([userId])
+  @@index([gameType, weekKey])
+}
+
 /// DB-backed rate limiter / login lockout. Serverless'te her Lambda kendi
 /// belleğinde olduğu ve cold start sayaçları sıfırladığı için in-memory Map
 /// güvenilir değildi; brute-force/flood koruması bu tabloya taşındı.

@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { Loader2, Trophy, Lock, RotateCcw, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GameLeaderboard } from './game-leaderboard';
+import { GameTournament } from './game-tournament';
 import type { MiniGamePhase, MiniGameResult } from '@/lib/use-mini-game';
 import { pickVariant, type GameCopy } from '@/lib/minigame-copy';
 
@@ -207,8 +208,11 @@ export function GameShell({
               </motion.div>
 
               {gameType && (
-                <div className="mt-4 w-full border-t border-white/10 pt-4">
-                  <GameLeaderboard gameType={gameType} accent={accent} />
+                <div className="mt-4 w-full space-y-4 border-t border-white/10 pt-4">
+                  <GameTournament gameType={gameType} accent={accent} />
+                  <div className="border-t border-white/10 pt-4">
+                    <GameLeaderboard gameType={gameType} accent={accent} />
+                  </div>
                 </div>
               )}
             </motion.div>
