@@ -539,7 +539,14 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
   await ensureCharacterBadgeRecord(picked.badgeId);
 
   const created = await prisma.$transaction(async (tx) => {
-    // Bu kategoride ŞU AN sahip olunan rozet sayısı (tx içinde taze okuma).
+    // YARIŞ KORUMASI: Read Committed altında iki eşzamanlı reveal tx'i birbirinin
+    // commit EDİLMEMİŞ INSERT'ini count() ile göremez → ikisi de takenNow=0 okuyup
+    // eşiği geçebilir, LLM farklı badgeId seçince skipDuplicates de çakışmaz → ÇİFT rozet.
+    // Bu kullanıcıya özel advisory kilit tx boyunca aynı-kullanıcı reveal'lerini SERİLEŞTİRİR;
+    // ikinci tx birinciyi bekler ve güncel (commit'lenmiş) sayımı görür.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`character-reveal:${userId}`}))`;
+
+    // Bu kategoride ŞU AN sahip olunan rozet sayısı (kilit sonrası taze okuma).
     const takenNow = await tx.userBadge.count({
       where: { userId, badgeId: { in: cat.characterIds } },
     });
