@@ -149,13 +149,28 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
   },
 ];
 
-/** Bir kategorinin eşiği (belirtilmemişse varsayılan). */
-export function categoryThreshold(cat: CharacterCategory): number {
+/**
+ * Bir kategorinin eşiği. Admin override (opsiyonel 2. arg) varsa onu, yoksa kod-içi
+ * cat.threshold'u, o da yoksa DEFAULT_CATEGORY_THRESHOLD'u kullanır. Override argümanı
+ * opsiyonel → mevcut tüm çağrı yerleri ve testler değişmeden çalışır (bu modül prisma'ya
+ * bağımlı DEĞİL; override'ı sadece argüman olarak alır — DB okuma character-thresholds'ta).
+ */
+export function categoryThreshold(
+  cat: CharacterCategory,
+  overrides?: Record<string, { threshold?: number; minReviewLength?: number }>,
+): number {
+  const ov = overrides?.[cat.key]?.threshold;
+  if (typeof ov === 'number' && ov > 0) return ov;
   return cat.threshold && cat.threshold > 0 ? cat.threshold : DEFAULT_CATEGORY_THRESHOLD;
 }
 
-/** Bir kategorinin min. yorum uzunluğu (0 = şart yok). */
-export function categoryMinReviewLength(cat: CharacterCategory): number {
+/** Bir kategorinin min. yorum uzunluğu (0 = şart yok). Admin override desteklenir. */
+export function categoryMinReviewLength(
+  cat: CharacterCategory,
+  overrides?: Record<string, { threshold?: number; minReviewLength?: number }>,
+): number {
+  const ov = overrides?.[cat.key]?.minReviewLength;
+  if (typeof ov === 'number' && ov >= 0) return ov;
   return cat.minReviewLength && cat.minReviewLength > 0 ? cat.minReviewLength : 0;
 }
 

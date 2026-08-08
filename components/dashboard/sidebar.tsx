@@ -204,6 +204,7 @@ const adminNavItems: NavItem[] = [
   { labelKey: 'compliance', href: '/admin/compliance', icon: Shield },
   { labelKey: 'privacy_requests', href: '/admin/privacy-requests', icon: Shield },
   { labelKey: 'points_matrix', href: '/admin/points-matrix', icon: SlidersHorizontal },
+  { labelKey: 'character_thresholds', href: '/admin/character-thresholds', icon: SlidersHorizontal },
   { labelKey: 'league_settings', href: '/admin/league-settings', icon: Trophy },
   { labelKey: 'mini_games', href: '/admin/games', icon: Gamepad2 },
   { labelKey: 'gamification_settings', href: '/admin/gamification-settings', icon: Zap },

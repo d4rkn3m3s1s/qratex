@@ -12,6 +12,8 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     consumptionReview: { groupBy: (...a: unknown[]) => mockReviewGroupBy(...a) },
     userBadge: { findMany: (...a: unknown[]) => mockUserBadgeFindMany(...a) },
+    // Admin eşik override okuması (character-thresholds) — override yok → kod-default kullanılır.
+    settings: { findUnique: () => Promise.resolve(null) },
   },
   isPrismaConnectivityError: () => false,
 }));

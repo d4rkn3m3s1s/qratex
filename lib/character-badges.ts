@@ -471,6 +471,8 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
   try {
     const { CHARACTER_CATEGORIES, categoryThreshold, categoryMinReviewLength } =
       await import('@/lib/character-categories');
+    const { getCategoryThresholdOverrides } = await import('@/lib/character-thresholds');
+    const overrides = await getCategoryThresholdOverrides(); // admin eşik/uzunluk override'ları
 
     // Kategori bazlı yorum sayıları. Genel sayım TÜM yorumları sayar; ama uzunluk-şartı
     // olan kategoriler (Gizemli) için yalnız DETAYLI (minReviewLength+) yorumlar sayılır.
@@ -486,7 +488,7 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
     // Uzunluk-şartı olan kategoriler için: yalnız minLen+ uzunluktaki (özenli) yorumları say.
     // Prisma'da metin uzunluğu filtresi yok → o kategorinin metinlerini çekip kod tarafında filtrele.
     for (const cat of CHARACTER_CATEGORIES) {
-      const minLen = categoryMinReviewLength(cat);
+      const minLen = categoryMinReviewLength(cat, overrides);
       if (minLen <= 0) continue;
       const rows = await prisma.consumptionReview.findMany({
         where: { customerId: userId, characterCategory: cat.key, text: { not: null } },
@@ -506,7 +508,7 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
 
     let best: CategoryProgress | null = null;
     for (const cat of CHARACTER_CATEGORIES) {
-      const threshold = categoryThreshold(cat); // kategori-başına eşik (Gizemli=20, diğer=6)
+      const threshold = categoryThreshold(cat, overrides); // admin override > kod-default (Gizemli=20/diğer=6)
       const total = countByCat.get(cat.key) ?? 0;
       const availableChars = cat.characterIds.filter((id) => !ownedSet.has(id));
       if (availableChars.length === 0) continue; // bu kategoride alınacak karakter kalmadı
@@ -549,10 +551,13 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
   // içinde yap; o kategoride TÜKETİLECEK eşik hâlâ geçerli mi tx içinde doğrula.
   const { CATEGORY_BY_KEY, categoryThreshold, categoryMinReviewLength } =
     await import('@/lib/character-categories');
+  const { getCategoryThresholdOverrides } = await import('@/lib/character-thresholds');
   const cat = CATEGORY_BY_KEY[categoryKey];
   if (!cat) return null;
-  const threshold = categoryThreshold(cat);
-  const minLen = categoryMinReviewLength(cat);
+  // Reveal guard'ı progress bar ile AYNI override snapshot'ını kullanmalı (tutarlılık).
+  const overrides = await getCategoryThresholdOverrides();
+  const threshold = categoryThreshold(cat, overrides);
+  const minLen = categoryMinReviewLength(cat, overrides);
 
   // Badge kaydını önceden hazırla (upsert tx dışında olabilir — idempotent, yarış yok).
   await ensureCharacterBadgeRecord(picked.badgeId);
