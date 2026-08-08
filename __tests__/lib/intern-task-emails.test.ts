@@ -8,6 +8,7 @@ jest.mock('@/lib/public-app-origin', () => ({ getPublicAppOrigin: () => 'https:/
 import {
   normalizeInternEmails,
   renderInternTaskEmailHtml,
+  deadlineIsToday,
   DEFAULT_INTERN_TASK_EMAILS,
   INTERN_TASK_DEADLINE_LABEL,
   type InternTaskEmail,
@@ -67,6 +68,68 @@ describe('renderInternTaskEmailHtml', () => {
     const { html } = renderInternTaskEmailHtml({ ...sample, body: 'Test <script>alert(1)</script>' });
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('deadline (şablon-başına son teslim)', () => {
+  it('normalize deadline alanını korur ve 60 karaktere kırpar', () => {
+    const r = normalizeInternEmails([{ ...sample, deadline: '20 Eylül 12.00' }]);
+    expect(r[0].deadline).toBe('20 Eylül 12.00');
+    const long = normalizeInternEmails([{ ...sample, deadline: 'x'.repeat(100) }]);
+    expect(long[0].deadline?.length).toBe(60);
+    const empty = normalizeInternEmails([{ ...sample, deadline: '   ' }]);
+    expect(empty[0].deadline).toBeUndefined();
+  });
+
+  it('render: şablonun kendi deadline"ı kullanılır (varsayılan değil)', () => {
+    const { html, text } = renderInternTaskEmailHtml({ ...sample, deadline: '20 Eylül 12.00' });
+    expect(html).toContain('20 Eylül 12.00');
+    expect(html).not.toContain(INTERN_TASK_DEADLINE_LABEL);
+    expect(text).toContain('20 Eylül 12.00');
+  });
+
+  it('render: deadline yoksa varsayılana düşer', () => {
+    const { html } = renderInternTaskEmailHtml(sample);
+    expect(html).toContain(INTERN_TASK_DEADLINE_LABEL);
+  });
+});
+
+describe('deadlineIsToday (cron gün eşleşmesi)', () => {
+  it('TR ay adıyla bugüne denk gelirse true', () => {
+    expect(deadlineIsToday('14 Ağustos 17.00', { day: 14, month: 8 })).toBe(true);
+    expect(deadlineIsToday('14 agustos', { day: 14, month: 8 })).toBe(true); // ascii
+    expect(deadlineIsToday('1 Ocak', { day: 1, month: 1 })).toBe(true);
+    expect(deadlineIsToday('30 Aralık 23.59', { day: 30, month: 12 })).toBe(true);
+  });
+
+  it('gün/ay uymuyorsa false', () => {
+    expect(deadlineIsToday('14 Ağustos 17.00', { day: 15, month: 8 })).toBe(false);
+    expect(deadlineIsToday('14 Ağustos 17.00', { day: 14, month: 9 })).toBe(false);
+  });
+
+  it('noktalı/slash sayısal biçimi anlar', () => {
+    expect(deadlineIsToday('14.08.2026', { day: 14, month: 8 })).toBe(true);
+    expect(deadlineIsToday('3/9 12:00', { day: 3, month: 9 })).toBe(true);
+  });
+
+  it('BOŞ/tanımsız deadline → asla true (cron hatırlatması gönderilmez)', () => {
+    expect(deadlineIsToday(undefined, { day: 14, month: 8 })).toBe(false);
+    expect(deadlineIsToday('', { day: 14, month: 8 })).toBe(false);
+    expect(deadlineIsToday('   ', { day: 14, month: 8 })).toBe(false);
+  });
+
+  it('tarih içermeyen metinde asla true dönmez', () => {
+    expect(deadlineIsToday('yakında', { day: 14, month: 8 })).toBe(false);
+    expect(deadlineIsToday('en kısa sürede', { day: 1, month: 1 })).toBe(false);
+  });
+
+  it('SAAT kısmını tarih sanmaz (ay adı bulununca sayısal biçim denenmez)', () => {
+    // '20 Eylül 11.09' → 20 Eylül; '11.09' saat, 11 Eylül olarak YANLIŞ tetiklenmemeli.
+    expect(deadlineIsToday('20 Eylül 11.09', { day: 11, month: 9 })).toBe(false);
+    expect(deadlineIsToday('20 Eylül 11.09', { day: 20, month: 9 })).toBe(true);
+    // '5 Mart 10.12' → 10 Aralık'ta YANLIŞ tetiklenmemeli.
+    expect(deadlineIsToday('5 Mart 10.12', { day: 10, month: 12 })).toBe(false);
+    expect(deadlineIsToday('5 Mart 10.12', { day: 5, month: 3 })).toBe(true);
   });
 });
 

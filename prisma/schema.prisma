@@ -908,6 +908,8 @@ model InternEmailSend {
   email         String
   subject       String
   kind          String    @default("send") // send | test
+  status        String    @default("sent")  // sent | error (gönderim başarısı)
+  lastError     String?   // gönderim hatası mesajı (status=error ise)
   sentByUserId  String?   // gönderen admin
   channel       String?   // smtp | resend
   firstOpenedAt DateTime? // ilk açılma (null = henüz açılmadı)

@@ -17,6 +17,33 @@ export const INTERN_EMAILS_SETTING_CATEGORY = 'email';
 /** Görev son teslim tarihi — maillerde "son teslim" rozeti + cron hatırlatması bunu kullanır. */
 export const INTERN_TASK_DEADLINE_LABEL = '14 Ağustos 17.00';
 
+/**
+ * Mailde gömülen mutlak URL'ler (özellikle AÇILMA TAKİP PIXEL'i) için güvenilir origin.
+ * KRİTİK: pixel URL'si asla `localhost` olmamalı — yoksa mail istemcisi (Gmail vb.) ona
+ * ulaşamaz ve açılma HİÇ kaydedilmez. Öncelik: MAIL_PUBLIC_ORIGIN (açık ayar) → normal origin
+ * (localhost değilse) → Vercel prod URL → normal origin (son çare). Böylece prod'da her zaman
+ * gerçek domain gömülür; lokal testte bile MAIL_PUBLIC_ORIGIN verilirse canlı domaine gider.
+ */
+export function mailPublicOrigin(): string {
+  const clean = (u: string) => u.replace(/\/$/, '');
+  const explicit = process.env.MAIL_PUBLIC_ORIGIN?.trim();
+  if (explicit) return clean(explicit);
+
+  const base = getPublicAppOrigin();
+  const isLocal = /localhost|127\.0\.0\.1|\.local(?::|$|\/)/i.test(base);
+  if (!isLocal) return clean(base);
+
+  // Origin localhost görünüyor → Vercel'in sağladığı prod/deployment URL'sine düş.
+  const vercelProd = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercelProd) return `https://${clean(vercelProd)}`;
+  const vercelUrl = process.env.VERCEL_URL?.trim();
+  if (vercelUrl) return `https://${clean(vercelUrl)}`;
+
+  // Hiçbiri yoksa localhost döner — açılma takibi çalışmaz ama mail yine gider (uyarı loglanır).
+  console.warn('[intern-mail] mailPublicOrigin localhost döndü; açılma takibi çalışmaz. MAIL_PUBLIC_ORIGIN ayarla.');
+  return clean(base);
+}
+
 export interface InternTaskEmail {
   /** Stabil id (düzenleme/silme için). */
   id: string;
@@ -30,6 +57,11 @@ export interface InternTaskEmail {
   subject: string;
   /** Mail gövdesi (düz metin/markdown; HTML wrapper gönderimde uygulanır). */
   body: string;
+  /**
+   * Bu görevin son teslim tarihi (serbest metin etiketi, ör. "14 Ağustos 17.00").
+   * Mailde "son teslim" kartında + hatırlatma cron'unda kullanılır. Boşsa varsayılan.
+   */
+  deadline?: string;
 }
 
 export const DEFAULT_INTERN_TASK_EMAILS: InternTaskEmail[] = [
@@ -413,6 +445,7 @@ export function normalizeInternEmails(value: unknown): InternTaskEmail[] {
       department: typeof r.department === 'string' ? r.department : 'Genel',
       recipientName: typeof r.recipientName === 'string' ? r.recipientName : '',
       email, subject, body,
+      deadline: typeof r.deadline === 'string' && r.deadline.trim() ? r.deadline.trim().slice(0, 60) : undefined,
     });
   }
   return out.length ? out : DEFAULT_INTERN_TASK_EMAILS;
@@ -507,26 +540,28 @@ const EMAIL_HEAD = `<head>
  * - trackToken verilirse görünmez açılma pixel'i.
  */
 export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: string): { html: string; text: string } {
-  const origin = getPublicAppOrigin().replace(/\/$/, '');
+  const origin = mailPublicOrigin();
   const theme = departmentTheme(tpl.department);
   const greetName = tpl.recipientName ? escHtml(tpl.recipientName) : 'Merhaba';
+  // Bu şablonun kendi son teslim tarihi (yoksa genel varsayılan).
+  const deadline = tpl.deadline && tpl.deadline.trim() ? tpl.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
 
   const pixel = trackToken
-    ? `<img src="${origin}/api/track/email-open/${encodeURIComponent(trackToken)}" width="1" height="1" alt="" style="display:none!important;width:1px;height:1px;opacity:0;overflow:hidden;" />`
+    ? `<img src="${origin}/api/track/email-open/${encodeURIComponent(trackToken)}" width="1" height="1" alt="" border="0" style="width:1px;height:1px;max-height:1px;max-width:1px;border:0;margin:0;padding:0;" />`
     : '';
 
   const html = `<!DOCTYPE html>
 <html lang="tr">
 ${EMAIL_HEAD}
 <body style="margin:0;padding:0;background:#eef2f7;-webkit-font-smoothing:antialiased;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">QRateX ekibinden görev ataması — son teslim ${escHtml(INTERN_TASK_DEADLINE_LABEL)}.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">QRateX ekibinden görev ataması — son teslim ${escHtml(deadline)}.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
 
         <!-- HERO: koyu gradient + gömülü beyaz logo + parıltı şeridi -->
         <tr><td style="background:#0b0618;background:linear-gradient(135deg,#1a0a2e 0%,#0f0f1e 55%,#16213e 100%);padding:40px 40px 32px;text-align:center;">
-          <img src="${QRATEX_WORDMARK_DATA_URI}" width="150" alt="QRateX" style="display:block;margin:0 auto 20px;max-width:150px;height:auto;border:0;" />
+          <img src="${QRATEX_WORDMARK_DATA_URI}" width="180" alt="QRateX" style="display:block;margin:0 auto 20px;width:180px;max-width:60%;height:auto;border:0;" />
           <div style="display:inline-block;padding:8px 18px;border-radius:999px;background:${theme.soft};border:1px solid ${theme.color}55;">
             <span style="font-size:13px;font-weight:800;letter-spacing:0.6px;color:${theme.color};">${theme.emoji}&nbsp;&nbsp;${escHtml(tpl.department.toUpperCase())} DEPARTMANI</span>
           </div>
@@ -551,7 +586,7 @@ ${EMAIL_HEAD}
                 <td width="52" style="vertical-align:middle;"><div style="width:44px;height:44px;border-radius:12px;background:#f59e0b;text-align:center;line-height:44px;font-size:22px;">⏳</div></td>
                 <td style="vertical-align:middle;padding-left:8px;">
                   <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:#b45309;text-transform:uppercase;">Son Teslim Tarihi</div>
-                  <div style="font-size:20px;font-weight:900;color:#78350f;margin-top:1px;">${escHtml(INTERN_TASK_DEADLINE_LABEL)}</div>
+                  <div style="font-size:20px;font-weight:900;color:#78350f;margin-top:1px;">${escHtml(deadline)}</div>
                   <div style="font-size:13px;color:#92400e;margin-top:2px;">Görev sonucunu bu tarih ve saate kadar iletmeni bekliyoruz.</div>
                 </td>
               </tr></table>
@@ -587,7 +622,7 @@ ${EMAIL_HEAD}
     '',
     tpl.body,
     '',
-    `⏳ Son teslim: ${INTERN_TASK_DEADLINE_LABEL}`,
+    `⏳ Son teslim: ${deadline}`,
     '',
     'ReverBot & QRateX Ekibi',
   ];
@@ -617,7 +652,7 @@ export function renderSimpleBrandedEmail(input: {
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;"><tr><td align="center">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
       <tr><td style="background:linear-gradient(135deg,#1a0a2e,#0f0f1e 55%,#16213e);padding:36px 40px 28px;text-align:center;">
-        <img src="${QRATEX_WORDMARK_DATA_URI}" width="140" alt="QRateX" style="display:block;margin:0 auto;max-width:140px;height:auto;border:0;" />
+        <img src="${QRATEX_WORDMARK_DATA_URI}" width="170" alt="QRateX" style="display:block;margin:0 auto;width:170px;max-width:60%;height:auto;border:0;" />
       </td></tr>
       <tr><td style="height:4px;background:linear-gradient(90deg,${accent},#e879f9,${accent});"></td></tr>
       <tr><td style="padding:34px 40px 30px;">
@@ -632,4 +667,46 @@ export function renderSimpleBrandedEmail(input: {
     </table>
   </td></tr></table>
 </body></html>`;
+}
+
+/** Türkçe ay adları → ay numarası (1-12). Serbest-metin deadline'ı çözmek için. */
+const TR_MONTHS: Record<string, number> = {
+  ocak: 1, şubat: 2, subat: 2, mart: 3, nisan: 4, mayıs: 5, mayis: 5, haziran: 6,
+  temmuz: 7, ağustos: 8, agustos: 8, eylül: 9, eylul: 9, ekim: 10, kasım: 11, kasim: 11, aralık: 12, aralik: 12,
+};
+
+/**
+ * Serbest-metin deadline etiketini ({gün} {ay adı}, ör. "14 Ağustos 17.00") bugünün TR
+ * tarihiyle karşılaştırır. Cron her gün çalışıp bugüne denk gelen görevleri bulmak için kullanır.
+ *
+ * ÖNEMLİ: BOŞ/tanımsız deadline → false döner (varsayılana DÜŞMEZ). Yani deadline'ı olmayan
+ * şablon için cron hatırlatması gönderilmez — 13 varsayılan şablonun hepsi 14 Ağustos'ta
+ * beklenmedik toplu mail atmasın diye. (Varsayılan etiket yalnızca mailde GÖRSEL gösterim içindir.)
+ *
+ * Parse: önce "{gün} {ay adı}" (ör. "14 Ağustos") denenir; bulunursa SONUÇ ONA göre döner ve
+ * sayısal biçim DENENMEZ — böylece metindeki SAAT kısmı ("...17.08") yanlışlıkla tarih sanılmaz.
+ * Ay adı yoksa "{gün}.{ay}" / "{gün}/{ay}" sayısal biçimi denenir.
+ */
+export function deadlineIsToday(deadline: string | undefined, today: { day: number; month: number }): boolean {
+  if (!deadline || !deadline.trim()) return false; // boş → hatırlatma yok
+  const raw = deadline.toLowerCase();
+
+  // 1) "14 ağustos ..." — gün + TR ay adı. Ay adı bulunursa SADECE bunu esas al (erken karar).
+  const nameMatch = raw.match(/(\d{1,2})\s*([a-zçğıöşü]+)/i);
+  if (nameMatch) {
+    const month = TR_MONTHS[nameMatch[2]];
+    if (month) {
+      const day = parseInt(nameMatch[1], 10);
+      return day === today.day && month === today.month; // saat kısmına BAKMA
+    }
+  }
+
+  // 2) Ay adı yoktu → "14.08" / "14/08" sayısal biçim. (ay 1-12 olmalı.)
+  const numMatch = raw.match(/\b(\d{1,2})[.\/](\d{1,2})\b/);
+  if (numMatch) {
+    const day = parseInt(numMatch[1], 10);
+    const month = parseInt(numMatch[2], 10);
+    if (month >= 1 && month <= 12) return day === today.day && month === today.month;
+  }
+  return false;
 }

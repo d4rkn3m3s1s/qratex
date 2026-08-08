@@ -5,41 +5,45 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { prisma } from '@/lib/prisma';
 import { sendTransactionalEmail, isMailConfigured } from '@/lib/mail-sender';
 import { checkRateLimitDb } from '@/lib/rate-limit';
-import { nanoid } from 'nanoid';
+import { randomBytes } from 'crypto';
 import {
   getInternTaskEmails,
   saveInternTaskEmails,
   normalizeInternEmails,
   renderInternTaskEmailHtml,
 } from '@/lib/intern-task-emails';
+import { groupSends } from '@/lib/intern-email-stats';
 
 export const dynamic = 'force-dynamic';
 
-/** GET — şablon listesi + her şablon için gönderim/açılma özeti + mail yapılandırma durumu. */
+/**
+ * URL-safe açılma-takip token'ı (base64url, ~24 karakter). Pixel endpoint regex'i
+ * /^[A-Za-z0-9_-]{6,64}$/ ile uyumlu. crypto ile — harici bağımlılık (nanoid) gerekmez.
+ */
+function makeTrackToken(): string {
+  return randomBytes(18).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** GET — şablon listesi + her şablon için gönderim/açılma özeti (gerçek + test) + mail durumu. */
 export async function GET() {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
   const templates = await getInternTaskEmails();
 
-  // Gönderim/açılma özeti (yalnız gerçek 'send'ler; test hariç). Şablon başına grupla.
-  const sends = await prisma.internEmailSend.findMany({
-    where: { kind: 'send' },
-    select: { templateId: true, email: true, firstOpenedAt: true, lastOpenedAt: true, openCount: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
+  // Gönderim/açılma özeti — HEM gerçek ('send') HEM test ('test') kayıtları.
+  // Her alıcı için son (en yeni) kayıt esas alınır — tekrar gönderimde durum güncellenir.
+  // Gerçek gönderim → stats; test gönderim → testStats (panelde ayrı gösterilir).
+  const rows = await prisma.internEmailSend.findMany({
+    where: { kind: { in: ['send', 'test'] } },
+    select: { templateId: true, kind: true, email: true, status: true, lastError: true, firstOpenedAt: true, lastOpenedAt: true, openCount: true, createdAt: true, id: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], // eşit createdAt'te deterministik (id tie-breaker)
   }).catch(() => []);
 
-  const statsByTemplate: Record<string, { sent: number; opened: number; lastSentAt: string | null; recipients: { email: string; openedAt: string | null; openCount: number }[] }> = {};
-  for (const s of sends) {
-    const st = statsByTemplate[s.templateId] ?? { sent: 0, opened: 0, lastSentAt: null, recipients: [] };
-    st.sent += 1;
-    if (s.firstOpenedAt) st.opened += 1;
-    if (!st.lastSentAt) st.lastSentAt = s.createdAt.toISOString(); // en yeni (orderBy desc)
-    st.recipients.push({ email: s.email, openedAt: s.firstOpenedAt?.toISOString() ?? null, openCount: s.openCount });
-    statsByTemplate[s.templateId] = st;
-  }
+  const statsByTemplate = groupSends(rows.filter((r) => r.kind !== 'test'));
+  const testStatsByTemplate = groupSends(rows.filter((r) => r.kind === 'test'));
 
   return NextResponse.json(
-    { success: true, templates, stats: statsByTemplate, mailConfigured: isMailConfigured() },
+    { success: true, templates, stats: statsByTemplate, testStats: testStatsByTemplate, mailConfigured: isMailConfigured() },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );
 }
@@ -113,19 +117,21 @@ export async function POST(request: NextRequest) {
   const results: { to: string; ok: boolean; channel?: string; error?: string }[] = [];
   for (const to of recipients) {
     // Açılma takibi için benzersiz token + gönderim kaydı (test dahil).
-    const token = nanoid(24);
+    const token = makeTrackToken();
     const { html, text } = renderInternTaskEmailHtml(tpl, token);
     const subject = action === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
     const r = await sendTransactionalEmail({ to, subject, html, text });
-    // Kayıt oluştur (gönderim başarılıysa; token pixel'iyle eşleşir).
-    if (r.ok) {
-      await prisma.internEmailSend.create({
-        data: {
-          token, templateId: tpl.id, department: tpl.department, recipientName: tpl.recipientName,
-          email: to, subject, kind: action, sentByUserId: userId, channel: r.channel,
-        },
-      }).catch(() => {});
-    }
+    // Kayıt oluştur — HEM başarı HEM hata (durum panelinde gitti✓/hata✗ görünsün).
+    // Başarılıysa token pixel'iyle eşleşir (açılma takibi); hatalıysa status=error + mesaj.
+    await prisma.internEmailSend.create({
+      data: {
+        token, templateId: tpl.id, department: tpl.department, recipientName: tpl.recipientName,
+        email: to, subject, kind: action, sentByUserId: userId,
+        status: r.ok ? 'sent' : 'error',
+        channel: r.ok ? r.channel : null,
+        lastError: r.ok ? null : (r.error ?? 'Bilinmeyen gönderim hatası').slice(0, 300),
+      },
+    }).catch(() => {});
     results.push({ to, ok: r.ok, channel: r.ok ? r.channel : undefined, error: r.ok ? undefined : r.error });
   }
 

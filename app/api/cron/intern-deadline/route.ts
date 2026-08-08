@@ -2,13 +2,17 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendTransactionalEmail, isMailConfigured } from '@/lib/mail-sender';
-import { getInternTaskEmails, INTERN_TASK_DEADLINE_LABEL, renderSimpleBrandedEmail } from '@/lib/intern-task-emails';
+import {
+  getInternTaskEmails,
+  INTERN_TASK_DEADLINE_LABEL,
+  renderSimpleBrandedEmail,
+  deadlineIsToday,
+} from '@/lib/intern-task-emails';
 import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
-/** Son teslim hatırlatmasının gönderileceği gün (yerel/UTC gün eşleşmesi — TR ~UTC+3). */
-const REMINDER_DATE = { month: 8, day: 14 }; // 14 Ağustos
+/** Idempotent bayrak anahtarı (bu şablon, bu gün için hatırlatma gönderildi mi). */
 const SENT_FLAG_KEY = 'intern_deadline_reminder_sent';
 
 function validBearer(authHeader: string | null, secret: string): boolean {
@@ -19,9 +23,10 @@ function validBearer(authHeader: string | null, secret: string): boolean {
 }
 
 /**
- * Vercel Cron — her gün çalışır. 14 Ağustos ise (ve daha önce gönderilmediyse) tüm stajyer
- * görev alıcılarına "görev bugün bitiyor, sonucunu gönder" hatırlatma maili atar. Idempotent:
- * Settings flag ile aynı yıl bir kez gönderilir. Diğer günlerde no-op.
+ * Vercel Cron — her gün çalışır. Son teslim tarihi (şablonun kendi `deadline`'ı; yoksa
+ * varsayılan) BUGÜN olan görev şablonlarının alıcılarına "görev bugün bitiyor, sonucunu
+ * gönder" hatırlatma maili atar. Her şablon kendi tarihinde tetiklenir (şablon-başına tarih).
+ * Idempotent: Settings flag ile (şablon+gün) bazında bir kez gönderilir. CRON_SECRET fail-closed.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -31,71 +36,80 @@ export async function GET(req: Request) {
   }
 
   try {
-    // TR saatiyle bugünün ay/gün'ü.
+    // TR saatiyle bugünün gün/ay'ı + gün anahtarı (idempotent flag için).
     const nowTr = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
-    const month = nowTr.getMonth() + 1;
     const day = nowTr.getDate();
+    const month = nowTr.getMonth() + 1;
     const year = nowTr.getFullYear();
+    const dayKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-    if (month !== REMINDER_DATE.month || day !== REMINDER_DATE.day) {
-      return NextResponse.json({ ok: true, skipped: 'not-deadline-day', today: `${day}.${month}` });
+    const templates = await getInternTaskEmails();
+    // Bugüne denk gelen (kendi deadline'ı bugün olan) şablonları seç.
+    const dueToday = templates.filter((t) => deadlineIsToday(t.deadline, { day, month }));
+    if (dueToday.length === 0) {
+      return NextResponse.json({ ok: true, skipped: 'no-template-due-today', today: `${day}.${month}` });
     }
 
-    // Idempotent: bu yıl zaten gönderildiyse tekrar gönderme.
+    // Idempotent: bu gün için zaten gönderilen şablon id'leri.
     const flag = await prisma.settings.findUnique({ where: { key: SENT_FLAG_KEY }, select: { value: true } }).catch(() => null);
-    const sentYear = (flag?.value as { year?: number } | null)?.year;
-    if (sentYear === year) {
-      return NextResponse.json({ ok: true, skipped: 'already-sent-this-year' });
+    const flagVal = (flag?.value as { dayKey?: string; templateIds?: string[] } | null) ?? null;
+    const alreadySent = new Set(flagVal?.dayKey === dayKey ? (flagVal.templateIds ?? []) : []);
+
+    const pending = dueToday.filter((t) => !alreadySent.has(t.id));
+    if (pending.length === 0) {
+      return NextResponse.json({ ok: true, skipped: 'already-sent-today', dueToday: dueToday.length });
     }
 
     if (!isMailConfigured()) {
       return NextResponse.json({ error: 'Mail yapılandırması eksik' }, { status: 400 });
     }
 
-    const templates = await getInternTaskEmails();
-    // Benzersiz alıcı adresleri (virgüllü çok alıcıları da aç).
-    const recipients = new Map<string, string>(); // email → recipientName
-    for (const t of templates) {
-      for (const e of t.email.split(',').map((s) => s.trim()).filter(Boolean)) {
-        if (!recipients.has(e)) recipients.set(e, t.recipientName || '');
-      }
-    }
-
     let sent = 0;
-    for (const [email, name] of recipients) {
-      const html = renderSimpleBrandedEmail({
-        heading: '⏳ Son gün: Görevini bugün teslim et!',
-        accent: '#f59e0b',
-        bodyHtml: `
-          <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">Merhaba${name ? ' ' + escapeName(name) : ''},</p>
-          <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">
-            QRateX ekip görevinin son teslim tarihi <b style="color:#b45309;">bugün</b> — <b style="color:#b45309;">${INTERN_TASK_DEADLINE_LABEL}</b>.
-            Hazırladığın çalışmayı bu saate kadar iletmeni bekliyoruz. 🚀
-          </p>
-          <p style="margin:0;line-height:1.7;color:#475569;font-size:15px;">
-            Eğer çoktan tamamladıysan, teşekkürler! Bir sorun yaşarsan bize hemen yaz.
-          </p>`,
-      });
-      const text = `Merhaba${name ? ' ' + name : ''},\n\nQRateX ekip görevinin son teslim tarihi bugün — ${INTERN_TASK_DEADLINE_LABEL}. Çalışmanı bu saate kadar ilet.\n\nBaşarılar dileriz. ReverBot & QRateX Ekibi`;
-      const r = await sendTransactionalEmail({ to: email, subject: '⏳ QRateX — Görev bugün teslim (son gün)', html, text });
-      if (r.ok) sent++;
+    const doneTemplateIds: string[] = [...alreadySent];
+    for (const t of pending) {
+      const deadlineLabel = t.deadline && t.deadline.trim() ? t.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
+      const recipients = t.email.split(',').map((s) => s.trim()).filter(Boolean);
+      let anySuccess = false; // en az bir alıcıya ulaşıldıysa şablon "gönderildi" sayılır
+      for (const email of recipients) {
+        const name = t.recipientName || '';
+        const html = renderSimpleBrandedEmail({
+          heading: '⏳ Son gün: Görevini bugün teslim et!',
+          accent: '#f59e0b',
+          bodyHtml: `
+            <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">Merhaba${name ? ' ' + escapeName(name) : ''},</p>
+            <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">
+              <b style="color:#b45309;">${escapeName(t.department)}</b> görevinin son teslim tarihi <b style="color:#b45309;">bugün</b> — <b style="color:#b45309;">${escapeName(deadlineLabel)}</b>.
+              Hazırladığın çalışmayı bu saate kadar iletmeni bekliyoruz. 🚀
+            </p>
+            <p style="margin:0;line-height:1.7;color:#475569;font-size:15px;">
+              Eğer çoktan tamamladıysan, teşekkürler! Bir sorun yaşarsan bize hemen yaz.
+            </p>`,
+        });
+        const text = `Merhaba${name ? ' ' + name : ''},\n\n${t.department} görevinin son teslim tarihi bugün — ${deadlineLabel}. Çalışmanı bu saate kadar ilet.\n\nBaşarılar dileriz. ReverBot & QRateX Ekibi`;
+        const r = await sendTransactionalEmail({ to: email, subject: '⏳ QRateX — Görev bugün teslim (son gün)', html, text });
+        if (r.ok) { sent++; anySuccess = true; }
+      }
+      // FAIL-CLOSED: yalnız en az bir gönderim BAŞARILIYSA "bugün gönderildi" işaretle.
+      // Hepsi başarısızsa (SMTP down vb.) işaretleme → aynı gün sonraki cron tekrar dener.
+      if (anySuccess) doneTemplateIds.push(t.id);
     }
 
-    // Gönderim bayrağını yaz (bu yıl tekrar göndermesin).
+    // Gönderim bayrağını yaz (bu gün + gönderilen şablon id'leri).
+    const uniqueIds = Array.from(new Set(doneTemplateIds));
     await prisma.settings.upsert({
       where: { key: SENT_FLAG_KEY },
-      update: { value: { year } as Prisma.InputJsonValue, category: 'email' },
-      create: { key: SENT_FLAG_KEY, value: { year } as Prisma.InputJsonValue, category: 'email' },
+      update: { value: { dayKey, templateIds: uniqueIds } as Prisma.InputJsonValue, category: 'email' },
+      create: { key: SENT_FLAG_KEY, value: { dayKey, templateIds: uniqueIds } as Prisma.InputJsonValue, category: 'email' },
     }).catch(() => {});
 
-    return NextResponse.json({ ok: true, sent, total: recipients.size });
+    return NextResponse.json({ ok: true, sent, templates: pending.length, dueToday: dueToday.length });
   } catch (error) {
     console.error('[CRON intern-deadline]', error);
     return NextResponse.json({ error: 'Hatırlatma gönderilemedi' }, { status: 500 });
   }
 }
 
-/** Basit HTML-escape (isim enjeksiyonu önlemi). */
+/** Basit HTML-escape (isim/etiket enjeksiyonu önlemi). */
 function escapeName(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Mail, Send, FlaskConical, Save, Trash2, Plus, Loader2, CheckCircle2,
-  Clock, Users, AlertTriangle, Eye,
+  Clock, Users, AlertTriangle, Eye, XCircle, CalendarClock,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
@@ -21,12 +21,22 @@ interface Template {
   email: string;
   subject: string;
   body: string;
+  deadline?: string;
+}
+interface Recipient {
+  email: string;
+  status: string;        // 'sent' | 'error'
+  error: string | null;
+  openedAt: string | null;
+  openCount: number;
+  sentAt: string;
 }
 interface Stat {
-  sent: number;
-  opened: number;
+  sent: number;          // başarıyla gönderilen alıcı sayısı
+  opened: number;        // maili açan alıcı sayısı
+  errored: number;       // gönderim hatası alan alıcı sayısı
   lastSentAt: string | null;
-  recipients: { email: string; openedAt: string | null; openCount: number }[];
+  recipients: Recipient[];
 }
 
 const deptEmoji = (d: string) => {
@@ -43,6 +53,7 @@ const deptEmoji = (d: string) => {
 export default function InternEmailsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [stats, setStats] = useState<Record<string, Stat>>({});
+  const [testStats, setTestStats] = useState<Record<string, Stat>>({});
   const [mailConfigured, setMailConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -58,6 +69,7 @@ export default function InternEmailsPage() {
       if (!res.ok) throw new Error(data?.error || 'Yüklenemedi');
       setTemplates(data.templates ?? []);
       setStats(data.stats ?? {});
+      setTestStats(data.testStats ?? {});
       setMailConfigured(!!data.mailConfigured);
       if (!selectedId && data.templates?.[0]) setSelectedId(data.templates[0].id);
     } catch (e) {
@@ -65,7 +77,7 @@ export default function InternEmailsPage() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedId]);
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,6 +148,7 @@ export default function InternEmailsPage() {
   };
 
   const stat = selected ? stats[selected.id] : undefined;
+  const testStat = selected ? testStats[selected.id] : undefined;
 
   return (
     <div className="space-y-6">
@@ -175,6 +188,9 @@ export default function InternEmailsPage() {
                           className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
                         >
                           <span className="min-w-0 flex-1 truncate font-medium">{t.recipientName || t.email || 'İsimsiz'}</span>
+                          {s && s.errored > 0 && (
+                            <span title={`${s.errored} gönderim hatası`} className="shrink-0 text-red-500"><XCircle className="h-4 w-4" /></span>
+                          )}
                           {s && s.sent > 0 && (
                             s.opened > 0
                               ? <span title={`${s.opened}/${s.sent} açıldı`} className="shrink-0 text-emerald-500"><CheckCircle2 className="h-4 w-4" /></span>
@@ -198,17 +214,59 @@ export default function InternEmailsPage() {
         {/* SAĞ: düzenleme + gönderim + açılma durumu */}
         {selected ? (
           <div className="space-y-4">
-            {/* Açılma durumu şeridi */}
-            {stat && stat.sent > 0 && (
+            {/* GÖNDERİM + AÇILMA DURUMU paneli (gitti mi + okundu mu tek yerde) */}
+            {stat && (stat.sent > 0 || stat.errored > 0) && (
               <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-fuchsia-500/5">
-                <CardContent className="flex flex-wrap items-center gap-4 py-3 text-sm">
-                  <span className="flex items-center gap-1.5"><Users className="h-4 w-4 text-primary" /> {stat.sent} gönderildi</span>
-                  <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400"><Eye className="h-4 w-4" /> {stat.opened} açıldı</span>
-                  {stat.recipients.some((r) => r.openedAt) && (
-                    <span className="text-xs text-muted-foreground">
-                      Açanlar: {stat.recipients.filter((r) => r.openedAt).map((r) => r.email).join(', ')}
+                <CardContent className="space-y-3 py-4">
+                  {/* Özet rozetleri */}
+                  <div className="flex flex-wrap items-center gap-2.5 text-sm">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" /> {stat.sent} gitti
                     </span>
-                  )}
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
+                      <Eye className="h-4 w-4" /> {stat.opened} açıldı
+                    </span>
+                    {stat.errored > 0 && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 font-semibold text-red-600 dark:text-red-400">
+                        <XCircle className="h-4 w-4" /> {stat.errored} hata
+                      </span>
+                    )}
+                    {stat.lastSentAt && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        Son gönderim: {new Date(stat.lastSentAt).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  {/* Alıcı-bazlı durum listesi */}
+                  <div className="space-y-1 border-t border-border/60 pt-2.5">
+                    {stat.recipients.map((r) => (
+                      <div key={r.email} className="flex items-center gap-2 text-xs">
+                        {r.status === 'error' ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-red-500" title={r.error ?? 'Gönderim hatası'}>
+                            <XCircle className="h-3.5 w-3.5" /> Hata
+                          </span>
+                        ) : r.openedAt ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                            <Eye className="h-3.5 w-3.5" /> Açıldı
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <Clock className="h-3.5 w-3.5" /> Bekliyor
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-foreground">{r.email}</span>
+                        {r.status !== 'error' && r.openedAt && (
+                          <span className="shrink-0 text-muted-foreground">
+                            {new Date(r.openedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            {r.openCount > 1 && ` · ${r.openCount}×`}
+                          </span>
+                        )}
+                        {r.status === 'error' && r.error && (
+                          <span className="shrink-0 max-w-[45%] truncate text-red-400" title={r.error}>{r.error}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -223,8 +281,19 @@ export default function InternEmailsPage() {
                 </div>
                 <div className="space-y-1"><Label className="text-xs">E-posta (çoklu için virgül)</Label>
                   <Input value={selected.email} onChange={(e) => updateSelected({ email: e.target.value })} placeholder="ornek@gmail.com" /></div>
-                <div className="space-y-1"><Label className="text-xs">Konu</Label>
-                  <Input value={selected.subject} onChange={(e) => updateSelected({ subject: e.target.value })} /></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1"><Label className="text-xs">Konu</Label>
+                    <Input value={selected.subject} onChange={(e) => updateSelected({ subject: e.target.value })} /></div>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1.5 text-xs"><CalendarClock className="h-3.5 w-3.5" /> Son teslim tarihi</Label>
+                    <Input
+                      value={selected.deadline ?? ''}
+                      onChange={(e) => updateSelected({ deadline: e.target.value })}
+                      placeholder="14 Ağustos 17.00"
+                    />
+                    <p className="text-[11px] leading-tight text-muted-foreground">Bu maile özel bitiş tarihi. Boş bırakırsan varsayılan (14 Ağustos 17.00) kullanılır.</p>
+                  </div>
+                </div>
                 <div className="space-y-1"><Label className="text-xs">Mail içeriği</Label>
                   <Textarea value={selected.body} onChange={(e) => updateSelected({ body: e.target.value })} rows={14} className="font-mono text-xs leading-relaxed" /></div>
                 <div className="flex items-center justify-between pt-1">
@@ -246,6 +315,49 @@ export default function InternEmailsPage() {
                     {busy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />} Test gönder
                   </Button>
                 </div>
+
+                {/* TEST maillerinin gönderim + açılma durumu (kendine attığın denemeleri de izle) */}
+                {testStat && (testStat.sent > 0 || testStat.errored > 0) && (
+                  <div className="rounded-lg border border-dashed border-primary/30 bg-primary/[0.03] p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-semibold uppercase tracking-wide text-muted-foreground">
+                        <FlaskConical className="h-3 w-3" /> Test denemeleri
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" /> {testStat.sent} gitti</span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-primary"><Eye className="h-3.5 w-3.5" /> {testStat.opened} açıldı</span>
+                      {testStat.errored > 0 && (
+                        <span className="inline-flex items-center gap-1 font-semibold text-red-500"><XCircle className="h-3.5 w-3.5" /> {testStat.errored} hata</span>
+                      )}
+                      <button onClick={load} className="ml-auto inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline" title="Durumu yenile">
+                        <Loader2 className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> Yenile
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {testStat.recipients.map((r) => (
+                        <div key={r.email + r.sentAt} className="flex items-center gap-2 text-xs">
+                          {r.status === 'error' ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-red-500" title={r.error ?? 'Gönderim hatası'}><XCircle className="h-3.5 w-3.5" /> Hata</span>
+                          ) : r.openedAt ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400"><Eye className="h-3.5 w-3.5" /> Açıldı</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground"><Clock className="h-3.5 w-3.5" /> Bekliyor</span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-foreground">{r.email}</span>
+                          {r.status !== 'error' && r.openedAt && (
+                            <span className="shrink-0 text-muted-foreground">
+                              {new Date(r.openedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {r.openCount > 1 && ` · ${r.openCount}×`}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] leading-tight text-muted-foreground">
+                      Açılma, mail istemcisi görselleri yüklediğinde kaydedilir. Bazı istemciler görselleri engelleyebilir (o zaman &quot;Bekliyor&quot; kalır). &quot;Yenile&quot;ye basıp güncel durumu gör.
+                    </p>
+                  </div>
+                )}
+
                 <div className="h-px bg-border" />
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Gerçek alıcı: <b className="text-foreground">{selected.email || '—'}</b></p>
