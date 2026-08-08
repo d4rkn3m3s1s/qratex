@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TW_BRAND_CTA_BUTTON, TW_BRAND_GRADIENT_STOPS_SOFT } from '@/lib/tw-brand-classes';
+import { badgeColorStyle } from '@/lib/badge-colors';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -77,6 +78,8 @@ interface BadgeType {
   pointCost?: number | null;
   requirement: string;
   isActive: boolean;
+  color?: string | null;
+  bgColor?: string | null;
   _count?: {
     userBadges: number;
   };
@@ -293,6 +296,8 @@ export default function AdminBadgesPage() {
     pointCost: null as number | null,
     requirement: '',
     isActive: true,
+    color: '' as string,   // '' = rarity varsayılan rengi kullan
+    bgColor: '' as string, // '' = rarity varsayılan zemini kullan
   });
 
   useEffect(() => {
@@ -504,6 +509,8 @@ export default function AdminBadgesPage() {
       pointCost: null,
       requirement: '',
       isActive: true,
+      color: '',
+      bgColor: '',
     });
     setIconSearch('');
   };
@@ -520,6 +527,8 @@ export default function AdminBadgesPage() {
       pointCost: badge.pointCost ?? null,
       requirement: badge.requirement,
       isActive: badge.isActive,
+      color: badge.color ?? '',
+      bgColor: badge.bgColor ?? '',
     });
     setIconSearch('');
     setEditDialogOpen(true);
@@ -693,6 +702,86 @@ export default function AdminBadgesPage() {
           />
         </div>
       </div>
+      {/* RENK / ARKA PLAN — admin rozet-başına canlı renk verir (rarity paletini ezer).
+          Boş bırakılırsa rarity varsayılan rengi kullanılır. */}
+      <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-3">
+        <div className="flex items-center justify-between">
+          <Label>Renk & Arka Plan</Label>
+          {(formData.color || formData.bgColor) && (
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, color: '', bgColor: '' })}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              Sıfırla (nadirlik rengi)
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Vurgu rengi</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={formData.color || '#9333ea'}
+                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                className="h-9 w-12 cursor-pointer rounded border border-border bg-transparent"
+                aria-label="Vurgu rengi"
+              />
+              <Input
+                value={formData.color}
+                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                placeholder="#9333ea"
+                className="h-9 flex-1 font-mono text-xs"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs text-muted-foreground">Arka plan rengi</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={formData.bgColor || formData.color || '#c026d3'}
+                onChange={(e) => setFormData({ ...formData, bgColor: e.target.value })}
+                className="h-9 w-12 cursor-pointer rounded border border-border bg-transparent"
+                aria-label="Arka plan rengi"
+              />
+              <Input
+                value={formData.bgColor}
+                onChange={(e) => setFormData({ ...formData, bgColor: e.target.value })}
+                placeholder="#c026d3"
+                className="h-9 flex-1 font-mono text-xs"
+              />
+            </div>
+          </div>
+        </div>
+        {/* Canlı önizleme — kazanınca görülecek his */}
+        {(() => {
+          const style = badgeColorStyle(formData.color, formData.bgColor);
+          return (
+            <div
+              className="flex items-center gap-3 rounded-xl border p-3"
+              style={style ?? { borderColor: 'hsl(var(--border))' }}
+            >
+              <span
+                className="grid h-10 w-10 place-items-center rounded-lg text-lg"
+                style={style ? { background: style.background, color: style.color } : { background: 'hsl(var(--muted))' }}
+              >
+                {formData.icon?.startsWith('/') ? '🏅' : '🏅'}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold" style={style ? { color: style.color } : undefined}>
+                  {formData.name || 'Rozet önizleme'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {style ? 'Özel renk uygulandı' : 'Nadirlik varsayılan rengi'}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
         <Label>Aktif</Label>
         <Switch

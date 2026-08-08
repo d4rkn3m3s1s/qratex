@@ -30,6 +30,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/admin-toast';
 import { BADGE_RARITY_DARK } from '@/lib/badge-rarity-surfaces';
+import { badgeColorStyle } from '@/lib/badge-colors';
 import { TW_BRAND_GRADIENT_STOPS_SOFT } from '@/lib/tw-brand-classes';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { CharacterCard } from '@/components/customer/character-card';
@@ -45,6 +46,8 @@ interface BadgeType {
   points: number;
   pointCost?: number | null;
   requirement: string;
+  color?: string | null;
+  bgColor?: string | null;
   earned?: boolean;
   earnedAt?: string;
   progress?: number;
@@ -52,11 +55,13 @@ interface BadgeType {
   targetValue?: number;
 }
 
+// Rarity paletleri — light modda ARTIK CANLI/DOYGUN (önceki via-white tonları soluk
+// kalıp "kazandım!" hissiyatı vermiyordu). Nadirlik yükseldikçe renk + parıltı artar.
 const rarityConfig = {
   COMMON: {
     labelKey: 'customerBadges.rarity.common',
     color: 'from-gray-400 to-gray-600',
-    cardBg: `bg-gradient-to-br from-slate-50 via-white to-slate-100 ${BADGE_RARITY_DARK.slate}`,
+    cardBg: `bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 ${BADGE_RARITY_DARK.slate}`,
     borderColor: 'border-slate-300/80 dark:border-slate-500/40',
     textColor: 'text-slate-700 dark:text-gray-400',
     glowColor: 'shadow-gray-400/20 dark:shadow-slate-400/20',
@@ -67,34 +72,37 @@ const rarityConfig = {
   RARE: {
     labelKey: 'customerBadges.rarity.rare',
     color: 'from-blue-400 to-cyan-500',
-    cardBg: `bg-gradient-to-br from-sky-50/90 via-white to-blue-100/90 ${BADGE_RARITY_DARK.blue}`,
-    borderColor: 'border-sky-300/90 dark:border-cyan-500/40',
-    textColor: 'text-sky-700 dark:text-cyan-400',
-    glowColor: 'shadow-blue-400/20 dark:shadow-cyan-500/30',
-    neonGlow: 'dark:shadow-[0_0_15px_rgba(34,211,238,0.2),0_0_40px_rgba(34,211,238,0.1)]',
+    // Doygun mavi-cyan: light modda gerçek renk hissi + hafif parıltı.
+    cardBg: `bg-gradient-to-br from-sky-200 via-cyan-100 to-blue-200 ${BADGE_RARITY_DARK.blue}`,
+    borderColor: 'border-sky-400 dark:border-cyan-500/40',
+    textColor: 'text-sky-800 dark:text-cyan-400',
+    glowColor: 'shadow-cyan-400/40 dark:shadow-cyan-500/30',
+    neonGlow: 'shadow-[0_0_18px_rgba(34,211,238,0.25)] dark:shadow-[0_0_15px_rgba(34,211,238,0.2),0_0_40px_rgba(34,211,238,0.1)]',
     badgeBg: 'bg-sky-100 dark:bg-cyan-900/40',
     icon: Shield,
   },
   EPIC: {
     labelKey: 'customerBadges.rarity.epic',
     color: TW_BRAND_GRADIENT_STOPS_SOFT,
-    cardBg: `bg-gradient-to-br from-primary/[0.06] via-white to-primary/10 ${BADGE_RARITY_DARK.epic}`,
-    borderColor: 'border-primary/40 dark:border-primary/50',
-    textColor: 'text-primary dark:text-primary',
-    glowColor: 'shadow-primary/20 dark:shadow-primary/30',
-    neonGlow: 'dark:shadow-[0_0_15px_hsl(var(--primary)_/_0.25),0_0_40px_hsl(var(--primary)_/_0.12)]',
-    badgeBg: 'bg-primary/15 dark:bg-primary/25',
+    // Mor/fuşya epik: canlı primary tonları + belirgin parıltı.
+    cardBg: `bg-gradient-to-br from-fuchsia-200 via-purple-100 to-violet-200 ${BADGE_RARITY_DARK.epic}`,
+    borderColor: 'border-fuchsia-400 dark:border-primary/50',
+    textColor: 'text-fuchsia-800 dark:text-primary',
+    glowColor: 'shadow-fuchsia-400/40 dark:shadow-primary/30',
+    neonGlow: 'shadow-[0_0_22px_rgba(217,70,239,0.3)] dark:shadow-[0_0_15px_hsl(var(--primary)_/_0.25),0_0_40px_hsl(var(--primary)_/_0.12)]',
+    badgeBg: 'bg-fuchsia-100 dark:bg-primary/25',
     icon: Zap,
   },
   LEGENDARY: {
     labelKey: 'customerBadges.rarity.legendary',
     color: 'from-yellow-400 via-orange-500 to-red-500',
-    cardBg: `bg-gradient-to-br from-amber-50/90 via-white to-orange-100/90 ${BADGE_RARITY_DARK.ember}`,
-    borderColor: 'border-amber-400/90 dark:border-yellow-500/50',
-    textColor: 'text-amber-700 dark:text-yellow-400',
-    glowColor: 'shadow-yellow-400/30 dark:shadow-yellow-500/50',
-    neonGlow: 'dark:shadow-[0_0_20px_rgba(250,204,21,0.2),0_0_50px_rgba(250,204,21,0.1)]',
-    badgeBg: 'bg-yellow-100 dark:bg-amber-900/40',
+    // Altın-turuncu efsanevi: en göz alıcı, güçlü sıcak gradient + yoğun parıltı.
+    cardBg: `bg-gradient-to-br from-amber-200 via-orange-200 to-red-200 ${BADGE_RARITY_DARK.ember}`,
+    borderColor: 'border-amber-400 dark:border-yellow-500/50',
+    textColor: 'text-amber-800 dark:text-yellow-400',
+    glowColor: 'shadow-orange-400/50 dark:shadow-yellow-500/50',
+    neonGlow: 'shadow-[0_0_26px_rgba(251,146,60,0.4)] dark:shadow-[0_0_20px_rgba(250,204,21,0.2),0_0_50px_rgba(250,204,21,0.1)]',
+    badgeBg: 'bg-amber-100 dark:bg-amber-900/40',
     icon: Crown,
   },
 };
@@ -418,6 +426,9 @@ export default function CustomerBadgesPage() {
                     {catBadges.map((badge, index) => {
                       const config = rarityConfig[badge.rarity];
                       const isEarned = badge.earned;
+                      // Admin özel renk verdiyse (Badge.color) rarity zemini/çerçevesini EZER.
+                      // Yalnız kazanılmış rozette uygulanır (kilitli kart nötr kalır).
+                      const customStyle = isEarned ? badgeColorStyle(badge.color, badge.bgColor) : null;
                       return (
                         <motion.div
                           key={badge.id}
@@ -428,9 +439,12 @@ export default function CustomerBadgesPage() {
                           transition={{ delay: index * 0.04 }}
                         >
                           <div
-                            className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${config.cardBg} ${config.neonGlow} ${
-                              isEarned ? `border-2 ${config.borderColor} ${config.glowColor}` : 'border-2 border-slate-300/70 dark:border-white/10 bg-slate-50/80 dark:bg-transparent shadow-sm'
+                            className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${customStyle ? '' : `${config.cardBg} ${config.neonGlow}`} ${
+                              customStyle
+                                ? 'border-2'
+                                : isEarned ? `border-2 ${config.borderColor} ${config.glowColor}` : 'border-2 border-slate-300/70 dark:border-white/10 bg-slate-50/80 dark:bg-transparent shadow-sm'
                             }`}
+                            style={customStyle ? { background: customStyle.background, borderColor: customStyle.borderColor, boxShadow: customStyle.boxShadow } : undefined}
                             onClick={() => setSelectedBadge(badge)}
                           >
                             <div className="absolute inset-0 hidden dark:block overflow-hidden rounded-2xl">

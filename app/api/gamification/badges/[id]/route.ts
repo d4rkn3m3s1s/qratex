@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { sanitizeHexColor } from '@/lib/badge-colors';
 
 // GET /api/gamification/badges/[id] - Get single badge
 
@@ -73,6 +74,9 @@ export async function PATCH(
           : { type: 'custom', value: body.points || 100 },
         ...(typeof body.pointCost === 'number' || body.pointCost === null ? { pointCost: body.pointCost } : {}),
         isActive: body.isActive,
+        // Renk: alan gövdede varsa güncelle (boş string/null → temizle = rarity varsayılanına dön).
+        ...('color' in body ? { color: sanitizeHexColor(body.color) } : {}),
+        ...('bgColor' in body ? { bgColor: sanitizeHexColor(body.bgColor) } : {}),
       },
     });
 

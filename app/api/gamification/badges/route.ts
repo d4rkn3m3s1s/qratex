@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { Prisma } from '@prisma/client';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { sanitizeHexColor } from '@/lib/badge-colors';
 
 
 export const dynamic = 'force-dynamic';
@@ -274,6 +275,8 @@ export async function POST(request: NextRequest) {
         requirement: normalizedRequirement,
         pointCost: typeof body.pointCost === 'number' ? body.pointCost : null,
         isActive: body.isActive ?? true,
+        color: sanitizeHexColor(body.color),
+        bgColor: sanitizeHexColor(body.bgColor),
       },
     });
 

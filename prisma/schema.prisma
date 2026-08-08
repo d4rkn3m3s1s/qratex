@@ -601,6 +601,10 @@ model Badge {
   requirement Json // { type: "feedback_count", value: 10 }
   pointCost   Int? // puanla açılabilir (null = sadece requirement ile)
   isActive    Boolean  @default(true)
+  // Admin renk kontrolü (opsiyonel). Doluysa rozet kartında rarity paletini EZER —
+  // böylece admin rozet-başına canlı renk/arka plan verebilir. null = rarity varsayılanı.
+  color       String? // vurgu rengi (hex, ör. "#d946ef") — çerçeve/metin/parıltı
+  bgColor     String? // arka plan/gradient bitiş rengi (hex) — kart zemini
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
