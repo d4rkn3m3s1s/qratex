@@ -497,6 +497,8 @@ describe('auth.ts', () => {
             select: { cosmetic: { select: { type: true, imageUrl: true } } },
           },
           customFrameColor: true,
+          adminDepartment: true,
+          adminTeamRole: true,
         },
       });
     });
