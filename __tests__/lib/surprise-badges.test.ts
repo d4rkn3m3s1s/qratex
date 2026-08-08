@@ -30,6 +30,11 @@ import { awardEligibleSurpriseBadges, type UserBadgeCounters } from '@/lib/surpr
 const counters: UserBadgeCounters = {
   feedbackCount: 30, totalPoints: 500, currentStreak: 5, longestStreak: 10,
   level: 8, referralCount: 2, questsCompleted: 4,
+  // Gerçek-veri sayaçları (35 rozet canlandırma)
+  fiveStarCount: 12, lowRatingCount: 3, positiveCount: 20, photoCount: 6,
+  nightCount: 8, surpriseOpenedCount: 4, profileComplete: 1, accountAgeDays: 45,
+  chatMessagesCount: 25, activeDays: 30, uniqueBusinesses: 11, revisitBusinesses: 4,
+  leaderboardTop: 1, emojiCount: 15,
 };
 
 beforeEach(() => {
@@ -94,5 +99,36 @@ describe('awardEligibleSurpriseBadges', () => {
     ]);
     const awarded = await awardEligibleSurpriseBadges('u1', counters);
     expect(awarded).toEqual([]);
+  });
+
+  it('gerçek-veri sayaçları doğru eşlenir (5-yıldız/gece/foto/profil/işletme/hall-of-fame)', async () => {
+    mockBadgeFindMany.mockResolvedValue([
+      { id: 'm1', name: 'Mükemmeliyetçi', requirement: { type: 'five_star_count', value: 10 } }, // 12≥10 ✓
+      { id: 'm2', name: 'Leyla', requirement: { type: 'night_feedback', value: 5 } },            // 8≥5 ✓
+      { id: 'm3', name: 'Sessiz Sinema', requirement: { type: 'photo_feedback', value: 5 } },    // 6≥5 ✓
+      { id: 'm4', name: 'Copy CV', requirement: { type: 'profile_complete', value: 1 } },        // 1≥1 ✓
+      { id: 'm5', name: 'Tur Rehberi', requirement: { type: 'unique_businesses', value: 10 } },  // 11≥10 ✓
+      { id: 'm6', name: 'Taht Sahibi', requirement: { type: 'leaderboard_top', value: 1 } },     // 1≥1 ✓
+      { id: 'm7', name: 'Sürpriz Kutusu', requirement: { type: 'surprise_reward', value: 3 } },  // 4≥3 ✓
+      { id: 'm8', name: 'Emoji Ustası', requirement: { type: 'emoji_feedback', value: 10 } },    // 15≥10 ✓
+    ]);
+    const awarded = await awardEligibleSurpriseBadges('u1', counters);
+    expect(awarded.sort()).toEqual(['m1','m2','m3','m4','m5','m6','m7','m8']);
+  });
+
+  it('gerçek sayaç eşiğin altındaysa VERİLMEZ (five_star 12 < 20)', async () => {
+    mockBadgeFindMany.mockResolvedValue([
+      { id: 'm1', name: 'Zor', requirement: { type: 'five_star_count', value: 20 } }, // 12 < 20
+    ]);
+    const awarded = await awardEligibleSurpriseBadges('u1', counters);
+    expect(awarded).toEqual([]);
+  });
+
+  it('total_points seed hatası kapatıldı (points ile aynı sayaca eşlenir)', async () => {
+    mockBadgeFindMany.mockResolvedValue([
+      { id: 'ef', name: 'Efsane', requirement: { type: 'total_points', value: 500 } }, // 500≥500 ✓
+    ]);
+    const awarded = await awardEligibleSurpriseBadges('u1', counters);
+    expect(awarded).toEqual(['ef']);
   });
 });
