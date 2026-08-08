@@ -86,16 +86,37 @@ export async function recomputeAllCLV(now: Date = new Date()): Promise<{ process
     _max: { createdAt: true },
   });
 
-  // Churn riski: müşteri başına ortalama Feedback.churnRisk (AI'dan).
-  const churnAgg = await prisma.feedback.groupBy({
-    by: ['userId'],
-    where: { userId: { not: null }, churnRisk: { not: null } },
-    _avg: { churnRisk: true },
-  });
+  // Churn riski: müşteri başına ortalama churn olasılığı — İKİ AI kaynağından:
+  // (1) Feedback.churnRisk (QR geri bildirimi) ve (2) ConsumptionReview.churnRisk
+  //     (tüketim yorumu — önceden yalnız ölü bir AnalyticsEvent'teydi, artık okunuyor).
+  // İki kaynağın örneklem sayısıyla AĞIRLIKLI ortalaması alınır (adil birleşim).
+  const [fbChurn, crChurn] = await Promise.all([
+    prisma.feedback.groupBy({
+      by: ['userId'],
+      where: { userId: { not: null }, churnRisk: { not: null } },
+      _avg: { churnRisk: true },
+      _count: { churnRisk: true },
+    }),
+    prisma.consumptionReview.groupBy({
+      by: ['customerId'],
+      where: { churnRisk: { not: null } },
+      _avg: { churnRisk: true },
+      _count: { churnRisk: true },
+    }),
+  ]);
+  // userId → { sum: ağırlıklı churn toplamı, n: örneklem sayısı }
+  const churnAccum = new Map<string, { sum: number; n: number }>();
+  const addChurn = (userId: string | null, avg: number | null, n: number) => {
+    if (!userId || avg == null || n <= 0) return;
+    const cur = churnAccum.get(userId) ?? { sum: 0, n: 0 };
+    cur.sum += avg * n;
+    cur.n += n;
+    churnAccum.set(userId, cur);
+  };
+  for (const c of fbChurn) addChurn(c.userId, c._avg.churnRisk, c._count.churnRisk);
+  for (const c of crChurn) addChurn(c.customerId, c._avg.churnRisk, c._count.churnRisk);
   const churnByUser = new Map<string, number>();
-  for (const c of churnAgg) {
-    if (c.userId && c._avg.churnRisk != null) churnByUser.set(c.userId, c._avg.churnRisk);
-  }
+  for (const [userId, { sum, n }] of churnAccum) churnByUser.set(userId, sum / n);
 
   let processed = 0;
   for (const row of spendAgg) {

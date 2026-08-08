@@ -2545,6 +2545,7 @@
             "incidents": "Olaylar",
             "action_items": "Aksiyonlar",
             "churn_risk": "Churn Risk",
+            "segment_actions": "Segment Aksiyon Merkezi",
             "roi": "ROI",
             "benchmark": "Benchmark",
             "copilot": "Copilot",

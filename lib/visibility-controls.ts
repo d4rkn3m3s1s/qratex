@@ -59,6 +59,7 @@ export const DEALER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'incidents', href: '/dealer/incidents', label: 'Olaylar', role: 'dealer' },
   { key: 'action_items', href: '/dealer/action-items', label: 'Aksiyonlar', role: 'dealer' },
   { key: 'churn_risk', href: '/dealer/churn-risk', label: 'Churn Risk', role: 'dealer' },
+  { key: 'segment_actions', href: '/dealer/segment-actions', label: 'Segment Aksiyon Merkezi', role: 'dealer' },
   { key: 'roi', href: '/dealer/roi', label: 'ROI', role: 'dealer' },
   { key: 'benchmark', href: '/dealer/benchmark', label: 'Benchmark', role: 'dealer' },
   { key: 'copilot', href: '/dealer/copilot', label: 'Copilot', role: 'dealer' },

@@ -22,19 +22,23 @@ async function analyzeAndPersistConsumptionReview(params: {
   text?: string;
 }) {
   const text = params.text?.trim();
+  const now = new Date();
+
+  // Kısa/boş metin: puandan sentiment türet (churn sinyali yok, AI çağrısı gereksiz).
   if (!text || text.length < 5) {
     const sentimentFromRating = params.rating >= 4 ? 'positive' : params.rating >= 3 ? 'neutral' : 'negative';
+    await prisma.consumptionReview.update({
+      where: { id: params.reviewId },
+      data: { sentiment: sentimentFromRating, analyzedAt: now },
+    }).catch(() => {});
     await prisma.analyticsEvent.create({
       data: {
         userId: params.customerId,
         event: 'consumption_review_analyzed',
         category: 'ai',
         data: {
-          reviewId: params.reviewId,
-          dealerId: params.dealerId,
-          sentiment: sentimentFromRating,
-          source: 'rating_fallback',
-          textLength: text?.length ?? 0,
+          reviewId: params.reviewId, dealerId: params.dealerId,
+          sentiment: sentimentFromRating, source: 'rating_fallback', textLength: text?.length ?? 0,
         } as unknown as Prisma.InputJsonValue,
       },
     });
@@ -42,6 +46,16 @@ async function analyzeAndPersistConsumptionReview(params: {
   }
 
   const analysis = await analyzeWithFallback(text, { dealerId: params.dealerId });
+  // Sinyalleri ARTIK ConsumptionReview'e yaz (clv-core churn agregasyonu burayı okur —
+  // önceki AnalyticsEvent tek başına ölü sinyaldi). Event'i denetim/detay için koru.
+  await prisma.consumptionReview.update({
+    where: { id: params.reviewId },
+    data: {
+      sentiment: analysis.sentiment.label,
+      churnRisk: analysis.churnRisk ?? null,
+      analyzedAt: now,
+    },
+  }).catch(() => {});
   await prisma.analyticsEvent.create({
     data: {
       userId: params.customerId,

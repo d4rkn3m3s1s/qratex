@@ -2545,6 +2545,7 @@
             "incidents": "Incidents",
             "action_items": "Action Items",
             "churn_risk": "Churn Risk",
+            "segment_actions": "Segment Action Center",
             "roi": "ROI",
             "benchmark": "Benchmark",
             "copilot": "Copilot",

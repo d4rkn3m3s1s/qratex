@@ -238,6 +238,7 @@ const dealerNavItems: NavItem[] = [
   { key: 'analytics', labelKey: 'analytics', href: '/dealer/analytics', icon: BarChart3, groupKey: 'analytics' },
   { key: 'growth_hub', labelKey: 'growth_hub', href: '/dealer/growth-hub', icon: Sprout, groupKey: 'analytics' },
   { key: 'churn_risk', labelKey: 'churn_risk', href: '/dealer/churn-risk', icon: TrendingDown, groupKey: 'analytics' },
+  { key: 'segment_actions', labelKey: 'segment_actions', href: '/dealer/segment-actions', icon: Target, groupKey: 'analytics' },
   { key: 'roi', labelKey: 'roi', href: '/dealer/roi', icon: PieChart, groupKey: 'analytics' },
   { key: 'benchmark', labelKey: 'benchmark', href: '/dealer/benchmark', icon: BarChart3, groupKey: 'analytics' },
   { key: 'business_outcomes', labelKey: 'business_outcomes', href: '/dealer/business-outcomes', icon: Target, groupKey: 'analytics' },

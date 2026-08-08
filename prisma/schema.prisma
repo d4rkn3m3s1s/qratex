@@ -1511,6 +1511,11 @@ model ConsumptionReview {
   // Karakter rozeti: yorumun ÜSLUP kategorisi (dram-suc|komedi|fantastik|gizem-gerilim).
   // AI belirler; kullanıcıya gösterilmez. Karakter barı bu alanı sayar. Bkz. character-categories.
   characterCategory String?
+  // AI analiz sinyalleri (Feedback'teki gibi). Önceden yalnız ölü bir AnalyticsEvent'e
+  // yazılıyordu; artık burada — CLV/churn hesabı (clv-core) tüketim yorumlarını da görsün.
+  sentiment       String? // positive | neutral | negative
+  churnRisk       Float? // 0-1 kayıp olasılığı (AI); null = analiz edilmedi
+  analyzedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1526,6 +1531,8 @@ model ConsumptionReview {
   @@index([customerId, createdAt])
   // Karakter rozeti kategori sayımı: where customerId + characterCategory.
   @@index([customerId, characterCategory])
+  // CLV churn agregasyonu: where customerId + churnRisk not null → _avg.
+  @@index([customerId, churnRisk])
 }
 
 model CardAuditLog {
