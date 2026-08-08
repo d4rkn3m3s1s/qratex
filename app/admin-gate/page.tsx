@@ -192,7 +192,7 @@ export default function AdminGatePage() {
                 </div>
               )}
             </div>
-            <p className="mt-4 text-xs text-white/40">Tek rakam · sadece kâşifler bilir</p>
+            <p className="mt-4 text-xs text-white/40">Frekansı yalnızca içeri ait olanlar bilir</p>
             {status === 'wrong' && errorMsg && (
               <p className="mt-3 text-sm font-semibold text-red-400">{errorMsg}</p>
             )}
