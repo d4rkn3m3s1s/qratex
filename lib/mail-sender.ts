@@ -119,6 +119,8 @@ async function sendViaResend(params: {
   html: string;
   text?: string;
   from: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
 }): Promise<SendMailResult> {
   try {
     if (process.env.NODE_ENV === 'development') {
@@ -137,6 +139,8 @@ async function sendViaResend(params: {
       subject: params.subject,
       html: params.html,
       ...(params.text ? { text: params.text } : {}),
+      ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+      ...(params.headers ? { headers: params.headers } : {}),
     });
     if (error) {
       if (process.env.NODE_ENV === 'development') {
@@ -161,8 +165,13 @@ export async function sendTransactionalEmail(params: {
   /** multipart/alternative; spam skoru ve salt metin istemcileri için önerilir */
   text?: string;
   from?: string;
+  /** Yanıt adresi (Reply-To) — meşru gönderen sinyali, spam skorunu düşürür. */
+  replyTo?: string;
+  /** Ek başlıklar (ör. List-Unsubscribe) — teslim edilebilirlik için. */
+  headers?: Record<string, string>;
 }): Promise<SendMailResult> {
   const from = params.from?.trim() || fromDefault;
+  const replyTo = params.replyTo?.trim() || trimEnvValue(process.env.EMAIL_REPLY_TO) || undefined;
 
   const smtp = getSmtpCredentials();
   if (smtp) {
@@ -191,6 +200,8 @@ export async function sendTransactionalEmail(params: {
         subject: params.subject,
         html: params.html,
         ...(params.text ? { text: params.text } : {}),
+        ...(replyTo ? { replyTo } : {}),
+        ...(params.headers ? { headers: params.headers } : {}),
       });
       return { ok: true, channel: 'smtp', effectiveFrom: from };
     } catch (e) {
@@ -204,7 +215,7 @@ export async function sendTransactionalEmail(params: {
         } else {
           console.warn('[mail-sender] SMTP hatası (auth-dışı). Resend yedeğe geçiliyor:', message);
         }
-        const r = await sendViaResend({ ...params, from });
+        const r = await sendViaResend({ ...params, from, replyTo });
         if (r.ok) {
           return { ...r, usedResendAfterSmtpFailure: true };
         }
@@ -215,7 +226,7 @@ export async function sendTransactionalEmail(params: {
   }
 
   if (resendConfigured()) {
-    return sendViaResend({ ...params, from });
+    return sendViaResend({ ...params, from, replyTo });
   }
 
   return { ok: false, error: 'E-posta yapılandırılmadı (SMTP veya RESEND_API_KEY)' };

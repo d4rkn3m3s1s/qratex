@@ -15,6 +15,13 @@ import {
 import { groupSends } from '@/lib/intern-email-stats';
 
 export const dynamic = 'force-dynamic';
+// Toplu gönderim throttle nedeniyle uzun sürebilir — Vercel timeout'u yükselt.
+export const maxDuration = 60;
+
+/** Toplu gönderimde mailler arası bekleme (ms) — Gmail "toplu spam" tetikleyicisini yumuşatır. */
+const BULK_THROTTLE_MS = 800;
+
+const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 /**
  * URL-safe açılma-takip token'ı (base64url, ~24 karakter). Pixel endpoint regex'i
@@ -22,6 +29,21 @@ export const dynamic = 'force-dynamic';
  */
 function makeTrackToken(): string {
   return randomBytes(18).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Teslim edilebilirlik başlıkları (spam skorunu düşürür): List-Unsubscribe (Gmail'in en
+ * sevdiği meşru-gönderen sinyali) — mailto (endpoint gerektirmez) + Auto-Submitted.
+ * replyTo mail-sender'da env'den (EMAIL_REPLY_TO) eklenir.
+ */
+function deliverabilityHeaders(): Record<string, string> {
+  // NOT: Bu mailler TRANSACTIONAL (kişiye özel görev ataması), bülten değil. Bu yüzden
+  // 'Precedence: bulk' / 'List-Unsubscribe' EKLENMEZ — bunlar maili "toplu bülten" gibi
+  // işaretleyip Gmail'in Promosyonlar/Spam'e atma ihtimalini artırır. Meşru gönderen sinyali
+  // Reply-To (mail-sender'da EMAIL_REPLY_TO env'inden) + throttle ile sağlanır.
+  return {
+    'X-Entity-Ref-ID': 'qratex-intern-task',
+  };
 }
 
 /** GET — şablon listesi + her şablon için gönderim/açılma özeti (gerçek + test) + mail durumu. */
@@ -86,14 +108,17 @@ async function sendTemplate(
   recipients: string[],
   kind: 'send' | 'test',
   userId: string,
+  throttleMs = 0,
 ): Promise<SendResult[]> {
   const out: SendResult[] = [];
-  for (const to of recipients) {
+  const headers = deliverabilityHeaders();
+  for (let i = 0; i < recipients.length; i++) {
+    const to = recipients[i];
     // Açılma takibi için benzersiz token + gönderim kaydı (test dahil).
     const token = makeTrackToken();
     const { html, text } = renderInternTaskEmailHtml(tpl, token);
     const subject = kind === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
-    const r = await sendTransactionalEmail({ to, subject, html, text });
+    const r = await sendTransactionalEmail({ to, subject, html, text, headers });
     // Kayıt oluştur — HEM başarı HEM hata (durum panelinde gitti✓/hata✗ görünsün).
     await prisma.internEmailSend.create({
       data: {
@@ -105,6 +130,8 @@ async function sendTemplate(
       },
     }).catch(() => {});
     out.push({ to, ok: r.ok, department: tpl.department, channel: r.ok ? r.channel : undefined, error: r.ok ? undefined : r.error });
+    // Kademeli gönderim: son mail hariç aralarda bekle (Gmail toplu-spam tetikleyicisini yumuşat).
+    if (throttleMs > 0 && i < recipients.length - 1) await sleep(throttleMs);
   }
   return out;
 }
@@ -147,10 +174,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Gönderilecek (alıcısı olan) şablon yok.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
+    // Kademeli: şablonlar arasında ve şablon-içi alıcılar arasında bekle (spam riski ↓).
     const results: SendResult[] = [];
-    for (const tpl of chosen) {
+    for (let i = 0; i < chosen.length; i++) {
+      const tpl = chosen[i];
       const recipients = tpl.email.split(',').map((s) => s.trim()).filter(Boolean);
-      results.push(...await sendTemplate(tpl, recipients, 'send', userId));
+      results.push(...await sendTemplate(tpl, recipients, 'send', userId, BULK_THROTTLE_MS));
+      if (i < chosen.length - 1) await sleep(BULK_THROTTLE_MS);
     }
     const sent = results.filter((r) => r.ok).length;
     const allOk = results.every((r) => r.ok);
