@@ -43,9 +43,16 @@ export function mailPublicOrigin(): string {
   return clean(base);
 }
 
+// Şablon türü sabitleri client-safe ayrı dosyada (prisma sızmasın). İçeride kullanmak için
+// import ediyoruz; geriye uyum için de re-export ediyoruz.
+import { INTERN_EMAIL_KINDS, isInternEmailKind, type InternEmailKind } from '@/lib/intern-email-kinds';
+export { INTERN_EMAIL_KINDS, isInternEmailKind, type InternEmailKind };
+
 export interface InternTaskEmail {
   /** Stabil id (düzenleme/silme için). */
   id: string;
+  /** Şablon türü (görsel kimlik + bölümler). Yoksa 'task'. */
+  kind?: InternEmailKind;
   /** Departman etiketi (gruplama). */
   department: string;
   /** Alıcı adı (metinde hitap). */
@@ -58,7 +65,7 @@ export interface InternTaskEmail {
   body: string;
   /**
    * Bu görevin son teslim tarihi (serbest metin etiketi, ör. "14 Ağustos 17.00").
-   * Mailde "son teslim" kartında + hatırlatma cron'unda kullanılır. Boşsa varsayılan.
+   * Yalnız 'task' türünde "son teslim" kartında + hatırlatma cron'unda kullanılır. Boşsa varsayılan.
    */
   deadline?: string;
 }
@@ -441,6 +448,7 @@ export function normalizeInternEmails(value: unknown): InternTaskEmail[] {
     if (!id || !email || !subject) continue;
     out.push({
       id,
+      kind: isInternEmailKind(r.kind) ? r.kind : 'task',
       department: typeof r.department === 'string' ? r.department : 'Genel',
       recipientName: typeof r.recipientName === 'string' ? r.recipientName : '',
       email, subject, body,
@@ -540,10 +548,32 @@ const EMAIL_HEAD = `<head>
  */
 export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: string): { html: string; text: string } {
   const origin = mailPublicOrigin();
+  const kind: InternEmailKind = tpl.kind ?? 'task';
   const theme = departmentTheme(tpl.department);
   const greetName = tpl.recipientName ? escHtml(tpl.recipientName) : 'Merhaba';
   // Bu şablonun kendi son teslim tarihi (yoksa genel varsayılan).
   const deadline = tpl.deadline && tpl.deadline.trim() ? tpl.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
+
+  // Tür-özel görsel/metin. accent = hero şerit + vurgu rengi.
+  const K = ((): { emoji: string; accent: string; badge: string | null; titleSuffix: string; sub: string; sign: string } => {
+    switch (kind) {
+      case 'general':
+        return { emoji: '✉️', accent: theme.color, badge: null, titleSuffix: '', sub: '', sign: 'ReverBot & QRateX Ekibi' };
+      case 'welcome':
+        return { emoji: '🎉', accent: '#8b5cf6', badge: 'QRATEX EKİBİ', titleSuffix: ', aramıza hoş geldin!', sub: 'Seni ekibimizde görmekten mutluluk duyuyoruz.', sign: 'ReverBot & QRateX Ekibi' };
+      case 'reminder':
+        return { emoji: '🔔', accent: '#f59e0b', badge: 'HATIRLATMA', titleSuffix: '', sub: '', sign: 'ReverBot & QRateX Ekibi' };
+      case 'minimal':
+        return { emoji: '', accent: theme.color, badge: null, titleSuffix: '', sub: '', sign: 'QRateX' };
+      case 'task':
+      default:
+        return { emoji: theme.emoji, accent: theme.color, badge: `${escHtml(tpl.department.toUpperCase())} DEPARTMANI`, titleSuffix: tpl.recipientName ? ', görevin hazır!' : '', sub: 'QRateX ekibine katılım sürecinin bir parçası olarak sana özel bir görev.', sign: 'ReverBot & QRateX Ekibi' };
+    }
+  })();
+  const showDeadline = kind === 'task';
+  const preheader = kind === 'task'
+    ? `QRateX ekibinden görev ataması — son teslim ${escHtml(deadline)}.`
+    : `QRateX — ${escHtml(tpl.subject || 'mesaj')}`;
 
   const pixel = trackToken
     ? `<img src="${origin}/api/track/email-open/${encodeURIComponent(trackToken)}" width="1" height="1" alt="" border="0" style="width:1px;height:1px;max-height:1px;max-width:1px;border:0;margin:0;padding:0;" />`
@@ -553,31 +583,31 @@ export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: str
 <html lang="tr">
 ${EMAIL_HEAD}
 <body style="margin:0;padding:0;background:#eef2f7;-webkit-font-smoothing:antialiased;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">QRateX ekibinden görev ataması — son teslim ${escHtml(deadline)}.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:28px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(15,23,42,0.12);">
 
         <!-- HERO: koyu gradient + logo (HTTPS URL — Gmail data: URI'yi engeller) + parıltı şeridi -->
         <tr><td style="background:#0b0618;background:linear-gradient(135deg,#1a0a2e 0%,#0f0f1e 55%,#16213e 100%);padding:40px 40px 32px;text-align:center;">
-          <img src="${origin}/logo/font-white.png" width="180" alt="QRateX" style="display:block;margin:0 auto 20px;width:180px;max-width:60%;height:auto;border:0;" />
-          <div style="display:inline-block;padding:8px 18px;border-radius:999px;background:${theme.soft};border:1px solid ${theme.color}55;">
-            <span style="font-size:13px;font-weight:800;letter-spacing:0.6px;color:${theme.color};">${theme.emoji}&nbsp;&nbsp;${escHtml(tpl.department.toUpperCase())} DEPARTMANI</span>
-          </div>
+          <img src="${origin}/logo/font-white.png" width="180" alt="QRateX" style="display:block;margin:0 auto ${K.badge ? '20px' : '0'};width:180px;max-width:60%;height:auto;border:0;" />
+          ${K.badge ? `<div style="display:inline-block;padding:8px 18px;border-radius:999px;background:${K.accent}1a;border:1px solid ${K.accent}55;">
+            <span style="font-size:13px;font-weight:800;letter-spacing:0.6px;color:${K.accent};">${K.emoji ? K.emoji + '&nbsp;&nbsp;' : ''}${K.badge}</span>
+          </div>` : ''}
         </td></tr>
         <!-- Işıltı çizgisi -->
-        <tr><td style="height:4px;background:linear-gradient(90deg,${theme.color},#e879f9,${theme.color});"></td></tr>
+        <tr><td style="height:4px;background:linear-gradient(90deg,${K.accent},#e879f9,${K.accent});"></td></tr>
 
         <!-- GÖVDE -->
         <tr><td style="padding:36px 40px 8px;">
-          <h1 style="margin:0 0 4px;font-size:24px;line-height:1.25;font-weight:800;color:#0f172a;">
-            ${theme.emoji} ${greetName}${tpl.recipientName ? ', görevin hazır!' : ''}
+          <h1 style="margin:0 0 ${K.sub ? '4px' : '18px'};font-size:24px;line-height:1.25;font-weight:800;color:#0f172a;">
+            ${K.emoji ? K.emoji + ' ' : ''}${greetName}${K.titleSuffix}
           </h1>
-          <p style="margin:0 0 20px;font-size:14px;color:#94a3b8;">QRateX ekibine katılım sürecinin bir parçası olarak sana özel bir görev.</p>
-          ${prettyBody(tpl.body, theme.color)}
+          ${K.sub ? `<p style="margin:0 0 20px;font-size:14px;color:#94a3b8;">${escHtml(K.sub)}</p>` : ''}
+          ${prettyBody(tpl.body, K.accent)}
         </td></tr>
 
-        <!-- SON TESLİM kartı (dikkat çekici) -->
+        ${showDeadline ? `<!-- SON TESLİM kartı (dikkat çekici) -->
         <tr><td style="padding:8px 40px 4px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr><td style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1.5px solid #f59e0b66;border-radius:16px;padding:18px 20px;">
@@ -591,15 +621,15 @@ ${EMAIL_HEAD}
               </tr></table>
             </td></tr>
           </table>
-        </td></tr>
+        </td></tr>` : ''}
 
         <!-- İMZA -->
         <tr><td style="padding:24px 40px 32px;">
           <div style="border-top:1px solid #e2e8f0;padding-top:18px;">
-            <p style="margin:0;font-size:13px;line-height:1.7;color:#94a3b8;">
+            ${kind === 'task' ? `<p style="margin:0 0 8px;font-size:13px;line-height:1.7;color:#94a3b8;">
               Bu görev, QRateX ekibine katılım sürecinin bir parçasıdır. Soruların için bize her zaman ulaşabilirsin. 🚀
-            </p>
-            <p style="margin:8px 0 0;font-size:14px;font-weight:800;color:#7c3aed;">ReverBot &amp; QRateX Ekibi</p>
+            </p>` : ''}
+            <p style="margin:0;font-size:14px;font-weight:800;color:#7c3aed;">${escHtml(K.sign)}</p>
           </div>
         </td></tr>
 
@@ -617,13 +647,11 @@ ${EMAIL_HEAD}
 </html>`;
 
   const textLines = [
-    `${tpl.department} Departmanı`,
-    '',
+    ...(kind === 'task' ? [`${tpl.department} Departmanı`, ''] : []),
     tpl.body,
     '',
-    `⏳ Son teslim: ${deadline}`,
-    '',
-    'ReverBot & QRateX Ekibi',
+    ...(showDeadline ? [`⏳ Son teslim: ${deadline}`, ''] : []),
+    K.sign,
   ];
   const text = textLines.join('\n');
   return { html, text };

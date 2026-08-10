@@ -16,9 +16,11 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
+import { INTERN_EMAIL_KINDS, type InternEmailKind } from '@/lib/intern-email-kinds';
 
 interface Template {
   id: string;
+  kind?: InternEmailKind;
   department: string;
   recipientName: string;
   email: string;
@@ -26,6 +28,8 @@ interface Template {
   body: string;
   deadline?: string;
 }
+
+const kindMeta = (k?: InternEmailKind) => INTERN_EMAIL_KINDS.find((x) => x.value === (k ?? 'task')) ?? INTERN_EMAIL_KINDS[0];
 interface Recipient {
   email: string;
   status: string;        // 'sent' | 'error'
@@ -64,6 +68,7 @@ export default function InternEmailsPage() {
   const [busy, setBusy] = useState<'save' | 'send' | 'test' | 'bulk' | null>(null);
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState(''); // sol liste arama filtresi
+  const [newMenuOpen, setNewMenuOpen] = useState(false); // "Yeni" tür seçim menüsü
   // Onay modalı: tekli ('send') veya toplu ('bulk') gönderim öncesi güzel onay.
   const [confirmModal, setConfirmModal] = useState<null | { mode: 'send' | 'bulk' }>(null);
 
@@ -205,12 +210,25 @@ export default function InternEmailsPage() {
     }
   };
 
-  const addTemplate = () => {
+  // Tür-özel başlangıç içeriği (yeni şablon oluştururken).
+  const kindDefaults = (k: InternEmailKind): Partial<Template> => {
+    switch (k) {
+      case 'general': return { department: 'Genel', subject: 'QRateX — Mesaj', body: 'Merhaba,\n\n' };
+      case 'welcome': return { department: 'Genel', subject: 'QRateX ekibine hoş geldin! 🎉', body: 'Merhaba,\n\nQRateX ekibine katıldığın için çok mutluyuz! Sürecin boyunca yanındayız.\n\n' };
+      case 'reminder': return { department: 'Genel', subject: 'QRateX — Hatırlatma', body: 'Merhaba,\n\nKüçük bir hatırlatma:\n\n' };
+      case 'minimal': return { department: 'Genel', subject: 'QRateX', body: '' };
+      case 'task':
+      default: return { department: 'Genel', subject: 'QRateX — Görev', body: 'Selamlar,\n\n' };
+    }
+  };
+
+  const addTemplate = (kind: InternEmailKind = 'task') => {
     const id = `ozel-${Date.now()}`;
-    const t: Template = { id, department: 'Genel', recipientName: '', email: '', subject: 'QRateX — Görev', body: 'Selamlar,\n\n' };
+    const t: Template = { id, kind, recipientName: '', email: '', department: 'Genel', subject: '', body: '', ...kindDefaults(kind) };
     setTemplates((prev) => [...prev, t]);
     setSelectedId(id);
     setDirty(true);
+    setNewMenuOpen(false);
   };
 
   const removeSelected = () => {
@@ -266,7 +284,31 @@ export default function InternEmailsPage() {
         {/* SOL: şablon listesi — sticky + kendi içinde scroll (uzun liste sağ paneli itmesin) */}
         <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={addTemplate} variant="outline" className="gap-2"><Plus className="h-4 w-4" /> Yeni</Button>
+            <div className="relative">
+              <Button onClick={() => setNewMenuOpen((o) => !o)} variant="outline" className="w-full gap-2"><Plus className="h-4 w-4" /> Yeni</Button>
+              {newMenuOpen && (
+                <>
+                  {/* dışına tıklayınca kapat */}
+                  <button className="fixed inset-0 z-10 cursor-default" aria-hidden onClick={() => setNewMenuOpen(false)} />
+                  <div className="absolute left-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+                    <p className="border-b border-border/60 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Şablon türü seç</p>
+                    {INTERN_EMAIL_KINDS.map((k) => (
+                      <button
+                        key={k.value}
+                        onClick={() => addTemplate(k.value)}
+                        className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+                      >
+                        <span className="text-lg leading-none">{k.emoji}</span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-foreground">{k.label}</span>
+                          <span className="block text-xs text-muted-foreground">{k.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <Button
               onClick={() => setConfirmModal({ mode: 'bulk' })}
               disabled={busy !== null || bulkCount === 0 || dirty}
@@ -311,6 +353,9 @@ export default function InternEmailsPage() {
                           onClick={() => setSelectedId(t.id)}
                           className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
                         >
+                          {(t.kind ?? 'task') !== 'task' && (
+                            <span className="shrink-0 text-base leading-none" title={kindMeta(t.kind).label}>{kindMeta(t.kind).emoji}</span>
+                          )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate font-medium">{t.recipientName || t.email || 'İsimsiz'}</span>
                             {showEmail && <span className="block truncate text-xs text-muted-foreground">{t.email}</span>}
@@ -398,6 +443,25 @@ export default function InternEmailsPage() {
 
             <Card>
               <CardContent className="space-y-4 p-5">
+                {/* Şablon türü seçici (chip'ler) — mailin görsel kimliğini belirler */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Şablon türü</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {INTERN_EMAIL_KINDS.map((k) => {
+                      const active = (selected.kind ?? 'task') === k.value;
+                      return (
+                        <button
+                          key={k.value}
+                          onClick={() => updateSelected({ kind: k.value })}
+                          title={k.hint}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+                        >
+                          <span>{k.emoji}</span> {k.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1"><Label className="text-xs">Departman</Label>
                     <Input value={selected.department} onChange={(e) => updateSelected({ department: e.target.value })} /></div>
@@ -409,15 +473,17 @@ export default function InternEmailsPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1"><Label className="text-xs">Konu</Label>
                     <Input value={selected.subject} onChange={(e) => updateSelected({ subject: e.target.value })} /></div>
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1.5 text-xs"><CalendarClock className="h-3.5 w-3.5" /> Son teslim tarihi</Label>
-                    <Input
-                      value={selected.deadline ?? ''}
-                      onChange={(e) => updateSelected({ deadline: e.target.value })}
-                      placeholder="14 Ağustos 17.00"
-                    />
-                    <p className="text-[11px] leading-tight text-muted-foreground">Bu maile özel bitiş tarihi. Boş bırakırsan varsayılan (14 Ağustos 17.00) kullanılır.</p>
-                  </div>
+                  {(selected.kind ?? 'task') === 'task' && (
+                    <div className="space-y-1">
+                      <Label className="flex items-center gap-1.5 text-xs"><CalendarClock className="h-3.5 w-3.5" /> Son teslim tarihi</Label>
+                      <Input
+                        value={selected.deadline ?? ''}
+                        onChange={(e) => updateSelected({ deadline: e.target.value })}
+                        placeholder="14 Ağustos 17.00"
+                      />
+                      <p className="text-[11px] leading-tight text-muted-foreground">Bu maile özel bitiş tarihi. Boş bırakırsan varsayılan (14 Ağustos 17.00) kullanılır.</p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1"><Label className="text-xs">Mail içeriği</Label>
                   <Textarea value={selected.body} onChange={(e) => updateSelected({ body: e.target.value })} rows={14} className="font-mono text-xs leading-relaxed" /></div>
