@@ -116,9 +116,16 @@ export default function InboxPage() {
         </Card>
       )}
 
+      {/* Özet istatistik kartları */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard icon={<Mail className="h-5 w-5" />} label="Toplam mail" value={counts.all} tone="primary" />
+        <StatCard icon={<Users className="h-5 w-5" />} label="Stajyerden" value={counts.intern} tone="emerald" />
+        <StatCard icon={<Circle className="h-5 w-5" />} label="Okunmadı" value={counts.unread} tone="fuchsia" />
+      </div>
+
       <div className="grid items-start gap-5 lg:grid-cols-[380px_1fr]">
-        {/* SOL: liste + filtre + sync */}
-        <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
+        {/* SOL: liste + filtre + sync — mobilde mail açıkken gizlenir (sağ panel öne çıksın) */}
+        <div className={`space-y-3 lg:sticky lg:top-4 lg:self-start lg:block ${openId ? 'hidden' : 'block'}`}>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -154,7 +161,7 @@ export default function InboxPage() {
                   <button
                     key={m.id}
                     onClick={() => openMessage(m.id)}
-                    className={`flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
+                    className={`flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2.5 text-left transition-all duration-150 animate-in fade-in slide-in-from-left-1 hover:shadow-sm ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
                   >
                     <div className="flex items-center gap-2">
                       {!m.seen && <Circle className="h-2 w-2 shrink-0 fill-primary text-primary" />}
@@ -179,7 +186,7 @@ export default function InboxPage() {
 
         {/* SAĞ: mail görüntüleyici */}
         {openId ? (
-          <Card>
+          <Card className="animate-in fade-in slide-in-from-bottom-2 duration-200">
             <CardContent className="p-0">
               {openLoading || !openMsg ? (
                 <div className="grid place-items-center py-24 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -209,7 +216,7 @@ export default function InboxPage() {
                         title="mail"
                         sandbox=""
                         className="h-[60vh] w-full rounded-lg border border-border bg-white"
-                        srcDoc={openMsg.bodyHtml}
+                        srcDoc={withStrictCsp(openMsg.bodyHtml)}
                       />
                     ) : (
                       <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground">{openMsg.bodyText || '(boş içerik)'}</pre>
@@ -238,6 +245,39 @@ export default function InboxPage() {
       </div>
     </div>
   );
+}
+
+function StatCard({ icon, label, value, tone }: {
+  icon: React.ReactNode; label: string; value: number; tone: 'primary' | 'emerald' | 'fuchsia';
+}) {
+  const tones = {
+    primary: 'from-primary/10 to-primary/5 text-primary',
+    emerald: 'from-emerald-500/10 to-emerald-500/5 text-emerald-600 dark:text-emerald-400',
+    fuchsia: 'from-fuchsia-500/10 to-fuchsia-500/5 text-fuchsia-600 dark:text-fuchsia-400',
+  }[tone];
+  return (
+    <Card className={`overflow-hidden bg-gradient-to-br ${tones} transition-transform hover:-translate-y-0.5`}>
+      <CardContent className="flex items-center gap-3 p-4">
+        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-background/60 ${tones.split(' ').slice(-1)}`}>{icon}</div>
+        <div className="min-w-0">
+          <div className="text-2xl font-black leading-none text-foreground tabular-nums">{value}</div>
+          <div className="mt-0.5 truncate text-xs text-muted-foreground">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * HTML mail gövdesine KATI CSP meta enjekte eder. sandbox="" script'i keser ama harici
+ * subresource (img/css/font/beacon) isteklerini KESMEZ → beacon ile admin IP/konum/açılma-anı
+ * sızıntısı olurdu. Bu CSP ile harici hiçbir kaynak yüklenmez; sadece gömülü data: görseller görünür.
+ */
+function withStrictCsp(html: string): string {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none';">`;
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + meta);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => `${m}<head>${meta}</head>`);
+  return `<!doctype html><html><head>${meta}</head><body>${html}</body></html>`;
 }
 
 function FilterChip({ active, onClick, icon, label, count, accent }: {

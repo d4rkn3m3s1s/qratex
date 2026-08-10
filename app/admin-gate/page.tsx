@@ -99,7 +99,7 @@ export default function AdminGatePage() {
         setTimeout(() => { window.location.href = from.startsWith('/admin') ? from : '/admin'; }, 900);
       } else {
         setStatus('wrong');
-        setErrorMsg(data?.error || 'Yanlış cevap.');
+        setErrorMsg(data?.error || 'Yanlış frekans.');
         setShake(true);
         setTimeout(() => setShake(false), 500);
         setTimeout(() => { setDigit(''); setStatus('idle'); inputRef.current?.focus(); }, 700);
@@ -111,10 +111,22 @@ export default function AdminGatePage() {
     }
   }, [status]);
 
-  const onDigit = (v: string) => {
-    const d = v.replace(/[^0-9]/g, '').slice(-1); // yalnız tek rakam
-    setDigit(d);
-    if (d) submit(d); // rakam girilince otomatik dene (tek tık hissi)
+  // KAMUFLAJ: istediğin kadar harf/rakam yaz — ekranda görünmez, uzunluk sızmaz.
+  // Gerçek cevap, yazdığın metindeki SON rakamdır (kamuflaj harfleri gönderilmez).
+  const onCamouflage = (v: string) => {
+    setDigit(v); // ham metni tut (görünmez); sadece nokta gösterilir
+    if (status === 'wrong') setStatus('idle');
+  };
+
+  const trySubmit = () => {
+    const lastDigit = (digit.match(/[0-9]/g) ?? []).slice(-1)[0] ?? '';
+    if (lastDigit) submit(lastDigit);
+    else {
+      // Rakam yoksa yanlış gibi davran (ipucu verme — kamuflaj korunur).
+      setStatus('wrong'); setShake(true);
+      setTimeout(() => setShake(false), 500);
+      setTimeout(() => { setDigit(''); setStatus('idle'); inputRef.current?.focus(); }, 700);
+    }
   };
 
   const ringColor =
@@ -165,25 +177,47 @@ export default function AdminGatePage() {
             : question || 'Sırra ulaşmak için evrenin şifresini çöz…'}
         </p>
 
-        {/* Tek rakam input — parlayan yuva */}
+        {/* Kamuflaj input — ne yazdığın ve KAÇ karakter yazdığın görünmez (hep sabit nokta) */}
         {status !== 'ok' && (
           <>
             <div className="relative">
-              <input
-                ref={inputRef}
-                inputMode="numeric"
-                pattern="[0-9]"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => onDigit(e.target.value)}
-                disabled={status === 'checking'}
-                className="h-24 w-24 rounded-2xl bg-white/5 text-center text-5xl font-black outline-none backdrop-blur-md transition-all"
+              {/* Görünür katman: HEP 9 sabit nokta (uzunluk sızmaz). Yazılan metin bunun altında görünmez. */}
+              <div
+                onClick={() => inputRef.current?.focus()}
+                className="flex h-20 w-[22rem] max-w-[85vw] cursor-text items-center justify-center gap-2.5 rounded-2xl bg-white/5 backdrop-blur-md transition-all"
                 style={{
                   border: `2px solid ${ringColor}66`,
                   boxShadow: `0 0 30px ${ringColor}44, inset 0 0 20px ${ringColor}22`,
-                  caretColor: ringColor,
                 }}
-                aria-label="Gizli rakam"
+              >
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="h-3 w-3 rounded-full transition-all duration-300"
+                    style={{
+                      background: digit.length ? `${ringColor}` : `${ringColor}44`,
+                      boxShadow: digit.length ? `0 0 10px ${ringColor}` : 'none',
+                      // Hafif "canlı" his: yazınca noktalar sırayla parlar ama SAYI hep 9 (uzunluk gizli)
+                      opacity: digit.length ? 0.85 + 0.15 * Math.sin((i + digit.length) * 1.1) : 0.5,
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Gerçek input: tamamen görünmez (metin, caret, arka plan yok). İstediğin kadar yaz. */}
+              <input
+                ref={inputRef}
+                type="text"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={digit}
+                onChange={(e) => onCamouflage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); trySubmit(); } }}
+                disabled={status === 'checking'}
+                className="absolute inset-0 h-full w-full cursor-text rounded-2xl bg-transparent text-transparent caret-transparent outline-none"
+                style={{ WebkitTextFillColor: 'transparent' }}
+                aria-label="Gizli frekans"
                 autoFocus
               />
               {status === 'checking' && (
@@ -192,7 +226,15 @@ export default function AdminGatePage() {
                 </div>
               )}
             </div>
-            <p className="mt-4 text-xs text-white/40">Frekansı yalnızca içeri ait olanlar bilir</p>
+            <button
+              onClick={trySubmit}
+              disabled={status === 'checking'}
+              className="mt-5 rounded-full px-6 py-2.5 text-sm font-bold tracking-wide text-white transition-all hover:scale-105 disabled:opacity-50"
+              style={{ background: `linear-gradient(135deg, ${ringColor}, #e879f9)`, boxShadow: `0 0 24px ${ringColor}55` }}
+            >
+              Frekansı Gönder →
+            </button>
+            <p className="mt-4 text-xs text-white/40">İstediğini yaz — frekansı yalnızca içeri ait olanlar bilir</p>
             {status === 'wrong' && errorMsg && (
               <p className="mt-3 text-sm font-semibold text-red-400">{errorMsg}</p>
             )}

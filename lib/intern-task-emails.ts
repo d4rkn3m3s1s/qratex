@@ -558,17 +558,20 @@ const EMAIL_HEAD = `<head>
  * - Dikkat çekici son teslim kartı.
  * - trackToken verilirse görünmez açılma pixel'i.
  */
-export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: string): { html: string; text: string } {
+export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: string, recipientEmail?: string): { html: string; text: string } {
   const origin = mailPublicOrigin();
   const kind: InternEmailKind = tpl.kind ?? 'task';
   const theme = departmentTheme(tpl.department);
   const greetName = tpl.recipientName ? escHtml(tpl.recipientName) : 'Merhaba';
   // Bu şablonun kendi son teslim tarihi (yoksa genel varsayılan).
   const deadline = tpl.deadline && tpl.deadline.trim() ? tpl.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
-  // Değişkenleri doldur ({{isim}}, {{departman}}, {{email}}, {{deadline}}) — kişiselleştirme.
+  // Değişkenleri doldur — kişiselleştirme.
+  // {{email}}: KVKK — varsa YALNIZ o alıcının adresi (recipientEmail); yoksa boş (tüm listeyi ASLA
+  //   basma — çok-alıcılı şablonda alıcılar birbirinin adresini görmesin).
+  // {{deadline}}: yalnız 'task' türünde anlamlı; diğer türlerde boş (alakasız tarih basmasın).
   const body = applyMailVariables(tpl.body, {
     isim: tpl.recipientName, ad: tpl.recipientName, departman: tpl.department,
-    email: tpl.email, deadline, konu: tpl.subject,
+    email: recipientEmail ?? '', deadline: kind === 'task' ? deadline : '', konu: tpl.subject,
   });
   tpl = { ...tpl, body };
 

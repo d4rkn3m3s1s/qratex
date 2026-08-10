@@ -88,15 +88,17 @@ export async function GET(req: Request) {
       if (r.ok) { sent++; sentIds.push(t.id); }
     }
 
-    // Gönderilenleri işaretle (çift göndermesin).
+    // Gönderilenleri işaretle (çift göndermesin). İşaretleme BAŞARISIZ olursa fail-open:
+    // dueReminderSentAt null kalır → aynı gün tekrar tetiklenirse çift mail. Hatayı LOGLA (görünür).
+    let markFailed = false;
     if (sentIds.length) {
       await prisma.companyTask.updateMany({
         where: { id: { in: sentIds } },
         data: { dueReminderSentAt: new Date() },
-      }).catch(() => {});
+      }).catch((e) => { markFailed = true; console.error('[CRON team-task-due] işaretleme başarısız (çift-gönderim riski):', e); });
     }
 
-    return NextResponse.json({ ok: true, sent, candidates: tasks.length });
+    return NextResponse.json({ ok: true, sent, candidates: tasks.length, ...(markFailed ? { markFailed: true } : {}) });
   } catch (error) {
     console.error('[CRON team-task-due]', error);
     return NextResponse.json({ error: 'Hatırlatma gönderilemedi' }, { status: 500 });

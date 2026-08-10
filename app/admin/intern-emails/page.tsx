@@ -196,7 +196,7 @@ export default function InternEmailsPage() {
       try {
         const res = await fetch('/api/admin/intern-emails', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'send-bulk' }), // templateIds boş → alıcısı olan tüm şablonlar
+          body: JSON.stringify({ action: 'send-bulk', all: true }), // açık "tümü" bayrağı (kaza koruması)
         });
         const data = await res.json();
         if (!data.success && !data.results) throw new Error(data?.error || 'Toplu gönderilemedi');
@@ -351,7 +351,7 @@ export default function InternEmailsPage() {
                         <button
                           key={t.id}
                           onClick={() => setSelectedId(t.id)}
-                          className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
+                          className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-150 animate-in fade-in hover:shadow-sm ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
                         >
                           {(t.kind ?? 'task') !== 'task' && (
                             <span className="shrink-0 text-base leading-none" title={kindMeta(t.kind).label}>{kindMeta(t.kind).emoji}</span>

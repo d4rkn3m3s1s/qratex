@@ -116,7 +116,7 @@ async function sendTemplate(
     const to = recipients[i];
     // Açılma takibi için benzersiz token + gönderim kaydı (test dahil).
     const token = makeTrackToken();
-    const { html, text } = renderInternTaskEmailHtml(tpl, token);
+    const { html, text } = renderInternTaskEmailHtml(tpl, token, to); // to → {{email}} per-alıcı (KVKK)
     const subject = kind === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
     const r = await sendTransactionalEmail({ to, subject, html, text, headers });
     // Kayıt oluştur — HEM başarı HEM hata (durum panelinde gitti✓/hata✗ görünsün).
@@ -167,7 +167,12 @@ export async function POST(request: NextRequest) {
     const ids: string[] = Array.isArray(body?.templateIds)
       ? body.templateIds.filter((x: unknown): x is string => typeof x === 'string')
       : [];
-    // ids boşsa → alıcısı olan TÜM şablonlar (galeri toplu gönderim).
+    // KAZA KORUMASI: boş templateIds → "hepsi" DEĞİL. Tümünü göndermek için açık { all: true }
+    // bayrağı gerekir; aksi halde 400 (curl/replay/çift-tık tüm alıcılara kaza mail atmasın).
+    const sendAll = body?.all === true;
+    if (ids.length === 0 && !sendAll) {
+      return NextResponse.json({ success: false, error: 'Toplu gönderim için şablon seçimi (templateIds) veya açık { all: true } gerekir.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
     const chosen = (ids.length ? templates.filter((t) => ids.includes(t.id)) : templates)
       .filter((t) => t.email.split(',').some((e) => e.trim()));
     if (chosen.length === 0) {

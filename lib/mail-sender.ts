@@ -179,11 +179,15 @@ export async function sendTransactionalEmail(params: {
       if (process.env.NODE_ENV === 'development') {
         console.info('[mail-sender] Using SMTP transport', smtp.host);
       }
+      // Per-gönderim timeout'ları: asılı bir SMTP bağlantısı tüm serverless bütçesini (60s)
+      // yiyip toplu gönderimi kesmesin. 15s bağlantı/greeting/socket sınırı.
+      const timeouts = { connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 20_000 };
       const isGmailHost = smtp.host.toLowerCase() === 'smtp.gmail.com';
       const transporter = isGmailHost
         ? nodemailer.createTransport({
             service: 'gmail',
             auth: { user: smtp.user, pass: smtp.pass },
+            ...timeouts,
           })
         : nodemailer.createTransport({
             host: smtp.host,
@@ -193,6 +197,7 @@ export async function sendTransactionalEmail(params: {
               user: smtp.user,
               pass: smtp.pass,
             },
+            ...timeouts,
           });
       await transporter.sendMail({
         from,

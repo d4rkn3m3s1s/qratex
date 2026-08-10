@@ -100,7 +100,7 @@ export async function GET(req: Request) {
       where: { key: SENT_FLAG_KEY },
       update: { value: { dayKey, templateIds: uniqueIds } as Prisma.InputJsonValue, category: 'email' },
       create: { key: SENT_FLAG_KEY, value: { dayKey, templateIds: uniqueIds } as Prisma.InputJsonValue, category: 'email' },
-    }).catch(() => {});
+    }).catch((e) => { console.error('[CRON intern-deadline] flag yazımı başarısız (çift-gönderim riski):', e); });
 
     return NextResponse.json({ ok: true, sent, templates: pending.length, dueToday: dueToday.length });
   } catch (error) {

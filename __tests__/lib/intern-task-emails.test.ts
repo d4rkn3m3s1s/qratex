@@ -171,6 +171,27 @@ describe('şablon türleri (kind) render', () => {
     expect(html).toContain('Selam Zümra');
     expect(html).not.toContain('{{isim}}');
   });
+
+  it('KVKK: {{email}} yalnız verilen alıcının adresini basar (çok-alıcı listesini SIZDIRMAZ)', () => {
+    const multi = { ...sample, email: 'a@x.com, b@x.com, c@x.com', body: 'Adresin: {{email}}' };
+    const { html } = renderInternTaskEmailHtml(multi, undefined, 'a@x.com');
+    expect(html).toContain('a@x.com');
+    expect(html).not.toContain('b@x.com');
+    expect(html).not.toContain('c@x.com');
+  });
+
+  it('recipientEmail verilmezse {{email}} boş kalır (liste basmaz)', () => {
+    const multi = { ...sample, email: 'a@x.com, b@x.com', body: '{{email}}' };
+    const { html } = renderInternTaskEmailHtml(multi);
+    expect(html).not.toContain('a@x.com');
+    expect(html).not.toContain('b@x.com');
+  });
+
+  it('{{deadline}} yalnız task türünde dolar (welcome/general boş)', () => {
+    const wel = { ...sample, kind: 'welcome' as const, body: 'Tarih: {{deadline}}' };
+    const { html } = renderInternTaskEmailHtml(wel);
+    expect(html).not.toContain(INTERN_TASK_DEADLINE_LABEL);
+  });
 });
 
 describe('DEFAULT şablonları', () => {

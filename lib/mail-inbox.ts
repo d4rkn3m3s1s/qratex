@@ -83,28 +83,38 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
         const fromName = fromAddr?.name ?? parsed?.from?.value?.[0]?.name ?? '';
         const toEmail = (env?.to?.[0]?.address ?? '').toLowerCase();
         const subject = env?.subject ?? parsed?.subject ?? '';
-        const sentAt = env?.date ?? parsed?.date ?? new Date();
+        // Tarihi GÜVENE al: imapflow bozuk Date başlığında ham string döndürebilir →
+        // new Date(...) Invalid Date → Prisma throw → mail sessizce düşerdi. Geçersizse now.
+        const rawDate = env?.date ?? parsed?.date ?? new Date();
+        const parsedDate = new Date(rawDate as string | Date);
+        const sentAt = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
         const bodyText = parsed?.text ?? '';
         const bodyHtml = typeof parsed?.html === 'string' ? parsed.html : null;
         const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 200);
 
         // Stajyer eşleştirme.
         const m = internMap.get(fromEmail);
-        if (m) matched++;
 
-        await prisma.inboxMessage.create({
+        // Sayaçları GERÇEK başarıya bağla (koşulsuz stored++/matched++ yanlış rapor üretiyordu:
+        // duplicate/hata yutulup yine de sayılıyordu → durum panelinde şişkin "X yeni" değeri).
+        const created = await prisma.inboxMessage.create({
           data: {
             uid, mailbox: 'INBOX', messageId: env?.messageId ?? parsed?.messageId ?? null,
             fromEmail, fromName: fromName || null, toEmail: toEmail || null,
             subject, snippet, bodyText: bodyText || null, bodyHtml,
-            sentAt: new Date(sentAt),
+            sentAt,
             isFromIntern: Boolean(m),
             matchedTemplateId: m?.templateId ?? null,
             matchedRecipientName: m?.name ?? null,
             matchedDepartment: m?.dept ?? null,
           },
-        }).catch(() => {});
-        stored++;
+        }).then(() => true).catch((e: unknown) => {
+          // Duplicate (yarış/idempotency) beklenen — sessiz. Diğer hataları logla (görünür olsun).
+          const code = (e as { code?: string })?.code;
+          if (code !== 'P2002') console.warn('[inbox] kayıt hatası:', e instanceof Error ? e.message : e);
+          return false;
+        });
+        if (created) { stored++; if (m) matched++; }
       }
     } finally {
       lock.release();
