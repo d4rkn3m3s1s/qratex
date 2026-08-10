@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Mail, Send, FlaskConical, Save, Trash2, Plus, Loader2, CheckCircle2,
-  Clock, Users, AlertTriangle, Eye, XCircle, CalendarClock, SendHorizonal,
+  Clock, Users, AlertTriangle, Eye, XCircle, CalendarClock, SendHorizonal, Search,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
@@ -63,6 +63,7 @@ export default function InternEmailsPage() {
   const [testTo, setTestTo] = useState('');
   const [busy, setBusy] = useState<'save' | 'send' | 'test' | 'bulk' | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [query, setQuery] = useState(''); // sol liste arama filtresi
   // Onay modalı: tekli ('send') veya toplu ('bulk') gönderim öncesi güzel onay.
   const [confirmModal, setConfirmModal] = useState<null | { mode: 'send' | 'bulk' }>(null);
 
@@ -88,10 +89,22 @@ export default function InternEmailsPage() {
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selected = useMemo(() => templates.find((t) => t.id === selectedId) ?? null, [templates, selectedId]);
+  // Arama filtresi (isim/email/departman/konu üzerinde) + departmana göre grupla.
   const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? templates.filter((t) =>
+          `${t.recipientName} ${t.email} ${t.department} ${t.subject}`.toLowerCase().includes(q))
+      : templates;
     const g: Record<string, Template[]> = {};
-    for (const t of templates) (g[t.department] ??= []).push(t);
+    for (const t of filtered) (g[t.department] ??= []).push(t);
     return g;
+  }, [templates, query]);
+  // Aynı ada sahip birden çok şablon var mı (liste satırında email göstermek için).
+  const dupNames = useMemo(() => {
+    const count: Record<string, number> = {};
+    for (const t of templates) { const n = (t.recipientName || '').trim(); if (n) count[n] = (count[n] ?? 0) + 1; }
+    return new Set(Object.entries(count).filter(([, c]) => c > 1).map(([n]) => n));
   }, [templates]);
   // Toplu gönderime dahil olacak (alıcısı olan) şablon sayısı.
   const bulkCount = useMemo(
@@ -106,6 +119,16 @@ export default function InternEmailsPage() {
   };
 
   const saveAll = async () => {
+    // Sunucu email/konu BOŞ şablonları sessizce atar (normalizeInternEmails) → veri kaybı.
+    // Kaydetmeden önce uyar; kullanıcı emin olmalı.
+    const invalid = templates.filter((t) => !t.email.trim() || !t.subject.trim());
+    if (invalid.length > 0) {
+      const names = invalid.map((t) => t.recipientName || t.department || '(isimsiz)').join(', ');
+      toast.error(`Alıcı e-postası veya konusu boş şablon(lar) kaydedilmez: ${names}. Önce doldur.`);
+      // Boş olanı seçili yap ki kullanıcı düzeltebilsin.
+      setSelectedId(invalid[0].id);
+      return;
+    }
     setBusy('save');
     try {
       const res = await fetch('/api/admin/intern-emails', {
@@ -192,9 +215,32 @@ export default function InternEmailsPage() {
 
   const removeSelected = () => {
     if (!selected || !confirm('Bu şablon silinsin mi? (Kaydet dersen kalıcı olur)')) return;
-    setTemplates((prev) => prev.filter((t) => t.id !== selectedId));
-    setSelectedId(templates[0]?.id ?? null);
+    // Kalan listeden seç (stale `templates` yerine güncel filtreden) — silinen id'ye düşme.
+    setTemplates((prev) => {
+      const next = prev.filter((t) => t.id !== selectedId);
+      setSelectedId(next[0]?.id ?? null);
+      return next;
+    });
     setDirty(true);
+  };
+
+  // CANLI önizleme — o anki (kaydedilmemiş) taslağı POST edip yeni sekmede gösterir.
+  // (Önceki bug: önizleme kayıtlı şablonu okuyordu; yeni/düzenlenen taslak boş/404 dönüyordu.)
+  const openPreview = async () => {
+    if (!selected) return;
+    try {
+      const res = await fetch('/api/admin/intern-emails/preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: selected }),
+      });
+      if (!res.ok) throw new Error('Önizleme oluşturulamadı');
+      const html = await res.text();
+      const w = window.open('', '_blank');
+      if (!w) { toast.error('Açılır pencere engellendi — tarayıcı iznini kontrol et.'); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Önizleme açılamadı');
+    }
   };
 
   const stat = selected ? stats[selected.id] : undefined;
@@ -216,24 +262,39 @@ export default function InternEmailsPage() {
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        {/* SOL: şablon listesi (departmana göre) */}
-        <div className="space-y-4">
+      <div className="grid items-start gap-5 lg:grid-cols-[320px_1fr]">
+        {/* SOL: şablon listesi — sticky + kendi içinde scroll (uzun liste sağ paneli itmesin) */}
+        <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={addTemplate} variant="outline" className="gap-2"><Plus className="h-4 w-4" /> Yeni</Button>
             <Button
               onClick={() => setConfirmModal({ mode: 'bulk' })}
-              disabled={busy !== null || bulkCount === 0}
+              disabled={busy !== null || bulkCount === 0 || dirty}
               className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}
-              title={bulkCount === 0 ? 'Alıcısı olan şablon yok' : `${bulkCount} şablonun gerçek alıcılarına gönder`}
+              title={dirty ? 'Önce değişiklikleri kaydet' : bulkCount === 0 ? 'Alıcısı olan şablon yok' : `${bulkCount} şablonun gerçek alıcılarına gönder`}
             >
               {busy === 'bulk' ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizonal className="h-4 w-4" />} Toplu ({bulkCount})
             </Button>
           </div>
+
+          {/* Arama */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Şablon ara (isim, e-posta, departman)…" className="pl-8" />
+          </div>
+
+          {dirty && (
+            <Button onClick={saveAll} disabled={busy === 'save'} className={`w-full gap-2 ${TW_BRAND_CTA_BUTTON}`}>
+              {busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Değişiklikleri kaydet
+            </Button>
+          )}
+
           {loading ? (
             <div className="space-y-2">{[...Array(6)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/50" />)}</div>
+          ) : Object.keys(grouped).length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">Eşleşen şablon yok.</p>
           ) : (
-            <div className="space-y-4">
+            <div className="max-h-[calc(100vh-15rem)] space-y-4 overflow-y-auto pr-1">
               {Object.entries(grouped).map(([dept, items]) => (
                 <div key={dept}>
                   <p className="mb-1.5 px-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{deptEmoji(dept)} {dept}</p>
@@ -241,13 +302,22 @@ export default function InternEmailsPage() {
                     {items.map((t) => {
                       const s = stats[t.id];
                       const active = t.id === selectedId;
+                      const noEmail = !t.email.trim();
+                      // Aynı ada sahip birden çok şablon varsa email'i de göster (ayırt et).
+                      const showEmail = t.recipientName && dupNames.has(t.recipientName.trim());
                       return (
                         <button
                           key={t.id}
                           onClick={() => setSelectedId(t.id)}
                           className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'}`}
                         >
-                          <span className="min-w-0 flex-1 truncate font-medium">{t.recipientName || t.email || 'İsimsiz'}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{t.recipientName || t.email || 'İsimsiz'}</span>
+                            {showEmail && <span className="block truncate text-xs text-muted-foreground">{t.email}</span>}
+                          </span>
+                          {noEmail && (
+                            <span title="Alıcı e-postası boş — kaydedilmez" className="shrink-0 text-amber-500"><AlertTriangle className="h-4 w-4" /></span>
+                          )}
                           {s && s.errored > 0 && (
                             <span title={`${s.errored} gönderim hatası`} className="shrink-0 text-red-500"><XCircle className="h-4 w-4" /></span>
                           )}
@@ -263,11 +333,6 @@ export default function InternEmailsPage() {
                 </div>
               ))}
             </div>
-          )}
-          {dirty && (
-            <Button onClick={saveAll} disabled={busy === 'save'} className={`w-full gap-2 ${TW_BRAND_CTA_BUTTON}`}>
-              {busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Tüm değişiklikleri kaydet
-            </Button>
           )}
         </div>
 
@@ -358,7 +423,7 @@ export default function InternEmailsPage() {
                   <Textarea value={selected.body} onChange={(e) => updateSelected({ body: e.target.value })} rows={14} className="font-mono text-xs leading-relaxed" /></div>
                 <div className="flex items-center justify-between pt-1">
                   <Button onClick={removeSelected} variant="ghost" size="sm" className="gap-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> Sil</Button>
-                  <a href={`/api/admin/intern-emails/preview?id=${encodeURIComponent(selected.id)}`} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">Önizleme (HTML)</a>
+                  <Button onClick={openPreview} variant="outline" size="sm" className="gap-1.5"><Eye className="h-4 w-4" /> Canlı önizleme</Button>
                 </div>
               </CardContent>
             </Card>
@@ -394,7 +459,7 @@ export default function InternEmailsPage() {
                     </div>
                     <div className="space-y-1">
                       {testStat.recipients.map((r) => (
-                        <div key={r.email + r.sentAt} className="flex items-center gap-2 text-xs">
+                        <div key={r.email} className="flex items-center gap-2 text-xs">
                           {r.status === 'error' ? (
                             <span className="inline-flex items-center gap-1 font-semibold text-red-500" title={r.error ?? 'Gönderim hatası'}><XCircle className="h-3.5 w-3.5" /> Hata</span>
                           ) : r.openedAt ? (
@@ -419,9 +484,15 @@ export default function InternEmailsPage() {
                 )}
 
                 <div className="h-px bg-border" />
+                {dirty && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>Kaydedilmemiş değişikliklerin var. Gönderilen içerik son <b>KAYITLI</b> hâldir — önce <b>Kaydet</b>.</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Gerçek alıcı: <b className="text-foreground">{selected.email || '—'}</b></p>
-                  <Button onClick={() => setConfirmModal({ mode: 'send' })} disabled={busy !== null || !selected.email} className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}>
+                  <Button onClick={() => setConfirmModal({ mode: 'send' })} disabled={busy !== null || !selected.email || dirty} title={dirty ? 'Önce değişiklikleri kaydet' : undefined} className={`gap-2 ${TW_BRAND_CTA_BUTTON}`}>
                     {busy === 'send' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Görevi gönder
                   </Button>
                 </div>
