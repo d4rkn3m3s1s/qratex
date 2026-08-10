@@ -9,6 +9,7 @@ import {
   normalizeInternEmails,
   renderInternTaskEmailHtml,
   deadlineIsToday,
+  applyMailVariables,
   DEFAULT_INTERN_TASK_EMAILS,
   INTERN_TASK_DEADLINE_LABEL,
   type InternTaskEmail,
@@ -130,6 +131,45 @@ describe('deadlineIsToday (cron gün eşleşmesi)', () => {
     // '5 Mart 10.12' → 10 Aralık'ta YANLIŞ tetiklenmemeli.
     expect(deadlineIsToday('5 Mart 10.12', { day: 10, month: 12 })).toBe(false);
     expect(deadlineIsToday('5 Mart 10.12', { day: 5, month: 3 })).toBe(true);
+  });
+});
+
+describe('applyMailVariables (kişiselleştirme)', () => {
+  it('bilinen değişkenleri doldurur', () => {
+    expect(applyMailVariables('Merhaba {{isim}}, {{departman}} görevi', { isim: 'Ali', departman: 'Hukuk' }))
+      .toBe('Merhaba Ali, Hukuk görevi');
+  });
+  it('boşluklu ve büyük harfli tokenları da tanır', () => {
+    expect(applyMailVariables('{{ ISIM }} / {{Departman}}', { isim: 'Ali', departman: 'X' })).toBe('Ali / X');
+  });
+  it('bilinmeyen değişkeni OLDUĞU GİBİ bırakır (silmez)', () => {
+    expect(applyMailVariables('{{isim}} {{yok}}', { isim: 'Ali' })).toBe('Ali {{yok}}');
+  });
+  it('boş değer verilen değişkeni token olarak bırakır', () => {
+    expect(applyMailVariables('{{isim}}', { isim: '' })).toBe('{{isim}}');
+  });
+});
+
+describe('şablon türleri (kind) render', () => {
+  it('task: son teslim kartı + departman rozeti', () => {
+    const { html } = renderInternTaskEmailHtml({ ...sample, kind: 'task', deadline: '1 Eylül' });
+    expect(html).toContain('Son Teslim');
+    expect(html).toContain('HUKUK DEPARTMANI');
+  });
+  it('general: son teslim kartı YOK, departman rozeti YOK', () => {
+    const { html } = renderInternTaskEmailHtml({ ...sample, kind: 'general' });
+    expect(html).not.toContain('Son Teslim');
+    expect(html).not.toContain('DEPARTMANI');
+  });
+  it('welcome: QRATEX EKİBİ rozeti var, son teslim yok', () => {
+    const { html } = renderInternTaskEmailHtml({ ...sample, kind: 'welcome' });
+    expect(html).toContain('QRATEX EKİBİ');
+    expect(html).not.toContain('Son Teslim');
+  });
+  it('render gövdedeki değişkenleri doldurur', () => {
+    const { html } = renderInternTaskEmailHtml({ ...sample, kind: 'general', recipientName: 'Zümra', body: 'Selam {{isim}}' });
+    expect(html).toContain('Selam Zümra');
+    expect(html).not.toContain('{{isim}}');
   });
 });
 

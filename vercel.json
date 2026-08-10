@@ -4,7 +4,8 @@
   "installCommand": "npm install",
   "crons": [
     { "path": "/api/cron/intern-deadline", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/team-task-due", "schedule": "30 6 * * *" }
+    { "path": "/api/cron/team-task-due", "schedule": "30 6 * * *" },
+    { "path": "/api/cron/inbox-sync", "schedule": "0 * * * *" }
   ]
 }
 

@@ -45,8 +45,8 @@ export function mailPublicOrigin(): string {
 
 // Şablon türü sabitleri client-safe ayrı dosyada (prisma sızmasın). İçeride kullanmak için
 // import ediyoruz; geriye uyum için de re-export ediyoruz.
-import { INTERN_EMAIL_KINDS, isInternEmailKind, type InternEmailKind } from '@/lib/intern-email-kinds';
-export { INTERN_EMAIL_KINDS, isInternEmailKind, type InternEmailKind };
+import { INTERN_EMAIL_KINDS, MAIL_VARIABLES, isInternEmailKind, type InternEmailKind } from '@/lib/intern-email-kinds';
+export { INTERN_EMAIL_KINDS, MAIL_VARIABLES, isInternEmailKind, type InternEmailKind };
 
 export interface InternTaskEmail {
   /** Stabil id (düzenleme/silme için). */
@@ -481,6 +481,18 @@ export async function saveInternTaskEmails(list: InternTaskEmail[]): Promise<voi
 // ════════════════════════════════════════════════════════════════════════════
 
 
+/**
+ * Gövdedeki {{degisken}} yer tutucularını doldurur. Tanınmayan değişken OLDUĞU GİBİ bırakılır
+ * (silinmez — kullanıcı hatasını görsün). Türkçe eş adlar: isim=ad. Değerler render'da escape edilir.
+ */
+export function applyMailVariables(body: string, vars: Record<string, string>): string {
+  return body.replace(/\{\{\s*([a-zçğıöşü_]+)\s*\}\}/gi, (whole, name: string) => {
+    const key = name.toLowerCase();
+    const v = vars[key];
+    return typeof v === 'string' && v.length ? v : whole;
+  });
+}
+
 /** Departman → { emoji, renk } — mailde görsel kimlik (her departmanın kendi rengi). */
 function departmentTheme(dept: string): { emoji: string; color: string; soft: string } {
   const d = dept.toLowerCase();
@@ -553,6 +565,12 @@ export function renderInternTaskEmailHtml(tpl: InternTaskEmail, trackToken?: str
   const greetName = tpl.recipientName ? escHtml(tpl.recipientName) : 'Merhaba';
   // Bu şablonun kendi son teslim tarihi (yoksa genel varsayılan).
   const deadline = tpl.deadline && tpl.deadline.trim() ? tpl.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
+  // Değişkenleri doldur ({{isim}}, {{departman}}, {{email}}, {{deadline}}) — kişiselleştirme.
+  const body = applyMailVariables(tpl.body, {
+    isim: tpl.recipientName, ad: tpl.recipientName, departman: tpl.department,
+    email: tpl.email, deadline, konu: tpl.subject,
+  });
+  tpl = { ...tpl, body };
 
   // Tür-özel görsel/metin. accent = hero şerit + vurgu rengi.
   const K = ((): { emoji: string; accent: string; badge: string | null; titleSuffix: string; sub: string; sign: string } => {

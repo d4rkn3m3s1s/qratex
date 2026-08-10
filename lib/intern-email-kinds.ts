@@ -24,3 +24,12 @@ export const INTERN_EMAIL_KINDS: { value: InternEmailKind; label: string; emoji:
 export function isInternEmailKind(v: unknown): v is InternEmailKind {
   return v === 'task' || v === 'general' || v === 'welcome' || v === 'reminder' || v === 'minimal';
 }
+
+/** Mailde kullanılabilecek {{değişken}}'ler (UI ipucu + doldurma). Client-safe. */
+export const MAIL_VARIABLES: { token: string; label: string }[] = [
+  { token: '{{isim}}', label: 'Alıcı adı' },
+  { token: '{{departman}}', label: 'Departman' },
+  { token: '{{email}}', label: 'E-posta' },
+  { token: '{{deadline}}', label: 'Son teslim' },
+  { token: '{{konu}}', label: 'Konu' },
+];

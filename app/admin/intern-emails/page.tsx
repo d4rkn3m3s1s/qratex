@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
-import { INTERN_EMAIL_KINDS, type InternEmailKind } from '@/lib/intern-email-kinds';
+import { INTERN_EMAIL_KINDS, MAIL_VARIABLES, type InternEmailKind } from '@/lib/intern-email-kinds';
 
 interface Template {
   id: string;
@@ -485,8 +485,27 @@ export default function InternEmailsPage() {
                     </div>
                   )}
                 </div>
-                <div className="space-y-1"><Label className="text-xs">Mail içeriği</Label>
-                  <Textarea value={selected.body} onChange={(e) => updateSelected({ body: e.target.value })} rows={14} className="font-mono text-xs leading-relaxed" /></div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Mail içeriği</Label>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">Ekle:</span>
+                      {MAIL_VARIABLES.map((v) => (
+                        <button
+                          key={v.token}
+                          type="button"
+                          onClick={() => updateSelected({ body: (selected.body ?? '') + v.token })}
+                          title={`${v.label} — gönderimde otomatik dolar`}
+                          className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-primary hover:bg-primary/10"
+                        >
+                          {v.token}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea value={selected.body} onChange={(e) => updateSelected({ body: e.target.value })} rows={14} className="font-mono text-xs leading-relaxed" />
+                  <p className="text-[11px] leading-tight text-muted-foreground">{'İpucu: {{isim}}, {{departman}} gibi değişkenler gönderim anında her alıcı için otomatik dolar.'}</p>
+                </div>
                 <div className="flex items-center justify-between pt-1">
                   <Button onClick={removeSelected} variant="ghost" size="sm" className="gap-1.5 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> Sil</Button>
                   <Button onClick={openPreview} variant="outline" size="sm" className="gap-1.5"><Eye className="h-4 w-4" /> Canlı önizleme</Button>
