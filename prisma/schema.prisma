@@ -922,6 +922,36 @@ model InternEmailSend {
   @@index([createdAt])
 }
 
+/// GELEN KUTUSU — IMAP ile qratex.co@gmail.com'dan çekilen mailler. Admin panelinde okunur.
+/// fromEmail bir stajyer/görev alıcısına eşleşirse matchedTemplateId + matchedRecipientName dolar
+/// (stajyerden gelen cevaplar otomatik ayrılır). uid+mailbox IMAP'te benzersiz (idempotent sync).
+model InboxMessage {
+  id           String    @id @default(cuid())
+  uid          Int       // IMAP UID (mailbox içinde benzersiz)
+  mailbox      String    @default("INBOX")
+  messageId    String?   // RFC Message-ID (varsa)
+  fromEmail    String    // gönderen adresi (küçük harf)
+  fromName     String?
+  toEmail      String?   // alıcı (genelde qratex.co@gmail.com)
+  subject      String    @default("")
+  snippet      String    @default("") // gövdenin ilk ~200 karakteri (liste önizleme)
+  bodyText     String?   @db.Text
+  bodyHtml     String?   @db.Text
+  sentAt       DateTime  // mailin kendi tarihi
+  seen         Boolean   @default(false) // panelde okundu işareti
+  // Görev/stajyer eşleştirme (otomatik ayırma):
+  isFromIntern Boolean   @default(false) // fromEmail bir görev alıcısına eşleşti mi
+  matchedTemplateId   String?           // eşleşen şablon id
+  matchedRecipientName String?          // eşleşen kişi adı
+  matchedDepartment    String?          // eşleşen departman
+  createdAt    DateTime  @default(now()) // DB'ye çekilme zamanı
+
+  @@unique([mailbox, uid])
+  @@index([fromEmail])
+  @@index([isFromIntern])
+  @@index([sentAt])
+}
+
 model FeatureFlag {
   id          String    @id @default(cuid())
   key         String    @unique
