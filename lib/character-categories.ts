@@ -57,12 +57,21 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     emoji: '🎭',
     accent: '#dc2626',
     aiHint:
-      'TANIKLIK/DELİL kategorisidir (olumsuzluk ŞART DEĞİL — olumlu da olabilir). Yorumcu bir TANIK gibi ' +
-      'yazar: (a) İSİM verir ("özellikle Ayşe Hanım’ın ilgisi"), (b) SOMUT kanıt/olay sunar ("sıramız gelmeden ' +
-      'sonrakiler aldı", "yemediğimiz ürünün parasını ödedik", "menüde 300 hesapta 350"), (c) DENGELİ hüküm kurar ' +
-      '("tek eksiği...", "hakkını yemeyeyim", "ellerine sağlık"+detay, "fiyat performans"), (d) madde madde/sistematik ' +
-      'sıralar ("öncelikle... ilaveten... tüm bunlara ek olarak..."). DELİL→OLAY→HÜKÜM zinciri kurar. AYRIM: Fantastik ' +
-      '"davetiye" gibi biter (tavsiye/uğrayın, kanıtsız his); Dram/Suç "rapor/tanıklık" gibi biter (isim+kanıt+dengeli hüküm).',
+      'TANIKLIK/DELİL kategorisidir (olumsuzluk ŞART DEĞİL — 3 yorumdan 2\'si olumlu olabilir). Yorumcu bir TANIK ' +
+      'gibi yazar: "şahit oldum, size aktarıyorum". 5 SİNYAL GRUBU: ' +
+      '(1) 👤 TANIK: personel ismi + somut davranış ("özellikle Ayşe Hanım\'ın ilgisi", "Mehmet Bey bizzat ilgilendi"). ' +
+      '(2) 📋 DELİL: somut olay/kanıt ("sıramız gelmeden sonrakiler aldı", "yemediğimiz ürünün parasını ödedik", ' +
+      '"menüde 300 hesapta 350", "40 dk bekledik, sipariş sisteme girilmemiş"). ' +
+      '(3) ⚖️ DENGE: artı + tek eksi, adil ("tek eksiği/tek istediğim...", "hakkını yemeyeyim", "biraz yüksek ama porsiyona göre makul"). ' +
+      '(4) 🔍 GÖZLEM: küçük somut ayrıntı ("dikkatimi çeken bir diğer husus...", "masaları sürekli kontrol ediyorlardı"). ' +
+      '(5) 🧾 HÜKÜM: olaydan çıkan sonuç ("ellerine sağlık"+ürün detayı, "fiyat performans", "bir daha gitmem", "kimseye tavsiye etmem", "pişman oldum", "değmedi", "bu kafayla kaybeden siz olursunuz"). ' +
+      '(6) 📋 SİSTEMATİK LİSTELEME: birden çok somut kriteri düz/madde madde sıralama — isim/kanıt olmasa bile ("mekan temiz, ' +
+      'çalışanlar güler yüzlü, yemekler başarılı, fiyatlar makul", "öncelikle... ilaveten... tüm bunlara ek olarak..."). Bu ' +
+      'ÇOK-KRİTERLİ DÜZ LİSTELEME tek başına Dram/Suç\'a yeter (abartı YOKtur → Komedi DEĞİL; öneri/davet YOKtur → Fantastik DEĞİL). ' +
+      'ÇEKİRDEK KURAL: DELİL→OLAY→HÜKÜM zinciri. Salt hüküm TEK BAŞINA yetmez: "bir daha gitmem" tek başına Dram/Suç DEĞİL; ama ' +
+      '"sipariş 40 dk gecikti, yanlış geldi, kimse ilgilenmedi, bu yüzden bir daha gitmem" → Dram/Suç (kanıt+olay+hüküm var). ' +
+      'AYRIM: Fantastik "davetiye" gibi biter (uğrayın/keşfedin, kanıtsız his); Dram/Suç "rapor/tanıklık" gibi biter (isim+kanıt+dengeli hüküm). ' +
+      'Gizem/Gerilim ise olayı NET anlatmaz, ima/şüphe bırakır — Dram/Suç açık ve kanıtlıdır.',
     characterIds: [
       'badge-walter-white', 'badge-tommy-shelby', 'badge-sherlock', 'badge-professor',
       'badge-michael-scofield', 'badge-elizabeth', 'badge-jesse-pinkman', 'badge-spartacus',
@@ -77,10 +86,24 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     accent: '#f59e0b',
     aiHint:
       'HİPERBOL/MİZAH kategorisidir. Neredeyse zorunlu iskelet: "o kadar ... ki ..." yapısı — sıradan bir övgü/şikayet ' +
-      'gerçeklikten kopan ABSÜRT bir sonuca/benzetmeye bağlanır (hayvana dönüşme, Narnia, mikroskop/nanoteknoloji, ' +
-      'bekleme süresini "bir dil öğrendim/tez bitirdim" diye uzatma, kendini alaya alma). Espri altında genelde gerçek ' +
-      'bir yargı saklıdır. Ton eğlenceli/ironik/absürt. AYRIM: Komedi güldürmek için GERÇEKLİKTEN kopar; diğer kategoriler ' +
-      'gerçekçi kalır.',
+      'gerçeklikten kopan ABSÜRT bir sonuca/benzetmeye bağlanır (hayvana dönüşme, Narnia\'ya açılan kapı, mikroskop/' +
+      'nanoteknoloji, bekleme süresini "bir dil öğrendim/master tezi bitirdim/kayıp ilan edildim" diye uzatma, "tabağı ' +
+      'dekorasyon sandım", "yangın tüpüyle gidin", kendini alaya alma). Espri ALTINDA genelde gerçek bir yargı saklıdır ' +
+      '("lezzet şahane ama..."/"porsiyon küçük"). Ton eğlenceli/ironik/absürt. ' +
+      'İÇ KARAKTER TONLARI (hepsi Komedi): olayı absürt bir SAHNEYE/hikayeye dönüştürüp kendini kahraman yapma; sözde ' +
+      'BİLİMSEL/süreçsel analiz mizahı (çekirdeğin yetişmesini simüle ettim); TEK CÜMLELİK keskin iğneleme (uzun kurgu yok); ' +
+      'SOSYAL/duygusal saf abartı (kan kardeş olduk, garsona sarıldım). ' +
+      'AYRIM: Komedi güldürmek için GERÇEKLİKTEN kopar; Dram/Suç kanıt sunar, Fantastik davet eder, Gizem tedirgin eder — ' +
+      'hepsi GERÇEKÇİ kalır, Komedi absürde kaçar. ' +
+      '⛔ ZORUNLU GİRİŞ GUARD\'ı (önce bunu uygula): absürt benzetme / hiperbol / gerçeklikten kopuş / gülünç abartı ' +
+      'YOKSA yorum KOMEDİ DEĞİLDİR. Düz ve gerçekçi bir övgü/şikayet — özellikle çok kriterli sade liste ' +
+      '("mekan temiz, çalışanlar güler yüzlü, yemekler başarılı, fiyatlar makul") — mizah İÇERMEZ, bu ASLA Komedi ' +
+      'değildir; sistematik gözlem/değerlendirme olduğu için Dram/Suç\'tur. Sadece olumlu/nötr ton Komedi yapmaz; ' +
+      'Komedi için MUTLAKA absürt bir espri unsuru şart. ' +
+      '↔ ÇİFT YÖNLÜ: Şikayet/olumsuzluk bile ABSÜRT hiperbolle anlatılıyorsa ("servis o kadar yavaştı ki sakalım uzadı", ' +
+      '"o kadar kötüydü ki tabağı komşuya hediye ettim") → yine KOMEDİ\'dir. Teslim biçimi absürt-komikse, içerik şikayet ' +
+      'olsa da Komedi kazanır (Gizem/Dram DEĞİL); çünkü Gizem tedirgin eder, Dram kanıt sıralar — ikisi de GERÇEKÇİ kalır, ' +
+      'oysa burada gerçeklikten komik bir kopuş var.',
     characterIds: [
       'badge-chandler', 'badge-barney-stinson', 'badge-the-office', 'badge-rick-morty',
       'badge-tyrion', 'badge-good-omens', 'badge-sheldon',
@@ -94,11 +117,15 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     accent: '#8b5cf6',
     aiHint:
       'KEŞİF/DAVETİYE kategorisidir (genelde olumlu). Yorumcu mekanı bir KEŞİF/MACERA/ÖNERİ objesi gibi sunar, ' +
-      'başkalarına yol gösterir. Sinyaller: öneri ("gidip deneyin", "keşfedin", "uğrayın", "tavsiye ederim", "iyi bir ' +
-      'alternatif"), atmosfer ("sakin", "dingin", "huzurlu köşe", "aurası harika"), keşif ("gizli bir yer", "saklı ' +
-      'kalmış", "tesadüfen bulduk"), arkadaşlık/paylaşım ("arkadaşlarla vakit", "sevdiklerinizle"). "Davetiye" gibi ' +
-      'biter: kanıt sunmaz, HİSle konuşur, keşif çağrısıyla kapanır. AYRIM: Dram/Suç isim+kanıt+dengeli hüküm verir; ' +
-      'Fantastik his + öneri + davet verir.',
+      'başkalarına yol gösterir; "davetiye" gibi biter, HİSle konuşur, kanıt sunmaz. Sinyaller: öneri ("gidip deneyin", ' +
+      '"keşfedin", "mutlaka uğrayın", "tavsiye ederim", "iyi bir alternatif", "yolunuz düşerse"), atmosfer ("sakin", "dingin", ' +
+      '"huzurlu köşe", "aurası/atmosferi harika", "kendinizi evinizde hissedersiniz"), keşif ("gizli/saklı bir yer", "saklı ' +
+      'kalmış", "tesadüfen bulduk, iyi ki", "keşfedilmeyi bekliyor", "rotanıza ekleyin"), arkadaşlık ("arkadaşlarla saatlerce ' +
+      'sohbet", "sevdiklerinizle"). ' +
+      'AYRIM (kategori): Dram/Suç isim+kanıt+dengeli hüküm verir (tanıklık); Fantastik his+öneri+davet verir (davetiye). ' +
+      'BURAYA GİRMEZ: analitik puanlama ("kahve 8/10, servis 6/10" → sıradan/değerlendirici); aşırı coşku çığlığı ' +
+      '("MÜKEMMEL!!! HAYATIMDA EN İYİSİ!!!" → dengeli değil, Fantastik\'in sıcak-sakin tonu değil); tek kelimelik "güzel/iyi" ' +
+      '(üslup yok). Fantastik ton SICAK, DAVETKÂR, KAŞİF ruhlu — çatışma/öfke/suçlama YOKtur (varsa Dram/Suç veya Gizem).',
     characterIds: [
       'badge-daenerys', 'badge-jon-snow', 'badge-khalesi', 'badge-witcher', 'badge-ragnar',
       'badge-eleven', 'badge-sam-winchester', 'badge-dean-winchester', 'badge-kelly-yorkie',
@@ -112,11 +139,15 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     accent: '#0ea5e9',
     aiHint:
       'ŞÜPHE/İMA kategorisidir. Yorumcu bir tuhaflık/çelişki/çözülmemiş gerilim hisseder; olayı DOĞRUDAN anlatmak ' +
-      'yerine İMA ederek/ipucu bırakarak aktarır. Sinyaller: ima/çelişki ("aslında", "sanki", "galiba", "öyle görünüyor ' +
-      'ki"), sorgulama ("neden böyle?", "anlam veremedim"), gizli detay ifşası ("dikkatinizi çekerim", "fark ettim ki", ' +
-      '"meğerse", "menüde yazmıyor ama"), finansal şüphe ("adisyonu inceleyin", "bilerek yapılmış", "kafalarına göre ' +
-      'ekleme"), tedirginlik ("içim rahat etmedi", "bir şeyler tuhaftı"). AYRIM: Dram/Suç AÇIK öfke/mağduriyet + net kanıt; ' +
-      'Gizem/Gerilim BELİRSİZLİK/sorgulama, olay net sonuca bağlanmadan asılı kalır.',
+      'yerine İMA ederek/ipucu bırakarak aktarır ve olay NET sonuca bağlanmadan ASILI kalır. Sinyaller: ima/çelişki ' +
+      '("aslında", "sanki", "galiba", "öyle görünüyor ki"), sorgulama ("neden böyle?", "anlam veremedim"), gizli detay ifşası ' +
+      '("dikkatinizi çekerim", "fark ettim ki", "meğerse", "menüde yazmıyor ama"), finansal şüphe ("adisyonu inceleyin", ' +
+      '"bilerek yapılmış", "kafalarına göre ekleme"), tedirginlik ("içim rahat etmedi", "bir şeyler tuhaftı"). ' +
+      'İÇ KARAKTER TONLARI (hepsi bu kategoriye girer): saf gözlem/detay avcısı (fark ettim, bir de...); iz sürme/soruşturma ' +
+      '(önce tesadüf sandım, ikinci kez olunca şüphelendim); hesap/çıkar şüphesi (menüde 300 hesapta 350, bilerek); "neden ' +
+      'böyle?" derin sorgulama; keskin-özgün çarpıcı ifade; kesin-iddialı özgüvenli hüküm. ' +
+      'AYRIM: Dram/Suç AÇIK öfke/mağduriyet + NET kanıt sunar ve sonuca bağlar; Gizem/Gerilim BELİRSİZLİK/sorgulama, kanıtı ' +
+      'ima eder ama olayı asılı bırakır. Komedi absürt-güldürür; Gizem gerçekçi kalıp tedirgin eder.',
     characterIds: [
       'badge-joe', 'badge-villanelle', 'badge-pablo-escobar', 'badge-dark-jonas',
       'badge-frank-underwood', 'badge-carrie', 'badge-martha',
@@ -129,14 +160,16 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     emoji: '🕯️',
     accent: '#7c3aed',
     aiHint:
-      'ÖZEL/ZOR kategoridir — ustalık isteyen ÖZGÜN ÜSLUPLAR buraya girer. UZUN OLMAK ŞART DEĞİL: kısa ama ' +
-      'ustaca/keskin/derin bir yorum da girer (House’un tek cümlelik teşhisi, Crowley’nin deadpan ironisi, ' +
-      'Villanelle’nin keskin özgünlüğü gibi). Önemli olan uzunluk değil, üslubun USTALIĞI/ÖZGÜNLÜĞÜ. Ustalık üslupları: ' +
-      '(House) keskin teşhis + ironi; (The Doctor) merak + keşif + objektif denge; (Mr. Robot) olayları kayıt/log gibi ' +
-      'zaman+liste+detayla tutma; (Wednesday) "herkes seviyor ben sorguluyorum" ters görüş; (Castiel) eksiği söyle + ' +
-      'hakkını teslim et adaleti; (Dexter) verileri PARÇALA→değerlendir→net sonuca bağla soğukkanlı analiz; (John Locke) ' +
-      'inan→şans ver→deneyimle; (Hannibal) zarif/nazik başla→soğuk keskin final; (Crowley) beklenmedik karşılaştırma + ' +
-      'deadpan kara ironi. Sıradan/düz bir yorumu (özel bir üslup ustalığı yoksa) buraya ATMA.',
+      'ÖZEL/ZOR kategoridir — yalnızca üslup USTALIĞI/ÖZGÜNLÜĞÜ olan ÖZGÜN yorumlar. UZUN OLMAK ŞART DEĞİL: kısa ama ' +
+      'ustaca/keskin/derin bir yorum da girer (House\'un tek cümlelik teşhisi, Crowley\'nin deadpan ironisi, Villanelle\'nin ' +
+      'keskin özgünlüğü gibi). Önemli olan uzunluk değil, üslubun ustalığı. Ustalık üslupları: (House) keskin teşhis + ironi; ' +
+      '(The Doctor) merak + keşif + objektif denge; (Mr. Robot) olayları kayıt/log gibi zaman+liste+detayla tutma; (Wednesday) ' +
+      '"herkes seviyor ben sorguluyorum" ters görüş; (Castiel) eksiği söyle + hakkını teslim et adaleti; (Dexter) verileri ' +
+      'PARÇALA→değerlendir→net sonuca bağla soğukkanlı analiz; (John Locke) inan→şans ver→deneyimle; (Hannibal) zarif/nazik ' +
+      'başla→soğuk keskin final; (Crowley) beklenmedik karşılaştırma + deadpan kara ironi. ' +
+      'KRİTİK GUARD: Bir yorum içerik olarak başka kategoriye (Dram/Fantastik/Gizem/Komedi) benziyor OLABİLİR; Gizemli\'ye ' +
+      'ancak ÜSLUBUNDA istisnai bir ustalık/özgünlük/derinlik VARSA gir. Sıradan, düz, klişe veya sadece uzun bir yorumu ' +
+      '(özel üslup ustalığı yoksa) buraya ASLA ATMA — o zaman gerçek kategorisine (Dram/Fantastik/Gizem/Komedi) ata.',
     characterIds: [
       'badge-house-md', 'badge-the-doctor', 'badge-mr-robot', 'badge-wednesday', 'badge-castiel',
       'badge-dexter', 'badge-john-locke', 'badge-hannibal', 'badge-crowley',

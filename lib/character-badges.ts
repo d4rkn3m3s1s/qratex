@@ -27,7 +27,7 @@ export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string 
   { badgeId: 'badge-the-office', name: 'Michael Scott', trait: 'SOSYAL/DUYGUSAL saf abartı: mizahı insan ilişkisine ve kendi duygusuna bağlar; paylaşımcı, çocuksu, iyi niyetli ("kan kardeş olduk", garsona sarılmak). "Hepimiz birlikte yaşadık, duygulandım."' },
   { badgeId: 'badge-walter-white', name: 'Walter White', trait: 'Stratejik, planlı, hırslı; kriz anında çözüm bulur' },
   { badgeId: 'badge-tommy-shelby', name: 'Tommy Shelby', trait: 'Soğukkanlı, hesapçı, planlı; yorumlarına yön veren lider' },
-  { badgeId: 'badge-sherlock', name: 'Sherlock Holmes', trait: 'Analitik, gözlemci, detaycı; en küçük ayrıntıyı yakalar' },
+  { badgeId: 'badge-sherlock', name: 'Sherlock Holmes', trait: 'ÇIKARIMCI DEDEKTİF: detayları BİRLEŞTİRİR → bağlantı kurar → çıkarım yapar → NET sonuca varır ("bardaktaki ruj izi yeni ama yanındakinin dudağında yok; demek bardak başka masadan geldi"). İmza: "Bu nedenle şu sonuca vardım." AYRIM: Joe detayları toplar ama BAĞLAMAZ (sonuçsuz); Sherlock bağlar ve HÜKME varır.' },
   { badgeId: 'badge-professor', name: 'El Profesor', trait: 'Planlı, stratejik, soğukkanlı; düşünülmüş faydalı yorumlar' },
   { badgeId: 'badge-michael-scofield', name: 'Michael Scofield', trait: 'Stratejik zeka, mantık zinciri kuran, planlı' },
   // ── GİZEMLİ kategori (en zor): ustalık isteyen üsluplar ──
@@ -41,18 +41,18 @@ export const CHARACTER_PROFILES: { badgeId: string; name: string; trait: string 
   { badgeId: 'badge-wednesday', name: 'Wednesday Addams', trait: 'TERS GÖRÜŞ: genel kanıya meydan okur ("herkes buraya bayılıyor, ben hâlâ nedenini bulamadım"). Karanlık, bağımsız, genel beğeniyi sorgulayan.' },
   { badgeId: 'badge-castiel', name: 'Castiel', trait: 'ADALET/DENGE: eksiyi açıkça söyler ama hakkını da teslim eder; dingin, adil, dengeleyici bir hüküm kurar. "Eksiği söyle + hakkını teslim et."' },
   // ── GİZEM/GERİLİM: şüphe/ima ──
-  { badgeId: 'badge-joe', name: 'Joe Goldberg', trait: 'GÖZLEMCİ/DETAY AVCISI: başkalarının fark etmediği küçük detayları tek tek not düşer, takıntı derecesinde ("şunu da fark ettim... bir de..."). "Ne fark ettim?" — saf gözlem, hüküm değil.' },
+  { badgeId: 'badge-joe', name: 'Joe Goldberg', trait: 'GÖZLEMCİ/DETAY AVCISI: küçük detayları tek tek toplar ama BAĞLAMAZ, SONUÇSUZ bırakır ("ruj izi vardı, garsonun ayakkabısı çamurluydu, bir de kırmızı şemsiye... neden fark ettiğimi bilmiyorum"). İmza: "Bunu neden fark ettiğimi bilmiyorum." AYRIM: Sherlock detayları BAĞLAR+çıkarım yapar+hükme varır; Joe toplar ama bağlamaz. Carrie sezgiyle şüpheye bağlar; Joe takılır, bağlamaz.' },
   { badgeId: 'badge-frank-underwood', name: 'Frank Underwood', trait: 'HESAP/STRATEJİ ŞÜPHESİ: işletmenin bilinçli bir hesabı olduğundan şüphelenir ("menüde 300 hesapta 350, tesadüf değil; adisyonu inceleyin"). "Burada kimin hesabı var?" — finansal/çıkar şüphesi.' },
-  { badgeId: 'badge-carrie', name: 'Carrie Mathison', trait: 'İZ SÜRÜCÜ: detayları birleştirip şüpheli bir sonuca ulaşmaya çalışır ("önce tesadüf sandım, ikinci kez olunca şüphelendim"). Joe fark eder, Carrie soruşturur. "Gerçekte ne oluyor?"' },
-  { badgeId: 'badge-villanelle', name: 'Villanelle', trait: 'ÇARPICI/ÖZGÜN: sıradan değerlendirme değil, okuyanı şaşırtan keskin-özgün üslup, kendinden emin ("300 TL kahvenin 350’ye dönüşmesi oldukça yaratıcı bir matematik"). Absürt değil, keskin özgünlük.' },
-  { badgeId: 'badge-pablo-escobar', name: 'Pablo Escobar', trait: 'KESİN/İDDİALI: geri adım atmadan net hüküm verir ("hiç tartışmasız en iyilerden biri"). Gizem belirsizlikten değil ÖZGÜVENDEN gelir. "Benim hükmüm ne?"' },
-  { badgeId: 'badge-dark-jonas', name: 'Jonas (Dark)', trait: 'SORGULAYICI/DERİN: cevapsız bir "neden böyle?" sorusu bırakır, olayın arkasındaki sebebi merak eder, felsefi/derin ("bunun bir sebebi olmalı"). "Bunun arkasında ne var?"' },
+  { badgeId: 'badge-carrie', name: 'Carrie Mathison', trait: 'SEZGİSEL İZ SÜRÜCÜ: KANITI OLMADAN güçlü bir sezgiyle sonuca İNANIR ("kanıtım yok ama bu mekan yakında kapanacak", "bir şey saklıyorlar, kanıtlayamam ama hissediyorum"). İmza: "Kanıtlayamam ama biliyorum/hissediyorum." AYRIM: Jonas cevap arayan SORU sorar (belirsiz); Carrie kanıtsız ama KESİN sezgisel hüküm verir. Joe detay toplar-bağlamaz; Carrie sezgiyle bağlar.' },
+  { badgeId: 'badge-villanelle', name: 'Villanelle', trait: 'ÇARPICI/ÖZGÜN: beklenmedik, KİŞİSEL ve özgün bir tepki/benzetme verir ("bu tatlıyı yemek haksızlık gibi geldi", "yemek bana ‘beni yemeden saygı duy’ diyor"). İmza: "Garip ama bana ... hissettirdi." Absürt-güldürü DEĞİL (o Komedi), keskin ÖZGÜNLÜK. AYRIM: Escobar KESİN hüküm+meydan okuma verir; Villanelle özgün-kişisel HİS/bakış verir.' },
+  { badgeId: 'badge-pablo-escobar', name: 'Pablo Escobar', trait: 'KESİN/İDDİALI + MEYDAN OKUMA: geri adım atmadan net hüküm verir ve tartışmaya KAPATIR ("şehrin en iyisi, aksini söyleyen ya ne yediğini bilmiyor ya hiç gelmemiştir", "bu konuda tartışacak bir şey yok. Bitti."). İmza: "Tartışmaya gerek yok, aksini söyleyen yanılıyor." AYRIM: Villanelle özgün-kişisel his verir; Escobar kesin-otoriter HÜKÜM verir.' },
+  { badgeId: 'badge-dark-jonas', name: 'Jonas (Dark)', trait: 'CEVAP ARAYAN SORGULAYICI: bir problemi fark eder ve cevabını ARAR ama ulaşamaz; belirsizlik+neden arama ("geçen ay 180 şimdi 240, porsiyon aynı, neden arttı? malzeme mi pahalandı acaba?"). İmza: "Neden böyle olduğunu anlamıyorum, bir açıklaması olmalı." AYRIM: Carrie kanıtsız SEZGİSEL hüküm verir (biliyorum); Jonas cevap arayan açık SORU sorar (anlamıyorum).' },
   // ── FANTASTİK: keşif/davetiye ──
   { badgeId: 'badge-jon-snow', name: 'Jon Snow', trait: 'DÜRÜST/DENGELİ: güvenilir değerlendirme, hem artıyı hem küçük bir eksiyi adil ve abartısız sunar ("dürüst olmak gerekirse... ama... genel olarak memnun"). Güven veren ton.' },
   { badgeId: 'badge-daenerys', name: 'Daenerys', trait: 'KEŞİF/REHBER: mekanı bir keşif/öneri gibi sunar, başkasına yol gösterir ("keşfedilmeyi bekleyen gizli bir yer, yolunuz düşerse mutlaka uğrayın, iyi bir alternatif"). "Burası keşfedilmeli."' },
-  { badgeId: 'badge-dean-winchester', name: 'Dean Winchester', trait: 'KORUYUCU UYARI + TAVSİYE: "şuna dikkat et ama yine de git, pişman olmazsın" tarzı; küçük bir uyarı + genel olumlu tavsiye, enerjik-samimi arkadaş tonu.' },
+  { badgeId: 'badge-dean-winchester', name: 'Dean Winchester', trait: 'KORUYUCU UYARI + TAVSİYE: "şuna dikkat et ama yine de git, pişman olmazsın" tarzı; küçük bir uyarı + genel olumlu tavsiye, enerjik-samimi arkadaş tonu. UYARI/DİKKAT unsuru ZORUNLU ("kalabalık olabilir", "otopark sıkıntılı" gibi); yorumda uyarı YOKSA Dean DEĞİL (kısa+öneri ise Geralt).' },
   { badgeId: 'badge-eleven', name: 'Eleven', trait: 'ARKADAŞLIK/PAYLAŞIM: "ben geldim"den çok "sevdiklerimle güzel vakit geçirdim"; sıcak ortam, sohbet, samimiyet vurgusu ("arkadaşlarla saatlerce oturduk, evimizde gibi"). "Burada birlikte güzel vakit geçilir."' },
-  { badgeId: 'badge-witcher', name: 'Geralt', trait: 'AZ VE ÖZ: kısa, doğrudan, net yargı + vurucu sonuç, gereksiz hikaye yok ("Kahvesi çok iyi. Ortamı sakin. Tavsiye ederim."). Ama yalnız "iyi/güzel" tek kelime DEĞİL — fantastik öneri de taşımalı. "Kısa söyledim, net söyledim."' },
+  { badgeId: 'badge-witcher', name: 'Geralt', trait: 'AZ VE ÖZ: kısa, doğrudan, net yargı + vurucu sonuç, gereksiz hikaye yok ("Kahvesi çok iyi. Ortamı sakin. Tavsiye ederim."). Ama yalnız "iyi/güzel" tek kelime DEĞİL — fantastik öneri de taşımalı. UYARI/dikkat unsuru YOKtur (uyarı varsa Dean); arkadaşlık/sohbet vurgusu YOKtur (varsa Eleven); keşif/rota çağrısı baskın DEĞİL (baskınsa Daenerys). "Kısa söyledim, net söyledim."' },
   { badgeId: 'badge-elizabeth', name: 'Kraliçe Elizabeth', trait: 'Ciddi, sorumluluk sahibi; düzenli, istikrarlı' },
   { badgeId: 'badge-rick-morty', name: 'Rick Sanchez', trait: 'Dahi ama kaotik, alaycı ve umursamaz; sıra dışı bakış' },
   { badgeId: 'badge-sam-winchester', name: 'Sam Winchester', trait: 'Araştırmacı, mantıklı, sadık; detaylı ve düşünceli' },
@@ -95,92 +95,6 @@ export type CharacterClassification = {
   categoryName?: string;
 } | null;
 
-/**
- * Kullanıcının yorum geçmişini agregeleyip LLM ile 2 AŞAMADA sınıflandırır:
- *   1) Yorum üslubuna göre KATEGORİ (Dram/Suç, Komedi, Fantastik, Gizem…).
- *   2) O kategorinin karakterlerinden en uygun olanı.
- * Tek LLM çağrısında ikisini de ister (maliyet: 1 çağrı). AI kategoriyi şaşırırsa
- * güvenli fallback devreye girer. LLM yoksa/başarısızsa null (sessiz degradasyon).
- */
-export async function classifyCharacter(userId: string): Promise<CharacterClassification> {
-  const feedbacks = await prisma.feedback.findMany({
-    where: { userId, deletedAt: null, text: { not: null } },
-    select: { text: true, rating: true, sentiment: true },
-    orderBy: { createdAt: 'desc' },
-    take: 30,
-  });
-
-  const withText = feedbacks.filter((f) => f.text && f.text.trim().length > 0);
-  if (withText.length < CHARACTER_BADGE_THRESHOLD) return null;
-
-  const sample = withText
-    .slice(0, 20)
-    .map((f, i) => `${i + 1}. (${f.rating}★, ${f.sentiment || '?'}) ${f.text!.slice(0, 200)}`)
-    .join('\n');
-
-  // Kategori altyapısı burada TÜKETİLİR (genişletilebilir): kategoriler + her
-  // kategorinin karakterleri prompt'a otomatik yansır.
-  const { CHARACTER_CATEGORIES, CATEGORY_BY_KEY, charactersInCategory, FALLBACK_CATEGORY_KEY } =
-    await import('@/lib/character-categories');
-
-  const categoryBlock = CHARACTER_CATEGORIES.map((cat) => {
-    const chars = charactersInCategory(cat.key)
-      .map((c) => `    - ${c.badgeId} = ${c.name}: ${c.trait}`)
-      .join('\n');
-    return `• KATEGORİ "${cat.key}" (${cat.name}) — ${cat.aiHint}\n  Bu kategorinin karakterleri:\n${chars}`;
-  }).join('\n\n');
-
-  try {
-    const { runChatCompletion } = await import('@/lib/ai-engine');
-    const res = await runChatCompletion({
-      system:
-        'Sen bir kişilik/üslup analisti asistanısın. Kullanıcının yorumlarını oku ve İKİ AŞAMADA karar ver: ' +
-        '(1) Yorumların genel ÜSLUBUNU en iyi anlatan KATEGORİ\'yi seç (categoryKey). ' +
-        '(2) O kategorinin karakterleri arasından kişiliğe EN UYGUN olanı seç (badgeId). ' +
-        'badgeId, seçtiğin categoryKey\'in karakterlerinden BİRİ olmak ZORUNDA. ' +
-        'why: kullanıcının YAZIM TARZINI bu karaktere benzeten OLUMLU açıklama. ' +
-        '"Sen ... yazıyorsun, tıpkı ... gibi" tarzında, gurur verici. Yorumları eleştirme, ' +
-        'soru sorma, öneri verme. TAM cümle, en fazla 30 kelime, nokta ile bitir. ' +
-        'JSON döndür: {"categoryKey":"...","badgeId":"...","why":"..."}.',
-      user: `KATEGORİLER VE KARAKTERLERİ:\n${categoryBlock}\n\nKULLANICININ YORUMLARI:\n${sample}\n\nÖnce kategori, sonra o kategoriden karakter seç. why kısa ve tam bitsin. JSON:`,
-      temperature: 0.4,
-      maxTokens: 260,
-      jsonMode: true,
-    });
-    const content = res && typeof res !== 'string' ? res.content : (res as string | null);
-    if (!content) return null;
-    const parsed = JSON.parse(content) as { categoryKey?: string; badgeId?: string; why?: string };
-
-    // Karakter geçerli mi?
-    let match = CHARACTER_PROFILES.find((c) => c.badgeId === parsed.badgeId);
-    // Kategori geçerli mi? (AI uydurmuşsa karakterin gerçek kategorisine düş.)
-    let categoryKey = parsed.categoryKey && CATEGORY_BY_KEY[parsed.categoryKey] ? parsed.categoryKey : undefined;
-
-    if (!match) {
-      // Karakter tutmadı ama kategori tuttuysa, o kategoriden ilk karakteri seç (güvenli).
-      const fallbackCat = categoryKey ?? FALLBACK_CATEGORY_KEY;
-      const inCat = charactersInCategory(fallbackCat);
-      match = inCat[0] ? CHARACTER_PROFILES.find((c) => c.badgeId === inCat[0].badgeId) : undefined;
-      if (!match) return null;
-    }
-    // Kategori yoksa karakterin gerçek kategorisinden türet.
-    if (!categoryKey) {
-      const { CATEGORY_BY_CHARACTER } = await import('@/lib/character-categories');
-      categoryKey = CATEGORY_BY_CHARACTER[match.badgeId]?.key;
-    }
-    const cat = categoryKey ? CATEGORY_BY_KEY[categoryKey] : undefined;
-
-    return {
-      badgeId: match.badgeId,
-      name: match.name,
-      why: tidyWhy(parsed.why),
-      categoryKey: cat?.key,
-      categoryName: cat?.name,
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Kullanıcıya bir karakter rozetini atar (kazanılır — puan düşülmez, satın alma değil).
@@ -211,58 +125,6 @@ export async function ensureCharacterBadgeRecord(badgeId: string): Promise<{ id:
   }).catch(() => null);
 }
 
-export async function awardCharacterBadge(userId: string, badgeId: string): Promise<boolean> {
-  // Badge kaydı DB'de var mı? Yoksa KATALOGDAN otomatik oluştur (seed eksikliğine dayanıklı).
-  const badge = await ensureCharacterBadgeRecord(badgeId);
-  if (!badge) return false;
-
-  const existing = await prisma.userBadge.findUnique({
-    where: { userId_badgeId: { userId, badgeId } },
-    select: { id: true },
-  });
-  if (existing) return false; // zaten var
-
-  await prisma.userBadge.create({ data: { userId, badgeId } });
-
-  // Bildirim (fire-and-forget; hata rozet atamayı bozmasın)
-  try {
-    await prisma.notification.create({
-      data: {
-        userId,
-        type: 'badge',
-        title: 'Yeni Karakter Rozeti! 🎭',
-        message: `Yorumlarına göre karakterin belirlendi: ${badge.name}`,
-      },
-    });
-  } catch {
-    /* bildirim başarısız olsa da rozet atandı */
-  }
-  return true;
-}
-
-/**
- * Uçtan uca: kullanıcıyı sınıflandır ve rozeti ata. Eşik altındaysa/LLM yoksa no-op.
- * Döndürür: atanan karakter (yeni atandıysa) ya da null.
- */
-export async function assignCharacterBadge(userId: string): Promise<CharacterClassification> {
-  const classification = await classifyCharacter(userId);
-  if (!classification) return null;
-  await awardCharacterBadge(userId, classification.badgeId);
-  return classification; // kategori + why içerir (reveal ekranı bunları kullanır)
-}
-
-/**
- * Feedback POST'undan çağrılır (fire-and-forget). Kullanıcı karakter eşiğine TAM
- * ulaştığında (ilk kez threshold'a değince) bir kez sınıflandırma tetikler — böylece
- * her yorumda LLM çağrılmaz. Zaten karakter rozeti varsa da atlanır.
- *
- * @deprecated Kategori-bazlı akış için processFeedbackForCharacterBadge kullanılır.
- * Bu fonksiyon geriye dönük uyum için tutulur (çağrılırsa yeni akışa yönlendirir).
- */
-export async function maybeAssignCharacterOnThreshold(userId: string): Promise<void> {
-  // Yeni akışta bu no-op'tur; kategori işleme processFeedbackForCharacterBadge içinde.
-  void userId;
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KATEGORİ-BAZLI KARAKTER ROZETİ (yeni sistem)
