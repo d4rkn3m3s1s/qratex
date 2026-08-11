@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
-import { CHARACTER_PROFILES, CATEGORY_BADGE_THRESHOLD } from '@/lib/character-badges';
-import { CHARACTER_CATEGORIES } from '@/lib/character-categories';
+import { CHARACTER_PROFILES, CATEGORY_BADGE_THRESHOLD, classifyFeedbackCategory } from '@/lib/character-badges';
+import { CHARACTER_CATEGORIES, CATEGORY_BY_KEY, charactersInCategory } from '@/lib/character-categories';
+import { runChatCompletion } from '@/lib/ai-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,44 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const userId = await resolveUserId(auth, body.userId ?? null);
   const action = String(body.action ?? '');
+
+  if (action === 'classify') {
+    // Canlı test: serbest metni AI ile SINIFLA (kategori) + o kategoride karakter SEÇ.
+    // DB'ye hiçbir şey yazmaz — sadece formülün çıktısını gösterir.
+    const text = String(body.text ?? '').trim();
+    if (text.length < 3) {
+      return NextResponse.json({ success: false, error: 'Yorum metni çok kısa' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const categoryKey = await classifyFeedbackCategory(text);
+    const cat = categoryKey ? CATEGORY_BY_KEY[categoryKey] : null;
+    let character: { badgeId: string; name: string; why: string } | null = null;
+    if (cat) {
+      const options = charactersInCategory(cat.key).map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join('\n');
+      try {
+        const res = await runChatCompletion({
+          system:
+            `Kullanıcı "${cat.name}" üslubunda yorum yazdı. Aşağıdaki karakterlerden yazım tarzına EN UYGUN olanı seç. ` +
+            'why: kullanıcıyı bu karaktere benzeten OLUMLU, gurur verici tek cümle (en fazla 25 kelime). ' +
+            'JSON: {"badgeId":"...","why":"..."}.',
+          user: `KARAKTERLER:\n${options}\n\nYORUM:\n"${text}"\n\nJSON:`,
+          temperature: 0.3,
+          maxTokens: 160,
+          jsonMode: true,
+        });
+        const content = res && typeof res !== 'string' ? res.content : (res as string | null);
+        if (content) {
+          const parsed = JSON.parse(content) as { badgeId?: string; why?: string };
+          const list = charactersInCategory(cat.key);
+          const m = list.find((c) => c.badgeId === parsed.badgeId) ?? list[0];
+          character = { badgeId: m.badgeId, name: m.name, why: String(parsed.why ?? '').trim() };
+        }
+      } catch { /* AI yoksa karaktersiz sadece kategori döner */ }
+    }
+    return NextResponse.json(
+      { success: true, action, category: cat ? { key: cat.key, name: cat.name, emoji: cat.emoji } : null, character },
+      { headers: PRIVATE_NO_STORE_HEADERS },
+    );
+  }
 
   if (action === 'reset') {
     const del = await prisma.userBadge.deleteMany({ where: { userId, badgeId: { in: CHAR_IDS } } });
