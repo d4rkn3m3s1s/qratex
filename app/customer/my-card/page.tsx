@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
-import QRCode from 'qrcode';
 import {
   CreditCard,
   History,
@@ -345,6 +344,9 @@ export default function CustomerMyCardPage() {
         setCards(data.cards);
         setStats(data.stats);
 
+        // PERF: qrcode (~25KB) ilk bundle'dan çıkarıldı — QR üretimi zaten mount SONRASI
+        // olduğundan lib'i burada dynamic import ediyoruz (sayfa shell'i daha hızlı boyanır).
+        const QRCode = (await import('qrcode')).default;
         const qrPromises = data.cards.map(async (card: UserCard) => {
           const url = `${QR_DOMAIN}/c/${card.token}`;
           const qrDataUrl = await QRCode.toDataURL(url, {

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import QRCode from 'qrcode';
 import {
   CreditCard,
   Plus,
@@ -417,6 +416,8 @@ export default function AdminCardsPage() {
     
     // Generate QR code
     try {
+      // PERF: qrcode lib'i ilk bundle'dan çıkar — üretim anında dynamic import.
+      const QRCode = (await import('qrcode')).default;
       const url = `${QR_DOMAIN}/c/${card.token}`;
       const qrDataUrl = await QRCode.toDataURL(url, {
         width: 256,
