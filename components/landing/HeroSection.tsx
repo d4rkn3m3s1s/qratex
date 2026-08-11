@@ -87,13 +87,19 @@ export default function HeroSection() {
             muted
             loop
             playsInline
+            // LCP: dekoratif arka plan videosu tüm dosyayı eager indirip LCP kaynaklarıyla
+            // bant yarışına girmesin — metadata yeter (autoPlay yine de akışı başlatır).
+            preload="metadata"
             aria-hidden="true"
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-transparent to-background/25 z-[1]" aria-hidden="true" />
 
         <div className="container relative z-10 px-4 py-20 text-center">
-          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+          {/* LCP FIX: hero başlığı (LCP elementi) ilk boyamada GÖRÜNÜR olmalı. framer-motion
+              initial={{opacity:0}} SSR'de style="opacity:0" basıp başlığı hidrasyon+animasyona
+              kadar görünmez yapıyordu (FCP/LCP ~1s gecikme). initial=görünür → ilk paint'te LCP. */}
+          <motion.div initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }}>
             <Badge variant="secondary" className="mb-6">
               <Sparkles className="w-3 h-3 mr-1" />
               {t('landing.hero.badge')}
