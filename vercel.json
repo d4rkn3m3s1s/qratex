@@ -2,10 +2,13 @@
   "buildCommand": "prisma generate && DISABLE_SENTRY_BUILD=1 next build --webpack && node scripts/ensure-edge-instrumentation.js",
   "framework": "nextjs",
   "installCommand": "npm install",
+  "regions": ["fra1"],
   "crons": [
     { "path": "/api/cron/intern-deadline", "schedule": "0 6 * * *" },
     { "path": "/api/cron/team-task-due", "schedule": "30 6 * * *" },
-    { "path": "/api/cron/inbox-sync", "schedule": "0 * * * *" }
+    { "path": "/api/cron/inbox-sync", "schedule": "0 * * * *" },
+    { "path": "/api/cron/squad-battles", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/cleanup-counters", "schedule": "17 3 * * *" }
   ]
 }
 
