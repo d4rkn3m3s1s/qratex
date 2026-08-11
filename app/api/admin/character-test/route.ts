@@ -125,10 +125,12 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: 'asc' },
       take: n,
     });
-    for (const f of fbs) {
-      await prisma.consumptionReview.update({ where: { id: f.id }, data: { characterCategory: category } }).catch(() => {});
-    }
-    return NextResponse.json({ success: true, action, category, filled: fbs.length, threshold: CATEGORY_BADGE_THRESHOLD }, { headers: PRIVATE_NO_STORE_HEADERS });
+    // Hepsi aynı kategoriye atanıyor → tek updateMany (N ardışık update yerine, N+1 önlenir).
+    const upd = await prisma.consumptionReview.updateMany({
+      where: { id: { in: fbs.map((f) => f.id) } },
+      data: { characterCategory: category },
+    });
+    return NextResponse.json({ success: true, action, category, filled: upd.count, threshold: CATEGORY_BADGE_THRESHOLD }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   return NextResponse.json({ success: false, error: 'Bilinmeyen aksiyon' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

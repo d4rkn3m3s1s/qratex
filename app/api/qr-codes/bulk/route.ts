@@ -22,13 +22,18 @@ export async function POST(request: NextRequest) {
     if (!action || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: 'action ve ids gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
+    // Üst sınır: dev payload'ı (aşırı büyük IN listesi) engelle.
+    if (ids.length > 1000) {
+      return NextResponse.json({ error: 'Tek seferde en fazla 1000 kayıt işlenebilir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const cleanIds = ids.filter((v): v is string => typeof v === 'string');
     const validActions = ['activate', 'deactivate', 'delete'];
     if (!validActions.includes(action)) {
       return NextResponse.json({ error: 'Geçersiz action' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const where = {
-      id: { in: ids },
+      id: { in: cleanIds },
       ...(session.user.role === 'DEALER' ? { dealerId: session.user.id } : {}),
     };
 

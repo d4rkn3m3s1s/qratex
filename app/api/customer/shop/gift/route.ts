@@ -21,7 +21,10 @@ export async function POST(req: NextRequest) {
         const senderId = session.user.id;
         const { cosmeticId, recipientIdentifier, message } = await req.json();
 
-        if (!cosmeticId || !recipientIdentifier) {
+        // Hediye mesajı: sınırsız metin DB'yi şişirir + spam vektörü — string'e zorla + 280 karaktere kırp.
+        const safeMessage = typeof message === 'string' ? message.trim().slice(0, 280) : null;
+
+        if (!cosmeticId || !recipientIdentifier || typeof cosmeticId !== 'string' || typeof recipientIdentifier !== 'string') {
             return NextResponse.json(
                 { error: 'Kozmetik ID ve alıcı bilgisi (E-posta veya İsim) gereklidir.' },
                 { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
@@ -112,13 +115,13 @@ export async function POST(req: NextRequest) {
                     userId: recipient.id,
                     cosmeticId: cosmeticId,
                     giftedByUserId: senderId,
-                    giftMessage: message || null,
+                    giftMessage: safeMessage,
                     isEquipped: false
                 }
             });
 
             // Create notification for recipient
-            const giftMsgPart = message ? ` Mesajı: "${message}"` : '';
+            const giftMsgPart = safeMessage ? ` Mesajı: "${safeMessage}"` : '';
             await tx.notification.create({
                 data: {
                     userId: recipient.id,
