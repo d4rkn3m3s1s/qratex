@@ -47,7 +47,7 @@ export async function PATCH(
     if ('error' in auth) return auth.error;
 
     const params = await context.params;
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { action, ...data } = body;
 
     if (action === 'finish') {
@@ -55,20 +55,29 @@ export async function PATCH(
       return NextResponse.json({ success: true, battle });
     }
 
+    // GÜVENE AL: status yalnız geçerli enum; skor/ödül-havuzu negatif olamaz + üst sınır
+    // (rewardPool battle bitince ödeme = ekonomi; sınırsız değer dev ödeme yaratabilir).
+    const VALID_STATUS = ['pending', 'active', 'completed', 'cancelled'];
+    const clampInt = (v: unknown, max: number): number | undefined =>
+      v === undefined ? undefined : Math.min(max, Math.max(0, Math.floor(Number(v)) || 0));
+    const status = typeof data.status === 'string' && VALID_STATUS.includes(data.status) ? data.status : undefined;
+    const endTime = data.endTime ? new Date(data.endTime) : undefined;
+
     const updated = await prisma.squadBattle.update({
       where: { id: params.id },
       data: {
-        status: data.status,
-        squad1Score: data.squad1Score,
-        squad2Score: data.squad2Score,
-        rewardPool: data.rewardPool,
-        endTime: data.endTime ? new Date(data.endTime) : undefined,
+        status,
+        squad1Score: clampInt(data.squad1Score, 10_000_000),
+        squad2Score: clampInt(data.squad2Score, 10_000_000),
+        rewardPool: clampInt(data.rewardPool, 10_000_000),
+        endTime: endTime && !isNaN(endTime.getTime()) ? endTime : undefined,
       },
     });
 
     return NextResponse.json({ success: true, battle: updated });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Güncelleme başarısız' }, { status: 500 });
+  } catch (error) {
+    console.error('[squads/battles PATCH]', error);
+    return NextResponse.json({ error: 'Güncelleme başarısız' }, { status: 500 });
   }
 }
 
