@@ -132,7 +132,23 @@ export async function GET(request: NextRequest) {
       console.log('Consumption data not available');
     }
 
-    // Separate current and previous period feedbacks (QR + Consumption)
+    // ── MANŞET SAYILAR: DB AGREGASYONU (cap'siz, KESİN) ──
+    // Önceden totalFeedbacks/avgRating cap'li 20k in-memory diziden hesaplanıyordu → >20k
+    // feedback'i olan bayide YANLIŞ (hatta orderBy asc + cap yüzünden güncel dönem sıfır çıkabilir).
+    // Toplam + ortalama artık count/_avg ile DB'de hesaplanır (doğru + hızlı). Kırılımlar (trend,
+    // sentiment) hâlâ örneklem diziden gelir (görsel amaçlı, kabul edilebilir).
+    const [qrCur, qrPrev, consCur, consPrev] = await Promise.all([
+      prisma.feedback.aggregate({ where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: startDate } }, _count: { _all: true }, _avg: { rating: true } }),
+      prisma.feedback.aggregate({ where: { qrCode: { dealerId }, deletedAt: null, createdAt: { gte: prevStartDate, lt: startDate } }, _count: { _all: true }, _avg: { rating: true } }),
+      prisma.consumptionReview.aggregate({ where: { consumption: { dealerId }, createdAt: { gte: startDate } }, _count: { _all: true }, _avg: { rating: true } }).catch(() => ({ _count: { _all: 0 }, _avg: { rating: null } })),
+      prisma.consumptionReview.aggregate({ where: { consumption: { dealerId }, createdAt: { gte: prevStartDate, lt: startDate } }, _count: { _all: true }, _avg: { rating: true } }).catch(() => ({ _count: { _all: 0 }, _avg: { rating: null } })),
+    ]);
+    const curCount = (qrCur._count._all ?? 0) + (consCur._count._all ?? 0);
+    const prevCount = (qrPrev._count._all ?? 0) + (consPrev._count._all ?? 0);
+    const curSum = (qrCur._avg.rating ?? 0) * (qrCur._count._all ?? 0) + (consCur._avg.rating ?? 0) * (consCur._count._all ?? 0);
+    const prevSum = (qrPrev._avg.rating ?? 0) * (qrPrev._count._all ?? 0) + (consPrev._avg.rating ?? 0) * (consPrev._count._all ?? 0);
+
+    // Separate current and previous period feedbacks (QR + Consumption) — KIRILIMLAR için örneklem
     const allQRFeedbacks = qrFeedbacksFlat;
     const allConsumptionFeedbacks = consumptionReviews.map((r: any) => ({
       rating: r.rating,
@@ -147,21 +163,18 @@ export async function GET(request: NextRequest) {
       f => new Date(f.createdAt) >= prevStartDate && new Date(f.createdAt) < startDate
     );
     
-    const totalFeedbacks = currentFeedbacks.length;
+    // KESİN toplam/ortalama (DB agregasyonundan; cap'li diziden DEĞİL).
+    const totalFeedbacks = curCount;
     const totalScans = totalScansAllQR;
 
-    // Calculate growth rates
-    const feedbackGrowth = prevFeedbacks.length > 0
-      ? Math.round(((totalFeedbacks - prevFeedbacks.length) / prevFeedbacks.length) * 100)
+    // Calculate growth rates (kesin sayılarla)
+    const feedbackGrowth = prevCount > 0
+      ? Math.round(((totalFeedbacks - prevCount) / prevCount) * 100)
       : totalFeedbacks > 0 ? 100 : 0;
 
-    // Calculate average rating and change
-    const avgRating = totalFeedbacks > 0
-      ? currentFeedbacks.reduce((acc, f) => acc + f.rating, 0) / totalFeedbacks
-      : 0;
-    const prevAvgRating = prevFeedbacks.length > 0
-      ? prevFeedbacks.reduce((acc, f) => acc + f.rating, 0) / prevFeedbacks.length
-      : 0;
+    // Calculate average rating and change (kesin ağırlıklı ortalama)
+    const avgRating = curCount > 0 ? curSum / curCount : 0;
+    const prevAvgRating = prevCount > 0 ? prevSum / prevCount : 0;
     const ratingChange = prevAvgRating > 0 
       ? Number((avgRating - prevAvgRating).toFixed(1))
       : 0;
