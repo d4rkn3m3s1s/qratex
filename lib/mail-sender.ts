@@ -71,6 +71,24 @@ function smtpConfigured(): boolean {
   return getSmtpCredentials() !== null;
 }
 
+// Havuzlanmış SMTP transporter cache — config (host+user) başına tek transporter (bağlantı
+// yeniden kullanımı: toplu gönderimde el sıkışma maliyetini keser). pool:true + maxConnections.
+type SmtpCreds = NonNullable<ReturnType<typeof getSmtpCredentials>>;
+let cachedTransporter: { key: string; tx: nodemailer.Transporter } | null = null;
+
+function getPooledTransporter(smtp: SmtpCreds): nodemailer.Transporter {
+  const key = `${smtp.host}:${smtp.port}:${smtp.user}:${smtp.secure}`;
+  if (cachedTransporter && cachedTransporter.key === key) return cachedTransporter.tx;
+  const timeouts = { connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 20_000 };
+  const pool = { pool: true, maxConnections: 5, maxMessages: 100 };
+  const isGmailHost = smtp.host.toLowerCase() === 'smtp.gmail.com';
+  const tx = isGmailHost
+    ? nodemailer.createTransport({ service: 'gmail', auth: { user: smtp.user, pass: smtp.pass }, ...timeouts, ...pool })
+    : nodemailer.createTransport({ host: smtp.host, port: smtp.port, secure: smtp.secure, auth: { user: smtp.user, pass: smtp.pass }, ...timeouts, ...pool });
+  cachedTransporter = { key, tx };
+  return tx;
+}
+
 function resendConfigured(): boolean {
   return Boolean(trimEnvValue(process.env.RESEND_API_KEY));
 }
@@ -179,26 +197,9 @@ export async function sendTransactionalEmail(params: {
       if (process.env.NODE_ENV === 'development') {
         console.info('[mail-sender] Using SMTP transport', smtp.host);
       }
-      // Per-gönderim timeout'ları: asılı bir SMTP bağlantısı tüm serverless bütçesini (60s)
-      // yiyip toplu gönderimi kesmesin. 15s bağlantı/greeting/socket sınırı.
-      const timeouts = { connectionTimeout: 15_000, greetingTimeout: 15_000, socketTimeout: 20_000 };
-      const isGmailHost = smtp.host.toLowerCase() === 'smtp.gmail.com';
-      const transporter = isGmailHost
-        ? nodemailer.createTransport({
-            service: 'gmail',
-            auth: { user: smtp.user, pass: smtp.pass },
-            ...timeouts,
-          })
-        : nodemailer.createTransport({
-            host: smtp.host,
-            port: smtp.port,
-            secure: smtp.secure,
-            auth: {
-              user: smtp.user,
-              pass: smtp.pass,
-            },
-            ...timeouts,
-          });
+      // Havuzlanmış + cache'li transporter: toplu gönderimde her mailde TCP+TLS+SMTP el sıkışması
+      // yerine bağlantı yeniden kullanılır (pool). Aynı config için modül seviyesinde tekildir.
+      const transporter = getPooledTransporter(smtp);
       await transporter.sendMail({
         from,
         to: params.to,

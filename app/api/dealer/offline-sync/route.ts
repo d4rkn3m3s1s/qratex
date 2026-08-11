@@ -7,16 +7,22 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 
 export const dynamic = 'force-dynamic';
 
+/** Bir kuyruk öğesi bu kadar denemeden sonra "ölü" (DEAD) sayılır — sonsuz retry önlemi. */
+const MAX_QUEUE_RETRIES = 5;
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
+    // retries >= MAX_QUEUE_RETRIES olan öğeler "ölü" sayılır — sonsuz retry yapmasın
+    // (kalıcı hatalı öğe kuyruğu tıkamasın). Bu eşiğe ulaşanlar sync sorgusundan hariç.
     const pendingItems = await prisma.offlineQueue.findMany({
       where: {
         dealerId: session.user.id,
         status: { in: ['PENDING', 'FAILED'] },
+        retries: { lt: MAX_QUEUE_RETRIES },
       },
       orderBy: { queuedAt: 'asc' },
       take: 500,
@@ -142,11 +148,14 @@ export async function PATCH(req: NextRequest) {
             result = { success: false, error: 'Unknown action' };
         }
 
-        // Update queue item status (yalnızca bu bayinin kuyruğu)
+        // Update queue item status (yalnızca bu bayinin kuyruğu). Eşiğe ulaşan başarısız
+        // öğe 'DEAD' → bir daha denenmez (item.retries mevcut sayı, +1 bu deneme).
+        const nextRetries = (item.retries ?? 0) + 1;
+        const failStatus = nextRetries >= MAX_QUEUE_RETRIES ? 'DEAD' : 'FAILED';
         await prisma.offlineQueue.update({
           where: { id: owned.id },
           data: {
-            status: result.success ? 'SYNCED' : 'FAILED',
+            status: result.success ? 'SYNCED' : failStatus,
             error: result.error || null,
             syncedAt: result.success ? new Date() : null,
             retries: { increment: 1 },
@@ -155,11 +164,12 @@ export async function PATCH(req: NextRequest) {
 
         results.push({ id: item.id, ...result });
       } catch (error: any) {
-        // Update as failed (bayi kapsamı ile)
+        // Update as failed (bayi kapsamı ile). Eşiğe ulaşınca 'DEAD' → sonsuz retry önlemi.
+        const nextRetriesC = (item.retries ?? 0) + 1;
         await prisma.offlineQueue.updateMany({
           where: { id: item.id, dealerId: session.user.id },
           data: {
-            status: 'FAILED',
+            status: nextRetriesC >= MAX_QUEUE_RETRIES ? 'DEAD' : 'FAILED',
             error: error?.message != null ? String(error.message) : 'Hata',
             retries: { increment: 1 },
           },

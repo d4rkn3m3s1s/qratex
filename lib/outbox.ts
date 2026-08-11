@@ -21,12 +21,17 @@ export async function createOutboxEvent(
   });
 }
 
+/** Bir outbox event bu kadar başarısız denemeden sonra DLQ'ya (deadAt) düşer — poison event
+ *  kuyruğu tıkamasın, taze event'ler ilerlesin. */
+const MAX_OUTBOX_ATTEMPTS = 10;
+
 /**
- * İşlenmemiş outbox event'lerini al ve Inngest'e gönder.
+ * İşlenmemiş outbox event'lerini al ve Inngest'e gönder. Sürekli patlayan (poison) event
+ * MAX_OUTBOX_ATTEMPTS sonra deadAt ile işaretlenip sorgudan çıkarılır (DLQ).
  */
 export async function processOutbox(): Promise<number> {
   const pending = await prisma.outboxEvent.findMany({
-    where: { processedAt: null },
+    where: { processedAt: null, deadAt: null },
     take: 50,
     orderBy: { createdAt: 'asc' },
   });
@@ -47,7 +52,18 @@ export async function processOutbox(): Promise<number> {
       });
       processed++;
     } catch (err) {
-      console.error('[Outbox] Failed to process event', ev.id, err);
+      const nextAttempt = (ev.attemptCount ?? 0) + 1;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Outbox] event ${ev.id} işlenemedi (deneme ${nextAttempt}/${MAX_OUTBOX_ATTEMPTS}):`, msg);
+      // Deneme sayacını artır; eşiği aşarsa DLQ'ya al (deadAt) — bir daha getirilmez.
+      await prisma.outboxEvent.update({
+        where: { id: ev.id },
+        data: {
+          attemptCount: { increment: 1 },
+          lastError: msg.slice(0, 500),
+          ...(nextAttempt >= MAX_OUTBOX_ATTEMPTS ? { deadAt: new Date() } : {}),
+        },
+      }).catch(() => {});
     }
   }
   return processed;

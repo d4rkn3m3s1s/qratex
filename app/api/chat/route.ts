@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     const tier = resolveChatTier(role, userId);
     const rateKey = userId ?? fingerprintChatIp(getClientIdentifier(request));
-    const rl = checkQraChatRateLimit(rateKey, tier);
+    const rl = await checkQraChatRateLimit(rateKey, tier);
 
     if (!rl.ok) {
       const retryAfterMs = rl.retryAfterMs ?? 60_000;

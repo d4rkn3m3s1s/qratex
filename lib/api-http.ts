@@ -27,6 +27,35 @@ export function responseIfDatabaseUnavailable(error: unknown): NextResponse | nu
   );
 }
 
+/**
+ * Tutarlı BAŞARI yanıtı — { success: true, ...data }. Yeni/refactor edilen route'lar bunu
+ * kullanmalı (istemci hata yönetimi tek şekle dayansın). Mevcut route'lar kademeli geçebilir.
+ */
+export function apiOk<T extends object>(data: T, init?: { status?: number; headers?: Record<string, string> }): NextResponse {
+  return NextResponse.json(
+    { success: true, ...data },
+    { status: init?.status ?? 200, headers: { ...PRIVATE_NO_STORE_HEADERS, ...(init?.headers ?? {}) } }
+  );
+}
+
+/**
+ * Tutarlı HATA yanıtı — { success: false, error, code?, retryable? }.
+ */
+export function apiError(
+  message: string,
+  init?: { status?: number; code?: string; retryable?: boolean; headers?: Record<string, string> }
+): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      error: message,
+      ...(init?.code ? { code: init.code } : {}),
+      ...(init?.retryable != null ? { retryable: init.retryable } : {}),
+    },
+    { status: init?.status ?? 400, headers: { ...PRIVATE_NO_STORE_HEADERS, ...(init?.headers ?? {}) } }
+  );
+}
+
 const MAX_REASONABLE_PAGE = 50_000;
 
 /** Page number for offset pagination (1-based). */

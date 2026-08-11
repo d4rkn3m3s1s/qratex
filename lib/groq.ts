@@ -33,6 +33,8 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const RETRY_CAP_MS = 8000;
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries: number = MAX_RETRIES
@@ -42,7 +44,11 @@ async function withRetry<T>(
   } catch (error) {
     if (retries > 0 && error instanceof Error) {
       if (error.message.includes('rate_limit') || error.message.includes('429')) {
-        await sleep(RETRY_DELAY * (MAX_RETRIES - retries + 1));
+        // FULL JITTER + üstel backoff: aynı anda 429 yiyen N istek senkron tekrar denemesin
+        // (thundering herd). delay = random(0, min(CAP, base·2^attempt)).
+        const attempt = MAX_RETRIES - retries; // 0,1,2...
+        const expBackoff = Math.min(RETRY_CAP_MS, RETRY_DELAY * Math.pow(2, attempt));
+        await sleep(Math.floor(Math.random() * expBackoff));
         return withRetry(fn, retries - 1);
       }
     }

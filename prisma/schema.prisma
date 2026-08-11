@@ -339,11 +339,14 @@ model IdempotencyKey {
 
 // Outbox: DB yazımı + event publish atomik olsun
 model OutboxEvent {
-  id          String    @id @default(cuid())
-  eventName   String // feedback/created vb.
-  payload     Json // event data
-  processedAt DateTime?
-  createdAt   DateTime  @default(now())
+  id           String    @id @default(cuid())
+  eventName    String // feedback/created vb.
+  payload      Json // event data
+  processedAt  DateTime?
+  attemptCount Int       @default(0) // başarısız işleme denemesi sayısı (DLQ eşiği için)
+  lastError    String?   @db.Text // son hata mesajı (görünürlük)
+  deadAt       DateTime? // DLQ: eşiği aşan poison event bir daha denenmez
+  createdAt    DateTime  @default(now())
 
   @@index([processedAt])
   @@index([eventName])

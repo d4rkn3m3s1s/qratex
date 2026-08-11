@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
+import { prisma, withDbRetry } from '@/lib/prisma';
 import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
 import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { analyzeWithFallback } from '@/lib/ai-engine';
@@ -303,7 +303,9 @@ export async function POST(request: NextRequest) {
       const { getGamificationMultipliers } = await import('@/lib/gamification-settings');
       // Platform geneli gamification çarpanları (admin ayarı; önceden write-only'di).
       const gamiSettings = await getGamificationMultipliers();
-      const result = await prisma.$transaction(
+      // Serializable transaction serialization-failure (40001/P2034) verebilir — bu doğru davranış
+      // (cap-bypass'ı önler) ama retry gerektirir. withDbRetry çakışmada 2 kez daha dener.
+      const result = await withDbRetry(() => prisma.$transaction(
         async (tx) => {
           // Çarpan zinciri: VIP (kullanıcı seviyesi) → sezonsal kampanya (zaman
           // penceresi) → platform geneli gamification çarpanı, taban ödüle uygulanır,
@@ -354,7 +356,7 @@ export async function POST(request: NextRequest) {
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
+      ));
 
       cappedPoints = result.capped;
       if (cappedPoints > 0 || reward.xp > 0) {

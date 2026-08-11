@@ -81,27 +81,63 @@ export async function storeIdempotency(
 }
 
 /**
- * Wrapper: check idempotency first; if not cached, run handler and store result.
+ * Wrapper: RESERVE-FIRST idempotency. Handler çalışmadan ÖNCE key'i atomik `create` ile rezerve
+ * eder (statusCode=0 = "in-progress"). İki paralel istek aynı key ile gelirse ikincinin create'i
+ * unique-violation (P2002) ile çakışır → 409 döner (çift işlem ENGELLENİR). Önceki desen
+ * (findUnique → işle → upsert) TOCTOU açığıyla ikisini de çalıştırıyordu.
  */
 export async function withIdempotency<T>(
   request: Request,
   route: string,
   handler: () => Promise<{ statusCode: number; body: T }>
 ): Promise<NextResponse> {
-  const check = await checkIdempotency(request, route);
-  if ('error' in check) return check.error;
-  if (check.cached) return check.response;
-  if (!check.key) {
+  const key = getKeyFromHeader(request.headers);
+  // Key yoksa idempotency yok — normal çalıştır.
+  if (!key) {
     const result = await handler();
-    return NextResponse.json(result.body, {
-      status: result.statusCode,
+    return NextResponse.json(result.body, { status: result.statusCode, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  const now = new Date();
+  // Tamamlanmış (cached) bir yanıt var mı?
+  const existing = await prisma.idempotencyKey.findUnique({ where: { key } });
+  if (existing && existing.route === route && existing.expiresAt > now) {
+    if (existing.statusCode === 0) {
+      // Aynı key hâlâ İŞLENİYOR (başka istek rezerve etmiş, henüz bitmemiş) → 409.
+      return NextResponse.json(
+        { error: 'Bu istek zaten işleniyor (idempotency).', code: 'IN_PROGRESS' },
+        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    return NextResponse.json(JSON.parse(existing.responseBody), {
+      status: existing.statusCode as 200 | 201,
       headers: PRIVATE_NO_STORE_HEADERS,
     });
   }
+
+  // REZERVE ET (atomik). Çakışırsa (P2002) = paralel ikinci istek → 409.
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + TTL_HOURS);
+  try {
+    if (existing) {
+      // Süresi geçmiş eski kayıt var → in-progress'e resetle (sadece süresi geçmişse).
+      await prisma.idempotencyKey.updateMany({
+        where: { key, expiresAt: { lte: now } },
+        data: { route, statusCode: 0, responseBody: '', expiresAt },
+      });
+    } else {
+      await prisma.idempotencyKey.create({ data: { key, route, statusCode: 0, responseBody: '', expiresAt } });
+    }
+  } catch {
+    // create P2002 = başka istek aynı anda rezerve etti → çift işlemi engelle.
+    return NextResponse.json(
+      { error: 'Bu istek zaten işleniyor (idempotency).', code: 'IN_PROGRESS' },
+      { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
+  // İşle + gerçek sonucu yaz.
   const result = await handler();
-  await storeIdempotency(check.key, route, result.statusCode, result.body);
-  return NextResponse.json(result.body, {
-    status: result.statusCode,
-    headers: PRIVATE_NO_STORE_HEADERS,
-  });
+  await storeIdempotency(key, route, result.statusCode, result.body);
+  return NextResponse.json(result.body, { status: result.statusCode, headers: PRIVATE_NO_STORE_HEADERS });
 }

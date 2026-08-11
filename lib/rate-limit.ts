@@ -28,36 +28,55 @@ export async function checkRateLimitDb(
   const now = new Date();
   const newResetAt = new Date(now.getTime() + windowMs);
 
-  // 1) Kayıt yoksa oluştur (count=1). Varsa create atlanır.
+  // TEK ATOMİK SQL (INSERT ... ON CONFLICT DO UPDATE): oluştur / süresi geçmişse resetle /
+  // aktif pencerede artır — hepsi tek roundtrip. Frankfurt/serverless'te 4 seri roundtrip yerine 1.
+  // count artık kaç isteğin YAPILDIĞI (bu istek dahil). Limit kontrolü uygulama tarafında.
   try {
-    await prisma.rateLimitCounter.create({
-      data: { bucket, count: 1, resetAt: newResetAt },
-    });
-    return { ok: true, remaining: max - 1 };
-  } catch {
-    // zaten var — devam
+    // NOT: updatedAt @updatedAt yalnız Prisma-seviyedir; raw SQL Prisma'yı bypass ettiği için
+    // NOT NULL updatedAt'i MANUEL set etmeliyiz (yoksa 23502 not-null violation).
+    const rows = await prisma.$queryRaw<{ count: number; resetAt: Date }[]>`
+      INSERT INTO "RateLimitCounter" ("bucket", "count", "resetAt", "updatedAt")
+      VALUES (${bucket}, 1, ${newResetAt}, ${now})
+      ON CONFLICT ("bucket") DO UPDATE SET
+        "count"     = CASE WHEN "RateLimitCounter"."resetAt" <= ${now} THEN 1 ELSE "RateLimitCounter"."count" + 1 END,
+        "resetAt"   = CASE WHEN "RateLimitCounter"."resetAt" <= ${now} THEN ${newResetAt} ELSE "RateLimitCounter"."resetAt" END,
+        "updatedAt" = ${now}
+      RETURNING "count", "resetAt"
+    `;
+    const row = rows[0];
+    if (!row) return { ok: true, remaining: max - 1 };
+    const count = Number(row.count);
+    if (count <= max) {
+      return { ok: true, remaining: Math.max(0, max - count) };
+    }
+    // Limit aşıldı — bu istek sayıldı ama izin verilmiyor.
+    return { ok: false, remaining: 0, retryAfterMs: Math.max(0, new Date(row.resetAt).getTime() - now.getTime()) };
+  } catch (err) {
+    // $queryRaw beklenmedik hata → güvenli tarafta kal: eski çok-adımlı yola düş.
+    console.error('[rate-limit] atomic SQL failed, falling back:', err instanceof Error ? err.message : err);
+    return checkRateLimitDbFallback(bucket, max, windowMs);
   }
+}
 
-  // 2) Penceresi dolmuşsa atomik resetle (count=1) — koşullu updateMany.
-  const reset = await prisma.rateLimitCounter.updateMany({
-    where: { bucket, resetAt: { lte: now } },
-    data: { count: 1, resetAt: newResetAt },
-  });
-  if (reset.count > 0) {
+/** Eski çok-adımlı limiter — atomik SQL patlarsa güvenli yedek. */
+async function checkRateLimitDbFallback(
+  bucket: string,
+  max: number,
+  windowMs: number
+): Promise<RateLimitResult> {
+  const now = new Date();
+  const newResetAt = new Date(now.getTime() + windowMs);
+  try {
+    await prisma.rateLimitCounter.create({ data: { bucket, count: 1, resetAt: newResetAt } });
     return { ok: true, remaining: max - 1 };
-  }
-
-  // 3) Pencere aktif: limiti aşmayacaksa atomik artır.
-  const bumped = await prisma.rateLimitCounter.updateMany({
-    where: { bucket, count: { lt: max }, resetAt: { gt: now } },
-    data: { count: { increment: 1 } },
-  });
+  } catch { /* var — devam */ }
+  const reset = await prisma.rateLimitCounter.updateMany({ where: { bucket, resetAt: { lte: now } }, data: { count: 1, resetAt: newResetAt } });
+  if (reset.count > 0) return { ok: true, remaining: max - 1 };
+  const bumped = await prisma.rateLimitCounter.updateMany({ where: { bucket, count: { lt: max }, resetAt: { gt: now } }, data: { count: { increment: 1 } } });
   if (bumped.count > 0) {
     const row = await prisma.rateLimitCounter.findUnique({ where: { bucket }, select: { count: true } });
     return { ok: true, remaining: Math.max(0, max - (row?.count ?? max)) };
   }
-
-  // 4) Limit dolu.
   const row = await prisma.rateLimitCounter.findUnique({ where: { bucket }, select: { resetAt: true } });
   return { ok: false, remaining: 0, retryAfterMs: row ? Math.max(0, row.resetAt.getTime() - now.getTime()) : windowMs };
 }
@@ -300,28 +319,17 @@ const MAX_QRA_CHAT_PER_MINUTE = {
 
 export type QraChatTier = keyof typeof MAX_QRA_CHAT_PER_MINUTE;
 
+/**
+ * QRA chat limiter — DB-backed (atomik). LLM her istek = gerçek para; serverless'te her Lambda
+ * kendi belleğinde sayınca limit N-kat gevşer ve maliyet patlar. Bu yüzden PAYLAŞILAN DB sayacı
+ * (checkRateLimitDb) kullanılır. Async'e çevrildi — çağıran await etmeli.
+ */
 export function checkQraChatRateLimit(
   identifier: string,
   tier: QraChatTier
-): { ok: boolean; retryAfterMs?: number; remaining?: number } {
-  const key = getKey('qra_chat', `${tier}:${identifier}`);
-  cleanup(key);
+): Promise<RateLimitResult> {
   const max = MAX_QRA_CHAT_PER_MINUTE[tier];
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { count: 1, resetAt: Date.now() + QRA_CHAT_WINDOW_MS };
-    store.set(key, entry);
-    return { ok: true, remaining: max - 1 };
-  }
-  if (entry.count >= max) {
-    return {
-      ok: false,
-      remaining: 0,
-      retryAfterMs: Math.max(0, entry.resetAt - Date.now()),
-    };
-  }
-  entry.count += 1;
-  return { ok: true, remaining: max - entry.count };
+  return checkRateLimitDb(`qra_chat:${tier}:${identifier}`, max, QRA_CHAT_WINDOW_MS);
 }
 
 const AUTH_EMAIL_WINDOW_MS = 15 * 60 * 1000;

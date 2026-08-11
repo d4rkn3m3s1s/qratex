@@ -33,5 +33,39 @@ export function isPrismaConnectivityError(err: unknown): boolean {
   return false;
 }
 
+/** Serialization failure (Serializable transaction çakışması) — retry edilmeli. */
+export function isSerializationError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const { code, message } = err as { code?: string; message?: string };
+  // Prisma P2034 = transaction write conflict/deadlock; Postgres 40001 = serialization_failure.
+  return code === 'P2034' || (typeof message === 'string' && message.includes('40001'));
+}
+
+/**
+ * Geçici hataları (bağlantı VEYA serialization) kısa backoff'la yeniden dener.
+ * YALNIZ idempotent/salt-okunur işlerde veya kendi transaction'ı olan işlerde kullan
+ * (yan etkili yazma yolunu retry'lamak çift işlem yapabilir — orada idempotency anahtarına güven).
+ */
+export async function withDbRetry<T>(
+  fn: () => Promise<T>,
+  opts: { retries?: number; baseDelayMs?: number } = {}
+): Promise<T> {
+  const retries = opts.retries ?? 2;
+  const base = opts.baseDelayMs ?? 80;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= retries || !(isPrismaConnectivityError(err) || isSerializationError(err))) throw err;
+      // full jitter üstel backoff
+      const delay = Math.floor(Math.random() * Math.min(2000, base * Math.pow(2, attempt)));
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export default prisma;
 
