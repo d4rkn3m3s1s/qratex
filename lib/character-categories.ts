@@ -103,7 +103,10 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
       '↔ ÇİFT YÖNLÜ: Şikayet/olumsuzluk bile ABSÜRT hiperbolle anlatılıyorsa ("servis o kadar yavaştı ki sakalım uzadı", ' +
       '"o kadar kötüydü ki tabağı komşuya hediye ettim") → yine KOMEDİ\'dir. Teslim biçimi absürt-komikse, içerik şikayet ' +
       'olsa da Komedi kazanır (Gizem/Dram DEĞİL); çünkü Gizem tedirgin eder, Dram kanıt sıralar — ikisi de GERÇEKÇİ kalır, ' +
-      'oysa burada gerçeklikten komik bir kopuş var.',
+      'oysa burada gerçeklikten komik bir kopuş var. ' +
+      '⛔ KURU İRONİ DIŞLAMASI: absürt abartı OLMADAN yapılan keskin/deadpan/acımasız kısa eleştiri veya teşhis ' +
+      '("tek kelimeyle: vasat", "kötü; gerisi teferruat", "mutfak kendini anlatıyor") KOMEDİ DEĞİLDİR — bu Gizemli ' +
+      '(House) ustalık teşhisidir. Komedi güldürmeyi hedefleyen ABSÜRT abartı ister; salt iğneli/kuru keskinlik komedi değil.',
     characterIds: [
       'badge-chandler', 'badge-barney-stinson', 'badge-the-office', 'badge-rick-morty',
       'badge-tyrion', 'badge-good-omens', 'badge-sheldon',
@@ -147,7 +150,9 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
       '(önce tesadüf sandım, ikinci kez olunca şüphelendim); hesap/çıkar şüphesi (menüde 300 hesapta 350, bilerek); "neden ' +
       'böyle?" derin sorgulama; keskin-özgün çarpıcı ifade; kesin-iddialı özgüvenli hüküm. ' +
       'AYRIM: Dram/Suç AÇIK öfke/mağduriyet + NET kanıt sunar ve sonuca bağlar; Gizem/Gerilim BELİRSİZLİK/sorgulama, kanıtı ' +
-      'ima eder ama olayı asılı bırakır. Komedi absürt-güldürür; Gizem gerçekçi kalıp tedirgin eder.',
+      'ima eder ama olayı asılı bırakır. Komedi absürt-güldürür; Gizem gerçekçi kalıp tedirgin eder. ' +
+      'DIŞLAMA: Yorum zaman damgalı sistematik LOG/kayıt formundaysa ("15:10..., 15:22..., 15:58...") bu Gizem değil, ' +
+      'Gizemli (Mr. Robot) ustalığıdır — şüphe içerse bile kayıt disiplini baskındır, oraya bırak.',
     characterIds: [
       'badge-joe', 'badge-villanelle', 'badge-pablo-escobar', 'badge-dark-jonas',
       'badge-frank-underwood', 'badge-carrie', 'badge-martha',
@@ -163,7 +168,10 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
       'ÖZEL/ZOR kategoridir — yalnızca üslup USTALIĞI/ÖZGÜNLÜĞÜ olan ÖZGÜN yorumlar. UZUN OLMAK ŞART DEĞİL: kısa ama ' +
       'ustaca/keskin/derin bir yorum da girer (House\'un tek cümlelik teşhisi, Crowley\'nin deadpan ironisi, Villanelle\'nin ' +
       'keskin özgünlüğü gibi). Önemli olan uzunluk değil, üslubun ustalığı. Ustalık üslupları: (House) keskin teşhis + ironi; ' +
-      '(The Doctor) merak + keşif + objektif denge; (Mr. Robot) olayları kayıt/log gibi zaman+liste+detayla tutma; (Wednesday) ' +
+      '(The Doctor) merak + keşif + objektif denge; (Mr. Robot) olayları kayıt/log gibi zaman+liste+detayla tutma — ÖZEL: zaman damgalı sistematik LOG ' +
+      '("15:10 girdik, 15:22 sipariş, 15:58 geldi") tek başına ustalık formudur; içerik bir şüphe/haksızlık ima etse ' +
+      'bile (üç masa önce yedi) bu GİZEMLİ\'dir (Mr. Robot) — olayı disiplinle KAYDETME üslubu, gizem-gerilim\'in salt ' +
+      'sezgisel şüphesinden farklı bir ustalıktır; (Wednesday) ' +
       '"herkes seviyor ben sorguluyorum" ters görüş; (Castiel) eksiği söyle + hakkını teslim et adaleti; (Dexter) verileri ' +
       'PARÇALA→değerlendir→net sonuca bağla soğukkanlı analiz; (John Locke) inan→şans ver→deneyimle; (Hannibal) zarif/nazik ' +
       'başla→soğuk keskin final; (Crowley) beklenmedik karşılaştırma + deadpan kara ironi. ' +
