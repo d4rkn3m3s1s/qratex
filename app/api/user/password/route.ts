@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import bcrypt from 'bcryptjs';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 
 
 export const dynamic = 'force-dynamic';
@@ -17,17 +18,27 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
+    // Brute-force koruması: mevcut-şifre tahmini için oturum-içi deneme sınırı (8 / 5 dk).
+    const rl = await checkRateLimitDb(`password_change:${session.user.id}`, 8, 300_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin.' },
+        { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, ...(rl.retryAfterMs ? { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } : {}) } }
+      );
+    }
+
     const body = await request.json();
     const { currentPassword, newPassword } = body;
 
-    if (!currentPassword || !newPassword) {
+    // Tip zorlaması: sayı/obje gelirse .length atlanmasını önle (aksi halde zayıf şifre geçebilir).
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
       return NextResponse.json(
         { error: 'Mevcut şifre ve yeni şifre gereklidir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 8 || newPassword.length > 200) {
       return NextResponse.json(
-        { error: 'Yeni şifre en az 8 karakter olmalıdır' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        { error: 'Yeni şifre 8-200 karakter olmalıdır' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get user with password
