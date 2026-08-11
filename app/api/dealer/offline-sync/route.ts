@@ -223,8 +223,10 @@ async function processConsumption(dealerId: string, payload: any) {
     });
 
     return { success: true, consumptionId: consumption.id };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    // Ham hata mesajı (Prisma constraint isimleri vb.) client'a sızmamalı — genel mesaj + sunucu logu.
+    console.error('[offline-sync] processConsumption hata:', error instanceof Error ? error.message : error);
+    return { success: false, error: 'Tüketim kaydı işlenemedi' };
   }
 }
 
@@ -247,7 +249,8 @@ async function processScan(payload: any) {
     }
 
     return { success: true, card };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    console.error('[offline-sync] processScan hata:', error instanceof Error ? error.message : error);
+    return { success: false, error: 'Kart taranamadı' };
   }
 }

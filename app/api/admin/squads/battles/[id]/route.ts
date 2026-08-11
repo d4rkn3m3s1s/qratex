@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { finishSquadBattle } from '@/lib/gamification-engine';
+import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +30,10 @@ export async function GET(
     });
 
     if (!battle) {
-      return NextResponse.json({ error: 'Savaş bulunamadı' }, { status: 404 });
+      return NextResponse.json({ error: 'Savaş bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    return NextResponse.json({ success: true, battle });
+    return NextResponse.json({ success: true, battle }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     return NextResponse.json({ error: 'Savaş detayları getirilemedi' }, { status: 500 });
   }
