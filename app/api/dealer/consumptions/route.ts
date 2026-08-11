@@ -10,8 +10,11 @@ import {
   paginationSkip,
   responseIfDatabaseUnavailable,
 } from '@/lib/api-http';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 
 // Rate limit için basit in-memory cache (production'da Redis kullanılmalı)
+// NOT: in-memory yalnız hızlı ön-kontrol; ASIL sınır DB-backed checkRateLimitDb
+// (çapraz-instance atomik) — puan minting'i burada olduğu için race'e kapalı olmalı.
 
 export const dynamic = 'force-dynamic';
 
@@ -174,14 +177,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limit kontrolü
+    // Rate limit kontrolü — ÇAPRAZ-INSTANCE atomik (DB). Passive puan minting'i
+    // burada olduğu için in-memory Map yetersiz: serverless'te iki eşzamanlı istek
+    // farklı lambda'ya düşüp ikisi de geçebilir → çifte kredi. DB-backed sayaç bu
+    // race'i kapatır (aynı kart+bayi için 1 dk'da max RATE_LIMIT_MAX tüketim).
+    // Hızlı yol: in-memory ön-kontrol (DB roundtrip'i çoğu durumda atlar).
     const rateLimitKey = `${card.id}_${session.user.id}`;
     const lastRequest = rateLimitCache.get(rateLimitKey) || 0;
     const now = Date.now();
+    const minGapMs = RATE_LIMIT_WINDOW / RATE_LIMIT_MAX;
 
-    if (now - lastRequest < RATE_LIMIT_WINDOW / RATE_LIMIT_MAX) {
-      const minGapMs = RATE_LIMIT_WINDOW / RATE_LIMIT_MAX;
-      const retryAfterSec = Math.max(1, Math.ceil((lastRequest + minGapMs - now) / 1000));
+    const tooFast = now - lastRequest < minGapMs;
+    const dbRl = await checkRateLimitDb(`consumption:${rateLimitKey}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW);
+    if (tooFast || !dbRl.ok) {
+      const retryAfterSec = dbRl.retryAfterMs
+        ? Math.max(1, Math.ceil(dbRl.retryAfterMs / 1000))
+        : Math.max(1, Math.ceil((lastRequest + minGapMs - now) / 1000));
       return NextResponse.json(
         { error: 'Çok hızlı! Lütfen biraz bekleyin.' },
         {
