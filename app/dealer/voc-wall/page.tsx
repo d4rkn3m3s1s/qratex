@@ -149,7 +149,7 @@ function RatingBars({ dist }: { dist: number[] }) {
       {[5, 4, 3, 2, 1].map((r, i) => {
         const val = dist[r - 1] ?? 0;
         return (
-          <motion.div key={r} className="flex items-center gap-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+          <motion.div key={r} className="flex items-center gap-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
             <span className="text-xs w-4">{r}★</span>
             <div className="flex-1 h-5 bg-muted/50 rounded overflow-hidden">
               <motion.div
@@ -178,7 +178,7 @@ function DailyTrendChart({ data }: { data: { date: string; label: string; count:
           key={d.date}
           initial={{ height: 0 }}
           animate={{ height: `${(d.count / max) * 100}%` }}
-          transition={{ delay: i * 0.05, duration: 0.4 }}
+          transition={{ delay: Math.min(i, 10) * 0.05, duration: 0.4 }}
           className="flex-1 min-w-0 flex flex-col items-center gap-1"
         >
           <span className="text-[10px] font-medium text-muted-foreground order-2">{d.label}</span>

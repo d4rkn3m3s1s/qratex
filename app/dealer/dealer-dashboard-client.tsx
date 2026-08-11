@@ -738,7 +738,7 @@ export default function DealerDashboard() {
                               key={fb.id}
                               initial={{ opacity: 0, x: -8 }}
                               animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: i * 0.03, type: 'spring', stiffness: 300 }}
+                              transition={{ delay: Math.min(i, 10) * 0.03, type: 'spring', stiffness: 300 }}
                               whileHover={{ y: -2, boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}
                               className="flex items-start gap-3 p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors cursor-default"
                             >
@@ -786,7 +786,7 @@ export default function DealerDashboard() {
                               key={qr.id}
                               initial={{ opacity: 0, scale: 0.98 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              transition={{ delay: i * 0.04, type: 'spring', stiffness: 200 }}
+                              transition={{ delay: Math.min(i, 10) * 0.04, type: 'spring', stiffness: 200 }}
                               whileHover={{ y: -2, scale: 1.01 }}
                               className="p-4 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors"
                             >

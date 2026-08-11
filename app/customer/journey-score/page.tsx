@@ -299,7 +299,7 @@ export default function CustomerJourneyScorePage() {
                     initial={{ opacity: 0, y: 30, scale: 0.95 }}
                     whileInView={{ opacity: 1, y: 0, scale: 1 }}
                     viewport={{ once: true, margin: "-10%" }}
-                    transition={{ type: "spring", stiffness: 100, damping: 20, delay: i * 0.05 }}
+                    transition={{ type: "spring", stiffness: 100, damping: 20, delay: Math.min(i, 10) * 0.05 }}
                     className={`relative flex flex-col sm:flex-row items-start sm:items-center w-full group ${alignLeft ? 'sm:justify-end' : 'sm:justify-start'
                       }`}
                   >

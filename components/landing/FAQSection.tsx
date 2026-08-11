@@ -34,7 +34,7 @@ export default function FAQSection() {
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
+              transition={{ delay: Math.min(i, 10) * 0.05 }}
             >
               <Card className="border-border/60 transition-colors hover:border-primary/25">
                 <CardHeader className="pb-2">

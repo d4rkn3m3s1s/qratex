@@ -521,7 +521,7 @@ export default function CustomerQuestsPage() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: index * 0.05 }}
+                        transition={{ delay: Math.min(index, 10) * 0.05 }}
                       >
                         <Card className={`h-full overflow-hidden border ${config.borderColor} active:scale-[0.98] hover:shadow-lg transition-all group`}>
                           {/* Progress bar at top */}
@@ -638,7 +638,7 @@ export default function CustomerQuestsPage() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: index * 0.05 }}
+                        transition={{ delay: Math.min(index, 10) * 0.05 }}
                       >
                         <Card className={`h-full overflow-hidden active:scale-[0.98] ${quest.claimed ? 'opacity-60' : 'border-green-500/30'}`}>
                           {/* Completed bar */}

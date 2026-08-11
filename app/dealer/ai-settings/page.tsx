@@ -110,7 +110,7 @@ function DailyChart({ data, t }: { data: { date: string; label: string; count: n
           key={d.date}
           initial={{ height: 0 }}
           animate={{ height: `${(d.count / max) * 100}%` }}
-          transition={{ delay: i * 0.05, duration: 0.4 }}
+          transition={{ delay: Math.min(i, 10) * 0.05, duration: 0.4 }}
           className="flex-1 min-w-0 flex flex-col items-center gap-0.5"
         >
           <span className="text-[10px] font-medium text-muted-foreground order-2">{d.label}</span>

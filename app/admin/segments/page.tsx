@@ -148,7 +148,7 @@ export default function AdminSegmentsPage() {
             const Icon = segmentIcons[seg.id] || Users;
             const isSelected = selectedSegment === seg.id;
             return (
-              <motion.div key={seg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+              <motion.div key={seg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
                 <Card
                   className={`border-0 cursor-pointer transition-all hover:scale-105 ${isSelected ? (ringByColor[seg.color] || 'ring-2 ring-primary shadow-lg') : 'bg-card/50'}`}
                   onClick={() => setSelectedSegment(isSelected ? null : seg.id)}
@@ -222,7 +222,7 @@ export default function AdminSegmentsPage() {
               ) : (
                 <div className="space-y-2">
                   {selected.customers.map((customer, i) => (
-                    <motion.div key={customer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
+                    <motion.div key={customer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }}
                       className="flex items-center gap-3 p-3 rounded-xl bg-muted/30"
                     >
                       <Avatar className="h-9 w-9">

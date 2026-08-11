@@ -164,7 +164,7 @@ export function MemoryMatchGame() {
                 disabled={show}
                 initial={{ opacity: 0, scale: 0.6 }}
                 animate={{ opacity: 1, scale: 1, rotateY: show ? 180 : 0 }}
-                transition={{ delay: i * 0.02, type: 'spring', stiffness: 260, damping: 20 }}
+                transition={{ delay: Math.min(i, 10) * 0.02, type: 'spring', stiffness: 260, damping: 20 }}
                 className="relative flex aspect-square items-center justify-center rounded-xl border text-2xl"
                 style={{
                   transformStyle: 'preserve-3d',

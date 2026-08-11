@@ -130,7 +130,7 @@ export default function AdminAIDetailedPage() {
         ].map((item, i) => {
           const Icon = item.icon;
           return (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-4 text-center">
                   <Icon className={`h-6 w-6 mx-auto mb-2 ${item.color}`} />

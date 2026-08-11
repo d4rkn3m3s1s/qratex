@@ -359,7 +359,7 @@ export function NotificationCenter() {
                                             initial={{ opacity: 0, x: 16 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, x: -16, height: 0 }}
-                                            transition={{ delay: i * 0.02, type: 'spring', stiffness: 300, damping: 30 }}
+                                            transition={{ delay: Math.min(i, 10) * 0.02, type: 'spring', stiffness: 300, damping: 30 }}
                                             layout
                                         >
                                             <div

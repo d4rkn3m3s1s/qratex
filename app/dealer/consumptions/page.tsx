@@ -117,7 +117,7 @@ export default function DealerConsumptionsPage() {
                                         key={item.id}
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: i * 0.03 }}
+                                        transition={{ delay: Math.min(i, 10) * 0.03 }}
                                         className="p-4 sm:px-6 hover:bg-muted/30 transition-colors flex flex-col sm:flex-row gap-4 sm:items-center justify-between"
                                     >
                                         <div className="flex items-start gap-4 flex-1 min-w-0">

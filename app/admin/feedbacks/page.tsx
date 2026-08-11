@@ -394,7 +394,7 @@ export default function AdminFeedbacksPage() {
             { title: 'Nötr', value: stats.neutral, icon: Meh, color: 'bg-gray-500/10 text-gray-500' },
             { title: 'Olumsuz', value: stats.negative, icon: ThumbsDown, color: 'bg-red-500/10 text-red-500' },
           ].map((stat, i) => (
-            <motion.div key={stat.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <motion.div key={stat.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
@@ -636,7 +636,7 @@ export default function AdminFeedbacksPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: index * 0.03 }}
+                  transition={{ delay: Math.min(index, 10) * 0.03 }}
                 >
                   <Card className={`border-border/60 bg-card/50 hover:bg-card/80 transition-colors ${isSelected ? 'ring-2 ring-primary' : ''}`}>
                     <CardContent className="p-4">

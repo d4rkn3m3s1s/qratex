@@ -180,7 +180,7 @@ export function GamesHub() {
               key={c.href}
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              transition={{ delay: Math.min(i, 10) * 0.05 }}
             >
               <Link
                 href={c.href}

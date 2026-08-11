@@ -451,7 +451,7 @@ export default function CustomerBadgesPage() {
                           initial={{ opacity: 0, scale: 0.8 }}
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.8 }}
-                          transition={{ delay: index * 0.04 }}
+                          transition={{ delay: Math.min(index, 10) * 0.04 }}
                         >
                           <div
                             className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${customStyle ? '' : `${config.cardBg} ${config.neonGlow}`} ${
@@ -531,7 +531,7 @@ export default function CustomerBadgesPage() {
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ delay: index * 0.04 }}
+                  transition={{ delay: Math.min(index, 10) * 0.04 }}
                 >
                   <div
                     className={`group relative overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 rounded-2xl ${config.cardBg} ${config.neonGlow} ${

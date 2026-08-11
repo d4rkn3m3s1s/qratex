@@ -147,7 +147,7 @@ function CustomerRemedyContent() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    transition={{ delay: i * 0.03 }}
+                    transition={{ delay: Math.min(i, 10) * 0.03 }}
                   >
                     <Link href={`/customer/remedy/${o.id}`}>
                       <div
@@ -206,7 +206,7 @@ function CustomerRemedyContent() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    transition={{ delay: i * 0.03 }}
+                    transition={{ delay: Math.min(i, 10) * 0.03 }}
                     className="p-4 rounded-xl border bg-muted/20 border-emerald-500/10"
                   >
                     <div className="flex items-center gap-2">

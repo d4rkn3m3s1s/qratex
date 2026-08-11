@@ -379,7 +379,7 @@ export default function DealerProductsPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: index * 0.05 }}
+                transition={{ delay: Math.min(index, 10) * 0.05 }}
               >
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-lg transition-all">
                   <CardContent className="p-4">

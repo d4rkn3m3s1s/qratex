@@ -454,7 +454,7 @@ export default function AdminQuestsPage() {
               key={quest.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: Math.min(index, 10) * 0.05 }}
             >
               <Card glass hover className="group">
                 <CardContent className="p-6 space-y-4">

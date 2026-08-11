@@ -204,7 +204,7 @@ export function SurpriseEggThreeModal({
                                   y: -130 - Math.random() * 90,
                                 }}
                                 exit={{ opacity: 0 }}
-                                transition={{ duration: 1.1, delay: i * 0.04, ease: 'easeOut' }}
+                                transition={{ duration: 1.1, delay: Math.min(i, 10) * 0.04, ease: 'easeOut' }}
                               />
                             ))}
                         </AnimatePresence>

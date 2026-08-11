@@ -69,7 +69,7 @@ export default function SurveyResultsPage() {
             ) : (
                 <div className="space-y-4">
                     {questionResults.map((qr, i) => (
-                        <motion.div key={qr.questionId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                        <motion.div key={qr.questionId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
                             <Card className="rounded-2xl">
                                 <CardHeader className="pb-3">
                                     <div className="flex items-center gap-2">

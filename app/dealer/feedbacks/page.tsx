@@ -607,7 +607,7 @@ function DealerFeedbacksContent() {
                     key={review.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 }}
+                    transition={{ delay: Math.min(index, 10) * 0.03 }}
                   >
                     <Card className="border-border/60 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all">
                       <CardContent className="p-5">
@@ -748,7 +748,7 @@ function DealerFeedbacksContent() {
                     key={feedback.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 }}
+                    transition={{ delay: Math.min(index, 10) * 0.03 }}
                   >
                     <Card className="border-border/60 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all">
                       <CardContent className="p-5">

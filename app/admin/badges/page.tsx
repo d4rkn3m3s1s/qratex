@@ -500,7 +500,11 @@ export default function AdminBadgesPage() {
     totalEarned: badges.reduce((sum, b) => sum + (b.earnedCount ?? 0), 0),
   };
 
-  const BadgeForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
+  // PERF: Bu bir render-yardımcısıdır, JSX component'i DEĞİL. <BadgeForm/> olarak kullanılırsa
+  // her parent render'da YENİ component tipi olur → tüm form + 86-ikon grid REMOUNT olur
+  // (input focus kaybı, her tuşta yeniden render → kötü INP). Bu yüzden {renderBadgeForm({...})}
+  // olarak FONKSİYON gibi çağrılır → çıktısı inline JSX sayılır, remount olmaz. (Hook içermez.)
+  const renderBadgeForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Rozet Adı</Label>
@@ -1018,7 +1022,7 @@ export default function AdminBadgesPage() {
                 Kullanıcıların kazanabileceği yeni bir rozet oluşturun. Özel rozetler için &quot;Özel&quot; kategorisini seçin.
               </DialogDescription>
             </DialogHeader>
-            <BadgeForm onSubmit={handleCreate} submitLabel="Oluştur" />
+            {renderBadgeForm({ onSubmit: handleCreate, submitLabel: 'Oluştur' })}
           </DialogContent>
         </Dialog>
       </div>
@@ -1068,7 +1072,8 @@ export default function AdminBadgesPage() {
                     key={badge.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.03 }}
+                    // PERF: stagger delay'i sınırla (bkz. grid varyantı) — geç kartlar görünmezlikte kalmasın.
+                    transition={{ delay: Math.min(index, 10) * 0.03 }}
                     className={`flex items-center gap-4 p-4 rounded-xl ${config.bgGradient} border ${config.borderColor} hover:scale-[1.01] transition-transform group`}
                   >
                     <div className="relative">
@@ -1121,7 +1126,9 @@ export default function AdminBadgesPage() {
                   key={badge.id}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.05 }}
+                  // PERF: delay index ile SINIRSIZ büyüyordu (40. kart 2s sonra belirir → RES çöker).
+                  // İlk ~10 kartta stagger, gerisi anında görünür → tüm grid ~0.3s'de tamamlanır.
+                  transition={{ delay: Math.min(index, 10) * 0.03 }}
                   className="group"
                 >
                   <div className={`relative p-7 rounded-2xl ${config.bgGradient} border-2 ${config.borderColor} overflow-hidden transition-all duration-500 hover:scale-[1.03] hover:-translate-y-1.5 ${config.neonGlow} ${config.glowColor}`}>
@@ -1270,7 +1277,7 @@ export default function AdminBadgesPage() {
               {selectedBadge?.name} rozetini düzenleyin
             </DialogDescription>
           </DialogHeader>
-          <BadgeForm onSubmit={handleUpdate} submitLabel="Güncelle" />
+          {renderBadgeForm({ onSubmit: handleUpdate, submitLabel: 'Güncelle' })}
         </DialogContent>
       </Dialog>
     </div>

@@ -249,7 +249,7 @@ export default function AutoRepliesPage() {
                                     initial={{ opacity: 0, y: 8 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -8 }}
-                                    transition={{ delay: i * 0.03 }}
+                                    transition={{ delay: Math.min(i, 10) * 0.03 }}
                                     layout
                                 >
                                     <Card className={`rounded-2xl transition-all ${rule.isActive ? 'border-primary/20' : 'opacity-60 border-border/50'}`}>

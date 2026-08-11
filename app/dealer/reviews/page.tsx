@@ -286,7 +286,7 @@ export default function DealerReviewsPage() {
                                     key={review.id}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.05 }}
+                                    transition={{ delay: Math.min(i, 10) * 0.05 }}
                                 >
                                     <Card className="rounded-2xl border-border/50 shadow-sm hover:shadow-md transition-all overflow-hidden">
                                         <CardContent className="p-0">

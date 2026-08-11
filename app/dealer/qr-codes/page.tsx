@@ -576,7 +576,7 @@ export default function DealerQRCodesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ delay: index * 0.05 }}
+                transition={{ delay: Math.min(index, 10) * 0.05 }}
                 layout
               >
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm group hover:shadow-xl transition-all overflow-hidden">

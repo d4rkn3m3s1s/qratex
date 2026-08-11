@@ -519,7 +519,7 @@ export default function AdminAILearningPage() {
         ].map((item, index) => {
           const Icon = item.icon;
           return (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
+            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>

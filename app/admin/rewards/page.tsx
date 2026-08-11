@@ -485,7 +485,7 @@ export default function AdminRewardsPage() {
               key={reward.id}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: Math.min(index, 10) * 0.05 }}
             >
               <Card glass hover className="group overflow-hidden">
                 <CardContent className="p-0">

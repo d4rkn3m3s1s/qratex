@@ -176,7 +176,7 @@ export function DataMinerGame() {
               disabled={c.opened}
               initial={{ opacity: 0, scale: 0.6, rotateY: -90 }}
               animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-              transition={{ delay: i * 0.03, type: 'spring', stiffness: 200, damping: 18 }}
+              transition={{ delay: Math.min(i, 10) * 0.03, type: 'spring', stiffness: 200, damping: 18 }}
               whileHover={!c.opened ? { scale: 1.07, rotateX: 8, rotateY: 8 } : {}}
               whileTap={{ scale: 0.92 }}
               className="relative flex aspect-square items-center justify-center rounded-xl border text-2xl"

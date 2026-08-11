@@ -411,7 +411,7 @@ const SentimentTrendBars = ({
             key={`${d.label}-${i}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
+            transition={{ delay: Math.min(i, 10) * 0.05 }}
             className="space-y-1"
           >
             <div className="flex items-center justify-between text-xs">

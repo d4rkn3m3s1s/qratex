@@ -909,7 +909,7 @@ export default function AdminUsersPage() {
                         key={user.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.03 }}
+                        transition={{ delay: Math.min(index, 10) * 0.03 }}
                         className="group cursor-pointer hover:bg-muted/50"
                         onClick={() => handleOpenDetails(user)}
                       >

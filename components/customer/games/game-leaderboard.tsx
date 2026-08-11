@@ -78,7 +78,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
           key={r.rank}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.04 }}
+          transition={{ delay: Math.min(i, 10) * 0.04 }}
           className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm"
           style={{
             background: r.isMe ? `${accent}1f` : 'rgba(255,255,255,0.04)',

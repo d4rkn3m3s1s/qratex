@@ -140,7 +140,7 @@ function BarChartLocations({ items }: { items: HeatmapRow[] }) {
           key={row.qrCodeId}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: i * 0.06 }}
+          transition={{ delay: Math.min(i, 10) * 0.06 }}
           className="flex items-center gap-2"
         >
           <span className="text-xs text-muted-foreground w-24 truncate" title={row.locationName}>

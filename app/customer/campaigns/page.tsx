@@ -155,7 +155,7 @@ export default function CustomerCampaignsPage() {
                 key={campaign.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
+                transition={{ delay: Math.min(i, 10) * 0.05 }}
               >
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardContent className="p-4">

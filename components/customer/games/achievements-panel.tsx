@@ -61,7 +61,7 @@ export function AchievementsPanel() {
               key={a.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03 }}
+              transition={{ delay: Math.min(i, 10) * 0.03 }}
               className="relative flex flex-col gap-1.5 rounded-xl border p-3"
               style={{
                 borderColor: a.unlocked ? `${color}88` : 'rgba(255,255,255,0.08)',

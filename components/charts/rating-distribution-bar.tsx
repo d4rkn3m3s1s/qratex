@@ -45,7 +45,7 @@ export function RatingDistributionBar({
             <m.div
               initial={{ width: 0 }}
               animate={{ width: `${(item.count / maxCount) * 100}%` }}
-              transition={{ duration: 0.6, delay: i * 0.06 }}
+              transition={{ duration: 0.6, delay: Math.min(i, 10) * 0.06 }}
               className="h-full rounded-md flex items-center justify-end pr-2 min-w-0"
               style={{ backgroundColor: barColor, opacity: 0.9 }}
             >

@@ -368,7 +368,7 @@ export default function CustomerSurpriseBoxesPage() {
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ delay: i * 0.04, type: 'spring', stiffness: 380, damping: 28 }}
+                      transition={{ delay: Math.min(i, 10) * 0.04, type: 'spring', stiffness: 380, damping: 28 }}
                     >
                       <Card className="overflow-hidden border-amber-500/20 bg-gradient-to-b from-card to-amber-500/[0.04] shadow-md ring-1 ring-amber-500/10 dark:from-card dark:to-amber-950/20">
                         <CardContent className="p-4 sm:p-5">

@@ -174,7 +174,7 @@ export default function DealerCampaignsPage() {
               const seg = SEGMENTS[c.targetSegment] || SEGMENTS.all;
               const st = STATUS_BADGES[c.status] || STATUS_BADGES.draft;
               return (
-                <motion.div key={c.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ delay: i * 0.03 }} layout>
+                <motion.div key={c.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ delay: Math.min(i, 10) * 0.03 }} layout>
                   <Card className="rounded-2xl">
                     <CardContent className="p-4 sm:p-5">
                       <div className="flex items-start gap-4">

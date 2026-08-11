@@ -263,7 +263,7 @@ export function BotHunterGame() {
                   initial={{ opacity: 0, y: 20, rotateX: -25 }}
                   animate={{ opacity: 1, y: 0, rotateX: 0 }}
                   exit={{ opacity: 0, scale: 0.7, rotateX: 25 }}
-                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 200, damping: 20 }}
+                  transition={{ delay: Math.min(i, 10) * 0.05, type: 'spring', stiffness: 200, damping: 20 }}
                   onClick={() => toggleFlag(p.id)}
                   whileHover={{ scale: 1.05, rotateY: 6, z: 20 }}
                   whileTap={{ scale: 0.95 }}

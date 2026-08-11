@@ -674,7 +674,7 @@ export default function AdminAnalyticsPage() {
                         key={day.date}
                         initial={{ height: 0 }}
                         animate={{ height: `${height}%` }}
-                        transition={{ delay: i * 0.02 }}
+                        transition={{ delay: Math.min(i, 10) * 0.02 }}
                         className="flex-1 bg-gradient-to-t from-primary to-primary/60 rounded-t hover:from-primary/80 hover:to-primary/40 cursor-pointer group relative"
                         style={{ minHeight: day.feedbacks > 0 ? '4px' : '2px' }}
                       >
@@ -897,7 +897,7 @@ export default function AdminAnalyticsPage() {
                   { title: 'Tüketim', value: data.cardStats.consumptions, icon: ShoppingBag, color: 'bg-orange-500/10 text-orange-500' },
                   { title: 'Yorum', value: data.cardStats.reviews, icon: MessageSquare, color: 'bg-primary/10 text-primary' },
                 ].map((stat, i) => (
-                  <m.div key={stat.title} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
+                  <m.div key={stat.title} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
                     <Card className="border-border/60 bg-card/50 text-center">
                       <CardContent className="p-4">
                         <div className={`w-10 h-10 rounded-xl ${stat.color} flex items-center justify-center mx-auto mb-2`}>
@@ -970,7 +970,7 @@ export default function AdminAnalyticsPage() {
                   key={`recent-${activity.timestamp}-${index}`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
+                  transition={{ delay: Math.min(index, 10) * 0.05 }}
                   className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/30 transition-colors"
                 >
                   <div className={`p-2 rounded-lg ${

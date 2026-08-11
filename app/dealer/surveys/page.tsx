@@ -93,7 +93,7 @@ export default function DealerSurveysPage() {
                 <div className="space-y-3">
                     <AnimatePresence mode="popLayout">
                         {surveys.map((s, i) => (
-                            <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ delay: i * 0.03 }} layout>
+                            <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ delay: Math.min(i, 10) * 0.03 }} layout>
                                 <Card className={`rounded-2xl transition-all ${s.isActive ? 'border-emerald-500/20' : 'opacity-60'}`}>
                                     <CardContent className="p-4 sm:p-5">
                                         <div className="flex items-start gap-4">

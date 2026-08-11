@@ -115,7 +115,7 @@ export default function FavoritesPage() {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
-                                transition={{ delay: i * 0.05 }}
+                                transition={{ delay: Math.min(i, 10) * 0.05 }}
                                 layout
                             >
                                 <Card className="overflow-hidden border-border/40 hover:border-primary/30 transition-colors shadow-sm bg-card/60 backdrop-blur-sm group rounded-2xl">

@@ -527,7 +527,7 @@ export default function CustomerLeaderboardPage() {
                         key={user.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.03 }}
+                        transition={{ delay: Math.min(index, 10) * 0.03 }}
                         whileHover={{ scale: 1.01, y: -2 }}
                         className={`relative overflow-hidden rounded-xl border bg-gradient-to-r ${bgClass} ${
                           user.isCurrentUser ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''

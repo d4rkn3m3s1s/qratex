@@ -227,7 +227,7 @@ export function WordSpotGame() {
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.6 }}
-                transition={{ delay: i * 0.03, type: 'spring', stiffness: 240, damping: 18 }}
+                transition={{ delay: Math.min(i, 10) * 0.03, type: 'spring', stiffness: 240, damping: 18 }}
                 onClick={(e) => pick(t, e)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.92 }}

@@ -45,7 +45,7 @@ export function SquadLeaderboard({ squads }: SquadLeaderboardProps) {
                             key={squad.id}
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.05 }}
+                            transition={{ delay: Math.min(idx, 10) * 0.05 }}
                             className={`flex items-center justify-between p-4 transition-colors hover:bg-muted/30 ${
                                 idx < 3 ? 'bg-primary/5' : ''
                             }`}

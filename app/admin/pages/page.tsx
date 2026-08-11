@@ -240,7 +240,7 @@ export default function AdminPagesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filteredPages.map((page, index) => (
-            <motion.div key={page.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}>
+            <motion.div key={page.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.04 }}>
               <Card>
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-start justify-between">

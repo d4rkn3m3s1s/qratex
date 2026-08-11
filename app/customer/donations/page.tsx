@@ -729,7 +729,7 @@ function ProjectCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: Math.min(index, 10) * 0.05 }}
       whileHover={{ y: -4 }}
       className="group h-full"
     >
@@ -932,7 +932,7 @@ function LeaderboardSection({
                 key={entry.userId}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
+                transition={{ delay: Math.min(index, 10) * 0.05 }}
                 className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors ${
                   entry.userId === currentUserId ? 'bg-primary/5' : ''
                 }`}
@@ -1037,7 +1037,7 @@ function ActivitySection({ recentDonations, t }: { recentDonations: RecentDonati
             key={donation.id}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.05 }}
+            transition={{ delay: Math.min(index, 10) * 0.05 }}
             className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
           >
             <Avatar>

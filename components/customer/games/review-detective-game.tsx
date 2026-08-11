@@ -251,7 +251,7 @@ export function ReviewDetectiveGame() {
                   initial={{ opacity: 0, rotateX: -40, y: 14 }}
                   animate={{ opacity: 1, rotateX: 0, y: 0 }}
                   exit={{ opacity: 0, x: -30 }}
-                  transition={{ delay: i * 0.08, type: 'spring', stiffness: 180, damping: 18 }}
+                  transition={{ delay: Math.min(i, 10) * 0.08, type: 'spring', stiffness: 180, damping: 18 }}
                   onClick={(e) => pick(r, e)}
                   whileHover={{ scale: 1.02, x: 4 }}
                   className="group relative block w-full rounded-xl border p-3 text-left text-[12px] leading-snug text-white/90"

@@ -381,7 +381,7 @@ export default function CustomerRewardsPage() {
                 key={reward.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                transition={{ delay: Math.min(index, 10) * 0.05 }}
                 whileHover={{ y: -4 }}
                 className="h-full"
               >
@@ -525,7 +525,7 @@ export default function CustomerRewardsPage() {
                     key={myReward.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                    transition={{ delay: Math.min(index, 10) * 0.05 }}
                     whileHover={{ y: -2 }}
                   >
                     <Card 

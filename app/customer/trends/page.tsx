@@ -549,7 +549,7 @@ export default function CustomerTrendsPage() {
                       <motion.div
                         initial={{ height: 0 }}
                         animate={{ height: `${(day.count / maxFeedback) * 100}%` }}
-                        transition={{ delay: i * 0.02, duration: 0.4 }}
+                        transition={{ delay: Math.min(i, 10) * 0.02, duration: 0.4 }}
                         className={`w-full rounded-t-[1px] sm:rounded-t-sm transition-colors cursor-pointer ${
                           day.count > 0 
                             ? 'bg-gradient-to-t from-primary to-primary/60 hover:from-primary/80 hover:to-primary/40' 
