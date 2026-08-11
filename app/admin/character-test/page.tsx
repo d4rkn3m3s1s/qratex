@@ -14,9 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { FlaskConical, Sparkles, Loader2, RotateCcw, Wand2, Eraser } from 'lucide-react';
+import { FlaskConical, Sparkles, Loader2, RotateCcw, Wand2, Eraser, PlayCircle } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { TW_BRAND_CTA_BUTTON } from '@/lib/tw-brand-classes';
+import { CharacterReveal, type RevealCharacter } from '@/components/customer/character-reveal';
 
 interface Status {
   userId: string;
@@ -37,6 +38,12 @@ export default function CharacterTestPage() {
   const [classifying, setClassifying] = useState(false);
   const [busy, setBusy] = useState('');
   const [fillCat, setFillCat] = useState('dram-suc');
+  // Reveal önizleme (DB-free): admin rozetin nasıl açıldığını canlı görür.
+  const [revealCat, setRevealCat] = useState('dram-suc');
+  const [revealVariant, setRevealVariant] = useState<'orb' | 'mascot'>('orb');
+  const [revealChar, setRevealChar] = useState<RevealCharacter>(null);
+  const [revealOpen, setRevealOpen] = useState(false);
+  const [revealLoading, setRevealLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +76,26 @@ export default function CharacterTestPage() {
       toast.error(e instanceof Error ? e.message : 'AI sınıflandırma başarısız');
     } finally {
       setClassifying(false);
+    }
+  };
+
+  // Reveal önizleme: seçili kategoriden karakter çek (DB-free) → CharacterReveal aç.
+  const previewReveal = async () => {
+    setRevealLoading(true);
+    try {
+      const res = await fetch('/api/admin/character-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revealPreview', category: revealCat }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data?.error || 'Önizleme alınamadı');
+      setRevealChar(data.character);
+      setRevealOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Reveal önizleme başarısız');
+    } finally {
+      setRevealLoading(false);
     }
   };
 
@@ -150,6 +177,57 @@ export default function CharacterTestPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ROZET AÇILIŞI (REVEAL) ÖNİZLEME — DB'ye dokunmaz */}
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <PlayCircle className="h-4 w-4 text-fuchsia-500" /> Rozet Açılışı (Reveal) Önizleme
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Kategori seç → “Açılışı Oynat” → kullanıcının rozeti açarken gördüğü animasyonun aynısı burada oynar
+            (DB’ye hiçbir şey yazılmaz, gerçek reveal akışının önizlemesidir).
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Kategori</Label>
+              <select
+                value={revealCat}
+                onChange={(e) => setRevealCat(e.target.value)}
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                {(status?.categories ?? []).map((c) => (
+                  <option key={c.key} value={c.key}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Görsel varyant</Label>
+              <select
+                value={revealVariant}
+                onChange={(e) => setRevealVariant(e.target.value as 'orb' | 'mascot')}
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="orb">Küre (orb)</option>
+                <option value="mascot">Maskot</option>
+              </select>
+            </div>
+            <Button onClick={previewReveal} disabled={revealLoading} className={TW_BRAND_CTA_BUTTON}>
+              {revealLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
+              <span className="ml-2">Açılışı Oynat</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gerçek reveal bileşeni — fetchOnOpen=false → önizleme karakteriyle oynar, API/DB çağırmaz */}
+      <CharacterReveal
+        open={revealOpen}
+        onClose={() => setRevealOpen(false)}
+        character={revealChar}
+        fetchOnOpen={false}
+        variant={revealVariant}
+      />
 
       {/* DURUM */}
       <Card>

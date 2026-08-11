@@ -14,7 +14,7 @@ export default function CTASection() {
   const t = useAppT();
   return (
     <section className="py-20 lg:py-32 relative overflow-hidden">
-      <div className="absolute inset-0 gradient-mesh opacity-30" />
+      {/* gradient-mesh katmanı kaldırıldı — bölüm tamamen şeffaf (ortak LandingBackground görünür). */}
       <Spotlight className="top-0 left-0 md:left-1/2" fill="hsl(var(--primary))" />
       <div className="container relative z-10 px-4 text-center">
         <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="max-w-3xl mx-auto">

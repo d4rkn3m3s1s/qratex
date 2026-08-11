@@ -63,6 +63,39 @@ export async function POST(req: NextRequest) {
   const userId = await resolveUserId(auth, body.userId ?? null);
   const action = String(body.action ?? '');
 
+  if (action === 'revealPreview') {
+    // DB'ye DOKUNMADAN: bir kategoriden karakter seçip reveal için hazır obje döndür.
+    // Admin panelde <CharacterReveal fetchOnOpen={false} character={...}/> ile açılış
+    // animasyonunu (rozet nasıl açılıyor) canlı görebilsin — sentetik veri gerekmez.
+    const categoryKey = String(body.category ?? '');
+    const cat = CATEGORY_BY_KEY[categoryKey];
+    if (!cat) {
+      return NextResponse.json({ success: false, error: 'Geçersiz kategori' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    const list = charactersInCategory(cat.key);
+    if (list.length === 0) {
+      return NextResponse.json({ success: false, error: 'Kategoride karakter yok' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    // İstenen badgeId varsa onu, yoksa ilk karakteri seç (admin belirli birini görmek isteyebilir).
+    const wanted = String(body.badgeId ?? '');
+    const picked = list.find((c) => c.badgeId === wanted) ?? list[0];
+    // Rozet ikonunu (varsa) Badge tablosundan çek — reveal daha gerçekçi görünür.
+    const badge = await prisma.badge.findUnique({ where: { id: picked.badgeId }, select: { icon: true, rarity: true } }).catch(() => null);
+    const character = {
+      badgeId: picked.badgeId,
+      name: picked.name,
+      why: `Yorumların ${cat.name} üslubunu taşıyor; tıpkı ${picked.name} gibi. (admin önizleme)`,
+      icon: badge?.icon ?? undefined,
+      description: picked.trait,
+      rarity: badge?.rarity ?? 'epic',
+      category: { key: cat.key, name: cat.name, emoji: cat.emoji, accent: cat.accent, description: cat.description },
+    };
+    return NextResponse.json(
+      { success: true, action, character, characters: list.map((c) => ({ badgeId: c.badgeId, name: c.name })) },
+      { headers: PRIVATE_NO_STORE_HEADERS },
+    );
+  }
+
   if (action === 'classify') {
     // Canlı test: serbest metni AI ile SINIFLA (kategori) + o kategoride karakter SEÇ.
     // DB'ye hiçbir şey yazmaz — sadece formülün çıktısını gösterir.
