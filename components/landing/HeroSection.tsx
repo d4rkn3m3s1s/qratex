@@ -96,10 +96,10 @@ export default function HeroSection() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-transparent to-background/25 z-[1]" aria-hidden="true" />
 
         <div className="container relative z-10 px-4 py-20 text-center">
-          {/* LCP FIX: hero başlığı (LCP elementi) ilk boyamada GÖRÜNÜR olmalı. framer-motion
-              initial={{opacity:0}} SSR'de style="opacity:0" basıp başlığı hidrasyon+animasyona
-              kadar görünmez yapıyordu (FCP/LCP ~1s gecikme). initial=görünür → ilk paint'te LCP. */}
-          <motion.div initial={{ opacity: 1, y: 0 }} animate={{ opacity: 1, y: 0 }}>
+          {/* LCP FIX + tasarım korundu: başlık (LCP elementi) opacity HEP 1 → ilk paint'te görünür
+              (SSR'de opacity:0 basılmaz, FCP/LCP gecikmez). Giriş hissi için SADECE transform (y)
+              ile hafif slide-in — transform LCP'yi geciktirmez (element boyanmış sayılır). */}
+          <motion.div initial={{ opacity: 1, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}>
             <Badge variant="secondary" className="mb-6">
               <Sparkles className="w-3 h-3 mr-1" />
               {t('landing.hero.badge')}
