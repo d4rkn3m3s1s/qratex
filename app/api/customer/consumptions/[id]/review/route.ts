@@ -103,7 +103,7 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null); // bozuk gövde → null → safeParse temiz 400 verir (500 değil)
     const validatedData = createConsumptionReviewSchema.safeParse(body);
 
     if (!validatedData.success) {
@@ -302,7 +302,7 @@ export async function PUT(
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null); // bozuk gövde → null → safeParse temiz 400 verir (500 değil)
     const validatedData = createConsumptionReviewSchema.safeParse(body);
 
     if (!validatedData.success) {
