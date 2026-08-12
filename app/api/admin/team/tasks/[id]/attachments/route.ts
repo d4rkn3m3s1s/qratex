@@ -36,6 +36,9 @@ const BINARY_SIGNATURES: { mime: string; ext: string; inline: boolean; test: (b:
   { mime: 'image/webp', ext: '.webp', inline: true, test: (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
   { mime: 'image/gif', ext: '.gif', inline: true, test: (b) => b.length > 6 && (b.toString('ascii', 0, 6) === 'GIF87a' || b.toString('ascii', 0, 6) === 'GIF89a') },
   { mime: 'application/pdf', ext: '.pdf', inline: true, test: (b) => b.length > 4 && b.toString('ascii', 0, 4) === '%PDF' },
+  // Videolar (tarayıcıda oynatılabilir → inline). MP4/MOV: offset 4'te 'ftyp'; WebM: EBML başlığı.
+  { mime: 'video/mp4', ext: '.mp4', inline: true, test: (b) => b.length > 12 && b.toString('ascii', 4, 8) === 'ftyp' },
+  { mime: 'video/webm', ext: '.webm', inline: true, test: (b) => b.length > 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3 },
   // Arşivler (indirilir → asla inline)
   { mime: 'application/x-rar-compressed', ext: '.rar', inline: false, test: (b) => b.length > 7 && b.toString('ascii', 0, 4) === 'Rar!' && b[4] === 0x1a && b[5] === 0x07 },
   { mime: 'application/x-7z-compressed', ext: '.7z', inline: false, test: (b) => b.length > 6 && b[0] === 0x37 && b[1] === 0x7a && b[2] === 0xbc && b[3] === 0xaf && b[4] === 0x27 && b[5] === 0x1c },
@@ -148,12 +151,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const base = sanitize(path.parse(file.name).name || 'ek') || 'ek';
   const filename = `${base}-${Date.now()}${kind.ext}`;
-  // Güvenlik: yalnızca güvenle gösterilebilen türler (görsel/pdf) tarayıcıda
-  // açılır; Office/metin/arşiv indirmeye zorlanır (attachment) — böylece public
-  // bucket üzerinden XSS/aktif içerik çalıştırma riski engellenir.
-  const disposition = kind.inline
-    ? 'inline'
-    : `attachment; filename="${encodeURIComponent(file.name.slice(0, 100))}"`;
+  // iOS/Mac SAFARI 'attachment' disposition'ında boş sayfa/hata verir → tüm türlerde
+  // 'inline' kullan (Safari'de dosyalar görünsün). GÜVENLİ: .html/.svg/.js gibi aktif
+  // içerik türleri zaten üstte BLOKLU; kalan türler (text/ofis/arşiv) inline'da script
+  // çalıştıramaz — text görüntülenir, ofis/arşiv tarayıcıca indirilir.
+  const disposition = `inline; filename="${encodeURIComponent(file.name.slice(0, 100))}"`;
 
   let storedPath: string;
   if (isR2Configured()) {

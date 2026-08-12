@@ -15,6 +15,7 @@ import { Loader2, Plus, Trash2, Send, CheckSquare, MessageSquare, History, ListC
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn, getInitials } from '@/lib/utils';
 import { toast } from '@/lib/admin-toast';
+import { uploadWithProgress } from '@/lib/upload-with-progress';
 
 export type TeamMember = { id: string; name: string | null; email: string; image: string | null };
 
@@ -113,6 +114,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
   const commentFileRef = useRef<HTMLInputElement>(null);
   const [commentFile, setCommentFile] = useState<{ path: string; name: string } | null>(null);
   const [uploadingComment, setUploadingComment] = useState(false);
+  const [commentUploadPct, setCommentUploadPct] = useState(0);
   const { data: sessionData } = useSession();
   const myId = (sessionData?.user as { id?: string } | undefined)?.id ?? '';
   // Zaman takibi girişi
@@ -121,16 +123,22 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
   // Dosya eki yükleme durumu
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0); // 0-100 yükleme yüzdesi (animasyonlu bar)
 
   const uploadFile = async (file: File) => {
     if (!taskId) return;
     setUploading(true);
+    setUploadPct(0);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch(`/api/admin/team/tasks/${taskId}/attachments`, { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Yüklenemedi');
+      const { ok, json } = await uploadWithProgress(
+        `/api/admin/team/tasks/${taskId}/attachments`,
+        fd,
+        (p) => setUploadPct(p),
+      );
+      const body = json as { success?: boolean; error?: string };
+      if (!ok || !body.success) throw new Error(body.error || 'Yüklenemedi');
       toast.success('Dosya eklendi');
       load();
       onChanged?.();
@@ -138,6 +146,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
       toast.error(e instanceof Error ? e.message : 'Dosya yüklenemedi');
     } finally {
       setUploading(false);
+      setUploadPct(0);
     }
   };
 
@@ -228,17 +237,20 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
   const uploadCommentFile = async (file: File) => {
     if (!taskId) return;
     setUploadingComment(true);
+    setCommentUploadPct(0);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch(`/api/admin/team/tasks/${taskId}/attachments`, { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.success) throw new Error(json.error || 'Yüklenemedi');
+      const { ok, json } = await uploadWithProgress(
+        `/api/admin/team/tasks/${taskId}/attachments`, fd, (p) => setCommentUploadPct(p),
+      );
+      const body = json as { success?: boolean; error?: string; attachment?: { path: string; filename: string } };
+      if (!ok || !body.success || !body.attachment) throw new Error(body.error || 'Yüklenemedi');
       // attachments endpoint eki DB'ye de yazdı; yorumda referans için path/ad kullan.
-      setCommentFile({ path: json.attachment.path, name: json.attachment.filename });
+      setCommentFile({ path: body.attachment.path, name: body.attachment.filename });
       toast.success('Dosya hazır — yorumu gönder');
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Yüklenemedi'); }
-    finally { setUploadingComment(false); }
+    finally { setUploadingComment(false); setCommentUploadPct(0); }
   };
 
   // Yorum gönder (yanıt + dosya + mention dahil).
@@ -521,7 +533,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z"
+                accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z"
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }}
               />
@@ -531,9 +543,21 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) uploadFile(f); }}
                 disabled={uploading}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 py-3 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-60"
+                className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-lg border-2 border-dashed border-border/60 py-3 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-90"
               >
-                {uploading ? <><Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor…</> : <><Plus className="h-4 w-4" /> Dosya ekle (resim, PDF, Office, metin, arşiv — max 50MB)</>}
+                {/* Animasyonlu yükleme çubuğu (butonun içini soldan sağa doldurur) */}
+                {uploading && (
+                  <span
+                    className="absolute inset-y-0 left-0 bg-primary/15 transition-[width] duration-200 ease-out"
+                    style={{ width: `${uploadPct}%` }}
+                    aria-hidden
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  {uploading
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Yükleniyor… %{uploadPct}</>
+                    : <><Plus className="h-4 w-4" /> Dosya ekle (resim, video, PDF, Office, metin, arşiv — max 50MB)</>}
+                </span>
               </button>
             </section>
 
@@ -640,11 +664,11 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onChanged, members
                 </div>
               )}
               <div className="relative flex gap-2">
-                <input ref={commentFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z" className="hidden"
+                <input ref={commentFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.md,.zip,.rar,.7z" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
                 <button type="button" onClick={() => commentFileRef.current?.click()} disabled={uploadingComment}
                   className="self-end grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50" aria-label="Dosya iliştir">
-                  {uploadingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                  {uploadingComment ? <span className="text-[10px] font-bold tabular-nums">%{commentUploadPct}</span> : <Paperclip className="h-4 w-4" />}
                 </button>
                 <div className="relative flex-1">
                   <Textarea

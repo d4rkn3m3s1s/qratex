@@ -112,7 +112,10 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
             if (r2ok && content && size <= 15 * 1024 * 1024) {
               const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
               const key = `inbox/${uid}-${Date.now()}-${safeName}`;
-              url = await uploadToR2(key, content, contentType, `attachment; filename="${safeName}"`).catch(() => null);
+              // iOS Safari 'attachment' disposition'ında boş sayfa/hata verir + download attr'ını
+              // yok sayar → 'inline' ile dosyayı ÖNİZLER (PDF/resim açılır, kullanıcı Share→Kaydet).
+              // Desktop tarafında link'teki download attr yine indirmeyi tetikler.
+              url = await uploadToR2(key, content, contentType, `inline; filename="${safeName}"`).catch(() => null);
             }
             metas.push({ filename, contentType, size, url });
           }
