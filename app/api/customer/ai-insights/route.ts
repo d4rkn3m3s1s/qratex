@@ -104,9 +104,10 @@ export async function GET() {
     // Top emotions
     const emotionCounts: Record<string, number> = {};
     feedbacks.forEach(f => {
-      const emotions = f.emotions as string[] | null;
-      emotions?.forEach(e => {
-        emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+      // emotions bir JSON alanı: DB'de array olmayabilir (obj/string) → ?. yetmez, .forEach patlar (500).
+      const emotions = f.emotions;
+      if (Array.isArray(emotions)) emotions.forEach(e => {
+        if (typeof e === 'string') emotionCounts[e] = (emotionCounts[e] || 0) + 1;
       });
     });
     const topEmotions = Object.entries(emotionCounts)
@@ -117,9 +118,9 @@ export async function GET() {
     // Top topics
     const topicCounts: Record<string, number> = {};
     feedbacks.forEach(f => {
-      const topics = f.topics as string[] | null;
-      topics?.forEach(t => {
-        topicCounts[t] = (topicCounts[t] || 0) + 1;
+      const topics = f.topics;
+      if (Array.isArray(topics)) topics.forEach(t => {
+        if (typeof t === 'string') topicCounts[t] = (topicCounts[t] || 0) + 1;
       });
     });
     const topTopics = Object.entries(topicCounts)
@@ -156,8 +157,8 @@ export async function GET() {
         text: f.text!,
         rating: f.rating,
         sentiment: f.sentiment || 'neutral',
-        emotions: (f.emotions as string[]) || [],
-        topics: (f.topics as string[]) || [],
+        emotions: Array.isArray(f.emotions) ? (f.emotions as string[]) : [],
+        topics: Array.isArray(f.topics) ? (f.topics as string[]) : [],
         intent: f.intent,
         urgency: f.urgency,
         effortScore: f.effortScore,
