@@ -328,11 +328,23 @@ export async function analyzeComprehensive(
         label: a.sentiment?.label || 'neutral',
         score: a.sentiment?.score || 0.5,
       },
-      emotions: (a.emotions || []).map((e: { label: string; score: number }) => ({
-        label: e.label,
-        score: e.score,
-      })),
-      topics: a.topics || [],
+      // NORMALİZASYON (kök neden fix): LLM emotions'ı string veya {label,score} olarak
+      // dönebilir; topics'i string veya {topic/label} obj olarak. DB'ye HER ZAMAN tutarlı
+      // şekil yazılsın (aksi halde okuma tarafında .forEach/.map non-array/obj'de patlıyordu).
+      emotions: (Array.isArray(a.emotions) ? a.emotions : [])
+        .map((e: unknown) => {
+          if (typeof e === 'string') return { label: e, score: 0.5 };
+          const o = e as { label?: string; score?: number };
+          return { label: String(o?.label ?? ''), score: typeof o?.score === 'number' ? o.score : 0.5 };
+        })
+        .filter((e: { label: string }) => e.label.length > 0),
+      topics: (Array.isArray(a.topics) ? a.topics : [])
+        .map((t: unknown) => {
+          if (typeof t === 'string') return t;
+          const o = t as { topic?: string; label?: string; name?: string };
+          return String(o?.topic ?? o?.label ?? o?.name ?? '');
+        })
+        .filter((t: string) => t.length > 0),
       toxicity: {
         isToxic: a.toxicity?.isToxic || false,
         score: a.toxicity?.score || 0,
