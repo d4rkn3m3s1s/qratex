@@ -146,6 +146,7 @@ export default async function RootLayout({
     <html
       lang="tr"
       suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={`${inter.variable} ${spaceGrotesk.variable}`}
     >
       <head>

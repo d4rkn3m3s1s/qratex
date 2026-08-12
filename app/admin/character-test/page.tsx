@@ -38,6 +38,7 @@ export default function CharacterTestPage() {
   const [classifying, setClassifying] = useState(false);
   const [busy, setBusy] = useState('');
   const [fillCat, setFillCat] = useState('dram-suc');
+  const [targetEmail, setTargetEmail] = useState(''); // boş=me(admin); email=demo customer hedefle
   // Reveal önizleme (DB-free): admin rozetin nasıl açıldığını canlı görür.
   const [revealCat, setRevealCat] = useState('dram-suc');
   const [revealVariant, setRevealVariant] = useState<'orb' | 'mascot'>('orb');
@@ -256,6 +257,15 @@ export default function CharacterTestPage() {
           <div className="text-sm font-semibold">Reveal Akışı Test Araçları</div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
+              <Label className="text-xs">Hedef kullanıcı (email)</Label>
+              <Input
+                value={targetEmail}
+                onChange={(e) => setTargetEmail(e.target.value)}
+                placeholder="boş = kendim (admin)"
+                className="h-9 w-56"
+              />
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">Kategori</Label>
               <select
                 value={fillCat}
@@ -270,23 +280,30 @@ export default function CharacterTestPage() {
             <Button
               variant="outline"
               disabled={!!busy}
-              onClick={() => runAction('fill', { category: fillCat })}
+              onClick={() => runAction('fill', { category: fillCat, userId: targetEmail || 'me', synthetic: true })}
             >
               {busy === 'fill' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              <span className="ml-2">Barı Doldur (eşiğe kadar)</span>
+              <span className="ml-2">Barı Doldur (sentetik)</span>
             </Button>
-            <Button variant="outline" disabled={!!busy} onClick={() => runAction('reset')}>
+            <Button variant="outline" disabled={!!busy} onClick={() => runAction('reset', { userId: targetEmail || 'me' })}>
               {busy === 'reset' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
               <span className="ml-2">Rozetleri Sıfırla</span>
             </Button>
-            <Button variant="outline" disabled={!!busy} onClick={() => runAction('clearCategories')}>
+            <Button variant="outline" disabled={!!busy} onClick={() => runAction('clearCategories', { userId: targetEmail || 'me' })}>
               {busy === 'clearCategories' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
               <span className="ml-2">Kategorileri Temizle</span>
             </Button>
+            <Button variant="destructive" disabled={!!busy} onClick={() => runAction('cleanupTest', { userId: targetEmail || 'me' })}>
+              {busy === 'cleanupTest' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
+              <span className="ml-2">Test Verisini Sil</span>
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            “Barı Doldur” senin mevcut tüketim yorumlarını seçili kategoriye atar (bar dolar) — sonra
-            <b> /customer/badges</b> sayfasında reveal’i canlı test edebilirsin.
+            <b>Barı Doldur (sentetik):</b> hedef kullanıcının barı eşiğe ulaşana kadar
+            <b> işaretli test yorumları</b> üretir (gerçek yorum yoksa da bar dolar) — sonra
+            <b> /customer/badges</b> sayfasında reveal’i uçtan uca test edebilirsin.
+            <br /><b>Test Verisini Sil:</b> üretilen sentetik tüketim/yorumları temizler (gerçek veriye dokunmaz).
+            Email boşsa işlemler <b>kendi (admin)</b> hesabına uygulanır.
           </p>
         </CardContent>
       </Card>

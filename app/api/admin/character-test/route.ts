@@ -25,8 +25,16 @@ const CHAR_IDS = CHARACTER_PROFILES.map((c) => c.badgeId);
 
 async function resolveUserId(auth: { session: { user: { id: string } } }, param: string | null): Promise<string> {
   if (!param || param === 'me') return auth.session.user.id;
+  // Email verildiyse kullanıcıyı bul (admin demo customer'ı email ile hedefleyebilsin).
+  if (param.includes('@')) {
+    const u = await prisma.user.findFirst({ where: { email: { equals: param, mode: 'insensitive' } }, select: { id: true } });
+    if (u) return u.id;
+  }
   return param;
 }
+
+/** Karakter test aracının oluşturduğu sentetik veriyi işaretler (temizlenebilir olsun). */
+const TEST_CONSUMPTION_NOTE = '[KARAKTER-TEST]';
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
@@ -150,20 +158,61 @@ export async function POST(req: NextRequest) {
     if (!valid) {
       return NextResponse.json({ success: false, error: 'Geçersiz kategori' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
-    // Kaç yorum bu kategoriye atansın (varsayılan: eşik = bar tam dolu).
+    // Hedef doluluk (varsayılan: eşik = bar tam dolar).
     const n = Math.max(1, Math.min(50, Number(body.n) || CATEGORY_BADGE_THRESHOLD));
+
+    // 1) Önce MEVCUT yorumları bu kategoriye etiketle.
     const fbs = await prisma.consumptionReview.findMany({
       where: { customerId: userId, text: { not: null } },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-      take: n,
+      select: { id: true }, orderBy: { createdAt: 'asc' }, take: n,
     });
-    // Hepsi aynı kategoriye atanıyor → tek updateMany (N ardışık update yerine, N+1 önlenir).
-    const upd = await prisma.consumptionReview.updateMany({
+    await prisma.consumptionReview.updateMany({
       where: { id: { in: fbs.map((f) => f.id) } },
       data: { characterCategory: category },
     });
-    return NextResponse.json({ success: true, action, category, filled: upd.count, threshold: CATEGORY_BADGE_THRESHOLD }, { headers: PRIVATE_NO_STORE_HEADERS });
+
+    let created = 0;
+    // 2) Yetmezse SENTETİK Consumption+Review üret (demo customer'da bar gerçekten dolsun).
+    //    synthetic=false ise sadece mevcutları etiketler (eski davranış).
+    const wantSynthetic = body.synthetic !== false; // varsayılan: sentetik AÇIK
+    const need = n - fbs.length;
+    if (wantSynthetic && need > 0) {
+      const dealerId = auth.session.user.id; // admin (geçerli User FK); işaretli test verisi
+      // Tek sentetik test kartı (varsa yeniden kullan).
+      let card = await prisma.physicalCard.findFirst({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE }, select: { id: true } });
+      if (!card) {
+        card = await prisma.physicalCard.create({
+          data: { token: `chartest-${userId.slice(0, 8)}-${Math.floor(need)}-${fbs.length}`, customerId: userId, status: 'ACTIVATED', blockReason: TEST_CONSUMPTION_NOTE },
+          select: { id: true },
+        }).catch(async () => prisma.physicalCard.findFirst({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE }, select: { id: true } }));
+      }
+      const cat2 = CATEGORY_BY_KEY[category];
+      // Kategoriye uygun kısa örnek metin (min uzunluk şartlı kategoriler için yeterince uzun).
+      const sampleText = `${TEST_CONSUMPTION_NOTE} ${cat2?.name ?? category} üslubunda örnek deneyim yorumu — servis, lezzet ve ortam üzerine gözlemler; bar testini doldurmak için üretildi.`;
+      for (let i = 0; i < need && card; i++) {
+        const consumption = await prisma.consumption.create({
+          data: { cardId: card.id, customerId: userId, dealerId, note: TEST_CONSUMPTION_NOTE },
+          select: { id: true },
+        }).catch(() => null);
+        if (!consumption) continue;
+        await prisma.consumptionReview.create({
+          data: { consumptionId: consumption.id, customerId: userId, rating: 5, text: sampleText, characterCategory: category },
+        }).catch(() => {});
+        created++;
+      }
+    }
+
+    return NextResponse.json(
+      { success: true, action, category, tagged: fbs.length, created, total: fbs.length + created, threshold: CATEGORY_BADGE_THRESHOLD },
+      { headers: PRIVATE_NO_STORE_HEADERS },
+    );
+  }
+
+  if (action === 'cleanupTest') {
+    // Sentetik test verisini sil (Consumption silinince Review cascade ile gider) + test kartı.
+    const del = await prisma.consumption.deleteMany({ where: { customerId: userId, note: TEST_CONSUMPTION_NOTE } });
+    const delCard = await prisma.physicalCard.deleteMany({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE } }).catch(() => ({ count: 0 }));
+    return NextResponse.json({ success: true, action, deletedConsumptions: del.count, deletedCards: delCard.count }, { headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   return NextResponse.json({ success: false, error: 'Bilinmeyen aksiyon' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
