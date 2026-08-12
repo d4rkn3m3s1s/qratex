@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Compass, ExternalLink, MapPin, Navigation, Phone, RefreshCw, Star, Store, Zap, Sparkles } from 'lucide-react';
+import { Compass, ExternalLink, MapPin, Navigation, Phone, RefreshCw, Star, Store, Zap, Sparkles, ShieldCheck } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/lib/admin-toast';
 import Image from 'next/image';
 import { useAppT } from '@/lib/app-locale';
@@ -83,6 +84,7 @@ export default function CustomerNearbyPage() {
   const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
   const [aiStats, setAiStats] = useState<any | null>(null);
   const [locationError, setLocationError] = useState<number | null>(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   const categoryOptions = useMemo(
     () => [
@@ -93,6 +95,14 @@ export default function CustomerNearbyPage() {
     ],
     [t]
   );
+
+  // Konum izni MODAL'ı: butonlar önce açıklayıcı modalı açar; modaldaki onay
+  // gerçek getLocation()'ı çağırır (iOS: kullanıcı jesti içinde tetiklenir).
+  const promptLocation = () => setShowLocationModal(true);
+  const confirmLocation = () => {
+    setShowLocationModal(false);
+    getLocation();
+  };
 
   const getLocation = () => {
     if (!navigator.geolocation) {
@@ -249,12 +259,39 @@ export default function CustomerNearbyPage() {
 
   return (
     <div className="space-y-6">
+      {/* Konum izni MODAL'ı — "Konumumu Kullan" tıklanınca çıkar; onay tarayıcı iznini ister */}
+      <Dialog open={showLocationModal} onOpenChange={setShowLocationModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <ShieldCheck className="h-6 w-6 text-primary" />
+            </div>
+            <DialogTitle className="text-center">{t('customerNearby.shareLocationTitle')}</DialogTitle>
+            <DialogDescription className="text-center text-pretty">
+              {t('customerNearby.shareLocationBody')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
+            {t('customerNearby.iosLocationNote')}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowLocationModal(false)} className="w-full sm:w-auto">
+              Vazgeç
+            </Button>
+            <Button onClick={confirmLocation} disabled={locating} className="w-full gap-2 sm:w-auto">
+              <Navigation className={`h-4 w-4 ${locating ? 'animate-spin' : ''}`} />
+              {locating ? t('customerNearby.locationFetching') : t('customerNearby.useMyLocation')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Mobil: üstte tek parmakla erişilebilir konum CTA */}
       <div className="sm:hidden space-y-1.5">
         <Button
           type="button"
           variant={latitude === null && longitude === null ? 'default' : 'outline'}
-          onClick={getLocation}
+          onClick={promptLocation}
           disabled={locating}
           className="w-full min-h-11 gap-2 touch-manipulation font-medium justify-center"
         >
@@ -276,7 +313,7 @@ export default function CustomerNearbyPage() {
         title={t('customerNearby.title')}
         description={t('customerNearby.description')}
         actions={
-          <Button variant="outline" onClick={getLocation} disabled={locating} className="gap-2 touch-manipulation shrink-0">
+          <Button variant="outline" onClick={promptLocation} disabled={locating} className="gap-2 touch-manipulation shrink-0">
             <Navigation className={`h-4 w-4 shrink-0 ${locating ? 'animate-spin' : ''}`} />
             {t('customerNearby.refreshLocation')}
           </Button>
@@ -300,7 +337,7 @@ export default function CustomerNearbyPage() {
             <p className="text-xs text-muted-foreground leading-relaxed">{t('customerNearby.iosLocationNote')}</p>
             <Button
               type="button"
-              onClick={getLocation}
+              onClick={promptLocation}
               disabled={locating}
               className="w-full gap-2 touch-manipulation sm:w-auto max-sm:hidden min-h-10"
             >
@@ -536,7 +573,7 @@ export default function CustomerNearbyPage() {
                       ? t('customerNearby.locationHelpTimeout')
                       : t('customerNearby.locationHelpGeneric')}
                 </p>
-                <Button onClick={getLocation} disabled={locating} className="gap-2 max-sm:hidden touch-manipulation min-h-10 w-full sm:w-auto">
+                <Button onClick={promptLocation} disabled={locating} className="gap-2 max-sm:hidden touch-manipulation min-h-10 w-full sm:w-auto">
                   <Navigation className={`h-4 w-4 ${locating ? 'animate-spin' : ''}`} />
                   {locating ? t('customerNearby.locationFetching') : t('customerNearby.useMyLocation')}
                 </Button>
