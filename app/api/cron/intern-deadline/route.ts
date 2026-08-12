@@ -16,8 +16,8 @@ export const dynamic = 'force-dynamic';
 const SENT_FLAG_KEY = 'intern_deadline_reminder_sent';
 
 function validBearer(authHeader: string | null, secret: string): boolean {
-  const expected = `Bearer ${secret}`;
-  const got = authHeader ?? '';
+  const expected = `Bearer ${secret.trim()}`;
+  const got = (authHeader ?? '').trim();
   if (got.length !== expected.length) return false;
   try { return timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; }
 }

@@ -10,8 +10,8 @@ export const maxDuration = 60;
 const LAST_RUN_KEY = 'inbox_sync_last_run';
 
 function validBearer(authHeader: string | null, secret: string): boolean {
-  const expected = `Bearer ${secret}`;
-  const got = authHeader ?? '';
+  const expected = `Bearer ${secret.trim()}`;
+  const got = (authHeader ?? '').trim();
   if (got.length !== expected.length) return false;
   try { return timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; }
 }

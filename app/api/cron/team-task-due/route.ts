@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 const MAX_TASKS_PER_RUN = 200;
 
 function validBearer(authHeader: string | null, secret: string): boolean {
-  const expected = `Bearer ${secret}`;
-  const got = authHeader ?? '';
+  const expected = `Bearer ${secret.trim()}`;
+  const got = (authHeader ?? '').trim();
   if (got.length !== expected.length) return false;
   try { return timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; }
 }

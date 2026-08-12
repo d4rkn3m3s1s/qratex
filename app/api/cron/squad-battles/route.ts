@@ -11,8 +11,8 @@ const MAX_BATTLES_PER_RUN = 200;
 
 /** Sabit-zamanlı Bearer secret karşılaştırması. */
 function validBearer(authHeader: string | null, secret: string): boolean {
-  const expected = `Bearer ${secret}`;
-  const got = authHeader ?? '';
+  const expected = `Bearer ${secret.trim()}`;
+  const got = (authHeader ?? '').trim();
   if (got.length !== expected.length) return false;
   try {
     return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
