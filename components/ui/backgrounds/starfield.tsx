@@ -72,11 +72,14 @@ export function StarfieldBackground({
         star.pz = star.z;
         star.z -= speed;
 
-        if (star.z < 1) {
+        // z < 1 (geçti) VEYA z > width (pencere KÜÇÜLDÜ → z artık geçersiz, stale) →
+        // yıldızı yeni boyuta göre resetle. Aksi halde küçülünce z/width > 1 olup
+        // size negatife düşüyor (arc IndexSizeError) + izler "uçuyor".
+        if (star.z < 1 || star.z > width) {
           star.x = Math.random() * width - cx;
           star.y = Math.random() * height - cy;
-          star.z = width;
-          star.pz = width;
+          star.z = Math.random() * width;
+          star.pz = star.z;
         }
 
         const sx = (star.x / star.z) * width + cx;
@@ -84,14 +87,15 @@ export function StarfieldBackground({
         const px = (star.x / star.pz) * width + cx;
         const py = (star.y / star.pz) * height + cy;
 
-        const size = (1 - star.z / width) * 3;
+        // Güvence: size ASLA negatif olmasın (canvas arc/lineWidth negatifte patlar).
+        const size = Math.max(0, (1 - star.z / width) * 3);
 
         // Draw star trail
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(sx, sy);
 
-        const brightness = 1 - star.z / width;
+        const brightness = Math.max(0, Math.min(1, 1 - star.z / width));
         const gradient = ctx.createLinearGradient(px, py, sx, sy);
         gradient.addColorStop(0, `${trailStartColor} ${brightness * 0.3})`);
         gradient.addColorStop(1, `${starColor} ${brightness})`);
@@ -102,7 +106,7 @@ export function StarfieldBackground({
 
         // Draw star point
         ctx.beginPath();
-        ctx.arc(sx, sy, size * 0.5, 0, Math.PI * 2);
+        ctx.arc(sx, sy, Math.max(0, size * 0.5), 0, Math.PI * 2);
         ctx.fillStyle = `${starColor} ${brightness})`;
         ctx.fill();
       });
