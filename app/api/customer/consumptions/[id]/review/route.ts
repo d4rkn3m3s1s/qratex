@@ -186,7 +186,8 @@ export async function POST(
         // yolu üzerinden cap görünmez şekilde aşılıyordu (feedback yolu cap'liydi).
         pointsEarned = await capFeedbackPoints(session.user.id, pointsEarned, tx);
 
-        await creditPointsAndXp(tx, {
+        // Sonucu YAKALA: seviye atladıysa bildirimi kutlama tonuna çevir (feedback akışıyla tutarlı).
+        const credited = await creditPointsAndXp(tx, {
           userId: session.user.id,
           points: pointsEarned,
           xp: xpEarned,
@@ -208,10 +209,12 @@ export async function POST(
         await tx.notification.create({
           data: {
             userId: session.user.id,
-            title: 'Yorum için teşekkürler!',
-            message: `${pointsEarned} puan kazandınız!`,
+            title: credited.isLevelUp ? `Seviye Atladınız! 🚀 Seviye ${credited.level}` : 'Yorum için teşekkürler!',
+            message: credited.isLevelUp
+              ? `${pointsEarned} puan kazandınız ve artık Seviye ${credited.level} oldunuz!`
+              : `${pointsEarned} puan kazandınız!`,
             type: 'success',
-            data: { reviewId: created.id, pointsEarned, xpEarned },
+            data: { reviewId: created.id, pointsEarned, xpEarned, leveledUp: credited.isLevelUp, level: credited.level },
           },
         });
 
