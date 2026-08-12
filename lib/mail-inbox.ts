@@ -92,6 +92,31 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
         const bodyHtml = typeof parsed?.html === 'string' ? parsed.html : null;
         const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 200);
 
+        // ── EKLER: gerçek ekleri (inline resim değil) çıkar + R2'ye yükle. R2 yoksa
+        //    metadata url'siz saklanır (en azından "şu dosya ekli" görünür). 15MB üstü atlanır.
+        let attachmentsMeta: { filename: string; contentType: string; size: number; url: string | null }[] | null = null;
+        const rawAtts = Array.isArray(parsed?.attachments) ? parsed!.attachments : [];
+        const realAtts = rawAtts.filter((a) => a.contentDisposition !== 'inline' && a.filename);
+        if (realAtts.length > 0) {
+          const { isR2Configured, uploadToR2 } = await import('@/lib/r2-storage');
+          const r2ok = isR2Configured();
+          const metas: { filename: string; contentType: string; size: number; url: string | null }[] = [];
+          for (const a of realAtts) {
+            const filename = a.filename || 'ek';
+            const contentType = a.contentType || 'application/octet-stream';
+            const content = a.content as Buffer | undefined;
+            const size = a.size ?? content?.length ?? 0;
+            let url: string | null = null;
+            if (r2ok && content && size <= 15 * 1024 * 1024) {
+              const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+              const key = `inbox/${uid}-${Date.now()}-${safeName}`;
+              url = await uploadToR2(key, content, contentType, `attachment; filename="${safeName}"`).catch(() => null);
+            }
+            metas.push({ filename, contentType, size, url });
+          }
+          if (metas.length > 0) attachmentsMeta = metas;
+        }
+
         // Stajyer eşleştirme.
         const m = internMap.get(fromEmail);
 
@@ -107,6 +132,7 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
             matchedTemplateId: m?.templateId ?? null,
             matchedRecipientName: m?.name ?? null,
             matchedDepartment: m?.dept ?? null,
+            attachments: attachmentsMeta ?? undefined,
           },
         }).then(() => true).catch((e: unknown) => {
           // Duplicate (yarış/idempotency) beklenen — sessiz. Diğer hataları logla (görünür olsun).

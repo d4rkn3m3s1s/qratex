@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Inbox, RefreshCw, Loader2, Search, Mail, User, AlertTriangle, Users, Circle, ArrowLeft,
+  Paperclip, FileText, Download,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 
@@ -22,11 +23,21 @@ interface MsgListItem {
   matchedRecipientName: string | null;
   matchedDepartment: string | null;
 }
+interface MailAttachment {
+  filename: string;
+  contentType: string;
+  size: number;
+  url: string | null;
+}
 interface MsgFull extends MsgListItem {
   bodyText: string | null;
   bodyHtml: string | null;
   toEmail: string | null;
+  attachments: MailAttachment[] | null;
 }
+
+const fmtSize = (n: number) =>
+  n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 
 const fmtDate = (s: string) =>
   new Date(s).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -42,6 +53,24 @@ export default function InboxPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMsg, setOpenMsg] = useState<MsgFull | null>(null);
   const [openLoading, setOpenLoading] = useState(false);
+  const [mailHeight, setMailHeight] = useState(320); // iframe otomatik yükseklik (mail script'inden)
+
+  // Mail iframe'inden gelen yükseklik mesajını dinle (kısa mailde boşluk olmasın).
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const h = (e.data as { __mailHeight?: unknown })?.__mailHeight;
+      if (typeof h === 'number' && h > 0) {
+        // Makul sınırlar: min 160px, max ~%85 viewport (aşırı değeri kırp).
+        const max = typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.85) : 900;
+        setMailHeight(Math.min(max, Math.max(160, Math.ceil(h) + 8)));
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  // Yeni mail açılınca yüksekliği sıfırla (öncekinin yüksekliği kalmasın).
+  useEffect(() => { setMailHeight(320); }, [openId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -209,13 +238,47 @@ export default function InboxPage() {
                       </span>
                     )}
                   </div>
+                  {/* Ekler (varsa) — gövdenin ÜSTÜNDE, hemen görünür */}
+                  {openMsg.attachments && openMsg.attachments.length > 0 && (
+                    <div className="border-b border-border px-5 py-3">
+                      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                        <Paperclip className="h-3.5 w-3.5" /> {openMsg.attachments.length} ek
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {openMsg.attachments.map((att, i) => {
+                          const inner = (
+                            <>
+                              <FileText className="h-4 w-4 shrink-0 text-primary" />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{att.filename}</span>
+                                <span className="block text-[11px] text-muted-foreground">{fmtSize(att.size)}{att.url ? '' : ' · indirilemez'}</span>
+                              </span>
+                              {att.url && <Download className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                            </>
+                          );
+                          return att.url ? (
+                            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" download={att.filename}
+                              className="inline-flex max-w-[240px] items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm hover:bg-muted/70 transition">
+                              {inner}
+                            </a>
+                          ) : (
+                            <div key={i} title="Depolama (R2) yapılandırılmadığı için indirilemiyor"
+                              className="inline-flex max-w-[240px] items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm opacity-70">
+                              {inner}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {/* Gövde */}
                   <div className="p-5">
                     {openMsg.bodyHtml ? (
                       <iframe
                         title="mail"
-                        sandbox=""
-                        className="h-[60vh] w-full rounded-lg border border-border bg-white"
+                        sandbox="allow-scripts"
+                        style={{ height: mailHeight }}
+                        className="w-full rounded-lg border border-border bg-white transition-[height] duration-200"
                         srcDoc={withStrictCsp(openMsg.bodyHtml)}
                       />
                     ) : (
@@ -269,15 +332,21 @@ function StatCard({ icon, label, value, tone }: {
 }
 
 /**
- * HTML mail gövdesine KATI CSP meta enjekte eder. sandbox="" script'i keser ama harici
- * subresource (img/css/font/beacon) isteklerini KESMEZ → beacon ile admin IP/konum/açılma-anı
- * sızıntısı olurdu. Bu CSP ile harici hiçbir kaynak yüklenmez; sadece gömülü data: görseller görünür.
+ * HTML mail gövdesine KATI CSP meta + otomatik-yükseklik script'i enjekte eder.
+ * GÜVENLİK: iframe sandbox="allow-scripts" (allow-same-origin YOK) → script OPAK origin'de
+ * çalışır: parent DOM/cookie'ye erişemez. CSP default-src 'none' → harici hiçbir istek
+ * (beacon/IP/konum sızıntısı) yapılamaz. Navigasyon/popup sandbox'ta kapalı. Tek izin:
+ * inline script (yüksekliği ölçüp parent'a postMessage eder). Kalan risk minimal (admin-only iç kutu).
  */
 function withStrictCsp(html: string): string {
-  const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none';">`;
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + meta);
-  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => `${m}<head>${meta}</head>`);
-  return `<!doctype html><html><head>${meta}</head><body>${html}</body></html>`;
+  const meta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline' data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'; script-src 'unsafe-inline';">`;
+  // Yüksekliği ölç → parent'a bildir (kısa mailde dev beyaz boşluk olmaz, uzun mail kesilmez).
+  const resize = `<script>(function(){function h(){try{var b=document.body,e=document.documentElement;var y=Math.max(b?b.scrollHeight:0,e?e.scrollHeight:0,b?b.offsetHeight:0);parent.postMessage({__mailHeight:y},'*');}catch(_){}}window.addEventListener('load',h);setTimeout(h,120);setTimeout(h,500);if(window.ResizeObserver){try{new ResizeObserver(h).observe(document.documentElement);}catch(_){}}})();<\/script>`;
+  if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, (m) => m + meta);
+  else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, (m) => `${m}<head>${meta}</head>`);
+  else html = `<!doctype html><html><head>${meta}</head><body>${html}</body></html>`;
+  // resize script'i </body>'den hemen önce ekle (yoksa sona).
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, resize + '</body>') : html + resize;
 }
 
 function FilterChip({ active, onClick, icon, label, count, accent }: {

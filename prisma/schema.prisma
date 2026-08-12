@@ -951,6 +951,7 @@ model InboxMessage {
   matchedTemplateId   String?           // eşleşen şablon id
   matchedRecipientName String?          // eşleşen kişi adı
   matchedDepartment    String?          // eşleşen departman
+  attachments  Json?     // [{ filename, contentType, size, url }] — R2'ye yüklenen ekler (metadata)
   createdAt    DateTime  @default(now()) // DB'ye çekilme zamanı
 
   @@unique([mailbox, uid])
