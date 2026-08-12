@@ -18,11 +18,19 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 export const MODULE_GATE_CACHE_TAG = 'module-gate-settings';
 
 async function loadModuleControlsRow() {
-  const row = await prisma.settings.findUnique({
-    where: { key: MODULE_CONTROLS_SETTINGS_KEY },
-    select: { value: true },
-  });
-  return normalizeModuleControls(row?.value);
+  // FAIL-SAFE: DB erişilemezse (build sırasında Neon URL değişimi / endpoint hazır değil /
+  // soğuk başlatma) throw ETME → varsayılan modül ayarlarına düş. Aksi halde bu fonksiyon
+  // patlayınca build-time'da statik üretilen public sayfalar (getModuleControls çağıran)
+  // fail ediyor ve DEPLOY başarısız oluyordu. Runtime'da DB gelince gerçek değer okunur.
+  try {
+    const row = await prisma.settings.findUnique({
+      where: { key: MODULE_CONTROLS_SETTINGS_KEY },
+      select: { value: true },
+    });
+    return normalizeModuleControls(row?.value);
+  } catch {
+    return normalizeModuleControls(undefined);
+  }
 }
 
 // unstable_cache (cross-request 60s) + React cache (aynı istekte tek çağrı).
@@ -52,21 +60,26 @@ type ModuleGateOptions = {
 };
 
 async function loadVisibilitySettings() {
-  const [featureRow, menuRow, systemFeatureRow] = await Promise.all([
-    prisma.settings.findUnique({
-      where: { key: FEATURE_VISIBILITY_SETTINGS_KEY },
-      select: { value: true },
-    }),
-    prisma.settings.findUnique({
-      where: { key: MENU_VISIBILITY_SETTINGS_KEY },
-      select: { value: true },
-    }),
-    prisma.settings.findUnique({
-      where: { key: SYSTEM_FEATURE_VISIBILITY_SETTINGS_KEY },
-      select: { value: true },
-    }),
-  ]);
-  return normalizeVisibilitySettingsWithSystem(featureRow?.value, menuRow?.value, systemFeatureRow?.value);
+  // FAIL-SAFE (bkz. loadModuleControlsRow): DB erişilemezse build patlatma → varsayılan görünürlük.
+  try {
+    const [featureRow, menuRow, systemFeatureRow] = await Promise.all([
+      prisma.settings.findUnique({
+        where: { key: FEATURE_VISIBILITY_SETTINGS_KEY },
+        select: { value: true },
+      }),
+      prisma.settings.findUnique({
+        where: { key: MENU_VISIBILITY_SETTINGS_KEY },
+        select: { value: true },
+      }),
+      prisma.settings.findUnique({
+        where: { key: SYSTEM_FEATURE_VISIBILITY_SETTINGS_KEY },
+        select: { value: true },
+      }),
+    ]);
+    return normalizeVisibilitySettingsWithSystem(featureRow?.value, menuRow?.value, systemFeatureRow?.value);
+  } catch {
+    return normalizeVisibilitySettingsWithSystem(undefined, undefined, undefined);
+  }
 }
 
 const getVisibilitySettings = cache(() =>
