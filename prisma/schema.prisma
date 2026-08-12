@@ -238,6 +238,9 @@ model User {
 
   @@index([email])
   @@index([role])
+  // Leaderboard: where role='CUSTOMER' + orderBy points desc → composite ile hem filtre
+  // hem sıralama index'ten karşılanır (önceden role ile filtre + in-memory points sort'u vardı).
+  @@index([role, points])
 }
 
 // Müşteri favori işletmeler (Ö2)
