@@ -71,7 +71,7 @@ function LoginPageContent() {
   const [twoFactorStep, setTwoFactorStep] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [pendingCreds, setPendingCreds] = useState<{ email: string; password: string } | null>(null);
-  const [authFeatures, setAuthFeatures] = useState<{ magicLink: boolean; mailConfigured: boolean } | null>(null);
+  const [authFeatures, setAuthFeatures] = useState<{ magicLink: boolean; mailConfigured: boolean; google: boolean; github: boolean } | null>(null);
   const [magicEmail, setMagicEmail] = useState('');
   const [magicSending, setMagicSending] = useState(false);
 
@@ -85,14 +85,16 @@ function LoginPageContent() {
     void (async () => {
       try {
         const res = await fetch('/api/public/auth-features', { cache: 'no-store' });
-        const data = (await res.json()) as { magicLink?: boolean; mailConfigured?: boolean };
+        const data = (await res.json()) as { magicLink?: boolean; mailConfigured?: boolean; google?: boolean; github?: boolean };
         if (cancelled || !res.ok) return;
         setAuthFeatures({
           magicLink: Boolean(data.magicLink),
           mailConfigured: Boolean(data.mailConfigured),
+          google: Boolean(data.google),
+          github: Boolean(data.github),
         });
       } catch {
-        if (!cancelled) setAuthFeatures({ magicLink: false, mailConfigured: false });
+        if (!cancelled) setAuthFeatures({ magicLink: false, mailConfigured: false, google: false, github: false });
       }
     })();
     return () => {
@@ -309,6 +311,7 @@ function LoginPageContent() {
             </div>
           </div>
 
+          {authFeatures?.google && (<>
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator />
@@ -346,7 +349,9 @@ function LoginPageContent() {
             </svg>
             {t('auth.googleLogin')}
           </Button>
+          </>)}
 
+          {authFeatures?.google && (
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator />
@@ -355,6 +360,7 @@ function LoginPageContent() {
               <span className="bg-card px-2 text-muted-foreground">{t('auth.orEmail')}</span>
             </div>
           </div>
+          )}
 
           {twoFactorStep ? (
             <div className="space-y-4">

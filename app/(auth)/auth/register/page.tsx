@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useMemo } from 'react';
+import { Suspense, useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
@@ -63,6 +63,18 @@ function RegisterContent() {
   const [verifyResult, setVerifyResult] = useState<{ verifyUrl: string; email: string; emailSent?: boolean } | null>(
     null,
   );
+  // OAuth butonlarını yalnız yapılandırılmış provider için göster (yapılandırılmamış
+  // provider butonu tıklanınca next-auth "provider yok" hatası veriyordu).
+  const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/public/auth-features')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d) setOauth({ google: !!d.google, github: !!d.github }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const anyOauth = oauth.google || oauth.github;
 
   const {
     register,
@@ -234,7 +246,9 @@ function RegisterContent() {
             })}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {anyOauth && (
+          <div className={`grid gap-2 ${oauth.google && oauth.github ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {oauth.google && (
             <Button
               type="button"
               variant="outline"
@@ -263,6 +277,8 @@ function RegisterContent() {
               </svg>
               Google
             </Button>
+            )}
+            {oauth.github && (
             <Button
               type="button"
               variant="outline"
@@ -276,8 +292,11 @@ function RegisterContent() {
               </svg>
               GitHub
             </Button>
+            )}
           </div>
+          )}
 
+          {anyOauth && (
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <Separator />
@@ -286,6 +305,7 @@ function RegisterContent() {
               <span className="bg-card px-2 text-muted-foreground">{t('auth.separatorEmailRegister')}</span>
             </div>
           </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <input type="hidden" {...register('role')} />
