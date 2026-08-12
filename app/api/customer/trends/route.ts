@@ -13,6 +13,15 @@ export async function GET() {
     const { session } = auth;
     const userId = session.user.id;
 
+    // REDIS CACHE: müşteri trend sayfası (çok sayıda count/findMany) 30s cache'lenir (kullanıcı
+    // başına). Hit'te sorgular atlanır. Redis yoksa cache-miss gibi → davranış aynı.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const trendsCacheKey = `customer-trends:${userId}`;
+    const cachedTrends = await redisGetJson<object>(trendsCacheKey);
+    if (cachedTrends) {
+      return NextResponse.json(cachedTrends, { headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
     // Son 30 günlük veri için tarih aralığı
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -279,7 +288,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({
+    const trendsPayload = {
       summary: {
         totalFeedbacks: user._count.feedbacks + consumptionReviewCount30d,
         totalBadges: user._count.badges,
@@ -316,9 +325,9 @@ export async function GET() {
         avgDailyFeedbacks: (combined30d / 30).toFixed(1),
       },
       badges: badges.slice(0, 5),
-    }, {
-      headers: PRIVATE_NO_STORE_HEADERS,
-    });
+    };
+    await redisSetJson(trendsCacheKey, trendsPayload, 30); // Redis yoksa sessizce geçer
+    return NextResponse.json(trendsPayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

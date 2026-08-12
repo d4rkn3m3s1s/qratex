@@ -32,6 +32,15 @@ export async function GET() {
     const { session } = auth;
     const dealerId = session.user.id;
 
+    // REDIS CACHE: bu uç ~10 agregasyon/raw sorgu içeriyor + cache'sizdi. Bayi başına 45s
+    // cache: hit'te tüm sorgular atlanır. Redis yoksa cache-miss gibi → davranış aynı.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const statsCacheKey = `dealer-stats:${dealerId}`;
+    const cachedStats = await redisGetJson<object>(statsCacheKey);
+    if (cachedStats) {
+      return NextResponse.json(cachedStats, { headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
     // Date ranges for comparison
     const now = new Date();
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -409,8 +418,7 @@ export async function GET() {
     ]);
     const actionCompletionRate = actionItemsTotal > 0 ? (actionItemsDone / actionItemsTotal) * 100 : 0;
 
-    return NextResponse.json(
-      {
+    const statsPayload = {
         success: true,
         data: {
         stats: {
@@ -453,9 +461,9 @@ export async function GET() {
           createdAt: c.createdAt,
         })),
       },
-    },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    };
+    await redisSetJson(statsCacheKey, statsPayload, 45); // Redis yoksa sessizce geçer
+    return NextResponse.json(statsPayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Dealer stats error:', error);
     const db = responseIfDatabaseUnavailable(error);
