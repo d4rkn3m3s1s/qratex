@@ -72,3 +72,17 @@ export async function redisSetJson(key: string, value: unknown, ttlSeconds: numb
     /* yut */
   }
 }
+
+/**
+ * GET-OR-COMPUTE: key Redis'te varsa döndür; yoksa fetcher()'ı çalıştır, sonucu ttl kadar
+ * cache'le ve döndür. Redis yoksa/hata → doğrudan fetcher (cache'siz, davranış bozulmaz).
+ * Ağır agregasyon uçlarını (dealer analytics vb.) sarmak için.
+ */
+export async function cachedJson<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
+  const cached = await redisGetJson<T>(key);
+  if (cached !== null) return cached;
+  const fresh = await fetcher();
+  // null/undefined cache'leme (miss ile karışmasın).
+  if (fresh != null) await redisSetJson(key, fresh, ttlSeconds);
+  return fresh;
+}

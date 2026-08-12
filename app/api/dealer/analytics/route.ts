@@ -60,6 +60,15 @@ export async function GET(request: NextRequest) {
         prevStartDate.setDate(now.getDate() - 60);
     }
 
+    // REDIS CACHE: ağır analitik (10+ sorgu) bayi+dönem başına 45s cache'lenir. Cache hit'te
+    // TÜM sorgular atlanır. Redis yoksa cache-miss gibi davranır (fetcher çalışır, davranış aynı).
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const analyticsCacheKey = `dealer-analytics:${dealerId}:${period}`;
+    const cachedAnalytics = await redisGetJson<object>(analyticsCacheKey);
+    if (cachedAnalytics) {
+      return NextResponse.json(cachedAnalytics, { headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
     // Cap in-memory merge (90g yoğun bayilerde DB yükünü sınırlar; sıralama eski→yeni)
     const ANALYTICS_EVENT_CAP = 20_000;
 
@@ -377,42 +386,41 @@ export async function GET(request: NextRequest) {
       negativeCount,
     ]);
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          totalFeedbacks,
-          avgRating: avgRating.toFixed(1),
-          totalScans,
-          conversionRate,
-          feedbackGrowth,
-          ratingChange,
-          responseRate,
-          sentimentBreakdown: {
-            positive: positivePct,
-            neutral: neutralPct,
-            negative: negativePct,
-          },
-          ratingDistribution,
-          topQRCodes,
-          topTopics,
-          dailyData,
-          heatmapData,
-          hourlyData,
-          dayOfWeekData,
-          comparison,
-          insights: {
-            peakHour: `${peakHour}:00 - ${peakHour + 1}:00`,
-            peakDay: peakDay.day,
-            bestQR: topQRCodes[0]?.name || null,
-            worstTopic: topTopics.find((t) => t.sentiment === 'negative')?.name || null,
-          },
-          // Consumption stats
-          consumptionStats,
+    const analyticsPayload = {
+      success: true,
+      data: {
+        totalFeedbacks,
+        avgRating: avgRating.toFixed(1),
+        totalScans,
+        conversionRate,
+        feedbackGrowth,
+        ratingChange,
+        responseRate,
+        sentimentBreakdown: {
+          positive: positivePct,
+          neutral: neutralPct,
+          negative: negativePct,
         },
+        ratingDistribution,
+        topQRCodes,
+        topTopics,
+        dailyData,
+        heatmapData,
+        hourlyData,
+        dayOfWeekData,
+        comparison,
+        insights: {
+          peakHour: `${peakHour}:00 - ${peakHour + 1}:00`,
+          peakDay: peakDay.day,
+          bestQR: topQRCodes[0]?.name || null,
+          worstTopic: topTopics.find((t) => t.sentiment === 'negative')?.name || null,
+        },
+        // Consumption stats
+        consumptionStats,
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    };
+    await redisSetJson(analyticsCacheKey, analyticsPayload, 45); // Redis yoksa sessizce geçer
+    return NextResponse.json(analyticsPayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Analytics error:', error);
     const db = responseIfDatabaseUnavailable(error);
