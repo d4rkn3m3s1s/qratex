@@ -25,6 +25,17 @@ export async function checkRateLimitDb(
   max: number,
   windowMs: number
 ): Promise<RateLimitResult> {
+  // REDIS-FIRST: yapılandırılmışsa in-memory sayaç (~1-5ms) — DB roundtrip yok. Redis yoksa/
+  // hata verirse null döner ve aşağıdaki DB yoluna düşülür (fail-safe, davranış değişmez).
+  {
+    const { redisIncrWithTtl } = await import('@/lib/redis');
+    const rl = await redisIncrWithTtl(`rl:${bucket}`, Math.ceil(windowMs / 1000));
+    if (rl) {
+      if (rl.count <= max) return { ok: true, remaining: Math.max(0, max - rl.count) };
+      return { ok: false, remaining: 0, retryAfterMs: Math.max(0, rl.ttlMs) };
+    }
+  }
+
   const now = new Date();
   const newResetAt = new Date(now.getTime() + windowMs);
 
