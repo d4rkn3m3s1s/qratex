@@ -270,6 +270,15 @@ export async function processConsumptionReviewForCharacterBadge(
       // + prog.current === threshold → bu yorum eşiği yeni doldurdu.
       const justCrossed = prog.topCategoryKey === categoryKey && prog.current >= prog.threshold;
       if (justCrossed) {
+        // DEDUP (spam önleme): prog.current CLAMP'li olduğundan eşik geçildikten sonra HER
+        // yorumda justCrossed=true kalır. Zaten OKUNMAMIŞ bir "character-ready" bildirimi
+        // varsa tekrar bildirme (app + email) — kullanıcı açana/reveal edene kadar tek bildirim.
+        const alreadyNotified = await prisma.notification.findFirst({
+          where: { userId, isRead: false, type: 'badge', data: { path: ['kind'], equals: 'character-ready' } },
+          select: { id: true },
+        }).catch(() => null);
+        if (alreadyNotified) return;
+
         // Kullanıcının e-postası + adı + bildirim tercihleri (tek okuma).
         const user = await prisma.user.findUnique({
           where: { id: userId },

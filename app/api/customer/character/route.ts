@@ -151,6 +151,13 @@ export async function POST(req: Request) {
     );
   }
 
+  // Reveal, "character-ready" bildirimini KARŞILAR → okundu işaretle. Böylece bir
+  // sonraki bar dolumunda dedup temizlenir ve yeni bildirim gelebilir (loop kapanır).
+  prisma.notification.updateMany({
+    where: { userId, isRead: false, type: 'badge', data: { path: ['kind'], equals: 'character-ready' } },
+    data: { isRead: true, readAt: new Date() },
+  }).catch(() => {});
+
   const catalog = BADGE_CATALOG.find((b) => b.id === result.badgeId);
   // Nadir oran (reveal görkemi için).
   const [holders, totalCustomers] = await Promise.all([
