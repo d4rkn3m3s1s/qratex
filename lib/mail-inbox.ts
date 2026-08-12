@@ -71,9 +71,11 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
       for await (const msg of client.fetch(range, { uid: true, envelope: true, source: true })) {
         fetched++;
         const uid = msg.uid;
-        // Zaten var mı? (idempotent)
-        const exists = await prisma.inboxMessage.findUnique({ where: { mailbox_uid: { mailbox: 'INBOX', uid } }, select: { id: true } }).catch(() => null);
-        if (exists) continue;
+        // Zaten var mı? (idempotent). attachments'ı da al: eski mailler (ek özelliği
+        // öncesi) attachments=null'dır → source zaten elde, ekleri BACKFILL edelim.
+        const exists = await prisma.inboxMessage.findUnique({ where: { mailbox_uid: { mailbox: 'INBOX', uid } }, select: { id: true, attachments: true } }).catch(() => null);
+        const needsAttachmentBackfill = !!exists && exists.attachments == null;
+        if (exists && !needsAttachmentBackfill) continue;
 
         // Parse (gövde + başlıklar).
         const parsed = msg.source ? await simpleParser(msg.source).catch(() => null) : null;
@@ -115,6 +117,16 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
             metas.push({ filename, contentType, size, url });
           }
           if (metas.length > 0) attachmentsMeta = metas;
+        }
+
+        // BACKFILL: mail zaten kayıtlı (eski) → yalnız ekleri güncelle, yeni mail sayma.
+        // Ek yoksa da [] yaz (null bırakılırsa her sync'te tekrar parse edilir → kalıcı yavaşlama).
+        if (needsAttachmentBackfill) {
+          await prisma.inboxMessage.update({
+            where: { mailbox_uid: { mailbox: 'INBOX', uid } },
+            data: { attachments: attachmentsMeta ?? [] },
+          }).catch(() => {});
+          continue;
         }
 
         // Stajyer eşleştirme.
