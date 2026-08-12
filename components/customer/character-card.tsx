@@ -126,7 +126,7 @@ export function CharacterCard() {
         && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       if (!reduce) {
         fireStars();
-        import('@/lib/game-sounds').then((m) => m.sfxWin?.()).catch(() => {});
+        import('@/lib/game-sounds').then((m) => m.sfxReveal?.()).catch(() => {});
       }
     } else if (!isReady) {
       celebratedRef.current = false; // bar dolmadı → sonraki dolumda tekrar kutla

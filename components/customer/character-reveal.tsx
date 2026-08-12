@@ -193,7 +193,7 @@ export function CharacterReveal({
     const rt = rarityTheme(character?.rarity);
     // Ses opsiyonel — altyapı yoksa/hata olursa sessizce geç.
     import('@/lib/game-sounds')
-      .then((m) => { m.sfxWin?.(); if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
+      .then((m) => { m.sfxReveal?.(); if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
       .catch(() => { /* ses yoksa sorun değil */ });
     // Sarsılma yalnızca common dışında (shake > 0).
     if (rt.shake > 0) setShakeKey((k) => k + 1);
@@ -358,7 +358,7 @@ export function CharacterReveal({
                 />
 
                 {/* METİN KATMANI: aşamaya göre değişir */}
-                <div className="mt-6 min-h-[132px] w-full">
+                <div className="mt-4 min-h-[112px] w-full">
                   <AnimatePresence mode="wait">
                     {phase === 'preparing' && (
                       <PreparingText key="prep" line={PREPARING_LINES[lineIdx]} />
@@ -644,7 +644,7 @@ function RevealStage({
   theme: RarityTheme;
 }) {
   return (
-    <div className="relative grid h-56 w-56 place-items-center sm:h-64 sm:w-64">
+    <div className="relative grid h-44 w-44 place-items-center sm:h-52 sm:w-52">
       {/* IŞIK HUZMELERİ (god rays) — reveal anında rozetin arkasından yayılır.
           Rarity yüksekse daha belirgin; reduceMotion'da dönmez. */}
       <AnimatePresence>

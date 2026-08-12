@@ -94,6 +94,23 @@ export function sfxWin(): void {
   notes.forEach((f, i) => tone(c, f, i * 0.11, 0.2, 'triangle', 0.22));
 }
 
+/**
+ * Karakter rozeti REVEAL sesi — oyunların keskin triangle arpejinden farklı, YUMUŞAK
+ * ve mistik: sine chime (yumuşak) + sıcak alt pad + üstte hafif ışıltı. Kısık gain,
+ * uzun decay → "büyülü" his, kulak tırmalamaz.
+ */
+export function sfxReveal(): void {
+  const c = getCtx();
+  if (!c) return;
+  // G4–C5–E5–G5: açık, sıcak, çözülmüş bir akor — sine dalga, yavaş yayılım.
+  const notes = [392.0, 523.25, 659.25, 783.99];
+  notes.forEach((f, i) => tone(c, f, i * 0.14, 0.9, 'sine', 0.13));
+  // Üstte çok kısık bir ışıltı (yüksek oktav, iz bırakır ama baskın değil).
+  tone(c, 1567.98, 0.52, 0.7, 'sine', 0.045);
+  // Altta sıcak, dolgun bir pad (derinlik verir).
+  tone(c, 196.0, 0, 1.15, 'sine', 0.06);
+}
+
 /** Power modu bitiyor uyarısı. */
 export function sfxWarn(): void {
   const c = getCtx();
