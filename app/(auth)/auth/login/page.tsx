@@ -262,7 +262,10 @@ function LoginPageContent() {
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl });
+    // OAuth /auth/complete'e uğrar: şifresiz (yeni) hesaba "şifre oluştur" adımı sunulur,
+    // sonra asıl hedefe (callbackUrl) yönlendirir. Mevcut şifreli hesap anında geçer.
+    const safe = callbackUrl && callbackUrl.startsWith('/') ? callbackUrl : '/customer';
+    signIn('google', { callbackUrl: `/auth/complete?next=${encodeURIComponent(safe)}` });
   };
 
   return (

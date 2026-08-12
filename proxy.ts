@@ -17,11 +17,13 @@ function addSecurityHeaders(res: NextResponse): void {
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.vercel-insights.com https://va.vercel-scripts.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https: wss: https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://*.ingest.sentry.io",
+    "connect-src 'self' https: wss: https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://*.ingest.sentry.io https://vercel.live",
+    // Vercel Live preview feedback toolbar iframe'i (yalnız preview'da yüklenir).
+    "frame-src 'self' https://vercel.live",
     "frame-ancestors 'none'",
   ].join('; ');
   res.headers.set('Content-Security-Policy', csp);

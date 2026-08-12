@@ -146,9 +146,11 @@ function RegisterContent() {
   };
 
   const baseCallback = selectedRole === 'DEALER' ? '/dealer' : '/customer';
+  // OAuth HER ZAMAN /auth/complete'e uğrar: yeni hesabın şifresi yoksa "şifre oluştur"
+  // adımı gösterilir + varsa referral uygulanır, sonra next'e yönlendirir.
   const callbackWithRef = refCode
     ? `/auth/complete?ref=${encodeURIComponent(refCode)}&next=${encodeURIComponent(baseCallback)}`
-    : baseCallback;
+    : `/auth/complete?next=${encodeURIComponent(baseCallback)}`;
 
   const handleGoogleSignIn = () => {
     signIn('google', { callbackUrl: callbackWithRef });

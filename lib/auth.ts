@@ -309,6 +309,19 @@ export const authOptions: NextAuthOptions = {
     },
   },
   events: {
+    // Yeni OAuth kullanıcısı (adapter createUser YALNIZ OAuth'ta çalışır; credentials
+    // register API'sinden geçer) → email'i sağlayıcı (Google) DOĞRULADIĞI için
+    // emailVerified'ı hemen işaretle. Aksi halde null kalıp, kullanıcı sonra şifre
+    // eklerse email+şifre girişi bloklanırdı.
+    async createUser({ user }) {
+      try {
+        // Koşullu: yalnız emailVerified null'sa doldur (OAuth email zaten doğrulanmış).
+        // user.emailVerified NextAuth User tipinde yok → DB koşuluyla güvenli set.
+        await prisma.user.updateMany({ where: { id: user.id, emailVerified: null }, data: { emailVerified: new Date() } });
+      } catch (e) {
+        console.error('[auth] createUser emailVerified set failed:', e);
+      }
+    },
     async signIn({ user }) {
       if (process.env.NODE_ENV === 'development') {
         console.log(`User signed in: ${user.email}`);
