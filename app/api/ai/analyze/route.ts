@@ -468,9 +468,10 @@ export async function POST(request: NextRequest) {
         // Top topics
         const topicCounts: Record<string, number> = {};
         allReviews.forEach(f => {
-          const topics = f.topics as string[] | null;
-          topics?.forEach(topic => {
-            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+          // topics JSON alanı array olmayabilir (obj/string) → Array.isArray guard (yoksa .forEach 500).
+          const topics = f.topics;
+          if (Array.isArray(topics)) topics.forEach(topic => {
+            if (typeof topic === 'string') topicCounts[topic] = (topicCounts[topic] || 0) + 1;
           });
         });
         const topTopics = Object.entries(topicCounts)
@@ -699,8 +700,8 @@ export async function POST(request: NextRequest) {
         });
         const topicCounts2: Record<string, number> = {};
         allFeedbacks.forEach(f => {
-          const topics = f.topics as string[] | null;
-          topics?.forEach(t => { topicCounts2[t] = (topicCounts2[t] || 0) + 1; });
+          const topics = f.topics;
+          if (Array.isArray(topics)) topics.forEach(t => { if (typeof t === 'string') topicCounts2[t] = (topicCounts2[t] || 0) + 1; });
         });
         const topTopics2 = Object.entries(topicCounts2)
           .sort((a, b) => b[1] - a[1])

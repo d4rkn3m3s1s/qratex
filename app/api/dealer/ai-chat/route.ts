@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         // Topic extraction
         const topicCounts: Record<string, number> = {};
         feedbacks.forEach((f) => {
-            (f.topics as string[] | null)?.forEach((t) => { topicCounts[t] = (topicCounts[t] || 0) + 1; });
+            { const tp = f.topics; if (Array.isArray(tp)) tp.forEach((t) => { if (typeof t === 'string') topicCounts[t] = (topicCounts[t] || 0) + 1; }); }
         });
         const topTopics = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([topic, count]) => ({ topic, count }));
 

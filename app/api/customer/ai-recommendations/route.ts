@@ -89,8 +89,8 @@ export async function GET() {
     // Konular
     const topicCounts: Record<string, number> = {};
     feedbacks.forEach(f => {
-      const topics = f.topics as string[] | null;
-      topics?.forEach(t => { topicCounts[t] = (topicCounts[t] || 0) + 1; });
+      const topics = f.topics;
+      if (Array.isArray(topics)) topics.forEach(t => { if (typeof t === 'string') topicCounts[t] = (topicCounts[t] || 0) + 1; });
     });
     const topTopics = Object.entries(topicCounts)
       .sort((a, b) => b[1] - a[1])
