@@ -152,8 +152,8 @@ export default function DealerScanPage() {
       
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.1);
-    } catch (e) {
-      console.log('Audio not available');
+    } catch {
+      // Web Audio yoksa sessizce geç (beep opsiyonel).
     }
   }, [soundEnabled]);
 
@@ -175,8 +175,8 @@ export default function DealerScanPage() {
     playBeep();
     
     const token = extractToken(decodedText);
-    console.log('QR Scanned:', decodedText, '-> Token:', token);
-    
+    // (Debug log kaldırıldı — QR token'ı üretimde console'a basmamalı.)
+
     // Taramayı durdur ve işle
     await handleScan(token);
     
