@@ -26,6 +26,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // ZAMAN BÜTÇESİ: cron-job.org test timeout'u 30 sn. Her feedback GROQ'a gider (yavaş/yoksa
+  // 5-10 sn sürebilir) → 22 sn'de dur, kısmi dön. Kalanlar bir sonraki koşuda işlenir.
+  const startedAt = Date.now();
+  const TIME_BUDGET_MS = 22_000;
+
   // İlk (inline) analizle YARIŞMAMAK için: yalnız 3 dk'dan eski, metni olan, hiç işlenmemişler.
   const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000);
   const stuck = await prisma.feedback.findMany({
@@ -43,7 +48,10 @@ export async function GET(req: Request) {
   let upgraded = 0;
   let stillFallback = 0;
   let failed = 0;
+  let processed = 0;
   for (const f of stuck) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) break; // bütçe doldu → kalanı sonraki koşuya bırak
+    processed++;
     try {
       await runFeedbackAnalyzePipeline(f.id);
       // Pipeline sonrası gerçek analiz olduysa aiProcessedAt dolar.
@@ -61,8 +69,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     scanned: stuck.length,
+    processed,      // bu koşuda gerçekten denenen (zaman bütçesi nedeniyle < scanned olabilir)
     upgraded,       // gerçek AI'ye yükseldi
     stillFallback,  // GROQ hâlâ yok → fallback kaldı
     failed,
+    tookMs: Date.now() - startedAt,
   });
 }
