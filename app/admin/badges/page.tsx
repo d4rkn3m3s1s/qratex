@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import {
   Trophy,
   Plus,
@@ -827,6 +827,7 @@ export default function AdminBadgesPage() {
   );
 
   return (
+    <LazyMotion features={domAnimation}>
     <div className="space-y-6">
       <AdminPremiumHero
         eyebrow="Gamification"
@@ -877,7 +878,7 @@ export default function AdminBadgesPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="p-4 rounded-xl bg-card border border-border"
@@ -891,12 +892,12 @@ export default function AdminBadgesPage() {
               <p className="text-xs text-muted-foreground">Toplam</p>
             </div>
           </div>
-        </motion.div>
+        </m.div>
         
         {Object.entries(rarityConfig).map(([key, config], index) => {
           const count = stats[key.toLowerCase() as keyof typeof stats] || 0;
           return (
-            <motion.div
+            <m.div
               key={key}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -912,7 +913,7 @@ export default function AdminBadgesPage() {
                   <p className={`text-xs ${config.textColor}`}>{config.label}</p>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
@@ -1041,7 +1042,7 @@ export default function AdminBadgesPage() {
           ))}
         </div>
       ) : filteredBadges.length === 0 ? (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="p-16 rounded-2xl bg-card border text-center"
@@ -1049,10 +1050,10 @@ export default function AdminBadgesPage() {
           <Trophy className="h-20 w-20 text-muted-foreground/30 mx-auto mb-4" />
           <p className="text-foreground text-lg font-medium">Rozet bulunamadı</p>
           <p className="text-muted-foreground text-sm mt-1">Yeni bir rozet oluşturmaya başlayın</p>
-        </motion.div>
+        </m.div>
       ) : (
         <AnimatePresence mode="wait">
-          <motion.div
+          <m.div
             key={viewMode}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1068,7 +1069,7 @@ export default function AdminBadgesPage() {
               
               if (viewMode === 'list') {
                 return (
-                  <motion.div
+                  <m.div
                     key={badge.id}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -1117,12 +1118,12 @@ export default function AdminBadgesPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </motion.div>
+                  </m.div>
                 );
               }
 
               return (
-                <motion.div
+                <m.div
                   key={badge.id}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1178,22 +1179,22 @@ export default function AdminBadgesPage() {
 
                         {/* Rarity sparkle effects */}
                         {badge.rarity === 'LEGENDARY' && (
-                          <motion.div
+                          <m.div
                             className="absolute -top-1 -right-1 z-20"
                             animate={{ rotate: 360, scale: [1, 1.2, 1] }}
                             transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
                           >
                             <Sparkles className="h-7 w-7 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-                          </motion.div>
+                          </m.div>
                         )}
                         {badge.rarity === 'EPIC' && (
-                          <motion.div
+                          <m.div
                             className="absolute -top-0.5 -right-0.5 z-20"
                             animate={{ scale: [1, 1.3, 1] }}
                             transition={{ duration: 2, repeat: Infinity }}
                           >
                             <Zap className="h-6 w-6 text-primary drop-shadow-[0_0_6px_hsl(var(--primary)_/_0.45)] dark:text-primary" />
-                          </motion.div>
+                          </m.div>
                         )}
                         {badge.rarity === 'RARE' && (
                           <div className="absolute -top-0.5 -right-0.5 z-20">
@@ -1258,10 +1259,10 @@ export default function AdminBadgesPage() {
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </m.div>
               );
             })}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       )}
 
@@ -1281,5 +1282,6 @@ export default function AdminBadgesPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </LazyMotion>
   );
 }
