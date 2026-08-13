@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 interface BackgroundBeamsProps {
@@ -57,7 +57,7 @@ export function BackgroundBeams({ children, className }: BackgroundBeamsProps) {
           
           {/* Multiple animated beams */}
           {[...Array(6)].map((_, i) => (
-            <motion.path
+            <Motion.path
               key={i}
               d={`M 0 ${100 + i * 80} Q ${500 + i * 50} ${50 + i * 40} 1000 ${200 + i * 60}`}
               stroke={`url(#beam-gradient-${(i % 2) + 1})`}

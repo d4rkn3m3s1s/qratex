@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Brain,
   Loader2,
@@ -51,7 +51,7 @@ interface DetailedSignals {
 
 const AnimatedProgress = ({ value, color, delay = 0 }: { value: number; color: string; delay?: number }) => (
   <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
-    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }}
+    <Motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }}
       transition={{ duration: 1, delay, ease: 'easeOut' }} className={`h-full rounded-full ${color}`} />
   </div>
 );
@@ -130,7 +130,7 @@ export default function AdminAIDetailedPage() {
         ].map((item, i) => {
           const Icon = item.icon;
           return (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
+            <Motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow">
                 <CardContent className="p-4 text-center">
                   <Icon className={`h-6 w-6 mx-auto mb-2 ${item.color}`} />
@@ -138,7 +138,7 @@ export default function AdminAIDetailedPage() {
                   <p className="text-xs text-muted-foreground mt-1">{item.label}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>
@@ -146,7 +146,7 @@ export default function AdminAIDetailedPage() {
       {/* Intent Distribution & Urgency & Churn */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Intent */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Target className="h-5 w-5 text-orange-500" /> Niyet Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -165,10 +165,10 @@ export default function AdminAIDetailedPage() {
               ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Urgency */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-5 w-5 text-red-500" /> Aciliyet Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -186,10 +186,10 @@ export default function AdminAIDetailedPage() {
               ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Churn Risk */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="h-5 w-5 text-destructive" /> Churn Risk Dağılımı</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -207,20 +207,20 @@ export default function AdminAIDetailedPage() {
               ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Top Entities & Themes */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Entities */}
         {signals.topEntities.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
               <CardHeader><CardTitle className="flex items-center gap-2"><Search className="h-5 w-5 text-primary" aria-hidden /> Varlık Tanıma (NER)</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {signals.topEntities.slice(0, 12).map((ent, i) => (
-                    <motion.div key={`${ent.type}-${ent.name}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + i * 0.03 }}
+                    <Motion.div key={`${ent.type}-${ent.name}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + i * 0.03 }}
                       className="flex items-center justify-between p-2 rounded-lg bg-muted/20"
                     >
                       <div className="flex items-center gap-2">
@@ -232,23 +232,23 @@ export default function AdminAIDetailedPage() {
                         <span className="text-xs text-emerald-500">👍{ent.posRate}%</span>
                         <span className="text-xs text-red-500">👎{ent.negRate}%</span>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         )}
 
         {/* Themes */}
         {signals.topThemes.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
               <CardHeader><CardTitle className="flex items-center gap-2"><Layers className="h-5 w-5 text-primary" /> Tema Analizi</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {signals.topThemes.slice(0, 10).map((theme, i) => (
-                    <motion.div key={`${theme.theme}-${theme.subTheme || ''}`} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.03 }}
+                    <Motion.div key={`${theme.theme}-${theme.subTheme || ''}`} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.03 }}
                       className="p-3 rounded-lg bg-muted/20"
                     >
                       <div className="flex items-center justify-between">
@@ -266,12 +266,12 @@ export default function AdminAIDetailedPage() {
                         <div className="bg-red-500" style={{ width: `${theme.negRate}%` }} />
                         <div className="bg-blue-300" style={{ width: `${100 - theme.posRate - theme.negRate}%` }} />
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         )}
       </div>
 
@@ -279,13 +279,13 @@ export default function AdminAIDetailedPage() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Action Suggestions */}
         {signals.topActions.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
               <CardHeader><CardTitle className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-yellow-500" /> AI Aksiyon Önerileri</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {signals.topActions.slice(0, 10).map((action, i) => (
-                    <motion.div key={action.action} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03 }}
+                    <Motion.div key={action.action} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 + i * 0.03 }}
                       className="flex items-start gap-3 p-3 rounded-lg bg-muted/20"
                     >
                       <Badge className={`text-xs border-0 shrink-0 ${getPriorityColor(action.priority)}`}>{action.priority}</Badge>
@@ -294,17 +294,17 @@ export default function AdminAIDetailedPage() {
                         {action.impact && <p className="text-xs text-muted-foreground mt-0.5">{action.impact}</p>}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">{action.count}x</span>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         )}
 
         {/* Emotions */}
         {signals.topEmotions.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
               <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> Duygu Haritası</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -320,12 +320,12 @@ export default function AdminAIDetailedPage() {
                 })}
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         )}
       </div>
 
       {/* Rating Distribution */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm">
           <CardHeader><CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-yellow-500" /> Puan Dağılımı & Duygu Analizi</CardTitle></CardHeader>
           <CardContent>
@@ -341,7 +341,7 @@ export default function AdminAIDetailedPage() {
                       {[...Array(rating)].map((_, i) => <Star key={i} className="h-3 w-3 text-yellow-500 fill-yellow-500" />)}
                     </div>
                     <div className="h-24 relative flex items-end justify-center">
-                      <motion.div initial={{ height: 0 }} animate={{ height: `${(count / maxCount) * 100}%` }}
+                      <Motion.div initial={{ height: 0 }} animate={{ height: `${(count / maxCount) * 100}%` }}
                         transition={{ duration: 0.8, delay: 0.5 + rating * 0.1 }}
                         className="w-10 max-h-full min-h-[4px] rounded-t-lg bg-gradient-to-t from-primary to-primary/80"
                       />
@@ -358,7 +358,7 @@ export default function AdminAIDetailedPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

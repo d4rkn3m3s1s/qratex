@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy,
   Medal,
@@ -152,7 +152,7 @@ export default function CustomerLeaderboardPage() {
       </div>
 
       {/* User Stats Banner */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
@@ -196,12 +196,12 @@ export default function CustomerLeaderboardPage() {
                   <div className="flex items-center justify-center gap-1">
                     <span className="text-2xl md:text-3xl font-bold text-primary">#{userRank || '?'}</span>
                     {userRank && userRank <= 10 && (
-                      <motion.div
+                      <Motion.div
                         animate={{ scale: [1, 1.2, 1] }}
                         transition={{ duration: 2, repeat: Infinity }}
                       >
                         <Flame className="h-4 w-4 text-orange-500" />
-                      </motion.div>
+                      </Motion.div>
                     )}
                   </div>
                   <p className="text-[10px] text-muted-foreground">/ {totalUsers} kişi</p>
@@ -231,7 +231,7 @@ export default function CustomerLeaderboardPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       <Card className="border-primary/20">
         <CardContent className="p-4 space-y-3">
@@ -311,7 +311,7 @@ export default function CustomerLeaderboardPage() {
             <>
               {/* Podium - Top 3 - Modern Design */}
               {leaderboard.length >= 3 && (
-                <motion.div
+                <Motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="relative mb-12"
@@ -323,7 +323,7 @@ export default function CustomerLeaderboardPage() {
                   <div className="relative grid grid-cols-3 gap-2 md:gap-4 items-end pt-8 pb-4 px-2 md:px-8">
                     
                     {/* 2nd Place */}
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.2 }}
@@ -370,27 +370,27 @@ export default function CustomerLeaderboardPage() {
                       <div className="w-full mt-3 bg-gradient-to-t from-slate-600 to-slate-500 rounded-t-xl pt-6 pb-3 text-center shadow-lg">
                         <span className="text-2xl md:text-3xl font-bold text-white">2</span>
                       </div>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* 1st Place */}
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, y: 30, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
                       className="flex flex-col items-center -mt-8"
                     >
                       {/* Crown */}
-                      <motion.div
+                      <Motion.div
                         animate={{ y: [0, -5, 0], rotate: [0, 3, -3, 0] }}
                         transition={{ duration: 3, repeat: Infinity }}
                         className="mb-2"
                       >
                         <Crown className="h-8 w-8 md:h-10 md:w-10 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]" />
-                      </motion.div>
+                      </Motion.div>
                       
                       {/* Avatar */}
                       <div className="relative mb-2">
-                        <motion.div
+                        <Motion.div
                           animate={{ scale: [1, 1.05, 1] }}
                           transition={{ duration: 2, repeat: Infinity }}
                           className="absolute inset-0 bg-yellow-400/30 rounded-full blur-xl"
@@ -401,13 +401,13 @@ export default function CustomerLeaderboardPage() {
                             {getInitials(leaderboard[0]?.name || '')}
                           </AvatarFallback>
                         </Avatar>
-                        <motion.div
+                        <Motion.div
                           animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
                           transition={{ duration: 2, repeat: Infinity }}
                           className="absolute -top-1 -right-1"
                         >
                           <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-yellow-400" />
-                        </motion.div>
+                        </Motion.div>
                       </div>
                       
                       <p className="font-bold text-base md:text-lg truncate max-w-[110px] md:max-w-[140px] text-center">
@@ -441,10 +441,10 @@ export default function CustomerLeaderboardPage() {
                       <div className="w-full mt-3 bg-gradient-to-t from-yellow-600 to-yellow-500 rounded-t-xl pt-8 pb-4 text-center shadow-xl shadow-yellow-500/20">
                         <span className="text-3xl md:text-4xl font-bold text-white">1</span>
                       </div>
-                    </motion.div>
+                    </Motion.div>
 
                     {/* 3rd Place */}
-                    <motion.div
+                    <Motion.div
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3 }}
@@ -491,9 +491,9 @@ export default function CustomerLeaderboardPage() {
                       <div className="w-full mt-3 bg-gradient-to-t from-amber-700 to-amber-600 rounded-t-xl pt-4 pb-3 text-center shadow-lg">
                         <span className="text-2xl md:text-3xl font-bold text-white">3</span>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   </div>
-                </motion.div>
+                </Motion.div>
               )}
 
               {/* Rest of Leaderboard */}
@@ -523,7 +523,7 @@ export default function CustomerLeaderboardPage() {
                       : 'from-slate-500/5 to-transparent border-border/50';
                     
                     return (
-                      <motion.div
+                      <Motion.div
                         key={user.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -623,7 +623,7 @@ export default function CustomerLeaderboardPage() {
                             <span className="text-xs text-muted-foreground">{scoreMeta.suffix}</span>
                           </div>
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     );
                   })}
                 </AnimatePresence>

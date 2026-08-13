@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Heart, Gem } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -169,7 +169,7 @@ export function DataMinerGame() {
       >
         <div className="grid grid-cols-4 gap-2.5">
           {cells.map((c, i) => (
-            <motion.button
+            <Motion.button
               key={c.id}
               type="button"
               onClick={(e) => open(c, e)}
@@ -196,7 +196,7 @@ export function DataMinerGame() {
               }}
             >
               {c.opened ? FACE[c.kind] : <span className="text-white/30">⬡</span>}
-            </motion.button>
+            </Motion.button>
           ))}
         </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Trophy, Crown, Medal, Loader2, Gift, Timer } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 
@@ -121,7 +121,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
 
       {/* Bekleyen ödül (geçen hafta) */}
       {data.pendingReward && (
-        <motion.button
+        <Motion.button
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={claim}
@@ -136,7 +136,7 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
             </div>
           </div>
           {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="text-xs font-bold text-yellow-600">Ödülü al →</span>}
-        </motion.button>
+        </Motion.button>
       )}
 
       {/* Ödül havuzu */}

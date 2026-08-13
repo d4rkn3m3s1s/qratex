@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
 interface MeteorProps {
@@ -15,7 +15,7 @@ function Meteor({ delay }: { delay: number }) {
   });
 
   return (
-    <motion.span
+    <Motion.span
       className={cn(
         'absolute top-1/2 left-1/2 h-0.5 w-0.5 rotate-[215deg] animate-meteor-effect rounded-[9999px] bg-primary shadow-[0_0_0_1px_#ffffff10]',
         'before:content-[""] before:absolute before:top-1/2 before:-translate-y-1/2 before:w-[50px] before:h-[1px] before:bg-gradient-to-r before:from-primary before:to-transparent'

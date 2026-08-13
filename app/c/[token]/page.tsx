@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard,
   CheckCircle2,
@@ -126,14 +126,14 @@ export default function CardActivationPage() {
   if (loading || sessionStatus === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="text-center"
         >
           <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-primary" />
           <p className="text-muted-foreground">Kart bilgisi yükleniyor...</p>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -142,7 +142,7 @@ export default function CardActivationPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
@@ -171,7 +171,7 @@ export default function CardActivationPage() {
               </Button>
             </CardFooter>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -182,7 +182,7 @@ export default function CardActivationPage() {
 
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
@@ -282,7 +282,7 @@ export default function CardActivationPage() {
               )}
             </CardFooter>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -290,7 +290,7 @@ export default function CardActivationPage() {
   // Card not activated - show activation flow
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
@@ -302,7 +302,7 @@ export default function CardActivationPage() {
           </div>
 
           <CardHeader className="relative px-4 text-center sm:px-6">
-            <motion.div
+            <Motion.div
               className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 sm:h-24 sm:w-24"
               animate={{
                 boxShadow: [
@@ -314,7 +314,7 @@ export default function CardActivationPage() {
               transition={{ duration: 2, repeat: Infinity }}
             >
               <CreditCard className="h-10 w-10 sm:h-12 sm:w-12" aria-hidden />
-            </motion.div>
+            </Motion.div>
             <CardTitle className="text-xl sm:text-2xl">QRateX Kartı</CardTitle>
             <CardDescription className="text-sm sm:text-base">
               Bu kartı aktive ederek QRateX ayrıcalıklarına katılın
@@ -329,7 +329,7 @@ export default function CardActivationPage() {
                 { icon: History, text: 'Tüketimlerinizi takip edin', color: 'text-blue-600 dark:text-blue-400' },
                 { icon: Star, text: 'Yorum yaparak puan kazanın', color: 'text-primary' },
               ].map((item, index) => (
-                <motion.div
+                <Motion.div
                   key={item.text}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -340,14 +340,14 @@ export default function CardActivationPage() {
                     <item.icon className={`h-4 w-4 ${item.color}`} aria-hidden />
                   </div>
                   <span className="text-xs text-foreground sm:text-sm">{item.text}</span>
-                </motion.div>
+                </Motion.div>
               ))}
             </div>
 
             {/* Auth state */}
             <AnimatePresence mode="wait">
               {!session?.user ? (
-                <motion.div
+                <Motion.div
                   key="not-logged-in"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -373,9 +373,9 @@ export default function CardActivationPage() {
                       </Link>
                     </Button>
                   </div>
-                </motion.div>
+                </Motion.div>
               ) : session.user.role !== 'CUSTOMER' ? (
-                <motion.div
+                <Motion.div
                   key="wrong-role"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -385,9 +385,9 @@ export default function CardActivationPage() {
                   <p className="text-red-400 text-xs sm:text-sm text-center">
                     ⚠️ Sadece müşteri hesapları kart aktive edebilir. Lütfen müşteri hesabıyla giriş yapın.
                   </p>
-                </motion.div>
+                </Motion.div>
               ) : (
-                <motion.div
+                <Motion.div
                   key="ready"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -407,7 +407,7 @@ export default function CardActivationPage() {
                       </p>
                     </div>
                   </div>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
           </CardContent>
@@ -439,7 +439,7 @@ export default function CardActivationPage() {
         <p className="mt-6 text-center text-xs text-muted-foreground sm:text-sm">
           Powered by <span className="font-medium text-primary">QRateX</span>
         </p>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

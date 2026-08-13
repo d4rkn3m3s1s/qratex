@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   QrCode,
   Camera,
@@ -147,7 +147,7 @@ export default function CustomerScanPage() {
 
       <div className="max-w-lg mx-auto space-y-6">
         {/* Camera Scan */}
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -188,7 +188,7 @@ export default function CustomerScanPage() {
               )}
             </div>
           </DashboardPageHeroChrome>
-        </motion.div>
+        </Motion.div>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
@@ -200,7 +200,7 @@ export default function CustomerScanPage() {
         </div>
 
         {/* Manual Entry */}
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -233,10 +233,10 @@ export default function CustomerScanPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Info */}
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -254,7 +254,7 @@ export default function CustomerScanPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
     </div>
   );

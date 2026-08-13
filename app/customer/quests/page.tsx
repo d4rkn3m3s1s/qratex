@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Target,
   Clock,
@@ -356,19 +356,19 @@ export default function CustomerQuestsPage() {
                 <div className="relative">
                   <Progress value={dailyProgress} className="h-2.5 sm:h-3" />
                   {dailyProgress === 100 && (
-                    <motion.div
+                    <Motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       className="absolute -right-1 -top-1"
                     >
                       <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </div>
               </div>
               
               {dailyProgress === 100 && (
-                <motion.div
+                <Motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-lg bg-green-500/10 border border-green-500/20"
@@ -377,7 +377,7 @@ export default function CustomerQuestsPage() {
                     <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     {t('customerQuests.dailyAllDone')}
                   </p>
-                </motion.div>
+                </Motion.div>
               )}
             </div>
 
@@ -385,12 +385,12 @@ export default function CustomerQuestsPage() {
             <div className="flex flex-row md:flex-col justify-center gap-3 sm:gap-4">
               <div className="flex-1 md:flex-none p-3 sm:p-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/20">
                 <div className="flex items-center gap-2.5 sm:gap-3">
-                  <motion.div
+                  <Motion.div
                     animate={streak > 0 ? { scale: [1, 1.1, 1] } : {}}
                     transition={{ repeat: Infinity, duration: 1.5 }}
                   >
                     <Flame className={`h-6 w-6 sm:h-8 sm:w-8 ${streak > 0 ? 'text-orange-500 fill-orange-500' : 'text-muted-foreground'}`} />
-                  </motion.div>
+                  </Motion.div>
                   <div>
                     <p className="text-xl sm:text-2xl font-bold">{streak} {t('customerQuests.day')}</p>
                     <p className="text-[10px] sm:text-xs text-muted-foreground">{t('customerQuests.activeStreak')}</p>
@@ -421,7 +421,7 @@ export default function CustomerQuestsPage() {
           { label: t('customerQuests.earnedPoints'), value: stats.totalRewards, icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: t('customerQuests.earnedXp'), value: stats.totalXP, icon: Zap, color: 'text-primary', bg: 'bg-primary/10' },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -440,7 +440,7 @@ export default function CustomerQuestsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
@@ -515,7 +515,7 @@ export default function CustomerQuestsPage() {
                     const TypeIcon = config.icon;
                     
                     return (
-                      <motion.div
+                      <Motion.div
                         key={quest.id}
                         layout
                         initial={{ opacity: 0, scale: 0.95 }}
@@ -526,7 +526,7 @@ export default function CustomerQuestsPage() {
                         <Card className={`h-full overflow-hidden border ${config.borderColor} active:scale-[0.98] hover:shadow-lg transition-all group`}>
                           {/* Progress bar at top */}
                           <div className="h-1 bg-muted">
-                            <motion.div
+                            <Motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${progressPercent}%` }}
                               transition={{ duration: 0.5, delay: index * 0.1 }}
@@ -606,7 +606,7 @@ export default function CustomerQuestsPage() {
                             </div>
                           </CardContent>
                         </Card>
-                      </motion.div>
+                      </Motion.div>
                     );
                   })}
                 </AnimatePresence>
@@ -632,7 +632,7 @@ export default function CustomerQuestsPage() {
                     const TypeIcon = config.icon;
                     
                     return (
-                      <motion.div
+                      <Motion.div
                         key={quest.id}
                         layout
                         initial={{ opacity: 0, scale: 0.95 }}
@@ -709,7 +709,7 @@ export default function CustomerQuestsPage() {
                             )}
                           </CardContent>
                         </Card>
-                      </motion.div>
+                      </Motion.div>
                     );
                   })}
                 </AnimatePresence>

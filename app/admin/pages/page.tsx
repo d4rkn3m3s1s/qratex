@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { FileText, Plus, Search, Edit, Trash2, Globe, Lock, Loader2 } from 'lucide-react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
@@ -240,7 +240,7 @@ export default function AdminPagesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filteredPages.map((page, index) => (
-            <motion.div key={page.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.04 }}>
+            <Motion.div key={page.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.04 }}>
               <Card>
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-start justify-between">
@@ -268,7 +268,7 @@ export default function AdminPagesPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

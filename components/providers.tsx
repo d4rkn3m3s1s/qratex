@@ -3,7 +3,7 @@
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MotionConfig } from 'framer-motion';
+import { MotionConfig, LazyMotion, domAnimation } from 'framer-motion';
 import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
 import { OfflineBanner } from '@/components/layout/offline-banner';
@@ -235,9 +235,14 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
               <SeasonalConceptApplier />
               <ThemeColorsProvider initialThemeSettings={initialThemeSettings}>
                 <ConfettiProvider>
-                  {children}
-                  <InstallBanner />
-                  <OfflineBanner />
+                  {/* GLOBAL LazyMotion (non-strict): tüm sayfalarda `m.` bileşenleri
+                      per-sayfa sarmal olmadan çalışır → framer-motion bundle'ı ertelenir.
+                      Non-strict olduğu için çevrilmemiş `motion.` de çalışmaya devam eder. */}
+                  <LazyMotion features={domAnimation}>
+                    {children}
+                    <InstallBanner />
+                    <OfflineBanner />
+                  </LazyMotion>
                 </ConfettiProvider>
               </ThemeColorsProvider>
             </MotionConfig>

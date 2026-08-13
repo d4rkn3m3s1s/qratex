@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { RefreshCw, Activity, Server, Clock, AlertTriangle, ExternalLink, BarChart3, List, Zap, Copy, Check } from 'lucide-react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -372,7 +372,7 @@ export default function AdminObservabilityPage() {
         </section>
 
         {error && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-between gap-4 rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3 shadow-lg"
@@ -384,7 +384,7 @@ export default function AdminObservabilityPage() {
             <Button variant="outline" size="sm" onClick={fetchData} className="border-red-500/30">
               {t('adminObservability.refresh')}
             </Button>
-          </motion.div>
+          </Motion.div>
         )}
 
         {/* Son güncelleme + Yenile */}
@@ -411,7 +411,7 @@ export default function AdminObservabilityPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Vercel Status */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 }}
@@ -454,10 +454,10 @@ export default function AdminObservabilityPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
             {/* App Health */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -551,10 +551,10 @@ export default function AdminObservabilityPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
             {/* Last 60s */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
@@ -593,7 +593,7 @@ export default function AdminObservabilityPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           </div>
         </section>
 

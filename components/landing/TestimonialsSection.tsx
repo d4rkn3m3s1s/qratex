@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -25,7 +25,7 @@ export default function TestimonialsSection() {
   return (
     <section id="testimonials" className="py-20 lg:py-32 [content-visibility:auto]">
       <div className="container px-4">
-        <motion.div
+        <Motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -38,8 +38,8 @@ export default function TestimonialsSection() {
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto text-balance leading-relaxed">
             {landing.sub}
           </p>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto"
           variants={staggerContainer}
           initial="initial"
@@ -47,7 +47,7 @@ export default function TestimonialsSection() {
           viewport={{ once: true }}
         >
           {landing.items.map((item) => (
-            <motion.div key={item.name} variants={fadeInUp}>
+            <Motion.div key={item.name} variants={fadeInUp}>
               <Card className="h-full">
                 <CardContent className="pt-6">
                   <p className="text-muted-foreground mb-6">&ldquo;{item.content}&rdquo;</p>
@@ -64,9 +64,9 @@ export default function TestimonialsSection() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
-        </motion.div>
+        </Motion.div>
       </div>
     </section>
   );

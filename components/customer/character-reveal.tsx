@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { m as Motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { Sparkles, X, Wand2, PartyPopper, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { shareCharacter } from '@/components/customer/character-share-card';
@@ -302,7 +302,7 @@ export function CharacterReveal({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <Motion.div
           role="dialog"
           aria-modal="true"
           aria-label="Karakter rozeti keşfi"
@@ -317,7 +317,7 @@ export function CharacterReveal({
           }}
           onClick={onClose}
         >
-          <motion.div
+          <Motion.div
             initial={{ scale: 0.9, y: 30, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.9, y: 30, opacity: 0 }}
@@ -345,7 +345,7 @@ export function CharacterReveal({
             {error ? (
               <ErrorState message={error} onClose={onClose} />
             ) : (
-              <motion.div className="flex flex-col items-center text-center" animate={shakeControls}>
+              <Motion.div className="flex flex-col items-center text-center" animate={shakeControls}>
                 {/* SAHNE: küre veya maskot (aşama 1-3) */}
                 <RevealStage
                   variant={variant}
@@ -378,10 +378,10 @@ export function CharacterReveal({
                     )}
                   </AnimatePresence>
                 </div>
-              </motion.div>
+              </Motion.div>
             )}
-          </motion.div>
-        </motion.div>
+          </Motion.div>
+        </Motion.div>
       )}
     </AnimatePresence>
   );
@@ -401,7 +401,7 @@ function ErrorState({ message, onClose }: { message: string; onClose: () => void
 // ── Aşama 1 metni: değişen gizemli yazı ──────────────────────────────
 function PreparingText({ line }: { line: string }) {
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -413,14 +413,14 @@ function PreparingText({ line }: { line: string }) {
         {line}
       </p>
       <p className="text-xs text-white/50">Rozetin hazırlanıyor, biraz bekle…</p>
-    </motion.div>
+    </Motion.div>
   );
 }
 
 // ── Aşama 2 metni: kategori belli ────────────────────────────────────
 function CategoryText({ category }: { category: RevealCategory }) {
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -435,7 +435,7 @@ function CategoryText({ category }: { category: RevealCategory }) {
         <span className="text-3xl">{category.emoji}</span>
         {category.name}
       </p>
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -462,7 +462,7 @@ function DetailsText({
     : ratePct < 1 ? ratePct.toFixed(1) : String(Math.round(ratePct));
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
@@ -487,7 +487,7 @@ function DetailsText({
 
         {/* RARITY etiketi — altın/mor/mavi parıltıyla (common'da yok) */}
         {theme.label && (
-          <motion.span
+          <Motion.span
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', delay: 0.15, damping: 14 }}
@@ -496,7 +496,7 @@ function DetailsText({
           >
             <Sparkles className="h-3 w-3" />
             {theme.label}
-          </motion.span>
+          </Motion.span>
         )}
       </div>
 
@@ -514,7 +514,7 @@ function DetailsText({
       {/* AI'ın "neden bu rozeti aldın" açıklaması */}
       <AnimatePresence>
         {showWhy && character.why && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             transition={{ duration: 0.5, delay: 0.1 }}
@@ -530,13 +530,13 @@ function DetailsText({
               </p>
               <p className="text-sm leading-relaxed text-white/85">{character.why}</p>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
       {/* NADİR ORAN rozeti — ratePct varsa şık bir "seyreklik" göstergesi */}
       {showWhy && rateLabel !== null && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2, duration: 0.4 }}
@@ -552,11 +552,11 @@ function DetailsText({
             Oyuncuların yalnızca %{rateLabel}&apos;inde
             {veryRare && <span className="ml-1 font-extrabold">— çok nadir!</span>}
           </span>
-        </motion.div>
+        </Motion.div>
       )}
 
       {showWhy && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', delay: 0.25, damping: 18 }}
@@ -571,9 +571,9 @@ function DetailsText({
             <PartyPopper className="h-4 w-4" />
             Harika!
           </Button>
-        </motion.div>
+        </Motion.div>
       )}
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -654,7 +654,7 @@ function RevealStage({
       </AnimatePresence>
 
       {/* Prosedürel canvas sahne (küre veya maskot) — reveal sonrası solar */}
-      <motion.div
+      <Motion.div
         className="absolute inset-0"
         animate={{ opacity: revealed ? 0.35 : 1, scale: revealed ? 1.08 : 1 }}
         transition={{ duration: 0.6 }}
@@ -664,7 +664,7 @@ function RevealStage({
         ) : (
           <MascotCanvas accent={accent} categoryReady={categoryReady} reduceMotion={reduceMotion} />
         )}
-      </motion.div>
+      </Motion.div>
 
       {/* Rozet — reveal anında ışık patlamasıyla belirir */}
       <AnimatePresence>
@@ -695,7 +695,7 @@ function GodRays({ theme, reduceMotion }: { theme: RarityTheme; reduceMotion: bo
   const cone = `conic-gradient(from 0deg, ${stops.join(', ')})`;
 
   return (
-    <motion.div
+    <Motion.div
       className="pointer-events-none absolute inset-0 z-0 grid place-items-center"
       initial={{ opacity: 0, scale: 0.6 }}
       animate={{ opacity: theme.key === 'legendary' ? 0.85 : 0.6, scale: 1 }}
@@ -703,7 +703,7 @@ function GodRays({ theme, reduceMotion }: { theme: RarityTheme; reduceMotion: bo
       transition={{ duration: 0.6, ease: 'easeOut' }}
       aria-hidden="true"
     >
-      <motion.div
+      <Motion.div
         className="h-[150%] w-[150%] rounded-full"
         style={{
           background: cone,
@@ -716,7 +716,7 @@ function GodRays({ theme, reduceMotion }: { theme: RarityTheme; reduceMotion: bo
         animate={reduceMotion ? undefined : { rotate: 360 }}
         transition={{ duration: theme.key === 'legendary' ? 14 : 22, repeat: Infinity, ease: 'linear' }}
       />
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -739,7 +739,7 @@ function RevealedBadge({
   const strongBurst = theme.intensity >= 0.75;
 
   return (
-    <motion.div
+    <Motion.div
       className="relative z-10 grid place-items-center"
       style={{ perspective: 800 }}
       initial={{ scale: 0, rotate: reduceMotion ? 0 : -25, opacity: 0 }}
@@ -750,14 +750,14 @@ function RevealedBadge({
       {/* Işık patlaması halkaları (rarity rengiyle) */}
       {!reduceMotion && (
         <>
-          <motion.span
+          <Motion.span
             className="absolute rounded-full"
             style={{ border: `2px solid ${hexToRgba(glow, 0.75)}` }}
             initial={{ width: 40, height: 40, opacity: 0.9 }}
             animate={{ width: 260, height: 260, opacity: 0 }}
             transition={{ duration: 0.9, ease: 'easeOut' }}
           />
-          <motion.span
+          <Motion.span
             className="absolute rounded-full"
             style={{ border: `1px solid ${hexToRgba('#ffffff', 0.6)}` }}
             initial={{ width: 40, height: 40, opacity: 0.8 }}
@@ -766,7 +766,7 @@ function RevealedBadge({
           />
           {/* Legendary/epic'te ekstra ikinci renk halkası — daha görkemli patlama */}
           {strongBurst && (
-            <motion.span
+            <Motion.span
               className="absolute rounded-full"
               style={{ border: `2px solid ${hexToRgba(theme.glow2, 0.6)}` }}
               initial={{ width: 40, height: 40, opacity: 0.8 }}
@@ -778,7 +778,7 @@ function RevealedBadge({
       )}
 
       {/* Rarity dönen renk halkası — rarity glow + altın karışımı */}
-      <motion.div
+      <Motion.div
         className="absolute -inset-3 rounded-full"
         style={{
           background: `conic-gradient(from 0deg, ${glow}, ${theme.glow2}, #ffffff, ${glow})`,
@@ -789,7 +789,7 @@ function RevealedBadge({
       />
 
       {/* 3D salınım katmanı: rozet gövdesi yumuşakça sallanır (canlı dursun) */}
-      <motion.div
+      <Motion.div
         style={{ transformStyle: 'preserve-3d' }}
         initial={reduceMotion ? undefined : { rotateY: -180 }}
         animate={reduceMotion ? undefined : { rotateY: [0, 12, 0, -12, 0], rotateX: [0, -4, 0, 4, 0] }}
@@ -818,19 +818,19 @@ function RevealedBadge({
             <span className="text-5xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] sm:text-6xl">{emoji}</span>
           )}
         </div>
-      </motion.div>
+      </Motion.div>
 
       {/* Parıltı süsü */}
       {!reduceMotion && (
-        <motion.div
+        <Motion.div
           className="absolute -right-1 -top-1 z-20"
           animate={{ rotate: 360, scale: [1, 1.25, 1] }}
           transition={{ rotate: { duration: 5, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.6, repeat: Infinity } }}
         >
           <Sparkles className="h-7 w-7" style={{ color: theme.glow2, filter: `drop-shadow(0 0 8px ${hexToRgba(theme.glow, 0.7)})` }} />
-        </motion.div>
+        </Motion.div>
       )}
-    </motion.div>
+    </Motion.div>
   );
 }
 

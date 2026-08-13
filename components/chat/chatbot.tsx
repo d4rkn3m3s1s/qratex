@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { m as Motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   X,
   Send,
@@ -281,7 +281,7 @@ export function Chatbot() {
     <>
       <AnimatePresence>
         {!isOpen && (
-          <motion.div
+          <Motion.div
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.85, opacity: 0 }}
@@ -291,7 +291,7 @@ export function Chatbot() {
               'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[45] flex flex-col items-end gap-2 sm:bottom-8 sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-10 md:right-10'
             )}
           >
-            <motion.button
+            <Motion.button
               type="button"
               aria-haspopup="dialog"
               aria-expanded={false}
@@ -323,7 +323,7 @@ export function Chatbot() {
 
               <AnimatePresence>
                 {isHovered && finePointer && !motionLite && (
-                  <motion.div
+                  <Motion.div
                     key="fab-liquid-bubbles"
                     className="pointer-events-none absolute inset-0 z-[5]"
                     initial={{ opacity: 0 }}
@@ -332,7 +332,7 @@ export function Chatbot() {
                     transition={{ duration: 0.2 }}
                   >
                     {FAB_LIQUID_BUBBLES.map((b) => (
-                      <motion.span
+                      <Motion.span
                         key={b.id}
                         className={cn(
                           'pointer-events-none absolute rounded-full border border-white/55',
@@ -365,11 +365,11 @@ export function Chatbot() {
                         aria-hidden
                       />
                     ))}
-                  </motion.div>
+                  </Motion.div>
                 )}
               </AnimatePresence>
 
-              <motion.div
+              <Motion.div
                 className={cn(
                   'relative z-10 flex h-[3.35rem] w-[3.35rem] items-center justify-center overflow-hidden rounded-full',
                   'border-[1.5px] border-white/65 bg-gradient-to-b from-white/55 via-white/30 to-white/[0.14]',
@@ -383,14 +383,14 @@ export function Chatbot() {
                 whileTap={{ scale: 0.92 }}
               >
                 {!motionLite && (
-                  <motion.div
+                  <Motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/[0.08]"
                     animate={{ x: ['-120%', '120%'] }}
                     transition={{ duration: 3.6, repeat: Infinity, ease: 'linear' }}
                     aria-hidden
                   />
                 )}
-                <motion.span
+                <Motion.span
                   className="relative z-[1] flex items-center justify-center"
                   animate={isHovered && !motionLite ? { rotate: [0, -10, 10, 0] } : { rotate: 0 }}
                   transition={{ duration: 0.55 }}
@@ -411,16 +411,16 @@ export function Chatbot() {
                   ) : (
                     <Bot className="h-7 w-7 text-primary sm:h-8 sm:w-8" aria-hidden />
                   )}
-                </motion.span>
-              </motion.div>
-            </motion.button>
-          </motion.div>
+                </Motion.span>
+              </Motion.div>
+            </Motion.button>
+          </Motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {isOpen && (
-          <motion.div
+          <Motion.div
             key="qra-open-layer"
             className="pointer-events-none fixed inset-0 z-[44]"
             initial={{ opacity: 0 }}
@@ -428,14 +428,14 @@ export function Chatbot() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <motion.button
+            <Motion.button
               type="button"
               aria-label="Sohbet panelini kapat"
               className="pointer-events-auto absolute inset-0 bg-black/45 backdrop-blur-md sm:bg-black/35"
               onClick={closePanel}
             />
 
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 36, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 24, scale: 0.98 }}
@@ -486,7 +486,7 @@ export function Chatbot() {
                   aria-hidden
                 />
                 {!motionLite && !isMinimized && (
-                  <motion.div
+                  <Motion.div
                     className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-r from-transparent via-white/10 to-transparent dark:via-white/5"
                     animate={{ x: ['-100%', '100%'] }}
                     transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
@@ -495,7 +495,7 @@ export function Chatbot() {
                 )}
 
                 <div className="relative z-[1] flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-                  <motion.div
+                  <Motion.div
                     className="relative shrink-0"
                     animate={motionLite || isMinimized ? undefined : { y: [0, -2, 0] }}
                     transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
@@ -524,7 +524,7 @@ export function Chatbot() {
                         )}
                       </div>
                     </div>
-                  </motion.div>
+                  </Motion.div>
 
                   <div className="min-w-0">
                     <h3 className="flex min-w-0 flex-wrap items-center gap-2 truncate text-sm font-semibold tracking-tight sm:text-base">
@@ -541,7 +541,7 @@ export function Chatbot() {
                     {!isMinimized && (
                       <>
                         <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">QRateX için yapay zeka yardımcısı</p>
-                        <motion.p
+                        <Motion.p
                           className="mt-1 flex min-h-[1.125rem] items-center gap-1.5 truncate text-[11px] text-muted-foreground sm:mt-1.5 sm:text-xs"
                           key={isLoading ? typingMessage : 'idle'}
                           initial={{ opacity: 0, y: -4 }}
@@ -559,7 +559,7 @@ export function Chatbot() {
                               <span className="truncate">Çevrimiçi · Hazırım</span>
                             </>
                           )}
-                        </motion.p>
+                        </Motion.p>
                       </>
                     )}
                   </div>
@@ -606,7 +606,7 @@ export function Chatbot() {
                   <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y px-3 py-3 sm:px-4 sm:py-4">
                     <ul className="mx-auto max-w-none space-y-3 sm:space-y-3.5">
                       {messages.map((message, index) => (
-                        <motion.li
+                        <Motion.li
                           key={message.id}
                           initial={{ opacity: 0, y: 12, filter: motionLite ? undefined : 'blur(3px)' }}
                           animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
@@ -655,12 +655,12 @@ export function Chatbot() {
                               {message.timestamp.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                             </time>
                           </div>
-                        </motion.li>
+                        </Motion.li>
                       ))}
                     </ul>
 
                     {isLoading && (
-                      <motion.div
+                      <Motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="mx-auto mt-3 flex gap-2 sm:mt-4 sm:gap-2.5"
@@ -681,7 +681,7 @@ export function Chatbot() {
                           <div className="flex items-center gap-2 sm:gap-2.5">
                             <div className="flex gap-1.5">
                               {[0, 1, 2].map((i) => (
-                                <motion.span
+                                <Motion.span
                                   key={i}
                                   className="h-2 w-2 rounded-full bg-foreground/20 dark:bg-white/25"
                                   animate={
@@ -703,14 +703,14 @@ export function Chatbot() {
                             <span className="text-xs text-muted-foreground">Yazıyorum…</span>
                           </div>
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     )}
                     <div ref={messagesEndRef} className="h-px w-full shrink-0" />
                   </div>
 
                   <AnimatePresence>
                     {messages.length <= 2 && !isLoading && (
-                      <motion.div
+                      <Motion.div
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
@@ -726,7 +726,7 @@ export function Chatbot() {
                         </p>
                         <div className="mx-auto grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
                           {QUICK_ACTIONS.map((action, i) => (
-                            <motion.button
+                            <Motion.button
                               key={action.label}
                               type="button"
                               initial={{ opacity: 0, y: 8 }}
@@ -741,10 +741,10 @@ export function Chatbot() {
                                 <action.icon className="h-3.5 w-3.5 text-primary sm:h-4 sm:w-4" aria-hidden />
                               </span>
                               <span className="text-[11px] font-semibold leading-snug sm:text-xs">{action.label}</span>
-                            </motion.button>
+                            </Motion.button>
                           ))}
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     )}
                   </AnimatePresence>
 
@@ -767,7 +767,7 @@ export function Chatbot() {
                           style={{ maxHeight: 140 }}
                         />
                       </div>
-                      <motion.div whileTap={{ scale: 0.94 }} className="shrink-0 self-end">
+                      <Motion.div whileTap={{ scale: 0.94 }} className="shrink-0 self-end">
                         <Button
                           type="button"
                           aria-label="Gönder"
@@ -778,7 +778,7 @@ export function Chatbot() {
                         >
                           <Send className="h-4 w-4 sm:h-[1.125rem] sm:w-[1.125rem]" />
                         </Button>
-                      </motion.div>
+                      </Motion.div>
                     </div>
                     <p className="mx-auto mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-muted-foreground sm:mt-2.5 sm:text-[11px]">
                       <Zap className="h-3 w-3 shrink-0 text-foreground/35 sm:h-3.5 sm:w-3.5" aria-hidden />
@@ -788,8 +788,8 @@ export function Chatbot() {
                   </div>
                 </div>
               )}
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </>

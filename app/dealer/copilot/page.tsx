@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Bot,
   AlertTriangle,
@@ -114,20 +114,20 @@ export default function DealerCopilotPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[340px] gap-6">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-4"
         >
-          <motion.div
+          <Motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
             className="rounded-2xl bg-primary/20 p-4"
           >
             <Bot className="h-12 w-12 text-primary" />
-          </motion.div>
+          </Motion.div>
           <InlineLoadingStatus spinnerClassName="text-primary" description={t('dealerCopilot.loadingDescription')} />
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -215,7 +215,7 @@ export default function DealerCopilotPage() {
                   bg: 'bg-amber-500/10',
                 },
               ].map((item, i) => (
-                <motion.div
+                <Motion.div
                   key={item.label}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -240,14 +240,14 @@ export default function DealerCopilotPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </Motion.div>
               ))}
             </div>
           )}
 
           {/* Hızlı aksiyonlar (Next Best Actions) */}
           {nextBest.length > 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -263,7 +263,7 @@ export default function DealerCopilotPage() {
                 <CardContent>
                   <div className="flex flex-wrap gap-3">
                     {nextBest.map((action, i) => (
-                      <motion.div
+                      <Motion.div
                         key={action.cardKey}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -275,17 +275,17 @@ export default function DealerCopilotPage() {
                             <ChevronRight className="h-4 w-4" />
                           </Button>
                         </Link>
-                      </motion.div>
+                      </Motion.div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* Günlük trend grafiği */}
           {dailyTrend.length > 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
@@ -302,11 +302,11 @@ export default function DealerCopilotPage() {
                   <CopilotDailyTrendChart data={dailyTrend} />
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
 
           {summary.campaignRoiHints && summary.campaignRoiHints.length > 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.28 }}
@@ -338,12 +338,12 @@ export default function DealerCopilotPage() {
                   ))}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Kritik sorunlar */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, x: -12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
@@ -368,7 +368,7 @@ export default function DealerCopilotPage() {
                   ) : (
                     <ul className="space-y-4">
                       {summary.criticalIssues.map((issue, i) => (
-                        <motion.li
+                        <Motion.li
                           key={issue.feedbackId}
                           initial={{ opacity: 0, x: -8 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -401,16 +401,16 @@ export default function DealerCopilotPage() {
                               {t('dealerCopilot.goToFeedback')}
                             </Link>
                           </div>
-                        </motion.li>
+                        </Motion.li>
                       ))}
                     </ul>
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
             {/* Önerilen aksiyonlar */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.35 }}
@@ -436,7 +436,7 @@ export default function DealerCopilotPage() {
                   ) : (
                     <ul className="space-y-3">
                       {summary.topActions.map((action, i) => (
-                        <motion.li
+                        <Motion.li
                           key={`${action.feedbackId}-${i}`}
                           initial={{ opacity: 0, y: 4 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -460,18 +460,18 @@ export default function DealerCopilotPage() {
                               <ArrowRight className="h-3 w-3" />
                             </Button>
                           </Link>
-                        </motion.li>
+                        </Motion.li>
                       ))}
                     </ul>
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           </div>
 
           {/* Alt bilgi / Olaylar & Churn */}
           {stats && (stats.openIncidents > 0 || stats.churnCount > 0) && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
@@ -510,7 +510,7 @@ export default function DealerCopilotPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
         </>
       )}

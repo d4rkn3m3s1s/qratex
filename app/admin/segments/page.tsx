@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   PieChart,
   Users,
@@ -148,7 +148,7 @@ export default function AdminSegmentsPage() {
             const Icon = segmentIcons[seg.id] || Users;
             const isSelected = selectedSegment === seg.id;
             return (
-              <motion.div key={seg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
+              <Motion.div key={seg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
                 <Card
                   className={`border-0 cursor-pointer transition-all hover:scale-105 ${isSelected ? (ringByColor[seg.color] || 'ring-2 ring-primary shadow-lg') : 'bg-card/50'}`}
                   onClick={() => setSelectedSegment(isSelected ? null : seg.id)}
@@ -164,7 +164,7 @@ export default function AdminSegmentsPage() {
                     </p>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             );
           })}
         </div>
@@ -178,7 +178,7 @@ export default function AdminSegmentsPage() {
             {segments.map(seg => {
               const pct = totalCustomers > 0 ? (seg.count / totalCustomers) * 100 : 0;
               return (
-                <motion.div key={seg.id} initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                <Motion.div key={seg.id} initial={{ width: 0 }} animate={{ width: `${pct}%` }}
                   transition={{ duration: 0.8 }}
                   className={`bg-gradient-to-r ${segmentColors[seg.color]} cursor-pointer`}
                   title={`${seg.name}: ${seg.count} (${pct.toFixed(0)}%)`}
@@ -200,7 +200,7 @@ export default function AdminSegmentsPage() {
 
       {/* Selected Segment Detail */}
       {selected && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/60 bg-card/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -222,7 +222,7 @@ export default function AdminSegmentsPage() {
               ) : (
                 <div className="space-y-2">
                   {selected.customers.map((customer, i) => (
-                    <motion.div key={customer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }}
+                    <Motion.div key={customer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.03 }}
                       className="flex items-center gap-3 p-3 rounded-xl bg-muted/30"
                     >
                       <Avatar className="h-9 w-9">
@@ -241,13 +241,13 @@ export default function AdminSegmentsPage() {
                           <Star className="h-2.5 w-2.5 mr-0.5" />{customer.points}
                         </Badge>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
     </div>
   );

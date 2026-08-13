@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 
 interface GridDotsBackgroundProps {
   children?: React.ReactNode;
@@ -61,7 +61,7 @@ export function GridDotsBackground({
         <div className="absolute inset-0" style={getPatternStyle()} />
 
         {/* Mouse follow glow */}
-        <motion.div
+        <Motion.div
           className="absolute w-[600px] h-[600px] rounded-full"
           animate={{
             x: mousePosition.x - 300,

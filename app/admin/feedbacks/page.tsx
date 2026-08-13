@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
   CheckCircle2,
@@ -394,7 +394,7 @@ export default function AdminFeedbacksPage() {
             { title: 'Nötr', value: stats.neutral, icon: Meh, color: 'bg-gray-500/10 text-gray-500' },
             { title: 'Olumsuz', value: stats.negative, icon: ThumbsDown, color: 'bg-red-500/10 text-red-500' },
           ].map((stat, i) => (
-            <motion.div key={stat.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
+            <Motion.div key={stat.title} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
@@ -408,7 +408,7 @@ export default function AdminFeedbacksPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}
@@ -590,7 +590,7 @@ export default function AdminFeedbacksPage() {
 
       {/* Bulk Actions */}
       {selectedIds.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <Motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-0 bg-primary/5 border-primary/20">
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -605,7 +605,7 @@ export default function AdminFeedbacksPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Feedbacks List */}
@@ -630,7 +630,7 @@ export default function AdminFeedbacksPage() {
               const isSelected = selectedIds.includes(feedback.id);
               
               return (
-                <motion.div
+                <Motion.div
                   key={feedback.id}
                   layout
                   initial={{ opacity: 0, y: 10 }}
@@ -721,7 +721,7 @@ export default function AdminFeedbacksPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </Motion.div>
               );
             })}
           </AnimatePresence>

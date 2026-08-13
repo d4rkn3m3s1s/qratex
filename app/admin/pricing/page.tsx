@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Plus, Edit, Trash2, Check, Star, Loader2, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -384,7 +384,7 @@ export default function AdminPricingPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {plans.map((plan, index) => (
-            <motion.div key={plan.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.04 }}>
+            <Motion.div key={plan.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.04 }}>
               <Card className={plan.isPopular ? 'ring-2 ring-primary/60' : ''}>
                 <CardContent className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-2">
@@ -429,7 +429,7 @@ export default function AdminPricingPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
     Heart,
     MapPin,
@@ -64,7 +64,7 @@ export default function FavoritesPage() {
     return (
         <div className="space-y-6 pb-12 max-w-2xl mx-auto px-4 sm:px-6">
             {/* Header */}
-            <motion.header
+            <Motion.header
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm"
@@ -78,7 +78,7 @@ export default function FavoritesPage() {
                         <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">Sevdiğiniz işletmeleri buradan takip edin</p>
                     </div>
                 </div>
-            </motion.header>
+            </Motion.header>
 
             {isLoading ? (
                 <InlineLoadingStatus
@@ -87,7 +87,7 @@ export default function FavoritesPage() {
                     description="Mekanlar yükleniyor..."
                 />
             ) : favorites.length === 0 ? (
-                <motion.div
+                <Motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     className="text-center py-16 px-4 bg-muted/20 border border-dashed border-border/50 rounded-3xl"
@@ -105,12 +105,12 @@ export default function FavoritesPage() {
                     >
                         <Link href="/customer/nearby">Mekan Keşfet</Link>
                     </Button>
-                </motion.div>
+                </Motion.div>
             ) : (
                 <div className="space-y-4">
                     <AnimatePresence mode="popLayout">
                         {favorites.map((fav, i) => (
-                            <motion.div
+                            <Motion.div
                                 key={fav.dealerId}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -178,7 +178,7 @@ export default function FavoritesPage() {
                                         </div>
                                     </div>
                                 </Card>
-                            </motion.div>
+                            </Motion.div>
                         ))}
                     </AnimatePresence>
                 </div>

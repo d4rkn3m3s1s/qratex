@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AuroraText } from '@/components/ui/aurora-text';
@@ -17,7 +17,7 @@ export default function CTASection() {
       {/* gradient-mesh katmanı kaldırıldı — bölüm tamamen şeffaf (ortak LandingBackground görünür). */}
       <Spotlight className="top-0 left-0 md:left-1/2" fill="hsl(var(--primary))" />
       <div className="container relative z-10 px-4 text-center">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="max-w-3xl mx-auto">
+        <Motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="max-w-3xl mx-auto">
           <GradientCTACard>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-6 text-balance tracking-tight leading-tight">
             {t('landing.cta.headlineLine1')}
@@ -41,7 +41,7 @@ export default function CTASection() {
             </Button>
           </div>
           </GradientCTACard>
-        </motion.div>
+        </Motion.div>
       </div>
     </section>
   );

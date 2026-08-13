@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
   Sparkles,
@@ -104,7 +104,7 @@ interface ChatMessage {
 // ── Helpers ──
 const AnimatedProgress = ({ value, color, delay = 0 }: { value: number; color: string; delay?: number }) => (
   <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
-    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }}
+    <Motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(value, 100)}%` }}
       transition={{ duration: 1, delay, ease: 'easeOut' }} className={`h-full rounded-full ${color}`} />
   </div>
 );
@@ -280,7 +280,7 @@ export default function CustomerAIInsightsPage() {
 
       {/* ─── TAB: AI Chat ─── */}
       {activeTab === 'chat' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -304,7 +304,7 @@ export default function CustomerAIInsightsPage() {
                   </div>
                 )}
                 {chatMessages.map((msg, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  <Motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                     className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     {msg.role === 'assistant' && (
@@ -316,7 +316,7 @@ export default function CustomerAIInsightsPage() {
                     {msg.role === 'user' && (
                       <div className="p-2 rounded-lg bg-primary/10 h-fit"><User className="h-4 w-4 text-primary" /></div>
                     )}
-                  </motion.div>
+                  </Motion.div>
                 ))}
                 {chatLoading && (
                   <div className="flex gap-3">
@@ -339,12 +339,12 @@ export default function CustomerAIInsightsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* ─── TAB: Recommendations ─── */}
       {activeTab === 'recommendations' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           {recLoading ? (
             <InlineLoadingStatus
               className="py-12"
@@ -442,7 +442,7 @@ export default function CustomerAIInsightsPage() {
               </CardContent>
             </Card>
           )}
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* ─── TAB: Overview ─── */}
@@ -458,7 +458,7 @@ export default function CustomerAIInsightsPage() {
             ].map((item, index) => {
               const Icon = item.icon;
               return (
-                <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
+                <Motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
                   <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                     <CardContent className="p-4 text-center">
                       <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>
@@ -468,13 +468,13 @@ export default function CustomerAIInsightsPage() {
                       <p className="text-xs text-muted-foreground">{item.label}</p>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </Motion.div>
               );
             })}
           </div>
 
           {/* Sentiment Distribution */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -500,18 +500,18 @@ export default function CustomerAIInsightsPage() {
                   </div>
                 </div>
                 <div className="h-3 rounded-full overflow-hidden flex">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.positive}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.neutral}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.negative}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
+                  <Motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.positive}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
+                  <Motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.neutral}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
+                  <Motion.div initial={{ width: 0 }} animate={{ width: `${normalizedSentiment.negative}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
 
           {/* Topics & Emotions */}
           <div className="grid lg:grid-cols-2 gap-6">
             {stats.topEmotions.length > 0 && (
-              <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg"><Heart className="h-5 w-5 text-primary" /> En Sık Duygularım</CardTitle>
@@ -529,11 +529,11 @@ export default function CustomerAIInsightsPage() {
                     })}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             )}
 
             {stats.topTopics.length > 0 && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+              <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg"><FileText className="h-5 w-5 text-blue-500" /> En Çok Bahsettiğim Konular</CardTitle>
@@ -551,12 +551,12 @@ export default function CustomerAIInsightsPage() {
                     })}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             )}
           </div>
 
           {/* Feedback List */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+          <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -571,7 +571,7 @@ export default function CustomerAIInsightsPage() {
                   const isSelected = selectedFeedback?.id === fb.id;
 
                   return (
-                    <motion.div key={fb.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    <Motion.div key={fb.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.45 + index * 0.05 }}
                       className={`p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-primary/5 border-primary/30' : 'bg-card hover:border-primary/20'}`}
                       onClick={() => setSelectedFeedback(isSelected ? null : fb)}
@@ -600,7 +600,7 @@ export default function CustomerAIInsightsPage() {
 
                       {/* Expanded Detail */}
                       {isSelected && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t space-y-4">
+                        <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t space-y-4">
                           {fb.summary && (
                             <div className="p-3 rounded-lg bg-primary/5">
                               <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1"><Sparkles className="h-3 w-3" /> AI Özet</p>
@@ -683,9 +683,9 @@ export default function CustomerAIInsightsPage() {
                               </div>
                             </div>
                           )}
-                        </motion.div>
+                        </Motion.div>
                       )}
-                    </motion.div>
+                    </Motion.div>
                   );
                 })}
                 {stats.feedbacks.length > aiAnalysisLimit && (
@@ -706,7 +706,7 @@ export default function CustomerAIInsightsPage() {
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </>
       )}
     </div>

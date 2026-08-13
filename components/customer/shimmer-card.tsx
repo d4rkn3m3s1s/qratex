@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { type ReactNode } from 'react';
 
 interface ShimmerCardProps {
@@ -10,7 +10,7 @@ interface ShimmerCardProps {
 
 export function ShimmerCard({ children, className = '' }: ShimmerCardProps) {
   return (
-    <motion.div
+    <Motion.div
       className={`group relative overflow-hidden rounded-2xl border border-border/50 bg-card ${className}`}
       initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -22,6 +22,6 @@ export function ShimmerCard({ children, className = '' }: ShimmerCardProps) {
         <div className="absolute inset-y-0 w-1/2 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-15deg] group-hover:animate-shine" />
       </div>
       {children}
-    </motion.div>
+    </Motion.div>
   );
 }

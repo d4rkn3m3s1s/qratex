@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useTheme } from 'next-themes';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Menu, LogIn, ChevronRight, Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -172,7 +172,7 @@ export function Header() {
           href="/"
           className="group flex cursor-pointer items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <motion.div
+          <Motion.div
             className="relative"
             whileHover={{ scale: 1.05, rotate: 5 }}
             whileTap={{ scale: 0.95 }}
@@ -199,7 +199,7 @@ export function Header() {
                 />
               </>
             )}
-          </motion.div>
+          </Motion.div>
           <div className="hidden sm:block">
             {mounted && (
               <>
@@ -355,7 +355,7 @@ export function Header() {
 
                 <div className="flex-1 space-y-6">
                   {navigation.map((item, index) => (
-                    <motion.div
+                    <Motion.div
                       key={item.href}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -373,7 +373,7 @@ export function Header() {
                       >
                         {t(item.labelKey)}
                       </Link>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
 

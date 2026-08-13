@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Heart, Zap, Flame, Snowflake, Star } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { Boss3D } from './boss-3d';
@@ -339,20 +339,20 @@ export function MindThiefGame() {
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
         <div className="flex items-center gap-1">
           {Array.from({ length: MAX_LIVES }).map((_, i) => (
-            <motion.span key={i} animate={i >= lives ? { scale: [1.4, 1] } : {}}>
+            <Motion.span key={i} animate={i >= lives ? { scale: [1.4, 1] } : {}}>
               <Heart className="h-5 w-5" style={{ color: i < lives ? '#f43f5e' : '#3f3f46', fill: i < lives ? '#f43f5e' : 'transparent' }} />
-            </motion.span>
+            </Motion.span>
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <motion.div key={score} initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
+          <Motion.div key={score} initial={{ scale: 1.4 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
             <Zap className="h-4 w-4" /> {score}
-          </motion.div>
+          </Motion.div>
           <AnimatePresence>
             {combo >= 3 && (
-              <motion.span key={combo} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-0.5 font-bold text-orange-400">
+              <Motion.span key={combo} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-0.5 font-bold text-orange-400">
                 <Flame className="h-3.5 w-3.5" />{combo}x
-              </motion.span>
+              </Motion.span>
             )}
           </AnimatePresence>
         </div>
@@ -368,7 +368,7 @@ export function MindThiefGame() {
           <span className="flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-300"><Star className="h-3 w-3" /> Çift {doubleLeft}s</span>
         )}
         {rage && (
-          <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 0.6, repeat: Infinity }} className="flex items-center gap-1 rounded-full bg-rose-500/30 px-2 py-0.5 text-rose-300"><Flame className="h-3 w-3" /> ÖFKE MODU</motion.span>
+          <Motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 0.6, repeat: Infinity }} className="flex items-center gap-1 rounded-full bg-rose-500/30 px-2 py-0.5 text-rose-300"><Flame className="h-3 w-3" /> ÖFKE MODU</Motion.span>
         )}
       </div>
 
@@ -385,7 +385,7 @@ export function MindThiefGame() {
         {/* Öfke vinyeti */}
         <AnimatePresence>
           {rage && (
-            <motion.div
+            <Motion.div
               key="rage-vignette"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -399,7 +399,7 @@ export function MindThiefGame() {
         {/* Donma overlay */}
         <AnimatePresence>
           {frozenLeft > 0 && (
-            <motion.div key="freeze" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-0 z-20" style={{ background: 'radial-gradient(circle, rgba(103,232,249,0.1), rgba(103,232,249,0.04))', boxShadow: 'inset 0 0 70px rgba(103,232,249,0.3)' }} />
+            <Motion.div key="freeze" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pointer-events-none absolute inset-0 z-20" style={{ background: 'radial-gradient(circle, rgba(103,232,249,0.1), rgba(103,232,249,0.04))', boxShadow: 'inset 0 0 70px rgba(103,232,249,0.3)' }} />
           )}
         </AnimatePresence>
 
@@ -416,7 +416,7 @@ export function MindThiefGame() {
             const st = cardStyle(c.kind);
             const isPower = c.kind === 'freeze' || c.kind === 'double' || c.kind === 'heart';
             return (
-              <motion.button
+              <Motion.button
                 key={c.id}
                 type="button"
                 onClick={() => hitComment(c)}
@@ -439,7 +439,7 @@ export function MindThiefGame() {
                 whileTap={{ scale: scale * 0.85 }}
               >
                 {isPower ? <span className="font-bold">{c.text}</span> : c.text}
-              </motion.button>
+              </Motion.button>
             );
           })}
         </AnimatePresence>

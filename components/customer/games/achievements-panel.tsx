@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Award, Lock, Loader2 } from 'lucide-react';
 import { RARITY_COLOR, type AchievementProgress } from '@/lib/game-achievements';
 
@@ -57,7 +57,7 @@ export function AchievementsPanel() {
         {items.map((a, i) => {
           const color = RARITY_COLOR[a.rarity];
           return (
-            <motion.div
+            <Motion.div
               key={a.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -101,7 +101,7 @@ export function AchievementsPanel() {
                   </div>
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>

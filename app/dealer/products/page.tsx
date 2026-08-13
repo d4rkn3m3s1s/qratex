@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
   Plus,
@@ -374,7 +374,7 @@ export default function DealerProductsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
             {filteredProducts.map((product, index) => (
-              <motion.div
+              <Motion.div
                 key={product.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -436,7 +436,7 @@ export default function DealerProductsPage() {
                     )}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))}
           </AnimatePresence>
         </div>

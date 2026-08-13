@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Target,
   Plus,
@@ -450,7 +450,7 @@ export default function AdminQuestsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredQuests.map((quest, index) => (
-            <motion.div
+            <Motion.div
               key={quest.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -533,7 +533,7 @@ export default function AdminQuestsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

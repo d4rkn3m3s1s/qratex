@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import Link from 'next/link';
 import {
   MessageSquare,
@@ -401,7 +401,7 @@ function CustomerFeedbacksContent() {
             </Card>
           ) : (
             filteredConsumptionReviews.map((review, index) => (
-              <motion.div
+              <Motion.div
                 key={review.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -493,7 +493,7 @@ function CustomerFeedbacksContent() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))
           )}
         </TabsContent>
@@ -518,7 +518,7 @@ function CustomerFeedbacksContent() {
             </Card>
           ) : (
             filteredQRFeedbacks.map((feedback, index) => (
-              <motion.div
+              <Motion.div
                 key={feedback.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -605,7 +605,7 @@ function CustomerFeedbacksContent() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))
           )}
         </TabsContent>

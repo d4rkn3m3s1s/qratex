@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Lock, Loader2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,7 @@ function ResetPasswordInner() {
 
   return (
     <div className="w-full max-w-md mx-auto px-4 py-10">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-border/60 bg-card/80 backdrop-blur-sm shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">{t('auth.resetPasswordPageTitle')}</CardTitle>
@@ -122,7 +122,7 @@ function ResetPasswordInner() {
             </Button>
           </CardFooter>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { motion, useMotionTemplate, useMotionValue } from 'framer-motion';
+import { m as Motion, useMotionTemplate, useMotionValue } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 interface TiltCardProps {
@@ -35,7 +35,7 @@ export function TiltCard({ children, className = '', maxTilt = 8 }: TiltCardProp
   const rotateY = useMotionTemplate`${y}deg`;
 
   return (
-    <motion.div
+    <Motion.div
       ref={ref}
       className={className}
       onMouseMove={handleMouseMove}
@@ -48,7 +48,7 @@ export function TiltCard({ children, className = '', maxTilt = 8 }: TiltCardProp
       }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
-      <motion.div style={{ transform: 'translateZ(12px)' }}>{children}</motion.div>
-    </motion.div>
+      <Motion.div style={{ transform: 'translateZ(12px)' }}>{children}</Motion.div>
+    </Motion.div>
   );
 }

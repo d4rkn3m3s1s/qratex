@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Share2, Plus, Key, Copy, Check } from 'lucide-react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
@@ -193,7 +193,7 @@ export default function AdminPartnersPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {partners.map((p) => (
-            <motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <Motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <Card>
                 <CardContent className="p-4 flex items-center justify-between">
                   <div>
@@ -209,7 +209,7 @@ export default function AdminPartnersPage() {
                   <Key className="h-5 w-5 text-muted-foreground" />
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

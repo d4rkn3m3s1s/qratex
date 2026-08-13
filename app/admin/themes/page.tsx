@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import {
   Palette,
@@ -355,7 +355,7 @@ export default function AdminThemesPage() {
         <h2 className="text-lg font-semibold mb-4">Hazır Temalar (Açık + Koyu)</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {themeFamilies.map((family, index) => (
-            <motion.div
+            <Motion.div
               key={family.familyKey}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -424,7 +424,7 @@ export default function AdminThemesPage() {
                   </p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Network, Zap, Flame, ShieldAlert } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -298,7 +298,7 @@ export function NetworkDefenderGame() {
         {nodes.map((n) => {
           const infected = n.state === 'infected';
           return (
-            <motion.button
+            <Motion.button
               key={n.id}
               type="button"
               onClick={() => cleanNode(n)}
@@ -320,7 +320,7 @@ export function NetworkDefenderGame() {
               }}
             >
               <span className="text-sm">{infected ? '☣️' : '🟢'}</span>
-            </motion.button>
+            </Motion.button>
           );
         })}
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Brain, MousePointerClick } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -157,7 +157,7 @@ export function MemoryMatchGame() {
           {cards.map((c, i) => {
             const show = c.flipped || c.matched;
             return (
-              <motion.button
+              <Motion.button
                 key={c.id}
                 type="button"
                 onClick={(e) => flip(c, e)}
@@ -181,7 +181,7 @@ export function MemoryMatchGame() {
                 <span style={{ transform: show ? 'rotateY(180deg)' : 'none' }}>
                   {show ? c.face : '❔'}
                 </span>
-              </motion.button>
+              </Motion.button>
             );
           })}
         </div>

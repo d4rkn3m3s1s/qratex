@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useAppLocale } from '@/lib/app-locale';
@@ -13,7 +13,7 @@ export default function FAQSection() {
   return (
     <section id="faq" className="py-20 lg:py-32 scroll-mt-20 [content-visibility:auto]">
       <div className="container px-4">
-        <motion.div
+        <Motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -26,10 +26,10 @@ export default function FAQSection() {
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto text-balance leading-relaxed">
             {faq.sub}
           </p>
-        </motion.div>
+        </Motion.div>
         <div className="max-w-2xl mx-auto space-y-6">
           {faq.items.map((item, i) => (
-            <motion.div
+            <Motion.div
               key={item.q}
               initial={{ opacity: 0, y: 10 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -42,7 +42,7 @@ export default function FAQSection() {
                   <CardDescription className="text-sm mt-1">{item.a}</CardDescription>
                 </CardHeader>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       </div>

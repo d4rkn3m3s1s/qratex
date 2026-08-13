@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Eye,
   CheckCircle2,
@@ -203,7 +203,7 @@ export default function AdminAIQualityPage() {
       ) : (
         <div className="space-y-2">
           {samples.map((s) => (
-            <motion.div
+            <Motion.div
               key={s.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -313,7 +313,7 @@ export default function AdminAIQualityPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

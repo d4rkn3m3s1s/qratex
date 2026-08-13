@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp,
   TrendingDown,
@@ -297,7 +297,7 @@ export default function CustomerTrendsPage() {
             flame: data.insights.currentStreak > 0,
           },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -313,12 +313,12 @@ export default function CustomerTrendsPage() {
                     <stat.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.iconColor}`} />
                   </div>
                   {stat.flame && (
-                    <motion.div
+                    <Motion.div
                       animate={{ scale: [1, 1.2, 1] }}
                       transition={{ repeat: Infinity, duration: 1.5 }}
                     >
                       <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500 fill-orange-500" />
-                    </motion.div>
+                    </Motion.div>
                   )}
                 </div>
                 
@@ -336,7 +336,7 @@ export default function CustomerTrendsPage() {
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
@@ -376,7 +376,7 @@ export default function CustomerTrendsPage() {
             detail: t('customerTrends.cards.day'),
           },
         ].map((item, index) => (
-          <motion.div
+          <Motion.div
             key={item.title}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -398,7 +398,7 @@ export default function CustomerTrendsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
@@ -546,7 +546,7 @@ export default function CustomerTrendsPage() {
                 <div className="flex items-end gap-[2px] sm:gap-0.5 h-32 sm:h-44 px-0.5 sm:px-1">
                   {data.trends.feedbackTrend.slice(-30).map((day, i) => (
                     <div key={day.date} className="flex-1 group relative flex flex-col items-center">
-                      <motion.div
+                      <Motion.div
                         initial={{ height: 0 }}
                         animate={{ height: `${(day.count / maxFeedback) * 100}%` }}
                         transition={{ delay: Math.min(i, 10) * 0.02, duration: 0.4 }}
@@ -597,7 +597,7 @@ export default function CustomerTrendsPage() {
                             {day.day.slice(0, 3)}
                           </span>
                           <div className="flex-1 h-5 sm:h-7 bg-muted/50 rounded-full overflow-hidden relative">
-                            <motion.div
+                            <Motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${percentage}%` }}
                               transition={{ delay: i * 0.1, duration: 0.5 }}
@@ -674,14 +674,14 @@ export default function CustomerTrendsPage() {
                       <circle cx="104" cy="104" r="85" fill="none" stroke="currentColor" strokeWidth="28" className="text-muted/30" />
                       {data.sentiment.total > 0 && (
                         <>
-                          <motion.circle
+                          <Motion.circle
                             cx="104" cy="104" r="85"
                             fill="none" stroke={CHART_HEX.green} strokeWidth="28" strokeLinecap="round"
                             initial={{ strokeDasharray: '0 534' }}
                             animate={{ strokeDasharray: `${(data.sentiment.positive / data.sentiment.total) * 534} 534` }}
                             transition={{ duration: 1 }}
                           />
-                          <motion.circle
+                          <Motion.circle
                             cx="104" cy="104" r="85"
                             fill="none" stroke={CHART_HEX.yellow} strokeWidth="28" strokeLinecap="round"
                             initial={{ strokeDasharray: '0 534', strokeDashoffset: 0 }}
@@ -691,7 +691,7 @@ export default function CustomerTrendsPage() {
                             }}
                             transition={{ duration: 1, delay: 0.2 }}
                           />
-                          <motion.circle
+                          <Motion.circle
                             cx="104" cy="104" r="85"
                             fill="none" stroke={CHART_HEX.red} strokeWidth="28" strokeLinecap="round"
                             initial={{ strokeDasharray: '0 534', strokeDashoffset: 0 }}
@@ -744,7 +744,7 @@ export default function CustomerTrendsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="text-center py-6">
-                  <motion.div
+                  <Motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 200 }}
@@ -760,7 +760,7 @@ export default function CustomerTrendsPage() {
                       <span className="text-4xl font-bold">{data.sentiment.score}</span>
                       <span className="text-lg">%</span>
                     </div>
-                  </motion.div>
+                  </Motion.div>
                   <div className="mt-4">
                     {Number(data.sentiment.score) >= 70 && (
                       <Badge className="bg-green-500 gap-1"><Sparkles className="h-3 w-3" /> {t('customerTrends.sentiment.badgeGreat')}</Badge>
@@ -787,7 +787,7 @@ export default function CustomerTrendsPage() {
                         <span className="font-medium">{item.value.toFixed(0)}%</span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <motion.div
+                        <Motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${item.value}%` }}
                           transition={{ duration: 0.8 }}
@@ -862,7 +862,7 @@ export default function CustomerTrendsPage() {
                 description: `${data.insights.xpToNextLevel} XP ${t('customerTrends.cards.xpLeft')}`,
               },
             ].map((item, index) => (
-              <motion.div
+              <Motion.div
                 key={item.title}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -881,7 +881,7 @@ export default function CustomerTrendsPage() {
                     )}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))}
           </div>
         </TabsContent>
@@ -905,7 +905,7 @@ export default function CustomerTrendsPage() {
                       <line key={i} x1="0" y1={i * 37.5} x2="400" y2={i * 37.5} stroke="currentColor" strokeOpacity="0.1" />
                     ))}
                     
-                    <motion.path
+                    <Motion.path
                       initial={{ pathLength: 0, opacity: 0 }}
                       animate={{ pathLength: 1, opacity: 1 }}
                       transition={{ duration: 1.5 }}
@@ -923,7 +923,7 @@ export default function CustomerTrendsPage() {
                       fillOpacity="0.4"
                     />
                     
-                    <motion.path
+                    <Motion.path
                       initial={{ pathLength: 0 }}
                       animate={{ pathLength: 1 }}
                       transition={{ duration: 1.5 }}
@@ -978,7 +978,7 @@ export default function CustomerTrendsPage() {
                   <div className="space-y-3">
                     <AnimatePresence>
                       {data.badges.slice(0, 5).map((badge, i) => (
-                        <motion.div
+                        <Motion.div
                           key={badge.id}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -996,7 +996,7 @@ export default function CustomerTrendsPage() {
                             </Badge>
                           </div>
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        </motion.div>
+                        </Motion.div>
                       ))}
                     </AnimatePresence>
                   </div>

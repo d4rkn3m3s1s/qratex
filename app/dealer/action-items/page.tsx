@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   ListChecks,
   Clock,
@@ -212,7 +212,7 @@ export default function DealerActionItemsPage() {
           ) : (
             <ul className="space-y-3">
               {items.map((item) => (
-                <motion.li
+                <Motion.li
                   key={item.id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -262,7 +262,7 @@ export default function DealerActionItemsPage() {
                       </Button>
                     )}
                   </div>
-                </motion.li>
+                </Motion.li>
               ))}
             </ul>
           )}

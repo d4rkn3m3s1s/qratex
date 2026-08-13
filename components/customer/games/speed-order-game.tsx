@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Zap, Hash } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -191,7 +191,7 @@ export function SpeedOrderGame() {
           {cells.map((c) => {
             const isNext = c.n === next;
             return (
-              <motion.button
+              <Motion.button
                 key={c.id}
                 type="button"
                 onClick={() => tap(c)}
@@ -212,13 +212,13 @@ export function SpeedOrderGame() {
               >
                 {c.n}
                 {isNext && (
-                  <motion.span
+                  <Motion.span
                     className="absolute inset-0 rounded-2xl border-2 border-white"
                     animate={{ scale: [1, 1.25, 1], opacity: [0.8, 0, 0.8] }}
                     transition={{ duration: 1.1, repeat: Infinity }}
                   />
                 )}
-              </motion.button>
+              </Motion.button>
             );
           })}
         </AnimatePresence>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Star, Send, Camera, X, Check, Loader2, AlertCircle, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -221,21 +221,21 @@ export default function FeedbackPage() {
   if (submitted) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full"
         >
           <Card className="text-center overflow-hidden">
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6">
-              <motion.div
+              <Motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.2, type: 'spring' }}
                 className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto"
               >
                 <Check className="w-10 h-10 text-green-500" />
-              </motion.div>
+              </Motion.div>
             </div>
             <CardContent className="pt-6 pb-8">
               <h2 className="text-2xl font-bold mb-2">{t(locale, 'publicFeedback.successMsg')}</h2>
@@ -251,14 +251,14 @@ export default function FeedbackPage() {
                       </div>
                     </div>
                     {rewardData.leveledUp && (
-                      <motion.div 
+                      <Motion.div 
                         initial={{ y: 10, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         className="pt-2 border-t border-primary/20 flex flex-col items-center gap-1"
                       >
                         <span className="text-lg font-black text-primary animate-bounce">SEVİYE ATLADIN! 🆙</span>
                         <span className="text-xs font-bold text-muted-foreground">Yeni Seviye: {rewardData.newLevel}</span>
-                      </motion.div>
+                      </Motion.div>
                     )}
                   </div>
                 )}
@@ -283,7 +283,7 @@ export default function FeedbackPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -291,7 +291,7 @@ export default function FeedbackPage() {
   // Feedback form
   return (
     <div className="max-w-lg mx-auto p-4 py-8">
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
@@ -317,7 +317,7 @@ export default function FeedbackPage() {
               <Label className="text-center block">{t(locale, 'publicFeedback.rateExperience')}</Label>
               <div className="flex justify-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <motion.button
+                  <Motion.button
                     key={star}
                     type="button"
                     whileHover={{ scale: 1.1 }}
@@ -336,11 +336,11 @@ export default function FeedbackPage() {
                           : 'text-muted-foreground'
                       )}
                     />
-                  </motion.button>
+                  </Motion.button>
                 ))}
               </div>
               {rating > 0 && (
-                <motion.p
+                <Motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="text-center text-sm text-muted-foreground"
@@ -350,7 +350,7 @@ export default function FeedbackPage() {
                   {rating === 3 && t(locale, 'publicFeedback.good')}
                   {rating === 2 && t(locale, 'publicFeedback.needsImprovement')}
                   {rating === 1 && t(locale, 'publicFeedback.bad')}
-                </motion.p>
+                </Motion.p>
               )}
             </div>
 
@@ -467,7 +467,7 @@ export default function FeedbackPage() {
               <div className="flex flex-wrap gap-2">
                 <AnimatePresence>
                   {images.map((img, index) => (
-                    <motion.div
+                    <Motion.div
                       key={img}
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -486,7 +486,7 @@ export default function FeedbackPage() {
                       >
                         <X className="w-3 h-3 text-white" />
                       </button>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </AnimatePresence>
                 {images.length < 5 && (
@@ -536,7 +536,7 @@ export default function FeedbackPage() {
             </Button>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

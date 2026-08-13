@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   MapPin,
   Loader2,
@@ -88,7 +88,7 @@ function TimeHeatmapGrid({ data }: { data: number[][] }) {
             {hours.map((hour) => {
               const val = data[di]?.[hour] ?? 0;
               return (
-                <motion.div
+                <Motion.div
                   key={hour}
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -136,7 +136,7 @@ function BarChartLocations({ items }: { items: HeatmapRow[] }) {
   return (
     <div className="space-y-2">
       {top.map((row, i) => (
-        <motion.div
+        <Motion.div
           key={row.qrCodeId}
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
@@ -147,7 +147,7 @@ function BarChartLocations({ items }: { items: HeatmapRow[] }) {
             {row.locationName}
           </span>
           <div className="flex-1 h-6 bg-muted/50 rounded overflow-hidden">
-            <motion.div
+            <Motion.div
               initial={{ width: 0 }}
               animate={{ width: `${(row.feedbackCount / maxF) * 100}%` }}
               transition={{ delay: 0.2 + i * 0.05, duration: 0.5 }}
@@ -155,7 +155,7 @@ function BarChartLocations({ items }: { items: HeatmapRow[] }) {
             />
           </div>
           <span className="text-xs font-medium w-8 text-right">{row.feedbackCount}</span>
-        </motion.div>
+        </Motion.div>
       ))}
       {top.length === 0 && (
         <p className="text-sm text-muted-foreground py-4 text-center">{t('dealerHeatmap.barChartEmpty')}</p>
@@ -242,7 +242,7 @@ export default function DealerHeatmapPage() {
       />
 
       {neighbor && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-sky-500/25 bg-sky-500/5 p-4 md:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
@@ -262,12 +262,12 @@ export default function DealerHeatmapPage() {
           <Button asChild variant="outline" size="sm" className="shrink-0 border-sky-500/30">
             <Link href="/dealer/benchmark">{t('dealerHeatmap.benchmarkDetail')}</Link>
           </Button>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Summary cards */}
       {summary && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -331,12 +331,12 @@ export default function DealerHeatmapPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Time heatmap + Bar chart */}
       <div className="grid lg:grid-cols-2 gap-6">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
@@ -353,8 +353,8 @@ export default function DealerHeatmapPage() {
               <TimeHeatmapGrid data={timeHeatmap} />
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -371,11 +371,11 @@ export default function DealerHeatmapPage() {
               <BarChartLocations items={heatmap} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Location cards */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.25 }}
@@ -407,7 +407,7 @@ export default function DealerHeatmapPage() {
         ) : (
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {heatmap.map((row, i) => (
-              <motion.div
+              <Motion.div
                 key={row.qrCodeId}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -453,11 +453,11 @@ export default function DealerHeatmapPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))}
           </div>
         )}
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

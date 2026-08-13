@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Copy, Coins, Gift, Sparkles, Star, Trophy, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -67,7 +67,7 @@ export function SurpriseBoxModal({
 
   return (
     <AnimatePresence>
-      <motion.div
+      <Motion.div
         className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505]/95 text-white"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -82,7 +82,7 @@ export function SurpriseBoxModal({
           </div>
 
           <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center">
-            <motion.section
+            <Motion.section
               className="relative w-full max-w-[min(100%,78rem)] overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.035] shadow-[0_40px_140px_rgba(0,0,0,0.58)] backdrop-blur-2xl sm:rounded-[2rem]"
               initial={{ scale: 0.88, opacity: 0, y: 36, rotateX: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0, rotateX: 0 }}
@@ -113,23 +113,23 @@ export function SurpriseBoxModal({
                     </div>
 
                     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/25 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:rounded-[1.6rem] sm:p-3">
-                      <motion.div
+                      <Motion.div
                         className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.12),transparent_45%)]"
                         animate={{ opacity: [0.28, 0.62, 0.28], scale: [1, 1.05, 1] }}
                         transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <Motion.div
                         className="absolute left-4 top-6 h-28 w-28 rounded-full bg-amber-300/12 blur-3xl"
                         animate={{ x: [0, 18, 0], y: [0, 6, 0], opacity: [0.12, 0.28, 0.12] }}
                         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <Motion.div
                         className="absolute bottom-4 right-6 h-32 w-32 rounded-full bg-white/8 blur-3xl"
                         animate={{ x: [0, -14, 0], y: [0, -8, 0], opacity: [0.1, 0.22, 0.1] }}
                         transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
                       />
 
-                      <motion.div
+                      <Motion.div
                         className="relative z-10 flex h-[18rem] w-full max-w-[40rem] items-center justify-center md:h-[30rem]"
                         initial={{ opacity: 0, scale: 0.92, y: 18 }}
                         animate={phase === 'shaking'
@@ -139,18 +139,18 @@ export function SurpriseBoxModal({
                             : { opacity: 1, scale: 1, y: 0, rotate: 0 }}
                         transition={{ duration: 0.75, ease: 'easeOut' }}
                       >
-                        <motion.div
+                        <Motion.div
                           className="absolute inset-x-6 top-6 mx-auto h-40 w-40 rounded-full blur-3xl sm:inset-x-8 sm:h-52 sm:w-52"
                           style={{ background: 'radial-gradient(circle, rgba(255,232,170,0.4), transparent 70%)' }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, scale: 1.1 } : { opacity: 0.35, scale: 1 }}
                         />
-                        <motion.div
+                        <Motion.div
                           className="absolute inset-x-8 bottom-7 mx-auto h-20 w-56 rounded-full blur-3xl sm:inset-x-10 sm:h-24 sm:w-64"
                           style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%)' }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 0.7, scale: 1.08 } : { opacity: 0.18, scale: 1 }}
                         />
 
-                        <motion.div
+                        <Motion.div
                           className="absolute flex h-56 w-56 items-center justify-center rounded-[1.75rem] border border-white/10 bg-black/18 shadow-[0_28px_80px_rgba(0,0,0,0.34),inset_0_1px_0_rgba(255,255,255,0.08)] sm:h-72 sm:w-72 sm:rounded-[2rem]"
                           animate={phase === 'opening' ? { y: [0, -12, 0], scale: [1, 1.01, 1] } : { y: 0, scale: 1 }}
                           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
@@ -164,7 +164,7 @@ export function SurpriseBoxModal({
                             }}
                           />
 
-                          <motion.div
+                          <Motion.div
                             className="absolute inset-x-[16%] top-3 mx-auto h-10 rounded-t-[1rem] rounded-b-[0.85rem] border border-white/12 bg-gradient-to-b from-amber-100/60 to-amber-700/50 shadow-[0_12px_30px_rgba(0,0,0,0.22)]"
                             animate={
                               phase === 'opening'
@@ -175,36 +175,36 @@ export function SurpriseBoxModal({
                             }
                             transition={{ duration: 0.75, ease: 'easeOut' }}
                           />
-                          <motion.div
+                          <Motion.div
                             className="absolute inset-x-[12%] bottom-3 h-[60%] rounded-[1.35rem] border border-amber-200/10 bg-gradient-to-b from-amber-300/8 via-amber-700/28 to-amber-950/88 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
                             animate={phase === 'opening' ? { y: [0, 3, 0], scaleX: [1, 1.02, 1] } : { y: 0, scaleX: 1 }}
                             transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
                           />
 
-                          <motion.div
+                          <Motion.div
                             className="absolute inset-x-[26%] top-[18%] mx-auto h-[1px] bg-white/16"
                             animate={phase === 'reveal' || phase === 'done' ? { opacity: 0.2 } : { opacity: 0.55 }}
                           />
-                          <motion.div
+                          <Motion.div
                             className="absolute inset-x-[30%] top-[48%] mx-auto h-[1px] bg-white/12"
                             animate={phase === 'reveal' || phase === 'done' ? { opacity: 0.05 } : { opacity: 0.32 }}
                           />
 
                           <div className="relative z-10 flex flex-col items-center gap-4 text-center">
-                            <motion.div
+                            <Motion.div
                               className="flex h-16 w-16 items-center justify-center rounded-full border border-white/12 bg-black/15 shadow-[0_18px_40px_rgba(0,0,0,0.28)] sm:h-20 sm:w-20"
                               animate={phase === 'opening' ? { y: [4, -6, 0], scale: [1, 1.08, 1] } : { y: 0, scale: 1 }}
                               transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
                             >
                               <Sparkles className="h-8 w-8 text-white/85 sm:h-10 sm:w-10" />
-                            </motion.div>
+                            </Motion.div>
                           </div>
-                        </motion.div>
+                        </Motion.div>
 
                         <AnimatePresence>
                           {showParticles &&
                             [...Array(14)].map((_, i) => (
-                              <motion.span
+                              <Motion.span
                                 key={i}
                                 className="absolute h-2 w-2 rounded-full bg-amber-200"
                                 initial={{ opacity: 0.9, scale: 1, x: 0, y: 0 }}
@@ -219,7 +219,7 @@ export function SurpriseBoxModal({
                               />
                             ))}
                         </AnimatePresence>
-                      </motion.div>
+                      </Motion.div>
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -242,7 +242,7 @@ export function SurpriseBoxModal({
                 <div className="relative flex flex-col justify-between p-4 sm:p-6 md:p-8 lg:p-10">
                   <div className="space-y-5 sm:space-y-6">
                     <div className="space-y-3">
-                      <motion.div
+                      <Motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.7, y: 6 }}
                         transition={{ duration: 0.6, delay: 0.05 }}
@@ -250,35 +250,35 @@ export function SurpriseBoxModal({
                       >
                         <Trophy className="h-3.5 w-3.5" />
                         Günlük giriş ödülü
-                      </motion.div>
+                      </Motion.div>
 
-                      <motion.h3
+                      <Motion.h3
                         className="max-w-[14ch] text-balance text-2xl font-semibold tracking-[-0.04em] text-white sm:text-4xl md:text-5xl"
                         initial={{ opacity: 0, y: 18, filter: 'blur(8px)' }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0, filter: 'blur(0px)' } : { opacity: 0.8, y: 8, filter: 'blur(4px)' }}
                         transition={{ duration: 0.8, delay: 0.12 }}
                       >
                         {content?.title ?? (t('surpriseBoxes.congratulations') || 'Tebrikler!')}
-                      </motion.h3>
+                      </Motion.h3>
 
-                      <motion.p
+                      <Motion.p
                         className="max-w-xl text-pretty text-sm leading-6 text-white/68 sm:leading-7 sm:text-base"
                         initial={{ opacity: 0, y: 12 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.72, y: 6 }}
                         transition={{ duration: 0.7, delay: 0.18 }}
                       >
                         {content?.message || 'Her gün giriş yaparak yeni sürprizler kazanabilirsin. Bugünün ödülü hesabına işlendi.'}
-                      </motion.p>
+                      </Motion.p>
                     </div>
 
-                    <motion.div
+                    <Motion.div
                       className="grid gap-3 sm:grid-cols-2"
                       initial={{ opacity: 0, y: 10 }}
                       animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.18, y: 4 }}
                       transition={{ duration: 0.7, delay: 0.18 }}
                     >
                       {hasPoints ? (
-                        <motion.div
+                        <Motion.div
                           className="rounded-[1.4rem] border border-amber-300/20 bg-gradient-to-br from-amber-300/15 via-amber-200/10 to-transparent p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           initial={{ opacity: 0, y: 16 }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -293,9 +293,9 @@ export function SurpriseBoxModal({
                               <p className="text-2xl font-semibold tracking-[-0.03em] text-white">+{rewardPoints.toLocaleString()}</p>
                             </div>
                           </div>
-                        </motion.div>
+                        </Motion.div>
                       ) : (
-                        <motion.div
+                        <Motion.div
                           className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           initial={{ opacity: 0, y: 16 }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -304,10 +304,10 @@ export function SurpriseBoxModal({
                           <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Ödül tipi</p>
                           <p className="mt-1 text-lg font-semibold text-white">Anında erişim</p>
                           <p className="mt-1 text-sm text-white/55">Kazanılan içerik hesabında hazır.</p>
-                        </motion.div>
+                        </Motion.div>
                       )}
 
-                      <motion.div
+                      <Motion.div
                         className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         initial={{ opacity: 0, y: 16 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -316,11 +316,11 @@ export function SurpriseBoxModal({
                         <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Durum</p>
                         <p className="mt-1 text-lg font-semibold text-white">{phase === 'done' ? 'Kayıtlandı' : 'İşleniyor'}</p>
                         <p className="mt-1 text-sm text-white/55">Ödül hesabına güvenle işlendi.</p>
-                      </motion.div>
-                    </motion.div>
+                      </Motion.div>
+                    </Motion.div>
 
                     {content?.couponCode ? (
-                      <motion.div
+                      <Motion.div
                         className="space-y-3 rounded-[1.6rem] border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         initial={{ opacity: 0, y: 18 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.08, y: 10 }}
@@ -349,7 +349,7 @@ export function SurpriseBoxModal({
                             Aktif
                           </span>
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     ) : null}
                   </div>
 
@@ -388,10 +388,10 @@ export function SurpriseBoxModal({
               >
                 <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
-            </motion.section>
+            </Motion.section>
           </div>
         </div>
-      </motion.div>
+      </Motion.div>
     </AnimatePresence>
   );
 }

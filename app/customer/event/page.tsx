@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -102,7 +102,7 @@ export default function SeasonalEventPage() {
       ) : (
         <>
           {/* Etkinlik başlığı + geri sayım + çarpan */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <Motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-violet-500/5 to-amber-400/10">
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -134,11 +134,11 @@ export default function SeasonalEventPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
 
           {/* Challenge (varsa) */}
           {data.challenge && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <Card>
                 <CardContent className="space-y-4 p-6">
                   <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export default function SeasonalEventPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
         </>
       )}

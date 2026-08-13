@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { ClipboardList, Loader2, CheckCircle, Star, Send } from 'lucide-react';
 import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 import { Button } from '@/components/ui/button';
@@ -109,9 +109,9 @@ export default function FillSurveyPage() {
     if (submitted) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
+                <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
                     <CheckCircle className="h-20 w-20 text-emerald-500 mx-auto mb-4" />
-                </motion.div>
+                </Motion.div>
                 <h1 className="text-2xl font-bold">{t('surveyFill.thanksTitle')}</h1>
                 <p className="text-muted-foreground mt-2">{t('surveyFill.thanksBody')}</p>
             </div>
@@ -121,16 +121,16 @@ export default function FillSurveyPage() {
     return (
         <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
             {/* Header */}
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-2">
+            <Motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-2">
                 <ClipboardList className="h-10 w-10 text-emerald-500 mx-auto" />
                 <h1 className="text-2xl font-bold">{survey.title}</h1>
                 {survey.description && <p className="text-muted-foreground">{survey.description}</p>}
                 {survey.business && <p className="text-sm text-muted-foreground/70">{survey.business}</p>}
-            </motion.div>
+            </Motion.div>
 
             {/* Questions */}
             {survey.questions.map((q, i) => (
-                <motion.div key={q.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.05 }}>
+                <Motion.div key={q.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.05 }}>
                     <Card className="rounded-2xl">
                         <CardContent className="p-5 space-y-3">
                             <div className="flex items-start gap-2">
@@ -197,7 +197,7 @@ export default function FillSurveyPage() {
                             )}
                         </CardContent>
                     </Card>
-                </motion.div>
+                </Motion.div>
             ))}
 
             <div className="flex justify-center pt-4">

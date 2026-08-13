@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Users,
   Search,
@@ -905,7 +905,7 @@ export default function AdminUsersPage() {
                   {filteredUsers.map((user, index) => {
                     const RoleIcon = roleIcons[user.role];
                     return (
-                      <motion.tr
+                      <Motion.tr
                         key={user.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -1012,7 +1012,7 @@ export default function AdminUsersPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
-                      </motion.tr>
+                      </Motion.tr>
                     );
                   })}
                 </TableBody>

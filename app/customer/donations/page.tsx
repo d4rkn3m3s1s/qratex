@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Heart,
   Droplets,
@@ -336,7 +336,7 @@ export default function CustomerDonationsPage() {
 
       {/* Your Impact Section */}
       {userImpacts.length > 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -358,7 +358,7 @@ export default function CustomerDonationsPage() {
                 {userImpacts.map((impact, idx) => {
                   const colors = categoryColors[impact.category] || categoryColors.water;
                   return (
-                    <motion.div
+                    <Motion.div
                       key={idx}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -389,7 +389,7 @@ export default function CustomerDonationsPage() {
                           </p>
                         </div>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   );
                 })}
               </div>
@@ -415,7 +415,7 @@ export default function CustomerDonationsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Main Content */}
@@ -439,7 +439,7 @@ export default function CustomerDonationsPage() {
         <TabsContent value="projects" className="space-y-8">
           {/* Category Filter */}
           <div className="flex flex-wrap gap-3">
-            <motion.button
+            <Motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setActiveCategory('all')}
@@ -450,11 +450,11 @@ export default function CustomerDonationsPage() {
               }`}
             >
               {t('common.all')}
-            </motion.button>
+            </Motion.button>
             {Object.entries(categoryLabelKeys).map(([key, labelKey]) => {
               const Icon = categoryIcons[key];
               return (
-                <motion.button
+                <Motion.button
                   key={key}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -467,7 +467,7 @@ export default function CustomerDonationsPage() {
                 >
                   <Icon className="h-4 w-4" />
                   {t(labelKey)}
-                </motion.button>
+                </Motion.button>
               );
             })}
           </div>
@@ -513,7 +513,7 @@ export default function CustomerDonationsPage() {
 
           {/* Empty State */}
           {projects.length === 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="text-center py-20"
@@ -523,7 +523,7 @@ export default function CustomerDonationsPage() {
               </div>
               <h3 className="text-xl font-semibold text-muted-foreground">{t('customerDonations.emptyTitle')}</h3>
               <p className="text-muted-foreground mt-2">{t('customerDonations.emptyDescription')}</p>
-            </motion.div>
+            </Motion.div>
           )}
         </TabsContent>
 
@@ -605,7 +605,7 @@ function FeaturedProjectCard({
   const impactValue = Math.floor(project.current * (project.impact?.perPoint || 1));
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
@@ -659,7 +659,7 @@ function FeaturedProjectCard({
           {/* Progress */}
           <div className="space-y-2 mb-4">
             <div className="relative h-2.5 rounded-full bg-muted overflow-hidden">
-              <motion.div
+              <Motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(progress, 100)}%` }}
                 transition={{ duration: 1, delay: 0.5 }}
@@ -704,7 +704,7 @@ function FeaturedProjectCard({
           </Button>
         </CardContent>
       </Card>
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -726,7 +726,7 @@ function ProjectCard({
   const impactValue = Math.floor(project.current * (project.impact?.perPoint || 1));
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 10) * 0.05 }}
@@ -770,7 +770,7 @@ function ProjectCard({
           {/* Progress */}
           <div className="space-y-1.5 mb-4">
             <div className="relative h-2 rounded-full bg-muted overflow-hidden">
-              <motion.div
+              <Motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(progress, 100)}%` }}
                 transition={{ duration: 1, delay: 0.3 }}
@@ -796,7 +796,7 @@ function ProjectCard({
           </Button>
         </CardContent>
       </Card>
-    </motion.div>
+    </Motion.div>
   );
 }
 
@@ -814,7 +814,7 @@ function LeaderboardSection({
 
   if (leaderboard.length === 0) {
     return (
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center py-20"
@@ -824,7 +824,7 @@ function LeaderboardSection({
         </div>
         <h3 className="text-xl font-semibold text-muted-foreground">{t('customerDonations.noDonationsYet')}</h3>
         <p className="text-muted-foreground mt-2">{t('customerDonations.beFirstDonor')}</p>
-      </motion.div>
+      </Motion.div>
     );
   }
 
@@ -841,7 +841,7 @@ function LeaderboardSection({
       {top3.length >= 3 && (
         <div className="flex items-end justify-center gap-4 pt-8">
           {/* 2nd Place */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -863,22 +863,22 @@ function LeaderboardSection({
               <p className="text-sm text-muted-foreground">{formatNumber(top3[1]?.totalPoints || 0)} {t('customerDonations.points')}</p>
             </div>
             <div className="h-24 mt-4 rounded-t-2xl bg-gradient-to-t from-gray-400/50 to-gray-300/30" />
-          </motion.div>
+          </Motion.div>
 
           {/* 1st Place */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.1, type: 'spring' }}
             className="w-44"
           >
             <div className="text-center">
-              <motion.div
+              <Motion.div
                 animate={{ y: [0, -5, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
                 <Crown className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-              </motion.div>
+              </Motion.div>
               <div className="relative inline-block mb-3">
                 <Avatar className="w-28 h-28 ring-4 ring-yellow-400">
                   <AvatarImage src={top3[0]?.image || ''} />
@@ -894,10 +894,10 @@ function LeaderboardSection({
               <p className="text-primary font-semibold">{formatNumber(top3[0]?.totalPoints || 0)} {t('customerDonations.points')}</p>
             </div>
             <div className="h-32 mt-4 rounded-t-2xl bg-gradient-to-t from-yellow-500/50 to-yellow-300/30" />
-          </motion.div>
+          </Motion.div>
 
           {/* 3rd Place */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -919,7 +919,7 @@ function LeaderboardSection({
               <p className="text-sm text-muted-foreground">{formatNumber(top3[2]?.totalPoints || 0)} {t('customerDonations.points')}</p>
             </div>
             <div className="h-16 mt-4 rounded-t-2xl bg-gradient-to-t from-amber-600/50 to-amber-400/30" />
-          </motion.div>
+          </Motion.div>
         </div>
       )}
 
@@ -928,7 +928,7 @@ function LeaderboardSection({
         <Card>
           <CardContent className="p-0 divide-y divide-border">
             {visibleRest.map((entry, index) => (
-              <motion.div
+              <Motion.div
                 key={entry.userId}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -957,7 +957,7 @@ function LeaderboardSection({
                   <p className="font-bold text-primary">{formatNumber(entry.totalPoints)}</p>
                   <p className="text-xs text-muted-foreground">{t('customerDonations.points')}</p>
                 </div>
-              </motion.div>
+              </Motion.div>
             ))}
           </CardContent>
         </Card>
@@ -1008,7 +1008,7 @@ function LeaderboardSection({
 function ActivitySection({ recentDonations, t }: { recentDonations: RecentDonation[]; t: (key: string) => string }) {
   if (recentDonations.length === 0) {
     return (
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center py-20"
@@ -1018,7 +1018,7 @@ function ActivitySection({ recentDonations, t }: { recentDonations: RecentDonati
         </div>
         <h3 className="text-xl font-semibold text-muted-foreground">{t('customerDonations.noActivityYet')}</h3>
         <p className="text-muted-foreground mt-2">{t('customerDonations.startWithFirstDonation')}</p>
-      </motion.div>
+      </Motion.div>
     );
   }
 
@@ -1033,7 +1033,7 @@ function ActivitySection({ recentDonations, t }: { recentDonations: RecentDonati
       </CardHeader>
       <CardContent className="space-y-4">
         {recentDonations.map((donation, index) => (
-          <motion.div
+          <Motion.div
             key={donation.id}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -1059,7 +1059,7 @@ function ActivitySection({ recentDonations, t }: { recentDonations: RecentDonati
             <p className="text-xs text-muted-foreground whitespace-nowrap">
               {formatRelativeTime(donation.createdAt)}
             </p>
-          </motion.div>
+          </Motion.div>
         ))}
       </CardContent>
     </Card>
@@ -1124,7 +1124,7 @@ function DonationDialog({
             <Label className="text-sm font-medium">{t('customerDonations.quickSelect')}</Label>
             <div className="flex flex-wrap gap-2">
               {quickAmounts.map((amt) => (
-                <motion.button
+                <Motion.button
                   key={amt}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -1137,7 +1137,7 @@ function DonationDialog({
                   }`}
                 >
                   {amt}
-                </motion.button>
+                </Motion.button>
               ))}
             </div>
           </div>
@@ -1168,7 +1168,7 @@ function DonationDialog({
 
           {/* Impact Preview - Senin Etkin */}
           {amount > 0 && amount <= userPoints && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className={`p-4 rounded-xl ${categoryColors[project.category]?.bg || 'bg-primary/10'} border ${categoryColors[project.category]?.border || 'border-primary/20'}`}
@@ -1185,7 +1185,7 @@ function DonationDialog({
                   <p className="text-xs text-muted-foreground mt-0.5">{project.impact?.label}</p>
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* Message */}

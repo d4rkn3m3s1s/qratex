@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Trophy } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -315,7 +315,7 @@ export function TrustMergeGame() {
                 const st = styleFor(t.v);
                 const cellPct = 100 / N;
                 return (
-                  <motion.div
+                  <Motion.div
                     key={t.id}
                     initial={t.spawned ? { scale: 0 } : false}
                     animate={{
@@ -336,7 +336,7 @@ export function TrustMergeGame() {
                     }}
                   >
                     {t.v}
-                  </motion.div>
+                  </Motion.div>
                 );
               })}
             </AnimatePresence>

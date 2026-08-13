@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   DollarSign,
   Loader2,
@@ -129,14 +129,14 @@ export default function DealerROIPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[320px] gap-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-4"
         >
           <Loader2 className="h-10 w-10 animate-spin text-emerald-500" />
           <p className="text-sm text-muted-foreground">{t('dealerRoi.loadingDescription')}</p>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -185,7 +185,7 @@ export default function DealerROIPage() {
         <>
           {/* KPI Kartları */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
@@ -208,9 +208,9 @@ export default function DealerROIPage() {
                   <ChangeBadge change={comp?.feedbackChange ?? null} />
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
@@ -233,9 +233,9 @@ export default function DealerROIPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
@@ -263,9 +263,9 @@ export default function DealerROIPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
 
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
@@ -295,12 +295,12 @@ export default function DealerROIPage() {
                   )}
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           </div>
 
           {/* Haftalık trend grafiği */}
           {weeklyTrend.length > 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
@@ -317,12 +317,12 @@ export default function DealerROIPage() {
                   <RoiWeeklyAreaChart data={weeklyTrend} />
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* Günlük bar chart */}
           {dailyTrend.length > 0 && (
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35 }}
@@ -339,11 +339,11 @@ export default function DealerROIPage() {
                   <RoiDailyBarChart data={dailyTrend} />
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* Hedef özeti */}
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
@@ -367,7 +367,7 @@ export default function DealerROIPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </>
       )}
     </div>

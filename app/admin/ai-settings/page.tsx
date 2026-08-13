@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Brain,
   Settings,
@@ -188,7 +188,7 @@ export default function AdminAISettingsPage() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Dealer Listesi */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+        <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -222,7 +222,7 @@ export default function AdminAISettingsPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Ayar Detayları */}
         <div className="lg:col-span-2 space-y-6">
@@ -237,7 +237,7 @@ export default function AdminAISettingsPage() {
           ) : (
             <>
               {/* Ana Ayarlar */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -261,10 +261,10 @@ export default function AdminAISettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
 
               {/* Analiz Modülleri */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -295,10 +295,10 @@ export default function AdminAISettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
 
               {/* Raporlama & Alertler */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -323,10 +323,10 @@ export default function AdminAISettingsPage() {
                     ))}
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
 
               {/* Custom Prompt */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+              <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -344,10 +344,10 @@ export default function AdminAISettingsPage() {
                     />
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
 
               {/* AI Tones Management */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+              <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
@@ -367,15 +367,15 @@ export default function AdminAISettingsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
 
               {/* Kaydet */}
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+              <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
                 <Button onClick={saveSettings} disabled={saving} className="w-full" size="lg">
                   {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                   Ayarları Kaydet
                 </Button>
-              </motion.div>
+              </Motion.div>
             </>
           )}
         </div>

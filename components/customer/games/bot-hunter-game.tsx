@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Bot, UserCheck, ShieldCheck, Heart, Flame } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -214,9 +214,9 @@ export function BotHunterGame() {
             <span className="flex items-center gap-0.5 font-bold text-orange-400"><Flame className="h-3.5 w-3.5" />{combo}x</span>
           )}
         </div>
-        <motion.div key={score} initial={{ scale: 1.3 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
+        <Motion.div key={score} initial={{ scale: 1.3 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
           <ShieldCheck className="h-4 w-4" /> {score}
-        </motion.div>
+        </Motion.div>
       </div>
 
       <div
@@ -228,7 +228,7 @@ export function BotHunterGame() {
         }}
       >
         {/* Dönen radar süpürmesi */}
-        <motion.div
+        <Motion.div
           key={`r-${scanKey}`}
           aria-hidden
           className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[260px] w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-full"
@@ -241,7 +241,7 @@ export function BotHunterGame() {
 
         {/* Tarama ilerleme çubuğu */}
         {!revealed && (
-          <motion.div
+          <Motion.div
             key={`bar-${scanKey}`}
             className="absolute left-0 top-0 z-30 h-1"
             style={{ background: DEF.accent, boxShadow: `0 0 10px ${DEF.accent}` }}
@@ -256,7 +256,7 @@ export function BotHunterGame() {
             {profiles.map((p, i) => {
               const showTruth = revealed;
               return (
-                <motion.button
+                <Motion.button
                   key={p.id}
                   type="button"
                   layout
@@ -287,13 +287,13 @@ export function BotHunterGame() {
                       backgroundImage: `repeating-linear-gradient(0deg, ${DEF.accent}33 0px, transparent 2px, transparent 5px)`,
                     }}
                   />
-                  <motion.div
+                  <Motion.div
                     className="text-3xl"
                     animate={showTruth && p.bot ? { rotate: [0, -8, 8, 0] } : {}}
                     transition={{ duration: 0.4 }}
                   >
                     {showTruth ? (p.bot ? '🤖' : p.avatar) : p.avatar}
-                  </motion.div>
+                  </Motion.div>
                   <div className="w-full truncate text-[11px] font-semibold text-white">{p.name}</div>
                   <div className="w-full truncate text-[9px] text-white/40">{p.handle}</div>
 
@@ -307,7 +307,7 @@ export function BotHunterGame() {
                       {p.bot ? <Bot className="h-3 w-3 text-rose-400" /> : <UserCheck className="h-3 w-3 text-emerald-400" />}
                     </div>
                   )}
-                </motion.button>
+                </Motion.button>
               );
             })}
           </AnimatePresence>
@@ -315,7 +315,7 @@ export function BotHunterGame() {
 
         <FxLayer ref={fxRef} />
 
-        <motion.button
+        <Motion.button
           whileTap={{ scale: 0.97 }}
           onClick={resolveRound}
           disabled={revealed}
@@ -323,7 +323,7 @@ export function BotHunterGame() {
           style={{ background: DEF.accent, boxShadow: `0 0 20px ${DEF.accent}66` }}
         >
           ✓ Tara & Onayla
-        </motion.button>
+        </Motion.button>
         <p className="relative z-10 mt-1.5 text-center text-[10px] text-white/40">
           Botları işaretle, gerçek kullanıcılara dokunma. Süre dolmadan onayla!
         </p>

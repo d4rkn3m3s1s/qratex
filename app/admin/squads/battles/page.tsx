@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Sword, Plus, Calendar, Trophy, Users, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -202,7 +202,7 @@ export default function SquadBattlesAdminPage() {
           </Card>
         ) : (
           battles.map((battle) => (
-            <motion.div
+            <Motion.div
               key={battle.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -278,7 +278,7 @@ export default function SquadBattlesAdminPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))
         )}
       </div>

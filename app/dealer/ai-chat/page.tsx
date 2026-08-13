@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
     Brain, Send, Plus, Loader2, MessageSquare, Sparkles,
     ChevronRight, Bot, User,
@@ -107,7 +107,7 @@ export default function DealerAIChatPage() {
             {/* Sidebar */}
             <AnimatePresence>
                 {sidebarOpen && (
-                    <motion.div
+                    <Motion.div
                         initial={{ width: 0, opacity: 0 }}
                         animate={{ width: 280, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
@@ -141,7 +141,7 @@ export default function DealerAIChatPage() {
                                 )}
                             </div>
                         </div>
-                    </motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
@@ -161,11 +161,11 @@ export default function DealerAIChatPage() {
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                     {messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center space-y-6">
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
+                            <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
                                 <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
                                     <Sparkles className="h-10 w-10 text-primary" />
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                             <div>
                                 <h2 className="text-xl font-bold">{t('dealerAiChat.greetingTitle')}</h2>
                                 <p className="text-muted-foreground mt-1 text-sm max-w-md">
@@ -188,7 +188,7 @@ export default function DealerAIChatPage() {
                         </div>
                     ) : (
                         messages.map((msg, i) => (
-                            <motion.div
+                            <Motion.div
                                 key={i}
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -211,11 +211,11 @@ export default function DealerAIChatPage() {
                                         <User className="h-4 w-4 text-primary" />
                                     </div>
                                 )}
-                            </motion.div>
+                            </Motion.div>
                         ))
                     )}
                     {sendMutation.isPending && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+                        <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
                             <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
                                 <Bot className="h-4 w-4 text-primary" />
                             </div>
@@ -225,7 +225,7 @@ export default function DealerAIChatPage() {
                                     {t('dealerAiChat.thinking')}
                                 </div>
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
                 </div>
 

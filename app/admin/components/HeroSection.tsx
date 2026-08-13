@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Users, MessageSquare, QrCode, Shield, TrendingDown, TrendingUp, Minus } from 'lucide-react';
@@ -62,7 +62,7 @@ export function HeroSection({ data, analyticsData }: HeroSectionProps) {
       padded={false}
       tone="auto"
     >
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, type: 'spring', bounce: 0.32 }}
@@ -219,7 +219,7 @@ export function HeroSection({ data, analyticsData }: HeroSectionProps) {
             </Card>
           </div>
         </div>
-      </motion.div>
+      </Motion.div>
     </DashboardPageHeroChrome>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   ScanLine,
   Camera,
@@ -392,7 +392,7 @@ export default function DealerScanPage() {
                 <div className="absolute inset-0 pointer-events-none">
                   {/* Scan overlay animation */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div
+                    <Motion.div
                       className="absolute inset-0 border-4 border-emerald-500/30"
                       animate={{ opacity: [0.3, 0.7, 0.3] }}
                       transition={{ duration: 2, repeat: Infinity }}
@@ -441,18 +441,18 @@ export default function DealerScanPage() {
 
             {/* Status indicator */}
             {cameraActive && (
-              <motion.div 
+              <Motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex items-center justify-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"
               >
-                <motion.div 
+                <Motion.div 
                   className="w-3 h-3 rounded-full bg-emerald-500"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 />
                 <span className="text-sm text-emerald-400">{t('dealerScan.scanActiveHint')}</span>
-              </motion.div>
+              </Motion.div>
             )}
 
             {/* Manual input */}
@@ -496,7 +496,7 @@ export default function DealerScanPage() {
           <CardContent>
             <AnimatePresence mode="wait">
               {error ? (
-                <motion.div
+                <Motion.div
                   key="error"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -511,9 +511,9 @@ export default function DealerScanPage() {
                     <RefreshCw className="w-4 h-4 mr-2" />
                     {t('dealerScan.retryScan')}
                   </Button>
-                </motion.div>
+                </Motion.div>
               ) : scannedCard ? (
-                <motion.div
+                <Motion.div
                   key="result"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -590,9 +590,9 @@ export default function DealerScanPage() {
                       <RefreshCw className="w-4 h-4" />
                     </Button>
                   </div>
-                </motion.div>
+                </Motion.div>
               ) : (
-                <motion.div
+                <Motion.div
                   key="empty"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -608,7 +608,7 @@ export default function DealerScanPage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {t('dealerScan.emptyHintSub')}
                   </p>
-                </motion.div>
+                </Motion.div>
               )}
             </AnimatePresence>
           </CardContent>

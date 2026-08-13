@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Gift,
   Plus,
@@ -481,7 +481,7 @@ export default function AdminRewardsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredRewards.map((reward, index) => (
-            <motion.div
+            <Motion.div
               key={reward.id}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -551,7 +551,7 @@ export default function AdminRewardsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type JSX } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { m as Motion, useReducedMotion } from 'framer-motion';
 import { useAppT } from '@/lib/app-locale';
 import styles from './dealer-radar-scope.module.css';
 
@@ -152,7 +152,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
   const intel = hoveredPos ? bearingRangeNm(hoveredPos.x, hoveredPos.y) : null;
 
   return (
-    <motion.div
+    <Motion.div
       className="relative"
       initial={reduceMotion ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -209,7 +209,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
 
             {sorted.length === 0 ? (
               <div className="absolute inset-0 z-[9] flex flex-col items-center justify-center px-8 text-center">
-                <motion.div
+                <Motion.div
                   className="mb-3 h-px w-24 bg-gradient-to-r from-transparent via-amber-400/40 to-transparent"
                   animate={reduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }}
                   transition={{ duration: 2.2, repeat: Infinity }}
@@ -223,7 +223,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
                 const initials = (contact.name || contact.email || '?').charAt(0).toUpperCase();
                 const days = daysSince(contact.lastVisitIso);
                 return (
-                  <motion.button
+                  <Motion.button
                     key={contact.id}
                     type="button"
                     className={`${styles.blipWrap} group`}
@@ -259,7 +259,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
                     <span className="pointer-events-none absolute -top-2.5 left-1/2 z-10 -translate-x-1/2 rounded border border-amber-500/30 bg-black/70 px-1 py-px font-mono text-[6px] font-bold tracking-[0.2em] text-amber-300 opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
                       {t('dealerRadar.lockVisual')}
                     </span>
-                  </motion.button>
+                  </Motion.button>
                 );
               })
             )}
@@ -269,7 +269,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
             <div className={styles.vignette} />
           </div>
 
-          <motion.div
+          <Motion.div
             className="relative z-10 mt-5 overflow-hidden rounded-2xl border border-cyan-500/15 bg-gradient-to-r from-slate-950/90 via-slate-900/50 to-slate-950/90 p-4 shadow-inner backdrop-blur-sm"
             layout
           >
@@ -284,7 +284,7 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
               )}
             </div>
             {hovered ? (
-              <motion.div
+              <Motion.div
                 key={hovered.id}
                 initial={reduceMotion ? false : { opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -309,17 +309,17 @@ export function DealerRadarScope({ contacts }: { contacts: RadarScopeContact[] }
                     </span>
                   </p>
                 </div>
-              </motion.div>
+              </Motion.div>
             ) : (
               <p className="text-sm leading-relaxed text-cyan-100/35">{t('dealerRadar.hoverForIntel')}</p>
             )}
-          </motion.div>
+          </Motion.div>
 
           <p className="relative z-10 mt-3 text-center font-mono text-[9px] uppercase tracking-[0.35em] text-amber-500/25">
             {t('dealerRadar.hudFooter')}
           </p>
         </div>
       </div>
-    </motion.div>
+    </Motion.div>
   );
 }

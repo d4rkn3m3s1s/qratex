@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   ArrowLeft,
   Star,
@@ -365,7 +365,7 @@ export default function ConsumptionDetailPage() {
               <Label>{t('customerConsumptionDetail.overallRating')}</Label>
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <motion.button
+                  <Motion.button
                     key={star}
                     type="button"
                     whileHover={{ scale: 1.1 }}
@@ -383,7 +383,7 @@ export default function ConsumptionDetailPage() {
                           : 'text-muted-foreground'
                       )}
                     />
-                  </motion.button>
+                  </Motion.button>
                 ))}
                 <span className="ml-2 text-2xl font-bold">{rating || '-'}/5</span>
               </div>

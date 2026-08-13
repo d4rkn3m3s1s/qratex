@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Radio, Server, Zap } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -252,7 +252,7 @@ export function SignalPipeGame() {
               const isSrc = x === SRC[0] && y === SRC[1];
               const isDst = x === DST[0] && y === DST[1];
               return (
-                <motion.button
+                <Motion.button
                   key={`${x},${y}`}
                   type="button"
                   onClick={(e) => rotateCell(x, y, e)}
@@ -269,7 +269,7 @@ export function SignalPipeGame() {
                   <PipeGlyph mask={cell.mask} lit={lit} accent={DEF.accent} />
                   {isSrc && <span className="absolute -left-0.5 -top-0.5 text-[9px]">📡</span>}
                   {isDst && <span className="absolute -right-0.5 -bottom-0.5 text-[9px]">🖥️</span>}
-                </motion.button>
+                </Motion.button>
               );
             })
           )}

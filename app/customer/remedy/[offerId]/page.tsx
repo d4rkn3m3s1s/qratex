@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Gift, Loader2, CheckCircle2, ArrowLeft, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';

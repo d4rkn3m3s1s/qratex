@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   BarChart3,
   TrendingUp,
@@ -170,7 +170,7 @@ const LineChart = ({
         
         {/* Area */}
         {showArea && (
-          <motion.path
+          <Motion.path
             d={areaD}
             fill={`url(#gradient-${dataKey})`}
             initial={{ opacity: 0 }}
@@ -180,7 +180,7 @@ const LineChart = ({
         )}
         
         {/* Line */}
-        <motion.path
+        <Motion.path
           d={pathD}
           fill="none"
           stroke={color}
@@ -194,7 +194,7 @@ const LineChart = ({
         
         {/* Points */}
         {points.map((p, i) => (
-          <motion.circle
+          <Motion.circle
             key={i}
             cx={p.x}
             cy={p.y}
@@ -256,7 +256,7 @@ const Heatmap = ({ data }: { data: number[][] }) => {
           <div className="w-8 text-[10px] text-muted-foreground">{day}</div>
           <div className="flex-1 flex gap-0.5">
             {hours.map(hour => (
-              <motion.div
+              <Motion.div
                 key={hour}
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -345,7 +345,7 @@ const DonutChart = ({
         currentAngle += angle;
         
         return (
-          <motion.path
+          <Motion.path
             key={i}
             d={path}
             fill={segment.color}
@@ -380,7 +380,7 @@ const DistributionBar = ({
             <span className="font-semibold">{item.value}%</span>
           </div>
           <div className="h-2.5 bg-muted/50 rounded-full overflow-hidden">
-            <motion.div
+            <Motion.div
               initial={{ width: 0 }}
               animate={{ width: `${item.value}%` }}
               transition={{ duration: 0.8, delay: i * 0.1 }}
@@ -407,7 +407,7 @@ const SentimentTrendBars = ({
         const neu = total > 0 ? Math.round((d.neutral / total) * 100) : 0;
         const neg = Math.max(0, 100 - pos - neu);
         return (
-          <motion.div
+          <Motion.div
             key={`${d.label}-${i}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -423,7 +423,7 @@ const SentimentTrendBars = ({
               <div className="bg-blue-400" style={{ width: `${neu}%` }} />
               <div className="bg-red-500" style={{ width: `${neg}%` }} />
             </div>
-          </motion.div>
+          </Motion.div>
         );
       })}
     </div>
@@ -513,12 +513,12 @@ export default function DealerAnalyticsPage() {
       <div className="space-y-6 pb-8">
         <div className="flex items-center justify-center min-h-[600px]">
           <div className="text-center space-y-4">
-            <motion.div
+            <Motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
             >
               <Loader2 className="h-12 w-12 text-primary mx-auto" />
-            </motion.div>
+            </Motion.div>
             <p className="text-muted-foreground">{t('dealerAnalytics.loading')}</p>
           </div>
         </div>
@@ -601,7 +601,7 @@ export default function DealerAnalyticsPage() {
           { title: t('dealerAnalytics.conversionRate'), value: data.conversionRate, suffix: '%', icon: Target, iconBox: 'bg-primary/10', iconColor: 'text-primary' },
           { title: t('dealerAnalytics.responseRate'), value: data.responseRate, suffix: '%', icon: Activity, iconBox: 'bg-blue-500/10', iconColor: 'text-blue-500' },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.title}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -628,12 +628,12 @@ export default function DealerAnalyticsPage() {
                 </p>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
       {/* Trend Chart */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -674,10 +674,10 @@ export default function DealerAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Duygu Analizi Trendi */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -690,12 +690,12 @@ export default function DealerAnalyticsPage() {
             <SentimentTrendBars data={data.dailyData} />
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Comparison & Insights */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Period Comparison */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+        <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -733,10 +733,10 @@ export default function DealerAnalyticsPage() {
               />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Heatmap */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="lg:col-span-2">
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="lg:col-span-2">
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -760,13 +760,13 @@ export default function DealerAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Sentiment & Rating */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Sentiment */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+        <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -781,7 +781,7 @@ export default function DealerAnalyticsPage() {
                 </div>
                 <div className="space-y-3">
                   {sentimentChartData.map((item, i) => (
-                    <motion.div
+                    <Motion.div
                       key={item.label}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -793,16 +793,16 @@ export default function DealerAnalyticsPage() {
                         <p className="text-sm font-medium">{item.label}</p>
                         <p className="text-xl font-bold">{item.value}%</p>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Rating Distribution */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+        <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -814,11 +814,11 @@ export default function DealerAnalyticsPage() {
               <DistributionBar data={ratingChartData} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Quick Insights */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-5">
             <div className="flex items-center gap-3 mb-4">
@@ -859,12 +859,12 @@ export default function DealerAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Top QR & Topics */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Top QR Codes */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -881,7 +881,7 @@ export default function DealerAnalyticsPage() {
               ) : (
                 <div className="space-y-3">
                   {data.topQRCodes.map((qr, index) => (
-                    <motion.div
+                    <Motion.div
                       key={qr.name}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -910,16 +910,16 @@ export default function DealerAnalyticsPage() {
                         </div>
                         <p className="text-xs text-emerald-500">{qr.positiveRate}% {t('dealerAnalytics.positiveLower')}</p>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Top Topics */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -936,7 +936,7 @@ export default function DealerAnalyticsPage() {
               ) : (
                 <div className="space-y-3">
                   {data.topTopics.map((topic, index) => (
-                    <motion.div
+                    <Motion.div
                       key={topic.name}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -966,13 +966,13 @@ export default function DealerAnalyticsPage() {
                         <p className="text-lg sm:text-2xl font-bold">{topic.count}</p>
                         <p className="text-xs text-muted-foreground">{t('dealerAnalytics.mentions')}</p>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       <div className="flex items-center gap-2 pt-1">
@@ -980,7 +980,7 @@ export default function DealerAnalyticsPage() {
         <h3 className="text-lg font-semibold">{t('dealerAnalytics.advancedAi')}</h3>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
         <DashboardPageHeroChrome tone="auto" padded={false}>
           <div className="relative flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
@@ -1002,7 +1002,7 @@ export default function DealerAnalyticsPage() {
             </Button>
           </div>
         </DashboardPageHeroChrome>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, type ElementType } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Bot,
   Play,
@@ -453,7 +453,7 @@ export default function AgentCouncilPage() {
                 {Object.entries(run.personas ?? {}).map(([name, persona]) => {
                   const ps = personaState(name);
                   return (
-                  <motion.div
+                  <Motion.div
                     key={name}
                     layout
                     initial={false}
@@ -492,7 +492,7 @@ export default function AgentCouncilPage() {
                       {ps === 'listening' && '◉ Dinliyor'}
                       {ps === 'idle' && '—'}
                     </p>
-                  </motion.div>
+                  </Motion.div>
                   );
                 })}
               </div>
@@ -521,7 +521,7 @@ export default function AgentCouncilPage() {
                   const Icon = style.icon;
                   const isFinal = message.stance === 'consensus';
                   return (
-                    <motion.div
+                    <Motion.div
                       key={message.id}
                       layout
                       initial={{ opacity: 0, y: 10 }}
@@ -544,7 +544,7 @@ export default function AgentCouncilPage() {
                         </div>
                       </div>
                       <p className="whitespace-pre-wrap leading-relaxed text-foreground/95">{message.content}</p>
-                    </motion.div>
+                    </Motion.div>
                   );
                 })}
                 <div ref={transcriptEndRef} />

@@ -4,7 +4,7 @@ import { useState, Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { signIn, getSession } from 'next-auth/react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, User, ShieldCheck, Store, Loader2 } from 'lucide-react';
@@ -269,7 +269,7 @@ function LoginPageContent() {
   };
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -288,7 +288,7 @@ function LoginPageContent() {
                 const label = t(`auth.demo.accounts.${account.accountKey}.label`);
                 const description = t(`auth.demo.accounts.${account.accountKey}.description`);
                 return (
-                  <motion.button
+                  <Motion.button
                     key={account.role}
                     type="button"
                     onClick={() => handleDemoLogin(account)}
@@ -308,7 +308,7 @@ function LoginPageContent() {
                     </div>
                     <span className="text-xs font-medium">{label}</span>
                     <span className="text-[10px] text-muted-foreground text-center">{description}</span>
-                  </motion.button>
+                  </Motion.button>
                 );
               })}
             </div>
@@ -533,7 +533,7 @@ function LoginPageContent() {
           </p>
         </CardFooter>
       </Card>
-    </motion.div>
+    </Motion.div>
   );
 }
 

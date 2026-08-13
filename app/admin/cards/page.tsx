@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   CreditCard,
   Plus,
@@ -504,7 +504,7 @@ export default function AdminCardsPage() {
           { label: 'Aktif', value: stats.ACTIVATED, icon: CheckCircle2, color: 'from-emerald-500 to-green-600' },
           { label: 'Bloklu', value: stats.BLOCKED, icon: Ban, color: 'from-red-500 to-red-700' },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -524,7 +524,7 @@ export default function AdminCardsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 

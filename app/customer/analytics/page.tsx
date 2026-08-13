@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   BarChart3,
   TrendingUp,
@@ -170,7 +170,7 @@ export default function CustomerAnalyticsPage() {
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between"
@@ -198,10 +198,10 @@ export default function CustomerAnalyticsPage() {
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-      </motion.div>
+      </Motion.div>
 
       {/* Tüketimler & geri bildirimler — kişisel analitik içinde hızlı erişim */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         className="grid gap-3 sm:grid-cols-2"
@@ -236,7 +236,7 @@ export default function CustomerAnalyticsPage() {
             </span>
           </div>
         </Link>
-      </motion.div>
+      </Motion.div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -270,7 +270,7 @@ export default function CustomerAnalyticsPage() {
             change: null,
           },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -294,13 +294,13 @@ export default function CustomerAnalyticsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
       {/* VIP & Next Reward */}
       <div className="grid md:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+        <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
           <Card className="border-0 bg-gradient-to-br from-amber-500/10 to-yellow-500/10 border border-amber-500/20">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -321,9 +321,9 @@ export default function CustomerAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+        <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <Card className="border-0 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -347,12 +347,12 @@ export default function CustomerAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Category Breakdown & Top Products */}
       <div className="grid md:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -375,9 +375,9 @@ export default function CustomerAnalyticsPage() {
               ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -407,12 +407,12 @@ export default function CustomerAnalyticsPage() {
               ))}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Weekly & Hourly Patterns */}
       <div className="grid md:grid-cols-2 gap-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -435,9 +435,9 @@ export default function CustomerAnalyticsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -469,11 +469,11 @@ export default function CustomerAnalyticsPage() {
               </p>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Favorite Dealers */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -503,10 +503,10 @@ export default function CustomerAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Şube bazlı deneyim karşılaştırması */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -547,10 +547,10 @@ export default function CustomerAnalyticsPage() {
             )}
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Monthly Trends */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -583,10 +583,10 @@ export default function CustomerAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Achievements */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -636,7 +636,7 @@ export default function CustomerAnalyticsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Gamepad2,
   Loader2,
@@ -208,7 +208,7 @@ export default function AdminGamesPage() {
           const eff = g.effective;
           const hasOverride = !!g.override;
           return (
-            <motion.div
+            <Motion.div
               key={g.gameType}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -310,7 +310,7 @@ export default function AdminGamesPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>

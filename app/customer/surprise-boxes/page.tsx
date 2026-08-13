@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
   Box,
@@ -362,7 +362,7 @@ export default function CustomerSurpriseBoxesPage() {
               <ul className="space-y-4">
                 <AnimatePresence mode="popLayout">
                   {unopened.map((box, i) => (
-                    <motion.li
+                    <Motion.li
                       key={box.id}
                       layout
                       initial={{ opacity: 0, y: 14 }}
@@ -375,7 +375,7 @@ export default function CustomerSurpriseBoxesPage() {
                           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
                             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:gap-4">
                               <div className="relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400/40 to-orange-600/25 shadow-inner dark:from-amber-500/25 dark:to-orange-900/30">
-                                <motion.div
+                                <Motion.div
                                   className="absolute inset-2 rounded-lg bg-amber-200/25 dark:bg-amber-400/10"
                                   animate={{ opacity: [0.4, 0.85, 0.4] }}
                                   transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
@@ -423,7 +423,7 @@ export default function CustomerSurpriseBoxesPage() {
                           </div>
                         </CardContent>
                       </Card>
-                    </motion.li>
+                    </Motion.li>
                   ))}
                 </AnimatePresence>
               </ul>

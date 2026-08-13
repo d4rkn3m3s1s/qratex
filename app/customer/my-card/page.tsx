@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'framer-motion';
+import { m as Motion, useReducedMotion } from 'framer-motion';
 import {
   CreditCard,
   History,
@@ -155,7 +155,7 @@ function LegendDigitalCard({
 
   return (
     <div className="mx-auto w-full max-w-lg perspective-[1400px] sm:max-w-xl">
-      <motion.div
+      <Motion.div
         ref={wrapRef}
         initial={reduceMotion ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -187,7 +187,7 @@ function LegendDigitalCard({
 
             {/* Yavaş ışık bandı */}
             {!reduceMotion && (
-              <motion.div
+              <Motion.div
                 className="pointer-events-none absolute -inset-full z-[1] rotate-[18deg] bg-gradient-to-r from-transparent via-white/12 to-transparent"
                 animate={{ x: ['-30%', '130%'] }}
                 transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
@@ -308,7 +308,7 @@ function LegendDigitalCard({
             </div>
           </div>
         </div>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }
@@ -571,7 +571,7 @@ export default function CustomerMyCardPage() {
       ) : (
         <div className="space-y-10">
           {cards.map((card, index) => (
-            <motion.article
+            <Motion.article
               key={card.id}
               initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -681,7 +681,7 @@ export default function CustomerMyCardPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.article>
+            </Motion.article>
           ))}
         </div>
       )}
@@ -696,14 +696,14 @@ export default function CustomerMyCardPage() {
           </DialogHeader>
           {selectedCard && (
             <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-              <motion.div
+              <Motion.div
                 className="relative mx-auto w-fit"
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 28 }}
               >
                 {!reduceMotion && (
-                  <motion.div
+                  <Motion.div
                     className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-tr from-primary/35 via-violet-500/20 to-cyan-500/25 blur-2xl"
                     animate={{ opacity: [0.4, 0.75, 0.4] }}
                     transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
@@ -720,7 +720,7 @@ export default function CustomerMyCardPage() {
                     />
                   )}
                 </div>
-              </motion.div>
+              </Motion.div>
 
               <p className="text-center text-sm text-muted-foreground">Bu kodu kasada göstererek tüketim kaydı oluşturabilirsin.</p>
               <code className="block break-all rounded-xl bg-muted/60 px-3 py-2 text-center text-[11px] text-muted-foreground">
@@ -768,7 +768,7 @@ export default function CustomerMyCardPage() {
       </Dialog>
 
       {stats.reviewPending > 0 && (
-        <motion.div
+        <Motion.div
           initial={reduceMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 380, damping: 32 }}
@@ -794,7 +794,7 @@ export default function CustomerMyCardPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
     </div>
   );

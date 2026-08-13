@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Gift,
   Star,
@@ -377,7 +377,7 @@ export default function CustomerRewardsPage() {
             const gradient = gradients[index % gradients.length];
             
             return (
-              <motion.div
+              <Motion.div
                 key={reward.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -396,7 +396,7 @@ export default function CustomerRewardsPage() {
                     <div className="absolute bottom-0 left-0 w-12 sm:w-16 h-12 sm:h-16 bg-white/5 rounded-full blur-xl" />
                     
                     {displayImage ? (
-                      <motion.div
+                      <Motion.div
                         className="relative z-[1] rounded-2xl bg-black/10 p-2 shadow-lg ring-1 ring-white/15 backdrop-blur-[2px]"
                         whileHover={{ scale: 1.06, rotate: 2 }}
                         transition={{ type: 'spring', stiffness: 300 }}
@@ -408,7 +408,7 @@ export default function CustomerRewardsPage() {
                           height={112}
                           className="object-contain drop-shadow-xl w-[72px] h-[72px] sm:w-[100px] sm:h-[100px] rounded-xl"
                         />
-                      </motion.div>
+                      </Motion.div>
                     ) : (
                       <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white/10 backdrop-blur-sm">
                         <Gift className="h-8 w-8 sm:h-12 sm:w-12 text-white/70" />
@@ -474,7 +474,7 @@ export default function CustomerRewardsPage() {
                     </Button>
                   </div>
                 </Card>
-              </motion.div>
+              </Motion.div>
             );
           })}
           </div>
@@ -521,7 +521,7 @@ export default function CustomerRewardsPage() {
                     image: myReward.reward.image,
                   });
                   return (
-                  <motion.div
+                  <Motion.div
                     key={myReward.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -608,7 +608,7 @@ export default function CustomerRewardsPage() {
                         </div>
                       </CardContent>
                     </Card>
-                  </motion.div>
+                  </Motion.div>
                   );
                 })}
               </AnimatePresence>

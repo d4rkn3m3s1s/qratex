@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAppT } from '@/lib/app-locale';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import JSZip from 'jszip';
 import {
@@ -458,7 +458,7 @@ export default function DealerQRCodesPage() {
           { labelKey: 'dealerQrCodes.statActive', value: stats.active, icon: CheckCircle2, iconBox: 'bg-emerald-500/10', iconColor: 'text-emerald-500', gradient: 'from-emerald-500 to-teal-600' },
           { labelKey: 'dealerQrCodes.statTotalScans', value: stats.totalScans, icon: Eye, iconBox: 'bg-blue-500/10', iconColor: 'text-blue-500', gradient: 'from-blue-500 to-cyan-600' },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.labelKey}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -478,7 +478,7 @@ export default function DealerQRCodesPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
@@ -543,7 +543,7 @@ export default function DealerQRCodesPage() {
       ) : filteredQRCodes.length === 0 ? (
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardContent className="p-12 text-center">
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
             >
@@ -556,7 +556,7 @@ export default function DealerQRCodesPage() {
                 <Plus className="mr-2 h-4 w-4" />
                 {t('dealerQrCodes.ctaFirstQr')}
               </Button>
-            </motion.div>
+            </Motion.div>
           </CardContent>
         </Card>
       ) : (
@@ -571,7 +571,7 @@ export default function DealerQRCodesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <AnimatePresence>
             {filteredQRCodes.map((qr, index) => (
-              <motion.div
+              <Motion.div
                 key={qr.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -699,7 +699,7 @@ export default function DealerQRCodesPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))}
           </AnimatePresence>
         </div>
@@ -739,14 +739,14 @@ export default function DealerQRCodesPage() {
       {/* QR Preview Dialog */}
       <AnimatePresence>
         {previewDialogOpen && selectedQR && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={() => setPreviewDialogOpen(false)}
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -774,7 +774,7 @@ export default function DealerQRCodesPage() {
                 {/* QR Code */}
                 <div className="p-8 flex justify-center" style={{ backgroundColor: qrBgColor }}>
                   {qrPreview && (
-                    <motion.img 
+                    <Motion.img 
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       src={qrPreview} 
@@ -909,8 +909,8 @@ export default function DealerQRCodesPage() {
                   </Button>
                 </CardContent>
               </Card>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

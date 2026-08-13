@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   History,
   Star,
@@ -155,7 +155,7 @@ export default function CustomerConsumptionsPage() {
           { label: t('customerConsumptions.pendingReview'), value: stats.reviewPending, icon: Clock, iconBox: 'bg-amber-500/10', iconColor: 'text-amber-500' },
           { label: t('customerConsumptions.reviewed'), value: stats.reviewed, icon: CheckCircle2, iconBox: 'bg-emerald-500/10', iconColor: 'text-emerald-500' },
         ].map((stat, index) => (
-          <motion.div
+          <Motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -174,7 +174,7 @@ export default function CustomerConsumptionsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
@@ -257,7 +257,7 @@ export default function CustomerConsumptionsPage() {
         <div className="space-y-4">
           <AnimatePresence>
             {filteredConsumptions.map((consumption, index) => (
-              <motion.div
+              <Motion.div
                 key={consumption.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -332,7 +332,7 @@ export default function CustomerConsumptionsPage() {
                     </CardContent>
                   </Card>
                 </Link>
-              </motion.div>
+              </Motion.div>
             ))}
           </AnimatePresence>
         </div>

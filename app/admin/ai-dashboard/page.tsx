@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
   Sparkles,
@@ -71,7 +71,7 @@ interface ChatMessage {
 // ── Animated Progress Bar ──
 const AnimatedProgress = ({ value, color, delay = 0 }: { value: number; color: string; delay?: number }) => (
   <div className="h-3 bg-muted/30 rounded-full overflow-hidden">
-    <motion.div
+    <Motion.div
       initial={{ width: 0 }}
       animate={{ width: `${Math.min(value, 100)}%` }}
       transition={{ duration: 1, delay, ease: 'easeOut' }}
@@ -300,7 +300,7 @@ export default function AdminAIDashboardPage() {
       {/* AI Chat Panel */}
       <AnimatePresence>
         {chatOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+          <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -324,7 +324,7 @@ export default function AdminAIDashboardPage() {
                     </div>
                   )}
                   {chatMessages.map((msg, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    <Motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {msg.role === 'assistant' && (
@@ -336,7 +336,7 @@ export default function AdminAIDashboardPage() {
                       {msg.role === 'user' && (
                         <div className="p-2 rounded-lg bg-primary/10 h-fit"><User className="h-4 w-4 text-primary" /></div>
                       )}
-                    </motion.div>
+                    </Motion.div>
                   ))}
                   {chatLoading && (
                     <div className="flex gap-3">
@@ -358,7 +358,7 @@ export default function AdminAIDashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -366,7 +366,7 @@ export default function AdminAIDashboardPage() {
       {stats && (stats.urgentFeedbacks > 0 || stats.toxicFeedbacks > 0 || stats.highChurnRisk > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {stats.urgentFeedbacks > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
               <Card className="border-0 bg-red-500/5 border-red-500/20">
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-3 rounded-xl bg-red-500/10"><AlertTriangle className="h-6 w-6 text-red-500" /></div>
@@ -376,10 +376,10 @@ export default function AdminAIDashboardPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
           {stats.toxicFeedbacks > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <Card className="border-0 bg-orange-500/5 border-orange-500/20">
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-3 rounded-xl bg-orange-500/10"><Shield className="h-6 w-6 text-orange-500" /></div>
@@ -389,10 +389,10 @@ export default function AdminAIDashboardPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
           {stats.highChurnRisk > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <Card className="border-0 bg-destructive/5 border-destructive/20">
                 <CardContent className="p-4 flex items-center gap-3">
                   <div className="p-3 rounded-xl bg-destructive/10"><Users className="h-6 w-6 text-destructive" /></div>
@@ -402,7 +402,7 @@ export default function AdminAIDashboardPage() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           )}
         </div>
       )}
@@ -417,7 +417,7 @@ export default function AdminAIDashboardPage() {
         ].map((item, index) => {
           const Icon = item.icon;
           return (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
+            <Motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>
@@ -427,7 +427,7 @@ export default function AdminAIDashboardPage() {
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>
@@ -435,7 +435,7 @@ export default function AdminAIDashboardPage() {
       {/* AI Performance & Sentiment */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* AI Performance */}
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+        <Motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -464,10 +464,10 @@ export default function AdminAIDashboardPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
         {/* Sentiment Distribution */}
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+        <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -494,18 +494,18 @@ export default function AdminAIDashboardPage() {
                 </div>
               </div>
               <div className="h-4 rounded-full overflow-hidden flex">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.positive || 0}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.neutral || 0}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
-                <motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.negative || 0}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
+                <Motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.positive || 0}%` }} transition={{ duration: 1 }} className="bg-emerald-500" />
+                <Motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.neutral || 0}%` }} transition={{ duration: 1, delay: 0.2 }} className="bg-blue-400" />
+                <Motion.div initial={{ width: 0 }} animate={{ width: `${stats?.sentimentDistribution.negative || 0}%` }} transition={{ duration: 1, delay: 0.4 }} className="bg-red-500" />
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Intent Distribution */}
       {stats?.intentDistribution && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -524,7 +524,7 @@ export default function AdminAIDashboardPage() {
                 ].map((item, index) => {
                   const Icon = item.icon;
                   return (
-                    <motion.div key={item.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + index * 0.05 }}>
+                    <Motion.div key={item.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 + index * 0.05 }}>
                       <div className="text-center p-4 rounded-xl bg-card border">
                         <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>
                           <Icon className={`h-5 w-5 ${item.color}`} />
@@ -532,18 +532,18 @@ export default function AdminAIDashboardPage() {
                         <p className="text-2xl font-bold">{item.value}</p>
                         <p className="text-xs text-muted-foreground">{item.label}</p>
                       </div>
-                    </motion.div>
+                    </Motion.div>
                   );
                 })}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Top Topics */}
       {stats?.topTopics && stats.topTopics.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -556,22 +556,22 @@ export default function AdminAIDashboardPage() {
                   const maxCount = stats.topTopics[0]?.count || 1;
                   const percentage = (topic.count / maxCount) * 100;
                   return (
-                    <motion.div key={topic.topic} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.45 + index * 0.05 }} className="flex items-center gap-3">
+                    <Motion.div key={topic.topic} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.45 + index * 0.05 }} className="flex items-center gap-3">
                       <span className="w-24 text-sm font-medium capitalize">{topic.topic}</span>
                       <div className="flex-1"><AnimatedProgress value={percentage} color="bg-blue-500" delay={0.5 + index * 0.05} /></div>
                       <span className="text-sm text-muted-foreground w-12 text-right">{topic.count}</span>
-                    </motion.div>
+                    </Motion.div>
                   );
                 })}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Theme Clusters */}
       {stats?.themeClusters && stats.themeClusters.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -581,7 +581,7 @@ export default function AdminAIDashboardPage() {
             <CardContent>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {stats.themeClusters.slice(0, 9).map((cluster, index) => (
-                  <motion.div key={`${cluster.theme}-${cluster.subTheme}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 + index * 0.05 }} className="p-4 rounded-xl border bg-card">
+                  <Motion.div key={`${cluster.theme}-${cluster.subTheme}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 + index * 0.05 }} className="p-4 rounded-xl border bg-card">
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h4 className="font-semibold">{cluster.theme}</h4>
@@ -595,17 +595,17 @@ export default function AdminAIDashboardPage() {
                       <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{cluster.count}</span>
                       <span className="flex items-center gap-1"><Star className="h-3 w-3" />{(cluster.avgScore * 5).toFixed(1)}/5</span>
                     </div>
-                  </motion.div>
+                  </Motion.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Top Dealers */}
       {stats?.topDealers && stats.topDealers.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -616,7 +616,7 @@ export default function AdminAIDashboardPage() {
             <CardContent>
               <div className="space-y-3">
                 {stats.topDealers.map((dealer, index) => (
-                  <motion.div key={dealer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.65 + index * 0.05 }} className="flex items-center justify-between p-3 rounded-xl border bg-card">
+                  <Motion.div key={dealer.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.65 + index * 0.05 }} className="flex items-center justify-between p-3 rounded-xl border bg-card">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                         {index + 1}
@@ -634,17 +634,17 @@ export default function AdminAIDashboardPage() {
                         </Badge>
                       </div>
                     </div>
-                  </motion.div>
+                  </Motion.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Recent AI Analyses */}
       {stats?.recentAnalyses && stats.recentAnalyses.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -654,7 +654,7 @@ export default function AdminAIDashboardPage() {
             <CardContent>
               <div className="space-y-3">
                 {stats.recentAnalyses.slice(0, 10).map((analysis, index) => (
-                  <motion.div key={analysis.feedbackId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 + index * 0.03 }} className="p-3 rounded-xl border bg-card">
+                  <Motion.div key={analysis.feedbackId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75 + index * 0.03 }} className="p-3 rounded-xl border bg-card">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate">{analysis.text}</p>
@@ -671,12 +671,12 @@ export default function AdminAIDashboardPage() {
                         {new Date(analysis.createdAt).toLocaleDateString('tr-TR')}
                       </span>
                     </div>
-                  </motion.div>
+                  </Motion.div>
                 ))}
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
     </div>
   );

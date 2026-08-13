@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Compass, Star, MessageSquare, TrendingUp, CheckCircle2, Lock, Gift, ShieldAlert, Award, Coffee, Clock, MapPinned } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
@@ -150,7 +150,7 @@ export default function CustomerJourneyScorePage() {
         <Card className="rounded-2xl border-2 border-primary/25 overflow-hidden bg-gradient-to-br from-background to-muted/20 md:col-span-2 lg:col-span-2">
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-              <motion.div
+              <Motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
@@ -158,7 +158,7 @@ export default function CustomerJourneyScorePage() {
               >
                 <svg className="-rotate-90 drop-shadow-lg" width={112} height={112} viewBox="0 0 112 112">
                   <circle cx={56} cy={56} r={48} fill="none" stroke="currentColor" strokeWidth={8} className="text-muted/20" />
-                  <motion.circle
+                  <Motion.circle
                     cx={56} cy={56} r={48}
                     fill="none" strokeWidth={8} strokeLinecap="round"
                     className="stroke-primary"
@@ -172,7 +172,7 @@ export default function CustomerJourneyScorePage() {
                   <span className="text-3xl font-bold text-primary">{score}</span>
                   <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{tc('journeyScore.score')}</span>
                 </div>
-              </motion.div>
+              </Motion.div>
               <div className="flex-1 min-w-0 text-center sm:text-left">
                 <h2 className="text-xl font-bold tracking-tight">{tc('journeyScore.scoreTitle')}</h2>
                 <p className="text-sm text-muted-foreground mt-1">{tc('journeyScore.scoreDesc')}</p>
@@ -294,7 +294,7 @@ export default function CustomerJourneyScorePage() {
                 const alignLeft = isEven;
 
                 return (
-                  <motion.div
+                  <Motion.div
                     key={ev.id}
                     initial={{ opacity: 0, y: 30, scale: 0.95 }}
                     whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -305,7 +305,7 @@ export default function CustomerJourneyScorePage() {
                   >
                     {/* Node Circle */}
                     <div className="absolute left-[-16px] sm:left-1/2 sm:transform sm:-translate-x-1/2 z-10">
-                      <motion.div
+                      <Motion.div
                         whileHover={{ scale: 1.2, rotate: 10 }}
                         className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-md border-4 border-background ${colorClass} bg-background`}
                       >
@@ -314,7 +314,7 @@ export default function CustomerJourneyScorePage() {
                         ) : (
                           <IconComponent className="w-5 h-5 currentColor" />
                         )}
-                      </motion.div>
+                      </Motion.div>
                     </div>
 
                     {/* Content Card */}
@@ -345,7 +345,7 @@ export default function CustomerJourneyScorePage() {
                       </Card>
                     </div>
 
-                  </motion.div>
+                  </Motion.div>
                 );
               })}
             </AnimatePresence>

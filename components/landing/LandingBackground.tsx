@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { DynamicBackground, type BackgroundVariant } from '@/components/ui/backgrounds';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
 import { BRAND_ACCENT_PINK_HEX, BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
@@ -89,7 +89,7 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
             { size: 180, x: '5%', y: '82%', color: 'bg-primary/45', blur: 'blur-3xl', duration: 9 },
             { size: 130, x: '40%', y: '22%', color: 'bg-fuchsia-500/30', blur: 'blur-2xl', duration: 7 },
           ].map((orb, i) => (
-            <motion.div
+            <Motion.div
               key={`orb-${i}`}
               className={`absolute rounded-full ${orb.color} ${orb.blur}`}
               style={{ width: orb.size, height: orb.size, left: orb.x, top: orb.y }}
@@ -111,7 +111,7 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
             const delay = seeded(i * 10 + 3) * 12;
             const drift = (seeded(i * 10 + 4) - 0.5) * 120;
             return (
-              <motion.div
+              <Motion.div
                 key={`snow-${i}`}
                 className="absolute rounded-full"
                 style={{
@@ -144,18 +144,18 @@ export default function LandingBackground({ initialBackgroundEffect = 'original'
 
           {/* Işıldayan yıldızlar */}
           {[...Array(6)].map((_, i) => (
-            <motion.div
+            <Motion.div
               key={`sparkle-${i}`}
               className="absolute"
               style={{ left: `${5 + seeded(2000 + i * 5) * 90}%`, top: `${5 + seeded(2000 + i * 5 + 1) * 90}%` }}
             >
-              <motion.div
+              <Motion.div
                 className="h-1 w-1 rounded-full bg-white"
                 style={{ boxShadow: '0 0 10px 4px rgba(255,255,255,0.8), 0 0 20px 8px rgba(240, 171, 252, 0.5)' }}
                 animate={{ scale: [0, 1.5, 0], opacity: [0, 1, 0] }}
                 transition={{ duration: 2 + seeded(2000 + i * 5 + 2) * 2, repeat: Infinity, ease: 'easeInOut', delay: seeded(2000 + i * 5 + 3) * 4 }}
               />
-            </motion.div>
+            </Motion.div>
           ))}
         </>
       )}

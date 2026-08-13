@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
     Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle,
     XCircle, ExternalLink, Filter, BellOff, Gift,
@@ -275,14 +275,14 @@ export function NotificationCenter() {
                     >
                         <Bell className="h-[18px] w-[18px]" aria-hidden />
                         {unreadCount > 0 && (
-                            <motion.span
+                            <Motion.span
                                 key={unreadCount}
                                 initial={{ scale: 0.5 }}
                                 animate={{ scale: 1 }}
                                 className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow-sm"
                             >
                                 {unreadCount > 99 ? '99+' : unreadCount}
-                            </motion.span>
+                            </Motion.span>
                         )}
                     </Button>
                 </SheetTrigger>
@@ -354,7 +354,7 @@ export function NotificationCenter() {
                                 {filteredNotifications.map((n, i) => {
                                     const Icon = getIcon(n.type);
                                     return (
-                                        <motion.div
+                                        <Motion.div
                                             key={n.id}
                                             initial={{ opacity: 0, x: 16 }}
                                             animate={{ opacity: 1, x: 0 }}
@@ -417,7 +417,7 @@ export function NotificationCenter() {
                                                     </Button>
                                                 </div>
                                             </div>
-                                        </motion.div>
+                                        </Motion.div>
                                     );
                                 })}
                             </AnimatePresence>
@@ -433,14 +433,14 @@ export function NotificationCenter() {
                         <>
                             <DialogHeader>
                                 <div className="flex items-start gap-4">
-                                    <motion.div
+                                    <Motion.div
                                         initial={{ scale: 0 }}
                                         animate={{ scale: 1 }}
                                         transition={{ type: 'spring', stiffness: 200 }}
                                         className={`p-3 rounded-full shrink-0 ${getBg(selected.type)}`}
                                     >
                                         {(() => { const I = getIcon(selected.type); return <I className={`h-6 w-6 ${getColor(selected.type)}`} />; })()}
-                                    </motion.div>
+                                    </Motion.div>
                                     <div className="flex-1">
                                         <DialogTitle className="text-lg">{selected.title}</DialogTitle>
                                         <DialogDescription className="mt-1">{formatFullDate(selected.createdAt)}</DialogDescription>
@@ -469,7 +469,7 @@ export function NotificationCenter() {
 
                             <Separator className="my-4" />
 
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
+                            <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-4">
                                 <div className="p-4 rounded-lg bg-muted/50">
                                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{selected.message}</p>
                                 </div>
@@ -532,7 +532,7 @@ export function NotificationCenter() {
                                     </Button>
                                     <Button size="sm" onClick={() => setDetailOpen(false)}>{t('notificationCenter.closeOk')}</Button>
                                 </div>
-                            </motion.div>
+                            </Motion.div>
                         </>
                     )}
                 </DialogContent>

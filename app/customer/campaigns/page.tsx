@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Megaphone,
   Clock,
@@ -95,7 +95,7 @@ export default function CustomerCampaignsPage() {
               {t('customerCampaigns.activeNow')}
             </h2>
             {activeNow.map((campaign, i) => (
-              <motion.div
+              <Motion.div
                 key={campaign.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -130,7 +130,7 @@ export default function CustomerCampaignsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))}
           </div>
         )}
@@ -151,7 +151,7 @@ export default function CustomerCampaignsPage() {
             </Card>
           ) : (
             (activeNow.length > 0 ? upcoming : campaigns).map((campaign, i) => (
-              <motion.div
+              <Motion.div
                 key={campaign.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -182,7 +182,7 @@ export default function CustomerCampaignsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             ))
           )}
         </div>

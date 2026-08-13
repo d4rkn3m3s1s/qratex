@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   MessageSquare,
   Loader2,
@@ -115,7 +115,7 @@ function SentimentDonut({ positive, negative, neutral }: { positive: number; neg
           const path = getPath(currentAngle, currentAngle + angle);
           currentAngle += angle;
           return (
-            <motion.path
+            <Motion.path
               key={i}
               d={path}
               fill={d.color}
@@ -149,10 +149,10 @@ function RatingBars({ dist }: { dist: number[] }) {
       {[5, 4, 3, 2, 1].map((r, i) => {
         const val = dist[r - 1] ?? 0;
         return (
-          <motion.div key={r} className="flex items-center gap-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
+          <Motion.div key={r} className="flex items-center gap-2" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i, 10) * 0.05 }}>
             <span className="text-xs w-4">{r}★</span>
             <div className="flex-1 h-5 bg-muted/50 rounded overflow-hidden">
-              <motion.div
+              <Motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${(val / max) * 100}%` }}
                 transition={{ delay: 0.2 + i * 0.05, duration: 0.4 }}
@@ -160,7 +160,7 @@ function RatingBars({ dist }: { dist: number[] }) {
               />
             </div>
             <span className="text-xs w-16 text-right font-medium">{Math.round((val / total) * 100)}% ({val})</span>
-          </motion.div>
+          </Motion.div>
         );
       })}
     </div>
@@ -174,7 +174,7 @@ function DailyTrendChart({ data }: { data: { date: string; label: string; count:
   return (
     <div className="flex items-end gap-1 h-24">
       {data.map((d, i) => (
-        <motion.div
+        <Motion.div
           key={d.date}
           initial={{ height: 0 }}
           animate={{ height: `${(d.count / max) * 100}%` }}
@@ -187,7 +187,7 @@ function DailyTrendChart({ data }: { data: { date: string; label: string; count:
             title={t('dealerVocWall.chartBarTooltip').replace('{date}', d.date).replace('{count}', String(d.count))}
           />
           <span className="text-[10px] font-medium order-1">{d.count}</span>
-        </motion.div>
+        </Motion.div>
       ))}
     </div>
   );
@@ -200,7 +200,7 @@ function LiveTicker({ items }: { items: VoCItem[] }) {
   const repeated = [...items, ...items];
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm">
-      <motion.div
+      <Motion.div
         className="flex min-w-max gap-3 py-3 pr-3"
         animate={{ x: ['0%', '-50%'] }}
         transition={{ duration: 24, ease: 'linear', repeat: Infinity }}
@@ -226,7 +226,7 @@ function LiveTicker({ items }: { items: VoCItem[] }) {
             </div>
           );
         })}
-      </motion.div>
+      </Motion.div>
       <div className="pointer-events-none absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-background to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-background to-transparent" />
     </div>
@@ -240,7 +240,7 @@ function LiveFeedStrip({ items }: { items: VoCItem[] }) {
   const repeated = [...items.slice(0, 12), ...items.slice(0, 12)];
   return (
     <Card className="relative overflow-hidden border-border/60 bg-card/50 backdrop-blur-sm">
-      <motion.div
+      <Motion.div
         className="pointer-events-none absolute left-0 top-0 h-full w-1/3 bg-gradient-to-r from-primary/0 via-primary/10 to-primary/0"
         animate={{ x: ['-120%', '360%'] }}
         transition={{ duration: 6, ease: 'linear', repeat: Infinity }}
@@ -253,7 +253,7 @@ function LiveFeedStrip({ items }: { items: VoCItem[] }) {
         <CardDescription>{t('dealerVocWall.liveFeedDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="overflow-hidden">
-        <motion.div
+        <Motion.div
           className="flex min-w-max gap-3 pb-1"
           animate={{ x: ['0%', '-50%'] }}
           transition={{ duration: 20, ease: 'linear', repeat: Infinity }}
@@ -282,7 +282,7 @@ function LiveFeedStrip({ items }: { items: VoCItem[] }) {
               </div>
             );
           })}
-        </motion.div>
+        </Motion.div>
       </CardContent>
     </Card>
   );
@@ -420,7 +420,7 @@ export default function DealerVoCWallPage() {
       <LiveFeedStrip items={voc.recent} />
 
       {/* Stats */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
@@ -474,11 +474,11 @@ export default function DealerVoCWallPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Charts */}
       <div className="grid lg:grid-cols-3 gap-6">
-        <motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ y: -3 }}>
+        <Motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} whileHover={{ y: -3 }}>
           <Card className="h-full overflow-x-auto md:overflow-x-visible">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -493,8 +493,8 @@ export default function DealerVoCWallPage() {
               <SentimentDonut positive={sentiment.positive} negative={sentiment.negative} neutral={sentiment.neutral} />
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ y: -3 }}>
+        </Motion.div>
+        <Motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} whileHover={{ y: -3 }}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -507,8 +507,8 @@ export default function DealerVoCWallPage() {
               <RatingBars dist={ratingDist} />
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ y: -3 }}>
+        </Motion.div>
+        <Motion.div className="h-full" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} whileHover={{ y: -3 }}>
           <Card className="h-full">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -521,11 +521,11 @@ export default function DealerVoCWallPage() {
               <DailyTrendChart data={dailyTrend} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Feedback wall */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
+      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -567,7 +567,7 @@ export default function DealerVoCWallPage() {
               const bgGlow = isPositive ? 'from-emerald-500/5 to-transparent' : isNegative ? 'from-red-500/5 to-transparent' : 'from-slate-500/5 to-transparent';
 
               return (
-                <motion.div
+                <Motion.div
                   key={item.id}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -589,7 +589,7 @@ export default function DealerVoCWallPage() {
                           <Badge variant={isPositive ? 'default' : isNegative ? 'destructive' : 'secondary'} className="text-xs">
                             {sentimentDisplay}
                           </Badge>
-                          <motion.span
+                          <Motion.span
                             className={`h-2 w-2 rounded-full ${isPositive ? 'bg-emerald-500' : isNegative ? 'bg-red-500' : 'bg-slate-400'}`}
                             animate={{ opacity: [0.35, 1, 0.35], scale: [1, 1.15, 1] }}
                             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -616,12 +616,12 @@ export default function DealerVoCWallPage() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </Motion.div>
               );
             })}
           </div>
         )}
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

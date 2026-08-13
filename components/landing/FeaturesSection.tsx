@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { featureDefs } from '@/lib/landing-content';
@@ -21,7 +21,7 @@ export default function FeaturesSection() {
   return (
     <section id="features" className="py-20 lg:py-32 relative scroll-mt-20 [content-visibility:auto]" tabIndex={-1}>
       <div className="container px-4">
-        <motion.div
+        <Motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -34,8 +34,8 @@ export default function FeaturesSection() {
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto text-balance leading-relaxed">
             {t('landing.features.sub')}
           </p>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
           variants={staggerContainer}
           initial="initial"
@@ -43,7 +43,7 @@ export default function FeaturesSection() {
           viewport={{ once: true }}
         >
           {featureDefs.map((feature) => (
-            <motion.div key={feature.id} variants={fadeInUp}>
+            <Motion.div key={feature.id} variants={fadeInUp}>
               <Card hover className="h-full group">
                 <CardHeader>
                   <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
@@ -53,9 +53,9 @@ export default function FeaturesSection() {
                   <CardDescription>{t(`landing.features.items.${feature.id}.description`)}</CardDescription>
                 </CardHeader>
               </Card>
-            </motion.div>
+            </Motion.div>
           ))}
-        </motion.div>
+        </Motion.div>
       </div>
     </section>
   );

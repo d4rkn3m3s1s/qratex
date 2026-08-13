@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, Trash2, Pencil, Power, PowerOff, Zap, AlertTriangle,
     Star, MessageSquare, Search, ChevronLeft, Loader2, Sparkles,
@@ -244,7 +244,7 @@ export default function AutoRepliesPage() {
                         {rules.map((rule, i) => {
                             const Icon = FIELD_ICONS[rule.condition.field] || Star;
                             return (
-                                <motion.div
+                                <Motion.div
                                     key={rule.id}
                                     initial={{ opacity: 0, y: 8 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -300,7 +300,7 @@ export default function AutoRepliesPage() {
                                             </div>
                                         </CardContent>
                                     </Card>
-                                </motion.div>
+                                </Motion.div>
                             );
                         })}
                     </AnimatePresence>

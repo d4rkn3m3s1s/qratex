@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +32,7 @@ export default function DemoSection() {
   return (
     <section id="demo" className="py-20 lg:py-32 scroll-mt-20 [content-visibility:auto]">
       <div className="container px-4">
-        <motion.div
+        <Motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -95,7 +95,7 @@ export default function DemoSection() {
                           <rect x="62" y="78" width="8" height="8" fill="currentColor"/>
                           <rect x="78" y="78" width="14" height="14" fill="currentColor"/>
                         </svg>
-                        <motion.div
+                        <Motion.div
                           className="absolute inset-x-2 h-0.5 rounded-full bg-primary shadow-[0_0_12px_2px_hsl(var(--primary))]"
                           initial={{ top: '10%' }}
                           animate={{ top: ['10%', '86%', '10%'] }}
@@ -131,7 +131,7 @@ export default function DemoSection() {
               )}
             </div>
           </div>
-        </motion.div>
+        </Motion.div>
       </div>
     </section>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, m as Motion } from 'framer-motion';
 import { Copy, Gift, Sparkles, Star, Trophy, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -72,7 +72,7 @@ export function SurpriseEggThreeModal({
 
   return (
     <AnimatePresence>
-      <motion.div
+      <Motion.div
         className="fixed inset-0 z-[100] overflow-y-auto bg-[#050505]/95 text-white"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -92,7 +92,7 @@ export function SurpriseEggThreeModal({
           </div>
 
           <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center">
-            <motion.section
+            <Motion.section
               className="relative w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-[0_40px_140px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
               initial={{ scale: 0.96, opacity: 0, y: 24 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -121,23 +121,23 @@ export function SurpriseEggThreeModal({
                     </div>
 
                     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-[1.6rem] border border-white/10 bg-black/25 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                      <motion.div
+                      <Motion.div
                         className="absolute inset-0 bg-[radial-gradient(circle,rgba(255,255,255,0.12),transparent_45%)]"
                         animate={{ opacity: [0.28, 0.62, 0.28], scale: [1, 1.05, 1] }}
                         transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <Motion.div
                         className="absolute left-6 top-6 h-24 w-24 rounded-full bg-amber-300/20 blur-3xl"
                         animate={{ x: [0, 20, 0], y: [0, 8, 0], opacity: [0.18, 0.42, 0.18] }}
                         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
                       />
-                      <motion.div
+                      <Motion.div
                         className="absolute bottom-8 right-8 h-28 w-28 rounded-full bg-white/10 blur-3xl"
                         animate={{ x: [0, -18, 0], y: [0, -10, 0], opacity: [0.16, 0.32, 0.16] }}
                         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
                       />
 
-                      <motion.div
+                      <Motion.div
                         className="relative z-10 flex h-[18rem] w-full max-w-[34rem] items-center justify-center md:h-[28rem]"
                         animate={phase === 'intro' ? { scale: [0.98, 1.01, 1], rotate: [-1.2, 1.2, 0] } : { scale: 1, rotate: 0 }}
                         transition={{ duration: 1.5, ease: 'easeOut' }}
@@ -151,12 +151,12 @@ export function SurpriseEggThreeModal({
                           style={{ background: `radial-gradient(circle, ${leagueTheme.glowSecondary}40, transparent 70%)` }}
                         />
 
-                        <motion.div
+                        <Motion.div
                           className="relative flex h-56 w-56 items-center justify-center rounded-[2rem] border border-white/12 bg-white/[0.06] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           animate={phase === 'intro' ? { y: [0, -8, 0], rotate: [-2, 2, 0] } : { y: 0, rotate: 0 }}
                           transition={{ duration: 1.8, ease: 'easeInOut' }}
                         >
-                          <motion.div
+                          <Motion.div
                             className="absolute inset-4 rounded-[1.5rem]"
                             style={{
                               background: `linear-gradient(145deg, ${leagueTheme.shellLight}, ${leagueTheme.shellMid} 55%, ${leagueTheme.shellDark})`,
@@ -166,34 +166,34 @@ export function SurpriseEggThreeModal({
                             transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                           />
 
-                          <motion.div
+                          <Motion.div
                             className="absolute left-8 top-10 h-16 w-16 rounded-full bg-white/18 blur-2xl"
                             animate={phase === 'reveal' || phase === 'done' ? { opacity: 0.8, scale: 1.12 } : { opacity: 0.35, scale: 1 }}
                           />
-                          <motion.div
+                          <Motion.div
                             className="absolute bottom-12 right-9 h-14 w-14 rounded-full bg-black/20 blur-2xl"
                             animate={phase === 'reveal' || phase === 'done' ? { opacity: 0.75, scale: 1.15 } : { opacity: 0.25, scale: 1 }}
                           />
 
                           <div className="relative z-10 flex flex-col items-center gap-4 text-center">
-                            <motion.div
+                            <Motion.div
                               className="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-black/15 shadow-[0_20px_50px_rgba(0,0,0,0.35)]"
                               animate={phase === 'intro' ? { y: [0, -4, 0] } : { y: 0 }}
                               transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
                             >
                               <Gift className="h-10 w-10 text-white/90" />
-                            </motion.div>
+                            </Motion.div>
                             <div>
                               <p className="text-[11px] uppercase tracking-[0.24em] text-white/58">Bugünün sürprizi</p>
                               <p className="mt-1 text-sm font-medium text-white/84">{leagueName} ligi içinde açıldı</p>
                             </div>
                           </div>
-                        </motion.div>
+                        </Motion.div>
 
                         <AnimatePresence>
                           {showParticles &&
                             [...Array(14)].map((_, i) => (
-                              <motion.span
+                              <Motion.span
                                 key={i}
                                 className="absolute h-2 w-2 rounded-full bg-amber-200"
                                 initial={{ opacity: 0.9, scale: 1, x: 0, y: 0 }}
@@ -208,7 +208,7 @@ export function SurpriseEggThreeModal({
                               />
                             ))}
                         </AnimatePresence>
-                      </motion.div>
+                      </Motion.div>
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -231,7 +231,7 @@ export function SurpriseEggThreeModal({
                 <div className="relative flex flex-col justify-between p-5 sm:p-6 md:p-8 lg:p-10">
                   <div className="space-y-6">
                     <div className="space-y-3">
-                      <motion.div
+                      <Motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.7, y: 6 }}
                         transition={{ duration: 0.6, delay: 0.05 }}
@@ -239,30 +239,30 @@ export function SurpriseEggThreeModal({
                       >
                         <Trophy className="h-3.5 w-3.5" />
                         Günün ödülü
-                      </motion.div>
+                      </Motion.div>
 
-                      <motion.h3
+                      <Motion.h3
                         className="max-w-[14ch] text-balance text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl md:text-5xl"
                         initial={{ opacity: 0, y: 18, filter: 'blur(8px)' }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0, filter: 'blur(0px)' } : { opacity: 0.8, y: 8, filter: 'blur(4px)' }}
                         transition={{ duration: 0.8, delay: 0.12 }}
                       >
                         {title}
-                      </motion.h3>
+                      </Motion.h3>
 
-                      <motion.p
+                      <Motion.p
                         className="max-w-xl text-pretty text-sm leading-7 text-white/68 sm:text-base"
                         initial={{ opacity: 0, y: 12 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.72, y: 6 }}
                         transition={{ duration: 0.7, delay: 0.18 }}
                       >
                         {message || 'Ödül hesabına işlendi. Bu kutu sadece bir bildirim değil, günlük ritminin bir parçası gibi tasarlandı.'}
-                      </motion.p>
+                      </Motion.p>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       {pointsText ? (
-                        <motion.div
+                        <Motion.div
                           className="rounded-[1.4rem] border border-amber-300/20 bg-gradient-to-br from-amber-300/15 via-amber-200/10 to-transparent p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           initial={{ opacity: 0, y: 16 }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -277,9 +277,9 @@ export function SurpriseEggThreeModal({
                               <p className="text-2xl font-semibold tracking-[-0.03em] text-white">{pointsText}</p>
                             </div>
                           </div>
-                        </motion.div>
+                        </Motion.div>
                       ) : (
-                        <motion.div
+                        <Motion.div
                           className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                           initial={{ opacity: 0, y: 16 }}
                           animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -288,10 +288,10 @@ export function SurpriseEggThreeModal({
                           <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Ödül tipi</p>
                           <p className="mt-1 text-lg font-semibold text-white">Anında erişim</p>
                           <p className="mt-1 text-sm text-white/55">Kazanılan içerik hesabında hazır.</p>
-                        </motion.div>
+                        </Motion.div>
                       )}
 
-                      <motion.div
+                      <Motion.div
                         className="rounded-[1.4rem] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         initial={{ opacity: 0, y: 16 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.8, y: 8 }}
@@ -300,11 +300,11 @@ export function SurpriseEggThreeModal({
                         <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">Lig seviyesi</p>
                         <p className="mt-1 text-lg font-semibold text-white">{leagueName}</p>
                         <p className="mt-1 text-sm text-white/55">Tema, ödüle göre dinamik olarak değişiyor.</p>
-                      </motion.div>
+                      </Motion.div>
                     </div>
 
                     {couponCode ? (
-                      <motion.div
+                      <Motion.div
                         className="space-y-3 rounded-[1.6rem] border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                         initial={{ opacity: 0, y: 18 }}
                         animate={phase === 'reveal' || phase === 'done' ? { opacity: 1, y: 0 } : { opacity: 0.84, y: 10 }}
@@ -333,7 +333,7 @@ export function SurpriseEggThreeModal({
                             Aktif
                           </span>
                         </div>
-                      </motion.div>
+                      </Motion.div>
                     ) : null}
                   </div>
 
@@ -372,10 +372,10 @@ export function SurpriseEggThreeModal({
               >
                 <X className="h-5 w-5" />
               </Button>
-            </motion.section>
+            </Motion.section>
           </div>
         </div>
-      </motion.div>
+      </Motion.div>
     </AnimatePresence>
   );
 }

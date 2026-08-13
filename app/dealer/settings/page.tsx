@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Settings,
   Save,
@@ -414,7 +414,7 @@ export default function DealerSettingsPage() {
 
         {/* Profile Tab */}
         <TabsContent value="profile">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -685,12 +685,12 @@ export default function DealerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Notifications Tab */}
         <TabsContent value="notifications">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -762,12 +762,12 @@ export default function DealerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Security Tab */}
         <TabsContent value="security">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
@@ -891,12 +891,12 @@ export default function DealerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Dashboard Layout Tab */}
         <TabsContent value="dashboard">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -991,21 +991,21 @@ export default function DealerSettingsPage() {
                 <AccessibilityToggles />
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
       </Tabs>
 
       {/* Avatar Selection Modal */}
       <AnimatePresence>
         {avatarDialogOpen && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={() => setAvatarDialogOpen(false)}
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -1047,7 +1047,7 @@ export default function DealerSettingsPage() {
                   <div className="p-4 max-h-[50vh] overflow-y-auto">
                     <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
                       {currentCategoryAvatars.map((avatar) => (
-                        <motion.button
+                        <Motion.button
                           key={avatar}
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
@@ -1069,14 +1069,14 @@ export default function DealerSettingsPage() {
                               <Check className="h-3 w-3 text-primary-foreground" />
                             </div>
                           )}
-                        </motion.button>
+                        </Motion.button>
                       ))}
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

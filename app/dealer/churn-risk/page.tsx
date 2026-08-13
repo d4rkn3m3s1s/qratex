@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   TrendingDown,
   Loader2,
@@ -71,14 +71,14 @@ export default function DealerChurnRiskPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[300px]">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="flex flex-col items-center gap-4"
         >
           <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
           <p className="text-sm text-muted-foreground">{t('dealerChurnRisk.loadingDescription')}</p>
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -121,7 +121,7 @@ export default function DealerChurnRiskPage() {
 
       {/* Metrik kartları */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -148,8 +148,8 @@ export default function DealerChurnRiskPage() {
               )}
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
@@ -166,8 +166,8 @@ export default function DealerChurnRiskPage() {
               <p className="text-xs text-muted-foreground mt-1">{t('dealerChurnRisk.feedbackWord')}</p>
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -184,8 +184,8 @@ export default function DealerChurnRiskPage() {
               <p className="text-xs text-muted-foreground mt-1">{t('dealerChurnRisk.customersWord')}</p>
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div
+        </Motion.div>
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
@@ -234,12 +234,12 @@ export default function DealerChurnRiskPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Önerilen aksiyon */}
       {(cr?.highRiskCount ?? 0) > 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -262,11 +262,11 @@ export default function DealerChurnRiskPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Yüksek riskli geri bildirimler */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35 }}
@@ -296,7 +296,7 @@ export default function DealerChurnRiskPage() {
                 {cr.highRiskFeedbacks.map((fb, i) => {
                   const pct = fb.churnRisk != null ? Math.round(fb.churnRisk * 100) : 0;
                   return (
-                    <motion.li
+                    <Motion.li
                       key={fb.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -351,14 +351,14 @@ export default function DealerChurnRiskPage() {
                           </Button>
                         </Link>
                       </div>
-                    </motion.li>
+                    </Motion.li>
                   );
                 })}
               </ul>
             )}
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

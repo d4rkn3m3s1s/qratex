@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Download, X, Share, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePWA } from '@/hooks/use-pwa';
@@ -125,7 +125,7 @@ export function InstallBanner() {
     <>
       {/* z-[40]: dashboard mobil menü (z-50) üstte kalır; cookie bandı z-[70] üzerine oturabilir */}
       <AnimatePresence>
-        <motion.div
+        <Motion.div
           role="region"
           aria-labelledby="pwa-install-banner-title"
           initial={{ y: 100, opacity: 0 }}
@@ -191,13 +191,13 @@ export function InstallBanner() {
               </div>
             </div>
           </div>
-        </motion.div>
+        </Motion.div>
       </AnimatePresence>
 
       {/* iOS Guide Modal */}
       <AnimatePresence>
         {showIOSGuide && (
-          <motion.div
+          <Motion.div
             role="presentation"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -205,7 +205,7 @@ export function InstallBanner() {
             className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 backdrop-blur-sm"
             onClick={closeIosGuide}
           >
-            <motion.div
+            <Motion.div
               ref={iosGuideDialogRef}
               role="dialog"
               aria-modal="true"
@@ -282,8 +282,8 @@ export function InstallBanner() {
               >
                 {t('pwaInstall.iosGotIt')}
               </Button>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </>

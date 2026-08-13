@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Settings,
   Save,
@@ -542,7 +542,7 @@ export default function CustomerSettingsPage() {
 
         {/* Profile Tab */}
         <TabsContent value="profile">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -721,12 +721,12 @@ export default function CustomerSettingsPage() {
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Notifications Tab */}
         <TabsContent value="notifications">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -882,12 +882,12 @@ export default function CustomerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Security Tab */}
         <TabsContent value="security">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
@@ -944,12 +944,12 @@ export default function CustomerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Preferences Tab */}
         <TabsContent value="preferences">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -1039,21 +1039,21 @@ export default function CustomerSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         <TabsContent value="cosmetics">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
             <ShowcaseSelector />
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         <TabsContent value="privacy">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -1107,7 +1107,7 @@ export default function CustomerSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
       </Tabs>
 

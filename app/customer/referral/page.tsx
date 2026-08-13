@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import {
   Users,
@@ -178,7 +178,7 @@ export default function CustomerReferralPage() {
       />
 
       {/* Referral Code */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -222,11 +222,11 @@ export default function CustomerReferralPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Apply Referral Code */}
       {!data?.referredBy && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -247,12 +247,12 @@ export default function CustomerReferralPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Referred By */}
       {data?.referredBy && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
           <Card className="border-0 bg-emerald-500/5 border-emerald-500/20">
             <CardContent className="p-4 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
@@ -261,7 +261,7 @@ export default function CustomerReferralPage() {
               </p>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Stats */}
@@ -273,7 +273,7 @@ export default function CustomerReferralPage() {
         ].map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05 }}>
+            <Motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${stat.bg} w-fit mx-auto mb-2`}>
@@ -283,14 +283,14 @@ export default function CustomerReferralPage() {
                   <p className="text-[10px] sm:text-xs text-muted-foreground">{stat.label}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>
 
       {/* Kademe (milestone) ödülleri: ilerleme çubuğu + talep edilebilir bonuslar */}
       {data?.milestones && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
           <Card className="border-border/60 bg-gradient-to-br from-primary/5 to-violet-500/5 backdrop-blur-sm">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
@@ -372,11 +372,11 @@ export default function CustomerReferralPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Referral List - always show; empty state when no referrals */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export default function CustomerReferralPage() {
           <CardContent className="space-y-3">
             {data?.referrals && data.referrals.length > 0 ? (
               data.referrals.map((ref, i) => (
-                <motion.div key={ref.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + i * 0.05 }}
+                <Motion.div key={ref.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 + i * 0.05 }}
                   className="flex items-center gap-3 p-3 rounded-xl bg-muted/30"
                 >
                   <Avatar className="h-10 w-10">
@@ -415,7 +415,7 @@ export default function CustomerReferralPage() {
                       </Badge>
                     )}
                   </div>
-                </motion.div>
+                </Motion.div>
               ))
             ) : (
               <div className="text-center py-8 px-4 rounded-xl bg-muted/20 border border-dashed border-muted-foreground/20">
@@ -429,7 +429,7 @@ export default function CustomerReferralPage() {
             )}
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

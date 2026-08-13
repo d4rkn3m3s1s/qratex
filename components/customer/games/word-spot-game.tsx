@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Eye, Zap, Heart, Flame } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -220,7 +220,7 @@ export function WordSpotGame() {
         <div className="grid grid-cols-3 gap-2.5">
           <AnimatePresence mode="popLayout">
             {tiles.map((t, i) => (
-              <motion.button
+              <Motion.button
                 key={t.id}
                 type="button"
                 layout
@@ -238,7 +238,7 @@ export function WordSpotGame() {
                 }}
               >
                 {t.text}
-              </motion.button>
+              </Motion.button>
             ))}
           </AnimatePresence>
         </div>

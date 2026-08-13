@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { ArrowRight, Gamepad2, CheckCircle2, Trophy, Flame } from 'lucide-react';
 import { MINI_GAMES } from '@/lib/minigame-config';
 import { AchievementsPanel } from './achievements-panel';
@@ -100,7 +100,7 @@ export function GamesHub() {
     <div className="space-y-5">
       {/* Günlük seri (streak) banner */}
       {streak && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           className="relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4"
@@ -112,14 +112,14 @@ export function GamesHub() {
                 : 'linear-gradient(120deg, rgba(30,18,55,0.9), rgba(8,5,20,0.95))',
           }}
         >
-          <motion.div
+          <Motion.div
             className="text-5xl"
             animate={streak.current > 0 ? { scale: [1, 1.15, 1], rotate: [0, -6, 6, 0] } : {}}
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
             style={{ filter: streak.current > 0 ? 'none' : 'grayscale(1) opacity(0.5)' }}
           >
             🔥
-          </motion.div>
+          </Motion.div>
           <div className="flex-1">
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-black tabular-nums text-white">{streak.current}</span>
@@ -137,11 +137,11 @@ export function GamesHub() {
             className="h-6 w-6 shrink-0"
             style={{ color: streak.current > 0 ? '#fb923c' : '#52525b' }}
           />
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Günlük ilerleme şeridi */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="relative overflow-hidden rounded-2xl border border-white/10 p-4"
@@ -157,7 +157,7 @@ export function GamesHub() {
           </span>
         </div>
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-          <motion.div
+          <Motion.div
             className="h-full rounded-full"
             initial={{ width: 0 }}
             animate={{ width: `${loaded ? pct : 0}%` }}
@@ -170,13 +170,13 @@ export function GamesHub() {
             ? '🎉 Bugün tüm oyunları bitirdin! Efsanesin.'
             : 'Her oyundan günde 1 hakkın var — hepsini bitir, puanları topla!'}
         </p>
-      </motion.div>
+      </Motion.div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((c, i) => {
           const done = playedSet.has(c.gameType);
           return (
-            <motion.div
+            <Motion.div
               key={c.href}
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
@@ -212,13 +212,13 @@ export function GamesHub() {
                 )}
 
                 <div className="relative z-10 flex flex-col gap-3">
-                  <motion.div
+                  <Motion.div
                     className="text-5xl"
                     style={{ textShadow: `0 0 30px ${c.accent}`, filter: done ? 'grayscale(0.3)' : 'none' }}
                     whileHover={{ scale: 1.15, rotate: 6 }}
                   >
                     {c.emoji}
-                  </motion.div>
+                  </Motion.div>
                   <h3 className="text-lg font-bold text-white" style={{ textShadow: `0 0 14px ${c.accent}66` }}>
                     {c.title}
                   </h3>
@@ -231,7 +231,7 @@ export function GamesHub() {
                   </div>
                 </div>
               </Link>
-            </motion.div>
+            </Motion.div>
           );
         })}
 

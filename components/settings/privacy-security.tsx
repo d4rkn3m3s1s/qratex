@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
     Shield, Download, Trash2, Loader2, Key, Eye, EyeOff,
     QrCode, CheckCircle2, AlertTriangle, Copy, Bell, BellRing, BellOff
@@ -181,7 +181,7 @@ export function PrivacySecuritySettings() {
 
                     {/* Setup flow */}
                     {secret && !is2FAEnabled && (
-                        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 border-t pt-4">
+                        <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 border-t pt-4">
                             <div className="p-4 rounded-xl bg-muted/50 space-y-3">
                                 <p className="text-sm font-medium">{t('privacySecurity.step1Scan')}</p>
                                 <div className="flex items-center gap-2 bg-background rounded-lg px-3 py-2">
@@ -214,7 +214,7 @@ export function PrivacySecuritySettings() {
                                     </Button>
                                 </div>
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     )}
                 </CardContent>
             </Card>

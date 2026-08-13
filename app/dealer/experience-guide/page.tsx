@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { LayoutGrid, ClipboardList, Users, ArrowUpRight, Radio } from 'lucide-react';
 import { useAppT } from '@/lib/app-locale';
@@ -49,14 +49,14 @@ export default function DealerExperienceGuidePage() {
           icon={<Radio className="size-7" aria-hidden />}
           tone="auto"
           aside={
-            <motion.div {...fade} className="w-full max-w-sm lg:pt-1">
+            <Motion.div {...fade} className="w-full max-w-sm lg:pt-1">
               <div className="rounded-xl border-2 border-dashed border-amber-500/35 bg-muted/30 px-4 py-4 font-mono text-[11px] leading-relaxed text-foreground shadow-sm dark:border-amber-400/25 dark:bg-muted/20">
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-700 dark:text-amber-300">
                   {t('dealerExperienceGuide.railTag')}
                 </p>
                 <p className="mt-3 text-[13px] font-medium leading-snug text-foreground">{t('dealerExperienceGuide.heroRail')}</p>
               </div>
-            </motion.div>
+            </Motion.div>
           }
         />
 
@@ -66,7 +66,7 @@ export default function DealerExperienceGuidePage() {
           {STEPS.map((step, idx) => {
             const Icon = step.icon;
             return (
-              <motion.div
+              <Motion.div
                 key={step.key}
                 {...fade}
                 transition={{ ...fade.transition, delay: 0.08 + idx * 0.07 }}
@@ -97,12 +97,12 @@ export default function DealerExperienceGuidePage() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </Motion.div>
             );
           })}
         </div>
 
-        <motion.div {...fade} transition={{ ...fade.transition, delay: 0.32 }} className="space-y-3">
+        <Motion.div {...fade} transition={{ ...fade.transition, delay: 0.32 }} className="space-y-3">
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">{t('dealerExperienceGuide.ctaBand')}</p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {shortcuts.map((s) => (
@@ -116,7 +116,7 @@ export default function DealerExperienceGuidePage() {
               </Link>
             ))}
           </div>
-        </motion.div>
+        </Motion.div>
       </div>
     </div>
   );

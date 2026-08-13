@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Crown, Medal, Loader2 } from 'lucide-react';
 
 interface Row {
@@ -74,7 +74,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
         <span>{total} oyuncu</span>
       </div>
       {rows.map((r, i) => (
-        <motion.div
+        <Motion.div
           key={r.rank}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
@@ -92,7 +92,7 @@ export function GameLeaderboard({ gameType, accent }: { gameType: string; accent
           <span className="font-bold tabular-nums" style={{ color: accent }}>
             {r.score}
           </span>
-        </motion.div>
+        </Motion.div>
       ))}
 
       {/* İlk 10 dışındaysam kendi sıram */}

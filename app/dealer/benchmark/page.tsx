@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   BarChart3,
   Star,
@@ -137,7 +137,7 @@ const RadialGauge = ({ value, size = 120 }: { value: number; size?: number }) =>
         strokeWidth={strokeWidth}
         className="stroke-muted/30"
       />
-      <motion.circle
+      <Motion.circle
         cx={size / 2}
         cy={size / 2}
         r={radius}
@@ -176,18 +176,18 @@ export default function DealerBenchmarkPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[360px] gap-6">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-6"
         >
-          <motion.div
+          <Motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
             className="rounded-2xl bg-blue-500/20 p-5"
           >
             <BarChart3 className="h-14 w-14 text-blue-500" />
-          </motion.div>
+          </Motion.div>
           <InlineLoadingStatus
             spinnerClassName="text-blue-500"
             description={(
@@ -197,7 +197,7 @@ export default function DealerBenchmarkPage() {
               </>
             )}
           />
-        </motion.div>
+        </Motion.div>
       </div>
     );
   }
@@ -217,7 +217,7 @@ export default function DealerBenchmarkPage() {
         </div>
         <Card>
           <CardContent className="py-20 text-center">
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-4"
@@ -237,7 +237,7 @@ export default function DealerBenchmarkPage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
-            </motion.div>
+            </Motion.div>
           </CardContent>
         </Card>
       </div>
@@ -278,7 +278,7 @@ export default function DealerBenchmarkPage() {
       />
 
       {b.neighborSegment && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+        <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
           <Card className="border-teal-500/25 bg-teal-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -300,12 +300,12 @@ export default function DealerBenchmarkPage() {
               </p>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Yüzdelik sıra - Radial gauge */}
       {typeof b.percentile === 'number' && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
@@ -347,7 +347,7 @@ export default function DealerBenchmarkPage() {
                   ]
                     .filter((x): x is { label: string; value: number; isPercent: boolean } => !!x)
                     .map((item, i) => (
-                      <motion.div
+                      <Motion.div
                         key={item.label}
                         initial={{ opacity: 0, x: 8 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -356,18 +356,18 @@ export default function DealerBenchmarkPage() {
                       >
                         <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
                         <DiffBadge value={item.value} isPercent={item.isPercent} />
-                      </motion.div>
+                      </Motion.div>
                     ))}
                 </div>
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Günlük trend - Son 7 gün */}
       {dailyTrend.length > 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -384,11 +384,11 @@ export default function DealerBenchmarkPage() {
               <BenchmarkDailyAreaChart data={dailyTrend} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Karşılaştırma bar grafiği */}
-      <motion.div
+      <Motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
@@ -405,11 +405,11 @@ export default function DealerBenchmarkPage() {
             <BenchmarkComparisonBars data={comparisonData} />
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* İki kolon: Sizin metrikleriniz / Platform */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+        <Motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <Card className="border-blue-500/20 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -444,7 +444,7 @@ export default function DealerBenchmarkPage() {
                   color: 'text-emerald-500',
                 },
               ].map((row, i) => (
-                <motion.div
+                <Motion.div
                   key={row.label}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -458,7 +458,7 @@ export default function DealerBenchmarkPage() {
                   <span className="font-bold text-lg">
                     <AnimatedNumber value={row.value} decimals={row.decimals} suffix={row.suffix} />
                   </span>
-                </motion.div>
+                </Motion.div>
               ))}
               <p className="text-sm text-muted-foreground pt-2">
                 {t('dealerBenchmark.yourFooter')
@@ -468,8 +468,8 @@ export default function DealerBenchmarkPage() {
               </p>
             </CardContent>
           </Card>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+        </Motion.div>
+        <Motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -501,12 +501,12 @@ export default function DealerBenchmarkPage() {
               </p>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* Haftalık trend */}
       {weeklyTrend.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        <Motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -519,11 +519,11 @@ export default function DealerBenchmarkPage() {
               <BenchmarkWeeklyComposedChart data={weeklyTrend} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Hedef özeti */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <Card className="border-blue-500/20 bg-blue-500/5">
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-6">
@@ -543,7 +543,7 @@ export default function DealerBenchmarkPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

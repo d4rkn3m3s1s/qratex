@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Search, Heart, FileText, Flame, Timer } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -244,7 +244,7 @@ export function ReviewDetectiveGame() {
               const revealed = picked !== null;
               const isFake = r.fake;
               return (
-                <motion.button
+                <Motion.button
                   key={r.id}
                   type="button"
                   layout
@@ -270,7 +270,7 @@ export function ReviewDetectiveGame() {
                   {revealed && isFake && (
                     <span className="mt-1.5 block text-[10px] font-bold text-amber-300">⚠ YAPAY / SAHTE</span>
                   )}
-                </motion.button>
+                </Motion.button>
               );
             })}
           </AnimatePresence>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Sparkles, ArrowRight, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -99,7 +99,7 @@ export default function HeroSection() {
           {/* LCP FIX + tasarım korundu: başlık (LCP elementi) opacity HEP 1 → ilk paint'te görünür
               (SSR'de opacity:0 basılmaz, FCP/LCP gecikmez). Giriş hissi için SADECE transform (y)
               ile hafif slide-in — transform LCP'yi geciktirmez (element boyanmış sayılır). */}
-          <motion.div initial={{ opacity: 1, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}>
+          <Motion.div initial={{ opacity: 1, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}>
             <Badge variant="secondary" className="mb-6">
               <Sparkles className="w-3 h-3 mr-1" />
               {t('landing.hero.badge')}
@@ -128,7 +128,7 @@ export default function HeroSection() {
                 </Link>
               </Button>
             </div>
-            <motion.div
+            <Motion.div
               className="mt-16 sm:mt-20 max-w-3xl mx-auto rounded-2xl border border-border/40 bg-card/25 backdrop-blur-md px-4 py-7 sm:px-8 sm:py-8 shadow-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -144,16 +144,16 @@ export default function HeroSection() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         </div>
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3">
-          <motion.div className="flex flex-col items-center" aria-hidden="true" animate={{ y: [0, 10, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
+          <Motion.div className="flex flex-col items-center" aria-hidden="true" animate={{ y: [0, 10, 0] }} transition={{ duration: 1.5, repeat: Infinity }}>
             <div className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-2">
-              <motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ y: [0, 16, 0] }} transition={{ duration: 1.5, repeat: Infinity }} />
+              <Motion.div className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ y: [0, 16, 0] }} transition={{ duration: 1.5, repeat: Infinity }} />
             </div>
-          </motion.div>
+          </Motion.div>
           <Button
             variant="ghost"
             size="sm"

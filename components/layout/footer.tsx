@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Twitter, Linkedin, Instagram, Github, Mail, MapPin, Rss } from 'lucide-react';
 import { getRandomSlogan } from '@/lib/slogans';
 import { cn } from '@/lib/utils';
@@ -102,7 +102,7 @@ export function Footer() {
             {!slogan && <div className="mb-6" />}
             <div className="flex items-center gap-3">
               {socialLinks.map((social) => (
-                <motion.a
+                <Motion.a
                   key={social.label}
                   href={social.href}
                   target="_blank"
@@ -113,7 +113,7 @@ export function Footer() {
                   whileTap={{ scale: 0.98 }}
                 >
                   <social.icon className="h-5 w-5 shrink-0" aria-hidden />
-                </motion.a>
+                </Motion.a>
               ))}
             </div>
           </div>

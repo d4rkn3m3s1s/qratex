@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Brain,
   Settings,
@@ -106,7 +106,7 @@ function DailyChart({ data, t }: { data: { date: string; label: string; count: n
   return (
     <div className="flex items-end gap-1 h-24">
       {data.map((d, i) => (
-        <motion.div
+        <Motion.div
           key={d.date}
           initial={{ height: 0 }}
           animate={{ height: `${(d.count / max) * 100}%` }}
@@ -119,7 +119,7 @@ function DailyChart({ data, t }: { data: { date: string; label: string; count: n
             title={t('dealerAiSettings.chartBarTooltip').replace('{date}', d.date).replace('{count}', String(d.count))}
           />
           <span className="text-[10px] font-medium order-1">{d.count}</span>
-        </motion.div>
+        </Motion.div>
       ))}
     </div>
   );
@@ -259,7 +259,7 @@ export default function DealerAISettingsPage() {
 
       {/* Stats */}
       {stats && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="overflow-hidden border border-border/60 bg-card/50 shadow-md backdrop-blur-sm">
             <CardContent className="flex items-center gap-3 p-4">
               <div className="rounded-lg bg-primary/10 p-2">
@@ -309,12 +309,12 @@ export default function DealerAISettingsPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Daily chart */}
       {dailyAnalyzed.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -327,11 +327,11 @@ export default function DealerAISettingsPage() {
               <DailyChart data={dailyAnalyzed} t={t} />
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Master Toggle */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
         <Card className="border-0 shadow-md">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -353,10 +353,10 @@ export default function DealerAISettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Auto Analyze */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
         <Card className="border-0 shadow-md">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -373,10 +373,10 @@ export default function DealerAISettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Analysis Features */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function DealerAISettingsPage() {
                 const Icon = feature.icon;
                 const isEnabled = settings[feature.key as keyof AISettingsState] as boolean;
                 return (
-                  <motion.div
+                  <Motion.div
                     key={feature.key}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -419,16 +419,16 @@ export default function DealerAISettingsPage() {
                         <span className="text-[10px] text-muted-foreground">{t('dealerAiSettings.sentimentRequiredHint')}</span>
                       )}
                     </div>
-                  </motion.div>
+                  </Motion.div>
                 );
               })}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Alert Settings */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -443,7 +443,7 @@ export default function DealerAISettingsPage() {
                 const Icon = feature.icon;
                 const isEnabled = settings[feature.key as keyof AISettingsState] as boolean;
                 return (
-                  <motion.div
+                  <Motion.div
                     key={feature.key}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -462,16 +462,16 @@ export default function DealerAISettingsPage() {
                       </div>
                     </div>
                     <Switch checked={isEnabled} onCheckedChange={() => toggleSetting(feature.key)} disabled={!settings.isEnabled} />
-                  </motion.div>
+                  </Motion.div>
                 );
               })}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Report Settings */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -486,7 +486,7 @@ export default function DealerAISettingsPage() {
                 const Icon = feature.icon;
                 const isEnabled = settings[feature.key as keyof AISettingsState] as boolean;
                 return (
-                  <motion.div
+                  <Motion.div
                     key={feature.key}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -505,16 +505,16 @@ export default function DealerAISettingsPage() {
                       </div>
                     </div>
                     <Switch checked={isEnabled} onCheckedChange={() => toggleSetting(feature.key)} disabled={!settings.isEnabled} />
-                  </motion.div>
+                  </Motion.div>
                 );
               })}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Custom Prompt */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.62 }}>
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.62 }}>
         <Card className="border-0 shadow-md">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -535,10 +535,10 @@ export default function DealerAISettingsPage() {
             <p className="text-xs text-muted-foreground mt-2">{t('dealerAiSettings.customPromptFooter')}</p>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* AI Learning link */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}>
+      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}>
         <Link href="/dealer/ai-learning">
           <Card className="cursor-pointer border border-border/60 border-l-4 border-l-primary shadow-md transition-shadow hover:shadow-lg">
             <CardContent className="flex items-center justify-between p-4">
@@ -553,15 +553,15 @@ export default function DealerAISettingsPage() {
             </CardContent>
           </Card>
         </Link>
-      </motion.div>
+      </Motion.div>
 
       {/* Save Button */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} className="flex justify-end">
+      <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} className="flex justify-end">
         <Button onClick={saveSettings} disabled={saving} size="lg">
           {saving ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
           {saving ? t('dealerAiSettings.saving') : t('dealerAiSettings.saveFooter')}
         </Button>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

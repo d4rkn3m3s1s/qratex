@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ElementType } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   ToggleLeft,
   Plus,
@@ -339,7 +339,7 @@ export default function AdminFeaturesPage() {
           {filteredFeatures.map((feature, index) => {
             const Icon = getIcon(feature.key);
             return (
-              <motion.div
+              <Motion.div
                 key={feature.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -380,7 +380,7 @@ export default function AdminFeaturesPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </Motion.div>
             );
           })}
         </div>

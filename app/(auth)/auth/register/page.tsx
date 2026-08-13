@@ -4,7 +4,7 @@ import { Suspense, useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Mail, Lock, User, Building2, AlertCircle, Gift } from 'lucide-react';
@@ -169,7 +169,7 @@ function RegisterContent() {
     const openAria = verifyResult.emailSent ? t('auth.verifyOpenLinkSentAria') : t('auth.verifyOpenLinkDevAria');
 
     return (
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <Card glass>
           <CardHeader>
             <CardTitle className="text-center">{t('auth.verifyEmailCardTitle')}</CardTitle>
@@ -194,12 +194,12 @@ function RegisterContent() {
             </Button>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     );
   }
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -460,7 +460,7 @@ function RegisterContent() {
           </Link>
         </CardFooter>
       </Card>
-    </motion.div>
+    </Motion.div>
   );
 }
 

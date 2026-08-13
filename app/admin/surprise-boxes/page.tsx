@@ -16,7 +16,7 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -196,7 +196,7 @@ export default function AdminSurpriseBoxesPage() {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
@@ -341,9 +341,9 @@ export default function AdminSurpriseBoxesPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
 
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
@@ -384,7 +384,7 @@ export default function AdminSurpriseBoxesPage() {
               ) : (
                 <ul className="space-y-2 max-h-[min(520px,55vh)] overflow-y-auto pr-1 -mr-1">
                   {recent.slice(0, 50).map((box, i) => (
-                    <motion.li
+                    <Motion.li
                       key={box.id}
                       initial={{ opacity: 0, x: -6 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -431,13 +431,13 @@ export default function AdminSurpriseBoxesPage() {
                           )}
                         </div>
                       </div>
-                    </motion.li>
+                    </Motion.li>
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
-        </motion.div>
+        </Motion.div>
       </div>
     </div>
   );

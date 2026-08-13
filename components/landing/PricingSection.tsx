@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { Check, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ export default function PricingSection() {
   return (
     <section id="pricing" className="py-20 lg:py-32 scroll-mt-20 [content-visibility:auto]">
       <div className="container px-4">
-        <motion.div
+        <Motion.div
           className="text-center mb-16"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -31,13 +31,13 @@ export default function PricingSection() {
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto text-balance leading-relaxed">
             {m.landing.pricing.sub}
           </p>
-        </motion.div>
+        </Motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {pricingPlanDefs.map((plan, index) => {
             const copy = plans[plan.id];
             return (
-            <motion.div
+            <Motion.div
               key={plan.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -85,7 +85,7 @@ export default function PricingSection() {
                   </Button>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
             );
           })}
         </div>

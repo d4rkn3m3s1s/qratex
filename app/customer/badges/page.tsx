@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy,
   Lock,
@@ -445,7 +445,7 @@ export default function CustomerBadgesPage() {
                       // Yalnız kazanılmış rozette uygulanır (kilitli kart nötr kalır).
                       const customStyle = isEarned ? badgeColorStyle(badge.color, badge.bgColor) : null;
                       return (
-                        <motion.div
+                        <Motion.div
                           key={badge.id}
                           layout
                           initial={{ opacity: 0, scale: 0.8 }}
@@ -478,7 +478,7 @@ export default function CustomerBadgesPage() {
                                   <div className={`relative w-32 h-32 rounded-full bg-slate-100 dark:bg-white overflow-hidden flex items-center justify-center ring-2 ring-slate-200/80 dark:ring-white/15 shadow-[inset_0_2px_10px_rgba(15,23,42,0.08)] ${!isEarned ? 'opacity-80' : ''}`}>
                                     <Image src={badge.icon} alt={badge.name} width={140} height={140} className={`relative z-10 scale-110 drop-shadow-sm dark:drop-shadow-none ${isEarned ? '' : 'grayscale-[40%] opacity-80'}`} />
                                   </div>
-                                  {isEarned && badge.rarity === 'LEGENDARY' && <motion.div className="absolute -top-1 -right-1 z-20" animate={{ rotate: 360, scale: [1, 1.2, 1] }} transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}><Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.6)]" /></motion.div>}
+                                  {isEarned && badge.rarity === 'LEGENDARY' && <Motion.div className="absolute -top-1 -right-1 z-20" animate={{ rotate: 360, scale: [1, 1.2, 1] }} transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}><Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.6)]" /></Motion.div>}
                                   {isEarned && badge.rarity === 'EPIC' && <Zap className="absolute -right-0.5 -top-0.5 z-20 h-6 w-6 animate-pulse text-primary drop-shadow-[0_0_6px_hsl(var(--primary)_/_0.45)]" />}
                                   {!isEarned && <div className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-slate-100 dark:bg-black/60 border-2 border-slate-400/60 dark:border-white/20 flex items-center justify-center shadow-md z-20"><Lock className="w-4 h-4 text-muted-foreground" /></div>}
                                 </div>
@@ -508,7 +508,7 @@ export default function CustomerBadgesPage() {
                               </div>
                             </div>
                           </div>
-                        </motion.div>
+                        </Motion.div>
                       );
                     })}
                   </AnimatePresence>
@@ -525,7 +525,7 @@ export default function CustomerBadgesPage() {
               const isEarned = badge.earned;
 
               return (
-                <motion.div
+                <Motion.div
                   key={badge.id}
                   layout
                   initial={{ opacity: 0, scale: 0.8 }}
@@ -592,13 +592,13 @@ export default function CustomerBadgesPage() {
                           
                           {/* Earned Sparkle */}
                           {isEarned && badge.rarity === 'LEGENDARY' && (
-                            <motion.div
+                            <Motion.div
                               className="absolute -top-1 -right-1 z-20"
                               animate={{ rotate: 360, scale: [1, 1.2, 1] }}
                               transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
                             >
                               <Sparkles className="w-7 h-7 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.6)]" />
-                            </motion.div>
+                            </Motion.div>
                           )}
 
                           {isEarned && badge.rarity === 'EPIC' && (
@@ -677,7 +677,7 @@ export default function CustomerBadgesPage() {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </Motion.div>
               );
             })}
           </AnimatePresence>
@@ -689,14 +689,14 @@ export default function CustomerBadgesPage() {
         {selectedBadge && (() => {
           const modalConfig = rarityConfig[selectedBadge.rarity];
           return (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/85 backdrop-blur-md overflow-y-auto"
             onClick={() => setSelectedBadge(null)}
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.85, y: 40 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.85, y: 40, opacity: 0 }}
@@ -710,7 +710,7 @@ export default function CustomerBadgesPage() {
               {/* Starfield */}
               <div className="absolute inset-0 overflow-hidden hidden dark:block">
                 {[...Array(20)].map((_, i) => (
-                  <motion.div
+                  <Motion.div
                     key={i}
                     className="absolute w-[2px] h-[2px] bg-white rounded-full"
                     style={{
@@ -733,7 +733,7 @@ export default function CustomerBadgesPage() {
 
               {/* Neon glow border for Legendary */}
               {selectedBadge.rarity === 'LEGENDARY' && (
-                <motion.div
+                <Motion.div
                   className="absolute inset-0 rounded-3xl border-2 border-yellow-400/20"
                   animate={{ opacity: [0.3, 0.7, 0.3] }}
                   transition={{ duration: 2, repeat: Infinity }}
@@ -754,7 +754,7 @@ export default function CustomerBadgesPage() {
               <div className="relative z-10 p-6 sm:p-8">
                 {/* Badge Icon */}
                 <div className="flex justify-center mb-6">
-                  <motion.div
+                  <Motion.div
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: 'spring', delay: 0.1, damping: 15 }}
@@ -775,24 +775,24 @@ export default function CustomerBadgesPage() {
                     </div>
                     
                     {selectedBadge.earned && selectedBadge.rarity === 'LEGENDARY' && (
-                      <motion.div
+                      <Motion.div
                         className="absolute -top-2 -right-2 z-20"
                         animate={{ rotate: 360, scale: [1, 1.2, 1] }}
                         transition={{ rotate: { duration: 4, repeat: Infinity, ease: 'linear' }, scale: { duration: 1.5, repeat: Infinity } }}
                       >
                         <Sparkles className="w-8 h-8 text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.6)]" />
-                      </motion.div>
+                      </Motion.div>
                     )}
                     {selectedBadge.earned && selectedBadge.rarity === 'EPIC' && (
-                      <motion.div className="absolute -top-1 -right-1 z-20" animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
+                      <Motion.div className="absolute -top-1 -right-1 z-20" animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}>
                         <Zap className="h-7 w-7 text-primary drop-shadow-[0_0_8px_hsl(var(--primary)_/_0.4)]" />
-                      </motion.div>
+                      </Motion.div>
                     )}
-                  </motion.div>
+                  </Motion.div>
                 </div>
 
                 {/* Name & Rarity */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center mb-5">
+                <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center mb-5">
                   <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-3">{selectedBadge.name}</h2>
                   <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm ${modalConfig.badgeBg} ${modalConfig.textColor} font-semibold`}>
                     {selectedBadge.rarity === 'LEGENDARY' && <Crown className="w-4 h-4" />}
@@ -801,22 +801,22 @@ export default function CustomerBadgesPage() {
                     {selectedBadge.rarity === 'COMMON' && <Medal className="w-4 h-4" />}
                     {getRarityLabel(selectedBadge.rarity)}
                   </div>
-                </motion.div>
+                </Motion.div>
 
                 {/* Description */}
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="text-center text-muted-foreground text-sm sm:text-base mb-6 leading-relaxed">
+                <Motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="text-center text-muted-foreground text-sm sm:text-base mb-6 leading-relaxed">
                   {selectedBadge.description}
-                </motion.p>
+                </Motion.p>
 
                 {/* Status */}
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white/90 dark:bg-black/30 backdrop-blur-sm rounded-2xl p-5 border border-slate-300/90 dark:border-white/10 shadow-sm">
+                <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white/90 dark:bg-black/30 backdrop-blur-sm rounded-2xl p-5 border border-slate-300/90 dark:border-white/10 shadow-sm">
                   {selectedBadge.earned ? (
                     <div className="text-center space-y-4">
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.5 }}
+                      <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', delay: 0.5 }}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/30">
                         <Trophy className="w-6 h-6" />
                         <span className="text-lg font-bold">{t('customerBadges.earnedStatus')}</span>
-                      </motion.div>
+                      </Motion.div>
                       <div className="flex items-center justify-center gap-4 flex-wrap">
                         {selectedBadge.earnedAt && (
                           <span className="text-muted-foreground text-sm">
@@ -838,7 +838,7 @@ export default function CustomerBadgesPage() {
                           <span className="text-slate-900 dark:text-white font-bold text-base">%{selectedBadge.progress}</span>
                         </div>
                         <div className="relative h-3.5 bg-slate-300/90 dark:bg-white/10 rounded-full overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${selectedBadge.progress}%` }} transition={{ duration: 0.8, delay: 0.5 }}
+                          <Motion.div initial={{ width: 0 }} animate={{ width: `${selectedBadge.progress}%` }} transition={{ duration: 0.8, delay: 0.5 }}
                             className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${modalConfig.color}`} />
                         </div>
                         <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
@@ -859,10 +859,10 @@ export default function CustomerBadgesPage() {
                       </div>
                     </div>
                   )}
-                </motion.div>
+                </Motion.div>
               </div>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
           );
         })()}
       </AnimatePresence>

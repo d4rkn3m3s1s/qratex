@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 /**
@@ -92,7 +92,7 @@ export function MysteryBar({ progress, current, threshold, ready = false, classN
 function MysterySymbol({ intensity, ready, reduceMotion }: { intensity: number; ready: boolean; reduceMotion: boolean }) {
   const glow = ready ? 0.8 : 0.3 + intensity * 0.5;
   return (
-    <motion.div
+    <Motion.div
       className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-bold"
       style={{
         borderColor: rgba(PALETTE.fuchsia, 0.45 + intensity * 0.3),
@@ -118,7 +118,7 @@ function MysterySymbol({ intensity, ready, reduceMotion }: { intensity: number; 
       }
     >
       <span className="drop-shadow-[0_0_3px_rgba(255,255,255,0.7)]">?</span>
-    </motion.div>
+    </Motion.div>
   );
 }
 

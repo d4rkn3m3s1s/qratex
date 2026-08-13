@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn, formatCompactNumber } from '@/lib/utils';
@@ -36,7 +36,7 @@ export function StatsCard({
   const changeText = `${isPositive ? '+' : ''}${Math.abs(normalizedChange)}% son 30 gün`;
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
@@ -85,7 +85,7 @@ export function StatsCard({
           )}
         </CardContent>
       </Card>
-    </motion.div>
+    </Motion.div>
   );
 }
 

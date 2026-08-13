@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Loader2, Trophy, Lock, RotateCcw, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -132,20 +132,20 @@ export function GameShell({
         {/* OYNANIŞ — AnimatePresence DIŞINDA: canvas oyunlarında ref'in geç mount
             olmaması için phase 'playing' olur olmaz koşulsuz/anında DOM'a basılır. */}
         {playing && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2 }}
             className="w-full"
           >
             {children}
-          </motion.div>
+          </Motion.div>
         )}
 
         <AnimatePresence mode="wait">
           {/* YÜKLENİYOR */}
           {loading && (
-            <motion.div
+            <Motion.div
               key="loading"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -158,26 +158,26 @@ export function GameShell({
                   ? copy?.loadingSubmit ?? 'Sonuç kaydediliyor…'
                   : copy?.loadingStart ?? 'Oyun başlatılıyor…'}
               </p>
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* BAŞLANGIÇ */}
           {phase === 'idle' && (
-            <motion.div
+            <Motion.div
               key="idle"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
               className="flex max-w-md flex-col items-center gap-5 text-center"
             >
-              <motion.div
+              <Motion.div
                 className="text-7xl"
                 animate={{ y: [0, -10, 0], filter: ['brightness(1)', 'brightness(1.4)', 'brightness(1)'] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                 style={{ textShadow: `0 0 40px ${accent}` }}
               >
                 {emoji}
-              </motion.div>
+              </Motion.div>
               <h2 className="text-2xl font-bold text-white" style={{ textShadow: `0 0 20px ${accent}99` }}>
                 {title}
               </h2>
@@ -186,13 +186,13 @@ export function GameShell({
                 <Sparkles className="h-3.5 w-3.5" style={{ color: accent }} />
                 {copy?.startHint ?? 'Günde 1 hak — kazan, puan + XP kap!'}
               </div>
-              <motion.div
+              <Motion.div
                 className="relative mt-2"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.96 }}
               >
                 {/* nabız halkası */}
-                <motion.span
+                <Motion.span
                   aria-hidden
                   className="absolute inset-0 rounded-md"
                   animate={{ boxShadow: [`0 0 0 0 ${accent}66`, `0 0 0 14px ${accent}00`] }}
@@ -205,7 +205,7 @@ export function GameShell({
                 >
                   {copy?.startCta ?? '▶ Oyna'}
                 </Button>
-              </motion.div>
+              </Motion.div>
 
               {gameType && (
                 <div className="mt-4 w-full space-y-4 border-t border-white/10 pt-4">
@@ -215,12 +215,12 @@ export function GameShell({
                   </div>
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* SONUÇ */}
           {showResult && result && (
-            <motion.div
+            <Motion.div
               key="result"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -229,7 +229,7 @@ export function GameShell({
               {/* Trofe + dönen parlama halkası */}
               <div className="relative flex h-28 w-28 items-center justify-center">
                 {result.won && (
-                  <motion.div
+                  <Motion.div
                     aria-hidden
                     className="absolute inset-0"
                     animate={{ rotate: 360 }}
@@ -242,7 +242,7 @@ export function GameShell({
                     }}
                   />
                 )}
-                <motion.div
+                <Motion.div
                   animate={{
                     rotate: result.won ? [0, -10, 10, 0] : 0,
                     scale: result.won ? [1, 1.2, 1] : [1, 1.1, 1],
@@ -253,10 +253,10 @@ export function GameShell({
                   style={{ textShadow: `0 0 40px ${accent}` }}
                 >
                   {result.won ? '🏆' : '💀'}
-                </motion.div>
+                </Motion.div>
               </div>
 
-              <motion.h2
+              <Motion.h2
                 initial={{ y: 8, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.15 }}
@@ -264,7 +264,7 @@ export function GameShell({
                 style={{ textShadow: result.won ? `0 0 22px ${accent}99` : 'none' }}
               >
                 {resultTitle}
-              </motion.h2>
+              </Motion.h2>
 
               <div className="flex items-center gap-1.5 rounded-full bg-white/5 px-4 py-1.5 text-sm text-white/80">
                 <Star className="h-4 w-4" style={{ color: accent }} /> {copy?.scoreLabel ?? 'Skorun'}:{' '}
@@ -272,7 +272,7 @@ export function GameShell({
               </div>
 
               {result.rewarded ? (
-                <motion.div
+                <Motion.div
                   initial={{ scale: 0.6, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: 0.3, type: 'spring', stiffness: 260, damping: 16 }}
@@ -285,7 +285,7 @@ export function GameShell({
                 >
                   <Trophy className="h-5 w-5" style={{ color: accent }} />
                   +{result.rewardPoints} puan · +{result.rewardXp} XP
-                </motion.div>
+                </Motion.div>
               ) : (
                 <p className="text-xs text-white/50">
                   {copy?.rewardMissNote ??
@@ -301,12 +301,12 @@ export function GameShell({
                   <GameLeaderboard gameType={gameType} accent={accent} />
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           )}
 
           {/* BUGÜN ZATEN OYNANDI */}
           {showLocked && (
-            <motion.div
+            <Motion.div
               key="locked"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -328,7 +328,7 @@ export function GameShell({
                   <GameLeaderboard gameType={gameType} accent={accent} />
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>

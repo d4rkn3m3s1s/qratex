@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
   Database,
@@ -304,7 +304,7 @@ export default function AdminAILearningPage() {
       />
 
       {/* Sistem Derinliği ve Öğrenme Kapsamı */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
+      <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
         <Card className="border border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -423,14 +423,14 @@ export default function AdminAILearningPage() {
                         </button>
                         <AnimatePresence>
                           {showSystemPrompt && (
-                            <motion.pre
+                            <Motion.pre
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
                               className="p-4 rounded-xl bg-muted/50 text-xs overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap font-mono"
                             >
                               {systemProfile.systemPrompt}
-                            </motion.pre>
+                            </Motion.pre>
                           )}
                         </AnimatePresence>
                       </div>
@@ -447,14 +447,14 @@ export default function AdminAILearningPage() {
                         </button>
                         <AnimatePresence>
                           {showChatPrompt && (
-                            <motion.pre
+                            <Motion.pre
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
                               className="p-4 rounded-xl bg-muted/50 text-xs overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap font-mono"
                             >
                               {systemProfile.chatSystemPrompt}
-                            </motion.pre>
+                            </Motion.pre>
                           )}
                         </AnimatePresence>
                       </div>
@@ -476,10 +476,10 @@ export default function AdminAILearningPage() {
             ) : null}
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Nasıl çalışır? */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+      <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <Card className="border-primary/20">
           <CardHeader className="py-3">
             <button
@@ -507,7 +507,7 @@ export default function AdminAILearningPage() {
             </CardContent>
           )}
         </Card>
-      </motion.div>
+      </Motion.div>
 
       {/* Overview Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -519,7 +519,7 @@ export default function AdminAILearningPage() {
         ].map((item, index) => {
           const Icon = item.icon;
           return (
-            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
+            <Motion.div key={item.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 10) * 0.05 }}>
               <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                 <CardContent className="p-4 text-center">
                   <div className={`p-2 rounded-lg ${item.bg} w-fit mx-auto mb-2`}>
@@ -529,13 +529,13 @@ export default function AdminAILearningPage() {
                   <p className="text-xs text-muted-foreground">{item.label}</p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>
 
       {/* Dealer Learning Profiles */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+      <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
         <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -573,7 +573,7 @@ export default function AdminAILearningPage() {
           <CardContent>
             <div className="space-y-3">
               {filteredDealers.map((dealer, index) => (
-                <motion.div
+                <Motion.div
                   key={dealer.dealerId}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -625,7 +625,7 @@ export default function AdminAILearningPage() {
 
                   {/* Expanded Detail */}
                   {selectedDealer?.dealerId === dealer.dealerId && dealer.profile && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t">
+                    <Motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 pt-4 border-t">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div className="p-2 rounded-lg bg-muted/30 text-center">
                           <p className="text-xs text-muted-foreground">Versiyon</p>
@@ -691,14 +691,14 @@ export default function AdminAILearningPage() {
                           })()}
                         </div>
                       )}
-                    </motion.div>
+                    </Motion.div>
                   )}
-                </motion.div>
+                </Motion.div>
               ))}
             </div>
           </CardContent>
         </Card>
-      </motion.div>
+      </Motion.div>
     </div>
   );
 }

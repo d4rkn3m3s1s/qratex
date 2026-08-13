@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { MessageSquare, Smile, Meh, Frown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import type { DashboardData } from '../types';
@@ -43,7 +43,7 @@ export function SentimentSection({ data }: { data: DashboardData }) {
             <Card className="border border-border bg-card/80 dark:bg-card/90 backdrop-blur-sm shadow-lg overflow-hidden">
                 <CardContent className="pt-6 pb-6 space-y-5">
                     <div className="flex h-14 rounded-2xl overflow-hidden bg-muted/80 border border-border/50 shadow-inner ring-2 ring-inset ring-black/5 dark:ring-white/5">
-                        <motion.button
+                        <Motion.button
                             type="button"
                             onClick={() => router.push('/admin/feedbacks?sentiment=positive')}
                             className="h-full bg-green-500 flex items-center justify-center min-w-[2rem] cursor-pointer"
@@ -52,8 +52,8 @@ export function SentimentSection({ data }: { data: DashboardData }) {
                             transition={{ duration: 0.6 }}
                         >
                             {rawPosPct >= 15 && <span className="text-xs font-bold text-white drop-shadow">{posPct}%</span>}
-                        </motion.button>
-                        <motion.button
+                        </Motion.button>
+                        <Motion.button
                             type="button"
                             onClick={() => router.push('/admin/feedbacks?sentiment=neutral')}
                             className="h-full bg-zinc-400 dark:bg-zinc-500 flex items-center justify-center min-w-[2rem] cursor-pointer"
@@ -62,8 +62,8 @@ export function SentimentSection({ data }: { data: DashboardData }) {
                             transition={{ duration: 0.6 }}
                         >
                             {rawNeuPct >= 15 && <span className="text-xs font-bold text-white drop-shadow">{neuPct}%</span>}
-                        </motion.button>
-                        <motion.button
+                        </Motion.button>
+                        <Motion.button
                             type="button"
                             onClick={() => router.push('/admin/feedbacks?sentiment=negative')}
                             className="h-full bg-red-500 flex items-center justify-center min-w-[2rem] cursor-pointer"
@@ -72,7 +72,7 @@ export function SentimentSection({ data }: { data: DashboardData }) {
                             transition={{ duration: 0.6 }}
                         >
                             {rawNegPct >= 15 && <span className="text-xs font-bold text-white drop-shadow">{negPct}%</span>}
-                        </motion.button>
+                        </Motion.button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         <Link href="/admin/feedbacks?sentiment=positive" className="block">

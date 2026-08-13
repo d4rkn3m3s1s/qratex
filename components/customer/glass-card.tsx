@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import { ReactNode } from 'react';
 
 interface GlassCardProps {
@@ -12,7 +12,7 @@ interface GlassCardProps {
 
 export function GlassCard({ children, className = '', hoverLift = 4, delay = 0 }: GlassCardProps) {
   return (
-    <motion.div
+    <Motion.div
       className={`rounded-2xl border border-white/20 dark:border-white/10 bg-white/70 dark:bg-white/5 backdrop-blur-xl shadow-glass overflow-hidden ${className}`}
       initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -21,6 +21,6 @@ export function GlassCard({ children, className = '', hoverLift = 4, delay = 0 }
       whileHover={{ y: -hoverLift, transition: { duration: 0.2 } }}
     >
       {children}
-    </motion.div>
+    </Motion.div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion, useAnimation } from 'framer-motion';
+import { m as Motion, useAnimation } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 interface SparklesCoreProps {
@@ -58,7 +58,7 @@ export function SparklesCore({
           </filter>
         </defs>
         {particles.map((particle) => (
-          <motion.circle
+          <Motion.circle
             key={particle.id}
             cx={`${particle.x}%`}
             cy={`${particle.y}%`}

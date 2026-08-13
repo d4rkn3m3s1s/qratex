@@ -5,7 +5,7 @@ import { useState, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NextImage from 'next/image';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   Settings,
   Save,
@@ -988,7 +988,7 @@ export default function AdminSettingsPage() {
 
         {/* Profile Tab */}
         <TabsContent value="profile">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -1149,12 +1149,12 @@ export default function AdminSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* General Settings */}
         <TabsContent value="general">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -1203,12 +1203,12 @@ export default function AdminSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Appearance Settings */}
         <TabsContent value="appearance">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
@@ -1291,7 +1291,7 @@ export default function AdminSettingsPage() {
                   <h4 className="text-sm font-medium mb-3 text-muted-foreground">Standart Efektler</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {backgroundOptions.filter(o => !o.elite && !o.special && !o.legendary).map((option) => (
-                      <motion.button
+                      <Motion.button
                         key={option.id}
                         type="button"
                         onClick={() => handleBackgroundChange(option.id)}
@@ -1312,7 +1312,7 @@ export default function AdminSettingsPage() {
                           <p className="font-medium text-sm">{option.name}</p>
                           <p className="text-xs text-muted-foreground">{option.description}</p>
                         </div>
-                      </motion.button>
+                      </Motion.button>
                     ))}
                   </div>
                 </div>
@@ -1334,7 +1334,7 @@ export default function AdminSettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {backgroundOptions.filter(o => o.elite).map((option) => (
-                      <motion.button
+                      <Motion.button
                         key={option.id}
                         type="button"
                         onClick={() => handleBackgroundChange(option.id)}
@@ -1364,7 +1364,7 @@ export default function AdminSettingsPage() {
                           <p className="font-medium text-sm">{option.name}</p>
                           <p className="text-xs text-muted-foreground">{option.description}</p>
                         </div>
-                      </motion.button>
+                      </Motion.button>
                     ))}
                   </div>
                 </div>
@@ -1381,7 +1381,7 @@ export default function AdminSettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {backgroundOptions.filter(o => o.legendary).map((option) => (
-                      <motion.button
+                      <Motion.button
                         key={option.id}
                         type="button"
                         onClick={() => handleBackgroundChange(option.id)}
@@ -1402,7 +1402,7 @@ export default function AdminSettingsPage() {
                           <p className="font-medium text-sm">{option.name}</p>
                           <p className="text-xs text-muted-foreground">{option.description}</p>
                         </div>
-                      </motion.button>
+                      </Motion.button>
                     ))}
                   </div>
                 </div>
@@ -1419,7 +1419,7 @@ export default function AdminSettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {backgroundOptions.filter(o => o.special).map((option) => (
-                      <motion.button
+                      <Motion.button
                         key={option.id}
                         type="button"
                         onClick={() => handleBackgroundChange(option.id)}
@@ -1440,7 +1440,7 @@ export default function AdminSettingsPage() {
                           <p className="font-medium text-sm">{option.name}</p>
                           <p className="text-xs text-muted-foreground">{option.description}</p>
                         </div>
-                      </motion.button>
+                      </Motion.button>
                     ))}
                   </div>
                 </div>
@@ -1453,12 +1453,12 @@ export default function AdminSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Auth Settings */}
         <TabsContent value="auth">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -1705,12 +1705,12 @@ export default function AdminSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* AI Settings */}
         <TabsContent value="ai">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -1763,12 +1763,12 @@ export default function AdminSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         {/* Gamification Settings */}
         <TabsContent value="gamification">
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
@@ -1813,11 +1813,11 @@ export default function AdminSettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         <TabsContent value="modules">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <Card glass>
               <CardHeader>
                 <CardTitle>Tüm Modül Kontrol Merkezi</CardTitle>
@@ -1907,11 +1907,11 @@ export default function AdminSettingsPage() {
                 )}
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
 
         <TabsContent value="page-settings">
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+          <Motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <Card glass>
               <CardHeader>
                 <CardTitle>Bayi/Müşteri Sayfa Ayar Merkezi</CardTitle>
@@ -2065,7 +2065,7 @@ export default function AdminSettingsPage() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </Motion.div>
         </TabsContent>
       </Tabs>
     </div>

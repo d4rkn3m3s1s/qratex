@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 
 interface GradientAnimationProps {
   children?: React.ReactNode;
@@ -30,7 +30,7 @@ export function GradientAnimation({
         {/* Animated gradient orbs */}
         <div className="absolute inset-0 overflow-hidden">
           {colors.map((color, i) => (
-            <motion.div
+            <Motion.div
               key={i}
               className="absolute rounded-full blur-3xl"
               style={{

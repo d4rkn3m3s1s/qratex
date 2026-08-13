@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Zap, Flame } from 'lucide-react';
 import { GameShell } from './game-shell';
 import { FxLayer, type FxHandle } from './fx-layer';
@@ -177,14 +177,14 @@ export function ComboTapGame() {
       copy={getGameCopy(DEF.gameType)}
     >
       <div className="mb-3 flex items-center justify-between text-sm font-semibold text-white">
-        <motion.div key={score} initial={{ scale: 1.3 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
+        <Motion.div key={score} initial={{ scale: 1.3 }} animate={{ scale: 1 }} className="flex items-center gap-1.5" style={{ color: DEF.accent }}>
           <Zap className="h-4 w-4" /> {score}
-        </motion.div>
+        </Motion.div>
         <AnimatePresence>
           {combo >= 3 && (
-            <motion.div key={combo} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 font-bold text-orange-400" style={{ textShadow: '0 0 12px rgba(249,115,22,0.8)' }}>
+            <Motion.div key={combo} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 font-bold text-orange-400" style={{ textShadow: '0 0 12px rgba(249,115,22,0.8)' }}>
               <Flame className="h-4 w-4" /> {combo}x
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
         <div className="rounded-full bg-white/10 px-3 py-0.5 text-xs tabular-nums text-white/80">{timeLeft}s</div>
@@ -197,7 +197,7 @@ export function ComboTapGame() {
       >
         <AnimatePresence>
           {targets.map((t) => (
-            <motion.button
+            <Motion.button
               key={t.id}
               type="button"
               onClick={() => tap(t)}
@@ -221,14 +221,14 @@ export function ComboTapGame() {
             >
               {t.bad ? '💣' : t.golden ? '🌟' : '⭐'}
               {/* TTL halkası */}
-              <motion.span
+              <Motion.span
                 className="absolute inset-0 rounded-full border-2"
                 style={{ borderColor: t.bad ? '#fecaca' : t.golden ? '#fef3c7' : '#fff' }}
                 initial={{ scale: 1.6, opacity: 0.8 }}
                 animate={{ scale: 1, opacity: 0 }}
                 transition={{ duration: t.ttl / 1000, ease: 'linear' }}
               />
-            </motion.button>
+            </Motion.button>
           ))}
         </AnimatePresence>
         <FxLayer ref={fxRef} />

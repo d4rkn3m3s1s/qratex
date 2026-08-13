@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { m as Motion } from 'framer-motion';
 import {
   AlertTriangle,
   Plus,
@@ -215,7 +215,7 @@ export default function DealerIncidentsPage() {
           ) : (
             <ul className="space-y-3">
               {items.map((item) => (
-                <motion.li
+                <Motion.li
                   key={item.id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -251,7 +251,7 @@ export default function DealerIncidentsPage() {
                       {t('dealerIncidents.resolvedBadge')}
                     </Badge>
                   )}
-                </motion.li>
+                </Motion.li>
               ))}
             </ul>
           )}
