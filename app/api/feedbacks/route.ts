@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -447,13 +447,17 @@ export async function POST(request: NextRequest) {
           if (inngestQueueEnabled()) {
             sendFeedbackAnalyze(feedback.id, dealerId).catch(console.error);
           } else {
+            // after(): yanıttan SONRA çalışır ama serverless fonksiyonu canlı tutar → inline
+            // AI analizi güvenilir tamamlanır (await'siz fire-and-forget'i Vercel yanıt sonrası
+            // öldürebiliyordu; ai-retry cron artık yalnız gerçek arıza için son çare).
+            after(async () => {
             let adaptiveProfileText: string | undefined;
             try {
               const adaptiveProfile = await getAdaptiveProfileForDealer(dealerId);
               adaptiveProfileText = adaptiveProfile?.profile ? formatAdaptiveProfile(adaptiveProfile.profile) : undefined;
             } catch {}
 
-            analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
+            await analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
               try {
                 // Gerçek LLM yoksa analyzeWithFallback 'local-fallback' döndürür.
                 // Bu durumda zayıf keyword-tabanlı sentiment'i "işlenmiş AI sonucu"
@@ -513,6 +517,7 @@ export async function POST(request: NextRequest) {
                 console.error('[AI] Failed to save analysis:', err);
               }
             }).catch(err => console.error('[AI] Analysis failed:', err));
+            });
           }
         } else {
           processAutoReplies(feedback.id).catch(console.error);
@@ -528,7 +533,8 @@ export async function POST(request: NextRequest) {
       // sağlandıysa otomatik ver (fire-and-forget; müşteri göremediği için buton yok).
       if (session?.user?.id) {
         const uid = session.user.id;
-        import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+        // after(): rozet ödüllendirme yanıt sonrası ama fonksiyon canlıyken çalışsın (kaybolmasın).
+        after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
       }
 
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
