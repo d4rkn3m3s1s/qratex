@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
@@ -64,6 +64,14 @@ export default function DealerDashboard() {
   const [activeTab, setActiveTab] = useState<'feedbacks' | 'qrcodes'>('feedbacks');
   const [offlineSyncing, setOfflineSyncing] = useState(false);
 
+  // PERF: kritik-olmayan widget verilerini İLK PAINT'ten sonra çek → mount'ta ana stats
+  // fetch'i + ilk render ile ağ/CPU yarışmasın (INP/LCP iyileşir). Kısa gecikme sonrası açılır.
+  const [deferSecondary, setDeferSecondary] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setDeferSecondary(true), 150);
+    return () => clearTimeout(id);
+  }, []);
+
   const {
     data: statsData,
     isLoading: statsLoading,
@@ -102,6 +110,7 @@ export default function DealerDashboard() {
       return { count: 0, items: [] };
     },
     staleTime: 30_000,
+    enabled: deferSecondary,
   });
   const offlinePending = offlineData ?? { count: 0, items: [] };
 
@@ -114,6 +123,7 @@ export default function DealerDashboard() {
       return [];
     },
     staleTime: 60_000,
+    enabled: deferSecondary,
   });
   const nextBestActions = actionsData ?? [];
 
@@ -125,6 +135,7 @@ export default function DealerDashboard() {
       return d.benchmark ?? null;
     },
     staleTime: 5 * 60_000,
+    enabled: deferSecondary,
   });
   const benchmark = benchmarkData ?? null;
 
@@ -160,6 +171,7 @@ export default function DealerDashboard() {
       };
     },
     staleTime: 60_000,
+    enabled: deferSecondary,
   });
   const briefing = briefingData ?? null;
 
