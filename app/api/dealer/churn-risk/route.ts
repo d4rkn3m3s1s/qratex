@@ -26,6 +26,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
+  // REDIS CACHE: churn agregasyonları (4 ağır sorgu) → bayi başına 60s. Redis yoksa DB.
+  const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+  const churnCacheKey = `dealer-churn:${dealerId}`;
+  const cachedChurn = await redisGetJson<object>(churnCacheKey);
+  if (cachedChurn) {
+    return NextResponse.json(cachedChurn, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
   const since = new Date();
   since.setMonth(since.getMonth() - 1);
 
@@ -92,8 +100,7 @@ export async function GET(request: NextRequest) {
 
   const [lowRisk, mediumRisk, highRiskCount] = riskBuckets;
 
-  return NextResponse.json(
-    {
+  const churnPayload = {
       churnRisk: {
         dealerId,
         period: 'last_30_days',
@@ -115,7 +122,7 @@ export async function GET(request: NextRequest) {
           userImage: f.user?.image,
         })),
       },
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+    };
+  await redisSetJson(churnCacheKey, churnPayload, 60); // Redis yoksa sessizce geçer
+  return NextResponse.json(churnPayload, { headers: PRIVATE_NO_STORE_HEADERS });
 }

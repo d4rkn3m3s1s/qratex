@@ -36,6 +36,15 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // REDIS CACHE: platform-ölçekli ağır sorgu (25k feedback taraması, 7 agregasyon) → bayi
+  // başına 60s cache. Hit'te tüm sorgular atlanır. Redis yoksa cache-miss gibi → davranış aynı.
+  const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+  const benchCacheKey = `dealer-benchmark:${dealerId}`;
+  const cachedBench = await redisGetJson<object>(benchCacheKey);
+  if (cachedBench) {
+    return NextResponse.json(cachedBench, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
   const now = new Date();
   const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -239,7 +248,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  const benchPayload = {
     benchmark: {
       dealerId,
       period: 'last_30_days',
@@ -268,5 +277,7 @@ export async function GET(request: NextRequest) {
     },
     weeklyTrend: weeklyData,
     dailyTrend: dailyData,
-  }, { headers: PRIVATE_NO_STORE_HEADERS });
+  };
+  await redisSetJson(benchCacheKey, benchPayload, 60); // Redis yoksa sessizce geçer
+  return NextResponse.json(benchPayload, { headers: PRIVATE_NO_STORE_HEADERS });
 }
