@@ -12,6 +12,8 @@ const bodySchema = z.object({
   to: z.string().trim().email().max(320),
   subject: z.string().trim().min(1, 'Konu gerekli').max(200),
   message: z.string().trim().min(1, 'Mesaj gerekli').max(12_000),
+  // Yanıt (thread): orijinal mesajın RFC Message-ID'si → In-Reply-To/References header'ı.
+  inReplyTo: z.string().trim().max(998).optional(),
 });
 
 /** Admin: logo şablonu ile tek seferlik bilgilendirme e-postası (SMTP / Resend). */
@@ -47,11 +49,17 @@ export async function POST(request: NextRequest) {
     messagePlain: parsed.data.message,
   });
 
+  // Yanıtsa e-posta istemcisinde aynı konuşmaya iliştir (In-Reply-To + References).
+  const replyHeaders = parsed.data.inReplyTo
+    ? { 'In-Reply-To': parsed.data.inReplyTo, References: parsed.data.inReplyTo }
+    : undefined;
+
   const result = await sendTransactionalEmail({
     to: parsed.data.to,
     subject: parsed.data.subject,
     html,
     text,
+    ...(replyHeaders ? { headers: replyHeaders } : {}),
   });
 
   if (!result.ok) {

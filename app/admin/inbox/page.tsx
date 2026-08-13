@@ -34,6 +34,7 @@ interface MsgFull extends MsgListItem {
   bodyHtml: string | null;
   toEmail: string | null;
   attachments: MailAttachment[] | null;
+  messageId: string | null;
 }
 
 const fmtSize = (n: number) =>
@@ -54,6 +55,10 @@ export default function InboxPage() {
   const [openMsg, setOpenMsg] = useState<MsgFull | null>(null);
   const [openLoading, setOpenLoading] = useState(false);
   const [mailHeight, setMailHeight] = useState(320); // iframe otomatik yükseklik (mail script'inden)
+  // Uygulama-içi yanıt (thread header'lı — mailto yerine bizim SMTP/Resend'den gönderir).
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replySending, setReplySending] = useState(false);
 
   // Mail iframe'inden gelen yükseklik mesajını dinle (kısa mailde boşluk olmasın).
   useEffect(() => {
@@ -114,6 +119,8 @@ export default function InboxPage() {
     setOpenId(id);
     setOpenMsg(null);
     setOpenLoading(true);
+    setReplyOpen(false);
+    setReplyText('');
     try {
       const res = await fetch(`/api/admin/inbox/${id}`);
       const data = await res.json();
@@ -126,6 +133,34 @@ export default function InboxPage() {
       toast.error(e instanceof Error ? e.message : 'Mail açılamadı');
     } finally {
       setOpenLoading(false);
+    }
+  };
+
+  // Uygulama-içi yanıt: bizim SMTP/Resend'den, In-Reply-To header'ıyla (aynı konuşmaya iliştirir).
+  const sendReply = async () => {
+    if (!openMsg || !replyText.trim()) return;
+    setReplySending(true);
+    try {
+      const subject = /^re:/i.test(openMsg.subject || '') ? openMsg.subject : `Re: ${openMsg.subject || '(konu yok)'}`;
+      const res = await fetch('/api/admin/compose-mail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: openMsg.fromEmail,
+          subject,
+          message: replyText.trim(),
+          ...(openMsg.messageId ? { inReplyTo: openMsg.messageId } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data?.error || 'Yanıt gönderilemedi');
+      toast.success(`Yanıt gönderildi ✓ (${openMsg.fromEmail})`);
+      setReplyText('');
+      setReplyOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Yanıt gönderilemedi');
+    } finally {
+      setReplySending(false);
     }
   };
 
@@ -285,14 +320,45 @@ export default function InboxPage() {
                       <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground">{openMsg.bodyText || '(boş içerik)'}</pre>
                     )}
                   </div>
-                  {/* Yanıt kısayolu (mail istemcisinde aç) */}
-                  <div className="flex justify-end border-t border-border p-4">
-                    <a
-                      href={`mailto:${openMsg.fromEmail}?subject=${encodeURIComponent('Re: ' + (openMsg.subject || ''))}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50"
-                    >
-                      <Mail className="h-4 w-4" /> Yanıtla
-                    </a>
+                  {/* Uygulama-içi yanıt (bizim SMTP/Resend'den, thread header'lı) */}
+                  <div className="border-t border-border p-4">
+                    {!replyOpen ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <a
+                          href={`mailto:${openMsg.fromEmail}?subject=${encodeURIComponent('Re: ' + (openMsg.subject || ''))}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50"
+                          title="Kendi mail istemcinde aç"
+                        >
+                          <Mail className="h-4 w-4" /> İstemcide aç
+                        </a>
+                        <Button onClick={() => setReplyOpen(true)} className="gap-1.5">
+                          <Mail className="h-4 w-4" /> Yanıtla
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Kime: <span className="font-medium text-foreground">{openMsg.fromEmail}</span>
+                          {openMsg.messageId && <span className="ml-2 rounded bg-muted px-1.5 py-0.5">🧵 aynı konuşmaya eklenir</span>}
+                        </div>
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          rows={5}
+                          placeholder="Yanıtınızı yazın…"
+                          className="w-full resize-y rounded-lg border border-border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          disabled={replySending}
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="outline" onClick={() => { setReplyOpen(false); setReplyText(''); }} disabled={replySending}>
+                            Vazgeç
+                          </Button>
+                          <Button onClick={sendReply} disabled={replySending || !replyText.trim()} className="gap-1.5">
+                            <Mail className="h-4 w-4" /> {replySending ? 'Gönderiliyor…' : 'Gönder'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
