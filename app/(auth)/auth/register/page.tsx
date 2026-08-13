@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator';
 import { registerSchema, type RegisterInput } from '@/lib/validations';
 import { cn } from '@/lib/utils';
+import { track } from '@/lib/analytics';
 import { useAppT } from '@/lib/app-locale';
 import { translateKnownMessageKey } from '@/lib/translate-known-message';
 
@@ -108,6 +109,8 @@ function RegisterContent() {
         });
         return;
       }
+
+      track('user_registered', { role: selectedRole, needsVerify: !!result.verifyUrl });
 
       if (result.verifyUrl) {
         toast.success(t('auth.registerSuccessTitle'), {

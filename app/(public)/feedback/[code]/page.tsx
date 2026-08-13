@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { t, Locale, defaultLocale } from '@/i18n/request';
 import { LOCALE_STORAGE_KEY, writeLocaleCookieClient } from '@/lib/locale-shared';
 import { triggerConfetti } from '@/lib/effects/confetti';
+import { track } from '@/lib/analytics';
 
 interface QRCodeData {
   id: string;
@@ -133,6 +134,15 @@ export default function FeedbackPage() {
       const data = await response.json();
       setSubmitted(true);
       setRewardData(data.reward || null);
+
+      track('feedback_submitted', {
+        rating,
+        hasText: !!text.trim(),
+        hasMedia: images.length > 0,
+        hasNps: npsScore != null,
+        leveledUp: !!data.reward?.leveledUp,
+        pointsEarned: data.reward?.points ?? null,
+      });
 
       if (data.reward?.leveledUp) {
         // Seviye atlayınca havai fişek!

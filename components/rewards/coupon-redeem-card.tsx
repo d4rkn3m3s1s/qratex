@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/lib/admin-toast';
+import { track } from '@/lib/analytics';
 
 /**
  * Müşteri kupon kullanım kartı. /api/customer/redeem-coupon'a bağlı.
@@ -35,6 +36,7 @@ export function CouponRedeemCard({ labels }: { labels?: { title?: string; placeh
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Kupon kullanılamadı');
+      track('reward_redeemed', { code: data.coupon?.code ?? c.toUpperCase() });
       toast.success(data.message || 'Kupon tanımlandı');
       setApplied(data.coupon?.code ?? c.toUpperCase());
       setCode('');
