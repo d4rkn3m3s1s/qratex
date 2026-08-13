@@ -200,7 +200,7 @@ export function Header() {
               </>
             )}
           </Motion.div>
-          <div className="hidden h-10 w-[150px] sm:block">
+          <div className="hidden sm:block">
             {mounted && (
               <>
                 {/* Dark theme font (light/white colored) */}
