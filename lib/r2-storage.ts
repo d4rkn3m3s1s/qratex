@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
 
 /**
  * Cloudflare R2 (S3-uyumlu) depolama yardımcısı.
@@ -57,6 +57,23 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string,
     return `/${key}`;
   }
   return `${publicBase.replace(/\/$/, '')}/${key}`;
+}
+
+/**
+ * Mevcut bir R2 nesnesinin Content-Disposition/Content-Type metadata'sını GÜNCELLER.
+ * S3 in-place metadata değiştiremez → nesneyi kendine kopyalar (MetadataDirective: REPLACE).
+ * Safari eski ekleri açamıyordu (attachment disposition) → inline'a çevirmek için backfill.
+ */
+export async function setR2Disposition(key: string, contentType: string, contentDisposition: string): Promise<void> {
+  const bucket = env('R2_BUCKET')!;
+  await getClient().send(new CopyObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    CopySource: `${bucket}/${key}`,
+    ContentType: contentType,
+    ContentDisposition: contentDisposition,
+    MetadataDirective: 'REPLACE',
+  }));
 }
 
 /** R2'den dosya siler. `key` = bucket içi tam yol. */
