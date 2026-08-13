@@ -94,6 +94,21 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
         const bodyHtml = typeof parsed?.html === 'string' ? parsed.html : null;
         const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 200);
 
+        // ── THREAD (konuşma zinciri): In-Reply-To + References başlıkları.
+        const ownMessageId = env?.messageId ?? parsed?.messageId ?? null;
+        const inReplyTo = parsed?.inReplyTo ?? null;
+        // mailparser references: string | string[] | undefined → boşlukla ayrılmış tek string.
+        const refsRaw = parsed?.references;
+        const references = Array.isArray(refsRaw) ? refsRaw.join(' ') : (refsRaw ?? null);
+        // Konuşma kökü: References'ın ilki (en eski) > inReplyTo > kendi messageId (yeni thread).
+        const firstRef = references ? references.trim().split(/\s+/)[0] : null;
+        const threadRoot = firstRef || inReplyTo || ownMessageId || null;
+
+        // ── BOUNCE (teslim edilemedi): mailer-daemon/postmaster gönderen VEYA tipik konu.
+        const isBounce =
+          /mailer-daemon|postmaster|mail delivery/i.test(fromEmail) ||
+          /undeliver|delivery status notification|mail delivery (failed|subsystem)|returned mail|failure notice|delivery has failed/i.test(subject);
+
         // ── EKLER: gerçek ekleri (inline resim değil) çıkar + R2'ye yükle. R2 yoksa
         //    metadata url'siz saklanır (en azından "şu dosya ekli" görünür). 15MB üstü atlanır.
         let attachmentsMeta: { filename: string; contentType: string; size: number; url: string | null }[] | null = null;
@@ -139,7 +154,7 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
         // duplicate/hata yutulup yine de sayılıyordu → durum panelinde şişkin "X yeni" değeri).
         const created = await prisma.inboxMessage.create({
           data: {
-            uid, mailbox: 'INBOX', messageId: env?.messageId ?? parsed?.messageId ?? null,
+            uid, mailbox: 'INBOX', messageId: ownMessageId,
             fromEmail, fromName: fromName || null, toEmail: toEmail || null,
             subject, snippet, bodyText: bodyText || null, bodyHtml,
             sentAt,
@@ -148,6 +163,7 @@ export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
             matchedRecipientName: m?.name ?? null,
             matchedDepartment: m?.dept ?? null,
             attachments: attachmentsMeta ?? undefined,
+            inReplyTo, references, threadRoot, isBounce,
           },
         }).then(() => true).catch((e: unknown) => {
           // Duplicate (yarış/idempotency) beklenen — sessiz. Diğer hataları logla (görünür olsun).

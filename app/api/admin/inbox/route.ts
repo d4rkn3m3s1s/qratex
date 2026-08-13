@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
         id: true, fromEmail: true, fromName: true, subject: true, snippet: true,
         sentAt: true, seen: true, isFromIntern: true,
         matchedRecipientName: true, matchedDepartment: true,
+        threadRoot: true, isBounce: true,
       },
     }).catch(() => []),
     prisma.inboxMessage.count().catch(() => 0),

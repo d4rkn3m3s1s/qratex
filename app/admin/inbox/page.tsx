@@ -22,6 +22,8 @@ interface MsgListItem {
   isFromIntern: boolean;
   matchedRecipientName: string | null;
   matchedDepartment: string | null;
+  threadRoot: string | null;
+  isBounce: boolean;
 }
 interface MailAttachment {
   filename: string;
@@ -164,6 +166,12 @@ export default function InboxPage() {
     }
   };
 
+  // Thread boyutu: aynı threadRoot'a sahip mesaj sayısı (>1 ise "konuşma" göstergesi).
+  const threadSizes = new Map<string, number>();
+  for (const msg of messages) {
+    if (msg.threadRoot) threadSizes.set(msg.threadRoot, (threadSizes.get(msg.threadRoot) ?? 0) + 1);
+  }
+
   return (
     <div className="space-y-6">
       <DashboardPageHero
@@ -236,11 +244,23 @@ export default function InboxPage() {
                     </div>
                     <span className="truncate text-xs font-medium text-foreground/90">{m.subject || '(konu yok)'}</span>
                     <span className="truncate text-xs text-muted-foreground">{m.snippet}</span>
-                    {m.isFromIntern && (
-                      <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                        <User className="h-2.5 w-2.5" /> {m.matchedRecipientName || 'Stajyer'}{m.matchedDepartment ? ` · ${m.matchedDepartment}` : ''}
-                      </span>
-                    )}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                      {m.isBounce && (
+                        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                          ⚠️ İletilemedi
+                        </span>
+                      )}
+                      {m.threadRoot && (threadSizes.get(m.threadRoot) ?? 0) > 1 && (
+                        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                          🧵 {threadSizes.get(m.threadRoot)} mesaj
+                        </span>
+                      )}
+                      {m.isFromIntern && (
+                        <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <User className="h-2.5 w-2.5" /> {m.matchedRecipientName || 'Stajyer'}{m.matchedDepartment ? ` · ${m.matchedDepartment}` : ''}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}

@@ -955,12 +955,20 @@ model InboxMessage {
   matchedRecipientName String?          // eşleşen kişi adı
   matchedDepartment    String?          // eşleşen departman
   attachments  Json?     // [{ filename, contentType, size, url }] — R2'ye yüklenen ekler (metadata)
+  // Thread (konuşma) gruplama — RFC başlıkları:
+  inReplyTo    String?   // In-Reply-To başlığı (yanıtlanan mesajın Message-ID'si)
+  references   String?   @db.Text // References başlığı (thread zinciri, boşlukla ayrılmış id'ler)
+  threadRoot   String?   // konuşma kökü (References[0] || inReplyTo || messageId) — gruplama anahtarı
+  // Bounce (teslim edilemedi) — mailer-daemon/delivery-status tespiti:
+  isBounce     Boolean   @default(false)
   createdAt    DateTime  @default(now()) // DB'ye çekilme zamanı
 
   @@unique([mailbox, uid])
   @@index([fromEmail])
   @@index([isFromIntern])
   @@index([sentAt])
+  @@index([threadRoot])
+  @@index([isBounce])
 }
 
 model FeatureFlag {
