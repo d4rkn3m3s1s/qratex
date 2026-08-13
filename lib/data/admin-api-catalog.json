@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-21T13:00:50.967Z",
+  "generatedAt": "2026-08-13T00:19:02.072Z",
   "routes": [
     {
       "path": "/api/admin/ab-testing/overview",
@@ -207,6 +207,14 @@
       "file": "app/api/admin/cards/route.ts"
     },
     {
+      "path": "/api/admin/character-test",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/character-test/route.ts"
+    },
+    {
       "path": "/api/admin/compliance/logs",
       "methods": [
         "GET"
@@ -360,11 +368,35 @@
       "file": "app/api/admin/gamification/settings/route.ts"
     },
     {
+      "path": "/api/admin/gate",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/gate/route.ts"
+    },
+    {
       "path": "/api/admin/health",
       "methods": [
         "GET"
       ],
       "file": "app/api/admin/health/route.ts"
+    },
+    {
+      "path": "/api/admin/inbox/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/inbox/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/inbox",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "file": "app/api/admin/inbox/route.ts"
     },
     {
       "path": "/api/admin/innovation/ab-report",
@@ -436,6 +468,23 @@
         "GET"
       ],
       "file": "app/api/admin/insights/route.ts"
+    },
+    {
+      "path": "/api/admin/intern-emails/preview",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/intern-emails/preview/route.ts"
+    },
+    {
+      "path": "/api/admin/intern-emails",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "file": "app/api/admin/intern-emails/route.ts"
     },
     {
       "path": "/api/admin/kpis/action-completion",
@@ -608,6 +657,14 @@
       "file": "app/api/admin/seo/route.ts"
     },
     {
+      "path": "/api/admin/settings/admin-gate",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/admin-gate/route.ts"
+    },
+    {
       "path": "/api/admin/settings/ai-tones",
       "methods": [
         "GET",
@@ -622,6 +679,14 @@
         "GET"
       ],
       "file": "app/api/admin/settings/audit/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/character-thresholds",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/character-thresholds/route.ts"
     },
     {
       "path": "/api/admin/settings/experience-pulse",
@@ -670,6 +735,14 @@
         "PUT"
       ],
       "file": "app/api/admin/settings/route.ts"
+    },
+    {
+      "path": "/api/admin/settings/sidebar-groups",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "file": "app/api/admin/settings/sidebar-groups/route.ts"
     },
     {
       "path": "/api/admin/settings/sidebar-order",
@@ -732,6 +805,153 @@
         "GET"
       ],
       "file": "app/api/admin/system-status/route.ts"
+    },
+    {
+      "path": "/api/admin/team/activity",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/activity/route.ts"
+    },
+    {
+      "path": "/api/admin/team/ai-qa",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/team/ai-qa/route.ts"
+    },
+    {
+      "path": "/api/admin/team/ai",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/team/ai/route.ts"
+    },
+    {
+      "path": "/api/admin/team/automations",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/automations/route.ts"
+    },
+    {
+      "path": "/api/admin/team/autotask",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/team/autotask/route.ts"
+    },
+    {
+      "path": "/api/admin/team/departments",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/departments/route.ts"
+    },
+    {
+      "path": "/api/admin/team/files",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/files/route.ts"
+    },
+    {
+      "path": "/api/admin/team/members",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/members/route.ts"
+    },
+    {
+      "path": "/api/admin/team/performance",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/performance/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tags",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/tags/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tasks/[id]/attachments",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/tasks/[id]/attachments/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tasks/[id]/duplicate",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/team/tasks/[id]/duplicate/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tasks/[id]",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "file": "app/api/admin/team/tasks/[id]/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tasks/bulk",
+      "methods": [
+        "POST"
+      ],
+      "file": "app/api/admin/team/tasks/bulk/route.ts"
+    },
+    {
+      "path": "/api/admin/team/tasks",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/tasks/route.ts"
+    },
+    {
+      "path": "/api/admin/team/templates",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/templates/route.ts"
+    },
+    {
+      "path": "/api/admin/team/trend",
+      "methods": [
+        "GET"
+      ],
+      "file": "app/api/admin/team/trend/route.ts"
+    },
+    {
+      "path": "/api/admin/team/views",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "file": "app/api/admin/team/views/route.ts"
     },
     {
       "path": "/api/admin/tech-summary",

@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { PostHogProvider } from '@/components/analytics/posthog-provider';
 import './globals.css';
 import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
@@ -166,6 +167,7 @@ export default async function RootLayout({
           <ChatbotLazy />
           <Analytics />
           <SpeedInsights />
+          <PostHogProvider />
         </Providers>
       </body>
     </html>
