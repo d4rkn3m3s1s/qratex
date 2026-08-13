@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   // ZAMAN BÜTÇESİ: cron-job.org test timeout'u 30 sn. Her feedback GROQ'a gider (yavaş/yoksa
   // 5-10 sn sürebilir) → 22 sn'de dur, kısmi dön. Kalanlar bir sonraki koşuda işlenir.
   const startedAt = Date.now();
-  const TIME_BUDGET_MS = 22_000;
+  const TIME_BUDGET_MS = 18_000; // + PER_ITEM_MS(8sn) worst-case = 26sn < cron 30sn timeout
 
   // İlk (inline) analizle YARIŞMAMAK için: yalnız 3 dk'dan eski, metni olan, hiç işlenmemişler.
   const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000);
@@ -45,15 +45,25 @@ export async function GET(req: Request) {
     select: { id: true },
   }).catch(() => []);
 
+  // FEEDBACK-BAŞINA timeout: tek bir pipeline GROQ'ta takılsa bile bütünü bloklamasın.
+  // Race timeout pipeline'ı İPTAL ETMEZ (Vercel'de arkada bitmeye devam eder, sorun değil);
+  // sadece beklemeyi bırakır → yanıt hızlı döner, kalanı sonraki koşu toplar.
+  const PER_ITEM_MS = 8_000;
+  const timedOut = Symbol('timeout');
+  const withTimeout = (p: Promise<unknown>) =>
+    Promise.race([p.then(() => 'done' as const), new Promise((r) => setTimeout(() => r(timedOut), PER_ITEM_MS))]);
+
   let upgraded = 0;
   let stillFallback = 0;
   let failed = 0;
   let processed = 0;
+  let timeouts = 0;
   for (const f of stuck) {
     if (Date.now() - startedAt > TIME_BUDGET_MS) break; // bütçe doldu → kalanı sonraki koşuya bırak
     processed++;
     try {
-      await runFeedbackAnalyzePipeline(f.id);
+      const race = await withTimeout(runFeedbackAnalyzePipeline(f.id));
+      if (race === timedOut) { timeouts++; continue; } // bu feedback yavaş → sonraki koşuda tekrar
       // Pipeline sonrası gerçek analiz olduysa aiProcessedAt dolar.
       const after = await prisma.feedback.findUnique({
         where: { id: f.id },
@@ -72,6 +82,7 @@ export async function GET(req: Request) {
     processed,      // bu koşuda gerçekten denenen (zaman bütçesi nedeniyle < scanned olabilir)
     upgraded,       // gerçek AI'ye yükseldi
     stillFallback,  // GROQ hâlâ yok → fallback kaldı
+    timeouts,       // 8sn'de bitmeyen (arkada devam eder, sonraki koşuda tekrar denenir)
     failed,
     tookMs: Date.now() - startedAt,
   });
