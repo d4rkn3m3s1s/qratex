@@ -24,6 +24,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Yalnızca müşteri' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
+    // REDIS CACHE: saf agregat (5-6 ağır sorgu), puan/gerçek-zamanlı veri yok → 60s güvenli.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = `spending-overview:${customerId}`;
+    const cached = await redisGetJson<object>(cacheKey);
+    if (cached) return NextResponse.json(cached, { headers: PRIVATE_NO_STORE_HEADERS });
+
     const now = new Date();
 
     const [agg, reviewAgg, byDealer] = await Promise.all([
@@ -85,24 +91,23 @@ export async function GET() {
 
     const maxMonth = Math.max(1, ...monthly.map((m) => m.count));
 
-    return NextResponse.json(
-      {
-        success: true,
-        generatedAt: now.toISOString(),
-        totals: {
-          visits: agg._count.id,
-          recordedSpend: agg._sum.amount ?? 0,
-          uniqueDealers,
-        },
-        reviews: {
-          count: reviewAgg._count.id,
-          avgRating: reviewAgg._avg.rating != null ? Math.round(reviewAgg._avg.rating * 10) / 10 : null,
-        },
-        topDealers: topDealersEnriched,
-        monthlyVisits: monthly.map((m) => ({ ...m, barPct: maxMonth ? Math.round((m.count / maxMonth) * 100) : 0 })),
+    const payload = {
+      success: true,
+      generatedAt: now.toISOString(),
+      totals: {
+        visits: agg._count.id,
+        recordedSpend: agg._sum.amount ?? 0,
+        uniqueDealers,
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+      reviews: {
+        count: reviewAgg._count.id,
+        avgRating: reviewAgg._avg.rating != null ? Math.round(reviewAgg._avg.rating * 10) / 10 : null,
+      },
+      topDealers: topDealersEnriched,
+      monthlyVisits: monthly.map((m) => ({ ...m, barPct: maxMonth ? Math.round((m.count / maxMonth) * 100) : 0 })),
+    };
+    await redisSetJson(cacheKey, payload, 60); // Redis yoksa sessizce geçer
+    return NextResponse.json(payload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

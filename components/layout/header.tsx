@@ -173,7 +173,7 @@ export function Header() {
           className="group flex cursor-pointer items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Motion.div
-            className="relative"
+            className="relative h-14 w-14"
             whileHover={{ scale: 1.05, rotate: 5 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -200,7 +200,7 @@ export function Header() {
               </>
             )}
           </Motion.div>
-          <div className="hidden sm:block">
+          <div className="hidden h-10 w-[150px] sm:block">
             {mounted && (
               <>
                 {/* Dark theme font (light/white colored) */}

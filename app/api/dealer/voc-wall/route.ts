@@ -31,6 +31,12 @@ export async function GET(request: NextRequest) {
 
   const limit = clampTakeParam(request.nextUrl.searchParams.get('limit'), 50, 100);
 
+  // REDIS CACHE: 7 ağır sorgu (5000 satırlık 7-gün taraması dahil) → bayi+limit başına 45s. Redis yoksa DB.
+  const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+  const cacheKey = `voc-wall:${dealerId}:${limit}`;
+  const cachedVoc = await redisGetJson<object>(cacheKey);
+  if (cachedVoc) return NextResponse.json(cachedVoc, { headers: PRIVATE_NO_STORE_HEADERS });
+
   const baseWhere = { qrCode: { dealerId }, deletedAt: null };
   const publicWhere = { ...baseWhere, isPublic: true };
 
@@ -113,8 +119,7 @@ export async function GET(request: NextRequest) {
     dailyTrendFull.push({ date: dateStr, label, count: dayCounts[dateStr] ?? 0 });
   }
 
-  return NextResponse.json(
-    {
+  const vocPayload = {
       voc: {
         recent: recent.map((f) => ({
           id: f.id,
@@ -138,7 +143,7 @@ export async function GET(request: NextRequest) {
         ratingDistribution: [ratingMap[1], ratingMap[2], ratingMap[3], ratingMap[4], ratingMap[5]],
         dailyTrend: dailyTrendFull,
       },
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+  };
+  await redisSetJson(cacheKey, vocPayload, 45); // Redis yoksa sessizce geçer
+  return NextResponse.json(vocPayload, { headers: PRIVATE_NO_STORE_HEADERS });
 }
