@@ -60,6 +60,8 @@ function getAIClient(): OpenAI | null {
 
 function getModel(): string {
   if (process.env.AI_MODEL) return process.env.AI_MODEL;
+  // HACİM yolu (her feedback analiz edilir) → ücretsiz tier'da 14.4K istek/gün + 500K token/gün.
+  // Model tablosu/gerekçe: lib/groq.ts MODELS.
   if (process.env.GROQ_API_KEY) return 'llama-3.1-8b-instant';
   return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
 }

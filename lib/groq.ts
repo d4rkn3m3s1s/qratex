@@ -19,10 +19,29 @@ function getGroqClient(): OpenAI | null {
 }
 
 // Model seçenekleri
+/**
+ * MODEL SEÇİMİ — Groq ÜCRETSİZ tier limitlerine göre kullanım-başına ayrılmıştır.
+ * (Doğrulandı: console.groq.com/docs/rate-limits + /docs/models + /docs/structured-outputs)
+ *
+ *   model                  | RPM |   RPD | TPM |  TPD  | not
+ *   llama-3.1-8b-instant   |  30 | 14.4K |  6K |  500K | HACİM kralı → yüksek frekanslı işler
+ *   openai/gpt-oss-120b    |  30 |    1K |  8K |  200K | KALİTE + strict JSON şema desteği
+ *   openai/gpt-oss-20b     |  30 |    1K |  8K |  200K | 120B ile AYNI limit → 120B tercih edilir
+ *   groq/compound          |  30 |   250 | 70K |    -  | ajanik (web arama), TPD sınırsız
+ *
+ * KURAL: yüksek hacimli yollar (feedback analizi, aksiyon önerileri, öğrenme özetleri)
+ * `instant` kullanır — 14.4K istek/gün. Düşük hacimli ama kalite/JSON kritik yollar
+ * (sohbet botu, sistem öğrenmesi) `fast` kullanır — günde 1K istek yeterli.
+ * llama-3.3-70b-versatile 2026-08-16'da decommission edildi (Groq bildirimi).
+ */
 export const MODELS = {
-  fast: 'llama-3.3-70b-versatile', // Hızlı ve güçlü (70B)
-  reasoning: 'deepseek-r1-distill-llama-70b', // Akıl yürütme
-  instant: 'llama-3.1-8b-instant', // Çok hızlı, küçük model (8B)
+  /** Kalite + strict JSON: sohbet botu, sistem öğrenmesi. Ücretsiz: 1K istek/gün. */
+  fast: 'openai/gpt-oss-120b',
+  /** Akıl yürütme: gpt-oss-120b MoE zaten reasoning yetenekli (eski deepseek-r1-distill
+   *  Groq üretim listesinden kalktı). Ayrı bir kota tüketmemesi için `fast` ile aynı. */
+  reasoning: 'openai/gpt-oss-120b',
+  /** Hacim: yüksek frekanslı analizler. Ücretsiz: 14.4K istek/gün, 500K token/gün. */
+  instant: 'llama-3.1-8b-instant',
 } as const;
 
 // Retry yapılandırması

@@ -474,7 +474,7 @@ const SYSTEM_LEARNING_MODEL =
   process.env.AI_SYSTEM_LEARNING_MODEL ||
   process.env.AI_LEARNING_MODEL ||
   process.env.OPENAI_LEARNING_MODEL ||
-  (process.env.GROQ_API_KEY ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini');
+  (process.env.GROQ_API_KEY ? 'openai/gpt-oss-120b' : 'gpt-4o-mini'); // llama-3.3-70b-versatile decommission (2026-08-16)
 
 const MAX_FEEDBACKS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_FEEDBACKS, 0);
 const MAX_CORRECTIONS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_CORRECTIONS, 0);
