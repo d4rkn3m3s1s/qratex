@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +12,11 @@ import { Activity, ArrowUpRight, Download, Loader2, Radio } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { cn } from '@/lib/utils';
-import { PlatformPulseDailyTrendsChart } from '@/components/admin/platform-pulse-daily-trends-chart';
+// recharts (~368KB) ayrı chunk'a: sayfa ilk yükünde inmez, grafik göründüğünde yüklenir.
+const PlatformPulseDailyTrendsChart = dynamic(
+  () => import('@/components/admin/platform-pulse-daily-trends-chart').then((m) => m.PlatformPulseDailyTrendsChart),
+  { ssr: false, loading: () => <Skeleton className="h-[260px] w-full rounded-xl" /> }
+);
 
 type PulsePayload = {
   success?: boolean;

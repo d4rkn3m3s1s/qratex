@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +11,11 @@ import { ClipboardList, Download, Loader2, MessageSquare, Package, QrCode, Spark
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/admin-toast';
-import { DealerOperationsBriefDailyChart } from '@/components/dealer/operations-brief-daily-chart';
+// recharts (~368KB) ayrı chunk'a: sayfa ilk yükünde inmez, grafik göründüğünde yüklenir.
+const DealerOperationsBriefDailyChart = dynamic(
+  () => import('@/components/dealer/operations-brief-daily-chart').then((m) => m.DealerOperationsBriefDailyChart),
+  { ssr: false, loading: () => <Skeleton className="h-[260px] w-full rounded-xl" /> }
+);
 
 type BriefPayload = {
   success?: boolean;

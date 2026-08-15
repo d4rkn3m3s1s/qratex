@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import { Heart, Zap, Flame, Snowflake, Star } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { GameShell } from './game-shell';
-import { Boss3D } from './boss-3d';
+// three.js (~332KB) ayrı chunk: oyun sayfası hızlı açılır, 3B sahne arkadan yüklenir.
+const Boss3D = dynamic(() => import('./boss-3d').then((m) => m.Boss3D), { ssr: false });
 import { FxLayer, type FxHandle } from './fx-layer';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { getMiniGame } from '@/lib/minigame-config';
