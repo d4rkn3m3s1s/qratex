@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ReceiptAmountScanner } from '@/components/ocr/receipt-amount-scanner';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -684,7 +685,7 @@ export default function DealerScanPage() {
               </div>
             )}
 
-            {/* Amount */}
+            {/* Amount — fiş fotoğrafından OCR ile de doldurulabilir (tarayıcıda, ücretsiz) */}
             <div className="space-y-2">
               <Label>{t('dealerScan.amountOptional')}</Label>
               <Input
@@ -693,6 +694,7 @@ export default function DealerScanPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
+              <ReceiptAmountScanner onAmountDetected={(v) => setAmount(v)} />
             </div>
 
             {/* Note */}

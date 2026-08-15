@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from '@/lib/admin-toast';
 import Image from 'next/image';
 import { useAppT } from '@/lib/app-locale';
+import NearbyMap from '@/components/map/nearby-map-lazy';
 
 type LiveBoost = {
   dealerId: string | null;
@@ -27,6 +28,9 @@ type NearbyVenue = {
   image: string | null;
   phone: string | null;
   address?: string;
+  /** Harita (Leaflet/OSM) için — discovery API'sinden gelir. */
+  latitude?: number | null;
+  longitude?: number | null;
   distanceKm: number;
   categories: string[];
   avgRating: number;
@@ -590,9 +594,38 @@ export default function CustomerNearbyPage() {
           </Card>
         </>
       ) : (
+        <div className="space-y-4">
+          {/* HARİTA — Leaflet + OpenStreetMap (ücretsiz, API key yok). Koordinatı olan
+              işletmeler pin olarak görünür; ssr:false + ayrı chunk (ilk yükü ağırlaştırmaz). */}
+          {latitude !== null && longitude !== null && (() => {
+            const mapPoints = venues
+              .filter((v) => v.latitude != null && v.longitude != null)
+              .map((v) => ({
+                dealerId: v.dealerId,
+                businessName: v.businessName,
+                latitude: v.latitude as number,
+                longitude: v.longitude as number,
+                distanceKm: v.distanceKm,
+                address: v.address,
+                avgRating: v.avgRating,
+                isOpenNow: v.isOpenNow,
+              }));
+            if (mapPoints.length === 0) return null;
+            return (
+              <NearbyMap
+                userLat={latitude}
+                userLng={longitude}
+                points={mapPoints}
+                onSelect={(dealerId) => {
+                  document.getElementById(`venue-${dealerId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+              />
+            );
+          })()}
+
         <div className="grid gap-4 md:grid-cols-2">
           {venues.map((venue) => (
-            <Card key={venue.dealerId}>
+            <Card key={venue.dealerId} id={`venue-${venue.dealerId}`}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-3">
                   {venue.image ? (
@@ -672,6 +705,7 @@ export default function CustomerNearbyPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
         </div>
       )}
     </div>

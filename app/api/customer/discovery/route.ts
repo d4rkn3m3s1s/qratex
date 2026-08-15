@@ -278,6 +278,8 @@ export async function GET(request: NextRequest) {
       image: string | null;
       phone: string | null;
       address?: string;
+      latitude: number;
+      longitude: number;
       distanceKm: number;
       categories: string[];
       avgRating: number;
@@ -393,6 +395,9 @@ export async function GET(request: NextRequest) {
             image: dealer.image || null,
             phone: dealer.phone || null,
             address: dealer.address || configLocation?.address || undefined,
+            // Harita (Leaflet/OSM) için konum — liste zaten distanceKm gösteriyor.
+            latitude: sourceLatitude,
+            longitude: sourceLongitude,
             distanceKm: Number(distanceKm.toFixed(2)),
             categories: categoryByDealerId.get(dealer.id) || [],
             avgRating: scoreByDealerId.get(dealer.id)?.avgRating || 0,

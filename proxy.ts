@@ -17,7 +17,9 @@ function addSecurityHeaders(res: NextResponse): void {
   res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live",
+    // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcıda çalışır, sunucu CPU yakmaz).
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
+    "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
     "font-src 'self' https://fonts.gstatic.com",
