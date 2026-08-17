@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { m as Motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { Sparkles, X, Wand2, PartyPopper, Share2 } from 'lucide-react';
+import { Sparkles, X, Wand2, PartyPopper, Share2, Crown, Gem } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { shareCharacter } from '@/components/customer/character-share-card';
 import { categoryRevealTheme, badgeTier, LEGENDARY_OVERLAY, RARE_OVERLAY } from '@/lib/character-reveal-theme';
@@ -87,6 +87,13 @@ function hexToRgba(hex: string, alpha: number): string {
 
 const DEFAULT_ACCENT = '#9333ea'; // sistem primary morumsu — kategori gelene kadar
 
+/**
+ * SÜRPRİZ DÖNGÜSÜ: kategori belli olmadan önce kürede sırayla dönen renkler.
+ * Tüm kategorileri kapsar (kırmızı=dram, sarı=komedi, mor=fantastik, mavi=gizem,
+ * yeşil=gizemli) → kullanıcı kazandığı kategoriyi renkten önceden anlayamaz.
+ */
+const CYCLE_ACCENTS = ['#dc2626', '#f59e0b', '#8b5cf6', '#0ea5e9', '#10b981'];
+
 // ── Nadirlik (rarity) teması ─────────────────────────────────────────
 /**
  * Her rarity için görkem profili. `glow` kategori renginden BAĞIMSIZ bir ışık
@@ -118,11 +125,13 @@ function buildTheme(categoryKey?: string | null, badgeId?: string | null): Rarit
   const rare = tier === 'rare';
   return {
     key: legendary ? 'legendary' : rare ? 'rare' : 'common',
-    // Etiket: EFSANEVİ altın; NADİR kategori renginde; YAYGIN'da etiket yok (sade kalsın).
+    // Etiket: EFSANEVİ / NADİR (YAYGIN'da etiket yok — sade kalsın).
     label: legendary ? LEGENDARY_OVERLAY.label : rare ? RARE_OVERLAY.label : null,
-    // Işık = kategori rengi; YALNIZ efsaneviyse altın öne geçer (kategori kimliği korunur).
-    glow: legendary ? LEGENDARY_OVERLAY.glow : cat.accent,
-    glow2: legendary ? LEGENDARY_OVERLAY.glow2 : cat.accent2,
+    // RENK HER ZAMAN KATEGORİDEN gelir: gizemli rozet YEŞİL açılır, efsanevi olsa bile
+    // sarıya dönmez. Efsanevilik renkten DEĞİL, ayrı bir görsel dilden anlaşılır
+    // (taç ikonu + "EFSANEVİ" ibaresi + daha yoğun huzme/parçacık/sarsıntı).
+    glow: cat.accent,
+    glow2: cat.accent2,
     intensity: Math.min(
       1,
       cat.intensity + (legendary ? LEGENDARY_OVERLAY.intensityBoost : rare ? RARE_OVERLAY.intensityBoost : 0)
@@ -130,17 +139,8 @@ function buildTheme(categoryKey?: string | null, badgeId?: string | null): Rarit
     shake: cat.shake + (legendary ? LEGENDARY_OVERLAY.extraShake : rare ? RARE_OVERLAY.extraShake : 0),
     rays: cat.rays + (legendary ? LEGENDARY_OVERLAY.extraRays : rare ? RARE_OVERLAY.extraRays : 0),
     tagline: cat.tagline,
-    particles: legendary ? [LEGENDARY_OVERLAY.glow, LEGENDARY_OVERLAY.glow2, ...cat.particles] : cat.particles,
-  };
-}
-
-/** Rarity etiketi için parıltı gradyan metni (altın/mor/mavi). */
-function rarityLabelStyle(theme: RarityTheme): CSSProperties {
-  return {
-    color: theme.glow,
-    borderColor: hexToRgba(theme.glow, 0.55),
-    background: `linear-gradient(120deg, ${hexToRgba(theme.glow, 0.18)}, ${hexToRgba(theme.glow2, 0.1)})`,
-    textShadow: `0 0 12px ${hexToRgba(theme.glow, 0.6)}`,
+    // Parçacıklar da kategori paletinde kalır (altın karışmaz); efsanevilik yoğunlukla belli olur.
+    particles: cat.particles,
   };
 }
 
@@ -217,9 +217,26 @@ export function CharacterReveal({
   }, [fireCelebration, character, reduceMotion]);
 
   // Aktif kategori (aşama 2+'de kullanılır). Yoksa varsayılan tema.
-  const accent = character?.category?.accent ?? DEFAULT_ACCENT;
+  const finalAccent = character?.category?.accent ?? DEFAULT_ACCENT;
   const categoryReady = phase === 'category' || phase === 'reveal' || phase === 'details';
   const revealed = phase === 'reveal' || phase === 'details';
+
+  // ── SÜRPRİZ RENK DÖNGÜSÜ ──────────────────────────────────────────
+  // Hazırlanma aşamasında küre TÜM kategori renklerini sırayla dolaşır
+  // (kırmızı→sarı→mor→mavi→yeşil…), böylece kullanıcı hangi kategoriyi
+  // kazandığını renkten ÖNCEDEN anlayamaz. Kategori belli olunca (categoryReady)
+  // döngü durur ve gerçek renge oturur.
+  const [cycleIdx, setCycleIdx] = useState(0);
+  useEffect(() => {
+    if (categoryReady || reduceMotion) return; // kategori belli → döngü yok
+    const id = setInterval(() => setCycleIdx((i) => i + 1), 420);
+    return () => clearInterval(id);
+  }, [categoryReady, reduceMotion]);
+
+  // Küre/maskot rengi: kategori belli değilse döngüdeki renk, belliyse gerçek renk.
+  const accent = categoryReady
+    ? finalAccent
+    : CYCLE_ACCENTS[cycleIdx % CYCLE_ACCENTS.length];
 
   // ── Açılış efekti: state'i sıfırla, veriyi getir, aşamaları ilerlet ──
   useEffect(() => {
@@ -327,19 +344,30 @@ export function CharacterReveal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 backdrop-blur-xl"
+          // DİKKAT: `flex items-center` + `overflow-y-auto` birlikte, içerik ekrandan uzun
+          // olduğunda üst kısmı ERİŞİLEMEZ kılar (bilinen flexbox+scroll tuzağı).
+          // Çözüm: dış kap sadece kaydırır; ortalama içteki `min-h-full flex` sarmalında,
+          // çocukta `my-auto` ile yapılır → kısa içerik ortalanır, uzun içerik üstten kesilmez.
+          className="fixed inset-0 z-[60] overflow-y-auto backdrop-blur-xl"
           style={{
             // Kategori rengi + rarity ışığı birlikte katmanlanan koyu radyal overlay.
             background: `radial-gradient(120% 120% at 50% 30%, ${hexToRgba(theme.glow, revealed ? 0.2 : 0.1)} 0%, transparent 45%), radial-gradient(120% 120% at 50% 35%, ${hexToRgba(accent, 0.22)} 0%, rgba(6,8,18,0.9) 55%, rgba(2,4,10,0.96) 100%)`,
           }}
           onClick={onClose}
         >
+          {/* Ortalama sarmalı: min-h-full + flex → kısa içerik dikeyde ortalanır,
+              uzun içerik yukarı taşarken üstü ERİŞİLEBİLİR kalır (kaydırılabilir). */}
+          <div className="flex min-h-full items-center justify-center p-4">
           <Motion.div
             initial={{ scale: 0.9, y: 30, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.9, y: 30, opacity: 0 }}
             transition={{ type: 'spring', damping: 24, stiffness: 260 }}
-            className="relative w-full max-w-lg my-4 rounded-3xl border border-white/15 bg-white/[0.03] p-6 shadow-2xl sm:p-8"
+            // Üst padding bilinçli olarak daha dar (pt-3/sm:pt-4): sahne (küre/rozet) modalın
+            // üstünde gereksiz boşluk bırakmasın — kapat butonu zaten absolute konumlu.
+            // Ortalama dıştaki `min-h-full flex items-center` sarmalında yapılır;
+            // burada yalnız genişlik + iç boşluk (üst dar: sahne yukarıda dursun).
+            className="relative w-full max-w-lg rounded-3xl border border-white/15 bg-white/[0.03] px-6 pb-6 pt-3 shadow-2xl sm:px-8 sm:pb-8 sm:pt-4"
             style={{
               // Rarity ışığını modal kenarına taşır (kategori renginden bağımsız görkem).
               boxShadow: theme.key === 'common'
@@ -398,6 +426,7 @@ export function CharacterReveal({
               </Motion.div>
             )}
           </Motion.div>
+          </div>
         </Motion.div>
       )}
     </AnimatePresence>
@@ -506,19 +535,6 @@ function DetailsText({
           </span>
         )}
 
-        {/* KADEME etiketi — EFSANEVİ (altın) / NADİR (kategori rengi); YAYGIN'da yok */}
-        {theme.label && (
-          <Motion.span
-            initial={{ opacity: 0, scale: 0.7 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', delay: 0.15, damping: 14 }}
-            className="inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-xs font-extrabold uppercase tracking-wider"
-            style={rarityLabelStyle(theme)}
-          >
-            <Sparkles className="h-3 w-3" />
-            {theme.label}
-          </Motion.span>
-        )}
 
         {/* PUAN kademesi — kazanımın somut karşılığı (2.500 / 5.000 / 10.000 P) */}
         {revealText && (
@@ -532,6 +548,47 @@ function DetailsText({
           </Motion.span>
         )}
       </div>
+
+      {/* KADEME BANDI — efsanevi/nadir olduğunu BİR BAKIŞTA gösteren geniş şerit.
+          Küçük etiketten farklı olarak burada ikon + başlık + açıklama birlikte:
+          "EFSANEVİ · En özgün arketiplerden" gibi. Yaygın rozetlerde gösterilmez. */}
+      {theme.label && (
+        <Motion.div
+          initial={{ opacity: 0, scaleX: 0.6 }}
+          animate={{ opacity: 1, scaleX: 1 }}
+          transition={{ type: 'spring', delay: 0.1, damping: 18 }}
+          className="relative w-full max-w-sm overflow-hidden rounded-xl px-4 py-2"
+          style={{
+            background: `linear-gradient(100deg, ${hexToRgba(theme.glow, 0.28)} 0%, ${hexToRgba(theme.glow2, 0.12)} 60%, transparent 100%)`,
+            border: `1px solid ${hexToRgba(theme.glow, 0.5)}`,
+            boxShadow: `inset 0 1px 0 ${hexToRgba(theme.glow, 0.4)}`,
+          }}
+        >
+          {/* efsanevilerde soldan sağa kayan parıltı — dikkat çeker, renk değiştirmez */}
+          {theme.key === 'legendary' && (
+            <Motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 w-24"
+              style={{ background: `linear-gradient(90deg, transparent, ${hexToRgba('#ffffff', 0.28)}, transparent)` }}
+              animate={{ x: ['-120%', '520%'] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
+            />
+          )}
+          <div className="relative flex items-center justify-center gap-2">
+            {theme.key === 'legendary' ? (
+              <Crown className="h-5 w-5 shrink-0 text-white drop-shadow" />
+            ) : (
+              <Gem className="h-4 w-4 shrink-0 text-white/90" />
+            )}
+            <span className="text-sm font-extrabold uppercase tracking-[0.2em] text-white drop-shadow">
+              {theme.label}
+            </span>
+            <span className="text-[11px] font-medium text-white/70">
+              {theme.key === 'legendary' ? '· En özgün arketiplerden' : '· Belirgin, derin karakter'}
+            </span>
+          </div>
+        </Motion.div>
+      )}
 
       {/* KATEGORİ TAGLINE — isimden önce, sahneyi kuran küçük üst başlık */}
       <Motion.p
@@ -856,6 +913,24 @@ function RevealedBadge({
       exit={{ scale: 0, opacity: 0 }}
       transition={{ type: 'spring', damping: 12, stiffness: 200 }}
     >
+      {/* EFSANEVİ İŞARETİ — renk DEĞİL, form: rozetin çevresinde yavaşça dönen
+          kesikli taç halkası. Kategori renginde olduğu için gizemli yeşil kalır,
+          ama bu halka sadece efsanevilerde göründüğü için "özel" olduğu anlaşılır. */}
+      {theme.key === 'legendary' && !reduceMotion && (
+        <Motion.span
+          aria-hidden
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: 210,
+            height: 210,
+            border: `2px dashed ${hexToRgba(glow, 0.65)}`,
+            filter: `drop-shadow(0 0 10px ${hexToRgba(glow, 0.5)})`,
+          }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
+
       {/* Işık patlaması halkaları (rarity rengiyle) */}
       {!reduceMotion && (
         <>

@@ -4,6 +4,7 @@ import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { CustomerBirthdayBonusHost } from '@/components/customer/customer-birthday-bonus-host';
+import { WelcomeVideoModal } from '@/components/customer/welcome-video-modal';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
@@ -43,6 +44,8 @@ export default async function CustomerLayout({
         </main>
       </div>
       <OnboardingSheet />
+      {/* Karşılama videosu: dosya (public/videos/welcome-customer.mp4) yoksa hiç açılmaz. */}
+      <WelcomeVideoModal />
       <CustomerBirthdayBonusHost />
       <WebVitalsReporter />
     </div>

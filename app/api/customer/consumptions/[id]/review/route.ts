@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -256,17 +256,21 @@ export async function POST(
 
     // Karakter rozeti: tüketim yorumunu kategoriye sınıflandır + eşik dolduysa
     // "karakterin hazır" bildirimi (fire-and-forget; rozet reveal anında atanır).
+    // after(): yanıt sonrası ama fonksiyon canlıyken çalışır → Vercel serverless'ta
+    // await'siz fire-and-forget gibi yarıda kesilmez (rozet/karakter kaybolmaz).
     if (text && text.trim().length >= 8) {
       const uid = session.user.id, rid = review.id, rtext = text;
-      import('@/lib/character-badges')
+      after(() => import('@/lib/character-badges')
         .then((m) => m.processConsumptionReviewForCharacterBadge(uid, rid, rtext))
-        .catch(() => {});
+        .catch(() => {}));
     }
 
-    // Sürpriz rozet: yorum/puan arttı → koşulu sağlanan gizli rozetleri otomatik aç.
+    // Sürpriz + davranışsal (aktivite) rozetleri: yorum sayısı/deseni değişti →
+    // koşulu sağlananları otomatik aç. İkisi de idempotent (puan çoğaltmaz).
     {
       const uid = session.user.id;
-      import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+      after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
+      after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
     }
 
     const resBody = {

@@ -228,19 +228,39 @@ export async function awardEligibleSurpriseBadges(
       if (have < 0 || target <= 0) continue; // izlenemez/custom → otomatik verilemez
       if (have < target) continue; // koşul sağlanmadı
 
-      // Atomik ver (unique guard → çift verilmez) + sürpriz bildirimi.
-      const res = await prisma.userBadge.createMany({
-        data: [{ userId, badgeId: badge.id }],
-        skipDuplicates: true,
+      // Rozet ekleme + ödül kredisi AYNI TRANSACTION'da ([[points-economy-invariants]]):
+      // ayrı tx'lerde yapılırsa kredi hatasında rozet kalıcı verilmiş ama puan yatmamış
+      // olur ve sonraki çağrıda count=0 döneceği için kredi BİR DAHA denenmez (puan kaybı).
+      // Tek tx: kredi patlarsa rozet de rollback → tutarsız durum yok, sonraki koşuda tekrar denenir.
+      const { creditBadgeRewardInTx } = await import('@/lib/badge-reward-points');
+      const outcome = await prisma.$transaction(async (tx) => {
+        const res = await tx.userBadge.createMany({
+          data: [{ userId, badgeId: badge.id }],
+          skipDuplicates: true, // unique guard → çift verilmez
+        });
+        if (res.count === 0) return { created: false, points: 0 }; // yarış: başka istek verdi
+        const p = await creditBadgeRewardInTx(tx as never, {
+          userId, badgeId: badge.id, badgeName: badge.name, justCreated: true,
+        });
+        return { created: true, points: p };
+      }).catch((e: unknown) => {
+        // Sessiz yutma yok: rozet verilemediyse görünür olsun (rollback ile durum tutarlı).
+        console.error('[SURPRISE_BADGE] award tx failed:', badge.id, e);
+        return { created: false, points: 0 };
       });
-      if (res.count === 0) continue; // yarış: başka istek verdi
+
+      if (!outcome.created) continue;
       awarded.push(badge.id);
+      const rewarded = outcome.points;
+
       await prisma.notification.create({
         data: {
           userId,
           type: 'badge',
           title: '🎉 Sürpriz rozet kazandın!',
-          message: `Gizli bir rozet açıldı: ${badge.name}`,
+          message: rewarded > 0
+            ? `Gizli bir rozet açıldı: ${badge.name} (+${rewarded} puan)`
+            : `Gizli bir rozet açıldı: ${badge.name}`,
           data: { kind: 'surprise-badge', href: '/customer/badges' } as object,
         },
       }).catch(() => {});

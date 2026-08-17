@@ -51,6 +51,13 @@ export async function GET() {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
 
+    // REDIS CACHE: 11 ayrı COUNT (audit/card-audit/suspicious taramaları dahil,
+    // canlı logda ~18sn). Uyum özeti — 60s tazelik yeterli. Redis yoksa DB'ye düşer.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = 'admin:compliance-overview';
+    const cachedOverview = await redisGetJson<object>(cacheKey);
+    if (cachedOverview) return NextResponse.json(cachedOverview, { headers: PRIVATE_NO_STORE_HEADERS });
+
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(now.getDate() - 30);
@@ -90,7 +97,7 @@ export async function GET() {
       totalCardAuditLogs,
     };
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       data: {
         summary: {
@@ -113,7 +120,9 @@ export async function GET() {
           '5651 log bütünlüğü, erişim kontrolü ve saklama süreci',
         ],
       },
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
+    };
+    await redisSetJson(cacheKey, payload, 60); // Redis yoksa sessizce geçer
+    return NextResponse.json(payload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Compliance overview error:', error);
     return NextResponse.json({ error: 'Uyum özeti getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

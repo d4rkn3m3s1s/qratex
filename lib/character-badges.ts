@@ -469,6 +469,16 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
       skipDuplicates: true,
     });
     if (res.count === 0) return false; // aynı badgeId zaten alınmış (unique guard)
+
+    // ÖDÜL PUANI — AYNI TX: rozet eklemesiyle kredi atomik (kısmi durum yok).
+    // Yalnız count>0 iken çalışır → tekrar çağrı puan çoğaltmaz ([[points-economy-invariants]]).
+    const { creditBadgeRewardInTx } = await import('@/lib/badge-reward-points');
+    await creditBadgeRewardInTx(tx as never, {
+      userId,
+      badgeId: picked.badgeId,
+      badgeName: picked.name,
+      justCreated: true,
+    });
     return true;
   });
 
@@ -476,10 +486,14 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
 
   // Bildirim + koleksiyon başarımları (fire-and-forget; hata reveal'i bozmaz).
   try {
+    const { badgeRewardPoints } = await import('@/lib/badge-reward-points');
+    const rewardPts = badgeRewardPoints(picked.badgeId);
     await prisma.notification.create({
       data: {
         userId, type: 'badge', title: 'Yeni Karakter Rozeti! 🎭',
-        message: `Yorumlarına göre karakterin belirlendi: ${picked.name}`,
+        message: rewardPts > 0
+          ? `Yorumlarına göre karakterin belirlendi: ${picked.name} (+${rewardPts} puan)`
+          : `Yorumlarına göre karakterin belirlendi: ${picked.name}`,
       },
     });
   } catch { /* bildirim başarısız olsa da rozet atandı */ }

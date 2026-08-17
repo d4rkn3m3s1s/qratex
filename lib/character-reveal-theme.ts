@@ -103,10 +103,12 @@ export function categoryRevealTheme(categoryKey?: string | null): CategoryReveal
  */
 export const LEGENDARY_OVERLAY = {
   label: 'EFSANEVİ',
-  /** Altın parıltı — kategori renginin üstüne katmanlanır, onu EZMEZ. */
-  glow: '#fbbf24',
-  glow2: '#fde68a',
-  /** Kategori yoğunluğuna eklenen çarpan. */
+  /**
+   * RENK YOK — bilinçli. Efsanevilik rengi DEĞİŞTİRMEZ (gizemli rozet yeşil kalır,
+   * sarıya dönmez); yalnızca sahnenin YOĞUNLUĞUNU artırır ve UI'da ayrı bir görsel
+   * dil kullanılır: taç ikonu + nabız gibi atan etiket + rozet çevresinde dönen
+   * kesikli halka. Böylece "efsanevi" olduğu net anlaşılır ama kategori kimliği bozulmaz.
+   */
   intensityBoost: 0.25,
   extraRays: 6,
   extraShake: 3,

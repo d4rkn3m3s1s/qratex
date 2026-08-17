@@ -11,6 +11,13 @@ export async function GET() {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
 
+    // REDIS CACHE: 90 günlük feedback taraması × tüm bayiler (canlı logda ~19sn).
+    // AI kontrol merkezi "güncel durum" paneli — 60s tazelik yeterli. Redis yoksa DB.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = 'admin:dealers-ai-stats';
+    const cachedStats = await redisGetJson<object>(cacheKey);
+    if (cachedStats) return NextResponse.json(cachedStats, { headers: PRIVATE_NO_STORE_HEADERS });
+
     // Performans: AI Kontrol Merkezi "güncel durum" gösterir. Tüm zamanların
     // geri bildirimlerini çekmek yerine son 90 günle sınırla + bayi başına makul
     // bir tavan koy. Bu hem sorguyu hızlandırır hem de urgent/churn sayımlarını
@@ -129,7 +136,7 @@ export async function GET() {
     // Sort recent analyses by date desc
     recentAnalyses.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return NextResponse.json({
+    const payload = {
       dealers: dealerStats.slice(0, 20),
       analyzedCount: totalAnalyzed,
       urgentCount,
@@ -137,7 +144,9 @@ export async function GET() {
       churnCount,
       intentDist,
       recentAnalyses: recentAnalyses.slice(0, 20),
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
+    };
+    await redisSetJson(cacheKey, payload, 60); // Redis yoksa sessizce geçer
+    return NextResponse.json(payload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Error fetching admin AI stats:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

@@ -535,6 +535,9 @@ export async function POST(request: NextRequest) {
         const uid = session.user.id;
         // after(): rozet ödüllendirme yanıt sonrası ama fonksiyon canlıyken çalışsın (kaybolmasın).
         after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
+        // Davranışsal (aktivite) rozetleri: Yeni Ses / Usta Yorumcu / Taht Sahibi vb.
+        // İdempotent — tekrar çağrı puan çoğaltmaz ([[points-economy-invariants]]).
+        after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
       }
 
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
@@ -544,7 +547,8 @@ export async function POST(request: NextRequest) {
     const resBody = { success: true, feedback };
     if (session?.user?.id) {
       const uid = session.user.id;
-      import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {});
+      after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
+      after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
     }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });

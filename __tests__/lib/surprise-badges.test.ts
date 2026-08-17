@@ -10,19 +10,34 @@ const mockNotifCreate = jest.fn();
 const mockUserFindUnique = jest.fn();
 const mockCount = jest.fn();
 
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
-    badge: { findMany: (...a: unknown[]) => mockBadgeFindMany(...a) },
-    userBadge: {
-      findMany: (...a: unknown[]) => mockUserBadgeFindMany(...a),
-      createMany: (...a: unknown[]) => mockCreateMany(...a),
-    },
-    notification: { create: (...a: unknown[]) => mockNotifCreate(...a) },
-    user: { findUnique: (...a: unknown[]) => mockUserFindUnique(...a) },
-    feedback: { count: (...a: unknown[]) => mockCount(...a) },
-    referral: { count: (...a: unknown[]) => mockCount(...a) },
-    userQuest: { count: (...a: unknown[]) => mockCount(...a) },
+/**
+ * Rozet ekleme + ödül kredisi artık AYNI $transaction içinde (puan kaybı önlemi).
+ * Mock tx, gerçek client ile aynı yüzeyi sunar; callback'e kendini geçirir.
+ */
+const mockPrisma = {
+  badge: { findMany: (...a: unknown[]) => mockBadgeFindMany(...a) },
+  userBadge: {
+    findMany: (...a: unknown[]) => mockUserBadgeFindMany(...a),
+    createMany: (...a: unknown[]) => mockCreateMany(...a),
   },
+  notification: { create: (...a: unknown[]) => mockNotifCreate(...a) },
+  user: {
+    findUnique: (...a: unknown[]) => mockUserFindUnique(...a),
+    update: jest.fn().mockResolvedValue({}),
+  },
+  feedback: { count: (...a: unknown[]) => mockCount(...a) },
+  referral: { count: (...a: unknown[]) => mockCount(...a) },
+  userQuest: { count: (...a: unknown[]) => mockCount(...a) },
+  analyticsEvent: { create: jest.fn().mockResolvedValue({}) },
+  // $transaction: callback'i mock client ile çalıştırır (gerçek davranışı taklit eder).
+  $transaction: (fn: (tx: unknown) => unknown) => Promise.resolve(fn(mockPrisma)),
+};
+
+jest.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
+
+// Ödül puanı kredisi: bu testin konusu rozet ATAMA mantığı; cüzdan işlemi ayrı test edilir.
+jest.mock('@/lib/points-wallet', () => ({
+  creditPointsAndXp: jest.fn().mockResolvedValue({ points: 0, xp: 0, leveledUp: false, newLevel: null }),
 }));
 
 import { awardEligibleSurpriseBadges, type UserBadgeCounters } from '@/lib/surprise-badges';
