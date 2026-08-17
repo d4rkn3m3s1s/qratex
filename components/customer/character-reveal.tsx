@@ -7,6 +7,8 @@ import { m as Motion, AnimatePresence, useAnimationControls } from 'framer-motio
 import { Sparkles, X, Wand2, PartyPopper, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { shareCharacter } from '@/components/customer/character-share-card';
+import { categoryRevealTheme, badgeTier, LEGENDARY_OVERLAY, RARE_OVERLAY } from '@/lib/character-reveal-theme';
+import { getCharacterRevealText } from '@/lib/character-reveal-texts';
 
 /**
  * KARAKTER ROZETİ REVEAL — göz alıcı, sinematik "sürpriz açığa çıkarma" modalı.
@@ -93,25 +95,43 @@ const DEFAULT_ACCENT = '#9333ea'; // sistem primary morumsu — kategori gelene 
  */
 type RarityTheme = {
   key: 'common' | 'rare' | 'epic' | 'legendary';
-  label: string | null;   // rozet etiketi (common'da yok)
-  glow: string;           // rarity ışık rengi (hex)
+  label: string | null;   // "EFSANEVİ" etiketi (yalnız özel rozetlerde)
+  glow: string;           // ana ışık rengi (kategori accent'i; efsaneviyse altın)
   glow2: string;          // ikincil ton (huzme geçişi için)
   intensity: number;      // 0-1 görkem ölçeği
   shake: number;          // reveal sarsılma genliği (px)
   rays: number;           // god-ray huzme sayısı (0 = kapalı)
+  tagline: string;        // kategori üst başlığı ("TANIKLIK KAYDA GEÇTİ" vb.)
+  particles: string[];    // konfeti/parçacık paleti
 };
 
-const RARITY_THEMES: Record<string, RarityTheme> = {
-  legendary: { key: 'legendary', label: 'EFSANEVİ', glow: '#f59e0b', glow2: '#fde047', intensity: 1, shake: 7, rays: 14 },
-  epic: { key: 'epic', label: 'EPİK', glow: '#c026d3', glow2: '#a855f7', intensity: 0.78, shake: 5, rays: 12 },
-  rare: { key: 'rare', label: 'NADİR', glow: '#3b82f6', glow2: '#60a5fa', intensity: 0.55, shake: 3, rays: 9 },
-  common: { key: 'common', label: null, glow: DEFAULT_ACCENT, glow2: '#c084fc', intensity: 0.4, shake: 0, rays: 0 },
-};
-
-/** Rarity string'ini güvenli biçimde temaya çevirir (bilinmeyen → common). */
-function rarityTheme(rarity?: string): RarityTheme {
-  const key = (rarity || '').toLowerCase();
-  return RARITY_THEMES[key] ?? RARITY_THEMES.common;
+/**
+ * KATEGORİ ODAKLI TEMA (yeni sistem): açılışın kimliği artık kategoridir
+ * (dram=kırmızı, komedi=sarı, fantastik=mor, gizem=mavi, gizemli=yeşil).
+ * EFSANEVİ yalnız `LEGENDARY_BADGE_IDS` listesindeki rozetlerde, kategori renginin
+ * ÜSTÜNE altın bir katman olarak eklenir — kategori kimliğini ezmez.
+ */
+function buildTheme(categoryKey?: string | null, badgeId?: string | null): RarityTheme {
+  const cat = categoryRevealTheme(categoryKey);
+  const tier = badgeTier(badgeId); // puandan gelir: 10000→legendary, 5000→rare, 2500→common
+  const legendary = tier === 'legendary';
+  const rare = tier === 'rare';
+  return {
+    key: legendary ? 'legendary' : rare ? 'rare' : 'common',
+    // Etiket: EFSANEVİ altın; NADİR kategori renginde; YAYGIN'da etiket yok (sade kalsın).
+    label: legendary ? LEGENDARY_OVERLAY.label : rare ? RARE_OVERLAY.label : null,
+    // Işık = kategori rengi; YALNIZ efsaneviyse altın öne geçer (kategori kimliği korunur).
+    glow: legendary ? LEGENDARY_OVERLAY.glow : cat.accent,
+    glow2: legendary ? LEGENDARY_OVERLAY.glow2 : cat.accent2,
+    intensity: Math.min(
+      1,
+      cat.intensity + (legendary ? LEGENDARY_OVERLAY.intensityBoost : rare ? RARE_OVERLAY.intensityBoost : 0)
+    ),
+    shake: cat.shake + (legendary ? LEGENDARY_OVERLAY.extraShake : rare ? RARE_OVERLAY.extraShake : 0),
+    rays: cat.rays + (legendary ? LEGENDARY_OVERLAY.extraRays : rare ? RARE_OVERLAY.extraRays : 0),
+    tagline: cat.tagline,
+    particles: legendary ? [LEGENDARY_OVERLAY.glow, LEGENDARY_OVERLAY.glow2, ...cat.particles] : cat.particles,
+  };
 }
 
 /** Rarity etiketi için parıltı gradyan metni (altın/mor/mavi). */
@@ -147,23 +167,20 @@ export function CharacterReveal({
     && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   // Aktif rarity teması (kategori renginden bağımsız görkem profili).
-  const theme = rarityTheme(character?.rarity);
+  const theme = buildTheme(character?.category?.key, character?.badgeId);
 
   // Konfeti opsiyonel — provider yoksa hata vermesin diye dinamik import edilir.
   // Rarity'ye göre ölçeklenir: legendary'de daha çok + altın ağırlıklı.
   const fireCelebration = useCallback(() => {
     if (reduceMotion) return;
-    const rt = rarityTheme(character?.rarity);
+    const rt = buildTheme(character?.category?.key, character?.badgeId);
     import('@/components/providers/confetti-provider')
       .then(() => import('canvas-confetti'))
       .then((m) => {
         const confetti = m.default;
-        const accent = character?.category?.accent ?? DEFAULT_ACCENT;
-        // Legendary'de altın öne çıksın, aksi halde rarity + kategori karışımı.
-        const isLegend = rt.key === 'legendary';
-        const baseColors = isLegend
-          ? ['#fde047', '#f59e0b', '#ffffff', accent]
-          : [rt.glow, rt.glow2, accent, '#ffffff'];
+        // Konfeti paleti KATEGORİDEN gelir (dram=kırmızı, komedi=sarı, …);
+        // efsaneviyse altın tonlar listenin başına eklenmiş olur (buildTheme).
+        const baseColors = rt.particles;
         const scale = 0.85 + rt.intensity * 0.5; // ~1.05 → 1.35
         confetti({
           particleCount: Math.round(120 * (0.7 + rt.intensity * 0.9)),
@@ -190,7 +207,7 @@ export function CharacterReveal({
   const fireReveal = useCallback(() => {
     fireCelebration();
     if (reduceMotion) return;
-    const rt = rarityTheme(character?.rarity);
+    const rt = buildTheme(character?.category?.key, character?.badgeId);
     // Ses opsiyonel — altyapı yoksa/hata olursa sessizce geç.
     import('@/lib/game-sounds')
       .then((m) => { m.sfxReveal?.(); if (rt.intensity >= 0.75) m.haptic?.([18, 40, 24]); })
@@ -453,6 +470,10 @@ function DetailsText({
   showWhy: boolean;
   onClose: () => void;
 }) {
+  // Karaktere özel açılış metni (lib/character-reveal-texts.ts). Henüz yazılmamışsa null
+  // döner ve eski davranış (katalog açıklaması) gösterilir — yarım liste hiçbir şeyi bozmaz.
+  const revealText = getCharacterRevealText(character.badgeId);
+
   // Nadir oran rozeti verisi: ratePct varsa göster; düşükse "çok nadir" vurgusu.
   const ratePct = typeof character.ratePct === 'number' ? character.ratePct : null;
   const veryRare = ratePct !== null && ratePct <= 5;
@@ -485,7 +506,7 @@ function DetailsText({
           </span>
         )}
 
-        {/* RARITY etiketi — altın/mor/mavi parıltıyla (common'da yok) */}
+        {/* KADEME etiketi — EFSANEVİ (altın) / NADİR (kategori rengi); YAYGIN'da yok */}
         {theme.label && (
           <Motion.span
             initial={{ opacity: 0, scale: 0.7 }}
@@ -498,7 +519,30 @@ function DetailsText({
             {theme.label}
           </Motion.span>
         )}
+
+        {/* PUAN kademesi — kazanımın somut karşılığı (2.500 / 5.000 / 10.000 P) */}
+        {revealText && (
+          <Motion.span
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', delay: 0.22, damping: 14 }}
+            className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-3 py-0.5 text-xs font-extrabold tracking-wide text-white/90"
+          >
+            {revealText.points.toLocaleString('tr-TR')} P
+          </Motion.span>
+        )}
       </div>
+
+      {/* KATEGORİ TAGLINE — isimden önce, sahneyi kuran küçük üst başlık */}
+      <Motion.p
+        initial={{ opacity: 0, letterSpacing: '0.5em' }}
+        animate={{ opacity: 1, letterSpacing: '0.28em' }}
+        transition={{ duration: 0.7, delay: 0.05 }}
+        className="text-[10px] font-bold uppercase sm:text-[11px]"
+        style={{ color: hexToRgba(theme.glow, 0.85), textShadow: `0 0 14px ${hexToRgba(theme.glow, 0.5)}` }}
+      >
+        {theme.tagline}
+      </Motion.p>
 
       <h2
         className="text-3xl font-extrabold text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-4xl"
@@ -507,9 +551,60 @@ function DetailsText({
         {character.name}
       </h2>
 
-      {character.description && (
-        <p className="max-w-sm text-sm text-white/70">{character.description}</p>
+      {/* DİZİ/FİLM KAYNAĞI + karakterin özü (isim altı, ince ve zarif) */}
+      {revealText && (
+        <Motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.12 }}
+          className="-mt-1 flex flex-col items-center gap-0.5"
+        >
+          <span className="text-xs font-medium tracking-wide text-white/55">{revealText.source}</span>
+          <span className="text-[13px] italic text-white/75">{revealText.essence}</span>
+        </Motion.div>
       )}
+
+      {/* İMZA CÜMLE — "Rozetini kazandın! …" (karaktere özel kutlama). Yoksa katalog açıklaması. */}
+      {revealText?.quote ? (
+        <Motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="max-w-md text-balance px-2 text-base font-semibold leading-snug text-white/95 sm:text-lg"
+          style={{ textShadow: `0 0 18px ${hexToRgba(theme.glow, 0.35)}` }}
+        >
+          {revealText.quote}
+        </Motion.p>
+      ) : character.description ? (
+        <p className="max-w-sm text-sm text-white/70">{character.description}</p>
+      ) : null}
+
+      {/* ÖZELLİK ETİKETLERİ — karakteri tanımlayan kelimeler, kategori renginde çipler */}
+      {revealText?.tags?.length ? (
+        <Motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex max-w-md flex-wrap items-center justify-center gap-1.5"
+        >
+          {revealText.tags.map((tag, i) => (
+            <Motion.span
+              key={tag}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', damping: 16, delay: 0.34 + i * 0.05 }}
+              className="rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider sm:text-[11px]"
+              style={{
+                color: hexToRgba(theme.glow, 0.95),
+                borderColor: hexToRgba(theme.glow, 0.35),
+                backgroundColor: hexToRgba(theme.glow, 0.1),
+              }}
+            >
+              {tag}
+            </Motion.span>
+          ))}
+        </Motion.div>
+      ) : null}
 
       {/* AI'ın "neden bu rozeti aldın" açıklaması */}
       <AnimatePresence>
@@ -520,15 +615,29 @@ function DetailsText({
             transition={{ duration: 0.5, delay: 0.1 }}
             className="w-full overflow-hidden"
           >
+            {/* Kategori renginde çerçeve + üst ışık şeridi → "okunmaya değer" his */}
             <div
-              className="mt-1 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left"
-              style={{ boxShadow: `inset 0 1px 0 ${hexToRgba(accent, 0.15)}` }}
+              className="relative mt-1 overflow-hidden rounded-2xl border p-4 text-left"
+              style={{
+                borderColor: hexToRgba(theme.glow, 0.3),
+                background: `linear-gradient(160deg, ${hexToRgba(theme.glow, 0.1)} 0%, rgba(255,255,255,0.04) 45%)`,
+                boxShadow: `inset 0 1px 0 ${hexToRgba(theme.glow, 0.25)}, 0 8px 30px ${hexToRgba(theme.glow, 0.12)}`,
+              }}
             >
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: accent }}>
+              {/* üst kenar ışık çizgisi */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                style={{ background: `linear-gradient(90deg, transparent, ${hexToRgba(theme.glow, 0.9)}, transparent)` }}
+              />
+              <p
+                className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: theme.glow, textShadow: `0 0 12px ${hexToRgba(theme.glow, 0.5)}` }}
+              >
                 <Sparkles className="h-3.5 w-3.5" />
                 Bu rozeti aldın çünkü
               </p>
-              <p className="text-sm leading-relaxed text-white/85">{character.why}</p>
+              <p className="text-[15px] leading-relaxed text-white/90">{character.why}</p>
             </div>
           </Motion.div>
         )}

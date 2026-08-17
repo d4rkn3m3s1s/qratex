@@ -163,7 +163,8 @@ export const CHARACTER_CATEGORIES: CharacterCategory[] = [
     name: 'Gizemli',
     description: 'ÖZEL/ZOR KATEGORİ: yalnızca çok DÜZENLİ, DERİN ve ÖZENLİ yorumlar. Soğukkanlı analiz, zarif keskinlik, felsefi sorgulama, deadpan ironi gibi ustalık isteyen üsluplar. Kolay kazanılmaz.',
     emoji: '🕯️',
-    accent: '#7c3aed',
+    // Gizemli kategorisi YEŞİL (kullanıcı tema kararı) — Fantastik'in moru ile karışmasın.
+    accent: '#10b981',
     aiHint:
       'ÖZEL/ZOR kategoridir — yalnızca üslup USTALIĞI/ÖZGÜNLÜĞÜ olan ÖZGÜN yorumlar. UZUN OLMAK ŞART DEĞİL: kısa ama ' +
       'ustaca/keskin/derin bir yorum da girer (House\'un tek cümlelik teşhisi, Crowley\'nin deadpan ironisi, Villanelle\'nin ' +
