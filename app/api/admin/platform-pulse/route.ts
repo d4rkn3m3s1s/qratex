@@ -15,6 +15,12 @@ export async function GET() {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
 
+    // REDIS CACHE: 12 prisma cagrisi. Platform geneli (kisiye ozel degil) → global anahtar.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = 'admin:platform-pulse';
+    const cachedPulse = await redisGetJson<object>(cacheKey);
+    if (cachedPulse) return NextResponse.json(cachedPulse, { headers: PRIVATE_NO_STORE_HEADERS });
+
     const now = new Date();
     const since24h = new Date(now.getTime() - MS_24H);
     const since7d = new Date(now.getTime() - MS_7D);
@@ -91,8 +97,7 @@ export async function GET() {
       audits: number;
     }[];
 
-    return NextResponse.json(
-      {
+    const pulsePayload = {
         success: true,
         generatedAt: now.toISOString(),
         window24hSince: since24h.toISOString(),
@@ -111,9 +116,9 @@ export async function GET() {
         recentAudits,
         auditsByEntity: auditsByEntity.map((r) => ({ entity: r.entity, count: r._count._all })),
         dailySeries,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    };
+    await redisSetJson(cacheKey, pulsePayload, 60); // Redis yoksa sessizce gecer
+    return NextResponse.json(pulsePayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

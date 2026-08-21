@@ -28,6 +28,13 @@ export async function GET() {
     );
   }
 
+  // REDIS CACHE: 13 prisma cagrisi. ADMIN yukarida erken dondugu icin buraya yalniz
+  // bayi gelir → anahtar dealerId ile IZOLE (baska bayinin verisi sizamaz).
+  const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+  const cacheKey = `dealer-roi:${dealerId}`;
+  const cachedRoi = await redisGetJson<object>(cacheKey);
+  if (cachedRoi) return NextResponse.json(cachedRoi, { headers: PRIVATE_NO_STORE_HEADERS });
+
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -173,8 +180,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json(
-    {
+  const roiPayload = {
       metrics: {
         period: 'this_month',
         feedbackTotal,
@@ -201,7 +207,7 @@ export async function GET() {
       },
       weeklyTrend: weeklyData,
       dailyTrend: dailyData,
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+  };
+  await redisSetJson(cacheKey, roiPayload, 60); // Redis yoksa sessizce gecer
+  return NextResponse.json(roiPayload, { headers: PRIVATE_NO_STORE_HEADERS });
 }

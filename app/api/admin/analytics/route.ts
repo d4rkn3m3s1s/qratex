@@ -7,6 +7,23 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
 export const dynamic = 'force-dynamic';
 
+/** Bolum -> donen alan adlari. Modul duzeyinde: cache erken-donusunde de kullanilir. */
+const SECTION_KEYS: Record<string, string[]> = {
+  overview: ['totalUsers', 'totalFeedbacks', 'totalQRCodes', 'avgRating', 'userGrowth', 'feedbackGrowth', 'totalScans', 'activeQRCodes', 'sentimentBreakdown', 'ratingDistribution', 'comparison', 'roleDistribution', 'totals'],
+  trends: ['dailyData', 'heatmapData'],
+  dealers: ['topDealers', 'tenantBenchmark'],
+  root: ['rootCauseGraph'],
+  cards: ['cardStats'],
+  activity: ['recentActivity'],
+};
+
+/** Istenen bolumlere gore tam veriyi suzer (sections bos ise hepsini dondurur). */
+function pickSections(full: Record<string, unknown>, sections: string[] | null): Record<string, unknown> {
+  if (!sections || sections.length === 0) return full;
+  const allowed = new Set(sections.flatMap((sec) => SECTION_KEYS[sec] ?? []));
+  return Object.fromEntries(Object.entries(full).filter(([k]) => allowed.has(k)));
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
@@ -18,6 +35,19 @@ export async function GET(request: NextRequest) {
     const sections = sectionsParam
       ? sectionsParam.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
       : null;
+
+    // REDIS CACHE: bu uc 26 prisma cagrisi yapiyor (dosyadaki en agir uc).
+    // Anahtar yalniz period bazli — sections filtresi bellekte uygulanir.
+    // Admin geneli veri, kisiye ozel degil → global anahtar guvenli.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = `admin:analytics:${period}`;
+    const cachedFull = await redisGetJson<Record<string, unknown>>(cacheKey);
+    if (cachedFull) {
+      return NextResponse.json(
+        { success: true, data: pickSections(cachedFull, sections) },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
     // Calculate date ranges
     const now = new Date();
@@ -507,22 +537,14 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    const sectionKeys: Record<string, string[]> = {
-      overview: ['totalUsers', 'totalFeedbacks', 'totalQRCodes', 'avgRating', 'userGrowth', 'feedbackGrowth', 'totalScans', 'activeQRCodes', 'sentimentBreakdown', 'ratingDistribution', 'comparison', 'roleDistribution', 'totals'],
-      trends: ['dailyData', 'heatmapData'],
-      dealers: ['topDealers', 'tenantBenchmark'],
-      root: ['rootCauseGraph'],
-      cards: ['cardStats'],
-      activity: ['recentActivity'],
-    };
+    // Hesaplanan tam veriyi cache'le (sections filtresi BELLEKTE uygulanir; boylece
+    // farkli sections istekleri ayni cache girdisini paylasir).
+    await redisSetJson(cacheKey, fullData, 120);
 
-    let data = fullData;
-    if (sections && sections.length > 0) {
-      const allowed = new Set(sections.flatMap((s) => sectionKeys[s] ?? []));
-      data = Object.fromEntries(Object.entries(fullData).filter(([k]) => allowed.has(k)));
-    }
-
-    return NextResponse.json({ success: true, data }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, data: pickSections(fullData, sections) },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Admin analytics error:', error);
     return NextResponse.json({ error: 'Analitik verileri getirilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

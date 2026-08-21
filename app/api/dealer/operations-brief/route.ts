@@ -15,6 +15,12 @@ export async function GET() {
     if ('error' in auth) return auth.error;
     const dealerId = auth.session.user.id;
 
+    // REDIS CACHE: 12 prisma cagrisi. Anahtar dealerId ile IZOLE.
+    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+    const cacheKey = `dealer-ops-brief:${dealerId}`;
+    const cachedOps = await redisGetJson<object>(cacheKey);
+    if (cachedOps) return NextResponse.json(cachedOps, { headers: PRIVATE_NO_STORE_HEADERS });
+
     const now = new Date();
     const since7d = new Date(now.getTime() - MS_7D);
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -110,8 +116,7 @@ export async function GET() {
       consumptions: consByDay.get(dayKey(day.start)) ?? 0,
     }));
 
-    return NextResponse.json(
-      {
+    const opsPayload = {
         success: true,
         generatedAt: now.toISOString(),
         since7d: since7d.toISOString(),
@@ -136,9 +141,9 @@ export async function GET() {
           pendingCustomerOffers: remedyPending,
         },
         dailySeries,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    };
+    await redisSetJson(cacheKey, opsPayload, 60); // Redis yoksa sessizce gecer
+    return NextResponse.json(opsPayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

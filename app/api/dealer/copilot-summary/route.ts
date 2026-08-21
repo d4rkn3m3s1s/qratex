@@ -30,6 +30,13 @@ export async function GET() {
     );
   }
 
+  // REDIS CACHE: 13 prisma cagrisi. ADMIN yukarida erken dondugu icin buraya yalniz
+  // bayi gelir → anahtar dealerId ile IZOLE.
+  const { redisGetJson, redisSetJson } = await import('@/lib/redis');
+  const cacheKey = `dealer-copilot:${dealerId}`;
+  const cachedCopilot = await redisGetJson<object>(cacheKey);
+  if (cachedCopilot) return NextResponse.json(cachedCopilot, { headers: PRIVATE_NO_STORE_HEADERS });
+
   const now = new Date();
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -222,8 +229,7 @@ export async function GET() {
     })
   );
 
-  return NextResponse.json(
-    {
+  const copilotPayload = {
       summary: {
       period: 'last_7_days',
       criticalIssues,
@@ -244,9 +250,9 @@ export async function GET() {
       campaignRoiHints,
     },
     dailyTrend,
-  },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+  };
+  await redisSetJson(cacheKey, copilotPayload, 60); // Redis yoksa sessizce gecer
+  return NextResponse.json(copilotPayload, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
