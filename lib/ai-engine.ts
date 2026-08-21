@@ -45,13 +45,17 @@ function getAIClient(): OpenAI | null {
       aiClient = new OpenAI({
         apiKey: process.env.GROQ_API_KEY,
         baseURL: 'https://api.groq.com/openai/v1',
+        // Timeout ZORUNLU: SDK varsayılanı 10 dk. Sağlayıcı asılırsa after() içindeki
+        // analiz Vercel maxDuration'a kadar bekler → istek başına dakikalarca CPU yanar.
+        timeout: 15_000,
+        maxRetries: 1,
       });
     }
     return aiClient;
   }
   if (process.env.OPENAI_API_KEY) {
     if (!aiClient) {
-      aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      aiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 15_000, maxRetries: 1 });
     }
     return aiClient;
   }

@@ -32,6 +32,10 @@ function getClient(): S3Client {
       accessKeyId: env('R2_ACCESS_KEY_ID')!,
       secretAccessKey: env('R2_SECRET_ACCESS_KEY')!,
     },
+    // Timeout + sinirli retry: R2 yavaslarsa istek asili kalip serverless
+    // fonksiyonun CPU suresini bosuna yakmasin (Vercel CPU kotasi sinirli).
+    requestHandler: { requestTimeout: 20_000, connectionTimeout: 5_000 },
+    maxAttempts: 2,
   });
   return cachedClient;
 }

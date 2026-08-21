@@ -13,6 +13,10 @@ function getGroqClient(): OpenAI | null {
     groqClient = new OpenAI({
       apiKey: process.env.GROQ_API_KEY,
       baseURL: 'https://api.groq.com/openai/v1',
+      // Timeout ZORUNLU (SDK varsayilani 10 dk): saglayici asilirsa serverless
+      // fonksiyon maxDuration'a kadar bosuna CPU yakar.
+      timeout: 15_000,
+      maxRetries: 1,
     });
   }
   return groqClient;

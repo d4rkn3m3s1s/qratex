@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { requireTeamAccess } from '@/lib/team-access';
@@ -143,14 +143,14 @@ export async function POST(req: NextRequest) {
 
   // Atama varsa bildirim maili + in-app bildirim (fire-and-forget)
   if (task.assignedTo?.email && task.assignedToId) {
-    import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
+    after(() => import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
       to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
       taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
       description: task.description,
-    })).catch(() => {});
-    import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
+    })).catch(() => {}));
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
       userId: task.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
 
   return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
@@ -296,47 +296,47 @@ export async function PUT(req: NextRequest) {
 
   // Yeni birine atandıysa (değişiklik) bildirim + mail gönder (fire-and-forget).
   if (d.assignedToId && d.assignedToId !== existing.assignedToId && task.assignedTo?.email) {
-    import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
+    after(() => import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
       to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
       taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
       description: task.description,
-    })).catch(() => {});
-    import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
+    })).catch(() => {}));
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
       userId: d.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
 
   // Onay akışı bildirimleri (fire-and-forget).
   const actorName = (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null))?.name;
   // 1) Üye onaya gönderdi (review'e ilk geçiş) → yöneticilere "onay bekliyor".
   if (movingToReview) {
-    import('@/lib/team-notify').then((m) => m.notifyTaskSubmittedForReview({
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskSubmittedForReview({
       taskId: task.id, taskTitle: task.title,
       submittedById: userId, submittedByName: actorName,
       createdById: existing.createdById,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
   // 2) Yönetici onayladı (review → done) → gönderen üyeye "onaylandı".
   if (approving && existing.assignedToId && existing.assignedToId !== userId) {
-    import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
       userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
       approved: true, byName: actorName,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
   // 3) Yönetici reddetti (review → in_progress) → gönderen üyeye "revizyona döndü".
   if (rejecting && existing.assignedToId && existing.assignedToId !== userId) {
-    import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
       userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
       approved: false, byName: actorName, note: d.reviewNote,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
   // 4) Görev tamamlandıysa yöneticilere + oluşturana genel bildirim.
   if (movingToDone) {
-    import('@/lib/team-notify').then((m) => m.notifyTaskCompleted({
+    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskCompleted({
       taskId: task.id, taskTitle: task.title,
       completedById: userId, completedByName: actorName,
       createdById: existing.createdById,
-    })).catch(() => {});
+    })).catch(() => {}));
   }
 
   // Aktivite feed için TaskActivity kayıtları (status/atama/öncelik değişimleri).
