@@ -83,9 +83,12 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
+    // KADRAJ HESABI: yukseklik acisi ~25deg -> kutunun UST YUZU ve amblem gorunur
+    // (11.5deg'de kutu duz dikdortgen gibi okunuyordu). Mesafe 7.3 -> gorunur yukseklik
+    // ~4.45 birim; acilan kapak (max y~1.8) ve kaide (y~-1.0) rahatca sigar.
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
-    camera.position.set(0, 1.55, 6.4);
-    camera.lookAt(0, 0.25, 0);
+    camera.position.set(0, 3.2, 6.6);
+    camera.lookAt(0, 0.15, 0);
 
     // ── ORTAM YANSIMASI (dosyasız): prosedürel gradyan sahneden PMREM ──
     // Gerçek yansıma olmadan "premium render" hissi oluşmuyor; HDR dosyası
@@ -149,7 +152,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
 
     /** Işıklı dikey kenar dikişi — siluetin imzası. */
     const seamMat = new THREE.MeshStandardMaterial({
-      color: SEAM_BLUE, emissive: SEAM_BLUE, emissiveIntensity: 1.1,
+      color: SEAM_BLUE, emissive: SEAM_BLUE, emissiveIntensity: 0.6,
       metalness: 0.2, roughness: 0.35, toneMapped: false,
     });
 
@@ -174,7 +177,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     ];
 
     // ── GÖVDE: hafif konik yuvarlatılmış kutu ──────────────────────────
-    const BODY_W = 2.5, BODY_H = 1.5, BODY_D = 2.5;
+    const BODY_W = 2.0, BODY_H = 1.55, BODY_D = 2.0;
     const bodyGeo = new RoundedBoxGeometry(BODY_W, BODY_H, BODY_D, 6, 0.18);
     disposables.push(bodyGeo);
     const body = new THREE.Mesh(bodyGeo, bodyMat);
@@ -213,11 +216,11 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     }
 
     // ── KAİDE HALKASI (altta yumuşak ışık) ─────────────────────────────
-    const plinthGeo = new THREE.TorusGeometry(1.42, 0.045, 10, 64);
+    const plinthGeo = new THREE.TorusGeometry(BODY_W * 0.62, 0.028, 10, 64);
     disposables.push(plinthGeo);
     const plinth = new THREE.Mesh(plinthGeo, seamMat);
     plinth.rotation.x = Math.PI / 2;
-    plinth.position.y = -0.92;
+    plinth.position.y = -0.95;
     root.add(plinth);
 
     // ── KAPAK (ayrı grup: açılırken kaldırılır + arkaya yatırılır) ─────
@@ -232,7 +235,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     lid.add(lidMesh);
 
     // Kapak kenarına ince ışık şeridi (kapalıyken "mühürlü" hissi)
-    const lidSeamGeo = new THREE.TorusGeometry(1.3, 0.022, 8, 80);
+    const lidSeamGeo = new THREE.TorusGeometry(BODY_W * 0.49, 0.02, 8, 80);
     disposables.push(lidSeamGeo);
     const lidSeam = new THREE.Mesh(lidSeamGeo, seamMat);
     lidSeam.rotation.x = Math.PI / 2;
@@ -309,7 +312,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     const dustPos = new Float32Array(dustCount * 3);
     for (let i = 0; i < dustCount; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = 1.25 + Math.random() * 0.35;
+      const r = 1.05 + Math.random() * 0.3;
       dustPos[i * 3] = Math.cos(a) * r;
       dustPos[i * 3 + 1] = -0.85 + Math.random() * 1.7;
       dustPos[i * 3 + 2] = Math.sin(a) * r;
@@ -345,7 +348,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     root.add(rise);
 
     /** (c) Işık sütunu — kapak açılınca içeriden yükselen yumuşak hacimsel huzme. */
-    const beamGeo = new THREE.CylinderGeometry(0.15, 1.05, 2.6, 40, 1, true);
+    const beamGeo = new THREE.CylinderGeometry(0.10, 0.72, 1.8, 40, 1, true);
     disposables.push(beamGeo);
     const beamMat = new THREE.MeshBasicMaterial({
       color: INNER_GLOW, transparent: true, opacity: 0,
@@ -354,7 +357,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
     });
     disposables.push(beamMat);
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.position.y = 1.25;
+    beam.position.y = 0.92;
     root.add(beam);
 
     // ── ANİMASYON DÖNGÜSÜ ──────────────────────────────────────────────
@@ -398,9 +401,10 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
       }
 
       // Kapak: yukarı kalk + arkaya yatır → merkez ÖDÜL için boş kalır
-      lid.position.y = (BODY_H / 2 - 0.12) + openAmt * 1.5;
-      lid.rotation.x = -openAmt * 0.62;
-      lid.position.z = -openAmt * 0.35;
+      // Kapak KADRAJDA kalmali: 1.5 birim yukselince ust kenardan tasiyordu.
+      lid.position.y = (BODY_H / 2 - 0.12) + openAmt * 0.8;
+      lid.rotation.x = -openAmt * 0.5;
+      lid.position.z = -openAmt * 0.3;
 
       // Amblem: şarj oldukça parlar + mücevher döner
       const emissive = 0.35 + charge * 2.6;
@@ -416,17 +420,17 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
         emblemHalo.scale.setScalar(1 + charge * 0.28 + Math.sin(t * 2.2) * 0.03);
       }
       // Kapak açılınca amblem sönümlensin (ışık artık kutunun içinden geliyor)
-      emblem.visible = openAmt < 0.92;
+      emblem.visible = true; // mühür kapak ustunde kalir (kimlik)
 
       // Kenar dikişleri + kaide: şarjla nabız
-      seamMat.emissiveIntensity = 0.7 + charge * 1.4 + Math.sin(t * 3.1) * 0.12;
+      seamMat.emissiveIntensity = 0.45 + charge * 0.85 + Math.sin(t * 3.1) * 0.08;
 
       // İç ışık: kapak açıldıkça güçlenir
       innerLight.intensity = openAmt * 3.4;
       innerLight.position.y = 0.35 + openAmt * 0.5;
 
       // Işık sütunu: yalnız açılışta, yumuşak
-      beamMat.opacity = Math.max(0, (openAmt - 0.35)) * 0.32;
+      beamMat.opacity = Math.max(0, (openAmt - 0.4)) * 0.16; // yumusak, koni gibi durmasin
       beam.scale.setScalar(0.85 + openAmt * 0.25);
 
       // (a) toz: yavaş yükselip başa sarar
@@ -463,7 +467,7 @@ export default function SignatureGiftBox3D({ phase, className }: SignatureGiftBo
           const spread = 1 + dt * (burstT >= 0 ? 1.5 : 0.5);
           rpos.setX(i, rpos.getX(i) * spread);
           rpos.setZ(i, rpos.getZ(i) * spread);
-          if (y > 2.9) y = -99; // döngüye al
+          if (y > 2.1) y = -99; // döngüye al (kadraj disina tasmasin)
         }
         rpos.setY(i, y);
       }
