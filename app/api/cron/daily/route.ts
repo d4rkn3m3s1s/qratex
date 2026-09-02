@@ -7,6 +7,8 @@ import { GET as teamTaskDue } from '@/app/api/cron/team-task-due/route';
 import { GET as inboxSync } from '@/app/api/cron/inbox-sync/route';
 import { GET as squadBattles } from '@/app/api/cron/squad-battles/route';
 import { GET as cleanupCounters } from '@/app/api/cron/cleanup-counters/route';
+import { GET as dbCleanup } from '@/app/api/cron/db-cleanup/route';
+import { GET as aiRetry } from '@/app/api/cron/ai-retry/route';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -36,12 +38,24 @@ export async function GET(req: Request) {
   // Alt görevlere yetkili sentetik istek (her biri kendi bearer kontrolünü geçsin).
   const authedReq = () => new Request('https://internal/cron', { headers: { authorization: `Bearer ${secret}` } });
 
+  /*
+   * TEK UYANIŞ KURALI — Neon faturası sorgu sayısına değil, compute'un UYANIK
+   * KALDIĞI SÜREYE bakar. Dışarıdan ayrı ayrı tetiklenen her iş, uyuyan compute'u
+   * ayrı ayrı uyandırır ve her uyanış suspend süresi kadar (varsayılan 5 dk) boşa
+   * yanar. Dört ayrı tetikleyici günde 4 × 5 dk = 20 dk fazladan compute demek.
+   *
+   * Bu yüzden DB'ye dokunan bütün periyodik işler BURADA toplanır ve tek çağrıda
+   * sırayla çalışır. Yeni bir cron eklerken: ayrı bir dış tetikleyici kurma,
+   * bu listeye ekle.
+   */
   const tasks: { name: string; fn: (r: Request) => Promise<Response> }[] = [
     { name: 'intern-deadline', fn: internDeadline },
     { name: 'team-task-due', fn: teamTaskDue },
     { name: 'inbox-sync', fn: inboxSync },
     { name: 'squad-battles', fn: squadBattles },
     { name: 'cleanup-counters', fn: cleanupCounters },
+    { name: 'db-cleanup', fn: dbCleanup },
+    { name: 'ai-retry', fn: aiRetry },
   ];
 
   const results: Record<string, unknown> = {};

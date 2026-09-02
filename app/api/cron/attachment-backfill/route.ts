@@ -38,6 +38,22 @@ export async function GET(req: Request) {
   if (!validBearer(req.headers.get('authorization'), secret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  /*
+   * ⚠️ VARSAYILAN OLARAK KAPALI — geçiş TAMAMLANDI (2026-08 doğrulaması).
+   * Bu zaten "tek seferlik" bir işti; bekleyen kayıt sayıları koşu sınırlarının
+   * (120 / 60) çok altına indi, yani yapacak işi kalmadı. Periyodik tetiklenmeye
+   * devam etmesi, yalnızca uyuyan veritabanını uyandırıp compute yakıyordu.
+   * Yeniden gerekirse: ATTACHMENT_BACKFILL_ENABLED=1
+   */
+  if (process.env.ATTACHMENT_BACKFILL_ENABLED !== '1') {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: 'Geçiş tamamlandı; ATTACHMENT_BACKFILL_ENABLED=1 ile açılabilir.',
+    });
+  }
+
   if (!isR2Configured()) {
     return NextResponse.json({ error: 'R2 yapılandırılmamış' }, { status: 503 });
   }
