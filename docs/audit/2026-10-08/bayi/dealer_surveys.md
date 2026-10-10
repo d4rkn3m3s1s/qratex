@@ -225,3 +225,45 @@ Her iddia; sayfa, çağrılan API route'ları, `lib/api-auth.ts`, `lib/module-ga
 | 2 | API hatası boş liste olarak görünüyor | Doğrulandı |
 | 3 | Public yanıt tekilleştirme/tip doğrulaması yok | Doğrulandı (XFF sahteciliği alt iddiası Vercel'de geçersiz) |
 | 4 | Modül kapatılınca API açık kalıyor | Doğrulandı (önem: orta) |
+
+## Uygulama (Dalga 2)
+
+Commit'ler: `36b86af` (Anket Stüdyosu), `6603aa4` (kota kilidi, hidrasyon-güvenli kimlikler, e2e). Sayfa sunucu bileşeni (`app/dealer/surveys/page.tsx` → `gateSurveyPage` + `listDealerSurveys` SSR ön-yükleme), istemci adası `components/dealer/b-anketler/surveys-screen.tsx`; API'ler `defineRoute` (rol + kiracı + `module: 'dealer_surveys'` + rate limit), iş mantığı `lib/dealer-surveys/*`.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero | ÇALIŞIYOR | `PanelPage` (QDL v2). |
+| 2 | "Yeni anket" CTA | ÇALIŞIYOR | Kota dolunca devre dışı + gerekçe. |
+| 3 | Metadata | ÇALIŞIYOR | |
+| 4 | Liste verisi | ÇALIŞIYOR | SSR ön-yükleme; istemci `r.ok` denetler. |
+| 5 | Yükleniyor | ÇALIŞIYOR | İskelet. |
+| 6 | Boş durum | ÇALIŞIYOR | Fayda metni + şablonla başla. |
+| 7 | Hata durumu | ÇALIŞIYOR | Hata kartı + Tekrar dene; modül kapalı/yetkisiz ayrı ekran (`blocked.tsx`). |
+| 8 | Başlık | ÇALIŞIYOR | Sonuçlara bağlantı. |
+| 9 | Soru sayısı | ÇALIŞIYOR | Çoğul doğru. |
+| 10 | Yanıt sayısı | ÇALIŞIYOR | Public doldurmada tekillik + tip doğrulaması (paylaşım yüzeyi, `922912e`); toplama bilinmeyen seçenek ve aralık dışı puanı saymaz. |
+| 11 | Açıklama | ÇALIŞIYOR | |
+| 12 | Durum | ÇALIŞIYOR | Metinli rozet (Yayında/Durduruldu), opaklık yok. |
+| 13 | Link kopyala | ÇALIŞIYOR | `await` + hata bildirimi; durdurulmuş ankette uyarı. Paylaş diyaloğu (link + QR). |
+| 14 | Sonuçlar linki | ÇALIŞIYOR | |
+| 15 | Yayın aç/kapa | ÇALIŞIYOR | İyimser güncelleme + geri alma, aria-label, bekleme durumu. |
+| 16 | Sil | ÇALIŞIYOR | Onay diyaloğu; yalnız YANITSIZ anket silinir (tek atomik sorgu), yanıtlı → 409 "durdur + CSV indir". Cascade veri kaybı kapandı. |
+| 17 | Toast | ÇALIŞIYOR | Önek yok, TR/EN tutarlı. |
+| 18 | Animasyon | ÇALIŞIYOR | `m` + hareket politikası. |
+| 19 | Mobil | ÇALIŞIYOR | ≥44px hedefler, ikincil eylemler menüde. |
+| 20 | IDOR | ÇALIŞIYOR | `resolveDealerScope`; ADMIN yalnız `?dealerId=` ile salt-okunur. |
+| 21 | Modül kapısı | ÇALIŞIYOR | Tüm bayi uçları + sayfa kapısı. |
+| 22 | Karta tıklayıp detay | ÇALIŞIYOR | `/dealer/surveys/[id]` → sonuçlar. |
+| 23 | Arama/filtre/sıralama | ÇALIŞIYOR | İstemci tarafı (liste 50 kota ile sınırlı). |
+| 24 | Düzenleme | ÇALIŞIYOR | `/dealer/surveys/[id]/edit`; yanıtlı ankette yapısal kilit (`edit-policy.ts`). |
+| 25 | Çoğaltma | ÇALIŞIYOR | `POST [id]/duplicate`, kota kilidi altında. |
+| 26 | QR / paylaşım | ÇALIŞIYOR | Link, QR (PNG indir), WhatsApp. Anketi masa/şube QR'ına bağlama şema gerektirir → kalan. |
+| 27 | Oluşturma sonrası tazeleme | ÇALIŞIYOR | `invalidateQueries` + SSR. |
+| 28 | Kota göstergesi | ÇALIŞIYOR | Kullanılan/sınır sunucudan. |
+| 29 | Son yanıt/trend/tarih | ÇALIŞIYOR | Son yanıt, son 7 gün, oluşturma tarihi (Europe/Istanbul). "Yanıt oranı" paydası (gösterim) verisi yok → gösterilmiyor. |
+| 30 | Public sayfayı aç | ÇALIŞIYOR | "Müşteri sayfasını aç". |
+| 31 | CSV / toplu işlem | ÇALIŞIYOR (CSV) | Sunucu CSV sonuç sayfasında (`[id]/export`). Toplu işlem KALDIRILDI: 50 anket sınırında değeri düşük. |
+
+**Kapanan bulgular (11/11):** 1 onaysız silme/cascade, 2 hata=boş liste, 3 bayat liste, 4 toast dili, 5 yanıt şişirme/doğrulama (toplama burada; tekillik public yüzeyde), 6 modül kapısı, 7 erişilebilirlik, 8 kopyalama hatası, 9 switch bekleme, 10 ölü import/motion/e2e, 11 sonuç ucu sınırsız yükleme (SQL toplama).
+
+**Kalanlar:** Anketi QR/masa/şubeye bağlama — ŞEMA İSTEĞİ (`Survey` ↔ `QRCode` ilişkisi). Soft-delete (`archivedAt`) şemada yok; yerine "yanıtlı anket silinemez, durdurulur" kuralı.

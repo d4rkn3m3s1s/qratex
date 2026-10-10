@@ -212,3 +212,54 @@ Zincir uçtan uca okunarak doğrulandı; kırılan bir halka bulunamadı:
 - Tip değiştirme (`page.tsx:178`) `options` dizisini sıfırlamaz; `open_text` → `single_choice` geri dönüşünde eski boş seçenekler kalır — aynı kök nedeni besler.
 
 **Önerilen düzeltme (ürün seviyesi):** Tek bir paylaşılan zod şeması (`lib/surveys/schema.ts`) hem istemci formunda (`zodResolver`) hem `POST /api/dealer/surveys`'te kullanılmalı: seçim tiplerinde `superRefine` ile trim edilmiş, büyük/küçük harf duyarsız tekilleştirilmiş en az 2 seçenek zorunlu; diğer tiplerde `options` yok sayılıp `null` yazılmalı. Editörde boş seçenek satırı alan bazlı hata ile işaretlenmeli ve soru kartı kaydetmeden önce kaydırılıp vurgulanmalı. Savunma derinliği olarak public render, seçeneği olmayan seçim sorusunu cevaplanamaz kılmak yerine sunucu tarafında `required` hesaplamasından düşürmeli (ya da fill GET ucu bu soruyu filtrelemeli) ve fill POST cevap değerlerini sorunun seçenek kümesine karşı doğrulamalı. Mevcut bozuk anketler için salt-okunur bir tespit sorgusu (seçim tipinde `jsonb_array_length(options) < 2`) çalıştırılıp bayiye "bu anket yanıt toplayamıyor" uyarısı gösterilmeli; uzun vadede soru düzenleme ucu (`PUT /api/dealer/surveys/[id]`) eklenmeli.
+
+## Uygulama (Dalga 2)
+
+Commit'ler: `36b86af`, `6603aa4`. Sunucu sayfası `app/dealer/surveys/create/page.tsx` (kapı + metadata) → `components/dealer/b-anketler/survey-builder.tsx`; aynı oluşturucu düzenleme için `app/dealer/surveys/[id]/edit`. Ortak sözleşme `lib/survey-schema.ts` + `lib/dealer-surveys/input.ts` (istemci ve sunucu aynı kurallar, soru indeksli hata).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR | |
+| 2 | API rolü | ÇALIŞIYOR | POST yalnız DEALER; ADMIN salt-okunur. |
+| 3 | Modül kapısı | ÇALIŞIYOR | API + sayfa. |
+| 4 | Metadata | ÇALIŞIYOR | "Yeni anket" / "Anketi düzenle". |
+| 5 | Hero + geri | ÇALIŞIYOR | aria-label. |
+| 6 | Alt başlık vaadi | ÇALIŞIYOR | Kayıt sonrası paylaş adımı (link/QR). |
+| 7-8 | Başlık/açıklama | ÇALIŞIYOR | maxLength + sayaç + bağlı etiket. |
+| 9 | Soru sayacı | ÇALIŞIYOR | n/20. |
+| 10 | Soru ekle | ÇALIŞIYOR | Sınırda devre dışı; tip seçerek ekleme. |
+| 11 | Soru metni | ÇALIŞIYOR | Etiketli, maxLength. |
+| 12 | Tip seçimi | ÇALIŞIYOR | Görsel seçici, mobilde sarar. |
+| 13 | Seçenekler | ÇALIŞIYOR | Üst sınır; harf yerine numara. |
+| 14-15 | Seçenek ekle/sil | ÇALIŞIYOR | Kararlı `id` anahtarları, aria-label. |
+| 16 | Zorunlu | ÇALIŞIYOR | Erişilebilir ad. |
+| 17 | Soru silme | ÇALIŞIYOR | aria-label. |
+| 18 | Animasyon | ÇALIŞIYOR | `m`, azaltılmış hareket. |
+| 19 | Sıralama | ÇALIŞIYOR | Yukarı/aşağı düğmeleri (klavye erişilebilir). |
+| 20 | Soru çoğaltma | ÇALIŞIYOR | |
+| 21 | Boş durum | ÇALIŞIYOR | Şablon galerisi + boş başla. |
+| 22 | İstemci doğrulaması | ÇALIŞIYOR | Ortak zod; hatalı soru işaretlenir. |
+| 23 | Boş seçenek engeli | ÇALIŞIYOR | Seçim sorusu ≥2 dolu seçenek (istemci + sunucu). |
+| 24 | Tekrarlı seçenek | ÇALIŞIYOR | Reddedilir. |
+| 25 | Kaydet + çift tık koruması | ÇALIŞIYOR | "Taslak kaydet" / "Yayınla". |
+| 26 | POST | ÇALIŞIYOR | `defineRoute`, Türkçe sunucu mesajları. |
+| 27 | Kota | ÇALIŞIYOR | UI'da görünür; `count`+`create` danışma kilitli tek işlemde (`6603aa4`). |
+| 28 | Başarı + yönlendirme | ÇALIŞIYOR | Önbellek geçersiz kılınır; paylaş adımına gider. |
+| 29 | Hata bildirimleri | ÇALIŞIYOR | Alan bazlı, dil tutarlı; JSON olmayan yanıt güvenli. |
+| 30 | İptal | ÇALIŞIYOR | Kaydedilmemiş değişiklik onayı + `beforeunload`. |
+| 31 | Taslak | ÇALIŞIYOR | localStorage taslağı (try/catch) + sunucuda "durdurulmuş" = taslak. |
+| 32 | Canlı önizleme | ÇALIŞIYOR | `survey-preview.tsx`; mobilde Düzenle/Önizle geçişi. |
+| 33 | Şablon / AI | ÇALIŞIYOR (şablon) | Sektör şablonları (`templates.ts`). AI önerisi KALDIRILDI: mevcut AI geçitlerinde anket önerisi ucu yok. |
+| 34 | NPS/ölçek | KALDIRILDI | Paylaşılan `lib/survey-schema.ts` ve public doldurma 1–5; NPS iki yüzeyde sözleşme değişikliği ister → kalan. |
+| 35 | Koşullu mantık | KALDIRILDI | Doldurma tarafında desteği yok. |
+| 36 | Dağıtım | ÇALIŞIYOR | Link + QR + WhatsApp. |
+| 37 | Düzenleme | ÇALIŞIYOR | Yanıtlı ankette metin düzeltme + yeni soru serbest; tip/seçenek silme kilitli (veri bütünlüğü). |
+| 38 | Klavye/okuyucu | ÇALIŞIYOR | |
+| 39 | Mobil | ÇALIŞIYOR | |
+| 40 | Koyu tema | ÇALIŞIYOR | Token sınıfları. |
+| 41 | TR/EN | ÇALIŞIYOR | `copy.ts`. |
+| 42 | E2E | ÇALIŞIYOR | Koşulsuz akış, boş seçenek engeli dahil (`6603aa4`). |
+
+**Kapanan bulgular (11/12):** 1 boş seçenek, 2 düzenleme yok, 3 modül kapısı, 4 önbellek, 5 hata mesajları, 6 erişilebilirlik, 7 mobil sıkışma, 9 e2e, 10 taslak/kayıp, 11 motion, 12 seçenek sınırı. Kısmi: 8 (sunum iyileşti; NPS ölçeği kalan).
+
+**Kalanlar:** NPS 0–10 ve koşullu mantık (paylaşılan `lib/survey-schema.ts` + public doldurma yüzeyiyle ortak iş); AI soru önerisi.

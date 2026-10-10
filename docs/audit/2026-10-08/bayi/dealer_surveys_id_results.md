@@ -218,3 +218,47 @@ Kapsam: `app/dealer/surveys/[id]/results/page.tsx` (130 satır), `app/dealer/sur
 - `fill` POST'unda soru tanımına göre ayrıştırılmış doğrulama: ankete ait olmayan `questionId` reddi, aynı soru için yinelenen cevap reddi; `rating` → `z.number().int().min(1).max(5)`; `single_choice` → tek string ve `options` içinde olmalı; `multiple_choice` → `options` alt kümesi, tekrarsız; `open_text` → string, örn. en fazla 2000 karakter, trim. Doğrulanmış/normalize edilmiş değer kaydedilmeli (ham gövde değil).
 - Savunmayı derinleştirmek için toplama ucunda da aynı kuralları uygula: bilinmeyen seçenekleri ve aralık dışı puanları yok say (eski kirli kayıtlar da otomatik süzülür); `single_choice` için dizi değeri sayma.
 - Tekrar yanıtı azaltmak: oturumlu kullanıcıda `(surveyId, userId)` tekilliği, anonimde imzalı/httpOnly cihaz çerezi + IP/gün limiti; bayiye "yanıtı spam olarak işaretle/sil" aracı (yeniden tasarımın *Yanıtlar* sekmesi).
+
+## Uygulama (Dalga 2)
+
+Commit'ler: `36b86af`, `6603aa4`. Sunucu sayfası `app/dealer/surveys/[id]/results/page.tsx` (kapı + anket adlı metadata + SSR ön-yükleme) → `results-screen.tsx`. Toplama SQL'de (`getSurveyResults`: jsonb grup sayımı + pencere fonksiyonlu metin önizlemesi), saf özetleme `lib/dealer-surveys/aggregate.ts`.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1-2 | Rota/IDOR | ÇALIŞIYOR | |
+| 3 | ADMIN | ÇALIŞIYOR | `resolveDealerScope`: ADMIN `?dealerId=` ile salt-okunur. |
+| 4 | Modül kapısı | ÇALIŞIYOR | |
+| 5 | Veri yükleme | ÇALIŞIYOR | `r.ok` denetimi; 404'te yeniden deneme yok. |
+| 6 | Yükleniyor | ÇALIŞIYOR | İskelet; aralık değişiminde önceki veri korunur. |
+| 7 | Hata | ÇALIŞIYOR | Başlık korunur, Tekrar dene; 404 ayrı. |
+| 8 | Geri | ÇALIŞIYOR | aria-label. |
+| 9-10 | Başlık/toplam | ÇALIŞIYOR | Çoğul doğru. |
+| 11 | Durum rozeti | ÇALIŞIYOR | Buradan yayın aç/kapa. |
+| 12-13 | Açıklama/tarih | ÇALIŞIYOR | Oluşturma + son yanıt. |
+| 14 | Boş durum | ÇALIŞIYOR | Paylaş/yayınla sonraki adımı. |
+| 15-16 | Soru kartları/sayılar | ÇALIŞIYOR | Başlık hiyerarşisi; atlayan sayısı. |
+| 17 | Seçenek dağılımı | ÇALIŞIYOR | Yalnız tanımlı seçenekler; geçersizler dışarıda; çok seçimde taban açıklaması. |
+| 18 | Sıralama | ÇALIŞIYOR | Sayıya göre / orijinal sıra. |
+| 19 | Yüzde çubuğu | ÇALIŞIYOR | Erişilebilir değer + ad. |
+| 20 | Ortalama | ÇALIŞIYOR | Yerelleştirilmiş, "/5", yalnız 1–5 tamsayı. |
+| 21 | Yıldız | ÇALIŞIYOR | Kontrastlı token. |
+| 22 | Puan dağılımı | ÇALIŞIYOR | Çubuklar, toplam tutarlı. |
+| 23 | Açık uçlu | ÇALIŞIYOR | Önizleme + "tümünü gör" sayfalı yan panel, arama, tarih (`[id]/texts`). |
+| 24 | Seçeneksiz/bilinmeyen | ÇALIŞIYOR | Açıklayıcı not (`6603aa4`). |
+| 25 | Animasyon | ÇALIŞIYOR | |
+| 26 | Mobil | ÇALIŞIYOR | |
+| 27 | Tazelik | ÇALIŞIYOR | Pencere odağında yeniden getirme. |
+| 28 | Toplama doğruluğu | ÇALIŞIYOR | Doğrulayan toplama + public uçta tip doğrulaması. |
+| 29 | Yanıt bütünlüğü | ÇALIŞIYOR | Public uçta tekillik (paylaşım yüzeyi, `922912e`). |
+| 30 | Tarih aralığı | ÇALIŞIYOR | Hazır aralıklar, Europe/Istanbul. |
+| 31 | Tekil yanıt görünümü | ÇALIŞIYOR | Sayfalı yanıt listesi (`[id]/responses`). |
+| 32 | Dışa aktarma | ÇALIŞIYOR | Sunucu CSV `[id]/export` (Response, UTF-8 BOM, formül enjeksiyonu kaçışlı, ≤10.000). |
+| 33 | Paylaş/QR/aktiflik | ÇALIŞIYOR | |
+| 34 | Zaman serisi | ÇALIŞIYOR | Günlük yanıt eğilimi (lazy grafik). |
+| 35 | AI özet | KALDIRILDI | GET'te LLM yasak; mevcut AI geçidinde anket özeti ucu yok → kalan. |
+| 36 | Çapraz tablo | KALDIRILDI | Segment boyutu (şube/QR) şemada yok. |
+| 37 | Metadata | ÇALIŞIYOR | Anket adı sekmede. |
+
+**Kapanan bulgular (10/10):** 1 doğrulamasız değerler, 2 sınırsız bellek, 3 hata yönetimi, 4 ADMIN/modül, 5 Progress erişilebilirliği, 6 puan sunumu, 7 açık uçlu kesilme, 8 çıkmaz sokak, 9 yüzde tabanı, 10 i18n.
+
+**Kalanlar:** AI tema/duygu özeti (mevcut AI geçidine POST ucu gerekir); çapraz tablo — ŞEMA İSTEĞİ (`Survey`/`SurveyResponse` ↔ `QRCode`/şube ilişkisi).
