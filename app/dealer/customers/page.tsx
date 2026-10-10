@@ -1,171 +1,101 @@
-'use client';
+import { Suspense } from 'react';
+import type { Metadata } from 'next';
+import { requireAuth } from '@/lib/api-auth';
+import { getServerLocale } from '@/lib/server-locale';
+import { getSummary, listCustomers } from '@/lib/dealer-customers/server';
+import { isCustomerTag, isRiskLevel, isWinBackBand, normalizeSearch, parseSortParam } from '@/lib/dealer-customers/core';
+import { SkeletonStats, SkeletonTable } from '@/components/states';
+import { CustomersScreen, type CustomersInitial } from '@/components/dealer/b-musteriler/customers-screen';
+import type { ListParams } from '@/components/dealer/b-musteriler/api';
+import { LIST_DEFAULT_SORT, LIST_PAGE_SIZE } from '@/lib/dealer-customers/types';
 
-import { useState, useEffect, useCallback } from 'react';
-import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, TrendingUp, AlertTriangle } from 'lucide-react';
-import { toast } from '@/lib/admin-toast';
+/**
+ * Bayi → Müşteriler 360 (yol haritası §4.3, F3.2(c)).
+ * Birleşen eski rotalar (kalıcı yönlenir): /dealer/churn-risk (?tab=risk), /dealer/radar
+ * (?tab=winback), /dealer/segment-actions (?tab=segments).
+ *
+ * Sunucu önce: özet ve (liste sekmesindeyken) URL'deki ilk sayfa sunucuda paralel çekilir ve
+ * istemci adasına `initialData` olarak verilir; bir kaynak düşerse istemci kendi sorgusunda
+ * görünür hata + "Tekrar dene" gösterir ("200 + sıfırlar" yok).
+ */
+export const dynamic = 'force-dynamic';
 
-type CustomerRow = {
-  ref: string;
-  name: string | null;
-  email: string | null;
-  image: string | null;
-  totalSpent: number;
-  totalVisits: number;
-  avgOrderValue: number;
-  lastPurchaseAt: string | null;
-  predictedChurn: number | null;
-  churnRisk: string | null;
-  segment: { name: string; color: string } | null;
-  trustScore: number | null;
-  trustTier: string | null;
-  calculatedAt: string;
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getServerLocale().catch(() => 'tr' as const);
+  return locale === 'en'
+    ? { title: 'Customers', description: 'Customer list, 360 view, risk, win-back and segments.' }
+    : { title: 'Müşteriler', description: 'Müşteri listesi, 360 görünüm, kayıp riski, geri kazanım ve segmentler.' };
+}
 
-const churnColor = (risk: string | null) =>
-  risk === 'HIGH' ? 'text-red-600' : risk === 'MEDIUM' ? 'text-amber-600' : 'text-green-600';
+type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
+const PAGE_SIZES = [10, 20, 50, 100];
 
-// Güven skoru kademesini renkli rozete çevirir. Düşük kademe = kötü niyetli yorumcu riski.
-const trustBadge = (
-  tier: string | null
-): { label: string; className: string } => {
-  switch (tier) {
-    case 'low':
-      return { label: 'Düşük', className: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' };
-    case 'watch':
-      return { label: 'İzlemede', className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' };
-    case 'neutral':
-      return { label: 'Nötr', className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300' };
-    default:
-      return { label: 'Güvenilir', className: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300' };
+async function settle<T>(p: Promise<T>): Promise<T | null> {
+  try {
+    return await p;
+  } catch (err) {
+    console.error('[dealer/customers] sunucu ön yüklemesi başarısız:', err);
+    return null;
   }
-};
+}
 
-export default function DealerCustomersPage() {
-  const [list, setList] = useState<CustomerRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sort, setSort] = useState<'spend' | 'churn'>('spend');
+export default async function DealerCustomersPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  // Rol proxy'de korunur; yetki kararı yine DB'den (oturum iptali, rol değişimi).
+  const auth = await requireAuth(['DEALER']);
+  const dealerId = 'error' in auth ? null : auth.session.user.id;
 
-  const fetchList = useCallback(() => {
-    setLoading(true);
-    fetch(`/api/dealer/customers?sort=${sort}&limit=100`)
-      .then((r) => r.json())
-      .then((data) => setList(Array.isArray(data.customers) ? data.customers : []))
-      .catch(() => toast.error('Müşteriler yüklenemedi'))
-      .finally(() => setLoading(false));
-  }, [sort]);
+  const tab = first(sp.tab);
+  const size = Number(first(sp.size));
+  const pageNum = Number(first(sp.page));
+  const q = normalizeSearch(first(sp.q));
+  const params: ListParams = {
+    q: q.length >= 2 ? q : '',
+    segment: isCustomerTag(first(sp.segment)) ? first(sp.segment) : '',
+    risk: isRiskLevel(first(sp.risk)) ? first(sp.risk) : '',
+    band: isWinBackBand(first(sp.band)) ? first(sp.band) : '',
+    sort: first(sp.sort) || LIST_DEFAULT_SORT,
+    page: Number.isInteger(pageNum) && pageNum >= 1 ? pageNum : 1,
+    pageSize: PAGE_SIZES.includes(size) ? size : LIST_PAGE_SIZE,
+  };
 
-  useEffect(() => {
-    fetchList();
-  }, [fetchList]);
+  const listTab = !tab || tab === 'list';
+  const [summary, page] = dealerId
+    ? await Promise.all([
+        settle(getSummary(dealerId)),
+        listTab
+          ? settle(
+              listCustomers(dealerId, {
+                q: params.q,
+                segment: isCustomerTag(params.segment) ? params.segment : null,
+                risk: isRiskLevel(params.risk) ? params.risk : null,
+                band: isWinBackBand(params.band) ? params.band : null,
+                sort: parseSortParam(params.sort),
+                page: params.page,
+                pageSize: params.pageSize,
+              })
+            )
+          : Promise.resolve(null),
+      ])
+    : [null, null];
+
+  const initial: CustomersInitial = {
+    summary,
+    list: page ? { params, page } : null,
+    canSend: dealerId != null,
+  };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
-      <DashboardPageHero
-        title="Müşteriler"
-        description="Yaşam boyu değer, ziyaret, harcama ve kayıp riski — segmentlere göre"
-        icon={<Users className="text-white" />}
-      />
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Müşteri portföyü</CardTitle>
-            <CardDescription>CLV günlük olarak hesaplanır (gece 02:00).</CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={sort === 'spend' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSort('spend')}
-            >
-              <TrendingUp className="h-4 w-4" />
-              Harcama
-            </Button>
-            <Button
-              variant={sort === 'churn' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setSort('churn')}
-            >
-              <AlertTriangle className="h-4 w-4" />
-              Kayıp riski
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Yükleniyor...</p>
-          ) : list.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Henüz hesaplanmış müşteri verisi yok. Tüketim kaydı oluştukça günlük cron CLV üretir.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="py-2 pr-4">Müşteri</th>
-                    <th className="py-2 pr-4">Güven</th>
-                    <th className="py-2 pr-4">Segment</th>
-                    <th className="py-2 pr-4 text-right">Toplam harcama</th>
-                    <th className="py-2 pr-4 text-right">Ziyaret</th>
-                    <th className="py-2 pr-4 text-right">Ort. sepet</th>
-                    <th className="py-2 pr-4 text-right">Kayıp riski</th>
-                    <th className="py-2 text-right">Son ziyaret</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((c) => (
-                    <tr key={c.ref} className="border-b last:border-0">
-                      <td className="py-2 pr-4">
-                        <p className="font-medium">{c.name || 'İsimsiz'}</p>
-                        <p className="text-xs text-muted-foreground">{c.email}</p>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {(() => {
-                          const b = trustBadge(c.trustTier);
-                          return (
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${b.className}`}
-                              title={c.trustScore != null ? `Güven skoru: ${c.trustScore}/100` : undefined}
-                            >
-                              {b.label}
-                              {c.trustScore != null ? ` · ${c.trustScore}` : ''}
-                            </span>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {c.segment ? (
-                          <span
-                            className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                            style={{ backgroundColor: c.segment.color }}
-                          >
-                            {c.segment.name}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-right font-mono">{c.totalSpent.toLocaleString('tr-TR')}</td>
-                      <td className="py-2 pr-4 text-right">{c.totalVisits}</td>
-                      <td className="py-2 pr-4 text-right font-mono">{c.avgOrderValue.toLocaleString('tr-TR')}</td>
-                      <td className={`py-2 pr-4 text-right font-medium ${churnColor(c.churnRisk)}`}>
-                        {c.churnRisk ?? '—'}
-                        {c.predictedChurn != null ? ` (${Math.round(c.predictedChurn * 100)}%)` : ''}
-                      </td>
-                      <td className="py-2 text-right text-xs text-muted-foreground">
-                        {c.lastPurchaseAt ? new Date(c.lastPurchaseAt).toLocaleDateString('tr-TR') : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-7xl space-y-6">
+          <SkeletonStats />
+          <SkeletonTable />
+        </div>
+      }
+    >
+      <CustomersScreen initial={initial} />
+    </Suspense>
   );
 }

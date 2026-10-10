@@ -109,99 +109,13 @@ beforeEach(() => {
   );
 });
 
-describe('kampanya gönderimi (/api/dealer/campaigns/[id]/send)', () => {
-  const campaign = {
-    id: 'c1',
-    dealerId: 'dealer-1',
-    status: 'draft',
-    channel: 'notification',
-    targetSegment: 'all',
-    title: 'İndirim',
-    message: 'Bugün %10',
-  };
+// Kampanya gönderimi (Kampanya merkezi — Dalga 2) kendi test dosyasında: tercih (fail-closed),
+// sahte e-posta kanalı, frekans tavanı, kontrol grubu, tek transaction ve şema →
+// `__tests__/dealer/b-kampanyalar/send-route.test.ts` + `domain.test.ts`.
 
-  it('kampanyayı kapatan müşteriye ne bildirim ne push gider; diğer kanallar tercihe göre ayrışır', async () => {
-    mockCampaignFindUnique.mockResolvedValue(campaign);
-    const { POST } = await import('@/app/api/dealer/campaigns/[id]/send/route');
-    const res = await POST(req('/api/dealer/campaigns/c1/send'), params('c1'));
-    expect(res.status).toBe(200);
-    expect(recipients()).toEqual(['fresh', 'pushOff']);
-    expect(pushed()).toEqual(['fresh']);
-    expect(createdNotifications.every((n) => n.data.kind === 'campaign')).toBe(true);
-    const body = await res.json();
-    expect(body).toMatchObject({ sentCount: 2, optedOutCount: 1, candidateCount: 3 });
-    // "gönderildi" işareti ve bildirimler aynı transaction'da
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  it('herkes kapatmışsa hiçbir şey gönderilmez ve kampanya "gönderildi" işaretlenmez', async () => {
-    users.pushOff.prefs = OPTED_OUT;
-    users.fresh.prefs = OPTED_OUT;
-    mockCampaignFindUnique.mockResolvedValue(campaign);
-    const { POST } = await import('@/app/api/dealer/campaigns/[id]/send/route');
-    const res = await POST(req('/api/dealer/campaigns/c1/send'), params('c1'));
-    expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('NO_CONSENTING_RECIPIENTS');
-    expect(createdNotifications).toHaveLength(0);
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(mockCampaignUpdateMany).not.toHaveBeenCalled();
-  });
-
-  it('sahte "email" kanallı (eski) kampanya gönderilmez', async () => {
-    mockCampaignFindUnique.mockResolvedValue({ ...campaign, channel: 'email' });
-    const { POST } = await import('@/app/api/dealer/campaigns/[id]/send/route');
-    const res = await POST(req('/api/dealer/campaigns/c1/send'), params('c1'));
-    expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('CHANNEL_UNSUPPORTED');
-    expect(createdNotifications).toHaveLength(0);
-  });
-
-  it('FAIL-CLOSED: tercih okunamazsa gönderim yapılmaz', async () => {
-    mockCampaignFindUnique.mockResolvedValue(campaign);
-    prismaMock.user.findMany.mockRejectedValueOnce(new Error('db down'));
-    const { POST } = await import('@/app/api/dealer/campaigns/[id]/send/route');
-    const res = await POST(req('/api/dealer/campaigns/c1/send'), params('c1'));
-    expect(res.status).toBe(500);
-    expect(createdNotifications).toHaveLength(0);
-    expect(mockPush).not.toHaveBeenCalled();
-  });
-
-  it('oluşturma/düzenleme şeması "email" kanalını Türkçe hatayla reddeder', async () => {
-    const { campaignCreateSchema, campaignUpdateSchema } = await import('@/app/api/dealer/campaigns/campaign-schema');
-    const r = campaignCreateSchema.safeParse({ title: 'a', message: 'b', targetSegment: 'all', channel: 'email' });
-    expect(r.success).toBe(false);
-    if (!r.success) expect(r.error.errors[0].message).toMatch(/E-posta kanalı/);
-    expect(campaignUpdateSchema.safeParse({ channel: 'email' }).success).toBe(false);
-    expect(campaignCreateSchema.safeParse({ title: 'a', message: 'b', targetSegment: 'all' }).success).toBe(true);
-  });
-});
-
-describe('risk segmenti (/api/dealer/campaigns/risk-segment)', () => {
-  it('tercihi kapatanı atlar; push yalnız push\'u açık olana; data.kind kampanya grubunda', async () => {
-    const { POST } = await import('@/app/api/dealer/campaigns/risk-segment/route');
-    const res = await POST(req('/api/dealer/campaigns/risk-segment', {}));
-    expect(res.status).toBe(200);
-    expect(recipients()).toEqual(['fresh', 'pushOff']);
-    expect(pushed()).toEqual(['fresh']);
-    expect(createdNotifications.every((n) => n.data.kind === 'campaign-risk-segment')).toBe(true);
-    expect(await res.json()).toMatchObject({ sent: 2, eligibleCount: 3, optedOutCount: 1 });
-  });
-});
-
-describe('win-back (/api/dealer/win-back)', () => {
-  it('tercihi kapatan müşteriye "Sizi Özledik" gitmez; gerçek gönderim sayısı döner', async () => {
-    const { POST } = await import('@/app/api/dealer/win-back/route');
-    const res = await POST(
-      req('/api/dealer/win-back', { userIds: ['optedOut', 'pushOff', 'fresh'], offerType: 'free_coffee' })
-    );
-    expect(res.status).toBe(200);
-    // win-back yalnız uygulama içi kanaldan gider: pushOff'un uygulama içi kanalı açık.
-    expect(recipients()).toEqual(['fresh', 'pushOff']);
-    expect(createdNotifications.every((n) => n.data.kind === 'campaign-win-back')).toBe(true);
-    const body = await res.json();
-    expect(body).toMatchObject({ sent: 2, skippedByPreference: 1 });
-  });
-});
+// Risk segmenti ve win-back uçları emekli edildi (Müşteriler 360 — Dalga 2): segment / geri
+// kazanım gönderimleri artık `POST /api/dealer/customers/actions` üzerinden; tercih + sıklık
+// tavanı testi `__tests__/dealer/b-musteriler/actions.test.ts` içinde.
 
 describe('segment önerisi gönderimi (/api/dealer/innovation/segment-proposals/[id]/send)', () => {
   it('tercihe saygı + SENT işareti ile bildirimler aynı transaction\'da', async () => {
