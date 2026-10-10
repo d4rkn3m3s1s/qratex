@@ -13,8 +13,7 @@ import { SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
  * diğer cihazlardaki oturumlar düşer. İşlemi yapan tarayıcının çerezi yeni `sv` ile yeniden
  * imzalanır, böylece kullanıcı bu ekranda oturumunu kaybetmez.
  */
-async function withSessionRotation(request: NextRequest, userId: string, res: NextResponse): Promise<NextResponse> {
-  const sv = await bumpSessionVersion(userId);
+async function withSessionRotation(request: NextRequest, sv: number, res: NextResponse): Promise<NextResponse> {
   await reissueSessionCookie(request, res, { sv }, { maxAge: SESSION_MAX_AGE_SECONDS });
   return res;
 }
@@ -76,15 +75,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Yanlış kod, tekrar deneyin' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
       }
 
-      await prisma.user.update({
+      // 2FA açılışı ve oturum sürümü artışı TEK yazımda: biri olup diğeri olmayan ara durum yok.
+      const enabled = await prisma.user.update({
         where: { id: userId },
-        data: { twoFactorEnabled: true, twoFactorVerifiedAt: new Date() },
+        data: { twoFactorEnabled: true, twoFactorVerifiedAt: new Date(), sessionVersion: { increment: 1 } },
+        select: { sessionVersion: true },
       });
       // Kurtarma kodlarını üret ve TEK SEFER döndür (cihaz kaybı için).
       const recoveryCodes = await regenerateRecoveryCodes(userId);
       return withSessionRotation(
         request,
-        userId,
+        enabled.sessionVersion,
         NextResponse.json({ success: true, message: '2FA etkinleştirildi', recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
     }
@@ -104,16 +105,22 @@ export async function POST(request: NextRequest) {
       if (!verifyTOTP(user.twoFactorSecret, code)) {
         return NextResponse.json({ error: 'Yanlış kod' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
       }
-      await prisma.$transaction([
+      const [disabled] = await prisma.$transaction([
         prisma.user.update({
           where: { id: userId },
-          data: { twoFactorEnabled: false, twoFactorSecret: null, twoFactorVerifiedAt: null },
+          data: {
+            twoFactorEnabled: false,
+            twoFactorSecret: null,
+            twoFactorVerifiedAt: null,
+            sessionVersion: { increment: 1 },
+          },
+          select: { sessionVersion: true },
         }),
         prisma.twoFactorRecoveryCode.deleteMany({ where: { userId } }),
       ]);
       return withSessionRotation(
         request,
-        userId,
+        disabled.sessionVersion,
         NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
     }
@@ -132,9 +139,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Yanlış kod' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
       }
       const recoveryCodes = await regenerateRecoveryCodes(userId);
+      const sv = await bumpSessionVersion(userId);
       return withSessionRotation(
         request,
-        userId,
+        sv,
         NextResponse.json({ success: true, recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
     }

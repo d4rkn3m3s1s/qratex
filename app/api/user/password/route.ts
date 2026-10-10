@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { reissueSessionCookie } from '@/lib/auth/session-version';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import bcrypt from 'bcryptjs';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -62,10 +63,12 @@ export async function PATCH(request: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    // Update password
-    await prisma.user.update({
+    // Şifre ve oturum sürümü TEK yazımda (P0-07): şifre değişince diğer cihazlardaki
+    // (ör. çalınmış) oturumlar düşer; bu tarayıcının çerezi aşağıda yeni `sv` ile yenilenir.
+    const updated = await prisma.user.update({
       where: { id: session.user.id },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, sessionVersion: { increment: 1 } },
+      select: { sessionVersion: true },
     });
 
     // Log audit
@@ -79,7 +82,9 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, message: 'Şifre güncellendi' }, { headers: PRIVATE_NO_STORE_HEADERS });
+    const res = NextResponse.json({ success: true, message: 'Şifre güncellendi' }, { headers: PRIVATE_NO_STORE_HEADERS });
+    await reissueSessionCookie(request, res, { sv: updated.sessionVersion }, { maxAge: SESSION_MAX_AGE_SECONDS });
+    return res;
   } catch (error) {
     console.error('Error changing password:', error);
     return NextResponse.json(

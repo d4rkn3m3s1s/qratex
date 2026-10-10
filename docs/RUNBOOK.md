@@ -89,7 +89,7 @@ Notlar:
 
 `requireAuth` her istekte DB'deki `User.sessionVersion`, `suspendedAt`, `anonymizedAt`, güncel rol ve
 `DealerStaff.isActive` değerini kontrol eder (Redis `ss:v1:<userId>` 60 sn). Bir kullanıcının bütün
-oturumlarını hemen düşürmek için kodda `bumpSessionVersion(userId)` (`lib/auth/session-state.ts`),
+oturumlarını hemen düşürmek için kodda `bumpSessionVersion(userId)` (`lib/auth/session-version.ts`; ardından `invalidateSessionState(userId)` — `lib/auth/session-state.ts`),
 acil durumda SQL:
 
 ```sql

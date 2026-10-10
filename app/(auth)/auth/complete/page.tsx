@@ -13,9 +13,9 @@ import { InlineError } from '@/components/states';
 import { resolvePostLoginTarget, roleHome } from '@/lib/auth/post-login-target';
 import { useAuthCopy } from '../_components/auth-copy';
 import { AuthNotice } from '../_components/auth-notice';
+import { applyReferralCode, type ReferralOutcome } from '../_components/referral-outcome';
 
 type Phase = 'checking' | 'password' | 'finishing' | 'dealer_mismatch' | 'done';
-type ReferralOutcome = { kind: 'credited'; points: number } | { kind: 'pending' } | { kind: 'failed'; reason?: string } | null;
 
 const PROVIDER_LABEL: Record<string, string> = { google: 'Google', github: 'GitHub' };
 const DISMISS_KEY = 'qx_pw_prompt_dismissed:';
@@ -64,7 +64,7 @@ function AuthCompleteContent() {
   const [showPw, setShowPw] = useState(false);
   const [pwError, setPwError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [referral, setReferral] = useState<ReferralOutcome>(null);
+  const [referral, setReferral] = useState<ReferralOutcome | null>(null);
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -76,24 +76,11 @@ function AuthCompleteContent() {
     return resolvePostLoginTarget(rawNext, role, origin);
   }, [rawNext, role]);
 
-  const applyReferral = useCallback(async (): Promise<ReferralOutcome> => {
-    if (!refCode) return null;
-    try {
-      const res = await fetch('/api/referral', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: refCode }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; pointsEarned?: number; status?: string; error?: unknown };
-      if (!res.ok || !data.success) return { kind: 'failed', reason: typeof data.error === 'string' ? data.error : undefined };
-      if (data.status === 'COMPLETED' && typeof data.pointsEarned === 'number' && data.pointsEarned > 0) {
-        return { kind: 'credited', points: data.pointsEarned };
-      }
-      return { kind: 'pending' };
-    } catch {
-      return { kind: 'failed' };
-    }
-  }, [refCode]);
+  // Yanıt `interpretReferralResponse` ile okunur: yalnız gerçekten işlenen ödül "eklendi" der.
+  const applyReferral = useCallback(
+    async (): Promise<ReferralOutcome | null> => (refCode ? applyReferralCode(refCode) : null),
+    [refCode]
+  );
 
   const finish = useCallback(async () => {
     setPhase('finishing');

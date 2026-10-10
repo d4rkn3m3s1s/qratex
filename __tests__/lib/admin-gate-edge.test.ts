@@ -75,10 +75,22 @@ describe('Permissions-Policy (P0-36)', () => {
     expect(permissionsPolicyFor('/customer/scan/abc')).toContain('camera=(self)');
   });
 
-  it('diğer her yerde kamera kapalı', () => {
-    expect(permissionsPolicyFor('/dealer')).toContain('camera=()');
-    expect(permissionsPolicyFor('/dealer/scanner-settings')).toContain('camera=()');
-    expect(permissionsPolicyFor('/api/dealer/scan')).toContain('camera=()');
-    expect(permissionsPolicyFor('/admin')).toMatch(/^camera=\(\), microphone=\(\)/);
+  it('REGRESYON: panel sayfası da camera=(self) taşır (panelden taramaya yumuşak geçişte belge değişmez)', () => {
+    // Proxy /dealer'a camera=() yazsaydı, /dealer → /dealer/scan client-side geçişinde kamera engellenirdi.
+    expect(permissionsPolicyFor('/dealer')).toContain('camera=(self)');
+    expect(permissionsPolicyFor('/customer')).toContain('camera=(self)');
+    expect(permissionsPolicyFor('/admin')).toContain('camera=(self)');
+  });
+
+  it('belge politikası next.config başlığıyla (config/security-headers.js) birebir aynı', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PERMISSIONS_POLICY } = require('../../config/security-headers');
+    expect(permissionsPolicyFor('/dealer/scan')).toBe(PERMISSIONS_POLICY);
+  });
+
+  it('API yanıtlarında kamera ve diğer güçlü özellikler kapalı; mikrofon her yerde kapalı', () => {
+    expect(permissionsPolicyFor('/api/dealer/scan')).toMatch(/^camera=\(\), microphone=\(\)/);
+    expect(permissionsPolicyFor('/dealer/scan')).toContain('microphone=()');
+    expect(permissionsPolicyFor('/dealer/scan')).toContain('payment=()');
   });
 });

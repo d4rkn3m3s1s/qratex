@@ -68,7 +68,21 @@ export function isCameraRoute(pathname: string): boolean {
   return CAMERA_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 }
 
-/** Yola göre Permissions-Policy: tarama sayfalarında `camera=(self)`, diğer her yerde kapalı. */
+/**
+ * Belge (sayfa) yanıtlarının Permissions-Policy'si. `config/security-headers.js`
+ * `PERMISSIONS_POLICY` ile BİREBİR aynı olmalı (test eşitliği doğrular).
+ *
+ * Neden tarama sayfalarına özel değil? Permissions-Policy BELGEYE bağlıdır; /dealer'dan
+ * /dealer/scan'a geçiş yumuşak (client-side) navigasyondur ve belge değişmez. Proxy panel
+ * sayfalarına `camera=()` yazsaydı, panelden açılan tarama ekranında kamera yine engellenirdi
+ * (P0-36'nın kök nedeni). Kamera yalnız KENDİ origin'imize (`self`) açılır; üçüncü taraf
+ * iframe'ler engelli kalır ve tarayıcı izin istemi kullanıcıyı korur.
+ */
+export const DOCUMENT_PERMISSIONS_POLICY = 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()';
+/** API (JSON) yanıtları belge açmaz → bütün güçlü özellikler kapalı. */
+export const API_PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=()';
+
+/** Yola göre Permissions-Policy: tarama sayfaları dahil bütün belgelerde `camera=(self)`, API'de kapalı. */
 export function permissionsPolicyFor(pathname: string): string {
-  return `${isCameraRoute(pathname) ? 'camera=(self)' : 'camera=()'}, microphone=(), geolocation=(self), payment=(), usb=()`;
+  return pathname === '/api' || pathname.startsWith('/api/') ? API_PERMISSIONS_POLICY : DOCUMENT_PERMISSIONS_POLICY;
 }

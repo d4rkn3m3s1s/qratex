@@ -61,7 +61,10 @@ const cookieJar = new Map<string, string>();
 jest.mock('next/headers', () => ({
   headers: jest.fn(() => Promise.resolve(new Headers({ 'x-forwarded-for': '10.0.0.1' }))),
   cookies: jest.fn(() =>
-    Promise.resolve({ get: (name: string) => (cookieJar.has(name) ? { name, value: cookieJar.get(name) } : undefined) })
+    Promise.resolve({
+      get: (name: string) => (cookieJar.has(name) ? { name, value: cookieJar.get(name) } : undefined),
+      delete: (name: string) => cookieJar.delete(name),
+    })
   ),
 }));
 
@@ -370,6 +373,20 @@ describe('authAdapter', () => {
     cookieJar.set(SIGNUP_INTENT_COOKIE, 'DEALER');
     await authAdapter.createUser!({ id: 'x', email: 'Isletme@X.com', emailVerified: null } as never);
     expect(baseCreateUser).toHaveBeenCalledWith(expect.objectContaining({ email: 'isletme@x.com', role: 'DEALER' }));
+  });
+
+  it('niyet tek kullanımlıktır: aynı tarayıcıda açılan ikinci OAuth hesabı işletme olmaz', async () => {
+    cookieJar.set(SIGNUP_INTENT_COOKIE, 'DEALER');
+    await authAdapter.createUser!({ id: 'x', email: 'bir@x.com', emailVerified: null } as never);
+    expect(cookieJar.has(SIGNUP_INTENT_COOKIE)).toBe(false);
+    await authAdapter.createUser!({ id: 'y', email: 'iki@x.com', emailVerified: null } as never);
+    expect(baseCreateUser.mock.calls[1][0]).not.toHaveProperty('role');
+  });
+
+  it('niyet çerezi yalnız DEALER değerini tanır (keyfi rol enjekte edilemez)', async () => {
+    cookieJar.set(SIGNUP_INTENT_COOKIE, 'ADMIN');
+    await authAdapter.createUser!({ id: 'x', email: 'a@x.com', emailVerified: null } as never);
+    expect(baseCreateUser.mock.calls[0][0]).not.toHaveProperty('role');
   });
 
   it('niyet yoksa rol verilmez (şema varsayılanı CUSTOMER)', async () => {

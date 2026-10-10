@@ -101,6 +101,15 @@ async function readCookie(name: string): Promise<string | undefined> {
   }
 }
 
+async function deleteCookie(name: string): Promise<void> {
+  try {
+    const jar = await cookies();
+    jar.delete(name);
+  } catch {
+    /* salt okunur bağlam (RSC) — çerez kendi 15 dk ömrüyle düşer */
+  }
+}
+
 // ─────────────────────────────── Adapter (e-posta normalizasyonu) ───────────────────────────────
 
 const baseAdapter = PrismaAdapter(prisma) as Adapter;
@@ -122,6 +131,9 @@ export const authAdapter: Adapter = {
   },
   async createUser(data: AdapterUser) {
     const intent = await readCookie(SIGNUP_INTENT_COOKIE);
+    // Niyet tek kullanımlık: aynı tarayıcıda 15 dk içinde açılan İKİNCİ OAuth hesabı da
+    // sessizce işletme olmasın diye okunur okunmaz silinir.
+    if (intent !== undefined) await deleteCookie(SIGNUP_INTENT_COOKIE);
     const email = normalizeEmail(data.email) || data.email;
     const payload = { ...data, email, ...(intent === 'DEALER' ? { role: 'DEALER' } : {}) } as AdapterUser;
     return baseAdapter.createUser!(payload);

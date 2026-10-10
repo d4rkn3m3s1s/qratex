@@ -21,7 +21,7 @@ function addSecurityHeaders(res: NextResponse, pathname: string): void {
   res.headers.set('X-Content-Type-Options', 'nosniff');
   res.headers.set('X-Frame-Options', 'DENY');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  // Kamera yalnız tarama sayfalarında (P0-36): /dealer/scan, /customer/scan → camera=(self).
+  // API yanıtı belge açmaz → kamera dahil güçlü özellikler kapalı (lib/admin-gate-edge.ts).
   res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));
   const csp = [
     "default-src 'self'",
@@ -102,7 +102,8 @@ const authMiddleware = withAuth(
     }
 
     const res = NextResponse.next();
-    // Tarama sayfalarında kamera izni (P0-36); diğer sayfalarda next.config.js başlığı geçerli.
+    // Belge politikası (P0-36): tarama sayfaları DAHİL bütün panel sayfalarında camera=(self) —
+    // next.config başlığıyla aynı değer; panelden taramaya yumuşak geçişte belge değişmez.
     res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));
     return res;
   },
