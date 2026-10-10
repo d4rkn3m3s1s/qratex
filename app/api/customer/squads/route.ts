@@ -1,149 +1,37 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { assertModuleEnabled } from '@/lib/module-gate';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
+/**
+ * GET  — klan odası özeti (geri uyum yolu; `overview` ile aynı veri).
+ * POST — klan kur. Ad: trim + 3–30 + karakter kümesi + kaba dil süzgeci; aynı ad (harf
+ *        duyarsız) 409 `SQUAD_NAME_TAKEN`. Kullanıcı satırı kilitlenir: eşzamanlı kur/katıl
+ *        iki klana sokamaz (customer_squads.md Bulgu 5, 9).
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { squadDescriptionSchema, squadNameSchema } from '@/lib/squads/rules';
+import { createSquad } from '@/lib/squads/membership';
+import { getSquadOverview } from '@/lib/squads/overview';
 
 export const dynamic = 'force-dynamic';
 
-const FREEZE_KEY = 'admin_frozen_squads';
+const CreateBody = z.object({
+  name: squadNameSchema,
+  description: squadDescriptionSchema.optional(),
+});
 
-// Create a new Squad
-export async function POST(req: Request) {
-    try {
-        const gate = await assertModuleEnabled('squads');
-        if (gate) return gate;
-        const session = await getServerSession(authOptions);
+export const GET = defineRoute(
+  { name: 'customer.squads.overview.legacy', roles: ['CUSTOMER'], module: 'squads', rateLimit: 'read' },
+  async ({ user }) => ok(await getSquadOverview(user.id))
+);
 
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const { name } = await req.json();
-
-        if (!name || name.length < 3) {
-            return NextResponse.json(
-                { error: 'Squad name must be at least 3 characters' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const [existingOwnedSquad, existingMembership, frozenRow] = await Promise.all([
-            prisma.squad.findFirst({
-                where: { ownerId: session.user.id }
-            }),
-            prisma.squadMember.findFirst({
-                where: { userId: session.user.id },
-                select: { squadId: true }
-            }),
-            prisma.settings.findUnique({
-                where: { key: FREEZE_KEY },
-                select: { value: true }
-            })
-        ]);
-
-        const frozenIds = Array.isArray((frozenRow?.value as { squadIds?: unknown })?.squadIds)
-            ? ((frozenRow?.value as { squadIds?: unknown[] }).squadIds as unknown[]).map(String)
-            : [];
-
-        if (existingOwnedSquad) {
-            return NextResponse.json(
-                { error: 'You already own a squad' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        if (existingMembership) {
-            if (frozenIds.includes(existingMembership.squadId)) {
-                return NextResponse.json(
-                    { error: 'Dondurulmuş bir squad üyesiyken yeni squad oluşturamazsınız' },
-                    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-                );
-            }
-            return NextResponse.json(
-                { error: 'You must leave your current squad first' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-        const newSquad = await prisma.squad.create({
-            data: {
-                name,
-                ownerId: session.user.id,
-                inviteCode,
-                members: {
-                    create: {
-                        userId: session.user.id
-                    }
-                }
-            },
-            include: {
-                members: { include: { user: { select: { name: true, image: true } } } }
-            }
-        });
-
-        return NextResponse.json(
-            { success: true, squad: newSquad },
-            { headers: PRIVATE_NO_STORE_HEADERS }
-        );
-
-    } catch (error) {
-        console.error('[SQUAD_CREATE_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    }
-}
-
-// Get user's current squad
-export async function GET(req: Request) {
-    try {
-        const gate = await assertModuleEnabled('squads');
-        if (gate) return gate;
-        const session = await getServerSession(authOptions);
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        // Find the squad the user is a member of
-        const member = await prisma.squadMember.findFirst({
-            where: { userId: session.user.id },
-            include: {
-                squad: {
-                    include: {
-                        members: {
-                            include: {
-                                user: { select: { id: true, name: true, image: true, points: true } }
-                            }
-                        },
-                        owner: { select: { id: true, name: true } }
-                    }
-                }
-            }
-        });
-
-        if (!member) {
-            return NextResponse.json({ squad: null }, { headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        return NextResponse.json({ squad: member.squad }, { headers: PRIVATE_NO_STORE_HEADERS });
-
-    } catch (error) {
-        console.error('[SQUAD_GET_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    }
-}
+export const POST = defineRoute(
+  {
+    name: 'customer.squads.create',
+    roles: ['CUSTOMER'],
+    module: 'squads',
+    rateLimit: { max: 10, windowMs: 60_000, by: 'user' },
+    schema: CreateBody,
+  },
+  async ({ user, body }) => {
+    const squad = await createSquad(user.id, { name: body.name, description: body.description ?? null });
+    return ok({ squad, message: `${squad.name} klanı kuruldu.` }, { status: 201, legacySpread: true });
+  }
+);

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { settleSquadBattle } from '@/lib/squad-battle-service';
 import { triggerConfetti } from '@/lib/effects/confetti';
+import { SQUAD_POWER_SHARE } from '@/lib/squads/rules';
 
 /**
  * Klan Savaşını Sonlandır ve Ödülleri Dağıt.
@@ -35,11 +36,13 @@ export async function addToSquadTreasury(
 ) {
   const membership = await db.squadMember.findFirst({
     where: { userId },
+    orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
     select: { squadId: true },
   });
 
   if (membership) {
-    const treasuryShare = Math.ceil(points * 0.1); // %10 sandığa
+    // Klan gücü payı — oran TEK kaynaktan (lib/squads/rules); sayfa metni de oradan okur.
+    const treasuryShare = Math.ceil(points * SQUAD_POWER_SHARE);
     await db.squad.update({
       where: { id: membership.squadId },
       data: { treasuryPoints: { increment: treasuryShare } },
@@ -55,7 +58,11 @@ export async function addToSquadTreasury(
  * ilgili klan skorunu (squad1Score/squad2Score) artırır. Önceden bu skor hiç
  * birikmiyordu (her zaman 0) — savaş "tamamlanma"da rastgele kazanan çıkıyordu.
  *
- * Katılımcı kaydı yoksa otomatik oluşturulur (savaşa katılım = klan üyeliği).
+ * Kadro savaş KABULÜNDE donar (customer_squads.md Bulgu 6):
+ *  - Katılımcı satırı varsa skor yalnız aynı klan için yazılır; savaş ortasında rakip klana
+ *    geçen kullanıcının puanı hiçbir tarafa sayılmaz (eski klanından pay da alamaz).
+ *  - Satır yoksa yalnız kabulden (`acceptedAt`, yoksa `startTime`) ÖNCE katılmış üye için
+ *    oluşturulur; son dakikada kazanan klana katılan biri skor/ödül payı kazanamaz.
  * Hata-toleranslı tutulması çağıran tarafın sorumluluğunda (puan akışını bozmasın).
  */
 export async function addToActiveBattleScore(
@@ -67,7 +74,8 @@ export async function addToActiveBattleScore(
 
   const membership = await db.squadMember.findFirst({
     where: { userId },
-    select: { squadId: true },
+    orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+    select: { squadId: true, joinedAt: true },
   });
   if (!membership) return 0;
 
@@ -79,18 +87,29 @@ export async function addToActiveBattleScore(
       endTime: { gt: now },
       OR: [{ squad1Id: membership.squadId }, { squad2Id: membership.squadId }],
     },
-    select: { id: true, squad1Id: true, squad2Id: true },
+    select: { id: true, squad1Id: true, squad2Id: true, acceptedAt: true, startTime: true },
   });
   if (!battle) return 0;
 
   const isSquad1 = battle.squad1Id === membership.squadId;
 
-  // Katılımcı skorunu artır (yoksa oluştur).
-  await db.squadBattleParticipant.upsert({
+  const participant = await db.squadBattleParticipant.findUnique({
     where: { battleId_userId: { battleId: battle.id, userId } },
-    update: { score: { increment: points } },
-    create: { battleId: battle.id, squadId: membership.squadId, userId, score: points },
+    select: { squadId: true },
   });
+  if (participant) {
+    if (participant.squadId !== membership.squadId) return 0;
+    await db.squadBattleParticipant.update({
+      where: { battleId_userId: { battleId: battle.id, userId } },
+      data: { score: { increment: points } },
+    });
+  } else {
+    const rosterLockedAt = battle.acceptedAt ?? battle.startTime;
+    if (membership.joinedAt && membership.joinedAt.getTime() > rosterLockedAt.getTime()) return 0;
+    await db.squadBattleParticipant.create({
+      data: { battleId: battle.id, squadId: membership.squadId, userId, score: points },
+    });
+  }
 
   // Savaşın ilgili klan toplam skorunu artır.
   await db.squadBattle.update({

@@ -1,103 +1,26 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { assertModuleEnabled } from '@/lib/module-gate';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
+/**
+ * POST — davet koduyla klana katıl. Tek transaction: kullanıcı + klan satırı kilidi,
+ * dondurma (`Squad.isFrozen`), mevcut üyelik, kapasite (`SQUAD_MAX_MEMBERS`) kontrolü.
+ * Hatalar kodludur: INVITE_INVALID, ALREADY_IN_SQUAD, ALREADY_MEMBER, SQUAD_FULL, SQUAD_FROZEN.
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { inviteCodeSchema } from '@/lib/squads/rules';
+import { joinSquad } from '@/lib/squads/membership';
 
 export const dynamic = 'force-dynamic';
 
-const FREEZE_KEY = 'admin_frozen_squads';
-
-export async function POST(req: Request) {
-    try {
-        const gate = await assertModuleEnabled('squads');
-        if (gate) return gate;
-        const session = await getServerSession(authOptions);
-
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const { inviteCode } = await req.json();
-
-        if (!inviteCode) {
-            return NextResponse.json(
-                { error: 'Invite code is required' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        // Find Squad by Invite Code
-        const squadToJoin = await prisma.squad.findUnique({
-            where: { inviteCode }
-        });
-
-        if (!squadToJoin) {
-            return NextResponse.json(
-                { error: 'Invalid invite code' },
-                { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const frozenRow = await prisma.settings.findUnique({
-            where: { key: FREEZE_KEY },
-            select: { value: true },
-        });
-        const frozenIds = Array.isArray((frozenRow?.value as { squadIds?: unknown })?.squadIds)
-            ? ((frozenRow?.value as { squadIds?: unknown[] }).squadIds as unknown[]).map(String)
-            : [];
-        if (frozenIds.includes(squadToJoin.id)) {
-            return NextResponse.json(
-                { error: 'Bu squad geçici olarak dondurulmuş' },
-                { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const userId = session.user.id;
-
-        // Check if the user is already in a squad
-        const existingMembership = await prisma.squadMember.findFirst({
-            where: { userId }
-        });
-
-        if (existingMembership) {
-            if (existingMembership.squadId === squadToJoin.id) {
-                return NextResponse.json(
-                    { error: 'You are already in this squad' },
-                    { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-                );
-            }
-            return NextResponse.json(
-                { error: 'You must leave your current squad first' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        // Join the squad
-        await prisma.squadMember.create({
-            data: {
-                userId,
-                squadId: squadToJoin.id
-            }
-        });
-
-        // Award minor bonus logic if desired
-
-        return NextResponse.json(
-            { success: true, message: `Successfully joined ${squadToJoin.name}` },
-            { headers: PRIVATE_NO_STORE_HEADERS }
-        );
-
-    } catch (error) {
-        console.error('[SQUAD_JOIN_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    }
-}
+export const POST = defineRoute(
+  {
+    name: 'customer.squads.join',
+    roles: ['CUSTOMER'],
+    module: 'squads',
+    // Davet kodu tahminine karşı sıkı tavan.
+    rateLimit: { max: 10, windowMs: 10 * 60_000, by: 'user' },
+    schema: z.object({ inviteCode: inviteCodeSchema }),
+  },
+  async ({ user, body }) => {
+    const r = await joinSquad(user.id, body.inviteCode);
+    return ok({ ...r, message: `${r.name} klanına katıldın.` }, { legacySpread: true });
+  }
+);

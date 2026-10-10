@@ -116,6 +116,23 @@ const tx = {
       return {};
     }),
   },
+  squadBattleParticipant: {
+    // Ayrılan üye aktif savaş kadrosundan düşer (customer_squads Bulgu 6).
+    deleteMany: jest.fn(
+      async ({ where }: { where: { userId: string; squadId: string; battle: { status: string } } }) => {
+        const before = participants.length;
+        participants = participants.filter(
+          (p) =>
+            !(
+              p.userId === where.userId &&
+              p.squadId === where.squadId &&
+              battles.get(p.battleId)?.status === where.battle.status
+            )
+        );
+        return { count: before - participants.length };
+      }
+    ),
+  },
   notification: { create: jest.fn(async () => ({})), createMany: jest.fn(async () => ({ count: 1 })) },
   auditLog: {
     create: jest.fn(async ({ data }: { data: { action: string; entityId: string } }) => {
@@ -300,5 +317,21 @@ describe('leaveSquad', () => {
 
   it('üye değilse not_member', async () => {
     expect(await leaveSquad({ squadId: 's2', userId: 'u2' })).toEqual({ kind: 'not_member' });
+  });
+
+  it('aktif savaşta ayrılan üye kadrodan düşer: kazanırsa eski klanından pay ALAMAZ', async () => {
+    battles.set('b1', battle({ status: 'active', squad1Score: 100, squad2Score: 10 }));
+    participants = [
+      { battleId: 'b1', squadId: 's1', userId: 'owner1' },
+      { battleId: 'b1', squadId: 's1', userId: 'u3' },
+      { battleId: 'b1', squadId: 's2', userId: 'x1' },
+    ];
+    expect(await leaveSquad({ squadId: 's1', userId: 'u3' })).toEqual({ kind: 'left' });
+    expect(participants.some((p) => p.userId === 'u3')).toBe(false);
+    expect(audits.map((a) => a.action)).toContain('SQUAD_MEMBER_LEAVE');
+    const r = await settleSquadBattle('b1');
+    expect(r?.winnerId).toBe('s1');
+    expect(balances.get('u3')).toBeUndefined();
+    expect(balances.get('owner1')).toBe(500);
   });
 });

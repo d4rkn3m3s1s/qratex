@@ -1,101 +1,68 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+/**
+ * GET — tek savaşın skor tablosu (iki klandan birinin üyesi ya da ADMIN).
+ * Müşteri arayüzü güncel savaşı `battles/current`'tan alır; bu uç admin savaş listesindeki
+ * detay bağlantısı ve geçmişten detay için korunur.
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { squadError } from '@/lib/squads/errors';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * GET — Klan savaşı canlı durumu (skor tablosu). Yalnızca iki klandan birinin
- * üyesi görebilir. Polling ile canlı skor güncellemesi için kullanılır.
- */
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const { id } = await params;
+export const GET = defineRoute(
+  {
+    name: 'customer.squads.battle.detail',
+    roles: ['CUSTOMER', 'ADMIN'],
+    module: 'squads',
+    rateLimit: 'read',
+    params: z.object({ id: z.string().min(1).max(64) }),
+  },
+  async ({ user, params }) => {
     const battle = await prisma.squadBattle.findUnique({
-      where: { id },
+      where: { id: params.id },
       select: {
         id: true,
         status: true,
         startTime: true,
         endTime: true,
+        acceptedAt: true,
         squad1Score: true,
         squad2Score: true,
         winnerId: true,
         rewardPool: true,
+        rewardFunded: true,
+        cancelReason: true,
         squad1: { select: { id: true, name: true } },
         squad2: { select: { id: true, name: true } },
       },
     });
-    if (!battle) {
-      return NextResponse.json(
-        { error: 'Savaş bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    if (!battle) throw squadError('BATTLE_NOT_FOUND');
 
-    // Yetki: kullanıcı iki klandan birinin üyesi olmalı.
     const membership = await prisma.squadMember.findFirst({
-      where: {
-        userId: session.user.id,
-        squadId: { in: [battle.squad1.id, battle.squad2.id] },
-      },
+      where: { userId: user.id, squadId: { in: [battle.squad1.id, battle.squad2.id] } },
       select: { squadId: true },
     });
-    if (!membership && session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Bu savaşı görme yetkiniz yok' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    if (!membership && user.role !== 'ADMIN') throw squadError('NOT_SQUAD_MEMBER', 'Bu savaşı görme yetkin yok.');
 
-    // En çok katkı yapan katılımcılar (her iki klandan).
-    const topParticipants = await prisma.squadBattleParticipant.findMany({
-      where: { battleId: id, score: { gt: 0 } },
-      orderBy: { score: 'desc' },
+    const top = await prisma.squadBattleParticipant.findMany({
+      where: { battleId: battle.id, score: { gt: 0 } },
+      orderBy: [{ score: 'desc' }, { createdAt: 'asc' }],
       take: 10,
-      select: {
-        score: true,
-        squadId: true,
-        user: { select: { name: true, image: true } },
-      },
+      select: { score: true, squadId: true, user: { select: { name: true, image: true } } },
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        battle: {
-          ...battle,
-          topParticipants: topParticipants.map((p) => ({
-            name: p.user.name,
-            image: p.user.image,
-            score: p.score,
-            squadId: p.squadId,
-          })),
-          mySquadId: membership?.squadId ?? null,
-        },
+    return ok({
+      battle: {
+        ...battle,
+        mySquadId: membership?.squadId ?? null,
+        topParticipants: top.map((p) => ({
+          name: (p.user.name ?? '').trim() || 'Üye',
+          image: p.user.image,
+          score: p.score,
+          squadId: p.squadId,
+        })),
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('[SQUAD_BATTLE_GET]', error);
-    return NextResponse.json(
-      { error: 'Savaş durumu alınamadı' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    }, { legacySpread: true });
   }
-}
+);

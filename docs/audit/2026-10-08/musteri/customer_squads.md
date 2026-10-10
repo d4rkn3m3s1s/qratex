@@ -269,3 +269,98 @@ Salt okunur inceleme; kod ve veritabanına dokunulmadı. Not: iddialardaki satı
 - **Yeniden üretim (a):** U, A vs B savaşında A üyesi (katılımcı satırı squadId=A). U, A'dan ayrılıp B'ye katılıyor, puan kazanıyor ve B'nin skoru artıyor. A yine de kazanırsa U, A katılımcısı olarak havuzdan pay alıyor. Yani karşı tarafa oynayıp kendi eski tarafından ödül alabiliyor.
 - **Yeniden üretim (b):** Önde olan klana savaşın son dakikasında katılan biri tek bir geri bildirimle katılımcı satırı açıyor (squadId=şimdiki klan) ve sabit havuzdan eşit pay alıyor. Bu, savaşı fiilen kazanan üyelerin payını sulandırıyor. Puan "yoktan basılmıyor" (havuz escrow), ama dağıtım hatalı ve istismar edilebilir.
 - **Öneri:** Kadro savaş başında dondurulmalı. `addToActiveBattleScore` yalnızca katılımcı tablosunda **aynı squadId** ile bulunan kullanıcıya skor yazmalı (yeni satırı yalnızca kabulden önce üye olanlara açmalı ya da `joinedAt <= acceptedAt` şartı aranmalı). Aktif savaştaki klandan ayrılma ya engellenmeli ya da ayrılan kullanıcının katılımcı satırı `forfeited` diye işaretlenmeli. Ödeme `score > 0` olan ve hâlâ o klanda bulunan katılımcılarla sınırlandırılmalı; daha iyisi skor ağırlıklı dağıtım yapılmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/squads` (Oyna → Klan). Sayfa sunucu bileşeni: oturum + modül kapısı + ilk veri tek `getSquadOverview` ile sunucuda; istemci adası (`components/customer/m-klan/**`) yalnız yeniler. Yeni sunucu katmanı `lib/squads/` (`rules` tek kaynak, `membership`, `goal`, `battles`, `overview`, `errors`, `dto`). Bütün uçlar `defineRoute` (rol `CUSTOMER`, `module: 'squads'`, zod, rate limit, zarf v2, kodlu Türkçe hatalar). Testler: `__tests__/lib/squads-service.test.ts` (yeni), `squad-battle-score.test.ts` (kadro kilidi), `squad-battle-service.test.ts` (ayrılınca pay kaybı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Oturum + rol koruması | ÇALIŞIYOR | Girişe `callbackUrl` ile (davet derin linki korunur). |
+| 2 | Sayfa modül kapısı | ÇALIŞIYOR | `getModuleControls().squads === false` → dürüst boş durum; uçlar `MODULE_DISABLED`. |
+| 3 | "%5 ekstra pasif puan" vaadi | KALDIRILDI | Gerçek değildi. Yerine `rules`'tan üretilen doğru vaatler (haftalık ödül aralığı, savaş, %10 klan gücü). |
+| 4 | Klan oluştur → diyalog | ÇALIŞIYOR | `<form>`, `label`/`htmlFor`, gecikmeli ad müsaitlik kontrolü. |
+| 5 | Klan adı doğrulama | ÇALIŞIYOR | Sunucu ve istemci aynı `squadNameSchema`: trim, 3–30, karakter kümesi, kaba dil süzgeci. |
+| 6 | Klan oluşturma API | ÇALIŞIYOR | Kullanıcı satırı kilidi; aynı ad (harf duyarsız) 409 `SQUAD_NAME_TAKEN`; kod çakışmasında yeniden dener; kriptografik rastgele kod. |
+| 7 | Katıl → diyalog | ÇALIŞIYOR | |
+| 8 | Davet kodu girişi | ÇALIŞIYOR | Normalleştirme; `?join=KOD` ile dolu açılır. |
+| 9 | Katılma API | ÇALIŞIYOR | Tek tx: `User` + `Squad` `FOR UPDATE`, dondurma, mevcut üyelik, kapasite 10; lidere bildirim; sıkı rate limit. |
+| 10 | Enter ile gönderim | ÇALIŞIYOR | |
+| 11 | Boş durumda keşif / global sıralama | ÇALIŞIYOR | Gerçek lig (keşif modu) + "kodu bir üyeden iste" notu. Açık katılım için ŞEMA İSTEĞİ (aşağıda). |
+| 12 | Lidere "Meydan oku" | ÇALIŞIYOR | Üç adımlı meydan okuma fişi. |
+| 13 | Üyeye savaş bilgisi | ÇALIŞIYOR | `return null` yerine açıklama. |
+| 14 | Rakip seçimi | ÇALIŞIYOR | `GET /search` (ad araması, askıdakiler hariç, açık savaşı olan `busy`). |
+| 15 | Ödül havuzu girişi | ÇALIŞIYOR | Varsayılan 0 (onur savaşı), bakiye görünür, bakiye üstü seçenekler kapalı, "şimdi düşülür / iade koşulları" metni. |
+| 16 | Süre girişi | ÇALIŞIYOR | Çipler; Türkçe zod mesajları. |
+| 17 | Meydan okuma gönderimi | ÇALIŞIYOR | Bildirim aynı tx'te; iki klan kimlik sırasıyla kilitlenir; `Idempotency-Key`; süresi dolanlar çakışma sayılmaz. |
+| 18 | Bekleyen görünüm | ÇALIŞIYOR | Geri sayım + havuz + koşullar. |
+| 19 | Kabul / Ret | ÇALIŞIYOR | Onay diyaloğu; kadro tx içinde; iki tarafın dondurması; süresi dolmuş davet reddedilir; iki kadroya bildirim. |
+| 20 | Meydan okumayı geri çekme | ÇALIŞIYOR | `POST /battles/[id]/withdraw` → iadeli soft-cancel. |
+| 21 | Canlı skor yoklaması | ÇALIŞIYOR | Yalnız açık savaşta ve sekme görünürken 15 sn; süresi dolan savaş okumada kapanır (Bulgu 7). |
+| 22 | Geri sayım | ÇALIŞIYOR | `CountdownChip`; bitince tazeler. |
+| 23 | Katkı verenler | ÇALIŞIYOR | İlk 6 + "senin katkın" / "kadroda değilsin". |
+| 24 | Sonuç ekranı / geçmiş | ÇALIŞIYOR | 72 saat sonuç kartı (zaferde tek seferlik konfeti), sana yapılan ödeme defterden; `GET /battles` imleçli geçmiş. |
+| 25 | "X / 10 üye" | ÇALIŞIYOR | `SQUAD_MAX_MEMBERS` sunucuda uygulanıyor. |
+| 26 | Klan adı başlığı | ÇALIŞIYOR | Kimlik başlığı (amblem, slogan, seviye, kapasite, lig sırası). |
+| 27 | "%5 havuza yansır" metni | KALDIRILDI | Gerçek oran (%10) `SQUAD_POWER_SHARE`'den okunuyor. |
+| 28 | Davet kodu gösterimi | ÇALIŞIYOR | |
+| 29 | Kopyala / paylaş / derin link | ÇALIŞIYOR | Pano, Web Share, `?join=` bağlantısı, QR (lazy `qrcode`). |
+| 30 | Klandan ayrıl | ÇALIŞIYOR | `ConfirmAction` etki önizlemesi (devir / kapanış / savaş payı); aktif savaşta ayrılan kadrodan düşer. |
+| 31 | Lider yönetimi | ÇALIŞIYOR | Devir, üye çıkarma (aktif savaşta kilitli), kod yenileme, ad/slogan, hedef kademesi; hepsi AuditLog'da. |
+| 32 | Haftalık ekip hedefi | ÇALIŞIYOR | İstanbul haftası, kademe × üye sayısı, katılım sonrası geçerli geri bildirimler, katkı verene haftada bir ödül (`mintPoints`, tek-kez anahtar). |
+| 33 | Hedef yükleniyor/hata | ÇALIŞIYOR | Veri SSR'da; `QueryState` hata + tekrar dene. |
+| 34 | Klan içi tablo | ÇALIŞIYOR | Bu haftaki gerçek katkıya göre; bakiye gösterilmez. |
+| 35 | "Sen" / "Lider" rozetleri | ÇALIŞIYOR | |
+| 36 | Avatar + baş harf | ÇALIŞIYOR | |
+| 37 | "+X Katkı" (bakiye × %5) | KALDIRILDI | Sahteydi. Yerine haftalık katkı sayısı + aktif savaş skoru. |
+| 38 | Global top-10 | ÇALIŞIYOR | Kendi sıran (top-10 dışında da) sabit ve vurgulu; "puan" etiketi; 60 sn Redis önbelleği; askıdakiler hariç. |
+| 39 | "Lv. N" | ÇALIŞIYOR | Klan gücünden türetilir, ne olduğu açıkça yazılı (prestij). |
+| 40 | Sabit "Aktif" etiketi | KALDIRILDI | Sahte. |
+| 41 | "Sezon 1" | KALDIRILDI | Sezon modeli yok (F4.4). |
+| 42 | Sıralama stagger animasyonu | KALDIRILDI | Dekordu. Hareket artık durum değişimini anlatıyor: halat çekme yayı, sayaç, ilerleme çubuğu; azaltılmış harekette statik. |
+| 43 | Klan logosu (ölü prop) | ÇALIŞIYOR | Kimlikten türeyen renkli monogram amblem (şema gerekmez). Yüklenebilir logo ŞEMA İSTEĞİ. |
+| 44 | Klan sandığı bakiyesi | ÇALIŞIYOR | "Klan gücü" olarak dürüst tanım (harcanmaz, dağıtılmaz, seviyeyi belirler); "XP" etiketi kalktı. |
+| 45 | "Ay sonunda paylaştırılır" | KALDIRILDI | Dağıtım kodu yoktu (Seçenek B). Gerçek ödül haftalık hedefte. |
+| 46 | "Nasıl çalışır?" | ÇALIŞIYOR | Metin kural sabitlerinden üretiliyor; yazım hatası yok. |
+| 47 | Hata sınırı | ÇALIŞIYOR | Segment `error.tsx` + bölüm içi `QueryState`. |
+| 48 | Savaş paneli layout shift | ÇALIŞIYOR | Savaş ilk render'da sunucudan geliyor. |
+| 49 | i18n | ÇALIŞIYOR | TR/EN metin modülü (`m-klan/copy.ts`, `useDsLocale`); API hata kodları istemcide çevriliyor. |
+| 50 | Savaş bildirimleri | ÇALIŞIYOR | `data.href` derin link alanı; katılım, çıkarma, devir ve "savaş başladı" (iki kadro) bildirimleri eklendi. |
+| 51 | Aktivite akışı / sohbet / tepki | ÇALIŞIYOR (günlük) · KALDIRILDI (sohbet/tepki) | Klan günlüğü gerçek kayıtlardan (üyelik, AuditLog, savaş satırları). Sohbet/tepki için model yok, ŞEMA İSTEĞİ. |
+| 52 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun → masaüstünde içerik + 22rem yan sütun; `flex-col sm:flex-row`; dokunma hedefi ≥ 44px. |
+| 53 | Dondurulmuş klan engeli | ÇALIŞIYOR | Tek kaynak `Squad.isFrozen`: katılım, iki taraflı meydan okuma, kabul, ödül, düzenleme; sayfada askı bandı. |
+
+**Sayım:** ÇALIŞIYOR 46 (51 yalnız günlük kısmıyla; sohbet/tepki kaldırıldı) · KALDIRILDI 7 (3, 27, 37, 40, 41, 42, 45) · BOZUK/SAHTE/KISMİ/EKSİK 0.
+
+### Kapanan bulgular (15/15)
+
+1. Kurucu ayrılınca escrow kaybı: P0-20 devri korunuyor; ek olarak aktif savaşta ayrılan üye kadrodan düşüyor ve `SQUAD_MEMBER_LEAVE` denetim kaydı yazılıyor.
+2. Sandık vaatleri: Seçenek B (dürüst "klan gücü") + gerçek, defterli haftalık hedef ödülü; oranlar tek kaynaktan.
+3. Dondurma: ölü `admin_frozen_squads` okumaları kaldırıldı; `Squad.isFrozen` her akışta.
+4. Havuzun bakiyeden düşüldüğü söylenmiyordu: fiş, bakiye, varsayılan 0, iade koşulları. (Simetrik bahis ŞEMA İSTEĞİ.)
+5. Üye sınırı + TOCTOU: kapasite sunucuda; katıl/kur kullanıcı satırı kilidiyle serileşiyor, klan satırı kilidiyle kapasite yarışı yok.
+6. Savaş ortasında klan değiştirme: kadro kabulde (tx içinde) donuyor; `addToActiveBattleScore` yalnız aynı klanın kadro satırına ya da kabulden önce katılmış üyeye yazıyor; ayrılan pay alamıyor; aktif savaşta üye çıkarma kilitli.
+7. Süresi dolmuş "CANLI" savaş: okumada claim'li kapanış; çakışma kontrolü `endTime > now`.
+8. Sahte sayılar: "+Katkı", "XP", "Aktif", "Sezon 1" kalktı; bakiyeler diğer üyelere gösterilmiyor.
+9. TR/EN karışıklığı, aynı ad → 500: kodlu Türkçe hatalar, 409, istemcide yerelleştirme.
+10. Savaş deneyimi: geri sayım, halat çekme, katkıcılar, sonuç, geçmiş, geri çekme.
+11. Davet döngüsü: kopyala, paylaş, derin link, QR, kod yenileme, lig keşfi.
+12. Haftalık hedef: ölçekli, kademeli, ödüllü, İstanbul haftası, hata durumu.
+13. Erişilebilirlik/mobil: form semantiği, etiket bağları, `ConfirmAction` (native `confirm` yok), sonsuz nabız yalnız `Ambient` içinde, mobil sarma, `meter`/`progressbar` rolleri.
+14. Ölü kod: eski dört bileşen (`components/customer/squad-*.tsx`) silindi; yazım hataları gitti.
+15. Performans: klansız kullanıcıda lig önbellekten, şelale fetch yok (SSR ilk veri), gizli sekmede yoklama yok, geçmiş yalnız açılınca yükleniyor.
+
+### Kalan açıklar ve ŞEMA İSTEKLERİ
+
+- **ŞEMA İSTEĞİ:** `SquadMember.userId @unique` (tek klan kuralını DB'de de garanti etmek için; bugün uygulama kilidiyle serileşiyor).
+- **ŞEMA İSTEĞİ:** `SquadBattle.squad2Stake` (+ iade/ödeme mantığının iki tarafa genişlemesi): simetrik bahis (Bulgu 4'ün ikinci yarısı).
+- **ŞEMA İSTEĞİ:** `Squad.archivedAt` + `SquadBattle` FK `onDelete: Restrict`. Son üye ayrılınca klan hâlâ siliniyor; escrow önce iade ediliyor ve AuditLog kalıyor ama savaş satırları cascade ile gidiyor (§4.4/5).
+- **ŞEMA İSTEĞİ:** `Squad.joinPolicy` (açık/kapalı klan, katılım isteği): keşiften kodsuz katılım için.
+- **ŞEMA İSTEĞİ:** `Squad.emblem`/`color` (yüklenebilir logo), klan sohbeti/tepki modeli, ölü `weeklyTeamProgress`/`weeklyGoalResetAt` alanlarının kaldırılması.
+- Sezonlu klan ligi ve `/customer/leaderboard` içinde "Klanlar" sekmesi F4.4 ve lig yüzeyinin sahibine ait.
+- Görsel doğrulama yapılmadı: dev server ve build bu dalgada yasak, yalnız `tsc` ve jest çalıştırıldı.

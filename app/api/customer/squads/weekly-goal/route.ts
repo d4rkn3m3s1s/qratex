@@ -1,70 +1,43 @@
-import { NextResponse } from 'next/server';
+/**
+ * GET — haftalık klan hedefi (geri uyum yolu). Hafta Europe/Istanbul; hedef üye sayısıyla
+ * ölçeklenir; katkı yalnız katılım anından sonraki geçerli geri bildirimler.
+ * Klansız kullanıcıya `{ squad: null }` (hata değil, gerçek boş durum).
+ */
+import { defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-import { assertModuleEnabled } from '@/lib/module-gate';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { startOfWeekUTC as startOfWeekMonday } from '@/lib/timezone';
-
+import { membershipOf } from '@/lib/squads/membership';
+import { computeWeeklyGoal, hasClaimedWeeklyGoal, toWeeklyGoalDto } from '@/lib/squads/goal';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const gate = await assertModuleEnabled('squads');
-  if (gate) return gate;
-  const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-  if ('error' in auth) return auth.error;
-  const userId = auth.session.user.id;
-
-  const member = await prisma.squadMember.findFirst({
-    where: { userId },
-    include: {
-      squad: {
-        select: {
-          id: true,
-          name: true,
-          weeklyTeamTarget: true,
-          weeklyTeamProgress: true,
-          members: { select: { userId: true } },
+export const GET = defineRoute(
+  { name: 'customer.squads.weekly-goal', roles: ['CUSTOMER'], module: 'squads', rateLimit: 'read' },
+  async ({ user }) => {
+    const membership = await membershipOf(prisma, user.id);
+    if (!membership) return ok({ squad: null }, { legacySpread: true });
+    const squad = await prisma.squad.findUnique({
+      where: { id: membership.squadId },
+      select: {
+        id: true,
+        name: true,
+        isFrozen: true,
+        weeklyTeamTarget: true,
+        members: { select: { userId: true, joinedAt: true } },
+      },
+    });
+    if (!squad) return ok({ squad: null }, { legacySpread: true });
+    const goal = await computeWeeklyGoal(prisma, squad, squad.members);
+    const claimed = await hasClaimedWeeklyGoal(prisma, goal.weekKey, user.id);
+    return ok(
+      {
+        squad: {
+          id: squad.id,
+          name: squad.name,
+          memberCount: squad.members.length,
+          ...toWeeklyGoalDto(goal, user.id, claimed, squad.isFrozen),
         },
       },
-    },
-  });
-
-  if (!member) {
-    return NextResponse.json(
-      { success: true, squad: null },
-      { headers: PRIVATE_NO_STORE_HEADERS }
+      { legacySpread: true }
     );
   }
-
-  const squad = member.squad;
-  const memberIds = squad.members.map((m) => m.userId);
-  const weekStart = startOfWeekMonday(new Date());
-
-  const feedbacksThisWeek = await prisma.feedback.count({
-    where: {
-      userId: { in: memberIds },
-      deletedAt: null,
-      createdAt: { gte: weekStart },
-    },
-  });
-
-  const target = Math.max(1, squad.weeklyTeamTarget);
-  const progress = Math.min(target, feedbacksThisWeek);
-
-  return NextResponse.json(
-    {
-      success: true,
-      squad: {
-        id: squad.id,
-        name: squad.name,
-        weekStart: weekStart.toISOString(),
-        target,
-        progress,
-        percent: Math.round((progress / target) * 100),
-        memberCount: memberIds.length,
-      },
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
-}
+);

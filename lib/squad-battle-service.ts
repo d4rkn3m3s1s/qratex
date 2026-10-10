@@ -314,8 +314,17 @@ export async function leaveSquad(
     if (!membership) return { kind: 'not_member' };
     const squad = membership.squad;
 
+    // Aktif savaş kadrosundan çık (payından vazgeç): skoru klan toplamında kalır ama ödeme
+    // yalnız kadroya → ayrılıp rakibe geçen eski klanından pay alamaz (customer_squads Bulgu 6).
+    await tx.squadBattleParticipant.deleteMany({
+      where: { userId: params.userId, squadId: squad.id, battle: { status: 'active' } },
+    });
+
     if (squad.ownerId !== params.userId) {
       await tx.squadMember.delete({ where: { id: membership.id } });
+      await writeAudit(tx, { actorId: params.userId, actorRole: 'owner' }, 'SQUAD_MEMBER_LEAVE', 'Squad', squad.id, {
+        userId: params.userId,
+      });
       return { kind: 'left' };
     }
 
@@ -352,6 +361,7 @@ export async function leaveSquad(
         fromUserId: params.userId,
         toUserId: newOwnerId,
       });
+      await writeAudit(tx, actor, 'SQUAD_MEMBER_LEAVE', 'Squad', squad.id, { userId: params.userId });
       return { kind: 'ownership_transferred', newOwnerId };
     }
 
