@@ -12,7 +12,7 @@
  */
 
 import OpenAI from 'openai';
-import { guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
+import { checkAiCostGuard, guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
 import { getApprovedLearnedPayload, getSystemLearningProfile } from '@/lib/ai-learning';
 import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
 import {
@@ -1422,4 +1422,136 @@ export async function generateAutoReply(
     await recordFailure(dealerId, 'auto_reply', startTime, error);
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ARAÇ ÇAĞRILI AKIŞ GEÇİDİ (b-asistan "verine sor")
+// ─────────────────────────────────────────────────────────────
+
+export type ToolChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+export type ToolChatTool = OpenAI.Chat.Completions.ChatCompletionTool;
+
+export interface ToolChatCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export type ToolChatTurnResult =
+  | { ok: true; content: string; toolCalls: ToolChatCall[]; modelUsed: string; finishReason: string | null; inputTokens: number; outputTokens: number }
+  | { ok: false; reason: 'unconfigured' | 'disabled' | 'aborted' | 'provider_error'; error?: string };
+
+/** Asistan modeli: araç çağrısını güvenilir yapan kalite modeli (Groq'ta gpt-oss-120b). */
+function getToolChatModel(): string {
+  if (process.env.AI_ASSISTANT_MODEL) return process.env.AI_ASSISTANT_MODEL;
+  if (process.env.GROQ_API_KEY) return 'openai/gpt-oss-120b';
+  return process.env.OPENAI_MODEL || 'gpt-4o-mini';
+}
+
+/**
+ * Tek bir araç çağrılı model turu — AKIŞLI. Mevcut geçitlerin aynısı uygulanır:
+ * sağlayıcı yoksa `unconfigured`, bayi AI'ı kapalıysa `disabled` (LLM çağrısı yok),
+ * dakikalık limit + günlük token tavanı `guardAiCall` ile (aşımda AiRateLimitExceededError /
+ * AiCostLimitExceededError FIRLATILIR; çağıran `isAiGuardError` ile ayırır), kullanım
+ * `AIUsageLog`'a yazılır (sağlayıcı kullanım bildirmezse karakterden tahmin edilir; tavan
+ * kör kalmasın). Sahte/şablon metin ÜRETMEZ.
+ *
+ * `onDelta` metin parçalarını gerçek zamanlı iletir. `signal` iptal edilirse `aborted`
+ * döner ve o ana kadar akan metin kullanılmaz.
+ */
+export async function streamToolChatTurn(params: {
+  dealerId: string;
+  messages: ToolChatMessage[];
+  tools?: ToolChatTool[];
+  task?: AiTask;
+  temperature?: number;
+  maxTokens?: number;
+  signal?: AbortSignal;
+  onDelta?: (text: string) => void;
+  /** Aynı istekteki ilk tur dışında dakikalık limit sayılmasın (tek soru = tek limit hakkı). */
+  skipRateGuard?: boolean;
+}): Promise<ToolChatTurnResult> {
+  const client = getAIClient();
+  if (!client) return { ok: false, reason: 'unconfigured' };
+  if (!(await dealerAllowsAi(params.dealerId))) return { ok: false, reason: 'disabled' };
+
+  const task: AiTask = params.task ?? 'ask_ai';
+  if (params.skipRateGuard) {
+    await checkAiCostGuard(params.dealerId);
+  } else {
+    await guardAiCall({ task, dealerId: params.dealerId });
+  }
+
+  const model = getToolChatModel();
+  const modelUsed = `${getModelProvider()}/${model}`;
+  const start = Date.now();
+  let content = '';
+  const calls = new Map<number, ToolChatCall>();
+  let finishReason: string | null = null;
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const stream = await client.chat.completions.create(
+      {
+        model,
+        messages: params.messages,
+        ...(params.tools && params.tools.length > 0 ? { tools: params.tools, tool_choice: 'auto' as const } : {}),
+        temperature: params.temperature ?? 0.3,
+        max_tokens: params.maxTokens ?? 1100,
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      { signal: params.signal, timeout: 45_000, maxRetries: 0 }
+    );
+    for await (const chunk of stream) {
+      const choice = chunk.choices?.[0];
+      const delta = choice?.delta;
+      if (delta?.content) {
+        content += delta.content;
+        params.onDelta?.(delta.content);
+      }
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          const cur = calls.get(idx) ?? { id: '', name: '', arguments: '' };
+          if (tc.id) cur.id = tc.id;
+          if (tc.function?.name) cur.name += tc.function.name;
+          if (tc.function?.arguments) cur.arguments += tc.function.arguments;
+          calls.set(idx, cur);
+        }
+      }
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+      const usage = (chunk as { usage?: { prompt_tokens?: number; completion_tokens?: number } | null }).usage
+        ?? (chunk as { x_groq?: { usage?: { prompt_tokens?: number; completion_tokens?: number } } }).x_groq?.usage;
+      if (usage) {
+        inputTokens = usage.prompt_tokens ?? inputTokens;
+        outputTokens = usage.completion_tokens ?? outputTokens;
+      }
+    }
+  } catch (error) {
+    const aborted = params.signal?.aborted === true;
+    logAIUsage(task, modelUsed, Date.now() - start, false, aborted ? 'aborted' : error instanceof Error ? error.message : 'unknown');
+    // İptalde de o ana kadarki tahmini tüketim yazılır (tavan kör kalmasın).
+    const estIn = inputTokens || Math.ceil(JSON.stringify(params.messages).length / 4);
+    const estOut = outputTokens || Math.ceil(content.length / 4);
+    await recordAiCostUsage(params.dealerId, estIn, estOut, task, modelUsed, Date.now() - start, {
+      success: false,
+      error: aborted ? 'aborted' : error instanceof Error ? error.message : String(error),
+    });
+    if (aborted) return { ok: false, reason: 'aborted' };
+    console.error('[AI] streamToolChatTurn failed:', error);
+    return { ok: false, reason: 'provider_error', error: error instanceof Error ? error.message : String(error) };
+  }
+
+  if (!inputTokens) inputTokens = Math.ceil(JSON.stringify(params.messages).length / 4);
+  if (!outputTokens) outputTokens = Math.ceil((content.length + [...calls.values()].reduce((s, c) => s + c.arguments.length, 0)) / 4);
+  const latencyMs = Date.now() - start;
+  logAIUsage(task, modelUsed, latencyMs, true);
+  await recordAiCostUsage(params.dealerId, inputTokens, outputTokens, task, modelUsed, latencyMs);
+  const toolCalls = [...calls.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([i, c]) => ({ ...c, id: c.id || `call_${i}` }))
+    .filter((c) => c.name);
+  return { ok: true, content, toolCalls, modelUsed, finishReason, inputTokens, outputTokens };
 }

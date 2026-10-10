@@ -26,6 +26,9 @@ const DEFAULT_DAILY_LIMIT = parsePositiveIntEnv(
   100_000
 );
 
+/** Bayi başına günlük token tavanı (kota göstergesi bunu okur; ek dışa aktarım). */
+export const AI_DAILY_TOKEN_LIMIT_PER_DEALER = DEFAULT_DAILY_LIMIT;
+
 /** Görev kimlikleri — AIUsageLog.action ile aynı sözlük. */
 export type AiTask =
   | 'analyze'

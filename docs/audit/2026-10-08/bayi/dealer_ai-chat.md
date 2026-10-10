@@ -249,3 +249,103 @@ Her iddia, ilgili kod baştan okunarak çürütülmeye çalışıldı (route, `l
 *Yeniden üretim:* Admin `ai_features` modülünü kapatır. Bayi `/dealer/ai-chat` adresine doğrudan gider veya `POST /api/dealer/ai-chat` çağırır. İstek 200 döner ve LLM çağrılır. 1 numaralı bulguyla birleşince kapatılan modül maliyet üretmeye devam eder.
 
 **Öncelik notu:** 1 ve 5 numaralı bulgular birlikte ele alınmalı. `askAI`'ye `dealerId` parametresi eklenip `checkAiCostGuard` + `recordAiCostUsage` çağrıları `runChatCompletion` ile aynı desende yapılmalı. `AiCostLimitExceededError` route'ta `code` içeren bir 429 yanıtına çevrilmeli. Route başına `assertModuleEnabled('ai_features', { role: 'dealer', request, userId, routeKey: 'dealer.ai_chat' })` eklenmeli. 4 numaralı bulgu için mutasyon çağrısında `conversationId` değişkenlerle taşınmalı (`mutate({ question, convId })`). `onSuccess` yalnızca `variables.convId === activeIdRef.current` olduğunda ekrana yazmalı, aksi halde sadece liste invalidate edilmeli.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/dealer/ai-chat` ve `/dealer/ask-analytics` tek yüzeyde birleşti: **`/dealer/assistant` (AI Asistan)**. Eski sayfa `permanentRedirect` ile `/dealer/assistant`'a yönleniyor (sorgu parametreleri ve `?c=` sohbet kimliği korunur). Eski `app/dealer/ai-chat/layout.tsx` ve `app/api/dealer/ai-chat/route.ts` kaldırıldı (tek kullanıcıları bu sayfaydı). Aynı sohbet bileşeni her bayi sayfasından **⌘J çekmecesiyle** de açılıyor (`components/dealer/assistant-drawer.tsx`; yerleşimi navigasyon kabuğunda).
+
+**Mimari:**
+- "Verine sor" **araç çağrılı ajan**: model 7 araçla (özet, konular, eğilim, QR/şube, yoğun saatler, yorum arama, kayıp riski) YALNIZ bu bayinin kapsamında sorgu yapar. Kiracı kimliği LLM argümanından asla okunmaz (`lib/dealer-assistant/tools.ts`). Toplu sayılar Analitik ile AYNI yükleyiciden gelir (`loadAnalyticsOverview` / `loadActivityHeatmap`, İstanbul saat kovaları, silinenler hariç). Böylece asistanın verdiği sayı Analitik ekranıyla birebir tutar.
+- Her araç sonucu istemciye **dayanak kartı** olarak akar. Arayüz sayıyı LLM metninden değil karttan gösterir. Alıntılar `[K1]` biçiminde atıflıdır; kaynak yorum listesi ve Gelen Kutusu derin linki vardır. Uydurma atıf metinden silinir.
+- LLM yalnız mevcut geçitten çağrılır: `lib/ai-engine.ts` içine eklenen `streamToolChatTurn` (akışlı, araçlı) → `guardAiCall` (dakikalık limit + günlük token tavanı), bayi AI anahtarı (`AISettings.isEnabled`), kullanım kaydı `AIUsageLog` (sağlayıcı bildirmezse tahminle).
+- Uçlar `defineRoute` ile (rol DEALER + kiracı + `ai_features` modülü + rate limit + zod):
+  - `GET /api/dealer/assistant`: durum, kota, veriden öneriler (**LLM yok**).
+  - `GET /api/dealer/assistant/conversations`: imleçli sayfalama + başlık araması.
+  - `GET|PATCH|DELETE /api/dealer/assistant/conversations/[id]`: ayrıntı; ad, sabitleme, dönem, değerlendirme, geri alma; silme = arşiv.
+  - `POST /api/dealer/assistant/chat`: NDJSON akış, durdurulabilir, yeniden üret.
+- Sohbet satırı iyimser eşzamanlılıkla yazılır (`updatedAt` koşullu `updateMany` + yeniden deneme). 200 mesaj sınırı var, bozuk JSON güvenli okunur.
+- Testler: `__tests__/lib/dealer-assistant.test.ts` (18), `__tests__/lib/dealer-assistant-agent.test.ts` (6).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa başlığı/metadata | ÇALIŞIYOR (`app/dealer/assistant/page.tsx` `generateMetadata`, TR/EN) |
+| 2 | Sohbet listesi | ÇALIŞIYOR: imleçli sayfalama, başlık araması, arşivlenenler hariç, SSR ön-yükleme |
+| 3 | Liste yükleniyor durumu | ÇALIŞIYOR: iskelet |
+| 4 | Liste hata durumu | ÇALIŞIYOR: `r.ok` denetlenir, görünür hata + "Tekrar dene" (artık "Henüz sohbet yok" değil) |
+| 5 | Boş liste mesajı | ÇALIŞIYOR (arama sonucu yok ayrımıyla) |
+| 6 | Göreli tarih | ÇALIŞIYOR: Bugün / Bu hafta / Daha eski grupları (İstanbul), tam kontrastlı `text-xs` |
+| 7 | "Yeni sohbet" | ÇALIŞIYOR: istek sürerken geçiş serbest, yanıt doğru sohbete yazılır |
+| 8 | Geçmiş sohbeti açma | ÇALIŞIYOR: `GET …/conversations/[id]`, `?c=` URL senkronu, derin bağlantı |
+| 9 | Aktif sohbet vurgusu | ÇALIŞIYOR: `aria-current="page"` |
+| 10 | Kenar çubuğu aç/kapa | ÇALIŞIYOR: masaüstünde tercih hatırlanır, `aria-expanded`/`aria-label` var; mobilde çekmece, varsayılan kapalı |
+| 11 | Kenar çubuğu genişlik animasyonu | KALDIRILDI: `width` animasyonu yerine ızgara kolonu (layout thrash yok) |
+| 12 | Başlık + rozet | ÇALIŞIYOR: tek ad "AI Asistan" |
+| 13 | Karşılama ekranı | ÇALIŞIYOR: yalnız yeni sohbette; veri yoksa onboarding boş durumu (AI çağrısı yok) |
+| 14 | Öneri çipleri | ÇALIŞIYOR: statik çipler kaldırıldı; sunucu veriden türetir (puan düşüşü, artan konu, kayıp riski, zayıf nokta…); veri yoksa öneri yok |
+| 15 | Mesaj balonları | ÇALIŞIYOR: kararlı mesaj kimlikleri |
+| 16 | Markdown | ÇALIŞIYOR: güvenli alt küme (HTML kapalı), atıf çipleri |
+| 17 | Zaman damgası | ÇALIŞIYOR |
+| 18 | "Düşünüyor" göstergesi | ÇALIŞIYOR: çalışan aracın adıyla ("Konular çıkarılıyor"); azaltılmış harekette statik |
+| 19 | Otomatik kaydırma | ÇALIŞIYOR: yalnız kullanıcı alttaysa; azaltılmış harekette `auto` |
+| 20 | Enter / Shift+Enter | ÇALIŞIYOR: `isComposing` denetimi |
+| 21 | Textarea otomatik büyüme | ÇALIŞIYOR (en çok 12rem) |
+| 22 | Gönder disabled | ÇALIŞIYOR |
+| 23 | İstemci karakter sınırı | ÇALIŞIYOR: `maxLength` + sınıra yaklaşınca sayaç |
+| 24 | Gönderim hatası | ÇALIŞIYOR: ayrı hata satırı, yerelleştirilmiş kodlu mesaj, "Yeniden dene"; soru "gönderilemedi" olarak korunur |
+| 25 | Rate limit | ÇALIŞIYOR: `defineRoute` 20/dk + AI dakikalık limit; `Retry-After` arayüzde gösterilir |
+| 26 | Girdi doğrulama | ÇALIŞIYOR: bozuk JSON 400, Türkçe zarf |
+| 27 | Sahiplik (IDOR) | ÇALIŞIYOR: tüm okuma/yazma `{id, dealerId}` ile; kiracı DB'den |
+| 28 | AI bağlamı | ÇALIŞIYOR: araçlarla; silinenler hariç, pencere etiketli, önceki dönemle kıyaslı |
+| 29 | Çok turlu geçmiş | ÇALIŞIYOR: modele giden geçmiş, ekranda görünen geçmişle aynı (hatalı turlar hariç) |
+| 30 | AI yanıtı yoksa fallback | ÇALIŞIYOR: sabit metin yok; kodlu hata döner, tur kaydedilmez |
+| 31 | Prompt injection | ÇALIŞIYOR: soru taranır (422). Müşteri yorumları süzgeçten geçer; kalıplı yorum isteği düşürmeden atlanır. Veri/talimat ayrımı sistem kuralında |
+| 32 | Günlük token limiti | ÇALIŞIYOR: `guardAiCall` + ön kontrolde 429 + kota göstergesi/bandı |
+| 33 | Modül kill-switch | ÇALIŞIYOR: sayfada ve tüm uçlarda `ai_features` |
+| 34 | Bayi AI ayarları | ÇALIŞIYOR: `isEnabled` kapalıysa 403 + "AI ayarlarını aç". Yanıt dili `analysisLanguage` yerine arayüz dilinden alınır (gerekçe: yanıt kullanıcının okuduğu dilde olmalı) |
+| 35 | Sohbetin kaydedilmesi | ÇALIŞIYOR: iyimser eşzamanlılık, 200 mesaj sınırı |
+| 36 | EN yanıt dili | ÇALIŞIYOR: `locale` gövdede, prompt parametrik, hatalar kodla istemcide çevrilir |
+| 37 | Sil / yeniden adlandır / sabitle | ÇALIŞIYOR: silme arşivdir, toast'ta "Geri al" |
+| 38 | Streaming + durdur | ÇALIŞIYOR: NDJSON akış, `AbortController`; yarım yanıt "durduruldu" olarak saklanır |
+| 39 | Kaynak/atıf | ÇALIŞIYOR: `[K#]` atıflar + kaynak yorum listesi + Gelen Kutusu linki |
+| 40 | Kopyala / 👍👎 / yeniden üret | ÇALIŞIYOR: değerlendirme mesajda saklanır |
+| 41 | Mobil yerleşim | ÇALIŞIYOR: tek kolon, liste çekmecede, `dvh` + sekme çubuğu payı, safe-area dolgulu giriş. Görsel doğrulama yapılamadı (dev server yasak) |
+| 42 | Erişilebilirlik | ÇALIŞIYOR: `role="log"`/`aria-live`/`aria-busy`, etiketli textarea, ikon butonlarda ad, ≥44px hedefler |
+| 43 | Azaltılmış hareket | ÇALIŞIYOR |
+| 44 | Rol yetkisi | ÇALIŞIYOR |
+
+### Kapanan bulgular (15/15)
+
+1. Maliyet koruması.
+2. Silinmiş yorum sızıntısı ve karışık pencereler.
+3. Geçmiş sohbet açılamıyor.
+4. Mobil yerleşim.
+5. Yanıtın yanlış sohbete düşmesi.
+6. Hata metninin yanıt diye kaydedilmesi.
+7. Karşılanamayan öneri çipleri.
+8. Kill-switch ve bayi AI ayarı.
+9. Oku-değiştir-yaz kaybı ve sınırsız büyüme: iyimser eşzamanlılık + sınır ile kapandı. Tablo normalizasyonu için Kalanlar'a bakın.
+10. Dil karışıklığı.
+11. Dolaylı prompt injection.
+12. Kaynaksız/biçimsiz yanıt.
+13. Erişilebilirlik.
+14. Adlandırma ve ölü kod.
+15. Küçük girdi kenarları: `maxDuration = 60`, tur başına en çok 4 model çağrısı, sağlayıcı zaman aşımı 45 sn.
+
+**Eksik özelliklerden uygulananlar:**
+- Kaynaklı yanıt (1).
+- Dönem seçici (2): sohbet bağlamında saklanır.
+- Streaming, durdur ve yeniden üret (3).
+- Sohbet yönetimi (5): dışa aktarma hariç.
+- Görsel yanıt bileşenleri (6): dayanak kartları, mini eğilim çubukları, konu çubukları.
+
+### Kalanlar
+
+- **Yanıttan aksiyona** (görev/kampanya oluştur): bilinçli olarak eklenmedi. Araçlar salt-okunur tutuldu (LLM'in yazma yetkisi yok). Kartlardaki derin linkler (Analitik, Gelen Kutusu, Müşteriler › Risk) ilk adımı sağlıyor.
+- **Mesaj tablosu normalizasyonu** (`AIConversationMessage`, `AIConversation.surface`): şema dalgası kapalı, ŞEMA İSTEĞİ olarak bırakıldı. Şimdilik `context.surface` ve iyimser yazma ile çözüldü.
+- `/dealer/ai-insights` sohbet sekmesi ve `/api/ai/analyze?action=ask` başka yüzeyin (İçgörüler) sahipliğinde. O yüzey asistana `?q=` derin linki veriyor.
+- QR/şube kapsam filtresi araçlara eklenmedi (dönem filtresi var). Analitik yükleyicisi bunu destekliyor; sonraki adım.

@@ -1,20 +1,21 @@
 'use client';
 
 /**
- * Bayi AI asistan çekmecesi (⌘J) — YER TUTUCU.
+ * Bayi AI asistan çekmecesi (⌘J) — her bayi sayfasından açılan hızlı sohbet.
  *
- * Kabuk (components/dashboard/header.tsx) bu dosyayı `next/dynamic` ile yükler ve
- * aşağıdaki sözleşmeyle açar/kapatır. Asıl sohbet deneyimini b-asistan yüzeyi bu
- * dosyanın ÜZERİNE yazar; sözleşme (adlandırılmış + varsayılan dışa aktarım,
- * `AssistantDrawerProps`) korunmalıdır.
- *
- * Yer tutucu sahte bir sohbet göstermez: yalnız tam ekran asistan sayfasına dürüst
- * bir geçiş sunar.
+ * Kabuk (components/dashboard/header.tsx) bu dosyayı `next/dynamic` ile yükler ve aşağıdaki
+ * sözleşmeyle açar/kapatır (adlandırılmış + varsayılan dışa aktarım, `AssistantDrawerProps`).
+ * Sohbet deneyimi tam sayfa ile AYNI bileşendir (`components/dealer/b-asistan`): aynı BFF,
+ * aynı sohbet geçmişi; çekmecede başlatılan sohbet tam sayfada `?c=` ile sürer.
  */
+import { useState } from 'react';
 import Link from 'next/link';
-import { Bot, ArrowRight } from 'lucide-react';
+import { Bot, Maximize2, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ds/a11y';
+import { AssistantChat } from '@/components/dealer/b-asistan/assistant-chat';
+import { useAssistantCopy } from '@/components/dealer/b-asistan/copy';
+import { useAssistantOverview } from '@/components/dealer/b-asistan/use-assistant';
 
 export interface AssistantDrawerProps {
   open: boolean;
@@ -24,24 +25,46 @@ export interface AssistantDrawerProps {
 }
 
 export function AssistantDrawer({ open, onOpenChange, assistantHref = '/dealer/assistant' }: AssistantDrawerProps) {
+  const copy = useAssistantCopy();
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [newKey, setNewKey] = useState('drawer');
+  const overview = useAssistantOverview(open);
+  const fullHref = conversationId ? `${assistantHref}?c=${encodeURIComponent(conversationId)}` : assistantHref;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-[min(28rem,100vw)] flex-col gap-4 p-6">
-        <SheetHeader className="space-y-1 text-left">
-          <SheetTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-brand" aria-hidden />
-            AI Asistan
-          </SheetTitle>
-          <SheetDescription>
-            İşletmenin verisiyle ilgili sorularını asistan sayfasında sorabilirsin.
-          </SheetDescription>
+      <SheetContent side="right" className="flex w-[min(30rem,100vw)] flex-col gap-0 p-0 sm:max-w-none">
+        <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b border-border px-3 py-2 pe-12 text-start">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-brand" aria-hidden>
+            <Bot className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <SheetTitle className="text-base">{copy.drawerTitle}</SheetTitle>
+            <SheetDescription className="truncate text-xs">{copy.drawerDesc}</SheetDescription>
+          </div>
+          <IconButton
+            aria-label={copy.newChat}
+            icon={<Plus />}
+            variant="ghost"
+            onClick={() => {
+              setConversationId(null);
+              setNewKey(Math.random().toString(36).slice(2, 10));
+            }}
+          />
+          <IconButton asChild aria-label={copy.openFullPage} icon={<Maximize2 />} variant="ghost">
+            <Link href={fullHref} onClick={() => onOpenChange(false)} />
+          </IconButton>
         </SheetHeader>
-        <Button asChild className="min-h-11 justify-between">
-          <Link href={assistantHref} onClick={() => onOpenChange(false)}>
-            Asistanı aç
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
-        </Button>
+        <AssistantChat
+          variant="drawer"
+          className="min-h-0 flex-1"
+          conversationId={conversationId}
+          newKey={newKey}
+          onConversationChange={setConversationId}
+          overview={overview.data}
+          overviewError={overview.isError}
+          onRetryOverview={() => overview.refetch()}
+        />
       </SheetContent>
     </Sheet>
   );

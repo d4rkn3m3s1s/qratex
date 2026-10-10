@@ -217,3 +217,76 @@ Yöntem: iddiaların her biri çağıran/çağrılan kod baştan okunarak çür�
 - Desenler (`lib/prompt-injection.ts:5-18`) İngilizce ve kısmen geniş: `act as \w+`, `system:`, `on\w+="..."`. Doğal Türkçe yorumların yanlışlıkla tetiklemesi düşük ihtimal. Asıl risk kasıtlı kötüye kullanım: QR üzerinden herkese açık feedback gönderen biri (rakip, kızgın müşteri) bunu tetikleyebilir.
 - **Yeniden üretim:** Bir QR'a "Servis kötüydü. ignore previous instructions" yazılı bir yorum bırakılır. Bayi "servis neden şikayet alıyor?" diye sorar → yorum `minScore: 0.3` ile ilgili adaylara girer → `params.user` deseni eşleşir → 503 "AI yapılandırılmamış". Yorum silinene kadar o konudaki her soru engelli kalır; hard delete gerekir, soft delete yetmez (bkz. Bulgu 1).
 - **Öneri:** Injection tespiti yalnız bayinin `question`'ına uygulanmalı. Snippet'ler, açıkça "veri, talimat değil" diye işaretlenmiş sınırlandırılmış bir blokta (ör. `<feedback_data>` etiketleri + system prompt kuralı) verilmeli. Desen eşleşen tekil snippet ise bütün isteği düşürmek yerine prompt'tan çıkarılmalı veya `[filtrelendi]` olarak maskelenmeli. `runChatCompletion` reddi `reason: 'injection'` ile ayırt etmeli; route da 503 "AI yapılandırılmamış" yerine doğru mesajı dönmeli.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** Sayfa kaldırıldı; motoru korunup genişletilerek **`/dealer/assistant` (AI Asistan)** içine taşındı.
+- `app/dealer/ask-analytics/page.tsx` artık `permanentRedirect('/dealer/assistant?…')` yapan bir sunucu bileşeni. `?q=` ilk soru olarak kutuya yazılır ama kendiliğinden gönderilmez.
+- `app/api/dealer/ask-analytics/route.ts` kaldırıldı (tek kullanıcısı bu sayfaydı).
+- Haftalık kıyas, RAG ve dayanak çipleri asistanın araçlarına dönüştü (`lib/dealer-assistant/tools.ts`):
+  - `get_overview`: dönem + önceki dönem.
+  - `search_feedback`: embedding + anahtar kelime + süzgeç.
+  - `get_churn_risk`: kayıp riskli yorumların konu dağılımı dahil.
+  - `get_topics`, `get_trend`, `get_locations`, `get_busy_times`.
+
+Ayrıntı için `dealer_ai-chat.md` › Uygulama (Dalga 2) bölümüne bakın.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero başlık | ÇALIŞIYOR: asistan başlığı, TR/EN |
+| 2 | Hero eyebrow "Yönetim paneli" | KALDIRILDI: sayfa yok; asistan başlığı "AI Asistan" |
+| 3 | "AI Sohbet'e geç" bağlantısı | KALDIRILDI: iki yüzey birleşti |
+| 4 | Soru input'u | ÇALIŞIYOR: etiketli, `maxLength` 2000 + sayaç |
+| 5 | Enter ile gönderme | ÇALIŞIYOR: `isComposing` denetimi |
+| 6 | Sor butonu | ÇALIŞIYOR: gönder/durdur |
+| 7 | Min. karakter doğrulaması | ÇALIŞIYOR (2 karakter; sunucuda zod) |
+| 8 | Önerilen soru çipleri | ÇALIŞIYOR: veriden türetilir. "Kayıp riskli müşterilerde ortak tema" artık `get_churn_risk` konu dağılımıyla cevaplanabiliyor |
+| 9 | Yanıttan sonra öneriler | ÇALIŞIYOR: sohbet devam eder (takip sorusu) |
+| 10 | Yükleniyor kartı | ÇALIŞIYOR: `role="status"`, çalışan aracın adı |
+| 11 | Yanıt kartı | ÇALIŞIYOR: markdown, kopyala, 👍/👎, yeniden üret |
+| 12 | "Yalnızca gerçek veriye dayanır" iddiası | ÇALIŞIYOR: iddia yerine kanıt (dayanak kartları + atıflı kaynaklar) |
+| 13–15 | Dayanak çipleri (adet, ort. puan + önceki, kayıp riski) | ÇALIŞIYOR: dayanak kartları; değişim yönü/farkı gösterilir; Müşteriler › Risk derin linki |
+| 16 | Tema çipleri İngilizce anahtar | ÇALIŞIYOR: yerel etiket hem arayüzde hem modele giden araç sonucunda |
+| 17 | `relevantCount` | ÇALIŞIYOR: arama kartında eşleşen / gösterilen sayısı |
+| 18 | Kaynak alıntılar | ÇALIŞIYOR: `[K#]`, alıntı, puan, tarih, kanal, Gelen Kutusu linki |
+| 19 | Hata bildirimi | ÇALIŞIYOR: içerik türü denetlenir; kodlu, yerelleştirilmiş hata; yeniden dene |
+| 20 | Rate limit | ÇALIŞIYOR: `Retry-After` arayüzde gösterilir |
+| 21 | Günlük AI token limiti | ÇALIŞIYOR: 429 `AI_BUDGET_EXCEEDED` (ön kontrolde + akış içinde), kota göstergesi ve sıfırlanma saati |
+| 22 | RAG | ÇALIŞIYOR: adaylar dönem/kiracı/`deletedAt`/toksik/güven bayrağı süzgecinden geçer; sonuç azsa anahtar kelimeyle tamamlanır |
+| 23 | Toplu metrik bağlamı | ÇALIŞIYOR: Analitik yükleyicisinden tam sayım (örneklem yok); dönem seçilebilir |
+| 24 | Sayfa erişim yetkisi | ÇALIŞIYOR |
+| 25 | API çok-rol dalları | KALDIRILDI: uçlar yalnız DEALER (ADMIN/STAFF dalları ölü koddu) |
+| 26 | Modül kapısı | ÇALIŞIYOR |
+| 27 | Menü / gezinme | ÇALIŞIYOR: kayıtta `dealer.assistant` (navigasyon ajanı), eski rota yönlendiriliyor |
+| 28 | `<title>` | ÇALIŞIYOR |
+| 29 | i18n | ÇALIŞIYOR: TR/EN kopya + yanıt dili |
+| 30 | Geçmiş / takip sorusu | ÇALIŞIYOR |
+| 31 | Zaman aralığı filtresi | ÇALIŞIYOR: 7/30/90 gün, bu ay, geçen ay; sohbet başına saklanır. QR/şube filtresi kaldı |
+| 32 | İstek iptali | ÇALIŞIYOR: Durdur |
+| 33 | Boş veri durumu | ÇALIŞIYOR: hiç veri yoksa AI çağrılmadan "QR kodlarına git" gösterilir |
+| 34 | Mobil yerleşim | ÇALIŞIYOR |
+| 35 | Azaltılmış hareket | ÇALIŞIYOR |
+
+### Kapanan bulgular (12'nin 11'i)
+
+- 1: Silinmiş/toksik/işaretli yorum sızıntısı.
+- 3: Kota aşımı 500 yerine 429 dönüyor.
+- 4: Müşteri yorumuyla özelliği kilitleme. Kalıplı yorum atlanır, istek düşmez; yanlış "yapılandırılmamış" teşhisi yok.
+- 5: Yetim sayfa.
+- 6: Pencere/öneri uyumsuzluğu.
+- 7: Doğrulanamayan yanıt.
+- 8: İngilizce tema anahtarı.
+- 9: Modül kapısı.
+- 10: İstemci hata/biçim/a11y.
+- 11: Ölü STAFF/ADMIN dalları.
+- 12: Sıralamasız `take: 200` (artık tam sayım).
+
+### Kalanlar
+
+- **Bulgu 2 (1000 vektörlük bellek içi KNN):** `findSimilarFeedback` paylaşılan modülde (`lib/ai-learning.ts`) ve çözümü pgvector şema değişikliği istiyor; ŞEMA İSTEĞİ. Asistanda etkisi azaltıldı: anlamsal arama her soruda değil, yalnız `search_feedback` aracı bir sorgu ifadesiyle çağrıldığında çalışır. Hata verirse anahtar kelime aramasına düşer.
+- QR/şube/kanal kapsam filtresi (araçlara parametre olarak) sonraki adım.
