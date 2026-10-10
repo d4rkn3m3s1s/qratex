@@ -20,7 +20,9 @@ export default async function ResetPasswordPage({
   const sp = await searchParams;
   const token = (firstParam(sp.token) ?? '').trim().slice(0, 512);
   let status: ResetTokenStatus = 'invalid';
-  let account: { email: string; masked: string; minutesLeft: number } | null = null;
+  // Tam e-posta istemciye GÖNDERİLMEZ: bağlantı sızarsa (paylaşım, eklenti, ekran görüntüsü)
+  // hesabın adresi de sızmasın. Yalnız maskeli gösterim + kalan süre.
+  let account: { masked: string; minutesLeft: number } | null = null;
   if (token && isPlausibleToken(token)) {
     try {
       const now = new Date();
@@ -36,7 +38,6 @@ export default async function ResetPasswordPage({
       if (row) {
         status = 'valid';
         account = {
-          email: row.user.email,
           masked: maskEmail(row.user.email),
           minutesLeft: Math.max(1, Math.ceil((row.expiresAt.getTime() - now.getTime()) / 60_000)),
         };
