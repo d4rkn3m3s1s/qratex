@@ -151,3 +151,63 @@
 - **`/dealer/discover`:** Bayi tarafındaki ikiz sayfa, aynı nedenle bayi sidebar'ından da çıkarılmış (`sidebar.tsx:230-232`); aynı karar ve aynı birleştirme oraya da uygulanmalı (bu raporun kapsamı dışında, doğrulanmadı).
 
 **Sonuç:** `/customer/discover` ayrı bir sayfa olarak değer üretmiyor ve şu an erişilemez. Kaldırılıp işlevi sidebar + global arama + kişisel rozet sinyallerine dağıtılmalı; kaldırmadan önce **Deneyimler** modülünün akıbeti (Bulgu 2) karara bağlanmalı, aksi halde o modül tamamen görünmez kalır.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: KALDIR (§6.1).**
+
+- `app/customer/discover/page.tsx` artık küçük bir sunucu koçanı: sorgu parametrelerini koruyarak `/customer`'a `permanentRedirect` yapıyor. `discover/layout.tsx` silindi.
+- Kayıt (`lib/navigation/registry.ts` → `customer.home.redirectFrom`) aynı eşlemeyi `next.config` yönlendirmesine taşıyor.
+- Keşif işlevi, yani her özelliğe arama ile erişim, ⌘K paletinde ve sunucuda çözülen sidebar'da (navigasyon kaydı).
+- Kişisel "senin için" sinyalleri yeni Ana Sayfa'da iki bölümde:
+  - **Seni bekleyenler:** telafi teklifi, yorum bekleyen tüketim, kullanılmamış ödül, açılmamış kutu.
+  - **Günlük hedefler.**
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rol bazlı erişim | ÇALIŞIYOR | Proxy; koçan da `/customer` korumasına düşer. |
+| 2 | Sayfa metadata | KALDIRILDI | sayfa emekli |
+| 3 | Hero | KALDIRILDI | sayfa emekli |
+| 4 | Hero azaltılmış hareket | KALDIRILDI | sayfa emekli |
+| 5 | Hero tema flaşı (KISMİ) | KALDIRILDI | sayfa emekli |
+| 6 | "Kazan ve keşfet" kartı | KALDIRILDI | ⌘K + sidebar (kayıttan) |
+| 7 | "Topluluk" kartı | KALDIRILDI | ⌘K + sidebar |
+| 8 | "İçgörü" kartı (KISMİ) | KALDIRILDI | ⌘K + sidebar |
+| 9 | Link etiketleri | KALDIRILDI | Etiketler kayıtta (TR/EN). |
+| 10 | Link hedeflerinin varlığı | KALDIRILDI | Kayıt ↔ dosya sistemi sözleşme testi navigasyon ajanında. |
+| 11 | Duyarlı yerleşim | KALDIRILDI | |
+| 12 | Klavye odak | KALDIRILDI | |
+| 13 | Başlık hiyerarşisi (KISMİ) | KALDIRILDI | |
+| 14 | Navigasyon/liste semantiği (EKSİK) | KALDIRILDI | |
+| 15 | Yükleniyor/hata | KALDIRILDI | |
+| 16 | Giriş noktası yok — yetim (BOZUK) | KAPANDI | Eski URL Ana Sayfa'ya yönlenir; yetim sayfa kalmadı. |
+| 17 | Menü görünürlüğünü yok sayma (BOZUK) | KAPANDI | Ayrı liste yok; ⌘K ve sidebar sunucu kabuk yapılandırmasıyla filtreli. |
+| 18 | Admin `discover` menü anahtarı (SAHTE) | KALAN (sahiplik dışı) | `lib/visibility-controls.ts` ve `product-roadmap.json` girdileri navigasyon/menü kataloğu ajanının. |
+| 19 | `/customer/experiences` erişim yolu (BOZUK) | KALAN (sahiplik dışı) | Kayıtta `customer.places.redirectFrom` içinde. İçerik `/customer/places/[dealerId]`'e taşınacak (Keşfet ajanı). |
+| 20 | Tüm özellikleri kapsama (EKSİK) | KAPANDI | ⌘K paleti kayıttaki tüm görünür yüzeyleri kapsar. |
+| 21 | Link başına simge (EKSİK) | KAPANDI | Palet ve sidebar kayıttaki ikonları kullanır. |
+| 22 | Kişiselleştirilmiş durum (EKSİK) | KAPANDI | Ana Sayfa "Seni bekleyenler" (DB sayıları; kapalı modül gizli). |
+| 23 | Arama/filtre (EKSİK) | KAPANDI | ⌘K paleti |
+| 24 | Metin tutarlılığı (KISMİ) | KALDIRILDI | sayfa emekli |
+
+### Kapanan bulgular (7 / 9)
+
+| Bulgu | Konu |
+|---|---|
+| 1 | Yetim sayfa |
+| 3 | Görünürlüğü yok sayma |
+| 4 | Menünün elle kopyası |
+| 5 | Kapsam/IA çelişkisi |
+| 6 | Kişiselleştirmesiz liste (kişisel sinyaller artık Ana Sayfa'da) |
+| 7 | Erişilebilirlik |
+| 8 | Gereksiz istemci bileşeni, tema flaşı |
+
+### Kalanlar
+
+- **Bulgu 2 (Deneyimler modülü)** ve **Bulgu 9 (ölü admin anahtarı / yol haritası kaydı):** sahiplik dışı; Keşfet ve navigasyon ajanlarının işi.
+- **Navigasyon ajanına not:** `lib/navigation/next-redirects.js` içindeki `isRetirementStub`, JSX'i `/<[A-Za-z]/` ile arıyor. TS generic'i içeren koçanlar (`Promise<Record<…>>`; bu sayfa ve emekli oyun koçanları) bu yüzden "emekli değil" sayılıyor ve `next.config` yönlendirmesi atlanabiliyor. Sayfanın kendi `permanentRedirect`'i çalıştığı için kullanıcıya etkisi yok.

@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { addDays, istanbulDay } from '@/components/ds/page/date-range';
 
 export const dynamic = 'force-dynamic';
+
+function activeLoginStreak(count: number, lastDay: Date | null): number {
+  if (!lastDay) return 0;
+  const today = istanbulDay(new Date());
+  const last = istanbulDay(lastDay);
+  return last === today || last === addDays(today, -1) ? Math.max(0, count) : 0;
+}
 
 export async function GET() {
   try {
@@ -17,7 +25,7 @@ export async function GET() {
     const [user, feedbackCount, badgeCount, questProgress, recentFeedbacks, earnedBadges] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, name: true, email: true, image: true, points: true, xp: true, level: true, createdAt: true },
+        select: { id: true, name: true, email: true, image: true, points: true, xp: true, level: true, createdAt: true, loginStreakCount: true, loginStreakLastDay: true },
       }),
       prisma.feedback.count({ where: { userId } }),
       prisma.userBadge.count({ where: { userId } }),
@@ -110,7 +118,7 @@ export async function GET() {
       id: f.id,
       business: f.qrCode.dealer?.businessName || f.qrCode.name,
       rating: f.rating,
-      points: f.rating >= 4 ? 75 : 50,
+      // Kredilenen gerçek puan defterde (points_credited); burada uydurulmaz (denetim Bulgu 11).
       createdAt: f.createdAt,
       type: 'qr' as const,
     }));
@@ -148,13 +156,14 @@ export async function GET() {
       {
         success: true,
         data: {
-          user: { ...user, levelProgress, xpProgress, xpNeeded },
+          user: { id: user.id, name: user.name, email: user.email, image: user.image, points: user.points, xp: user.xp, level: user.level, createdAt: user.createdAt, levelProgress, xpProgress, xpNeeded },
           stats: {
             feedbackCount: feedbackCount + cardSystemData.consumptionReviewCount,
             badgeCount,
             points: user.points,
             level: user.level,
-            streak: 0,
+            // Giriş serisi: tek kaynak User.loginStreak* (İstanbul günü; dün/bugün sayılmadıysa kırık → 0).
+            streak: activeLoginStreak(user.loginStreakCount, user.loginStreakLastDay),
             cardCount: cardSystemData.cards.length,
             consumptionCount: cardSystemData.consumptionCount,
             consumptionReviewCount: cardSystemData.consumptionReviewCount,

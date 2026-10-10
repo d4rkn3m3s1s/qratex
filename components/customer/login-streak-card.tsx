@@ -25,8 +25,8 @@ type StreakResponse = {
 /**
  * GÜNLÜK GİRİŞ SERİSİ kartı.
  *
- * Mount olduğunda /api/customer/streak GET çağırır → bu, login streak'i günde bir
- * kez ilerletir (touchLoginStreak) ve kilometre taşında atomik puan ödülü verir.
+ * Mount olduğunda /api/customer/streak POST çağırır (GET artık yan etkisiz) → bu, login
+ * streak'i günde bir kez ilerletir (touchLoginStreak) ve kilometre taşında atomik puan ödülü verir.
  * Yeni bir ödül kazanıldıysa An Motoru puan kapsülü + kısa seri toast'ı tetiklenir.
  *
  * MİNİ OYUN serisinden ve UserStreak loyalty'den bağımsızdır.
@@ -40,7 +40,7 @@ export function LoginStreakCard({ className }: { className?: string }) {
     let alive = true;
     (async () => {
       try {
-        const res = await fetch('/api/customer/streak', { credentials: 'same-origin' });
+        const res = await fetch('/api/customer/streak', { method: 'POST', credentials: 'same-origin' });
         const json: StreakResponse = await res.json().catch(() => ({}));
         if (!alive) return;
         if (res.ok && json.success) {

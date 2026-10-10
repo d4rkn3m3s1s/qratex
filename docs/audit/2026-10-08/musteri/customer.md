@@ -302,3 +302,132 @@ Her iddia çürütülmeye çalışılarak çağıran/çağrılan kod baştan oku
 - Kalbe basılınca `POST` gidiyor. Upsert idempotent olduğu için DB'de kopya oluşmuyor (`favorites/route.ts:98-104`, `@@unique([userId, dealerId])`). Ancak istemci listeye koşulsuz yeni bir eleman ekliyor (`customer-dashboard.tsx:399-406`). Aynı `key={fav.dealerId}` ile ikinci bir kart çıkıyor (`:832`) ve React "duplicate key" uyarısı veriyor. Ad da `trendingVenues` boş olduğu için "İşletme" olarak düşüyor. Kullanıcı favoriyi hiçbir zaman kaldıramıyor.
 - **Yeniden üretim:** Admin müşteri menüsünden "Yakınımdaki" öğesini gizler. Favorisi olan müşteri `/customer`'da favori kartının kalbine basar. Kart kaybolmak yerine ikinci bir kopya belirir, DB'de favori yerinde kalır.
 - **Öneri:** Favori kümesinin tek kaynağı `/api/customer/favorites` olsun (`dealerIds` alanı zaten dönüyor). Toggle, `useMutation` ile iyimser güncelleme yapsın, hata olursa geri alsın; durum discovery'den türetilmesin.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `m-ana-sayfa` · **Hedef rota:** `/customer` (Ana Sayfa, §4.3) · **Emekli:** `/customer/discover` → `/customer` (308, sorgu korunur).
+
+**Yeni mimari (§4.4 ilke 11):** `app/customer/page.tsx` artık bir sunucu bileşeni. Kimlik ve rol DB'den doğrulanıyor (`requireAuth(['CUSTOMER'])`). Veri `lib/customer-home/load.ts`'ten tek turda okunuyor ve `HydrationBoundary` ile React Query'ye gömülüyor. Açılışta istemci veri isteği yok. Tek yan etki `POST /api/customer/streak` (seri dokunuşu, günde bir kez). Tazeleme tek BFF'ten yapılıyor: `GET /api/customer/home` (`defineRoute`, yalnız CUSTOMER, okuma rate limiti, zarf v2).
+
+İstemci adası `components/customer/m-ana-sayfa/**` altında. `HomeScreen` (QueryState) şu bölümleri çiziyor: `StatusHero`, `DailyGoals`, `PendingActions`, `StreakCard`, `SpinCard` + lazy `SpinDialog`, `SurpriseBoxCard`, `LeagueStrip`, `FirstSteps`. Metinler `copy.ts`'te (TR/EN, `useDsLocale`). Saf hesaplar `lib/customer-home/core.ts`'te: İstanbul günü/haftası, seviye eğrisi, seri şeridi, ödül hedefi, lig, hedefler, bekleyenler. Çark mantığı `lib/customer-home/spin.ts`'te: `mintPoints`, İstanbul günü, hak başına tek-kez anahtarı.
+
+Silinenler: 1.364 satırlık `customer-dashboard.tsx` ve iskeleti, `app/customer/types.ts`, `components/gamification/spin-wheel.tsx` ve yalnız bunların kullandığı `/api/customer/weekly-card`.
+
+**Doğrulama:**
+- Görsel: headless Chrome tezgâhı (Tailwind derlemesi + rollup + playwright) ile ekran görüntüsü alındı. Kapsanan durumlar: 390 px açık ve koyu tema, 1280 px masaüstü, yeni müşteri, hata, seri kaydediliyor, çark (normal ve azaltılmış hareket). Yatay taşma yok; dokunma hedefleri ≥ 44 px. İlk turda lig basamakları ızgarayı 710 px'e itiyordu, `min-w-0` ile düzeltildi.
+- Testler: `__tests__/lib/customer-home-core.test.ts` (40), `__tests__/api/customer-home.test.ts` (7), `__tests__/api/gamification-spin.test.ts` (8), `__tests__/lib/login-streak-core.test.ts` (13). 68/68 geçti.
+- `tsc` ve eslint: kendi dosyalarımda 0 hata.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rol koruması | ÇALIŞIYOR | proxy + sayfada `requireAuth(['CUSTOMER'])` (DB) + BFF `defineRoute` |
+| 2 | Sayfa metadata | ÇALIŞIYOR | değişmedi |
+| 3 | Kenar çubuğu | ÇALIŞIYOR | kabuk (navigasyon ajanı) |
+| 4 | Üst başlık + global arama | ÇALIŞIYOR | kabuk (⌘K) |
+| 5 | İçeriğe atla | ÇALIŞIYOR | layout |
+| 6 | Rota yükleme iskeleti | ÇALIŞIYOR | segment `loading.tsx` |
+| 7 | Hata sınırı | ÇALIŞIYOR | Render hataları `error.tsx`'te. API hataları artık `QueryState` ile görünür. |
+| 8 | Onboarding Sheet | KISMİ (sahiplik dışı) | Layout'taki ilk açılış kuyruğu F3.1(a) `useFirstRunQueue` işi. |
+| 9 | Karşılama videosu | KISMİ (sahiplik dışı) | Gerekçe #8 ile aynı. |
+| 10 | Doğum günü diyaloğu | ÇALIŞIYOR | layout |
+| 11 | Web Vitals | ÇALIŞIYOR | layout |
+| 12 | İstemci iskeleti | ÇALIŞIYOR | SSR verisi gömülü. İskelet yalnız SSR başarısız olunca görünür ve statiktir. Sahte ad, puan ya da "hoş geldin" içeriği hiç çizilmez. |
+| 13 | Spotlight + FloatingOrbs + bulanık lekeler | KALDIRILDI | 5 sonsuz blur animasyonunun yerine tek statik marka gradyanı (§4.2 kural 4). |
+| 14 | Profil arka planı kozmetiği | ÇALIŞIYOR | Kuşanılmış arka plan DB'den okunur; güvenli bir https görsel URL'siyse gerçekten çizilir. Önayar/sınıf adı değerlerinin render tanımı yok → ŞEMA İSTEĞİ (`renderSpec`). |
+| 15 | Avatar + çerçeve | ÇALIŞIYOR | Çerçeve ve renk DB'den gelir (JWT'den değil). URL tabanlı çerçeve desteği paylaşılan `components/ui/avatar-frame`'in işi. |
+| 16 | Seviye rozeti | ÇALIŞIYOR | `XpRing` (seviye + ilerleme) |
+| 17 | Profili düzenle | ÇALIŞIYOR | Avatarın kendisi `aria-label`'lı ve odak halkalı bir bağlantı; hover'a bağlı değil. |
+| 18 | Lig çipi → detay | ÇALIŞIYOR | Çip lig şeridine gider. Şerit DB lig kurallarını kullanır; sabit `DEFAULT_LEAGUE_RULES` yok. |
+| 19 | Selamlama | ÇALIŞIYOR | Sunucuda İstanbul saatiyle hesaplanır, TR/EN. Hidrasyon uyuşmazlığı yok. |
+| 20 | Puan çipi ("XP" etiketi) | ÇALIŞIYOR | Puan (bakiye) ve XP (seviye) ayrı gösterilir. |
+| 21 | Geri bildirim sayısı çipi | KALDIRILDI | Üçlü tekrar; Ben → Seslerim'in işi. |
+| 22 | Rozet sayısı çipi | KALDIRILDI | Ben → Rozetler'in işi. |
+| 23 | Gün serisi çipi (SAHTE) | ÇALIŞIYOR | `StreakCard` gerçek `User.loginStreak*` alanlarını gösterir. `/api/customer/stats` de artık gerçek seriyi döner. |
+| 24 | Vitrin (sabitlenenler) | KALDIRILDI | Profil/rozet yüzeyinin içeriği; ana sayfa "bugün" ekranıdır. |
+| 25 | "İlk rozet" ipucu + ilk görev | ÇALIŞIYOR | `FirstSteps` yalnız DB'de hiç değerlendirmesi olmayan müşteriye görünür, yükleme sırasında asla. |
+| 26 | Puan sayacı | ÇALIŞIYOR | Önceki değerden sayar (0'dan değil). An Motoru puan kapsülünün hedefidir (`data-moment-anchor`) ve varışta nabız atar. |
+| 27 | Sonraki lig ilerlemesi | ÇALIŞIYOR | DB kuralları; son lig açık uçlu. |
+| 28 | QR tara CTA | ÇALIŞIYOR | Hero'da birincil eylem. |
+| 29 | Günlük giriş serisi | ÇALIŞIYOR | GET yan etkisiz; dokunuş `POST` ile. Gün sınırı İstanbul. Kilometre taşı `mintPoints` + ömür boyu tek-kez anahtarıyla ödenir. |
+| 30 | Seri kutlaması | ÇALIŞIYOR | An Motoru puan kapsülü; konfeti yok. |
+| 31 | Haftalık görev kartı | KALDIRILDI | Uç silindi; yerine "günlük 3 hedef" geldi. Görev ayrıntısı Oyna → Görevler'de. |
+| 32 | Haftalık zafer bandı | KALDIRILDI | Yerine "Bugünlük tamam" durumu. |
+| 33 | Sosyal sorumluluk bandı | KALDIRILDI | Statik içerikti; Cüzdan → Bağış'ın işi. |
+| 34 | Bağış liderliği bağlantısı (BOZUK) | KALDIRILDI | Ana sayfada ölü `?tab=` derin linki kalmadı. |
+| 35 | Yeni müşteri rehberi | ÇALIŞIYOR | `FirstSteps` (#25 ile birleşti). |
+| 36 | Stat kartı: Geri bildirim | KALDIRILDI | tekrar |
+| 37 | Stat kartı: Toplam puan | KALDIRILDI | Tekrardı; bakiye artık tek yerde. |
+| 38 | Stat kartı: Rozetler | KALDIRILDI | tekrar |
+| 39 | Stat kartı: Aktif seri (SAHTE) | KALDIRILDI | Gerçek seri `StreakCard`'da. |
+| 40 | Kompakt şans çarkı | ÇALIŞIYOR | Sunucu otoriter. Kapalıysa hiç çizilmez. Durum BFF'ten gelir (ikinci GET yok). Gün sınırı İstanbul; kalan hak gerçek. |
+| 41 | Çark sonuç diyaloğu | ÇALIŞIYOR | Lazy chunk; çark sunucunun seçtiği dilime döner. |
+| 42 | Çark sonrası güncelleme | ÇALIŞIYOR | Kayıpta kutlama yok. XP de gösterilir. Gösterilen miktar gerçekten kredilenen tutardır (tavan/gölge ban sonrası). |
+| 43 | Hızlı eylemler | KALDIRILDI | Mobil alt sekme (TARA/Oyna/Cüzdan) + ⌘K. |
+| 44 | Modül/menü görünürlüğüne uyum (EKSİK) | ÇALIŞIYOR | `sections` = modül kontrolleri + sunucu kabuk yapılandırması. Kapalı bölüm hiç çizilmez ve sorgulanmaz. |
+| 45 | Favorilerim şeridi | KALDIRILDI | Keşfet → Kaydettiklerim. |
+| 46 | Favoriden çıkarma (BOZUK) | KALDIRILDI | Hata sınıfı ana sayfadan çıktı. |
+| 47 | "Sayfasına Git"/`?focus=` (BOZUK) | KALDIRILDI | Ana sayfada ölü derin link yok. |
+| 48 | Gizemli görev bandı | KALDIRILDI | Süresi geçmiş/pasif görev sızıntısı yok. |
+| 49 | "2 Saat Kaldı" (SAHTE) | KALDIRILDI | Yerine gerçek sayaçlar: çark ve kutu için İstanbul gece yarısına `CountdownChip`. |
+| 50 | Trend Mekanlar | KALDIRILDI | Keşfet (§4.3) |
+| 51 | "Yakında" etiketi (SAHTE) | KALDIRILDI | |
+| 52 | Trend favori kalbi | KALDIRILDI | |
+| 53 | "Tümünü gör" | KALDIRILDI | |
+| 54 | Haftanın Enleri | KALDIRILDI | Keşfet → En iyiler |
+| 55 | Sponsorlu fırsatlar (BOZUK) | KALDIRILDI | Keşfet → Fırsatlar'ın işi. |
+| 56 | Aktif Görevler (uydurma 50 puan) | KALDIRILDI | Günlük hedefler ödül vaat etmez. |
+| 57 | Gizli "Lig Durumu" kartı (ölü kod) | KALDIRILDI | |
+| 58 | Liderlik tablosu (BOZUK) | KALDIRILDI | Yerine Lig şeridi: ligdeki sıra, lig büyüklüğü ve bir üst sıraya fark, hepsi aynı metrikle. Başka kullanıcının adı sızmaz. |
+| 59 | Son Aktivite (uydurma puan) | KALDIRILDI | Cüzdan → Hareketler (defter). `stats` API'sindeki uydurma `points` da kaldırıldı. Ana sayfada yerine "Bu hafta +X puan" var (`points_credited` toplamı). |
+| 60 | Ödül vitrini | ÇALIŞIYOR | "Sonraki ödüle X puan" (`RewardProgress`) + "N ödülü şimdi alabilirsin". Stok ve geçerlilik penceresine uyar; görsel `resolveRewardDisplayImage`'dan. Sahte "Kilitli" bağlantı yok. |
+| 61 | Seviye atlama kutlaması (BOZUK) | KALDIRILDI | An Motoru (`CustomerMoment` + görüldü bayrağı) üstlendi; çark sonrası `moments.refresh()` çağrılır. |
+| 62 | API hata durumu (EKSİK) | ÇALIŞIYOR | `QueryState`: yükleniyor / hata + tekrar dene / yetkisiz. 503 `retryable` döner. |
+| 63 | 60 sn otomatik yenileme | KALDIRILDI | Yerine mutasyon sonrası hedefli tazeleme + sekmeye dönüşte tazeleme. |
+| 64 | Seviye ilerlemesi (EKSİK) | ÇALIŞIYOR | `XpRing` + "850 / 3.375 XP". Kredi yolundaki `calculateLevel` eğrisi kullanılır; eski `level*1000` hatası yok. |
+| 65 | Çok dillilik | ÇALIŞIYOR | Tüm metinler `copy.ts`'te TR/EN. Sunucu mesajı ham gösterilmez; çark ödül adları admin girdisidir. |
+| 66 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`. Konfeti yok, çark anında sonuca geçer, giriş stagger'ı kapanır. |
+| 67 | Manuel yenileme (EKSİK) | KISMİ | Sekmeye dönüşte tazeleme ve hata durumunda "Tekrar dene" var. Çek-bırak yenile uygulanmadı; kaydırma kabı `main` kabuğa ait. |
+
+### Kapanan bulgular (17 tam + 1 kısmi / 20)
+
+| Bulgu | Konu | Nasıl kapandı |
+|---|---|---|
+| 1 | Seri sabit 0 | Gerçek `loginStreak*` alanları; `stats` API'si de düzeltildi |
+| 2 | Karışık metrikli liderlik, "Siz (Sen)" | Lig şeridi tek metrikle |
+| 3 | Oturum flaşı, hidrasyon | SSR + HydrationBoundary; sunucuda selamlama |
+| 4 | Puan/XP karmaşası | İkisi ayrı gösteriliyor |
+| 5 | Her ziyarette seviye konfetisi, ham anahtar | An Motoru üstlendi |
+| 6 | Hata = boş; kapalı modül kartları | `QueryState`; kapalı bölüm çizilmiyor |
+| 7 | 11 istek, 60 sn yoklama, önbelleksiz discovery | Açılışta veri isteği 0, tek BFF, discovery çağrılmıyor |
+| 10 | Üç görev kaynağı, uydurma ödül, sahte geri sayım | Günlük 3 hedef; gerçek sayaçlar |
+| 11 | Uydurma aktivite puanı | Ana sayfadan ve `stats` API'sinden kaldırıldı |
+| 12 | Sahte kilitli buton, ikon çözümleme, stok | `RewardProgress` + stok/geçerlilik filtresi |
+| 13 | Favori çift kart | Şerit ana sayfadan kaldırıldı |
+| 14 | Tekrarlar, 13+ bölüm | Sıra: Durum → Bugün → Bekleyenler → Lig |
+| 15 | Erişilebilirlik | Profil bağlantısı, ikon etiketleri, kontrast token'ları, sahte hover ve konfeti giderildi |
+| 16 | i18n | `copy.ts` TR/EN |
+| 17 | İki lig kaynağı | Tek kaynak DB kuralları |
+| 18 | Çark sorunları | Kayıpta kutlama yok; kapalıyken gizli; çift GET yok; İstanbul günü; gerçek kalan hak |
+| 19 | Ölü kod, `any`, kopya state | Dosya baştan yazıldı |
+| 8 (kısmi) | Sponsorlu/`focus`/`tab` derin linkleri | Ana sayfadan kaldırıldı; hedef sayfalardaki parametreler "Kalanlar"da |
+
+Ek sağlamlaştırma: çark ve seri ödülleri artık `mintPoints` üzerinden geçiyor (defter + `points_credited` + tek-kez anahtarı + gölge ban kapısı). Gün sınırları Europe/Istanbul.
+
+### Kalanlar
+
+- **Bulgu 9 (kısmi):** https görsel arka planı çiziliyor. Önayar türündeki kozmetik için `renderSpec` gerekiyor → ŞEMA İSTEĞİ: `CosmeticItem.renderSpec Json?` (`{ kind: 'image', url } | { kind: 'preset', key }`).
+- **Bulgu 20 / #8, #9:** ilk açılış katman kuyruğu (onboarding · karşılama videosu · doğum günü) layout'ta. Bu F3.1(a) kabuk işi; bu yüzey dokunmadı.
+- **Bulgu 8 (hedef taraf):** `nearby` sayfasının `focus`/`promo` parametreleri, bağış sayfasının `tab` parametresi ve sponsorlu kart ölçümü Keşfet/Cüzdan yüzeylerinin işi.
+- **Eksik özellikler:**
+  1. Sonraki ödüle ilerleme: yapıldı.
+  2. Haftalık seri takvimi: yapıldı. Seri dondurma ve gece hatırlatma push'u şema ve push altyapısı istediği için yapılmadı.
+  3. Lig rekabeti: ligdeki sıra ve bir üst sıraya fark yapıldı. Haftalık lig grubu, terfi/düşme bölgesi ve geri sayım F4.4 sezon XP'sine bağlı.
+  4. Aktivite akışı: Cüzdan → Hareketler'in işi. Ana sayfada "bu hafta +X puan" özeti var.
+  5. Yakınlık önerisi: Keşfet'in işi.
+  6. Paylaşılabilir dönem özeti: Ben → Yılım'ın işi.
+- `/api/customer/stats` içindeki `levelProgress` hâlâ eski `level*1000` formülünü kullanıyor. Tüketicisi `progress-hub`; Ben → İlerleme yüzeyinin işi.

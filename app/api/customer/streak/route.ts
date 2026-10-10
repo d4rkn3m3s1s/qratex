@@ -1,67 +1,73 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { touchLoginStreak, LOGIN_STREAK_MILESTONES } from '@/lib/login-streak';
+/**
+ * GÜNLÜK GİRİŞ SERİSİ (login/aktivite streak) — yalnız CUSTOMER.
+ *
+ *   GET  → serinin güncel durumu (YAN ETKİSİZ; eskiden GET seriyi ilerletip puan veriyordu).
+ *   POST → bugünü say ("dokun"): günde bir kez ilerler, kilometre taşında tek seferlik
+ *          puan (`mintPoints`). Ana Sayfa açılışında bir kez çağrılır.
+ *
+ * NOT: /api/customer/games/streak (mini oyun serisi) ve /api/streak (UserStreak loyalty)
+ * AYRIDIR — bu yalnızca giriş serisidir.
+ */
+import { prisma } from '@/lib/prisma';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { LOGIN_STREAK_MILESTONES, touchLoginStreak } from '@/lib/login-streak';
+import { parseClaimedMilestones, streakSnapshot } from '@/lib/customer-home/core';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * GET — GÜNLÜK GİRİŞ SERİSİ (login/aktivite streak).
- *
- * Bu endpoint'i müşteri paneli (dashboard) sayfa yüklenince fire-and-forget
- * çağırır: touchLoginStreak günde bir kez seriyi ilerletir, kilometre taşında
- * atomik+idempotent puan ödülü verir ve güncel durumu döner.
- *
- * NOT: /api/customer/games/streak (mini oyun serisi) ve /api/streak (UserStreak
- * loyalty) AYRIDIR — bu yalnızca login streak'idir.
- *
- * Dönüş: { success, streak, longest, milestones, claimedMilestones,
- *          nextMilestone, todayClaimed (yeni ödül), milestoneReward? }
- */
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Unauthorized', streak: 0, longest: 0 },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const result = await touchLoginStreak(session.user.id);
-
-    // Sonraki (henüz ödüllenmemiş) kilometre taşı.
-    const nextMilestone =
-      LOGIN_STREAK_MILESTONES.find(
-        (m) => m.days > result.streak && !result.claimedMilestones.includes(m.days)
-      ) ??
-      LOGIN_STREAK_MILESTONES.find((m) => !result.claimedMilestones.includes(m.days)) ??
-      null;
-
-    return NextResponse.json(
+export const GET = defineRoute(
+  { name: 'customer.streak.read', roles: ['CUSTOMER'], rateLimit: 'read' },
+  async ({ user }) => {
+    const row = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        loginStreakCount: true,
+        loginStreakLongest: true,
+        loginStreakLastDay: true,
+        loginStreakClaimedMilestones: true,
+      },
+    });
+    const snapshot = streakSnapshot(
       {
-        success: true,
-        streak: result.streak,
+        count: row?.loginStreakCount ?? 0,
+        longest: row?.loginStreakLongest ?? 0,
+        lastDay: row?.loginStreakLastDay ?? null,
+        claimedMilestones: parseClaimedMilestones(row?.loginStreakClaimedMilestones),
+      },
+      new Date(),
+      LOGIN_STREAK_MILESTONES
+    );
+    return ok({ ...snapshot, milestones: LOGIN_STREAK_MILESTONES }, { legacySpread: true });
+  }
+);
+
+export const POST = defineRoute(
+  { name: 'customer.streak.touch', roles: ['CUSTOMER'], rateLimit: 'mutation' },
+  async ({ user }) => {
+    const now = new Date();
+    const result = await touchLoginStreak(user.id, now);
+    const snapshot = streakSnapshot(
+      {
+        count: result.streak,
         longest: result.longest,
+        lastDay: result.streak > 0 ? now : null,
+        claimedMilestones: result.claimedMilestones,
+      },
+      now,
+      LOGIN_STREAK_MILESTONES
+    );
+    return ok(
+      {
+        ...snapshot,
+        // Eski istemci alanları (components/customer/login-streak-card.tsx).
+        streak: snapshot.days,
         isNewDay: result.isNewDay,
         milestones: LOGIN_STREAK_MILESTONES,
         claimedMilestones: result.claimedMilestones,
-        nextMilestone,
-        daysUntilNextMilestone: nextMilestone ? Math.max(0, nextMilestone.days - result.streak) : null,
-        // Bu çağrıda yeni bir ödül kazanıldı mı (UI kutlaması için).
         todayClaimed: !!result.milestoneReward,
         milestoneReward: result.milestoneReward ?? null,
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('[LOGIN_STREAK_API]', error);
-    return NextResponse.json(
-      { error: 'Seri alınamadı', streak: 0, longest: 0 },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+      { legacySpread: true }
     );
   }
-}
+);
