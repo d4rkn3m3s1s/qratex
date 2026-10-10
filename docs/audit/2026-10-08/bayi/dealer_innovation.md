@@ -245,3 +245,73 @@ Yöntem: Her iddia, çağıran ve çağrılan taraflar, `proxy.ts`, auth yardım
 - **Rıza/opt-out yok sayılıyor (gerçek, en somut kullanıcı etkisi):** Müşteri ayarlarında "Kampanya & Sürprizler" grubu için app ve push kanalları kapatılabiliyor (`lib/notification-prefs.ts:49-53, 121-136`; `app/api/customer/settings/route.ts:216-218`). Ancak gönderim ucu `notificationPrefs`'i hiç okumuyor; `sendPushNotification` da tercih kontrolü yapmıyor (`lib/push.ts:12-29`). Tercihler yalnızca `lib/character-badges.ts` ve `lib/team-notify.ts` içinde uygulanıyor. **Yeniden üretim:** Müşteri kampanya push'unu kapatır → bayi `loyal` segment taslağı oluşturur, admin onaylar, bayi "Gönder"e basar → müşteriye yine de push ve in-app kampanya bildirimi gider. Bu, ticari ileti onayı (İYS/KVKK) açısından da risk taşıyor.
 - **Admin üzerinden yeniden gönderim (kısmen):** Admin PATCH'te geçiş tablosu yok; mevcut durumdan bağımsız olarak `APPROVED | REJECTED | SENT` yazılabiliyor (`app/api/admin/innovation/segment-proposals/[id]/route.ts:9-11, 36-43`). Bu yüzden `SENT → APPROVED` geri alınabiliyor ve bayi yeniden gönderebiliyor. Ancak admin arayüzü yalnızca `PENDING` kayıtları listeliyor (`app/api/admin/innovation/segment-proposals/route.ts:13`; `app/admin/innovation/page.tsx:323`). Gerçekçi tetikleme yalnızca **bayat sekme** ile oluşuyor: İki admin sekmesi (`/admin/innovation` ve `/admin/innovation/segment-proposals`) açıkken biri onaylar, bayi gönderir, diğer bayat sekmede "Onayla"ya basılır → kayıt `APPROVED`'a döner ve aynı kitleye ikinci gönderim mümkün olur. Kötü niyetli dış aktör senaryosu yok (yalnızca ADMIN); bu madde orta önem.
 - **Düzeltme yaklaşımı:** Bir `SENDING` ara durumu ekleyin; gönderimi `prisma.$transaction` içinde `claim + notification.createMany` olarak yapın ya da outbox/kuyruğa (mevcut `outbox-process`) taşıyın. `targetCount/sentCount/skippedOptOut/truncated` alanlarını kaydedin. Kitleyi `isChannelEnabled(prefs, 'campaign', 'app'|'push')` ile filtreleyin. Admin PATCH'e açık bir geçiş tablosu ekleyin (`PENDING→APPROVED|REJECTED`, `APPROVED→REJECTED`; `SENT` terminal) ve `updateMany where status: <beklenen>` ile koşullu yazın. 500'ü aşan kitle için gönderimi ya sayfalayın ya da arayüzde "ilk 500'e gidecek" uyarısıyla açık onay isteyin.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: PARÇALA (§6.2).** `/dealer/innovation` artık tek satırlık `permanentRedirect` → `/dealer/offers?from=innovation` (sorgu parametreleri korunur; `layout.tsx` kaldırıldı). Yeni yüzey **Pazarlama › Teklifler** (`/dealer/offers`): sunucu önce sayfa (`requireAuth(['DEALER'])` + `HydrationBoundary`, açılışta istemci isteği yok), tek BFF `GET /api/dealer/offers` (bölüm bazlı `ready | disabled | error`), QDL v2 `ops` kaydı (`PanelPage`, `SectionCard`, `MetricTile`, `StatusBadge`, `EntityEditorSheet`, `ConfirmAction`, `QueryState`), TR/EN metin, hareket yalnız durum değişikliğinde (liste girişi `listItem` + `layout`, `useMotionPolicy` ile azaltılmış harekette statik; canlı teklifte kalan süre halkası CSS geçişi; sonsuz döngü yok). Form çekmeceleri `next/dynamic` ile yalnız açılınca yüklenir. `from=innovation` ile gelen bayiye parçaların yeni yerlerini gösteren bilgi kartı çıkar.
+
+**Dosyalar:** `app/dealer/offers/page.tsx` · `components/dealer/b-teklifler/*` (ekran, 4 bölüm, 3 çekmece, api/copy/format/context) · `lib/dealer/offers/{rules,types,load.server,mutations.server}.ts` · BFF: `app/api/dealer/offers/route.ts`, `flash/route.ts`, `flash/[id]/route.ts`, `happy-hours/route.ts`, `happy-hours/[id]/route.ts`, `personal/route.ts`, `personal/candidates/route.ts` (hepsi `defineRoute`: rol + kiracı + zod + hız sınırı; yazmalar yalnız DEALER, ADMIN yalnız `?dealerId=` ile salt-okunur) · test `__tests__/lib/dealer-offers.test.ts` (33 test, geçiyor). **Emekli uçlar (tüketicisi yalnız bu sayfaydı):** `app/api/dealer/innovation/flash-offers/route.ts`, `flash-offers/[id]/route.ts`, `weekly-brief/route.ts` silindi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa başlığı + açıklama | ÇALIŞIYOR | Teklifler `PageHeader` (tek h1), TR/EN, "Güncellendi: SS:dd" (İstanbul). |
+| 2 | "Yenile" | ÇALIŞIYOR | `query.refetch`; zarf v2 `success:false` / HTTP hatası `OffersApiError` olarak fırlar, "boş veri" gibi işlenmez. |
+| 3 | İlk yükleme | ÇALIŞIYOR | 5 istek → SSR'da tek yükleyici + aynı BFF; bölümler `allSettled` ile bağımsız. |
+| 4 | Yükleniyor durumu | ÇALIŞIYOR | `QueryState skeleton="cards"` (statik iskelet); bölümler veri gelmeden "kayıt yok" demez. |
+| 5 | Hata durumu | ÇALIŞIYOR | Bölüm bazlı `ErrorState` + "Tekrar dene"; bir bölüm düşerse diğerleri çalışır (testli). |
+| 6 | Özellik bayrağı kapalı durumu | ÇALIŞIYOR | Flash platform ayarı kapalıysa kart kilit açıklaması (`disabled: platform`); `POST` 403 `MODULE_DISABLED` (testli). |
+| 7 | Modül kapısı | ÇALIŞIYOR | Kişiye özel teklif + telafi şablonları `remedy_offers` modülüne bağlı (yükleyici + `defineRoute module`). `dealer_innovation` anahtarı artık tüketicisiz (bkz. Kalanlar). |
+| 8 | Masa sinyali URL gösterimi | KALDIRILDI (bu yüzeyden) | §6.2: masa sinyali → Gelen Kutusu › Vakalar (o yüzeyin sahibine devredildi). Bilgi kartı oraya bağlanır. |
+| 9 | "Kopyala" | KALDIRILDI (bu yüzeyden) | #8 ile aynı gerekçe. |
+| 10 | `?table=M7` yönergesi (BOZUK) | KALDIRILDI | Hatalı yönerge metni sayfayla birlikte kalktı; doğru parametreli masa QR seti Vakalar'da yapılmalı. |
+| 11 | Masa QR üretimi | KALDIRILDI (bu yüzeyden) | Vakalar / QR stüdyosuna devredildi. |
+| 12 | Haftalık özet görüntüleme | KALDIRILDI (bu yüzeyden) | §6.2: haftalık özet → Bugün; doğru kaynak `/dealer/weekly-brief` (`/api/dealer/weekly-brief`, cron kaydı). |
+| 13 | "Özeti yeniden üret" (BOZUK, Bulgu 1) | KALDIRILDI | Yazan uç `POST /api/dealer/innovation/weekly-brief` silindi → `DealerWeeklyBrief` artık yalnız cron'un kaydı; digest bildirimi/e-postası bir daha sessizce iptal edilemez. |
+| 14 | Önerilen aksiyon metni (NPS dalı ölü) | KALDIRILDI | Hesaplayıcının bayi yüzeyinde tüketicisi kalmadı (yalnız admin demo seed kullanıyor). |
+| 15 | "En çok geçen temalar" | KALDIRILDI | #14 ile aynı. |
+| 16 | Flash form: Başlık | ÇALIŞIYOR | `TextField` 3–80 karakter, `<label for>`, sayaç; önceden doldurulmuş "Mutlu saat" yok. |
+| 17 | Flash form: Metin | ÇALIŞIYOR | 5–280 karakter (sunucuda da). |
+| 18 | Flash form: İndirim % (BOZUK) | ÇALIŞIYOR | Tür seçici (yüzde / tutar / ikram); `%1–90`, `1–5.000 ₺` tam sayı, ikramda değer yok — paylaşılan zod şeması (istemci + sunucu); `0 → %10`, `-20`, `%500` artık 400 (testli). |
+| 19 | "Flash oluştur (30 dk)" | ÇALIŞIYOR | Süre 15/30/60/120/240 dk; hemen ya da İstanbul saatiyle ≤7 gün ileri planlama (sunucu otoriter pencere); çift tık: gönder kilidi + `Idempotency-Key` + advisory kilit altında "en fazla 3 açık teklif"; hız sınırı 10/dk; denetim izi `CREATE_FLASH_OFFER`. |
+| 20 | Konumsuz bayide görünürlük (BOZUK) | ÇALIŞIYOR | "Kimler görür?" kartı gerçek veriden: konum var/yok (+ Ayarlar bağlantısı), mekânı kaydeden müşteri sayısı, mekân sayfası. Formda konumsuz uyarısı. İşletme adı yoksa oluşturma 409 (müşteri listeleri adsız mekânı göstermez → sahte başarı olurdu). |
+| 21 | Flash açıklaması | ÇALIŞIYOR | Koşullar açıkça yazılı (Keşfet › Fırsatlar 15 km, kaydedenler, mekân sayfası). |
+| 22 | "Aktif flash listesi" | ÇALIŞIYOR | `flashStatus` tek kaynak: Canlı / Planlı / Durduruldu / Bitti; açıklar üstte, geçmiş katlanır bölümde; kalan süre (dakikalık, sekme gizliyken durur); son 30 kayıt + "daha eski var" notu; durum istemcide de yeniden türetilir. |
+| 23 | Flash durdurma / düzenleme / silme | ÇALIŞIYOR (durdurma) · KALDIRILDI (silme, düzenleme) | `PATCH …/flash/[id] {action:'stop'}` + `ConfirmAction`; koşullu `updateMany` (bitmişse 409); canlıysa bitiş şimdiye çekilir, denetim izi. Silme yok (arşiv ilkesi); yayındaki teklif düzenlenmez (müşterinin gördüğü metin değişmesin) — durdur + yeni teklif. |
+| 24 | Kullanım sayacı (SAHTE) | KALDIRILDI | `maxRedemptions` / `redemptionCount` arayüzden ve yeni uçlardan çıkarıldı; kasada kod doğrulama akışı yok, sayı gösterilmiyor. |
+| 25 | Segment şablon butonları | KALDIRILDI (bu yüzeyden) | §6.2: segment önerileri → Pazarlama › Kampanyalar (bilgi kartında bağlantı). `segment-proposals/*` uçları Müşteriler/Kampanyalar ile paylaşıldığı için dokunulmadı. |
+| 26 | Taslak listesi | KALDIRILDI (bu yüzeyden) | #25 ile aynı. |
+| 27 | Hedef kitle önizlemesi | KALDIRILDI (bu yüzeyden) | #25 ile aynı. |
+| 28 | "Müşterilere gönder" | KALDIRILDI (bu yüzeyden) | #25 ile aynı. |
+| 29 | Pazarlama izni / frekans | ÇALIŞIYOR (bu yüzeydeki gönderim için) | Kişiye özel teklif `resolveMarketingAudience` ile kampanya uygulama içi tercihini kontrol eder (kapalıysa 409 `CUSTOMER_OPTED_OUT`, seçicide "Kampanya bildirimleri kapalı"); günde en fazla 20. Segment gönderimi Kampanyalar sahibinde. |
+| 30 | Admin onay akışı | KALDIRILDI (bu yüzeyden) | Segment taslağı akışı Kampanyalar / Admin Segmentler'e ait. |
+| 31 | Personel/masa içgörüsü anahtarı (SAHTE) | KALDIRILDI | Görünür etkisi olmayan anahtar ve kullanıcıya gösterilen `/api/...` metni kalktı; tercih masa ısı haritasıyla birlikte Vakalar'da anlam kazanmalı. |
+| 32 | Masa performansı görünümü | KALDIRILDI (bu yüzeyden) | Vakalar'a devredildi (`table-performance` ucu korunuyor). |
+| 33 | "Son masa sinyalleri" | KALDIRILDI (bu yüzeyden) | Vakalar'a devredildi (`table-pulses` ucu korunuyor). |
+| 34 | Sinyali "çözüldü" işaretleme | KALDIRILDI (bu yüzeyden) | Vakalar'a devredildi (`table-pulses/[id]/resolve` ucu korunuyor). |
+| 35 | Canlı sinyal bildirimi | KALDIRILDI (bu yüzeyden) | Vakalar / uyarı kuralları kapsamı. |
+| 36 | Public sinyal ucu koruması | KALDIRILDI (bu yüzeyden) | Public uç başka sahipte; çalışma ağacında ona IP + mekân başına hız sınırı eklenmiş görünüyor (gözlem, bu işin değişikliği değil). |
+| 37 | Yetki (sahiplik) | ÇALIŞIYOR | Yeni uçlar `defineRoute tenant` (DEALER = kendi id'si); kayıtlar `where {id, dealerId}`; kişisel teklif müşterisi bayiye özgü HMAC `ref` ile seçilir (ham kullanıcı kimliği istemciye gitmez, başka bayinin ref'i çözülmez — testli). |
+| 38 | Sayfa rol erişimi | ÇALIŞIYOR | `/dealer` DEALER; BFF yazmaları yalnız DEALER. |
+| 39 | i18n (BOZUK) | ÇALIŞIYOR | Tüm metinler TR/EN (`components/dealer/b-teklifler/copy.ts`), dil sunucudan; tarihler `Europe/Istanbul` + `Intl.RelativeTimeFormat`. |
+| 40 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun → `lg` iki sütun; dokunma hedefleri ≥ 44px; çekmeceler mobilde tam genişlik. |
+| 41 | Erişilebilirlik | ÇALIŞIYOR | `Field` ile etiket/açıklama/hata bağları, çip grupları `aria-labelledby`, switch `aria-label`, müşteri seçici `radiogroup`, durumlar ikon + metin (yalnız renk değil), token'lı odak halkaları. |
+
+**Yeni özellikler (eksikler listesinden ve §6.2 hedefinden):**
+- **Kişiye özel teklif (B5 / P0-22 `targetUserId`):** Flash tablosuna şema eklemeden, hedef müşteriye bağlı kaynaksız `RemedyOffer` (`source: personal`). Müşteri seçici (yalnız bu işletmeyi ziyaret etmiş müşteriler, Türkçe duyarsız arama, ulaşılabilirlik + açık teklif rozeti), mesaj, telafi şablonu allowlist'inden tür seçimi. Puan türü kabulde `acceptRemedyOffer → mintPoints` (bayi günlük bütçesi) ile `lib/economy` üzerinden basılır. Liste churn otomasyonunun açtıklarını da gösterir: durum rozetleri, "onay bekleyen" → Gelen Kutusu › Telafi onayı bağlantısı, son 30 gün kabul sayısı.
+- **Telafi şablonları görünümü (§6.2 "Teklifler'de de görünür"):** işletme geneli + şube bazlı etkin seçenekler, kapalı şablon sayısı, sistem varsayılanı kullanılıyorsa açık uyarı; düzenleme Otomasyon › Telafi'ye bağlantı. Salt okunur; hata yutulmaz (`getRemedyOptions`'un sessiz varsayılanı kullanılmadı).
+- **Mutlu saatler (kayıt anahtar kelimesi "happy hour"; önceden bayi arayüzü hiç yoktu):** liste (çarpan, saat, günler, İstanbul saatiyle "şu an uygulanıyor"), oluşturma (çarpan 1,5–3, platformun tek şeması `happyHourCreateSchema` ile yeniden doğrulama, en fazla 10 açık, denetim izi), duraklat/aç (koşullu, kiracı kapsamlı, denetim izi). Silme yok.
+
+**Kapanan bulgular (bu yüzeyde):** 1 (yazan uç silindi), 4 (değer/süre/konum/yönetim/sahte sayaç), 5 (sahte anahtar ve geliştirici metni kalktı; masa uçları Vakalar'a devredildi), 6 (hatalı yönerge kalktı), 8 (hesaplayıcının bayi tüketicisi kalmadı), 9, 10, 11, 12, 13 (tek BFF + SSR). **Toplam 10.**
+
+### Kalanlar (gerekçeli)
+- **Bulgu 2 (public masa sinyali kötüye kullanımı)** ve **Bulgu 7 (tercihlerin tek `Settings` satırında RMW'si):** `app/api/innovation/table-pulse` ve `lib/innovation-dealer-prefs` masa sinyali hattına ait; masa sinyali Gelen Kutusu › Vakalar sahibine devredildi. Çalışma ağacında public uca hız sınırı eklenmiş görünüyor (başka ajan).
+- **Bulgu 3 (segment gönderimi):** `segment-proposals/*` uçları Müşteriler › Segmentler ve Kampanyalar ile paylaşılıyor; çalışma ağacında rıza kapısı + transaction eklenmiş görünüyor. Admin geçiş tablosu Admin Segmentler sahibinde.
+- **Masa sinyali / segment taslakları için geçici boşluk:** `/dealer/inbox/incidents` ve Kampanyalar'daki taslak listesi tamamlanana kadar bilgi kartındaki bağlantılar ilgili içeriği göstermez; sahiplerine bildirildi. `app/dealer/segment-actions/page.tsx:177` "Taslaklara git" hâlâ `/dealer/innovation`'a gidiyor (yönlendirmeyle Teklifler'e düşer); Müşteriler sahibi bunu `/dealer/campaigns`'e çevirmeli.
+- **Flash teklif metrikleri (görüntülenme/tıklama/kullanım):** veri kaynağı yok; uydurma sayı gösterilmedi. Kasada tek kullanımlık kod akışı ödül teslim zinciri (F2.5) kapsamında.
+- **Müşteri tarafı `take: 300` sırasız flash sorgusu** (`lib/places/data.server.ts`) Keşfet sahibinde.
+- **`dealer_innovation` modül anahtarı** artık sayfa/uç tüketicisiz; modül kataloğu admin/navigasyon sahibinde. `app/api/admin/innovation/demo-package/route.ts:63` silinen `POST /api/dealer/innovation/weekly-brief` ucundan söz eden bir metin içeriyor (admin sahibinde).
+- **Görsel doğrulama:** dev server ve build yasak olduğu için ekran görüntüsüyle doğrulanmadı; tip denetimi (bu yüzeyin dosyalarında 0 hata) ve 33 jest testiyle doğrulandı.
