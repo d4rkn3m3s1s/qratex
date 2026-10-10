@@ -82,10 +82,19 @@ export async function POST(request: NextRequest) {
       if (ids.length === 0) {
         return NextResponse.json({ error: 'Kendinizin rolünü toplu değiştiremezsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
       }
-      await prisma.user.updateMany({
-        where: { id: { in: ids } },
-        data: { role },
+      // P0-07: rolü GERÇEKTEN değişenlerin açık oturumları düşer (eski rolle verilmiş token geçersiz).
+      const changing = await prisma.user.findMany({
+        where: { id: { in: ids }, role: { not: role } },
+        select: { id: true },
       });
+      const changedIds = changing.map((u) => u.id);
+      if (changedIds.length > 0) {
+        await prisma.user.updateMany({
+          where: { id: { in: changedIds }, role: { not: role } },
+          data: { role, sessionVersion: { increment: 1 } },
+        });
+        await Promise.all(changedIds.map((id) => invalidateSessionState(id).catch(() => undefined)));
+      }
       // Toplu rol değişikliği izlenmeli (tekil işlemler gibi) — kritik yetki değişimi.
       await prisma.auditLog.create({
         data: {

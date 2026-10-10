@@ -4,8 +4,8 @@
  * taslağı hazırlar.
  *
  * Bayinin elle yaptığı "riskli müşteri yakala → teklif gönder" işini otomatikleştirir.
- * Veri kaynağı: CustomerLifetimeValue (günlük CLV cron'u doldurur) + Consumption
- * (bayi↔müşteri eşleşmesi).
+ * Veri kaynağı: YALNIZ bu bayinin verisi (`listDealerAtRiskCustomers` — Consumption +
+ * Feedback/ConsumptionReview churn sinyalleri, bayi kapsamlı). Platform geneli CLV OKUNMAZ (P0-12).
  *
  * P0-22 / bayi D8: Eskiden her riskli müşteri için müşteri alanı OLMAYAN bir
  * `DealerFlashOffer` taslağı açılıyordu; bayi aktive edince teklif konuma göre yakındaki
@@ -18,6 +18,7 @@
 import { prisma } from '@/lib/prisma';
 import { getRemedyOptions } from '@/lib/remedy-options';
 import { createRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
+import { listDealerAtRiskCustomers } from '@/lib/dealer-customer-stats';
 
 /** Kişisel geri kazanım teklifinin müşteriye görünen metni (bayi yayınlamadan önce kuyrukta görür). */
 export const CHURN_PERSONAL_OFFER_MESSAGE =
@@ -65,22 +66,18 @@ export async function runChurnInterventionForDealer(
 
   const inactiveCutoff = new Date(now.getTime() - cfg.inactiveDays * DAY);
 
-  // Bu bayiyle tüketimi olan + yüksek churn + uzun süredir pasif müşteriler.
-  const customerIds = (
-    await prisma.consumption.groupBy({ by: ['customerId'], where: { dealerId: dealer.id } })
-  ).map((r) => r.customerId);
-  if (customerIds.length === 0) return { dealerId: dealer.id, flagged: 0, offersCreated: 0 };
-
-  const atRisk = await prisma.customerLifetimeValue.findMany({
-    where: {
-      userId: { in: customerIds },
-      predictedChurn: { gte: cfg.churnThreshold },
-      OR: [{ lastPurchaseAt: { lt: inactiveCutoff } }, { lastPurchaseAt: null }],
-    },
-    select: { userId: true, predictedChurn: true, lastPurchaseAt: true, user: { select: { name: true } } },
-    orderBy: { predictedChurn: 'desc' },
-    take: cfg.maxPerRun,
-  });
+  // Bu bayide yüksek churn + BU BAYİDE uzun süredir pasif müşteriler (P0-12). Eskiden platform
+  // geneli `CustomerLifetimeValue` okunuyordu: risk müşterinin RAKİP işletmelerdeki yorumlarından,
+  // pasiflik rakip işletmedeki son alışverişten hesaplanıyor ve bu global değerler bayinin
+  // teklif zaman çizelgesine/analitik olayına yazılıyordu. Artık yalnız bu bayinin verisi.
+  const atRisk = (
+    await listDealerAtRiskCustomers(dealer.id, {
+      churnThreshold: cfg.churnThreshold,
+      inactiveBefore: inactiveCutoff,
+      limit: cfg.maxPerRun,
+      now,
+    })
+  ).map((c) => ({ userId: c.customerId, predictedChurn: c.churnRisk, lastPurchaseAt: c.lastVisitAt }));
   if (atRisk.length === 0) return { dealerId: dealer.id, flagged: 0, offersCreated: 0 };
 
   // Tekrar uyarmamak için: son 7 günde bu bayiye churn uyarısı atıldı mı?

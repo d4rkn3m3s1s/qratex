@@ -13,6 +13,7 @@ import { anonymizeUser } from '@/lib/gdpr-core';
 import { archiveGateResponse, readArchiveIntent } from '@/lib/data-safety/archive';
 import { actorFromSession } from '@/lib/data-safety/audit';
 import { previewUserErasure } from '@/lib/data-safety/user-erasure';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 
 
 export const dynamic = 'force-dynamic';
@@ -369,9 +370,11 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // P0-07: rol değişikliği açık oturumları düşürür (eski rolle verilmiş token geçersizleşir).
+    const roleChanged = validatedData.data.role !== undefined && validatedData.data.role !== existing.role;
     const user = await prisma.user.update({
       where: { id: userId },
-      data: validatedData.data,
+      data: roleChanged ? { ...validatedData.data, sessionVersion: { increment: 1 } } : validatedData.data,
       select: {
         id: true,
         name: true,
@@ -408,6 +411,7 @@ export async function PUT(request: NextRequest) {
         ...auditMeta,
       },
     });
+    if (roleChanged) await invalidateSessionState(user.id).catch(() => undefined);
 
     return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

@@ -6,6 +6,7 @@ import { checkRateLimitDb } from '@/lib/rate-limit';
 import { generateBase32Secret, verifyTOTP, buildOtpauthUri } from '@/lib/totp';
 import { regenerateRecoveryCodes, countUnusedRecoveryCodes } from '@/lib/two-factor';
 import { bumpSessionVersion, reissueSessionCookie } from '@/lib/auth/session-version';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 import { SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 
 /**
@@ -13,7 +14,15 @@ import { SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
  * diğer cihazlardaki oturumlar düşer. İşlemi yapan tarayıcının çerezi yeni `sv` ile yeniden
  * imzalanır, böylece kullanıcı bu ekranda oturumunu kaybetmez.
  */
-async function withSessionRotation(request: NextRequest, sv: number, res: NextResponse): Promise<NextResponse> {
+async function withSessionRotation(
+  request: NextRequest,
+  userId: string,
+  sv: number,
+  res: NextResponse
+): Promise<NextResponse> {
+  // Oturum durumu sıcak katmanı (≤ 60 sn) eski sürümü tutmasın: diğer cihazlardaki (ör. çalınmış)
+  // token'lar ANINDA düşsün; bu tarayıcının yeni `sv`'li çerezi DB'den taze okunarak kabul edilir.
+  await invalidateSessionState(userId).catch(() => undefined);
   await reissueSessionCookie(request, res, { sv }, { maxAge: SESSION_MAX_AGE_SECONDS });
   return res;
 }
@@ -85,6 +94,7 @@ export async function POST(request: NextRequest) {
       const recoveryCodes = await regenerateRecoveryCodes(userId);
       return withSessionRotation(
         request,
+        userId,
         enabled.sessionVersion,
         NextResponse.json({ success: true, message: '2FA etkinleştirildi', recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
@@ -120,6 +130,7 @@ export async function POST(request: NextRequest) {
       ]);
       return withSessionRotation(
         request,
+        userId,
         disabled.sessionVersion,
         NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
@@ -142,6 +153,7 @@ export async function POST(request: NextRequest) {
       const sv = await bumpSessionVersion(userId);
       return withSessionRotation(
         request,
+        userId,
         sv,
         NextResponse.json({ success: true, recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
       );

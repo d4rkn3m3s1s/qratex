@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { reportSuspiciousActivity } from '@/lib/security';
 import {
@@ -20,13 +19,10 @@ const LIST_MAX_PAGE_SIZE = 100;
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    // P0-01: yönetici ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const { searchParams } = new URL(req.url);
     const severity = searchParams.get('severity');
@@ -116,13 +112,10 @@ export async function POST(req: NextRequest) {
 // PATCH - Resolve suspicious activity
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    // P0-01: yönetici ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const { id, resolution } = body;

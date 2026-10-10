@@ -24,6 +24,9 @@ jest.mock('next-auth', () => ({
   getServerSession: (...a: unknown[]) => mockGetServerSession(...a),
 }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
+// P0-01: görev oluşturma yönetici ucu `requireAuth(['ADMIN'])` (gizli kapı + DB rolü) kullanır.
+const mockRequireAuth = jest.fn();
+jest.mock('@/lib/api-auth', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
 jest.mock('@/lib/module-gate', () => ({ assertModuleEnabled: jest.fn().mockResolvedValue(null) }));
 jest.mock('@/lib/request-metadata', () => ({ getAuditRequestMeta: () => ({}) }));
 jest.mock('@/lib/points-rules', () => ({ getPointsMatrix: jest.fn(), getQuestReward: jest.fn() }));
@@ -164,6 +167,7 @@ describe('POST /api/gamification/quests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: 'admin1', role: 'ADMIN' } });
+    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'admin1', role: 'ADMIN' } } });
     mockQuestCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: 'q1', ...data }));
     mockAuditCreate.mockResolvedValue({});
   });

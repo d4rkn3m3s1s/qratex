@@ -42,10 +42,16 @@ const m = {
   templateFindMany: jest.fn(),
   consumptionGroupBy: jest.fn(),
   clvFindMany: jest.fn(),
+  atRisk: jest.fn(),
   flashCreate: jest.fn(),
   flashFindMany: jest.fn(),
   executeRaw: jest.fn(),
 };
+
+// P0-12: churn müdahalesi platform geneli CLV yerine bayi kapsamlı risk listesini okur.
+jest.mock('@/lib/dealer-customer-stats', () => ({
+  listDealerAtRiskCustomers: (...a: unknown[]) => m.atRisk(...a),
+}));
 
 jest.mock('@/lib/prisma', () => {
   const tx = {
@@ -242,16 +248,16 @@ describe('/api/customer/remedy/[offerId]', () => {
 
 describe('churn müdahalesi kişisel teklif', () => {
   it('herkese açık flash teklif açmaz; hedef müşteriye bağlı kuyruk taslağı açar', async () => {
-    m.consumptionGroupBy.mockResolvedValue([{ customerId: 'cust1' }]);
-    m.clvFindMany.mockResolvedValue([
-      { userId: 'cust1', predictedChurn: 0.9, lastPurchaseAt: null, user: { name: 'Ayşe' } },
-    ]);
+    m.atRisk.mockResolvedValue([{ customerId: 'cust1', churnRisk: 0.9, lastVisitAt: null }]);
     const r = await runChurnInterventionForDealer({
       id: 'dealer1',
       dealerChurnIntervention: { enabled: true, autoFlashOffer: true },
     });
     expect(r.offersCreated).toBe(1);
     expect(m.flashCreate).not.toHaveBeenCalled();
+    // Platform geneli CLV okunmaz; risk listesi bu bayinin kapsamında istenir.
+    expect(m.clvFindMany).not.toHaveBeenCalled();
+    expect(m.atRisk).toHaveBeenCalledWith('dealer1', expect.objectContaining({ churnThreshold: 0.6, limit: 20 }));
     const data = m.offerCreate.mock.calls[0][0].data;
     expect(data).toMatchObject({
       userId: 'cust1',
@@ -266,8 +272,7 @@ describe('churn müdahalesi kişisel teklif', () => {
   });
 
   it('açık kişisel teklif varken ikinci taslak açılmaz', async () => {
-    m.consumptionGroupBy.mockResolvedValue([{ customerId: 'cust1' }]);
-    m.clvFindMany.mockResolvedValue([{ userId: 'cust1', predictedChurn: 0.9, lastPurchaseAt: null, user: null }]);
+    m.atRisk.mockResolvedValue([{ customerId: 'cust1', churnRisk: 0.9, lastVisitAt: null }]);
     m.offerFindFirst.mockResolvedValue({ id: 'open', status: 'awaiting_dealer_approval' });
     const r = await runChurnInterventionForDealer({
       id: 'dealer1',

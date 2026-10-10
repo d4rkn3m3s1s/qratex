@@ -375,6 +375,18 @@ describe('auth.ts', () => {
   describe('jwt callback', () => {
     const getJwtCallback = () => authOptions.callbacks!.jwt!;
 
+    // P0-07: var olan oturumun her okunuşunda DB durumu doğrulanır; bu testlerdeki kullanıcı
+    // aktif ve `sessionVersion` 0 (token'da `sv` yok → 0). Kendi değerini kuran testler ezer.
+    beforeEach(() => {
+      mockFindUnique.mockResolvedValue({
+        role: 'CUSTOMER',
+        sessionVersion: 0,
+        suspendedAt: null,
+        anonymizedAt: null,
+        staffProfile: null,
+      });
+    });
+
     it('should set token from dbUser when user exists and found in DB', async () => {
       const jwtCallback = getJwtCallback();
       const mockDbUser = {

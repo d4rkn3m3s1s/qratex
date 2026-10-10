@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { consumePasswordResetToken, isPasswordResetTokenUsable } from '@/lib/auth-email-token';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 import { checkAuthEmailActionLimit, getClientIdentifier } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ code: 'INVALID_LINK', error: INVALID_LINK }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
+    // P0-07: sıcak katmanı bayatlat → çalınmış eski oturumlar 60 sn beklemeden ANINDA düşer.
+    await invalidateSessionState(result.userId).catch(() => undefined);
     return NextResponse.json(
       { success: true, message: 'Şifren güncellendi. Diğer cihazlardaki oturumlar kapatıldı; yeni şifrenle giriş yapabilirsin.' },
       { headers: PRIVATE_NO_STORE_HEADERS }

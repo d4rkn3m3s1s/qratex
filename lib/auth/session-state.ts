@@ -141,6 +141,29 @@ function deny(status: 401 | 403, code: SessionDenyCode): SessionVerdict {
   return { ok: false, status, code, message: SESSION_DENY_MESSAGES[code] };
 }
 
+/**
+ * Token'ı DB oturum durumuna karşı doğrular (sıcak katman → uyuşmazlıkta TAZE DB okuması).
+ *
+ * `requireAuth` dışındaki bütün yollar (doğrudan `getServerSession` kullanan ~70 API ucu, RSC
+ * sayfaları, istemcinin `/api/auth/session` yoklaması) bu kararı NextAuth `jwt` callback'i
+ * üzerinden alır (lib/auth.ts). Önbellek bayat olabilir (ör. 2FA değişince bu tarayıcıya yeni
+ * `sv`'li çerez verildi): `SESSION_REVOKED` önbellekten geldiyse karar DB'den yeniden verilir.
+ *
+ * Dönüş: karar; durum OKUNAMAZSA (Redis + DB erişilemez) `null` — çağıran oturumu düşürmez,
+ * çünkü geçici bir kesinti herkesi çıkış yaptırmamalı (`requireAuth` aynı durumda 503 verir).
+ */
+export async function verifySessionAgainstDb(userId: string, tokenSv: unknown): Promise<SessionVerdict | null> {
+  try {
+    let verdict = evaluateSessionState(await loadSessionState(userId), tokenSv);
+    if (!verdict.ok && verdict.code === 'SESSION_REVOKED') {
+      verdict = evaluateSessionState(await loadSessionState(userId, { bypassCache: true }), tokenSv);
+    }
+    return verdict;
+  } catch {
+    return null;
+  }
+}
+
 /** Saf karar fonksiyonu (test edilebilir): DB durumu + token `sv` → izin/ret. */
 export function evaluateSessionState(state: SessionState, tokenSv: unknown): SessionVerdict {
   if (!state.exists || state.anonymized) return deny(401, state.exists ? 'ACCOUNT_CLOSED' : 'SESSION_REVOKED');

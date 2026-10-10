@@ -26,7 +26,17 @@ jest.mock('@/lib/api-auth', () => ({
   requireAuth: jest.fn(async () => ({ session: { user: { id: 'victim', role: 'CUSTOMER' } } })),
 }));
 jest.mock('next-auth', () => ({ getServerSession: jest.fn(async () => ({ user: { id: 'victim' } })) }));
-jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn().mockResolvedValue({ ok: true }) }));
+jest.mock('@/lib/rate-limit', () => ({
+  checkRateLimitDb: jest.fn().mockResolvedValue({ ok: true }),
+  checkAuthEmailActionLimit: jest.fn().mockResolvedValue({ ok: true }),
+  getClientIdentifier: jest.fn(() => '10.0.0.1'),
+}));
+const mockConsumeReset = jest.fn();
+jest.mock('@/lib/auth-email-token', () => ({
+  isPasswordResetTokenUsable: jest.fn(async () => true),
+  consumePasswordResetToken: (...a: unknown[]) => mockConsumeReset(...a),
+}));
+jest.mock('@/lib/password', () => ({ hashPassword: jest.fn(async () => '$2a$12$reset') }));
 jest.mock('@/lib/totp', () => ({
   generateBase32Secret: jest.fn(() => 'SECRET'),
   verifyTOTP: jest.fn(() => true),
@@ -37,6 +47,9 @@ jest.mock('@/lib/two-factor', () => ({
   countUnusedRecoveryCodes: jest.fn(async () => 1),
 }));
 jest.mock('@/lib/request-metadata', () => ({ getAuditRequestMeta: () => ({}) }));
+// Sıcak katman (≤ 60 sn) bayatlatılmazsa çalınan eski `sv`'li token o süre boyunca çalışırdı.
+const mockInvalidate = jest.fn(async (_id: string) => undefined);
+jest.mock('@/lib/auth/session-state', () => ({ invalidateSessionState: (id: string) => mockInvalidate(id) }));
 jest.mock('bcryptjs', () => ({
   __esModule: true,
   default: { compare: jest.fn(async () => true), hash: jest.fn(async () => '$2a$12$new') },
@@ -95,6 +108,7 @@ describe('POST /api/auth/2fa', () => {
       })
     );
     expect(await cookieSv(res as never)).toBe(9);
+    expect(mockInvalidate).toHaveBeenCalledWith('victim');
   });
 
   it('kurtarma kodu yenileme de sv artırır', async () => {
@@ -118,6 +132,7 @@ describe('POST /api/auth/2fa', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(await cookieSv(res as never)).toBeNull();
+    expect(mockInvalidate).not.toHaveBeenCalled();
   });
 });
 
@@ -135,5 +150,36 @@ describe('PATCH /api/user/password', () => {
       expect.objectContaining({ data: { password: '$2a$12$new', sessionVersion: { increment: 1 } } })
     );
     expect(await cookieSv(res as never)).toBe(5);
+    expect(mockInvalidate).toHaveBeenCalledWith('victim');
+  });
+});
+
+describe('POST /api/auth/reset-password', () => {
+  it('sıfırlama başarılıysa oturum önbelleği ANINDA bayatlatılır (çalınan oturum 60 sn yaşamaz)', async () => {
+    mockConsumeReset.mockResolvedValue({ ok: true, userId: 'victim' });
+    const { POST } = await import('@/app/api/auth/reset-password/route');
+    const res = await POST(
+      new NextRequest('https://app.qratex.com/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: 't'.repeat(32), newPassword: 'Yeni12345' }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(mockInvalidate).toHaveBeenCalledWith('victim');
+  });
+
+  it('geçersiz bağlantıda önbelleğe dokunulmaz', async () => {
+    mockConsumeReset.mockResolvedValue({ ok: false, error: 'INVALID' });
+    const { POST } = await import('@/app/api/auth/reset-password/route');
+    const res = await POST(
+      new NextRequest('https://app.qratex.com/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: 't'.repeat(32), newPassword: 'Yeni12345' }),
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(mockInvalidate).not.toHaveBeenCalled();
   });
 });

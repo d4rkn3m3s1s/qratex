@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { reissueSessionCookie } from '@/lib/auth/session-version';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import bcrypt from 'bcryptjs';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -82,6 +83,8 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
+    // Sıcak katmanı bayatlat: diğer cihazlardaki eski `sv`'li token'lar 60 sn beklemeden düşsün.
+    await invalidateSessionState(session.user.id).catch(() => undefined);
     const res = NextResponse.json({ success: true, message: 'Şifre güncellendi' }, { headers: PRIVATE_NO_STORE_HEADERS });
     await reissueSessionCookie(request, res, { sv: updated.sessionVersion }, { maxAge: SESSION_MAX_AGE_SECONDS });
     return res;

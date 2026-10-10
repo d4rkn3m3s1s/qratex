@@ -31,6 +31,7 @@ import { emailLookupFilter, normalizeEmail } from '@/lib/auth/normalize-email';
 import { nextAuthRedirect, sanitizeCallbackPath } from '@/lib/auth/post-login-target';
 import { AUTH_ERROR, OAUTH_ERROR, encodeAuthError } from '@/lib/auth/login-errors';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { invalidateSessionState, verifySessionAgainstDb } from '@/lib/auth/session-state';
 import type { Adapter, AdapterUser } from 'next-auth/adapters';
 import type { Account, Profile, User } from 'next-auth';
 
@@ -276,6 +277,8 @@ export async function claimUnverifiedAccount(userId: string, email: string, prov
     prisma.authEmailToken.deleteMany({ where: { userId } }),
     prisma.verificationToken.deleteMany({ where: { identifier: emailLookupFilter(email) } }),
   ]);
+  // Saldırganın önceden açtığı oturum(lar) sıcak katman süresini beklemeden düşsün.
+  await invalidateSessionState(userId).catch(() => undefined);
   console.warn('[auth] unverified account claimed by verified OAuth identity', { userId, provider });
 }
 
@@ -495,6 +498,26 @@ export const authOptions: NextAuthOptions = {
           token.equippedFrame = null;
           token.equippedBackground = null;
           token.customFrameColor = null;
+        }
+      }
+
+      // P0-07: Var olan oturumun HER okunuşunda (getServerSession, /api/auth/session) DB
+      // durumu doğrulanır. `requireAuth` bunu zaten yapıyordu; ama ~70 API ucu ve RSC sayfaları
+      // doğrudan `getServerSession` kullanıyor → şifre sıfırlama / rol değişikliği /
+      // anonimleştirme / askı sonrası çalınan token o uçlarda süresiz yaşıyordu. Burada
+      // fırlatılan hata NextAuth'ta oturumu `null` yapar ve çerezi temizler (çıkış).
+      // Durum okunamazsa (geçici kesinti) token korunur; yetkili kontrol `requireAuth`'ta 503.
+      if (!user) {
+        const uid = typeof token.id === 'string' && token.id ? token.id : typeof token.sub === 'string' ? token.sub : '';
+        if (uid) {
+          const verdict = await verifySessionAgainstDb(uid, token.sv);
+          if (verdict && !verdict.ok) throw new Error(`SESSION_INVALID:${verdict.code}`);
+          if (verdict?.ok) {
+            // Yetki kararları token'daki bayat rolden değil DB'deki güncel rolden verilsin.
+            token.role = verdict.role;
+            if (verdict.role === 'STAFF' && verdict.dealerId) token.dealerId = verdict.dealerId;
+            else delete token.dealerId;
+          }
         }
       }
 

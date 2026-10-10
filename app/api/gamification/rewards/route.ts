@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { createRewardSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -155,12 +156,10 @@ export async function POST(req: Request) {
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
     const auditMeta = getAuditRequestMeta(req);
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { success: false, error: 'Yetkisiz erişim' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    // P0-01: yönetici yazma ucu → gizli kapı + DB rolü (`requireAuth`); ham oturum rolü yetmez.
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const body = await req.json();
     const validatedData = createRewardSchema.parse(body);
