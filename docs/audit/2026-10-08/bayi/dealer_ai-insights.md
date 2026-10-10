@@ -294,3 +294,58 @@ Yöntem: Her iddia için çağıran ve çağrılan taraf baştan okundu: `proxy.
 - `app/api/dealer/staff/route.ts:77-115`: Eklenen e-posta mevcut bir kullanıcıya aitse ve bu kullanıcının `dealerStaff` bağı yoksa (yani her CUSTOMER, DEALER ve ADMIN), kod `prisma.user.update` ile o kullanıcının **şifresini bayinin belirlediği şifreyle değiştiriyor** ve rolünü `STAFF` yapıyor. Hesap sahibine onay ya da davet gönderilmiyor.
 - **Yeniden üretim:** Herhangi bir DEALER, `POST /api/dealer/staff` isteğini `{name:"x", email:"<kurbanın e-postası>", password:"Attacker123"}` ile gönderir. Ardından kurbanın e-postası ve `Attacker123` şifresiyle giriş yapar. Kurbanın puanları, geçmişi ve kişisel verileri ele geçirilir; bir ADMIN hesabı ise rolünü kaybeder.
 - **Düzeltme:** Mevcut kullanıcıya şifre ya da rol yazılmamalı. Davet akışı kurulmalı: imzalı ve süreli bir davet bağlantısı gönderilmeli, kullanıcı kendi oturumunda kabul etmeli, yalnızca `dealerStaff` bağı eklenmeli. ADMIN ve DEALER hesapları personel yapılamamalı. Bu, iddia 1'den bağımsız olarak en öncelikli düzeltme.
+
+## Uygulama (Dalga 2)
+
+Hedef rota: **`/dealer/analytics/insights`** (sunucu bileşeni + SSR ön-yükleme → `HydrationBoundary`; istemci adası `components/dealer/b-icgoruler/**`). `/dealer/ai-insights` → `permanentRedirect` (sorgu parametreleri korunur); 2558 satırlık `ai-insights-client.tsx`, `layout.tsx`, `loading.tsx` silindi. Sayıları kod hesaplar (`lib/dealer-insights/core.ts`, 5 dk Redis önbellek), LLM yalnız saklı anlatıyı yazar (`POST /api/dealer/insights/narrative`, saatte 6, maliyet kapısı); **GET'te LLM ve yan etki yok**. Anlatı satırları kaynak referanslıdır (metrik/tema/uyarı/öneri çipi → kanıt çekmecesi). Öğrenme profili bölümü Ayarlar → AI'a (`/dealer/settings?tab=ai`) taşındı. Test: `__tests__/lib/dealer-insights-core.test.ts`.
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Segment metadata | ÇALIŞIYOR (`generateMetadata`, TR/EN; "gelir" iddiası kaldırıldı) |
+| 2 | loading.tsx | KALDIRILDI → Suspense + `InsightsSkeleton` (SSR veriyle çoğu zaman gerekmez) |
+| 3 | ssr:false chunk | KALDIRILDI → sunucu bileşeni önce, küçük istemci adası |
+| 4 | Tam sayfa spinner | ÇALIŞIYOR (yok; `keepPreviousData`, dönem değişiminde içerik kalır) |
+| 5 | Boş durum | ÇALIŞIYOR (örneklem 0/az → dürüst boş durum; null metrik "—") |
+| 6 | Hata durumu | ÇALIŞIYOR (QueryState satır içi hata + tekrar dene; 4xx görünür) |
+| 7 | Hero | ÇALIŞIYOR (QDL `PageHeader`, ops kaydı) |
+| 8 | Dönem seçici | ÇALIŞIYOR (İstanbul günleri, gerçek filtre, URL'de, karşılaştırma dönemi; yarış RQ anahtarıyla kapandı) |
+| 9 | Son güncelleme | ÇALIŞIYOR (sunucu `generatedAt`) |
+| 10 | Genel skor halkası | KALDIRILDI (LLM skoru; yerine ölçülen KPI'lar) |
+| 11 | Trend oku | ÇALIŞIYOR (önceki dönem karşılaştırmasıyla deterministik delta) |
+| 12 | N kayıt satırı | ÇALIŞIYOR (örneklem: toplam/metinli/analizli/bekleyen/tavan) |
+| 13 | Yenile | ÇALIŞIYOR (önbelleği atlar, LLM çağırmaz; hata → hata toast'ı) |
+| 14,16,17,18,19 | AI'a sor paneli/çipler/sohbet | KALDIRILDI → Asistan sayfasına soru önceden doldurulmuş bağlantı (tek sohbet yüzeyi, geçmişi orada) |
+| 15 | "Nasıl üretildi" | ÇALIŞIYOR (yöntem notu dürüst: kod hesaplar, AI anlatır) |
+| 20 | Uyarılar | ÇALIŞIYOR (kural tabanlı, yerelleştirilmiş tür, kanıt bağlantısı) |
+| 21 | Ortalama puan | ÇALIŞIYOR (ölçülen) |
+| 22 | NPS | ÇALIŞIYOR (yalnız gerçek 0-10 yanıtı varsa; yoksa kart yok) |
+| 23 | CSAT | ÇALIŞIYOR (4-5 yıldız oranı, hesaplanan) |
+| 24 | CES | ÇALIŞIYOR (gerçek `effort` sinyali, Sinyaller sekmesi) |
+| 25 | Yanıt oranı | ÇALIŞIYOR (yanıtlanan/metinli, hesaplanan) |
+| 26-28 | Duygu / deneyim sinyalleri / niyet-aciliyet-churn | ÇALIŞIYOR (dönem filtreli, `mixed` dahil) |
+| 29 | AI özeti | ÇALIŞIYOR (saklı anlatı, arayüz dilinde, kaynaklı, butonla üretilir) |
+| 30,31 | Güçlü/zayıf yönler | ÇALIŞIYOR (tema tablosundan deterministik; anlatıda kaynaklı) |
+| 32 | Korelasyon % | KALDIRILDI (hesaplanamayan istatistik) |
+| 33,34,35 | Tema kümeleri/performansı/en çok konu | ÇALIŞIYOR (tek birleşik tema tablosu; yıldız yerine puan ort. + olumsuz oranı; kanıt çekmecesi) |
+| 36,37 | Varlık / duygu haritası | ÇALIŞIYOR (yerelleştirilmiş tür, metin etiketli) |
+| 38,55 | Aksiyon önerileri + AI önerileri | ÇALIŞIYOR (tek birleşik öneri listesi, Özet sekmesinde üstte) |
+| 39 | Aksiyona ekle | ÇALIŞIYOR (öncelik korunur, atanan sunucuda `validateAssignee`, idempotent) |
+| 40 | "Listede" önyüklemesi | ÇALIŞIYOR (yan etkisiz tek sorgu; otomatik tetikleyici GET'ten çıktı) |
+| 41 | Aksiyonlara git | ÇALIŞIYOR |
+| 42-46,48 | Öğrenme özeti / toplu analiz / yeniden eğitim / profil / sayaçlar / geçmiş | KALDIRILDI buradan → Ayarlar → AI (b-ayarlar); bağlantı korunur. Toplu analiz otomatik hatta (bekleyen sayısı gösterilir) |
+| 47 | Düzeltme formu | ÇALIŞIYOR (kanıt çekmecesinde tek tıkla duygu düzeltme; kaydı da günceller; ham JSON yok) |
+| 49-54 | Geri bildirim listesi/arama/filtre/kart/detay | KALDIRILDI → kanıt çekmecesi (sunucuda sayfalı) + Gelen kutusuna filtreli bağlantı (yanıtla/detay orada) |
+| 56 | AI tahmini | KALDIRILDI (uydurma tahmin) |
+| 57 | Personel listesi | ÇALIŞIYOR (yalnız yazabilen bayi için) |
+| 58 | No-AI yedeği | ÇALIŞIYOR (`ai` durumu: not_configured/module_off/dealer_off → metrikler yine tam, anlatı kartı dürüst neden + ayar bağlantısı) |
+| 59 | Sunucu modül kapısı | ÇALIŞIYOR (sayfa + tüm BFF uçları `ai_features`; bayi AI ayarı anlatıda) |
+| 60 | Tarih/şube filtresi | ÇALIŞIYOR |
+| 61 | Rapor geçmişi / karşılaştırma | KISMİ → dönem karşılaştırması var; anlatı dönem anahtarıyla saklanır; geçmiş rapor listesi yok |
+| 62 | Dışa aktarma / e-posta özeti | EKSİK (kalan) |
+| 63 | Geri bildirime git | ÇALIŞIYOR (kanıt öğesi → gelen kutusu) |
+| 64 | Azaltılmış hareket | ÇALIŞIYOR (sonsuz animasyon yok, iskelet statik) |
+| 65 | Bölüm içi gezinme | ÇALIŞIYOR (`SectionTabs`: Özet · Temalar · Sinyaller) |
+
+**Kapanan bulgular (16/16 + doğrulama 1-5):** 1-2 (STAFF sızıntısı/zehirleme: yeni uçlar `defineRoute` + `tenant:'dealer'`, yazma yalnız DEALER) · 3 (uydurma KPI) · 4 (dönem/hafta/trend) · 5 (GET'te LLM yok, maliyet kapısı + hız limiti) · 6 (otomatik tetikleyici GET'ten çıktı) · 7 (tema yıldızı) · 8 (boş/no-AI) · 9 (sekmeler, eylem üstte) · 10 (düzeltme UX) · 11 (anlatı arayüz dilinde, metinler i18n) · 12 (atanan doğrulama + sunucu modül kapısı) · 13 (hata toast'ı) · 14 (dönem filtreli, tavanlı, önbellekli toplama) · 15 (ARIA/hareket) · 16 (tek dev bileşen silindi). Doğrulama #3 (`action=analyze` sahiplik) eski uçta; bu yüzey artık o ucu çağırmıyor.
+
+**Kalanlar:** dışa aktarma/planlı e-posta özeti; geçmiş anlatı listesi; anlatının cron ile otomatik üretimi (`app/api/cron/daily/jobs.ts` paylaşılan dosya, bu turda butonla üretim); eski `/api/ai/*` uçlarının kendisi (başka yüzeyler kullanıyor) ve "Ek bulgu" personel ekleme açığı (b-personel sahipliği).
