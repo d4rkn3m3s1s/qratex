@@ -228,3 +228,95 @@ Durum sayımı (41 özellik): ÇALIŞIYOR 5 · KISMİ 17 · BOZUK 4 · SAHTE 3 �
 - **Yeniden üretim:** Sayfayı `?dealerId` olmadan aç → A'nın ID'sini yaz → "Yükle" → kart A'yı gösterir → input'u B'nin geçerli ID'siyle değiştir, "Yükle"ye basma → "İyileştirme isteği gönder" → istek ve bildirim B'ye gider; ekran hâlâ A'yı gösterir. B geçersizse 404 toast'u alınır.
 - Nüans: Sayfa `?dealerId=...` ile açılmışsa `load` `dealerId`'ye bağımlı olduğu için (`:73`) `useEffect([initialDealer, load])` (`:75-77`) her tuş vuruşunda yeniden çalışıyor; bu da kısmi ID'lerde "İşletme bulunamadı" toast yağmuru ve `setPayload(null)` üretiyor (ayrı bir hata) — bu kipte kartlar kaybolduğu için yanlış yönlendirme pratikte maskeleniyor. Etki yalnızca kullanıcının kendi eylemiyle sınırlı, başka kullanıcıya erişim yok; "Kritik/Yüksek" sınıflaması abartılı.
 - **Düzeltme yönü:** Aksiyonlar `payload.dealerId`'yi kullanmalı; input değişince `payload` sıfırlanmalı (veya ID girişi tamamen kaldırılıp önerilen `/customer/experiences/[dealerId]` rota parametresine geçilmeli); otomatik yükleme effect'i yalnızca mount'ta çalışmalı.
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı:** `/customer/experiences` emekli edildi; içerik yeni **mekân detayı** `/customer/places/[dealerId]` sayfasına taşındı (yol haritası §4.3, F3.1-d). Eski rota `permanentRedirect` ile yönlenir: `?dealerId=X` → `/customer/places/X`, diğer her şey (sorgu korunarak) → `/customer/places`. Eski `layout.tsx`, ölü `GET /api/customer/experiences/at-dealer` ve yalnız onun kullandığı `lib/customer-dealer-experiences.ts` kaldırıldı.
+
+**Yeni yapı**
+- Sayfa: `app/customer/places/[dealerId]/{page,loading,error,not-found}.tsx`. Sunucu bileşenidir; kritik veri tek turda `lib/venue-detail/detail.ts#getVenueDetail` ile (paralel sorgular) gelir. İstemci adaları yalnız etkileşimli parçalardır: `FavoriteButton`, `StampCard`, `HistoryList` (+ yalnız "Paylaş"a basılınca yüklenen `ShareSheet`), `ImprovementPanel` (`components/customer/m-mekan-detay/`).
+- Sunucu mantığı: `lib/venue-detail/{detail,history,visits,improvement,share,types}.ts`. Açık/kapalı ve kategori Keşfet ile **aynı kaynaktan** gelir (`lib/places/business-hours`, `lib/places/categories`).
+- Uçlar (hepsi `defineRoute`, yalnız `CUSTOMER`, rate limit, modül kapısı): `POST /api/customer/improvement-request` (yeniden yazıldı), `POST /api/customer/experience-share` (yeniden yazıldı), yeni `GET /api/customer/venue-detail/[dealerId]/history` (imleçli sayfalama).
+- Ölü derin linkler bağlandı: `components/customer/business-of-month-badge.tsx` ve `components/customer/recommendations-section.tsx` (`/customer/nearby?focus=` → `/customer/places/[id]`). Ana sayfa (`customer-dashboard.tsx`) ve favoriler sayfası diğer ajanlarca kaldırıldı ya da yönlendirildi.
+- Testler: `__tests__/api/customer-venue-detail.test.ts`, `__tests__/lib/venue-detail-logic.test.ts`, `__tests__/lib/venue-detail-loader.test.ts` (37 test, prisma mock).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment metadata | ÇALIŞIYOR | Yanlış açıklamalı layout kaldırıldı; sayfa başlığı mekân adı (`generateMetadata`, `noindex`). |
+| 2 | Sayfa başlığı / h1 | ÇALIŞIYOR | QDL `PageHeader`: tek h1 (mekân adı), Keşfet'e geri bağlantısı, logo, kategori ve adres. |
+| 3 | Menüden erişim | ÇALIŞIYOR | Kayıtta `customer.places.detail` (gizli alt sayfa). Giriş noktaları: Keşfet, Ayın İşletmesi, öneriler ve eski `?dealerId=` yönlendirmesi. |
+| 4 | İşletme ID manuel girişi | KALDIRILDI | Rota parametresi kullanılır; kullanıcı hiçbir kimlik yazmaz (B5). |
+| 5 | `?dealerId=` ön yükleme | ÇALIŞIYOR | Eski rota `/customer/places/<id>`'ye kalıcı olarak yönlenir. |
+| 6 | "Yükle" butonu | KALDIRILDI | Veri sunucuda yüklenir. |
+| 7 | Yükleniyor durumu | ÇALIŞIYOR | `loading.tsx` statik iskelet (`aria-busy`); geçmiş sayfalamada buton durumu ve `aria-busy`. |
+| 8 | Hata durumu | ÇALIŞIYOR | `error.tsx` (`ErrorState` + tekrar dene + Sentry) ve satır içi `InlineError`; admin toast önekleri yok. |
+| 9 | Boş durum | ÇALIŞIYOR | Ziyaret yoksa kart ve "QR okut" CTA'sı; geçmiş boşsa `EmptyState` ve CTA. |
+| 10 | İşletme adı | ÇALIŞIYOR | |
+| 11 | Ziyaret sayısı | ÇALIŞIYOR | İstanbul takvim gününe göre tekil sayılır (tüketim ∪ QR geri bildirimi); çift sayım bitti. |
+| 12 | Sadakat kademesi "rozeti" | ÇALIŞIYOR (dürüst) | "Rozet" sözcüğü ve ödül vaadi kaldırıldı. Nötr **ziyaret kademesi** (İlk adım → Tanıdık yüz → Müdavim → Evin bir parçası) yalnız ziyaret gününden türer. |
+| 13 | Sonraki eşik | ÇALIŞIYOR | 10 hücreli **ziyaret kartı**: damga ızgarası, kart doldu/yeni kart, kalan gün ve sonraki kademe. Yeni damga yalnız bir kez canlanır; azaltılmış harekette statiktir. |
+| 14 | Son 3 deneyim | ÇALIŞIYOR | Tam ve sayfalı zaman çizelgesi (10'ar). Konu anahtarları çevrilir; ham kelime etiketi yok. |
+| 15 | Deneyim boş durumu | ÇALIŞIYOR | CTA'lı boş durum. |
+| 16 | Deneyim türü gösterimi | ÇALIŞIYOR | Tüketim ve QR geri bildirimi ikon ve metinle ayrılır. |
+| 17 | Satırdan detaya | ÇALIŞIYOR | Tüketim → `/customer/consumptions/[id]` (yorum yaz/ayrıntı); geri bildirim → `/customer/feedbacks/[id]/journey`. |
+| 18 | Deneyim kartı oluştur | ÇALIŞIYOR | Belirli bir 4-5 puanlık deneyimden başlar; aynı kart varsa link yeniden kullanılır. |
+| 19 | Not / ruh hâli seçimi | ÇALIŞIYOR | Kullanıcı ruh hâlini ve 4 şablon nottan birini seçer; puan karta yazılır; önizleme gösterilir. |
+| 20 | Link gösterimi | ÇALIŞIYOR | Salt okunur alan; odaklanınca metin seçilir. |
+| 21 | Kopyala | ÇALIŞIYOR | `await` edilir; hata olursa metin seçilir ve dürüst mesaj verilir. |
+| 22 | Web Share / WhatsApp | ÇALIŞIYOR | `navigator.share` (destekleniyorsa), WhatsApp ve kopyala. |
+| 23 | İşletme değişince link sıfırlama | ÇALIŞIYOR | Sayfa tek mekâna kilitli; alt sayfa hedef değişince sıfırlanır. |
+| 24 | Şablon seçimi | ÇALIŞIYOR | Etiketli `ChoiceChips` radiogroup. |
+| 25 | İyileştirme mesajı | ÇALIŞIYOR | 10–1000 karakter, sayaç, `maxLength`, Türkçe doğrulama mesajları. |
+| 26 | "Tahmini dönüş (saat)" alanı | KALDIRILDI | Müşteri SLA seçemez (B7). Yerine işletmenin **gerçek** medyan yanıt süresi gösterilir (son 120 gün, en az 3 yanıt; yoksa "veri yok") ve kayda sunucuda yazılır. |
+| 27 | İsteği gönder | ÇALIŞIYOR | Hedef rota parametresidir; isteğin yanlış işletmeye gitmesi imkânsız (B3). |
+| 28 | Bayiye bildirim | ÇALIŞIYOR | Bildirim başlığı kategoriyi, gövdesi isteğin metnini taşır; kayıt ve bildirim tek transaction'da. |
+| 29 | Bayinin görmesi / yanıtlaması / durum | KISMİ (kalan) | Bayi isteği bildirim merkezinde **okur**; müşteri "İşletme gördü" durumunu görür. Yanıt yazma ve durum makinesi bayi Gelen Kutusu yüzeyinin işidir ve şema alanı ister (aşağıda). |
+| 30 | Müşterinin geçmiş istekleri | ÇALIŞIYOR | "Gönderdiğim istekler" listesi. Durum, bayi bildiriminin `readAt` alanından gelir ("Gönderildi" / "İşletme gördü · tarih"). |
+| 31 | Herkese açık `/experience/[token]` | KAPSAM DIŞI (kalan) | F3.4 herkese açık yüzeyler ajanının işi (SSR + OG + CTA). Kart metni artık şablon + puan olduğundan "şu" belirsizliği bu taraftan bitti. |
+| 32 | Görüntülenme sayacı | KISMİ (kalan) | Müşteri kendi kartlarını, açılma sayısını ve bitiş tarihini görür, linki yeniden kopyalar. Bot/yenileme tekilleştirmesi herkese açık uçta yapılmalı (F3.4). |
+| 33 | Yetki | ÇALIŞIYOR | Tüm uçlar `defineRoute` + yalnız `CUSTOMER`; sayfa müşteri olmayanlara yetkisiz durumu gösterir. |
+| 34 | Modül kapatma | ÇALIŞIYOR | Paylaşım ve istek uçları `module: 'experiences'`, geçmiş ucu ve sayfa `discovery` kapısında; kapalıyken arayüz dürüst bilgi gösterir. |
+| 35 | Rate limit | ÇALIŞIYOR | Rota sınırı + DB'den günlük tavanlar (istek: mekân başına 2, kullanıcı başına 10; kart: kullanıcı başına 10). |
+| 36 | İşletme ilişkisi doğrulaması | ÇALIŞIYOR | İstek için son 180 günde bu mekânda tüketim ya da QR geri bildirimi gerekir; kart için müşterinin kendi, silinmemiş ve bu mekâna ait kaydı gerekir. |
+| 37 | Süresi dolan token temizliği | KAPSAM DIŞI (kalan) | Ortak `db-cleanup` cron'u başka sahipte. Yeni kart üretimi tekilleştirildi ve günlük tavana bağlandı; büyüme sınırlı. |
+| 38 | i18n | ÇALIŞIYOR | Yüzeye özgü TR/EN metin modülü (`m-mekan-detay/copy.ts`); tarih ve para `Intl` + `Europe/Istanbul`; İngilizce anahtar sızıntısı yok. |
+| 39 | Form erişilebilirliği | ÇALIŞIYOR | `Field` ile bağlı etiketler, radiogroup çipler, puanda `role="img"` + `aria-label`, `announce` canlı bölgesi. |
+| 40 | Mobil düzen | ÇALIŞIYOR | Mobil öncelikli tek sütun, en az 44px dokunma hedefleri, paylaşım için alt sayfa; masaüstünde mekân bilgisi yan panelde. |
+| 41 | Suspense / `useSearchParams` | KALDIRILDI | Sayfa sunucu bileşeni; istemcide `useSearchParams` yok. |
+
+**Rota gereksinimiyle yeni eklenenler:**
+- Açık/kapalı durumu: tatil modu, kapanışa 60 dakikadan az kala uyarı, sonraki açılış. Saat çözülemezse durum iddia edilmez, bayinin yazdığı ham metin gösterilir.
+- Haftalık saat tablosu (bugün vurgulu).
+- Aktif flash teklifler (kullanım tavanı dolanlar hariç, inovasyon bayrağına uyar) ve mutlu saatler ("Şu an" / "Bugün başlıyor"; yalnız alışverişe uygulandığı açıkça yazılı).
+- Yol tarifi (mekân ve şubeler).
+- Kaydet/çıkar (mevcut favori ucu; iyimser güncelleme, hata olursa geri alma).
+- "QR okut, puan kazan" kısayolu.
+
+### Bulgular
+
+| Bulgu | Durum |
+|---|---|
+| B1 iyileştirme spam'i | KAPANDI: uygunluk kontrolü, günlük tavanlar, rota rate limit, tek transaction. |
+| B2 keyfi metinli paylaşım | KAPANDI: serbest metin yok (şablon anahtarı); sahiplik, mekân ve en az 4 puan kontrolü; günlük tavan. Bayinin kartı bildirmesi ve admin iptali F3.4 ile birlikte kalıyor. |
+| B3 yanlış işletmeye aksiyon | KAPANDI: aksiyonlar rota parametresine kilitli. |
+| B4 tuş başına fetch / yarış | KAPANDI: sunucu bileşeni; sayfalama TanStack `useInfiniteQuery` ile. |
+| B5 ham ID girişi | KAPANDI. |
+| B6 kara delik | KISMİ: bayi metni okuyor, müşteri "gördü" durumunu izliyor; bayi yanıtı kalan. |
+| B7 müşteri SLA seçiyor | KAPANDI: gerçek medyan yanıt süresi. |
+| B8 sahte rozet | KAPANDI: dürüst ziyaret kartı ve kademe, gün bazında tekil sayım. |
+| B9 sabit paylaşım içeriği | KAPANDI (bu taraf): ruh hâli ve not seçimi, puan, Web Share. OG görseli F3.4'te. |
+| B10 modül anahtarı | KAPANDI. |
+| B11 eski link / doğrulanmayan kopyalama | KAPANDI. |
+| B12 i18n | KAPANDI. |
+| B13 erişilebilirlik | KAPANDI. |
+| B14 sayaç ve temizlik | KISMİ: müşteri görünürlüğü eklendi; tekilleştirme ve cron temizliği kapsam dışı. |
+
+### Kalanlar ve gerekçeleri
+- **Gerçek damga ödülü:** İşletmeye özel ödül/kupon altyapısı yok. Puan basmak bir ekonomi kararı (lib/economy, tavanlar) gerektirdiği için kart ödül vaat etmiyor. Ürün kararı verilirse `mintPoints` ile `idempotencyKey: stamp:<user>:<dealer>:<kartNo>` kullanılarak eklenebilir.
+- **Bayi yanıtı ve durum makinesi (B6):** Bayi Gelen Kutusu (`/dealer/inbox`) yüzeyinin işi. **ŞEMA İSTEĞİ:** `ImprovementRequest` modeline `dealerReply String? @db.Text`, `dealerRepliedAt DateTime?` ve `seenAt DateTime?` alanları. Bugün "görüldü" bilgisi bildirimin `readAt` alanından türetiliyor.
+- **Herkese açık kart sayfası (SSR + OG + CTA), görüntülenme tekilleştirmesi, süresi dolan token temizliği:** F3.4 ve ortak cron sahiplerinin işi.
+- **Keşfet çekmecesiyle bağlantı:** `lib/places/legacy-redirect.ts` eski `?focus=`/`?dealerId=` linklerini `/customer/places?venue=<id>` çekmecesine yönlendiriyor. Çekmeceden bu sayfaya "Tüm ayrıntılar" bağlantısını Keşfet ajanı vermeli.
+- **Görsel doğrulama:** Dev server ve build yasak olduğu için ekran görüntüsüyle doğrulanmadı. Doğrulama tsc (kendi dosyalarda 0 hata), eslint ve 37 jest testiyle yapıldı.

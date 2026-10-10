@@ -1,82 +1,52 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { createImprovementRequest } from '@/lib/venue-detail/improvement';
+import { loadResponseTime } from '@/lib/venue-detail/detail';
+import {
+  IMPROVEMENT_MESSAGE_MAX,
+  IMPROVEMENT_MESSAGE_MIN,
+  IMPROVEMENT_TEMPLATE_KEYS,
+} from '@/lib/venue-detail/types';
 
 export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
-  dealerId: z.string().min(1),
-  templateKey: z.enum(['tone', 'speed', 'quality', 'value', 'other']),
-  message: z.string().min(5).max(2000),
-  expectedHours: z.number().int().min(12).max(168).optional(),
+  dealerId: z.string().trim().min(8).max(64),
+  templateKey: z.enum(IMPROVEMENT_TEMPLATE_KEYS, {
+    errorMap: () => ({ message: 'Bir konu seçin.' }),
+  }),
+  message: z
+    .string({ required_error: 'Mesaj gerekli.' })
+    .trim()
+    .min(IMPROVEMENT_MESSAGE_MIN, `En az ${IMPROVEMENT_MESSAGE_MIN} karakter yazın.`)
+    .max(IMPROVEMENT_MESSAGE_MAX, `En fazla ${IMPROVEMENT_MESSAGE_MAX} karakter yazabilirsiniz.`),
+  // Eski istemci alanı: müşteri işletmenin yanıt süresini SEÇEMEZ (B7). Gelirse yok sayılır.
+  expectedHours: z.unknown().optional(),
 });
 
-const TEMPLATES: Record<string, string> = {
-  tone: 'Genel üslup / iletişim',
-  speed: 'Hız ve bekleme süresi',
-  quality: 'Ürün / lezzet kalitesi',
-  value: 'Fiyat-değer dengesi',
-  other: 'Diğer iyileştirme',
-};
-
-/** Şikâyet değil — iyileştirme isteği (SLA mesajı ile). */
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-  if ('error' in auth) return auth.error;
-
-  const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? 'Geçersiz' },
-      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+/**
+ * "Daha iyi olabilirdi" — mekâna iyileştirme isteği (mekân detayı, `/customer/places/[dealerId]`).
+ * Uygunluk, tavanlar ve bildirim: lib/venue-detail/improvement.ts.
+ */
+export const POST = defineRoute(
+  {
+    name: 'customer.improvement-request.create',
+    roles: ['CUSTOMER'],
+    schema: bodySchema,
+    rateLimit: { max: 5, windowMs: 60_000, by: 'user' },
+    module: 'experiences',
+  },
+  async ({ body, user }) => {
+    const now = new Date();
+    const response = await loadResponseTime(body.dealerId, now).catch(() => null);
+    const request = await createImprovementRequest({
+      userId: user.id,
+      dealerId: body.dealerId,
+      templateKey: body.templateKey,
+      message: body.message,
+      expectedHours: response?.hours ?? null,
+      now,
+    });
+    return ok({ request, responseTime: response }, { status: 201 });
   }
-
-  const dealer = await prisma.user.findFirst({
-    where: { id: parsed.data.dealerId, role: 'DEALER' },
-    select: { id: true },
-  });
-  if (!dealer) {
-    return NextResponse.json(
-      { error: 'İşletme bulunamadı' },
-      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  }
-
-  const hours = parsed.data.expectedHours ?? 48;
-
-  const req = await prisma.improvementRequest.create({
-    data: {
-      userId: auth.session.user.id,
-      dealerId: parsed.data.dealerId,
-      templateKey: parsed.data.templateKey,
-      message: `(${TEMPLATES[parsed.data.templateKey]}) ${parsed.data.message}`,
-      expectedHours: hours,
-    },
-  });
-
-  await prisma.notification.create({
-    data: {
-      userId: parsed.data.dealerId,
-      title: 'İyileştirme isteği',
-      message: `Müşteri şikâyet değil, iyileştirme talebi bıraktı (≈${hours} saat içinde dönüş önerilir).`,
-      type: 'info',
-      data: {
-        type: 'improvement_request',
-        improvementRequestId: req.id,
-      } as object,
-    },
-  });
-
-  return NextResponse.json(
-    {
-      success: true,
-      id: req.id,
-      expectedResponseBy: new Date(Date.now() + hours * 3600 * 1000).toISOString(),
-      templateLabel: TEMPLATES[parsed.data.templateKey],
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
-}
+);

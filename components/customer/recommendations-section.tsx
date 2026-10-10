@@ -61,7 +61,7 @@ export function RecommendationsSection() {
           {items.map((rec) => (
             <Link
               key={rec.productId}
-              href={`/customer/nearby?focus=${rec.dealerId}`}
+              href={`/customer/places/${encodeURIComponent(rec.dealerId)}`}
               className="group flex gap-3 rounded-xl border border-border/50 bg-background/60 p-3 transition-all hover:border-primary/40 hover:shadow-md"
             >
               {rec.image ? (

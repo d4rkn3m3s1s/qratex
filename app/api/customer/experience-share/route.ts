@@ -1,67 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { createExperienceShare, resolveShareBase } from '@/lib/venue-detail/share';
+import { SHARE_CAPTION_KEYS, SHARE_MOODS } from '@/lib/venue-detail/types';
 
 export const dynamic = 'force-dynamic';
 
 const bodySchema = z.object({
-  dealerId: z.string().min(1),
-  caption: z.string().max(200).optional(),
-  mood: z.enum(['great', 'good', 'ok']).optional(),
+  dealerId: z.string().trim().min(8).max(64),
+  experience: z.object({
+    kind: z.enum(['feedback', 'review']),
+    id: z.string().trim().min(8).max(64),
+  }),
+  captionKey: z.enum(SHARE_CAPTION_KEYS, { errorMap: () => ({ message: 'Bir not seçin.' }) }),
+  mood: z.enum(SHARE_MOODS, { errorMap: () => ({ message: 'Bir ruh hâli seçin.' }) }),
 });
 
-/** Arkadaşla paylaşılabilir anonim deneyim linki (7 gün geçerli). */
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-  if ('error' in auth) return auth.error;
-
-  const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Geçersiz istek' },
-      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+/**
+ * Anonim deneyim kartı (7 gün) — müşterinin KENDİ 4-5 puanlık deneyim kaydına bağlı,
+ * şablon metinli. Serbest metin kabul edilmez (denetim B2). Ayrıntı: lib/venue-detail/share.ts.
+ */
+export const POST = defineRoute(
+  {
+    name: 'customer.experience-share.create',
+    roles: ['CUSTOMER'],
+    schema: bodySchema,
+    rateLimit: { max: 10, windowMs: 60_000, by: 'user' },
+    module: 'experiences',
+  },
+  async ({ body, user, request }) => {
+    const link = await createExperienceShare({
+      userId: user.id,
+      dealerId: body.dealerId,
+      ref: body.experience,
+      captionKey: body.captionKey,
+      mood: body.mood,
+      baseUrl: resolveShareBase(request.nextUrl?.origin ?? null),
+    });
+    return ok({ link }, { status: link.reused ? 200 : 201 });
   }
-
-  const dealer = await prisma.user.findFirst({
-    where: { id: parsed.data.dealerId, role: 'DEALER' },
-    select: { id: true },
-  });
-  if (!dealer) {
-    return NextResponse.json(
-      { error: 'İşletme bulunamadı' },
-      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  }
-
-  const token = randomBytes(18).toString('base64url');
-  const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
-
-  await prisma.experienceShareToken.create({
-    data: {
-      token,
-      creatorId: auth.session.user.id,
-      dealerId: parsed.data.dealerId,
-      caption: parsed.data.caption?.trim() || null,
-      mood: parsed.data.mood ?? 'good',
-      expiresAt,
-    },
-  });
-
-  const base =
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
-    new URL(request.url).origin;
-
-  return NextResponse.json(
-    {
-      success: true,
-      token,
-      shareUrl: `${base}/experience/${token}`,
-      expiresAt: expiresAt.toISOString(),
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
-}
+);

@@ -46,7 +46,7 @@ export function BusinessOfMonthBadge() {
 
   return (
     <Link
-      href={`/customer/nearby?focus=${w.dealerId}`}
+      href={`/customer/places/${encodeURIComponent(w.dealerId)}`}
       className="group block rounded-2xl border border-amber-400/40 bg-gradient-to-br from-amber-400/15 via-card/60 to-orange-500/10 p-4 shadow-sm transition-all hover:border-amber-400/60 hover:shadow-md"
     >
       <div className="flex items-center gap-4">
