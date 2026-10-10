@@ -26,8 +26,10 @@ import {
   type ParsedRequirement,
 } from './mechanics';
 import {
+  claimableAfterExpiry,
   getQuestPeriod,
   progressWindow,
+  storedCompletionInPeriod,
   questPeriodKind,
   rewardedInPeriod,
   QUEST_CLAIM_GRACE_MS,
@@ -260,8 +262,9 @@ export async function getQuestBoard(userId: string, now: Date = new Date(), db: 
         const legacy = uq ? legacyAt.get(uq.id) ?? null : null;
         const paid =
           rewardedInPeriod(uq?.rewardedAt, ctx.period) || (legacy ? rewardedInPeriod(legacy, ctx.period) : false);
-        const done = progress >= target || (ctx.tracking !== 'live' && !!uq?.completedAt);
-        state = paid ? 'claimed' : done ? 'claimable' : 'in_progress';
+        const done =
+          ctx.tracking === 'live' ? progress >= target : storedCompletionInPeriod(uq, ctx.period, target);
+        state = paid ? 'claimed' : done && claimableAfterExpiry(q.expiresAt, ctx.period, now) ? 'claimable' : 'in_progress';
       }
 
       // Süresi dolan görev: yalnız ödül penceresindeki "alınabilir" olan kalır.

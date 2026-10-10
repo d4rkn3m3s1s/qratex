@@ -144,8 +144,9 @@ export function progressWindow(
   quest: { createdAt: Date; expiresAt: Date | null },
   now: Date
 ): { from: Date; to: Date } {
-  if (period.kind !== 'once') return { from: period.start, to: now };
+  // Görevin bitişinden sonraki etkinlik sayılmaz (dönemli görevde de).
   const to = quest.expiresAt && quest.expiresAt < now ? quest.expiresAt : now;
+  if (period.kind !== 'once') return { from: period.start, to };
   return { from: quest.createdAt, to };
 }
 
@@ -154,4 +155,37 @@ export function rewardedInPeriod(rewardedAt: Date | null | undefined, period: Qu
   if (!rewardedAt) return false;
   if (period.kind === 'once') return true;
   return rewardedAt.getTime() >= period.start.getTime();
+}
+
+/**
+ * Saklanan ilerleme (live olmayan) bu dönem için tamamlanmış mı?
+ *  - Tek seferlik: `completedAt` ya da hedefe ulaşan ilerleme yeterli.
+ *  - Dönemli: `progress`/`completedAt` dönem değişince SIFIRLANMAZ; bu yüzden yalnız bu dönemde
+ *    ve son ödemeden SONRA tamamlanmış satır sayılır (aksi hâlde bir kez tamamlayan her dönem
+ *    hiçbir şey yapmadan yeniden ödül alırdı).
+ */
+export function storedCompletionInPeriod(
+  row: { progress: number; completedAt: Date | null; rewardedAt: Date | null } | null | undefined,
+  period: QuestPeriod,
+  target: number
+): boolean {
+  if (!row) return false;
+  if (period.kind === 'once') return !!row.completedAt || row.progress >= target;
+  if (!row.completedAt || row.completedAt.getTime() < period.start.getTime()) return false;
+  return !row.rewardedAt || row.completedAt.getTime() > row.rewardedAt.getTime();
+}
+
+/**
+ * Süresi dolmuş görevde ödül alma hâlâ mümkün mü? Ek süre (QUEST_CLAIM_GRACE_MS) yalnız
+ * görevin BİTTİĞİ dönem içindir: dönemli bir görevde ek süre içinde başlayan yeni dönem
+ * ödül hakkı doğurmaz. Süresi dolmamış görev için her zaman true.
+ */
+export function claimableAfterExpiry(
+  expiresAt: Date | null | undefined,
+  period: QuestPeriod,
+  now: Date
+): boolean {
+  if (!expiresAt || now.getTime() <= expiresAt.getTime()) return true;
+  if (now.getTime() > expiresAt.getTime() + QUEST_CLAIM_GRACE_MS) return false;
+  return period.kind === 'once' || period.start.getTime() < expiresAt.getTime();
 }

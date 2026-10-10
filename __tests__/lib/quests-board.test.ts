@@ -347,6 +347,35 @@ describe('claimQuest', () => {
     await expect(claimQuest('u1', 'sp', { db: db as never, now: NOW })).rejects.toMatchObject({ code: 'QUEST_EXPIRED' });
   });
 
+  it('dönemli manuel görev: geçen dönem tamamlanması bu dönem ödül DOĞURMAZ (tekrarlı basım yok)', async () => {
+    const q = quest({ id: 'cm', requirement: { type: 'custom', count: 2 } });
+    // Dün tamamlanmış ve dün ödenmiş; bugün hiçbir şey yapılmamış.
+    const prev = claimDb({ quest: q, fresh: { progress: 2, completedAt: new Date('2026-10-09T10:00:00Z'), rewardedAt: new Date('2026-10-09T10:05:00Z') } });
+    await expect(claimQuest('u1', 'cm', { db: prev.db as never, now: NOW })).rejects.toMatchObject({ code: 'QUEST_NOT_TRACKED' });
+    // Bu dönem tamamlanmış ama son ödeme ondan sonra → yine yok.
+    const stale = claimDb({ quest: q, fresh: { progress: 2, completedAt: new Date('2026-10-09T21:30:00Z'), rewardedAt: null } });
+    await expect(claimQuest('u1', 'cm', { db: stale.db as never, now: NOW })).resolves.toBeTruthy();
+    expect(mockMint).toHaveBeenCalledTimes(1);
+  });
+
+  it('süresi dolan dönemli görev: ek süre yalnız bittiği dönem için; yeni dönem ödül doğurmaz', async () => {
+    // Görev dün (İstanbul) 22:00'de bitti; şimdi yeni gün ve 24 saatlik pencere içinde.
+    const yesterday = quest({ id: 'dx', expiresAt: new Date('2026-10-09T19:00:00Z') });
+    const a = claimDb({ quest: yesterday, feedback: 5 });
+    await expect(claimQuest('u1', 'dx', { db: a.db as never, now: NOW })).rejects.toMatchObject({ code: 'QUEST_EXPIRED' });
+    expect(mockMint).not.toHaveBeenCalled();
+  });
+
+  it('bugün biten günlük görev: ödül alınabilir ama ilerleme bitiş anına kadar sayılır', async () => {
+    const endedToday = new Date(NOW.getTime() - 60_000);
+    const q = quest({ id: 'dt', expiresAt: endedToday });
+    const { db } = claimDb({ quest: q, feedback: 1 });
+    await claimQuest('u1', 'dt', { db: db as never, now: NOW });
+    const where = (db.feedback.count.mock.calls[0] as unknown as [{ where: { createdAt?: { lt?: Date; lte?: Date } } }])[0].where;
+    const upper = where.createdAt?.lt ?? where.createdAt?.lte;
+    expect(upper?.getTime()).toBeLessThanOrEqual(endedToday.getTime());
+  });
+
   it('bulunamayan görev', async () => {
     const { db } = claimDb({ quest: null });
     await expect(claimQuest('u1', 'x', { db: db as never, now: NOW })).rejects.toMatchObject({ code: 'QUEST_NOT_FOUND', status: 404 });

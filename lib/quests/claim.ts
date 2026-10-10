@@ -2,6 +2,8 @@
  * Görev ödülü alma — tekil ve toplu ("Hepsini al"). Sunucu otoriter:
  *  - İlerleme claim anında YENİDEN hesaplanır (istemcinin "tamamlandı" demesine güvenilmez).
  *  - Otomatik ödenen görevler (ziyaret/başarım) buradan ödenmez → `QUEST_AUTO_REWARDED` (B2).
+ *  - Dönemli görevde saklanan ilerleme yalnız bu dönemde ve son ödemeden sonra tamamlandıysa
+ *    sayılır; süresi dolan görevde ek süre yalnız bittiği dönem için geçerlidir (period.ts).
  *  - Tek sefer: satır kilidi (`FOR UPDATE`) + koşullu `updateMany` (tek seferlikte
  *    `rewardedAt: null`, dönemlide `rewardedAt < dönem başı`) — count===0 ise ödeme yok.
  *    Kredi `mintPoints` ile aynı tx'te; defter anahtarı `quest:<userQuestId>` (tek seferlik,
@@ -13,7 +15,7 @@ import { prisma } from '@/lib/prisma';
 import { mintPoints } from '@/lib/economy';
 import { getPointsMatrix, getQuestReward } from '@/lib/points-rules';
 import type { LiveMechanic } from './mechanics';
-import { QUEST_CLAIM_GRACE_MS, rewardedInPeriod } from './period';
+import { claimableAfterExpiry, QUEST_CLAIM_GRACE_MS, rewardedInPeriod, storedCompletionInPeriod } from './period';
 import { createProgressCounter, questContext, QUEST_ROW_SELECT, type QuestRow } from './board';
 import type { QuestClaimErrorCode, QuestClaimItem, QuestClaimResult } from './board-types';
 
@@ -88,16 +90,16 @@ async function payQuest(
 ): Promise<PaidQuest> {
   const ctx = questContext(quest, now);
   if (ctx.autoReward) throw new QuestClaimError('QUEST_AUTO_REWARDED');
-  if (quest.expiresAt && now.getTime() > quest.expiresAt.getTime() + QUEST_CLAIM_GRACE_MS) {
+  if (!claimableAfterExpiry(quest.expiresAt, ctx.period, now)) {
     throw new QuestClaimError('QUEST_EXPIRED');
   }
 
   const once = ctx.period.kind === 'once';
+  // İlerleme görevin bitişinden sonra sayılmaz (ek süre yalnız ödülü ALMAK içindir).
+  const until = quest.expiresAt && quest.expiresAt < now ? quest.expiresAt : now;
   let liveProgress: number | null = null;
   if (ctx.tracking === 'live') {
-    const window = once
-      ? { from: quest.createdAt, to: quest.expiresAt && quest.expiresAt < now ? quest.expiresAt : now }
-      : { from: ctx.period.start, to: now };
+    const window = once ? { from: quest.createdAt, to: until } : { from: ctx.period.start, to: until };
     liveProgress = await count(ctx.mechanic as LiveMechanic, window, ctx.req);
     if (liveProgress < ctx.target) throw new QuestClaimError('QUEST_NOT_COMPLETED');
   }
@@ -114,7 +116,7 @@ async function payQuest(
     if (!fresh) throw new QuestClaimError('QUEST_NOT_FOUND');
 
     if (ctx.tracking !== 'live') {
-      const done = !!fresh.completedAt || fresh.progress >= ctx.target;
+      const done = storedCompletionInPeriod(fresh, ctx.period, ctx.target);
       if (!done) throw new QuestClaimError(ctx.tracking === 'manual' ? 'QUEST_NOT_TRACKED' : 'QUEST_NOT_COMPLETED');
     }
     if (rewardedInPeriod(fresh.rewardedAt, ctx.period)) throw new QuestClaimError('QUEST_ALREADY_CLAIMED');
@@ -252,10 +254,8 @@ export async function claimAllQuests(userId: string, opts: ClaimOptions = {}): P
     const ctx = questContext(q, now);
     if (ctx.autoReward) return false;
     if (rewardedInPeriod(q.users[0]?.rewardedAt, ctx.period)) return false;
-    if (ctx.tracking === 'manual') {
-      const uq = q.users[0];
-      return !!uq && (!!uq.completedAt || uq.progress >= ctx.target);
-    }
+    if (!claimableAfterExpiry(q.expiresAt, ctx.period, now)) return false;
+    if (ctx.tracking === 'manual') return storedCompletionInPeriod(q.users[0], ctx.period, ctx.target);
     return true;
   });
 
