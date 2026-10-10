@@ -1,157 +1,139 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { CHARACTER_PROFILES } from '@/lib/character-badges';
+import { cachedJson } from '@/lib/redis';
+import { defineRoute } from '@/lib/http/define-route';
 import { BADGE_CATALOG } from '@/lib/badge-catalog';
+import { resolveBadgeThumb } from '@/lib/badge-images';
+import { getCharacterTier } from '@/lib/character-reveal-texts';
 import { CATEGORY_BY_CHARACTER } from '@/lib/character-categories';
+import { CHARACTER_BADGE_IDS } from '@/lib/badges/customer-collection';
+import {
+  competitionRank,
+  holdersPercent,
+  maskDisplayName,
+  normalizeCollectionRarity,
+} from '@/lib/badges/collection-logic';
+import { nextIstanbulWeekStart } from '@/components/ds/play/istanbul-time';
 
 export const dynamic = 'force-dynamic';
 
-const CHAR_IDS = CHARACTER_PROFILES.map((c) => c.badgeId);
+const CATALOG_BY_ID = new Map(BADGE_CATALOG.map((b) => [b.id, b]));
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const TOP_N = 20;
 
-/** Bir karakter badgeId'sinin kategorisini (varsa) sadeleştirir (UI teması için). */
 function categoryOf(badgeId: string) {
   const c = CATEGORY_BY_CHARACTER[badgeId];
   return c ? { key: c.key, name: c.name, emoji: c.emoji, accent: c.accent } : null;
 }
 
-/** Katalogdan rarity (common|rare|epic|legendary). Yoksa common. */
-function rarityOf(badgeId: string): string {
-  return BADGE_CATALOG.find((b) => b.id === badgeId)?.rarity ?? 'common';
+/** Karakter kademesi PUANDAN türer (reveal ile aynı kaynak); yoksa katalog. */
+function rarityOf(badgeId: string) {
+  return normalizeCollectionRarity(getCharacterTier(badgeId) ?? CATALOG_BY_ID.get(badgeId)?.rarity);
 }
 
+type RarestGlobal = { holdersByBadge: Array<[string, number]>; totalCustomers: number };
+
 /**
- * KARAKTER LİDERLİK TABLOSU (CUSTOMER).
+ * GET /api/customer/character-leaderboard?mode=rarest|top-weekly (yalnız CUSTOMER)
  *
- * İki mod (?mode=):
- *   1) rarest (varsayılan): "EN NADİR KARAKTERLER" — her karakter rozeti kaç
- *      kullanıcıda var. En az kullanıcıda olan = en nadir. Yalnızca EN AZ 1 kişide
- *      olan karakterler listelenir (hiç kimsede olmayan sızmaz).
- *   2) top-weekly: "BU HAFTA EN ÇOK KARAKTER KAZANANLAR" — son 7 günde en çok
- *      karakter rozeti kazanan kullanıcılar (ad/avatar + adet). İlk ~20 + mevcut
- *      kullanıcının bu haftaki sayısı.
- *
- * Karakter rozetleri genel listede gizlidir; bu endpoint "kazanılmış karakterler
- * arasında" nadirlik/aktivite gösterir — kilitli karakter adı sızması yoktur çünkü
- * yalnızca en az bir kişide olan karakterler görünür.
+ *  - `rarest`: en az kullanıcıda olan karakterler. Global kısım (sahip sayıları) herkes için
+ *    aynı → Redis 10 dk; yalnız `isMine` maskesi istek başına. Sahip olmadığın karakterin
+ *    kimliği (badgeId/ad/ikon/kategori) SIZMAZ; satır anahtarı opak.
+ *  - `top-weekly`: bu hafta (Europe/Istanbul Pazartesi 00:00'dan beri) en çok karakter
+ *    kazananlar. Diğer kullanıcıların `userId`'si ve avatarı DÖNMEZ; ad maskelenir
+ *    ("Furkan U."). Kullanıcının kendi sırası ilk 20 dışında da GERÇEK hesaplanır.
  */
-export async function GET(request: NextRequest) {
-  const auth = await requireAuth(['CUSTOMER']);
-  if ('error' in auth) return auth.error;
-  const userId = auth.session.user.id;
+export const GET = defineRoute(
+  {
+    name: 'customer.character-leaderboard',
+    roles: ['CUSTOMER'],
+    query: z.object({ mode: z.enum(['rarest', 'top-weekly']).default('rarest') }),
+    rateLimit: 'read',
+  },
+  async ({ query, user }) => {
+    const userId = user.id;
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const mode = searchParams.get('mode') === 'top-weekly' ? 'top-weekly' : 'rarest';
+    if (query.mode === 'top-weekly') {
+      const now = new Date();
+      const weekStart = new Date(nextIstanbulWeekStart(now).getTime() - WEEK_MS);
 
-    if (mode === 'top-weekly') {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-      // Son 7 günde kazanılan karakter rozetleri → kullanıcı başına adet.
       const grouped = await prisma.userBadge.groupBy({
         by: ['userId'],
-        where: { badgeId: { in: CHAR_IDS }, earnedAt: { gte: since } },
+        where: { badgeId: { in: [...CHARACTER_BADGE_IDS] }, earnedAt: { gte: weekStart } },
         _count: { _all: true },
       });
-
+      const allCounts = grouped.map((g) => g._count._all);
       const sorted = [...grouped]
-        .sort((a, b) => b._count._all - a._count._all)
-        .slice(0, 20);
+        .sort((a, b) => b._count._all - a._count._all || a.userId.localeCompare(b.userId))
+        .slice(0, TOP_N);
 
-      const ids = sorted.map((g) => g.userId);
-      const users = ids.length
-        ? await prisma.user.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, name: true, image: true },
-          })
+      const users = sorted.length
+        ? await prisma.user.findMany({ where: { id: { in: sorted.map((g) => g.userId) } }, select: { id: true, name: true } })
         : [];
-      const userById = new Map(users.map((u) => [u.id, u]));
+      const nameById = new Map(users.map((u) => [u.id, u.name]));
 
-      const leaderboard = sorted.map((g, index) => {
-        const u = userById.get(g.userId);
+      const rows = sorted.map((g, i) => {
+        const count = g._count._all;
+        const isCurrentUser = g.userId === userId;
         return {
-          rank: index + 1,
-          userId: g.userId,
-          name: u?.name ?? null,
-          image: u?.image ?? null,
-          count: g._count._all,
-          isCurrentUser: g.userId === userId,
+          rank: competitionRank(count, allCounts) ?? 0,
+          // Opak anahtar: diğer kullanıcıların kimliğinden hiçbir parça istemciye gitmez.
+          rowKey: isCurrentUser ? 'me' : `w-${i}`,
+          name: maskDisplayName(nameById.get(g.userId)),
+          count,
+          isCurrentUser,
         };
       });
 
-      // Mevcut kullanıcının bu haftaki karakter sayısı (listede olmasa da göster).
-      const myCount = await prisma.userBadge.count({
-        where: { userId, badgeId: { in: CHAR_IDS }, earnedAt: { gte: since } },
-      });
-      const myEntry = leaderboard.find((r) => r.isCurrentUser);
-      const currentUser = {
-        count: myCount,
-        rank: myEntry ? myEntry.rank : null, // ilk 20 dışındaysa sıra null
+      const mine = grouped.find((g) => g.userId === userId)?._count._all ?? 0;
+      return {
+        mode: 'top-weekly' as const,
+        weekStart: weekStart.toISOString(),
+        participants: grouped.length,
+        leaderboard: rows,
+        currentUser: { count: mine, rank: competitionRank(mine, allCounts) },
       };
-
-      return NextResponse.json(
-        { success: true, mode, leaderboard, currentUser },
-        { headers: PRIVATE_NO_STORE_HEADERS }
-      );
     }
 
-    // ── mode === 'rarest' ──
-    const [grouped, totalCustomers, myBadges] = await Promise.all([
-      prisma.userBadge.groupBy({
-        by: ['badgeId'],
-        where: { badgeId: { in: CHAR_IDS } },
-        _count: { _all: true },
+    const [global, myBadges] = await Promise.all([
+      cachedJson<RarestGlobal>('badges:character-rarest:v1', 10 * 60, async () => {
+        const [grouped, totalCustomers] = await Promise.all([
+          prisma.userBadge.groupBy({
+            by: ['badgeId'],
+            where: { badgeId: { in: [...CHARACTER_BADGE_IDS] } },
+            _count: { _all: true },
+          }),
+          prisma.user.count({ where: { role: 'CUSTOMER' } }),
+        ]);
+        return {
+          holdersByBadge: grouped.map((g) => [g.badgeId, g._count._all] as [string, number]),
+          totalCustomers,
+        };
       }),
-      prisma.user.count({ where: { role: 'CUSTOMER' } }),
-      // Mevcut kullanıcının sahip olduğu karakterler — SADECE onlar açık gösterilir.
-      prisma.userBadge.findMany({ where: { userId, badgeId: { in: CHAR_IDS } }, select: { badgeId: true } }),
+      prisma.userBadge.findMany({ where: { userId, badgeId: { in: [...CHARACTER_BADGE_IDS] } }, select: { badgeId: true } }),
     ]);
     const mineSet = new Set(myBadges.map((b) => b.badgeId));
 
-    // Yalnızca en az 1 kişide olan karakterler (hiç kimsede olmayan listelenmez).
-    const rows = grouped
-      .map((g) => {
-        const cat = BADGE_CATALOG.find((b) => b.id === g.badgeId);
-        const holders = g._count._all;
-        const ratePct = totalCustomers > 0 ? Math.round((holders / totalCustomers) * 1000) / 10 : null;
-        const isMine = mineSet.has(g.badgeId);
-        return {
-          // İç sıralama için gerçek badgeId (yanıttan önce maskelenir).
-          _sortKey: g.badgeId,
-          // Sürpriz: kullanıcının SAHİP OLMADIĞI karakterin KİMLİĞİ (badgeId dahil) istemciye
-          // SIZMAZ — badge-walter-white gibi id'ler adı ele verirdi. Kendi rozetin açık.
-          badgeId: isMine ? g.badgeId : null,
-          name: isMine ? (cat?.name ?? g.badgeId) : null,
-          icon: isMine ? (cat?.icon ?? '/logo/logo.png') : null,
-          category: isMine ? categoryOf(g.badgeId) : null,
-          rarity: rarityOf(g.badgeId),
-          holders,
-          ratePct, // "oyuncuların %X'inde"
-          isMine,
-        };
-      })
-      // En nadir (en az holder) önce; eşitlikte gerçek badgeId ile stabil (yanıtta gizli).
-      .sort((a, b) => a.holders - b.holders || a._sortKey.localeCompare(b._sortKey, 'tr'));
+    const sorted = global.holdersByBadge
+      .filter(([, holders]) => holders > 0)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], 'tr'));
 
-    // İstemciye giden liste: gizli satırlar için opak, sıra-tabanlı stabil key (React key +
-    // sürpriz koruması). Gerçek badgeId yalnızca isMine satırlarında kalır.
-    const leaderboard = rows.map(({ _sortKey, ...r }, i) => ({
-      ...r,
-      rowKey: r.isMine ? _sortKey : `rare-${i}`,
-    }));
+    const leaderboard = sorted.map(([badgeId, holders], i) => {
+      const isMine = mineSet.has(badgeId);
+      const cat = CATALOG_BY_ID.get(badgeId);
+      return {
+        rowKey: isMine ? badgeId : `rare-${i}`,
+        badgeId: isMine ? badgeId : null,
+        name: isMine ? cat?.name ?? null : null,
+        thumb: isMine ? resolveBadgeThumb(cat?.icon ?? null) : null,
+        category: isMine ? categoryOf(badgeId) : null,
+        rarity: rarityOf(badgeId),
+        holders,
+        holdersPct: holdersPercent(holders, global.totalCustomers),
+        isMine,
+      };
+    });
 
-    return NextResponse.json(
-      { success: true, mode, totalCustomers, leaderboard },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    console.error('Character leaderboard error:', error);
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    return NextResponse.json(
-      { success: false, error: 'Karakter liderlik tablosu yüklenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  }
-}
+    return { mode: 'rarest' as const, totalCustomers: global.totalCustomers, leaderboard };
+  },
+);

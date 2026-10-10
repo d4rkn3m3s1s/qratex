@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { m as Motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useReducedMotionPref } from '@/lib/motion';
+import { Ambient } from '@/components/ds/play';
 
 /**
  * MYSTERY BAR — sade ama merak uyandıran gizemli ilerleme çubuğu.
@@ -52,16 +54,9 @@ export function MysteryBar({ progress, current, threshold, ready = false, classN
   const slots = Math.max(1, Math.floor(threshold) || 1);
   const filled = Math.max(0, Math.min(slots, Math.floor(current) || 0));
 
-  // reduceMotion — gövdede koşulsuz hesaplanır (hook sırası korunur).
-  const [reduceMotion, setReduceMotion] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!mq) return;
-    const apply = () => setReduceMotion(mq.matches);
-    apply();
-    mq.addEventListener?.('change', apply);
-    return () => mq.removeEventListener?.('change', apply);
-  }, []);
+  // Tek tercih kaynağı (QDL §4.2): OS `prefers-reduced-motion` VEYA uygulama ayarı
+  // (`html.reduce-animations`). Azaltılmışta canvas tek statik kare çizer.
+  const reduceMotion = useReducedMotionPref();
 
   // Yoğunluk: %70 üstünde uç parlaması artar; %95+ yoğun; ready en üst.
   const intensity = ready ? 1 : Math.max(0, (p - 0.7) / 0.3);
@@ -75,7 +70,10 @@ export function MysteryBar({ progress, current, threshold, ready = false, classN
         </div>
 
         {/* Uçta tek gizem sembolü — "?" (dolunca parlar). */}
-        <MysterySymbol intensity={intensity} ready={ready} reduceMotion={reduceMotion} />
+        {/* Nabız yalnız <Ambient> içinde: görünürken, sekme açıkken ve politika izin verdiğinde. */}
+        <Ambient className="shrink-0">
+          {(running) => <MysterySymbol intensity={intensity} ready={ready} reduceMotion={!running} />}
+        </Ambient>
       </div>
 
       {/* Sayaç — gizli, sadece "3/6" (rozet adı YOK). */}
@@ -191,9 +189,25 @@ function MysteryEnergyBar({
 
     let raf = 0;
     let t = 0;
+    // Görünmezken (ekran dışı ya da sekme gizli) döngü DURUR; görününce kaldığı yerden sürer.
+    let inView = true;
+    const running = () => !reduceMotion && inView && !document.hidden;
+    const resume = () => {
+      if (running() && raf === 0) raf = requestAnimationFrame(draw);
+    };
+    const io =
+      typeof IntersectionObserver === 'function'
+        ? new IntersectionObserver(([entry]) => {
+            inView = !!entry?.isIntersecting;
+            resume();
+          })
+        : null;
+    io?.observe(wrap);
+    document.addEventListener('visibilitychange', resume);
     const cols = [PALETTE.violet, PALETTE.sky, PALETTE.cyan, PALETTE.fuchsia, PALETTE.violet];
 
     const draw = () => {
+      raf = 0;
       const prog = progRef.current;
       const inten = intenRef.current;
       const rdy = readyRef.current;
@@ -299,13 +313,15 @@ function MysteryEnergyBar({
         ctx.stroke();
       }
 
-      if (!reduceMotion) raf = requestAnimationFrame(draw);
+      if (running()) raf = requestAnimationFrame(draw);
     };
 
     draw();
 
     return () => {
       cancelAnimationFrame(raf);
+      io?.disconnect();
+      document.removeEventListener('visibilitychange', resume);
       ro.disconnect();
       window.removeEventListener('resize', resize);
     };

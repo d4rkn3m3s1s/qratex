@@ -244,3 +244,141 @@ Yöntem: salt okunur kod incelemesi (DB'ye, script'e, sunucuya dokunulmadı). He
 - Gerçek ödül `lib/badge-reward-points.ts:25-31` → `lib/emoji-badge-texts.ts` (`badge-yeni-ses` = 200, `badge-yorum-makinesi` = 4000). Seed'deki `requirement.value` ise eşik sayısı: `badge-yeni-ses` = 1, `badge-yorum-makinesi` = 25 (`prisma/seed.ts:105,107`).
 - **Yeniden üretim:** İlk yorumunu yapıp `badge-yeni-ses` kazanan müşteriye hesabına 200 puan yatar (`activity-badges` → `creditBadgeRewardInTx`), ama `/customer/badges` kartında ve modalda "+1 puan", hero'da "Toplam Puan: 1" görür.
 - Ek not: tutarsızlık üç kaynaklı — görüntü `requirement.value`, davranışsal motor `badgeRewardPoints`, `POST /api/gamification/progress` ise yine `requirement.value || 100` kredileyor. Tek doğruluk kaynağı `badgeRewardPoints` olmalı; API `rewardPoints` alanı döndürmeli, hero toplamı `points_credited` (category `badge`) kayıtlarından hesaplanmalı. Admin panelinin `requirement`'ı değiştirmiş olması ihtimali canlı DB'de doğrulanmadı, ama seed değerleriyle tutarsızlık kesin.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/me/badges` (Ben → Rozetler). Eski `/customer/badges` artık emekli koçanı: sorgu dizgisini koruyarak `permanentRedirect` yapar. Böylece bildirimlerin ve e-postaların eski bağlantıları ile `?badge=` derin linki çalışmaya devam eder. Silinen dosyalar: 882 satırlık `badges-client.tsx`, `layout.tsx` ve `components/customer/character-leaderboard.tsx`.
+
+**Mimari (sunucu önce):**
+- `app/customer/me/badges/page.tsx` yetkiyi DB'den doğrular (`requireAuth(['CUSTOMER'])`).
+- Koleksiyon sunucuda tek paralel turda yüklenir (`lib/badges/customer-collection.ts`) ve istemci adasına `initialData` olarak verilir.
+- Ada (`components/customer/m-rozetler/**`) aynı veriyi `GET /api/customer/badges` ile tazeler. Uç `defineRoute` ile tanımlı, yalnız CUSTOMER'a açık, `read` limitli ve `userId` parametresi almaz.
+- Sekme, sıralama, kategori ve detay durumu (`?tab`, `?sort`, `?cat`, `?badge`) URL'de tutulur ama sunucuya gitmeden güncellenir (`window.history`).
+- Saf mantık `lib/badges/collection-logic.ts`'tedir ve testlidir.
+
+**Yeni ve değişen uçlar**
+- `GET /api/customer/badges`: yalnız kazanılmış rozetleri (normal + karakter) döndürür. Dönen alanlar:
+  - Gerçek kredi puanı: `points_credited` (category `badge`). Eski `data.badgeId` biçimi ile `mintPoints` `sourceId` biçimi birlikte okunur.
+  - Sahiplik oranı: sahip sayıları ve müşteri tabanı Redis'te 15 dk tutulur.
+  - Kutlama metni (`quote`), vitrin durumu, "yeni" işareti (son 7 gün) ve gizli rozet işareti.
+  - Karakter kademesi PUANDAN türetilir; reveal ile aynı kaynak.
+  - Ana karakter, gizli bar ve kategori istatistiği. İstatistikte `complete` bayrağı var; toplam sayı sızmaz.
+  - `moreToDiscover`: sayı sızdırmayan tek boolean.
+  - `nextSurprise`: yorum kilometre taşı. Yalnız aktif ve sahip olunmayan rozet sayılır.
+- `PATCH /api/customer/badges/[id]` `{ isPinned }`: rozeti vitrine sabitler.
+  - Sahiplik kontrol edilir; rozet kullanıcıda yoksa 404.
+  - Vitrin sınırı showcase ucuyla aynıdır: rozet ve kozmetik toplam 4. Sınır, kullanıcı satırı kilitlenerek transaction içinde sayılır; aşılırsa 409 `PIN_LIMIT`.
+  - "Vitrin ustası" başarımı showcase ucundaki gibi ilerletilir.
+- `GET /api/customer/character-leaderboard` (defineRoute):
+  - Diğer müşterilerin `userId`'si ve avatarı artık dönmez. Adlar maskelenir ("Furkan U."), satır anahtarları opaktır.
+  - "Bu hafta" İstanbul saatiyle Pazartesi 00:00'dan sayılır.
+  - Kullanıcının sırası ilk 20'nin dışında da gerçek yarışma sırasıyla hesaplanır.
+  - "En nadir" listesinin global kısmı Redis'te 10 dk tutulur.
+- `POST /api/gamification/badges/[id]/unlock` → **410** `BADGE_SHOP_DISABLED`. TAM SÜRPRİZ politikası gereği rozet puanla açılmaz. Satın alınan rozetin sonraki davranışsal ödülü yakması sorunu da bununla kapandı.
+- `GET /api/customer/character` kaldırıldı. Tek tüketicisi eski karttı; veri overview'a taşındı. Reveal ve ana karakter seçimi için POST değişmedi.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR | Sayfa ve API `requireAuth` kullanır (rol, ban, oturum sürümü DB'den). |
+| 2 | Metadata | ÇALIŞIYOR | "Vitrin" artık bu sayfada gerçekten yönetiliyor; `noindex`. |
+| 3 | Code-split + iskelet | ÇALIŞIYOR | `ssr:false` yerine sunucu render + küçük ada. Tek, statik iskelet. |
+| 4 | Masaüstü başlık | ÇALIŞIYOR | QDL `PageHeader` her genişlikte. |
+| 5 | Mobil h1 | ÇALIŞIYOR | Sayfanın en üstünde tek h1. |
+| 6 | Karakter veri yükleme | ÇALIŞIYOR | Veri sunucudan gelir; `return null` ve CLS yok. Bar alınamazsa görünür uyarı çıkar. |
+| 7 | Gizemli bar | ÇALIŞIYOR | `role="progressbar"` eklendi. Canvas döngüsü ekran dışında ya da sekme gizliyken durur. |
+| 8 | Konfeti + ses | ÇALIŞIYOR | Oturum başına tek kez. `isReducedMotion` açıkken (OS ya da uygulama ayarı) çalmaz. |
+| 9 | Küre/Maskot seçici | ÇALIŞIYOR | `aria-pressed`, ≥ 44px hedef, TR/EN. |
+| 10 | Reveal modalı | ÇALIŞIYOR | `next/dynamic` ile yalnız açılınca yüklenir; 1324 satır ilk yükte gelmez. |
+| 11 | Kategori vitrini | ÇALIŞIYOR | |
+| 12 | Nadirlik / % / tarih | ÇALIŞIYOR | Tarih yerel dilde ve İstanbul saatinde. Kademe puandan gelir; vitrin ile reveal tutarlı. |
+| 13 | Ana karakter yap | ÇALIŞIYOR | Detay çekmecesinde. İyimser güncelleme; başarı ve hata toast ile bildirilir. Sessiz geri alma kaldırıldı. |
+| 14 | "???" kartları | ÇALIŞIYOR | Kategori başına tek kart. Tamamlanan kategoride gösterilmez, yani artık yanlış bilgi vermez. |
+| 15 | Karakter boş durumu | ÇALIŞIYOR | `EmptyState`. |
+| 16 | Liderlik: En nadir | ÇALIŞIYOR | Önbellekli. Kullanıcıda olmayan karakterin kimliği yanıtta yok. |
+| 17 | Liderlik: Bu hafta | ÇALIŞIYOR | userId ve avatar yok, ad maskeli, İstanbul haftası. |
+| 18 | "Sen" satırı | ÇALIŞIYOR | İlk 20 dışında da gerçek sıra. |
+| 19 | Liderlik yükleniyor/boş | ÇALIŞIYOR | `QueryState`. |
+| 20 | Liderlik hata durumu | ÇALIŞIYOR | `QueryState` hatası + "Tekrar dene". |
+| 21 | "Nasıl kazanılır / puanla aç" kartı | KALDIRILDI | Tutulmayan bir vaatti. Yerine gerçek veriyle çalışan "Sıradaki sürpriz" bölmesi geldi. |
+| 22 | Hero: kazanılan/toplam | Yeniden yazıldı, ÇALIŞIYOR | Paydasız "Toplanan rozet" (sürpriz politikası gereği payda yok). |
+| 23 | Efsanevi/epik sayacı | KALDIRILDI (hero'dan) | Yerine "En nadir rozetin" (+ kullanıcıların %X'i) geldi. Nadirlik her kartta ikon ve metinle görünür. |
+| 24 | Toplam Puan | ÇALIŞIYOR | Gerçek kredi kayıtlarının toplamı; `requirement.value` artık kullanılmıyor. |
+| 25 | Tamamlanan % | KALDIRILDI | Yalnız kazanılanların görüldüğü düzende hep %100 çıkıyordu; anlamsızdı. |
+| 26 | Sıradaki % | Yeniden yazıldı, ÇALIŞIYOR | Sunucudaki `nextSurprise`: yorum kilometre taşları, yalnız aktif ve sahip olunmayan rozet. Ad sızmaz. |
+| 27 | Sıradaki ilerleme çubuğu | ÇALIŞIYOR | Aynı veri, `progressbar` ile. |
+| 28 | Arama | ÇALIŞIYOR | 12 ve üzeri rozette görünür. Türkçe büyük/küçük harf duyarsız; sonuç sayısı `aria-live`. |
+| 29 | Durum filtresi | KALDIRILDI | İki seçenek de aynı sonucu veriyordu. Yerine sıralama geldi: Yeni · Nadirlik · Kategori (URL'de). |
+| 30 | Kategori filtresi | ÇALIŞIYOR | URL'de (`?cat`). |
+| 31 | Yükleniyor iskeleti | ÇALIŞIYOR | Statik (shimmer yok) ve tek yerde. |
+| 32 | Boş durum | ÇALIŞIYOR | Üç ayrı durum: hata (ErrorState + yeniden dene), sonuç yok ("filtreleri temizle"), gerçekten boş (QR okutma CTA'sı). |
+| 33 | API hata yönetimi | ÇALIŞIYOR | Zarf v2 + `QueryState`. 500 artık "boş koleksiyon" gibi görünmez. |
+| 34 | Gruplu ızgara / sıralama | ÇALIŞIYOR | Kademe sırası `RARITY_ORDER` ile. Kategoriye göre sıralama bir seçenek. |
+| 35 | Admin rozet rengi | ÇALIŞIYOR | Tek kart bileşeni, her görünümde uygulanır (`BadgeGlyph color`). |
+| 36 | "+N puan" | ÇALIŞIYOR | Detayda hesaba gerçekten yatan miktar gösterilir. Puan yatmadıysa "puan eklenmedi" yazar. |
+| 37 | Puanla aç butonu | KALDIRILDI | UI'dan silindi; uç 410 döner. |
+| 38 | Kilitli kart ilerleme çubuğu | KALDIRILDI | Sürpriz politikası. |
+| 39 | Detay açma | ÇALIŞIYOR | Kart `<button>`; anlamlı `aria-label` + `aria-haspopup`. |
+| 40 | Detay: tarih + puan | ÇALIŞIYOR | Kutlama metni, nadirlik oranı ve kategori de var. |
+| 41 | Detay: kilitli dal | KALDIRILDI | Ölü koddu. |
+| 42 | Detay kapatma | ÇALIŞIYOR | Kapat düğmesi etiketli. `?badge` geçmişte tutulduğu için geri tuşu da çekmeceyi kapatır. |
+| 43 | Escape / odak / dialog | ÇALIŞIYOR | DS `DetailSheet` (Radix): odak tuzağı, Esc, `aria-modal`. Mobilde alttan, masaüstünde yandan açılır. |
+| 44 | Kart klavye erişimi | ÇALIŞIYOR | |
+| 45 | Hareket azaltma | ÇALIŞIYOR | `useReducedMotionPref` / `isReducedMotion` / `<Ambient>`. Uygulama içi ayar da dikkate alınır. |
+| 46 | Nadirlik efektleri | ÇALIŞIYOR | Efekt bütçesi: yaygın ve nadir statik, destansı ince kenar, efsanevi tek folyo (yalnız görünürken, `<Ambient>` içinde). `<style jsx global>` silindi. |
+| 47 | Çok dillilik | ÇALIŞIYOR | Yüzey ve karakter bileşenleri TR/EN (`m-rozetler/copy.ts`). Reveal modalı hariç; bkz. kalanlar. |
+| 48 | Derin bağlantı | ÇALIŞIYOR | `?badge=<id>` çekmeceyi açar, karta kaydırır ve vurgular. Eski rota sorguyu korur. |
+| 49 | Rozet paylaşma | ÇALIŞIYOR | Normal rozette 1080×1350 PNG kart (token renkleri). Sıra: Web Share → indirme → metin → pano; sonuç toast ile bildirilir. Karakterde mevcut `shareCharacter` kullanılır. |
+| 50 | Vitrine sabitleme | ÇALIŞIYOR | Detaydaki anahtar. Sınır ve doluluk görünür; iyimser güncelleme, hata olursa geri alınır. |
+| 51 | "Kullanıcıların %X'inde" | ÇALIŞIYOR | Detayda, karakter kartında, hero'da ve liderlikte. |
+| 52 | "Yeni" işareti | ÇALIŞIYOR | Zaman tabanlı: kazanımdan sonraki 7 gün. Gerçek "görüldü" bayrağı için bkz. ŞEMA İSTEĞİ. |
+
+**Sayım:** ÇALIŞIYOR 45 (#22 ve #26 yeniden yazılarak dahil) · KALDIRILDI 7 (#21, #23, #25, #29, #37, #38, #41) — toplam 52.
+
+### Bulgular: kapanış
+
+| # | Bulgu | Durum |
+|---|---|---|
+| 1 | IDOR | Kapandı. Yüzey artık `userId` almayan yeni uçta. Liderlik yanıtından `userId` çıkarıldı. (`/api/gamification/badges` GET'teki P0-09 kapanışı daha önce yapılmıştı.) |
+| 2 | Sürpriz politikası / satın alma | Satın alma kapandı (410). Puan basan `POST /api/gamification/progress` yolu P0-14'te zaten kaldırılmıştı. **Kalan:** `/api/gamification/badges`, `userId`'siz çağrıda gizli olmayan kataloğu hâlâ döndürüyor. Uç admin paneliyle paylaşıldığı için sahiplik dışı. |
+| 3 | Yanlış puan alanı | Kapandı; artık gerçek kredi gösteriliyor. |
+| 4 | Hero metrikleri | Kapandı. |
+| 5 | Hatanın boş durum gibi görünmesi | Kapandı. |
+| 6 | Kopya kart / ölü dallar / iki görsel dil | Kapandı. Tek kart bileşeni, nadirlik için tek kaynak (`RARITY_STYLES`); ölü dallar silindi. |
+| 7 | Erişilebilirlik | Kapandı. Butonlar, Radix çekmece, h1 → h2 → h3 hiyerarşisi, `aria-pressed`, ≥ 44px hedefler, `progressbar`. |
+| 8 | Bilgi mimarisi | Kapandı. Sıra: hero → sürpriz → sekmeler (Rozetler · Karakterler · Topluluk). Liderlik ayrı sekmede ve gerektiğinde yükleniyor. |
+| 9 | Performans | Büyük ölçüde kapandı: tek uç ve tek tur, global sayımlar Redis'te, reveal gerektiğinde yükleniyor, liderlik önbellekli, canvas görünmezken duruyor, ızgara 24'lük sayfalarla açılıyor. **Kalan:** `getCategoryProgress`, uzunluk şartı olan kategoride yorum metinlerini çekiyor (`lib/character-badges.ts`, paylaşılan motor). Şu an hiçbir kategoride uzunluk şartı olmadığı için pratik etkisi yok. |
+| 10 | Aşırı efekt | Kapandı. |
+| 11 | i18n | Kapandı; reveal modalı hariç. |
+| 12 | Sıralama | Kapandı. |
+| 13 | Liderlik gizliliği | Adlar maskeleniyor, avatar kaldırıldı. "Liderliklerde görün" tercihi için bkz. ŞEMA İSTEĞİ. |
+| 14 | Kod hijyeni | Kapandı. |
+
+**Eksik özellikler:**
+- Uygulandı:
+  - 1: Detay bağlamı (quote, %, tarih, gerçek puan).
+  - 2: Paylaşım kartı.
+  - 3: Koleksiyondan vitrine sabitleme.
+  - 4: "Yeni" işareti ve derin link.
+  - 6: Sürprizi bozmayan merak sinyali (`moreToDiscover` + `nextSurprise`).
+- Yapılmadı:
+  - 5: Rozet zaman çizelgesi. Bu Yılım yüzeyinin işi; "Yeni" sıralaması zaten kronolojik görünüm veriyor.
+
+### Kalanlar (gerekçeli)
+- **Bildirimlerde `?badge=`:** Şu dosyalar hâlâ düz `/customer/badges` linki üretiyor: `lib/activity-badges.ts`, `lib/surprise-badges.ts`, `lib/character-achievements.ts`, `lib/notify-email.ts`, `lib/team-email.ts`. Yönlendirme bu linkleri karşılıyor. Doğrudan rozete odaklanmak için üreticilerin `?badge=<id>` eklemesi gerekiyor; dosyalar sahiplik dışı.
+- **Reveal modalı (`character-reveal.tsx`):** Yalnız Türkçe ve kendi nadirlik temasını taşıyor. Admin rozet test laboratuvarıyla paylaşıldığı için dokunulmadı.
+- **Paylaşılan öğe geçişi (`layoutId`, kart → çekmece):** Bu yüzeyde `domMax` yüklü değil. Yerine Radix çekmecenin CSS geçişi kullanıldı.
+- **Görsel doğrulama:** Dev sunucusu ve build yasak olduğu için ekran görüntüsüyle doğrulama yapılamadı. Yapıyı ve erişilebilirliği SSR duman testi (`__tests__/customer/badges-experience-render.test.ts`) doğruluyor.
+- `lib/qra-knowledge-base.ts` hâlâ eski yolu ("ilerleme" açıklamasıyla) taşıyor. Navigasyon ve Qra sahipliğinde.
+
+### ŞEMA İSTEKLERİ
+1. `UserBadge.seenAt DateTime?`: Gerçek bir "görülmedi" işareti için. Bugün "yeni" = son 7 gün.
+2. `User.showOnLeaderboards Boolean @default(true)` (ya da sistem geneli bir liderlik görünürlük tercihi): Haftalık karakter liderliğinden çıkabilme hakkı için. Bugün adlar maskeleniyor ve avatar gösterilmiyor.
+
+### Testler
+- `__tests__/lib/badge-collection-logic.test.ts` (16 test).
+- `__tests__/api/customer-badges.test.ts` (16 test): yetki, sahiplik, vitrin sınırı, 410, maskeleme, gerçek sıra, hata zarfı.
+- `__tests__/customer/badges-experience-render.test.ts` (5 test).
