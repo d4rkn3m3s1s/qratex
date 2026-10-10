@@ -4,11 +4,30 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { invalidateStaffScope } from '@/lib/auth/scope';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 import { z } from 'zod';
+
+/** Yanıt DTO'su: PIN hiçbir zaman ham dönmez (GET listesiyle tutarlı: `****`). */
+function staffDto(row: { id: string; userId: string; dealerId: string; jobTitle: string | null; pinCode: string | null; isActive: boolean; createdAt: Date }) {
+  return {
+    id: row.id,
+    userId: row.userId,
+    dealerId: row.dealerId,
+    jobTitle: row.jobTitle,
+    pinCode: row.pinCode ? '****' : null,
+    isActive: row.isActive,
+    createdAt: row.createdAt,
+  };
+}
 
 const patchStaffSchema = z.object({
   jobTitle: z.string().trim().max(50).nullable().optional(),
-  pinCode: z.string().regex(/^\d{4,6}$/, 'PIN 4-6 haneli olmalı').nullable().optional(),
+  // Liste PIN'i `****` olarak maskeli döner; düzenleme formu bu maskeyi geri gönderirse
+  // "PIN değişmedi" sayılır (eskiden 400 "PIN 4-6 haneli olmalı" ile kaydı engelliyordu).
+  pinCode: z.preprocess(
+    (v) => (v === '****' ? undefined : v),
+    z.string().regex(/^\d{4,6}$/, 'PIN 4-6 haneli olmalı').nullable().optional()
+  ),
   isActive: z.boolean().optional(),
 });
 
@@ -42,7 +61,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
             if (!updated) {
                 return NextResponse.json({ success: false, error: 'Personel bulunamadı veya yetkisiz erişim' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
             }
-            return NextResponse.json({ success: true, staff: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
+            return NextResponse.json({ success: true, staff: staffDto(updated) }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const write = await prisma.dealerStaff.updateMany({
@@ -61,7 +80,13 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
             return NextResponse.json({ success: false, error: 'Personel bulunamadı veya yetkisiz erişim' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
         // Pasifleştirme/yeniden etkinleştirme kapsamı ANINDA etkilesin (Redis sıcak katmanı düşür).
-        if (isActive !== undefined) await invalidateStaffScope(updated.userId).catch(() => {});
+        if (isActive !== undefined) {
+            await Promise.all([
+                invalidateStaffScope(updated.userId).catch(() => {}),
+                // requireAuth'un oturum durumu önbelleği de düşsün: pasif personel bir sonraki istekte dışarıda.
+                invalidateSessionState(updated.userId).catch(() => {}),
+            ]);
+        }
 
         await prisma.auditLog.create({
             data: {
@@ -75,7 +100,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
             },
         });
 
-        return NextResponse.json({ success: true, staff: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
+        return NextResponse.json({ success: true, staff: staffDto(updated) }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
         console.error('Update staff error:', error);
         const db = responseIfDatabaseUnavailable(error);

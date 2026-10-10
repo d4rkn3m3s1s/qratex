@@ -103,6 +103,16 @@ export async function POST(req: NextRequest) {
   const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
 
+  // P0-10: "bu e-posta kayıtlı mı?" sorusunun yanıtı (404) da bir numaralandırma kanalıdır;
+  // aramayla AYNI kova paylaşılır → ekleme + arama toplamı aktör başına dakikada 30.
+  const rl = await checkRateLimitDb(`team-member-search:${auth.session.user.id}`, SEARCH_RATE_MAX, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Çok fazla deneme yaptınız. Lütfen biraz bekleyin.' },
+      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    );
+  }
+
   const raw = await req.json().catch(() => ({}));
   const parsed = addSchema.safeParse(raw);
   if (!parsed.success) {
@@ -198,9 +208,17 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
   const id = req.nextUrl.searchParams.get('id');
-  if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+  if (!id || id.length > 191) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
 
-  await prisma.user.update({ where: { id }, data: { adminDepartment: null, adminTeamRole: null } }).catch(() => null);
+  // Yalnız MEVCUT ekip üyesi çıkarılır (id ile ekip dışındaki hesaplara yazılmaz, sahte audit
+  // kaydı oluşmaz). Koşullu güncelleme: arada çıkarılmışsa 404.
+  const removed = await prisma.user.updateMany({
+    where: { id, adminTeamRole: { not: null } },
+    data: { adminDepartment: null, adminTeamRole: null },
+  });
+  if (removed.count === 0) {
+    return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+  }
   await prisma.userDepartment.deleteMany({ where: { userId: id } }).catch(() => null); // çoklu departman temizle
   await prisma.auditLog.create({
     data: { userId: auth.session.user.id, action: 'remove_team_member', entity: 'admin_team_member', entityId: id, ...getAuditRequestMeta(req) },

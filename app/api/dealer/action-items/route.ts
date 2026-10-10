@@ -92,8 +92,25 @@ export async function GET(request: NextRequest) {
       prisma.actionItem.count({ where }),
     ]);
 
-    // P0-11: atanan kişi açık DTO ile (e-posta maskeli) — ham e-posta dışarı çıkmaz.
-    const items = rows.map((row) => ({ ...row, assignedTo: assigneeDto(row.assignedTo) }));
+    // P0-11: AÇIK DTO (`...row` yayılımı yok: şemaya eklenen alan kendiliğinden dışarı çıkmaz);
+    // atanan kişinin e-postası maskeli.
+    const items = rows.map((row) => ({
+      id: row.id,
+      feedbackId: row.feedbackId,
+      dealerId: row.dealerId,
+      suggestionText: row.suggestionText,
+      priority: row.priority,
+      status: row.status,
+      assignedToId: row.assignedToId,
+      dueAt: row.dueAt,
+      completedAt: row.completedAt,
+      sourceModule: row.sourceModule,
+      impactScore: row.impactScore,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      feedback: row.feedback,
+      assignedTo: assigneeDto(row.assignedTo),
+    }));
 
     return NextResponse.json(
       {

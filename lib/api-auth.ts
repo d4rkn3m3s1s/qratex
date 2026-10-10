@@ -221,32 +221,13 @@ export function requireUserResource(
 }
 
 /**
- * Dealer scope for Prisma where: use in all dealer-scoped queries.
- * ADMIN: pass undefined to query any; DEALER: pass { dealerId: session.user.id }.
+ * Senkron kapsam filtreleri (P0-05, VARSAYILAN REDDET). Tek kaynak `lib/auth/scope`;
+ * eski içe aktarımlar kırılmasın diye buradan yeniden dışa aktarılır.
+ *  - ADMIN → `{}`; DEALER → `{ dealerId }` / CUSTOMER → `{ userId }`
+ *  - STAFF / bilinmeyen rol / kimliksiz oturum → hiçbir satırla eşleşmeyen filtre
+ * Personel kapsamı için `resolveDealerScope` (aktiflik DB'den).
  */
-export function dealerScopeWhere(
-  session: Session
-): { dealerId: string } | Record<string, never> {
-  const role = session.user?.role as string | undefined;
-  const userId = session.user?.id;
-  if (!userId || role === 'ADMIN') return {};
-  if (role === 'DEALER') return { dealerId: userId };
-  return {};
-}
-
-/**
- * User scope for Prisma where: use in all customer-scoped queries.
- * ADMIN: pass undefined to query any; CUSTOMER: pass { userId: session.user.id }.
- */
-export function userScopeWhere(
-  session: Session
-): { userId: string } | Record<string, never> {
-  const role = session.user?.role as string | undefined;
-  const userId = session.user?.id;
-  if (!userId || role === 'ADMIN') return {};
-  if (role === 'CUSTOMER') return { userId };
-  return {};
-}
+export { dealerScopeWhere, userScopeWhere } from '@/lib/auth/scope';
 
 /**
  * Staff: get dealerId from session. STAFF must have dealerId (employer).

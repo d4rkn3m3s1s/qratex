@@ -26,6 +26,7 @@ import { hashPassword } from '@/lib/password';
 import { isSameEmail, normalizeEmail, emailLookupFilter } from '@/lib/auth/normalize-email';
 import { maskEmail } from '@/lib/http/dto';
 import { invalidateStaffScope } from '@/lib/auth/scope';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 
 export const STAFF_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const STAFF_INVITE_PATH = '/auth/staff-invite';
@@ -360,7 +361,11 @@ export async function acceptStaffInvitation(input: AcceptInvitationInput): Promi
       return { userId, createdAccount };
     });
 
-    await invalidateStaffScope(result.userId).catch(() => {});
+    await Promise.all([
+      invalidateStaffScope(result.userId).catch(() => {}),
+      // Rol CUSTOMER → STAFF oldu: requireAuth'un oturum durumu önbelleği eski rolü tutmasın.
+      invalidateSessionState(result.userId).catch(() => {}),
+    ]);
     return {
       ok: true,
       userId: result.userId,

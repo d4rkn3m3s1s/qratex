@@ -134,6 +134,43 @@ describe('GET /api/admin/team/members — kullanıcı tabanı listelenemez', () 
     expect(db.user.update).not.toHaveBeenCalled();
     expect(db.userDepartment.deleteMany).not.toHaveBeenCalled();
   });
+
+  it('POST: ekleme aramayla aynı rate-limit kovasını paylaşır (404 numaralandırma kanalı) → 429, sorgu yok', async () => {
+    setSession(TEAM_MANAGER_CUSTOMER);
+    db.user.findUnique.mockResolvedValue({ adminTeamRole: 'yonetici', adminDepartment: null, role: 'CUSTOMER' });
+    mockRate.mockImplementation(async () => ({ ok: false, remaining: 0, retryAfterMs: 1000 } as never));
+    const { POST } = await import('@/app/api/admin/team/members/route');
+    const res = await POST(req('/api/admin/team/members', { method: 'POST', body: { email: 'kurban@ornek.com' } }));
+    expect(res.status).toBe(429);
+    expect((mockRate.mock.calls[0] as unknown[])[0]).toBe('team-member-search:cust-mgr');
+    expect(db.user.findFirst).not.toHaveBeenCalled();
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it('DELETE: ekip dışındaki bir hesap id ile "çıkarılamaz" → 404, audit yazılmaz', async () => {
+    setSession(TEAM_MANAGER_CUSTOMER);
+    db.user.findUnique.mockResolvedValue({ adminTeamRole: 'yonetici', adminDepartment: null, role: 'CUSTOMER' });
+    db.user.updateMany.mockResolvedValue({ count: 0 });
+    const { DELETE } = await import('@/app/api/admin/team/members/route');
+    const res = await DELETE(req('/api/admin/team/members?id=outsider', { method: 'DELETE' }));
+    expect(res.status).toBe(404);
+    expect(db.user.updateMany.mock.calls[0][0].where).toEqual({ id: 'outsider', adminTeamRole: { not: null } });
+    expect(db.userDepartment.deleteMany).not.toHaveBeenCalled();
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('DELETE: ekip üyesi çıkarılır, departmanları temizlenir, audit yazılır', async () => {
+    setSession(TEAM_MANAGER_CUSTOMER);
+    db.user.findUnique.mockResolvedValue({ adminTeamRole: 'yonetici', adminDepartment: null, role: 'CUSTOMER' });
+    db.user.updateMany.mockResolvedValue({ count: 1 });
+    db.userDepartment.deleteMany.mockResolvedValue({ count: 2 });
+    db.auditLog.create.mockResolvedValue({});
+    const { DELETE } = await import('@/app/api/admin/team/members/route');
+    const res = await DELETE(req('/api/admin/team/members?id=member-1', { method: 'DELETE' }));
+    expect(res.status).toBe(200);
+    expect(db.userDepartment.deleteMany).toHaveBeenCalledWith({ where: { userId: 'member-1' } });
+    expect(db.auditLog.create).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ───────────────────────────── P0-11: atama ─────────────────────────────

@@ -8,7 +8,7 @@ import { z } from 'zod';
 export const dynamic = 'force-dynamic';
 
 const createSchema = z.object({
-  assignedTo: z.string(),
+  assignedTo: z.string().min(1).max(191),
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   dueAt: z.string().datetime().optional(),
@@ -42,15 +42,17 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const dealerId = auth.session.user.id;
 
-  const body = await request.json();
+  const body: unknown = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
+  // P0-11: yalnız bu işletmenin AKTİF personeline atanır (ayrılmış/pasif personel hedeflenemez).
   const staff = await prisma.dealerStaff.findFirst({
-    where: { dealerId, userId: parsed.data.assignedTo },
+    where: { dealerId, userId: parsed.data.assignedTo, isActive: true },
+    select: { id: true },
   });
   if (!staff) {
     return NextResponse.json(

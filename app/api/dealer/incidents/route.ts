@@ -37,55 +37,77 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  try {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const page = clampPageParam(searchParams.get('page'));
+    const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
+    const skip = paginationSkip(page, pageSize);
 
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get('status');
-  const page = clampPageParam(searchParams.get('page'));
-  const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
-  const skip = paginationSkip(page, pageSize);
+    const dealerId = session.user.role === 'DEALER' ? session.user.id : null;
+    const where =
+      session.user.role === 'ADMIN'
+        ? (status ? { status } : {})
+        : { dealerId: session.user.id, ...(status ? { status } : {}) };
 
-  const dealerId = session.user.role === 'DEALER' ? session.user.id : null;
-  const where =
-    session.user.role === 'ADMIN'
-      ? (status ? { status } : {})
-      : { dealerId: session.user.id, ...(status ? { status } : {}) };
-
-  // Otomatik tetikleme: sadece dealer için; eşik aşımında olay oluştur.
-  // Sahte "demo olay" artık YAZILMAZ (D11); eskiden yazılmış olanlar burada temizlenir.
-  if (dealerId) {
-    try {
-      await purgeLegacyDemoIncidents(dealerId);
-      await runIncidentDetection(dealerId);
-    } catch (_) {
-      // Detection hatası listeyi bozmasın
+    // Otomatik tetikleme: sadece dealer için; eşik aşımında olay oluştur.
+    // Sahte "demo olay" artık YAZILMAZ (D11); eskiden yazılmış olanlar burada temizlenir.
+    if (dealerId) {
+      try {
+        await purgeLegacyDemoIncidents(dealerId);
+        await runIncidentDetection(dealerId);
+      } catch (_) {
+        // Detection hatası listeyi bozmasın
+      }
     }
-  }
 
-  const [rows, total] = await Promise.all([
-    prisma.incident.findMany({
-      where,
-      skip,
-      take: pageSize,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        assignedTo: { select: ASSIGNEE_SELECT },
+    const [rows, total] = await Promise.all([
+      prisma.incident.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          assignedTo: { select: ASSIGNEE_SELECT },
+        },
+      }),
+      prisma.incident.count({ where }),
+    ]);
+    // P0-11: AÇIK DTO (`...row` yayılımı yok); atanan kişinin e-postası maskeli.
+    const items = rows.map((row) => ({
+      id: row.id,
+      dealerId: row.dealerId,
+      type: row.type,
+      severity: row.severity,
+      status: row.status,
+      title: row.title,
+      description: row.description,
+      thresholdValue: row.thresholdValue,
+      assignedToId: row.assignedToId,
+      dueAt: row.dueAt,
+      resolvedAt: row.resolvedAt,
+      metadata: row.metadata,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      assignedTo: assigneeDto(row.assignedTo),
+    }));
+
+    return NextResponse.json(
+      {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
       },
-    }),
-    prisma.incident.count({ where }),
-  ]);
-  // P0-11: atanan kişi açık DTO ile; e-posta maskeli.
-  const items = rows.map((row) => ({ ...row, assignedTo: assigneeDto(row.assignedTo) }));
-
-  return NextResponse.json(
-    {
-      items,
-      total,
-      page,
-      pageSize,
-      totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
-    },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  } catch (error) {
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    console.error('incidents GET:', error);
+    return NextResponse.json({ error: 'Olaylar yüklenemedi' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
+  }
 }
 
 export async function POST(request: NextRequest) {

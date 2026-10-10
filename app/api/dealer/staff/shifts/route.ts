@@ -8,11 +8,11 @@ import { z } from 'zod';
 export const dynamic = 'force-dynamic';
 
 const createSchema = z.object({
-  userId: z.string(),
-  date: z.string(), // YYYY-MM-DD
-  startTime: z.string(),
-  endTime: z.string(),
-  note: z.string().optional(),
+  userId: z.string().min(1).max(191),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  note: z.string().max(500).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -45,14 +45,16 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const dealerId = auth.session.user.id;
 
-  const body = await request.json();
+  const body: unknown = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 
+  // P0-11: yalnız bu işletmenin AKTİF personeline atanır (ayrılmış/pasif personel hedeflenemez).
   const staff = await prisma.dealerStaff.findFirst({
-    where: { dealerId, userId: parsed.data.userId },
+    where: { dealerId, userId: parsed.data.userId, isActive: true },
+    select: { id: true },
   });
   if (!staff) {
     return NextResponse.json({ error: 'Bu personel bu işletmeye bağlı değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });

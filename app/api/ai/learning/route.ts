@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
@@ -46,7 +45,10 @@ function json(body: unknown, status = 200) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // Rol kararı DB'deki GÜNCEL rolle (requireAuth); kapsam aşağıda resolveAiScope ile.
+    const auth = await requireAuth(['ADMIN', 'DEALER', 'STAFF']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
     const { searchParams } = new URL(request.url);
     const scope = await resolveAiScope(session, { dealerId: searchParams.get('dealerId'), allowPlatform: true });
     if (!scope.ok) return scopeErrorResponse(scope);
@@ -111,7 +113,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const auth = await requireAuth(['ADMIN', 'DEALER', 'STAFF']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'record_correction';
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
@@ -95,17 +94,13 @@ const themeClusterSchema = z.object({
 // ─────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Oturum bulunamadı. Lütfen giriş yapın.' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
     // P0-05 / P0-06: VARSAYILAN REDDET. CUSTOMER ve tanınmayan roller bu uçların HİÇBİRİNİ
-    // çağıramaz (müşteri kendi olumsuz yorumunu "olumlu" yazdırabiliyordu). Kalan roller için
-    // kapsam aşağıda `resolveAiScope` ile DB'den çözülür (STAFF → aktif bağlı bayi).
-    const actorRole = session.user.role as string;
-    if (actorRole !== 'ADMIN' && actorRole !== 'DEALER' && actorRole !== 'STAFF') {
-      return NextResponse.json({ error: 'Bu işlem için yetkiniz yok.', code: 'FORBIDDEN' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    // çağıramaz (müşteri kendi olumsuz yorumunu "olumlu" yazdırabiliyordu). Rol kararı DB'deki
+    // GÜNCEL rolle verilir (requireAuth; bayat JWT rolü kapsam açmaz). Kalan roller için kapsam
+    // aşağıda `resolveAiScope` ile DB'den çözülür (STAFF → aktif bağlı bayi).
+    const auth = await requireAuth(['ADMIN', 'DEALER', 'STAFF']);
+    if ('error' in auth) return auth.error;
+    const { session } = auth;
 
     const rlAnalyze = await checkRateLimitDb(`ai_analyze:${session.user.id}`, RATE_LIMIT, 60_000);
     if (!rlAnalyze.ok) {

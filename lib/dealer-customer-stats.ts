@@ -238,17 +238,31 @@ function toRowData(stat: DealerCustomerStat, now: Date) {
   };
 }
 
-/** Bir bayinin istatistiklerini hesaplayıp `DealerCustomerStats`'a yazar (idempotent upsert). */
+/** Tek transaction'da yazılan upsert sayısı (satır-satır gidiş-dönüşü azaltır, tx'i kısa tutar). */
+const UPSERT_CHUNK = 200;
+
+/**
+ * Bir bayinin istatistiklerini hesaplayıp `DealerCustomerStats`'a yazar (idempotent upsert).
+ * Bu turda yazılmayan (artık bu bayide tüketimi olmayan — silinmiş/anonimleştirilmiş tüketim)
+ * eski satırlar SİLİNİR; bayi bayat bir müşteri satırı görmeye devam etmez.
+ */
 export async function recomputeDealerCustomerStats(dealerId: string, now: Date = new Date()): Promise<number> {
   const stats = await computeDealerCustomerStats(dealerId, { now });
-  for (const stat of stats) {
-    const data = toRowData(stat, now);
-    await prisma.dealerCustomerStats.upsert({
-      where: { dealerId_customerId: { dealerId, customerId: stat.customerId } },
-      update: data,
-      create: { dealerId, customerId: stat.customerId, ...data },
-    });
+  for (let i = 0; i < stats.length; i += UPSERT_CHUNK) {
+    const chunk = stats.slice(i, i + UPSERT_CHUNK);
+    await prisma.$transaction(
+      chunk.map((stat) => {
+        const data = toRowData(stat, now);
+        return prisma.dealerCustomerStats.upsert({
+          where: { dealerId_customerId: { dealerId, customerId: stat.customerId } },
+          update: data,
+          create: { dealerId, customerId: stat.customerId, ...data },
+        });
+      })
+    );
   }
+  // Yalnız bütün upsert'ler başarılıysa buraya gelinir: bu turda dokunulmayan satırlar bayattır.
+  await prisma.dealerCustomerStats.deleteMany({ where: { dealerId, calculatedAt: { lt: now } } });
   return stats.length;
 }
 
@@ -327,6 +341,30 @@ export async function getDealerCustomerStats(
     return b.totalSpend - a.totalSpend;
   });
   return { source: 'live', calculatedAt: null, stats: sorted.slice(0, limit) };
+}
+
+/**
+ * Bu bayide kayıp riski yüksek ve BU BAYİDE uzun süredir pasif müşteriler (churn müdahalesi,
+ * risk segmenti gibi arka plan işleri için). Platform geneli CLV'nin yerine geçer: risk yalnız bu
+ * bayideki sinyallerden, pasiflik yalnız bu bayideki son ziyaretten hesaplanır (rakip işletmedeki
+ * ziyaret ne sonucu ne de seçimi etkiler). Günlük iş için canlı ve kesin hesap kullanılır.
+ */
+export async function listDealerAtRiskCustomers(
+  dealerId: string,
+  options: { churnThreshold: number; inactiveBefore: Date; limit?: number; now?: Date }
+): Promise<Array<{ customerId: string; churnRisk: number; lastVisitAt: Date | null }>> {
+  const limit = Math.min(Math.max(options.limit ?? 20, 1), 500);
+  const stats = await computeDealerCustomerStats(dealerId, { now: options.now });
+  return stats
+    .filter(
+      (s): s is DealerCustomerStat & { churnRisk: number } =>
+        s.churnRisk != null &&
+        s.churnRisk >= options.churnThreshold &&
+        (s.lastVisitAt == null || s.lastVisitAt.getTime() < options.inactiveBefore.getTime())
+    )
+    .sort((a, b) => b.churnRisk - a.churnRisk)
+    .slice(0, limit)
+    .map((s) => ({ customerId: s.customerId, churnRisk: s.churnRisk, lastVisitAt: s.lastVisitAt }));
 }
 
 /** Bayinin müşteri sayısı (kalıcı tablo boşsa canlı). */
