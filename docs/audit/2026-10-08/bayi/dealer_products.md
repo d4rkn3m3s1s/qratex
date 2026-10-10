@@ -187,3 +187,91 @@
 - **`/dealer/reviews` ve `/dealer/consumptions`:** Ürün adını gösteriyor ama ürün bazlı özet sunmuyor. Ürün performans özeti burada (ürün kartında ve ürün detayında) toplanıp oradaki listelere filtreli derin bağlantı verilmeli (`/dealer/reviews?productId=`). Ayrı bir "ürün analitiği" sayfası açmaya gerek yok.
 - **Admin tarafı:** Global kategori ve ürünleri yönetecek bir admin ekranı yok (`app/admin` altında katalog sayfası bulunamadı). Global kayıtlar yalnız seed ile geliyor. Ya bir admin "Global katalog şablonları" ekranı eklenmeli ya da global kayıtlar bayi onboarding'inde kopyalanan şablonlara dönüştürülmeli.
 - **Kaldırma veya birleştirme önerilmiyor:** Sayfanın yeri doğru (sidebar.tsx:238, visibility-controls.ts:47, onboarding adımı). Yapılması gereken, kapsamını genişletmek.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/dealer/products` ("Ürünler ve menü"). Sunucu bileşeni ilk sayfayı, kategorileri ve içgörüleri `loadCatalogPage` ile hazırlar (React Query `HydrationBoundary`); istemci adası `components/dealer/b-urunler/**`. Düzenleyici, detay, kategori yönetimi, içe aktarma ve toplu işlem çubuğu `next/dynamic` ile ayrı parça. Ops kaydı (QDL v2): `PanelPage` + `PageHeader`, `QueryState`, `EntityEditorSheet`, `DetailSheet`, `ConfirmAction`, `MoneyField`, `PhotoPicker`; hareket yalnız durum değişimini anlatır (filtrede `layout` ile yerinde yeniden düzen, arşivde solarak çıkış), `useReducedMotionPref` ile statik; kartlarda `backdrop-blur` yok.
+
+**Yeni sunucu katmanı:** `lib/dealer/catalog/`: `core.ts` (saf: İstanbul pencereleri, ürün başına 30 gün / önceki 30 gün tüketim + puan, Türkçe arama/sıralama/sayfa, içgörüler, CSV içe aktarma raporu, görsel alanı denetimi), `server.ts` (okuma; iki `groupBy` + tek değerlendirme sorgusu, N+1 yok), `mutations.ts` (yazma; sahiplik, kategori erişimi, aynı ad 409, `baseUpdatedAt` 409, arşiv, silme yok), `schemas.ts` (sunucu ve form ortak zod; fiyat **kuruş** `priceMinor`), `money.ts`, `csv.ts`, `text.ts`, `types.ts`.
+
+**Yeni BFF uçları** (hepsi `defineRoute`: rol + zod + rate limit + kiracı kapsamı; ADMIN yalnız `?dealerId=` ile salt-okunur):
+`GET /api/dealer/catalog` · `POST /api/dealer/catalog/products` · `GET|PATCH /api/dealer/catalog/products/[id]` · `POST …/products/[id]/copy` · `POST …/products/bulk` · `POST /api/dealer/catalog/images` (multipart → sharp ile yeniden kodlama, EXIF silme → R2 `products/<bayi>/…`) · `POST /api/dealer/catalog/categories` · `PATCH …/categories/[id]` · `POST …/categories/[id]/archive` · `POST …/categories/[id]/restore` · `POST …/categories/reorder` · `POST /api/dealer/catalog/import` (önizleme → commit, tek işlem) · `GET /api/dealer/catalog/export` (CSV, Excel Türkçe).
+
+**Eski uçlar:** `app/api/dealer/products/[id]/route.ts` kaldırıldı (yalnız eski sayfa kullanıyordu; görsel alanına her URL'yi kabul ediyordu). `/api/dealer/products` ve `/api/dealer/categories` yalnız GET olarak kaldı (Kart Tara tüketiyor); POST'lar emekli. Kategori `_count` artık yalnız bu bayinin + sistemin aktif ürünlerini sayıyor (Bulgu 10; Kart Tara'daki sayı da düzeldi). `any` yerine `Prisma.ProductWhereInput`.
+
+**Test:** `__tests__/lib/dealer-catalog.test.ts`, 23 test (zaman pencereleri, istatistik/içgörü, Türkçe arama, sıralama/sayfa, sorgu anahtarı gidiş-dönüş, kuruş/CSV/formül kaçışı, içe aktarma raporu, görsel alanı, şemalar, yazma kuralları: 409/403/404, arşivlenmiş kategori, hedefsiz kategori arşivi, toplu fiyat).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero | ÇALIŞIYOR | Ops sayfası olduğu için `PageHeader` compact (hero yalnız ana sayfalarda) |
+| 2 | Sayfa metadata | ÇALIŞIYOR | Sayfa kendi `generateMetadata`'sını veriyor; "stok" vaadi kalktı, ürün bazlı tüketim/puan gerçekten var |
+| 3 | "Kategori Ekle" | ÇALIŞIYOR | "Kategoriler" çekmecesi (oluştur + yönet) |
+| 4 | "Ürün Ekle" | ÇALIŞIYOR | Masaüstünde başlıkta, mobilde alt gezinmenin üstünde FAB |
+| 5 | Kategori sayısı kartı | KALDIRILDI | Bilgi değeri düşüktü; yerine kategori çiplerinde bayi kapsamlı ürün sayıları ve eyleme dönük içgörü şeridi |
+| 6 | Ürün sayısı kartı | KALDIRILDI | Yerine Aktif/Arşiv sayaçları (durum anahtarında) ve sonuç sayısı; yüklenirken "0" yok (iskelet) |
+| 7 | Ürün arama | ÇALIŞIYOR | Ad + açıklama + kategori, `tr-TR` + işaret atma (İ/I/Ş…), çok kelimeli; URL'de (`q`), 300 ms gecikmeli, sonuç sayısı duyurulur |
+| 8 | Kategori filtresi | ÇALIŞIYOR | `justify-start`, yatay kaydırılan çip şeridi (Bulgu 7), `aria-pressed`, URL'de (`category`) |
+| 9 | İlk veri yükleme | ÇALIŞIYOR | SSR ön-yükleme + React Query; `!res.ok` / `success:false` hata olarak fırlatılır |
+| 10 | Yükleniyor durumu | ÇALIŞIYOR | Statik iskelet; filtre değişiminde önceki veri kalır (`keepPreviousData`, `aria-busy`) |
+| 11 | Hata durumu | ÇALIŞIYOR | `QueryState`: sayfa içi hata, kod sınıflaması, "Tekrar dene"; 401/403/503 ayrı |
+| 12 | Boş durum | ÇALIŞIYOR | Üç ayrı durum: ilk kullanım (ürün ekle / önce kategori / CSV), filtre boşu (temizle), arşiv boş |
+| 13 | Kart avatarı | ÇALIŞIYOR | Ürün görseli (lazy), yoksa kategori simgesi; arşivde gri tonlama |
+| 14 | Ad ve kategori adı | ÇALIŞIYOR | Arşivlenmiş kategori "(arşivde)" etiketli |
+| 15 | Açıklama | ÇALIŞIYOR | |
+| 16 | Fiyat gösterimi | ÇALIŞIYOR | `null` → "Fiyat yok", 0 → "Ücretsiz", `$` ikonu kalktı; kuruştan `Intl` TRY |
+| 17 | Kart animasyonu | ÇALIŞIYOR | `m.li layout="position"` + `AnimatePresence`; azaltılmış harekette statik |
+| 18 | Kart aksiyon menüsü | ÇALIŞIYOR | Her zaman görünür, `aria-label`'lı `IconButton` (44px); kartın tamamı detayı açar |
+| 19 | Ürün düzenleme | ÇALIŞIYOR | Tek form çekmecesi, `baseUpdatedAt` ile eşzamanlılık 409; sistem ürününde düzenle sunulmaz |
+| 20 | Silme | ÇALIŞIYOR | Arşivle (silme yok) + toast'ta "Geri al"; tüketim geçmişi korunur |
+| 21 | Yeni kategori adı | ÇALIŞIYOR | Aynı adla (Türkçe duyarlı, sistem dahil) kategori varsa 409 |
+| 22 | Kategori simge seçici | ÇALIŞIYOR | 32 simge, `radiogroup` + ok tuşları + `aria-checked`; sunucu `z.enum` ile sınırlar |
+| 23 | Yeni ürün formu | ÇALIŞIYOR | `MoneyField` (tam sayı kuruş), sınırlar ve karakter sayacı önceden görünür |
+| 24 | Kategori yokken yönlendirme | ÇALIŞIYOR | Formda "Kategori oluştur" kutusu, boş durumda "Önce kategori oluştur" |
+| 25 | Düzenleme formu | ÇALIŞIYOR | Arşivlenmiş kategorideki ürünün kategorisi seçimde "(arşivde)" olarak görünür |
+| 26 | Enter ile gönderme | ÇALIŞIYOR | Tüm formlar gerçek `<form>` |
+| 27 | Sunucu hata mesajları | ÇALIŞIYOR | Zarf v2 `code` + Türkçe mesaj; alan hataları alana (`details.path`), zod mesajları Türkçe |
+| 28 | `?search=` derin bağlantı | ÇALIŞIYOR | `parseCatalogQuery`, `search`'ü `q` olarak okur (SSR + istemci) |
+| 29 | Kategori düzenle/sil/sırala | ÇALIŞIYOR | Yeniden adlandır, simge, ↑/↓ sıralama (klavye/dokunmatik; Kart Tara `order` ile listeler), arşivle (aktif ürün varsa hedefe taşıyarak), geri yükle |
+| 30 | Ürün görseli | ÇALIŞIYOR | `PhotoPicker` → `/api/dealer/catalog/images` (bayt doğrulama, EXIF/konum silme, R2); ürüne yalnız bu bayinin `products/` alanı yazılabilir; R2 yoksa bölüm gizlenir |
+| 31 | Aktif/pasif ("tükendi") | ÇALIŞIYOR (kısmen ŞEMA) | Tek dokunuşla arşivle/geri yükle ve toplu arşiv var. Arşivden ayrı geçici "Tükendi" durumu şema gerektirir (aşağıda) |
+| 32 | Arşiv ve geri alma | ÇALIŞIYOR | Arşiv sekmesi, tekli/toplu geri yükleme; kategorisi arşivde olan ya da aynı adlı aktif ürünü bulunanlar açıkça reddedilir |
+| 33 | Ürün performansı | ÇALIŞIYOR | Kartta 30 günlük ortalama puan, değerlendirme ve tüketim sayısı, eğilim; detayda dağılım, 8 haftalık seri, son 5 yorum, tüm zamanlar |
+| 34 | Toplu işlem, CSV | ÇALIŞIYOR | Seç → arşivle/geri yükle/taşı/% fiyat (yuvarlamalı); CSV içe aktarma (önizleme raporu, atla/güncelle, yeni kategori) ve dışa aktarma (gidiş-dönüş) |
+| 35 | Sıralama | ÇALIŞIYOR | Ad, fiyat (fiyatsız sonda), tüketim, puan, eklenme; URL'de |
+| 36 | API yetki/sahiplik | ÇALIŞIYOR | `defineRoute` + `resolveDealerScope`; yazmalar yalnız DEALER, ADMIN salt-okunur |
+| 37 | Global/bayi ayrımı | ÇALIŞIYOR (gizleme ŞEMA) | "Sistem" rozeti, düzenle yerine "Kopyamı oluştur"; sistem kategorileri çekmecede salt-okunur. Bayi başına gizleme şema gerektirir |
+| 38 | Onboarding "ürün" adımı | ÇALIŞIYOR | Doğrulandı: sayım artık `lib/dealer-today/load.ts`'te `isActive: true` (başka yüzeyin işi) |
+| 39 | Form erişilebilirliği | ÇALIŞIYOR | QDL alanları: `label for`, `aria-describedby`, `aria-invalid`, `aria-required`, ilk hatalı alana odak |
+| 40 | Çift gönderim | ÇALIŞIYOR | Form `isSubmitting` + oluşturma/toplu/içe aktarma uçlarında `Idempotency-Key` |
+| 41 | Sayfalama | ÇALIŞIYOR | Sunucu sayfalaması (12/24/48/96), URL'de; 2.000 ürün üst sınırı aşılırsa dürüst uyarı bandı |
+
+**Sonuç:** 41 satırın 39'u ÇALIŞIYOR, 2'si KALDIRILDI (#5, #6: düşük değerli sayaç kartları; yerlerine eyleme dönük içgörüler geldi). #31 ve #37'nin yalnız şema gerektiren alt parçaları açık.
+
+### Kapanan bulgular (13/13)
+
+1. Yükleme hatası "ürün yok"a düşüyordu → `readEnvelope` + `QueryState`; üç ayrı boş durum.
+2. Menü dokunmatikte ve klavyede görünmüyordu → her zaman görünür ve etiketli; karta dokununca detay açılıyor.
+3. `?search=` çalışmıyordu → URL durumu (`q`, `category`, `status`, `sort`, `page`, `size`, `missing`); `search` de okunuyor.
+4. Türkçe İ/I araması → `normalizeForSearch` (`tr-TR`, işaret atma, `ı→i`); açıklama ve kategori de aranıyor.
+5. "0" ve `$` → "Ücretsiz" / "Fiyat yok"; API ve formlar kuruş (`priceMinor`), Float yalnız sınırda (ŞEMA İSTEĞİ: Decimal).
+6. Kategori yaşam döngüsü → düzenle, sırala, arşivle (taşıyarak), geri yükle; sistem kategorileri ayırt ediliyor.
+7. Sekme kırpılması → `justify-start` kaydırılan çip şeridi.
+8. TR/EN karışık hata → Türkçe zod mesajları, kodlu zarf, alan eşleme, sınırlar formda önceden görünüyor. (EN arayüz çevirisi açık, aşağıda.)
+9. Global kayıtlarda yanlış aksiyon → `isGlobal`/`canEdit`, "Sistem" rozeti, "Kopyamı oluştur".
+10. `_count` sızıntısı → katalog BFF'i sayıları bellekte kapsamlı hesaplıyor; eski GET'teki `_count` filtrelendi.
+11. Ölü kod / iki kopya form → 660 satırlık sayfa silindi; tek `ProductEditor`, bileşenlere bölündü, `useCatalog` kancası, `Prisma.ProductWhereInput`.
+12. Onboarding sayımı → doğrulandı, `isActive: true` (başka ajan kapattı).
+13. Metadata vaadi → dürüst açıklama; vaat edilen ürün bazlı tüketim de gerçekten eklendi.
+
+### Kalanlar (gerekçeli)
+
+- **ŞEMA İSTEKLERİ:** (a) `Product.price Float → Decimal(10,2)` ya da `priceMinor Int` (API zaten kuruş; dönüşüm tek noktada, `money.ts`); (b) `Product.status` (`ACTIVE | SOLD_OUT | ARCHIVED`): arşivden ayrı, geçici "Tükendi"; (c) `Product.order Int`: ürün sırası (şu an yalnız kategori sırası var); (d) `DealerCategoryPreference { dealerId, categoryId, hidden }`: sistem kategorilerini bayi başına gizleme; (e) isteğe bağlı alerjen/diyet etiketleri (`Product.tags String[]`).
+- **EN arayüz:** yüzey metinleri Türkçe (sunucu mesajları da). İngilizce çeviri ayrı bir i18n turu ister.
+- **Sürükle-bırak sıralama:** yerine ↑/↓ düğmeleri var (klavyede ve dokunmatikte erişilebilir); DnD kütüphanesi eklenmedi (npm install yasak).
+- **Kart Tara "öne çıkanlar" (`QuickScanPreset`)** ve **`/dealer/reviews?productId=`** derin bağlantısı başka yüzeylerin sahipliğinde. Detay çekmecesi son 5 yorumu kendisi gösteriyor ve tüm yorumlara bağlanıyor.
+- **Fotoğraftan AI ile menü içe aktarma:** yapılmadı (yeni bir AI geçidi gerektirir; CSV yolu var).
+- **Redis önbellek:** katalog küçük ve sorgular indeksli (`groupBy`); gerek görülmedi. Yazmadan sonra React Query geçersiz kılma yeterli.

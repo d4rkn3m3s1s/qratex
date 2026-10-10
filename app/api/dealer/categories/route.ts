@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { createProductCategorySchema } from '@/lib/validations';
 
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * GET /api/dealer/categories
  * Kategorileri listele (global + bayiye özel)
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
@@ -28,8 +27,14 @@ export async function GET(request: NextRequest) {
       take: 500,
       orderBy: { order: 'asc' },
       include: {
+        // Yalnız bu bayinin + sistemin AKTİF ürünleri (eskiden tüm bayilerin ürünleri
+        // sayılıyordu: platform hacmi sızıyordu ve Kart Tara'da yanlış sayı görünüyordu).
         _count: {
-          select: { products: true },
+          select: {
+            products: {
+              where: { isActive: true, OR: [{ dealerId: session.user.id }, { dealerId: null }] },
+            },
+          },
         },
       },
     });
@@ -47,44 +52,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/**
- * POST /api/dealer/categories
- * Yeni kategori ekle (bayiye özel)
- */
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    const body = await request.json();
-    const validatedData = createProductCategorySchema.safeParse(body);
-
-    if (!validatedData.success) {
-      return NextResponse.json(
-        { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const { name, icon, order } = validatedData.data;
-
-    const category = await prisma.productCategory.create({
-      data: {
-        name,
-        icon,
-        order,
-        dealerId: session.user.id,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      category,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Error creating category:', error);
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    return NextResponse.json(
-      { error: 'Kategori oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
-}
+// Yazma: POST /api/dealer/catalog/categories (defineRoute; aynı ad 409, simge doğrulamalı).
