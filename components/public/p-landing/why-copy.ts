@@ -57,7 +57,7 @@ const tr: WhyCopy = {
       'Müşteri deneyimini masada, o anda yakalayın. {brand}; QR ile geri bildirim toplamayı, yapay zekâ analizini, olumsuz deneyime hızlı dönüşü ve müşteriyi geri getiren oyunlaştırmayı tek panelde birleştirir.',
     ctaRegister: 'Ücretsiz işletme hesabı aç',
     ctaPricing: 'Planları gör',
-    ctaContact: 'Bize yazın',
+    ctaContact: 'Satış ve sorularınız için',
   },
   proof: {
     heading: 'Platformdan güncel rakamlar',
@@ -202,7 +202,7 @@ const en: WhyCopy = {
       'Capture the customer experience at the table, in the moment. {brand} combines QR feedback, AI analysis, fast recovery from bad experiences and loyalty-building gamification in one dashboard.',
     ctaRegister: 'Create a free business account',
     ctaPricing: 'See plans',
-    ctaContact: 'Contact us',
+    ctaContact: 'Sales and questions',
   },
   proof: {
     heading: 'Current numbers from the platform',

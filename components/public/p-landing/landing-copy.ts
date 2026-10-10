@@ -18,7 +18,6 @@ export interface LandingCopy {
     qrHint: string;
   };
   story: {
-    label: string;
     exampleTag: string;
     scanTitle: string;
     scanBody: string;
@@ -124,7 +123,6 @@ const tr: LandingCopy = {
     qrHint: 'Uygulama indirmen gerekmez: telefonunun kamerasıyla QR kodu okutman yeter.',
   },
   story: {
-    label: 'Örnek akış: QR okut, puanla, puan kazan',
     exampleTag: 'Örnek görünüm',
     scanTitle: 'QR kodu okut',
     scanBody: 'Masadaki kodu kameranla tara.',
@@ -277,7 +275,6 @@ const en: LandingCopy = {
     qrHint: 'No app needed: just scan the QR code with your phone camera.',
   },
   story: {
-    label: 'Example flow: scan, rate, earn points',
     exampleTag: 'Example view',
     scanTitle: 'Scan the QR code',
     scanBody: 'Point your camera at the code on the table.',

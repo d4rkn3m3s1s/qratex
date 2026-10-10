@@ -20,6 +20,7 @@ import {
   Archive,
   Activity,
   Building2,
+  Repeat,
   type LucideIcon,
 } from 'lucide-react';
 import { BreadcrumbNav } from '@/components/seo/breadcrumb-nav';
@@ -39,7 +40,7 @@ const PATH = '/guven';
 /** Gizlilik ayarları (eski yol; `/customer/me/settings?tab=privacy`'ye yönlenir, derin link korunur). */
 const PRIVACY_SETTINGS_HREF = '/customer/settings?tab=privacy';
 const CONTROL_ICONS: LucideIcon[] = [Download, ScrollText, Trash2];
-const SECURITY_ICONS: LucideIcon[] = [KeyRound, MailCheck, Fingerprint, Lock, Timer, ShieldCheck, FileText, Archive, Activity];
+const SECURITY_ICONS: LucideIcon[] = [KeyRound, MailCheck, Fingerprint, Lock, Timer, ShieldCheck, FileText, Archive, Activity, Repeat];
 
 /**
  * `/guven` — Güven Merkezi (denetim guven.md, Dalga 2). Ops kaydı: sakin, okunur, hareket

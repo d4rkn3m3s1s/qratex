@@ -20,7 +20,7 @@ import { ComparisonTable } from '@/components/public/p-landing/comparison-table'
 import { CtaLink } from '@/components/public/p-landing/cta-link';
 import { FaqList } from '@/components/public/p-landing/faq-list';
 import { FinalCta } from '@/components/public/p-landing/final-cta';
-import { fmt } from '@/components/public/p-landing/fmt';
+import { fmt, PUBLIC_CONTACT_EMAIL } from '@/components/public/p-landing/fmt';
 import { getLandingCopy } from '@/components/public/p-landing/landing-copy';
 import { LocaleSync } from '@/components/public/p-landing/locale-sync';
 import { PricingPlans } from '@/components/public/p-landing/pricing-plans';
@@ -112,6 +112,15 @@ export default async function WhyQratexPage() {
                 </CtaLink>
               </Button>
             </div>
+            <p className="mt-4 text-sm text-fg-muted">
+              {copy.hero.ctaContact}:{' '}
+              <a
+                href={`mailto:${PUBLIC_CONTACT_EMAIL}`}
+                className="inline-flex min-h-11 items-center font-medium text-brand underline underline-offset-4 hover:no-underline"
+              >
+                {PUBLIC_CONTACT_EMAIL}
+              </a>
+            </p>
           </div>
         </div>
       </section>

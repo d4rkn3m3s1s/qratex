@@ -25,8 +25,8 @@
  */
 import type { PublicLocale } from './fmt';
 
-/** İçeriğin son gözden geçirildiği gün (sayfa + sitemap için sabit; `new Date()` değil). */
-export const TRUST_CONTENT_UPDATED_AT = '2026-10-10';
+/** İçeriğin son gözden geçirildiği gün (sayfa + sitemap aynı sabit; `new Date()` değil). */
+export { TRUST_CONTENT_UPDATED_AT } from '@/lib/landing/content-dates';
 
 export interface TrustCopy {
   meta: { title: string; description: string };
@@ -223,6 +223,10 @@ const tr: TrustCopy = {
         body: 'Kayıtlar kazara silinmeye karşı arşivlenir; hesap silme ise kişisel verileri anonimleştirir.',
       },
       { title: 'Hata izleme', body: 'Uygulama hataları otomatik izlenir; sorunlar kullanıcılar bildirmeden fark edilir.' },
+      {
+        title: 'Çift işlem koruması',
+        body: 'Puan ve ödül gibi kritik işlemler, aynı istek tekrar gönderilse de yalnız bir kez uygulanır.',
+      },
     ],
   },
   infra: {
@@ -406,6 +410,10 @@ const en: TrustCopy = {
       { title: 'Audit log', body: 'Admin and sensitive actions are written to an audit log; emails, phones and IPs are masked in security logs.' },
       { title: 'Archive instead of delete', body: 'Records are archived to protect against accidental deletion; account deletion anonymizes personal data.' },
       { title: 'Error monitoring', body: 'Application errors are monitored automatically, so problems are noticed before users report them.' },
+      {
+        title: 'Duplicate protection',
+        body: 'Critical actions such as points and rewards are applied only once, even if the same request is sent again.',
+      },
     ],
   },
   infra: {

@@ -194,7 +194,6 @@ export function Header() {
                   width={56}
                   height={56}
                   className="object-contain hidden dark:block"
-                  priority
                 />
                 {/* Light theme logo (dark colored) */}
                 <Image
@@ -203,7 +202,6 @@ export function Header() {
                   width={56}
                   height={56}
                   className="object-contain block dark:hidden"
-                  priority
                 />
               </>
             )}
@@ -219,7 +217,6 @@ export function Header() {
                   height={40}
                   className="object-contain hidden dark:block"
                   style={{ height: 'auto' }}
-                  priority
                 />
                 {/* Light theme font (dark colored) */}
                 <Image
@@ -229,7 +226,6 @@ export function Header() {
                   height={40}
                   className="object-contain block dark:hidden"
                   style={{ height: 'auto' }}
-                  priority
                 />
               </>
             )}

@@ -37,7 +37,7 @@ export function HeroStory({
 }) {
   const summary = fmt(copy.staticSummary, { points, xp });
   return (
-    <figure className="relative mx-auto w-full max-w-[19rem]" aria-label={copy.label}>
+    <figure className="relative mx-auto w-full max-w-[19rem]">
       {/* Arka parıltı: konum dış katmanda, statik (dekor). */}
       <div
         aria-hidden
@@ -46,7 +46,7 @@ export function HeroStory({
       <div className="relative rounded-[2.5rem] border border-strong bg-surface-2 p-2.5 shadow-2xl">
         <div className="relative aspect-[9/16] overflow-hidden rounded-[2rem] border border-subtle bg-surface-0">
           <div aria-hidden className="absolute left-1/2 top-2 z-10 h-1.5 w-16 -translate-x-1/2 rounded-full bg-fg/15" />
-          <span className="absolute right-3 top-5 z-10 rounded-full border border-subtle bg-surface-1 px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+          <span className="absolute right-3 top-5 z-10 rounded-full border border-subtle bg-surface-1 px-2 py-0.5 text-xs font-medium text-fg-muted">
             {copy.exampleTag}
           </span>
           <Ambient className="absolute inset-0" fallback={<StaticFrame copy={copy} points={points} xp={xp} />}>

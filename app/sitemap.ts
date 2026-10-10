@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { LEGAL_DOCUMENTS, legalDateToDate } from '@/lib/legal/documents';
 import { getAllPosts, getLatestModified } from '@/lib/blog-posts';
+import { TRUST_CONTENT_UPDATED_AT, WHY_CONTENT_UPDATED_AT } from '@/lib/landing/content-dates';
 
 /** URL sayısı bu eşiği aşarsa ileride sitemap-index (app/sitemap.xml/route.ts) ile bölünebilir. */
 const SITEMAP_INDEX_THRESHOLD = 5000;
@@ -32,7 +33,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${base}/guven`,
-      lastModified: new Date(),
+      // İçerik revizyon tarihi (render anı değil) — lib/landing/content-dates.ts
+      lastModified: new Date(`${TRUST_CONTENT_UPDATED_AT}T00:00:00Z`),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
@@ -73,7 +75,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${base}/neden-qratex`,
-      lastModified: new Date(),
+      lastModified: new Date(`${WHY_CONTENT_UPDATED_AT}T00:00:00Z`),
       changeFrequency: 'monthly',
       priority: 0.6,
     },
