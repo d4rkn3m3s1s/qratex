@@ -3,8 +3,14 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getClientIdentifier, checkAuthEmailActionLimit, checkRateLimitDb } from '@/lib/rate-limit';
-import { createAuthEmailToken, AUTH_TOKEN_PURPOSE } from '@/lib/auth-email-token';
-import { sendPasswordResetEmail } from '@/lib/email';
+import {
+  createAuthEmailToken,
+  AUTH_TOKEN_PURPOSE,
+  buildEmailVerifyUrl,
+  issueEmailVerificationToken,
+  revokeEmailVerificationTokens,
+} from '@/lib/auth-email-token';
+import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/email';
 import { isMailConfigured } from '@/lib/mail-sender';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
 import { safePostLoginRedirect } from '@/lib/safe-callback-url';
@@ -18,11 +24,12 @@ const bodySchema = z.object({
 });
 
 const UNIFORM_MESSAGE =
-  'Bu e-posta ile kayıtlı ve doğrulanmış bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.';
+  'Bu e-posta ile kayıtlı bir hesap varsa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.';
 
 function uniformOk(extraHeaders?: Record<string, string>) {
   return NextResponse.json(
-    { success: true, message: UNIFORM_MESSAGE },
+    // `code` istemcinin TR/EN metni seçmesi içindir; `message` eski istemciler için korunur.
+    { success: true, code: 'SENT', message: UNIFORM_MESSAGE },
     { status: 200, headers: { ...PRIVATE_NO_STORE_HEADERS, ...(extraHeaders ?? {}) } }
   );
 }
@@ -37,6 +44,8 @@ function uniformOk(extraHeaders?: Record<string, string>) {
  *    yapılır (`after`) → zamanlama ve 502 farkıyla hesap sayımı yapılamaz.
  *  - E-posta normalize edilir (karışık harfli kayıtlar da sıfırlayabilir) ve e-posta başına
  *    saatlik sınır vardır (kurbanın gelen kutusu doldurulamaz).
+ *  - E-postası DOĞRULANMAMIŞ hesap çıkmaza düşmez: sıfırlama yerine yeni doğrulama bağlantısı
+ *    gönderilir (eskiden "gönderildi" deniyor ama hiçbir şey gelmiyordu). Yanıt yine aynıdır.
  */
 export async function POST(request: NextRequest) {
   const ip = getClientIdentifier(request);
@@ -71,7 +80,19 @@ export async function POST(request: NextRequest) {
         where: { email: emailLookupFilter(email) },
         select: { id: true, name: true, email: true, emailVerified: true, suspendedAt: true, anonymizedAt: true },
       });
-      if (!user?.emailVerified || user.suspendedAt || user.anonymizedAt) return;
+      if (!user || user.suspendedAt || user.anonymizedAt) return;
+
+      if (!user.emailVerified) {
+        await revokeEmailVerificationTokens(user.id, user.email);
+        const verifyPlain = await issueEmailVerificationToken(user.id);
+        const sentVerify = await sendVerificationEmail(
+          user.email,
+          buildEmailVerifyUrl(getPublicAppOrigin(), verifyPlain),
+          user.name || undefined
+        );
+        if (!sentVerify.ok) console.error('[forgot-password] verification resend failed');
+        return;
+      }
 
       const plain = await createAuthEmailToken(user.id, AUTH_TOKEN_PURPOSE.PASSWORD_RESET, 60 * 60 * 1000);
       const base = getPublicAppOrigin();

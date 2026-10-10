@@ -1,132 +1,117 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
-import { Sun, Moon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Sun, Moon, Languages } from 'lucide-react';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
-import { useAppT } from '@/lib/app-locale';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
+import { useAuthCopy } from './p-auth/copy';
 
+const iconButton =
+  'inline-flex h-11 min-w-11 touch-manipulation items-center justify-center gap-1.5 rounded-full px-3 text-fg-muted transition-colors duration-150 hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * Kimlik ekranlarının TEK kabuğu (QDL v2 · ops kaydı): sakin düz zemin, üstte logo + dil +
+ * tema, altta yasal bağlantılar. Landing'in gradient zemini kaldırıldı (yol haritası §4.2:
+ * auth "animasyonsuz ya da tek giriş, landing zemini kaldırılır").
+ *
+ * Logo artık `mounted` beklemeden ilk HTML'de çizilir (iki tema görseli CSS `dark:` ile
+ * ayrışır) → başlıkta boş alan ve yerleşim kayması yok.
+ */
 export function AuthShell({ children }: { children: React.ReactNode }) {
   const t = useAppT();
-  const [mounted, setMounted] = useState(false);
+  const copy = useAuthCopy();
+  const { locale, setLocale } = useAppLocale();
   const { resolvedTheme, setTheme } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const forceModeDom = (mode: 'light' | 'dark' | 'system') => {
-    const resolved =
-      mode === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-        : mode;
+  const forceModeDom = (mode: 'light' | 'dark') => {
     const root = document.documentElement;
-    const body = document.body;
     root.classList.remove('light', 'dark');
-    root.classList.add(resolved);
-    root.setAttribute('data-theme', resolved);
-    root.style.colorScheme = resolved;
+    root.classList.add(mode);
+    root.setAttribute('data-theme', mode);
+    root.style.colorScheme = mode;
+    const body = document.body;
     if (body) {
       body.classList.remove('light', 'dark');
-      body.classList.add(resolved);
-      body.setAttribute('data-theme', resolved);
-      body.style.colorScheme = resolved;
+      body.classList.add(mode);
+      body.setAttribute('data-theme', mode);
+      body.style.colorScheme = mode;
     }
   };
 
-  const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
-    safeLocalStorageSetItem('qratex-theme', mode);
-    safeLocalStorageSetItem('theme', mode);
-    forceModeDom(mode);
-    setTheme(mode);
+  const toggleTheme = () => {
+    const next = resolvedTheme === 'dark' ? 'light' : 'dark';
+    safeLocalStorageSetItem('qratex-theme', next);
+    safeLocalStorageSetItem('theme', next);
+    forceModeDom(next);
+    setTheme(next);
   };
 
-  const toggleTheme = () => {
-    applyThemeSelection(resolvedTheme === 'dark' ? 'light' : 'dark');
-  };
+  const nextLocale = locale === 'en' ? 'tr' : 'en';
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-surface-0 text-fg" data-register="ops">
       <SkipToMainContent targetId="auth-main" />
-      <header className="safe-top sticky top-0 z-20 flex items-center justify-between border-b border-border/50 bg-background/80 px-4 py-3 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <Link prefetch={false}
+      <header className="safe-top flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+        <Link
+          prefetch={false}
           href="/"
-          className="flex w-fit cursor-pointer items-center gap-2 rounded-lg outline-none ring-offset-background transition-opacity duration-200 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={copy.shellHome}
+          className="flex w-fit items-center gap-2 rounded-lg outline-none transition-opacity duration-150 hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {mounted && (
-            <>
-              <Image
-                src="/logo/logo.png"
-                alt="QRateX Logo"
-                width={56}
-                height={56}
-                className="object-contain h-10 sm:h-11 hidden dark:block"
-                priority
-              />
-              <Image
-                src="/logo/logo-light.png"
-                alt="QRateX Logo"
-                width={56}
-                height={56}
-                className="object-contain h-10 sm:h-11 block dark:hidden"
-                priority
-              />
-              <Image
-                src="/logo/font.png"
-                alt="QRateX"
-                width={140}
-                height={36}
-                className="object-contain h-10 sm:h-11 hidden dark:block"
-                style={{ width: 'auto' }}
-                priority
-              />
-              <Image
-                src="/logo/font-light.png"
-                alt="QRateX"
-                width={140}
-                height={36}
-                className="object-contain h-10 sm:h-11 block dark:hidden"
-                style={{ width: 'auto' }}
-                priority
-              />
-            </>
-          )}
+          <Image src="/logo/logo.png" alt="" width={40} height={40} className="hidden h-9 w-9 object-contain dark:block" priority />
+          <Image src="/logo/logo-light.png" alt="" width={40} height={40} className="block h-9 w-9 object-contain dark:hidden" priority />
+          <Image src="/logo/font.png" alt="" width={112} height={28} className="hidden h-7 w-auto object-contain dark:block" />
+          <Image src="/logo/font-light.png" alt="" width={112} height={28} className="block h-7 w-auto object-contain dark:hidden" />
         </Link>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={toggleTheme}
-          className="h-11 min-h-11 min-w-11 w-11 touch-manipulation rounded-full transition-colors duration-200"
-          aria-label={t('common.toggleTheme')}
-        >
-          {mounted && resolvedTheme === 'dark' ? (
-            <Sun className="h-5 w-5" aria-hidden />
-          ) : (
-            <Moon className="h-5 w-5" aria-hidden />
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setLocale(nextLocale)}
+            className={iconButton}
+            aria-label={`${copy.shellLanguage}: ${nextLocale === 'en' ? 'English' : 'Türkçe'}`}
+            lang={nextLocale}
+          >
+            <Languages className="h-5 w-5" aria-hidden />
+            <span className="qx-small font-semibold uppercase">{nextLocale}</span>
+          </button>
+          <button type="button" onClick={toggleTheme} className={iconButton} aria-label={t('common.toggleTheme')}>
+            {/* İkon CSS ile seçilir: hidrasyon öncesi tema bilinmese de doğru ikon görünür. */}
+            <Sun className="hidden h-5 w-5 dark:block" aria-hidden />
+            <Moon className="block h-5 w-5 dark:hidden" aria-hidden />
+          </button>
+        </div>
       </header>
 
       <main
         id="auth-main"
         tabIndex={-1}
-        className="flex flex-1 items-center justify-center p-4 outline-none pb-[max(1.5rem,env(safe-area-inset-bottom))] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-6"
+        className="flex flex-1 flex-col items-center justify-start px-4 pb-8 pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring sm:justify-center sm:px-6 sm:pt-6"
       >
         {children}
       </main>
 
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 gradient-mesh opacity-30" />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/0 via-background/80 to-background" />
-      </div>
+      <footer className="pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+        <nav aria-label={copy.shellTerms} className="flex flex-wrap items-center justify-center gap-x-1 px-4">
+          {[
+            { href: '/kullanim-sartlari', label: copy.shellTerms },
+            { href: '/gizlilik-politikasi', label: copy.shellPrivacy },
+            { href: '/kvkk-aydinlatma-metni', label: copy.shellKvkk },
+          ].map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              prefetch={false}
+              className="qx-caption inline-flex min-h-11 items-center rounded-sm px-2 text-fg-muted underline-offset-4 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      </footer>
     </div>
   );
 }

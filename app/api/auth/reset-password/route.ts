@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { consumePasswordResetToken, isPasswordResetTokenUsable } from '@/lib/auth-email-token';
 import { invalidateSessionState } from '@/lib/auth/session-state';
 import { checkAuthEmailActionLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { passwordPolicyError } from '@/components/auth/p-auth/password-policy';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { getPublicAppOrigin } from '@/lib/public-app-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +22,8 @@ const INVALID_LINK = 'Bağlantı geçersiz, kullanılmış veya süresi dolmuş.
  * Şifreyi sıfırlar. `consumePasswordResetToken` tek transaction'da token'ı atomik tüketir,
  * şifreyi yazar ve `sessionVersion`'ı artırır (P0-07): sıfırlamadan önce açılmış BÜTÜN
  * oturumlar (çalınmış olanlar dahil) geçersizleşir. Bekleyen magic/sıfırlama bağlantıları da iptal.
+ * Yanıttan sonra (`after`): denetim kaydı + "şifren değiştirildi" güvenlik e-postası (sahibi
+ * değişikliği yapmadıysa hemen yeni sıfırlama başlatabilsin).
  */
 export async function POST(request: NextRequest) {
   // Rate limit — token tahmin/deneme ve DB yükünü sınırla (IP başına 15 dk penceresi).
@@ -42,6 +47,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Kayıtla aynı şifre politikası (en az 8 + küçük/büyük harf + rakam). Eskiden sıfırlama yalnız
+  // uzunluğa bakıyordu → aynı hesap için iki farklı politika.
+  const policy = passwordPolicyError(parsed.data.newPassword);
+  if (policy) {
+    return NextResponse.json(
+      {
+        code: policy,
+        error:
+          policy === 'PASSWORD_TOO_LONG'
+            ? 'Şifre en fazla 128 karakter olabilir.'
+            : 'Şifre en az 8 karakter olmalı; küçük harf, büyük harf ve rakam içermeli.',
+      },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
   // Ucuz kontrol önce: geçersiz token için bcrypt (pahalı) çalıştırılmaz.
   if (!(await isPasswordResetTokenUsable(parsed.data.token))) {
     return NextResponse.json({ code: 'INVALID_LINK', error: INVALID_LINK }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
@@ -55,8 +76,9 @@ export async function POST(request: NextRequest) {
     }
     // P0-07: sıcak katmanı bayatlat → çalınmış eski oturumlar 60 sn beklemeden ANINDA düşer.
     await invalidateSessionState(result.userId).catch(() => undefined);
+    scheduleAfterReset(result.userId, getAuditRequestMeta(request));
     return NextResponse.json(
-      { success: true, message: 'Şifren güncellendi. Diğer cihazlardaki oturumlar kapatıldı; yeni şifrenle giriş yapabilirsin.' },
+      { success: true, code: 'PASSWORD_RESET', message: 'Şifren güncellendi. Diğer cihazlardaki oturumlar kapatıldı; yeni şifrenle giriş yapabilirsin.' },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (error) {
@@ -66,5 +88,32 @@ export async function POST(request: NextRequest) {
       { code: 'SERVER_ERROR', error: 'Şifre güncellenemedi. Lütfen tekrar dene.' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
+  }
+}
+
+function scheduleAfterReset(userId: string, meta: ReturnType<typeof getAuditRequestMeta>) {
+  try {
+    after(async () => {
+      try {
+        const { prisma } = await import('@/lib/prisma');
+        await prisma.auditLog
+          .create({
+            data: { userId, action: 'PASSWORD_RESET', entity: 'User', entityId: userId, newData: { source: 'email_link' } as object, ...meta },
+          })
+          .catch((e: unknown) => console.error('[reset-password] audit log failed', e));
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+        if (!user?.email) return;
+        const { sendPasswordChangedEmail } = await import('@/lib/email');
+        const sent = await sendPasswordChangedEmail(user.email, {
+          userName: user.name ?? undefined,
+          forgotUrl: `${getPublicAppOrigin()}/auth/forgot-password`,
+        });
+        if (!sent.ok) console.error('[reset-password] password-changed notice failed');
+      } catch (e) {
+        console.error('[reset-password] after-reset tasks failed', e);
+      }
+    });
+  } catch {
+    // İstek kapsamı yok (betik/test) — bildirim isteğe bağlıdır, sıfırlama zaten tamamlandı.
   }
 }

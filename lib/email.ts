@@ -137,6 +137,42 @@ export async function sendPasswordResetEmail(
   return { ok: true };
 }
 
+/**
+ * "Şifren değiştirildi" güvenlik bildirimi (şifre sıfırlama sonrası). Hesap sahibi değişikliği
+ * kendisi yapmadıysa hemen yeni bir sıfırlama başlatabilsin diye bağlantı içerir. Gizli değer
+ * (token, IP) içermez. Gönderim hatası çağıranı bozmaz.
+ */
+export async function sendPasswordChangedEmail(
+  to: string,
+  opts: { userName?: string; forgotUrl: string }
+): Promise<{ ok: boolean; error?: string }> {
+  const subject = 'QRATEX — Şifreniz değiştirildi';
+  const { logoUrl, brandLinkHref } = transactionalBranding();
+  const html = buildTransactionalEmailHtml({
+    heading: 'QRATEX',
+    bodyHtml: `${greetingHtml(opts.userName)}
+  <p>Hesabınızın şifresi az önce değiştirildi ve diğer cihazlardaki oturumlar kapatıldı.</p>
+  <p>Bu değişikliği siz yapmadıysanız hemen yeni bir şifre belirleyin.</p>`,
+    cta: { href: opts.forgotUrl, label: 'Şifremi sıfırla' },
+    footnoteHtml: `<p class="tx-email-muted" style="font-size: 14px; color: #666;">Değişikliği siz yaptıysanız bu e-postayı yok sayabilirsiniz.</p>`,
+    logoUrl,
+    brandLinkHref,
+  });
+  const text = buildTransactionalPlainText({
+    heading: 'QRATEX',
+    bodyLines: [
+      greetingText(opts.userName),
+      'Hesabınızın şifresi az önce değiştirildi ve diğer cihazlardaki oturumlar kapatıldı.',
+      'Bu değişikliği siz yapmadıysanız hemen yeni bir şifre belirleyin.',
+    ],
+    cta: { href: opts.forgotUrl, label: 'Şifremi sıfırla' },
+    footnoteLines: ['Değişikliği siz yaptıysanız bu e-postayı yok sayabilirsiniz.'],
+  });
+  const result = await sendTransactionalEmail({ to, subject, html, text, from: fromEmail });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 export async function sendMagicLinkEmail(
   to: string,
   magicUrl: string,

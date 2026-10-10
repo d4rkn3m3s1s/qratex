@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { MailCheck, RotateCw, ExternalLink, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,35 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { InlineError } from '@/components/states';
 import { normalizeEmail } from '@/lib/auth/normalize-email';
-import { useAuthCopy } from './auth-copy';
+import { useAuthCopy } from './copy';
 import { AuthNotice } from './auth-notice';
+import { AuthCard, authLinkClass } from './auth-card';
 import { useResendVerification } from './use-resend-verification';
 
+/** Web gelen kutusu kısayolları (mailto değil — uygulamayı değil kutuyu açar). */
+export function InboxShortcuts() {
+  const copy = useAuthCopy();
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <Button asChild variant="outline" className="w-full">
+        <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer">
+          {copy.verifyPendingOpenGmail}
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+        </a>
+      </Button>
+      <Button asChild variant="outline" className="w-full">
+        <a href="https://outlook.live.com/mail/0/" target="_blank" rel="noopener noreferrer">
+          {copy.verifyPendingOpenOutlook}
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+        </a>
+      </Button>
+    </div>
+  );
+}
+
 /**
- * "Gelen kutunu kontrol et" ekranı — kayıt sonrası, `/auth/verify` ve doğrulanmamış hesapla
- * giriş denemesinde ortak (P0-39: eskiden üretimde hiç görünmüyordu, kullanıcı "giriş
+ * "Gelen kutunu kontrol et" kartı — kayıt sonrası, `/auth/verify` ve geçersiz doğrulama
+ * bağlantısında ortak (P0-39: eskiden üretimde hiç görünmüyordu, kullanıcı "giriş
  * yapabilirsiniz" yalanından sonra sessizce login'e düşüyordu).
  */
 export function VerifyPending({
@@ -25,6 +47,7 @@ export function VerifyPending({
   onBack,
   backHref,
   initialCooldownSec = 0,
+  notice,
 }: {
   /** Bilinen e-posta (kayıt formundan). Yoksa kullanıcı yazar. */
   email?: string | null;
@@ -36,6 +59,8 @@ export function VerifyPending({
   onBack?: () => void;
   backHref?: string;
   initialCooldownSec?: number;
+  /** Kartın en üstünde gösterilecek durum bandı (ör. "bağlantı geçersiz"). */
+  notice?: ReactNode;
 }) {
   const copy = useAuthCopy();
   const { state, cooldown, send } = useResendVerification(initialCooldownSec);
@@ -55,36 +80,30 @@ export function VerifyPending({
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="grid h-14 w-14 place-items-center rounded-full bg-brand-subtle ring-1 ring-inset ring-brand-border">
-          <MailCheck className="h-7 w-7 text-brand" aria-hidden />
-        </div>
-        <h1 className="qx-h2 text-fg">{copy.verifyPendingTitle}</h1>
-        <p className="qx-body text-fg-muted text-pretty">
-          {knownEmail ? copy.verifyPendingBody(knownEmail) : copy.verifyPendingGeneric}
-        </p>
-      </div>
-
+    <AuthCard
+      icon={<MailCheck className="h-6 w-6" aria-hidden />}
+      title={copy.verifyPendingTitle}
+      description={knownEmail ? copy.verifyPendingBody(knownEmail) : copy.verifyPendingGeneric}
+      footer={
+        <>
+          {onBack ? (
+            <Button type="button" variant="ghost" onClick={onBack} className="gap-2">
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              {copy.verifyPendingWrongEmail}
+            </Button>
+          ) : null}
+          <Link href={backHref ?? '/auth/login'} className={authLinkClass}>
+            {copy.backToLogin}
+          </Link>
+        </>
+      }
+    >
+      {notice}
       {emailSent === false ? <AuthNotice tone="warning">{copy.verifyPendingEmailNotSent}</AuthNotice> : null}
       {referralPending ? <AuthNotice tone="info">{copy.verifyReferralPending}</AuthNotice> : null}
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Button asChild variant="outline" className="w-full gap-2">
-          <a href="https://mail.google.com/mail/u/0/#inbox" target="_blank" rel="noopener noreferrer">
-            {copy.verifyPendingOpenGmail}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        </Button>
-        <Button asChild variant="outline" className="w-full gap-2">
-          <a href="https://outlook.live.com/mail/0/" target="_blank" rel="noopener noreferrer">
-            {copy.verifyPendingOpenOutlook}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        </Button>
-      </div>
-
-      <p className="qx-small text-fg-muted text-center text-pretty">{copy.verifyPendingSpamHint}</p>
+      <InboxShortcuts />
+      <p className="qx-small text-center text-fg-muted text-pretty">{copy.verifyPendingSpamHint}</p>
 
       {!knownEmail ? (
         <div className="space-y-1.5">
@@ -105,13 +124,7 @@ export function VerifyPending({
         </div>
       ) : null}
 
-      <Button
-        type="button"
-        className="w-full gap-2"
-        onClick={resend}
-        loading={state === 'sending'}
-        disabled={cooldown > 0}
-      >
+      <Button type="button" variant="outline" className="w-full" onClick={resend} loading={state === 'sending'} disabled={cooldown > 0}>
         <RotateCw className="h-4 w-4" aria-hidden />
         {cooldown > 0 ? copy.resendIn(cooldown) : copy.resend}
       </Button>
@@ -125,21 +138,6 @@ export function VerifyPending({
           <a href={devVerifyUrl}>{copy.verifyPendingDevLink}</a>
         </Button>
       ) : null}
-
-      <div className="flex flex-col items-center gap-2 pt-1">
-        {onBack ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onBack} className="gap-2">
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            {copy.verifyPendingWrongEmail}
-          </Button>
-        ) : null}
-        <Link
-          href={backHref ?? '/auth/login'}
-          className="qx-small rounded-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {copy.backToLogin}
-        </Link>
-      </div>
-    </div>
+    </AuthCard>
   );
 }

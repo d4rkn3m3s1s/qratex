@@ -1,7 +1,6 @@
 'use client';
 
-import { Card, CardContent } from '@/components/ui/card';
-import { VerifyPending } from '../_components/verify-pending';
+import { VerifyPending } from '@/components/auth/p-auth/verify-pending';
 
 /**
  * NextAuth `pages.verifyRequest` + kayıt sonrası "gelen kutunu kontrol et" ekranının
@@ -9,13 +8,5 @@ import { VerifyPending } from '../_components/verify-pending';
  * dolaşmasın); kullanıcı yeniden gönderim için adresini burada yazar.
  */
 export function VerifyRequestView() {
-  return (
-    <div className="w-full max-w-md">
-      <Card glass>
-        <CardContent className="pt-6">
-          <VerifyPending />
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <VerifyPending />;
 }
