@@ -205,3 +205,59 @@
 - Tailwind 3 preflight (`@tailwind base`) başlıkları `font-size: inherit; font-weight: inherit`, `ul`'yi `list-style: none; padding: 0`, `p`/`h2`/`ul` marjinlerini `0` yapar. `lib/blog-posts.ts` içinde 6 adet `h2` ve 3 adet `ul` bloğu var; hepsi bu sıfırlamaya maruz kalıyor.
 - **Yeniden üretim:** `/blog` → herhangi bir karta tıkla → yazı gövdesinde ara başlıklar paragrafla aynı boyut/kalınlıkta, madde işaretleri ve paragraf arası boşluklar yok; metin tek bir yoğun blok gibi okunur. (Tarayıcıda görsel doğrulama bu incelemede de yapılmadı; CSS zinciri ve bağımlılık ağacı okunarak kesinleştirildi — eklenti hem config'te hem node_modules'ta yok, belirsizlik kalmıyor.)
 - **Not:** `app/customer/nearby/page.tsx` de `prose` kullanıyor; aynı kök neden orayı da etkiler. Düzeltme yaklaşımı: `@tailwindcss/typography` eklentisini ekleyip `tailwind.config.ts` plugins'e kaydetmek ve tema token'larıyla (`--foreground`, `--muted-foreground`, `--primary`) `typography` extend'i tanımlamak (dark modda `prose-invert` yerine token tabanlı renkler daha tutarlı olur); ya da eklenti istenmiyorsa blok renderer'ı (`h2`/`ul`/`p`) tipli bileşenlere (ör. `components/blog/blog-block.tsx`) taşıyıp her bloğa açık Tailwind sınıfları vermek. CMS'e geçiş planlandığı için ikinci yol (tipli blok bileşenleri) uzun vadede daha sağlam.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL'ler korundu. Sayfalar `app/(okuma)/` route grubuna taşındı (URL değişmez): hareketli landing zemini ve tam ekran yükleme katmanı olmayan sakin okuma kabuğu (`app/(okuma)/layout.tsx`, `loading.tsx`). İçerik + saf yardımcılar `lib/blog-posts.ts`, bileşenler `components/public/p-blog-yasal/`, metadata `lib/legal/seo.ts`. Test: `__tests__/lib/blog-posts.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | `generateMetadata` + admin ezmesi (`getPageSeo('/blog')`) |
+| 2 | Canonical | ÇALIŞIYOR | `buildReadingMetadata` → `${base}/blog` (filtreli/sayfalı görünüm kendi URL'si); kök `canonical: '/'` mirası eziliyor |
+| 3 | OG / Twitter | ÇALIŞIYOR | url, siteName, locale, images, twitter kartı açıkça veriliyor |
+| 4 | Admin SEO ezmesi | ÇALIŞIYOR | başlık, açıklama, canonical; başlık H1 açıklamasına da yansır |
+| 5 | Üst etiket | ÇALIŞIYOR | `qx-overline` |
+| 6 | H1 + açıklama | ÇALIŞIYOR | |
+| 7 | Izgara | ÇALIŞIYOR | öne çıkan yazı + lg 3 / sm 2 / mobil 1 |
+| 8 | Yayın tarihi | ÇALIŞIYOR | deterministik, gün sınırı Europe/Istanbul |
+| 9 | Okuma süresi | ÇALIŞIYOR | `getReadingMinutes` kelime sayısından türetiliyor (elle girilen alan kaldırıldı) |
+| 10 | Başlık + açıklama | ÇALIŞIYOR | |
+| 11 | Kart bağlantısı + odak | ÇALIŞIYOR | `article` + başlıkta gerilmiş bağlantı (erişilebilir ad = başlık), `focus-within` halkası kartla aynı radius |
+| 12 | Hover hareketi | ÇALIŞIYOR | yalnız `motion-safe:`; `transition-[transform,box-shadow,border-color]` |
+| 13 | Sıralama | ÇALIŞIYOR | `getAllPosts` yayın tarihine göre (dizi sırasından bağımsız) |
+| 14 | Kapak görseli | ÇALIŞIYOR | kategori renginden üretilen marka kapağı (`PostCover`); ölü `image` alanı KALDIRILDI (stok görsel uydurulmadı) |
+| 15 | Boş durum | ÇALIŞIYOR | "Bu kategoride henüz yazı yok" + RSS + tüm yazılar |
+| 16 | Kategori filtresi | ÇALIŞIYOR | `?kategori=`; sunucuda, boş kategori çipi gizli, `aria-current` |
+| 17 | Arama | KALDIRILDI | 4 yazıda arama değer üretmez; kategori + RSS yeterli. CMS'e geçilince eklenmeli |
+| 18 | Sayfalama | ÇALIŞIYOR | `?sayfa=`, 9/sayfa, `rel=prev/next`, sınır kırpma |
+| 19 | Öne çıkan yazı | ÇALIŞIYOR | ilk sayfada en yeni yazı yatay büyük kart |
+| 20 | Breadcrumb (görsel + LD) | ÇALIŞIYOR | DS `Breadcrumbs` (mobilde "‹ Üst sayfa") + canonical tabanlı `BreadcrumbList` |
+| 21 | Blog / ItemList LD | ÇALIŞIYOR | `Blog` (blogPost[]) + `ItemList`, `<` kaçışlı |
+| 22 | RSS | ÇALIŞIYOR | sayfada "RSS ile takip et"; feed canonical tabanla, `lastBuildDate` = son değişiklik, kategori + yazar |
+| 23 | Sitemap | ÇALIŞIYOR | tekil yazılar eklendi; `/blog` lastModified = en yeni yazı, sıklık monthly |
+| 24 | İçerik yönetimi | ÇALIŞIYOR (depo tabanlı) | tipli bloklar depoda, gözden geçirilebilir; deploy'suz CMS → ŞEMA İSTEĞİ |
+| 25 | Çok dil | ÇALIŞIYOR (kısmi kapsam) | EN arayüzde "yalnız Türkçe" notu, `lang="tr"`; içerik çevirisi yok |
+| 26 | Dönüşüm CTA | ÇALIŞIYOR | kitleye/kategoriye göre bant; `blog_cta_click` (rızaya bağlı PostHog) |
+| 27 | Bülten aboneliği | KALDIRILDI | e-posta bülteni altyapısı (abonelik + çift onay) yok; sahte form konmadı, RSS sunuldu |
+| 28 | Tüketiciye içerik | ÇALIŞIYOR | `audience` alanı + 2 tüketici yazısı (çerez tercihleri, KVKK hakları); panel içi "Rehberler" müşteri panelinin işi |
+| 29 | İçerik tazeliği | ÇALIŞIYOR | 10 Ekim 2026 tarihli 2 yeni yazı (koddaki gerçek davranışa dayanır); oyunlaştırma yazısı güncellendi |
+| 30 | Yükleniyor | ÇALIŞIYOR | hafif statik iskelet (shimmer/tam ekran yok) |
+| 31 | Hata | ÇALIŞIYOR | kök error + yazıya özel `not-found` |
+| 32 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | statik zemin; §4.2 3D/motion politikası |
+| 33 | Skip-link + main | ÇALIŞIYOR | |
+| 34 | Header/footer | ÇALIŞIYOR | yazdırmada gizli |
+| 35 | Detay tipografisi | ÇALIŞIYOR | ölü `prose` yerine tipli `ArticleBody` |
+| 36 | Yazar tipi | ÇALIŞIYOR | `Organization` |
+| 37 | Paylaşım / ilgili / önceki-sonraki | ÇALIŞIYOR | Web Share + kopyala, 3 ilgili yazı, önceki/sonraki |
+
+### Kapanan bulgular
+1 (canonical/OG), 2 (prose), 3 (sitemap), 6 (SEO deseni, JSON-LD), 7 (kart dili, kapak, CTA), 8 (tazelik), 9 (motion-reduce, link adı, focus), 11 (okuma süresi, sıralama), 12 (feed/sitemap tek taban, marka adı `seo.siteName`). Kısmen: 4 (kitle modeli + tüketici yazıları; panel içi rehber yüzeyi müşteri paneline ait), 10 (TR-only notu).
+
+### Kalanlar
+- **Bulgu 5 / CMS:** ŞEMA İSTEĞİ — `BlogPost { slug @unique, title, description, blocks Json, category, audience, tags String[], status, publishedAt, updatedAt, authorName }` (ya da `Page`'e `kind/excerpt/category/audience/publishedAt`). `lib/blog-posts.ts` arayüzü korunarak DB kaynağına (try/catch + boş liste) geçilebilir.
+- Arama ve bülten bilinçli olarak eklenmedi (yukarıda gerekçe).
+- Görsel doğrulama tarayıcıda yapılmadı (dev server/build bu dalgada yasak); tip denetimi ve testlerle doğrulandı.

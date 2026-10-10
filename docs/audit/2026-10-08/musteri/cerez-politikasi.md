@@ -214,3 +214,50 @@ Yöntem: İddialar, ilgili kod baştan okunarak çürütülmeye çalışıldı (
 - Rızanın, verildiği kadar kolay geri alınabilmesi gerekir (KVKK Çerez Rehberi / GDPR m.7(3)). Buna karşın kullanıcı tarayıcı depolamasını elle temizlemek zorunda kalıyor. Bulgu, 1. bulgu düzeltilse bile geçerliliğini koruyor.
 
 **Yeniden üretim:** Banner'da "Tümünü Kabul Et"e basın, ardından `/cerez-politikasi` sayfasına ve footer'a gidin. Tercihi değiştirecek ya da banner'ı yeniden açacak hiçbir kontrol bulunmuyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL korundu (`app/(okuma)/cerez-politikasi`). Rıza altyapısı (P0-31: `lib/consent`, tercih merkezi, PostHog kapısı, `ConsentRecord`) önceki dalgada kuruldu; bu dalgada sayfa ortak `LegalDocument` kabuğuna taşındı. Sürüm/tarih tek kaynak: `lib/legal/documents.ts` (çerez sürümü `lib/consent/inventory.ts`'ten). Test: `__tests__/lib/legal-documents.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1 | Metadata + admin ezmesi | ÇALIŞIYOR | `buildLegalMetadata` (OG article + Twitter dahil) |
+| 2 | Canonical | ÇALIŞIYOR | |
+| 3 | WebPage LD | ÇALIŞIYOR | sürüm, datePublished/dateModified (yürürlük), inLanguage |
+| 4 | Breadcrumb LD | ÇALIŞIYOR | canonical tabanla (env `siteUrl` değil) |
+| 5 | Görsel breadcrumb | ÇALIŞIYOR | DS `Breadcrumbs` |
+| 6 | Sayfa başlığı | ÇALIŞIYOR | `h1`, admin ezmesi görünen başlığa da yansır |
+| 7 | Giriş | ÇALIŞIYOR | + "Kısaca" kartı |
+| 8 | Zorunlu çerezler | ÇALIŞIYOR | envanter tablosu (ad, sağlayıcı, tür, amaç, süre) |
+| 9 | "Analitik tercihe bağlı" | ÇALIŞIYOR | beyan artık doğru (P0-31 kapısı) |
+| 10 | Pazarlama | ÇALIŞIYOR | "kullanmıyoruz; eklenirse önce politika güncellenir" — tercih merkeziyle tutarlı |
+| 11 | Tercihi güncelleme | ÇALIŞIYOR | `ConsentSummaryCard` + "Tercihleri yönet" + sayfa altı bağlantısı |
+| 12 | Zorunlu çerez uyarısı | ÇALIŞIYOR | "tarayıcı ayarlarından" yönlendirmesi (`#silme`) |
+| 13 | Son güncelleme | ÇALIŞIYOR | sürüm rozeti + yürürlük tarihi + değişiklik geçmişi |
+| 14–16 | Banner kabul/ret | ÇALIŞIYOR | P0-31 (bu yüzey dışı, doğrulandı) |
+| 17–19 | Banner/footer/`/guven` bağlantıları | ÇALIŞIYOR | |
+| 20 | Sitemap | ÇALIŞIYOR | `lastModified` = yürürlük tarihi |
+| 21 | Çok dil | ÇALIŞIYOR (kısmi kapsam) | EN arayüzde "yalnız Türkçe, bağlayıcı olan Türkçe" notu |
+| 22 | Envanter tablosu | ÇALIŞIYOR | mobilde kart listesi |
+| 23 | Tercih merkezi | ÇALIŞIYOR | P0-31 |
+| 24 | Üçüncü taraf/aktarım | ÇALIŞIYOR | Gizlilik Politikası sağlayıcı tablosuna derin bağlantı |
+| 25 | Yerel depolama/önbellek | ÇALIŞIYOR | envanterde |
+| 26 | İçindekiler | ÇALIŞIYOR | masaüstü scroll-spy, mobil açılır, numaralı bölümler |
+| 27 | Veri sorumlusu/başvuru | ÇALIŞIYOR | "Haklarınız ve iletişim" + ilgili belgeler kutusu |
+| 28 | Müşteri panelinden erişim | ÇALIŞIYOR (başka yüzey) | Ayarlar › Gizlilik'te tercih kartı (P0); panel içi yasal belge bağlantıları ayarlar yüzeyinin işi |
+| 29 | Yükleniyor | ÇALIŞIYOR | hafif statik iskelet |
+| 30 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | ek `no-store` istek de yok |
+| 31–32 | Azaltılmış hareket, skip-link | ÇALIŞIYOR | |
+| 33 | Rıza sürümleme / denetim izi | ÇALIŞIYOR | P0-31 (`CONSENT_VERSION`, `ConsentRecord`) |
+| 34 | Yazdır / sürüm geçmişi | ÇALIŞIYOR | "Yazdır / PDF" + yazdırma görünümü (krom gizli, açık zemin) + değişiklik geçmişi |
+
+### Kapanan bulgular
+1–4 (P0-31 + metin), 6 (h1), 7 (ortak `LegalDocument`), 8 (breadcrumb tabanı), 9 (bu sayfada ek DB isteği yok), 10 (hafif yükleme), 11 (P0). Kısmen: 5 (TR-only notu; EN metin yok).
+
+### Kalanlar
+- EN çeviri: hukuk onaylı İngilizce metin gerekiyor.
+- Eski sürümlerin tam metin arşivi yok (yalnız değişiklik özeti); tam arşiv için ŞEMA İSTEĞİ `LegalDocumentVersion`.

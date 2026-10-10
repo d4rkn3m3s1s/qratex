@@ -268,3 +268,48 @@ Salt okunur inceleme yapıldı. Kod çalıştırılmadı, veritabanına dokunulm
   - Gizlilik politikası (gizlilik-politikasi/page.tsx:41-48) da bu boşluğu kapatmıyor. Yalnız /guven sayfası Sentry/Vercel/Inngest'i anıyor (guven/page.tsx:55), o da aydınlatma metninin yerini tutmaz.
 - **Somut senaryo:** Tüketici QR geri bildirimi bırakıyor. Yorumu AI analizi için ABD merkezli Groq'a gidiyor. IP/UA bilgisi fraud kayıtlarına yazılıyor, doğum tarihi ve konum işleniyor. Aydınlatma metni ise bunların hiçbirini, alıcı gruplarını ve yurt dışı aktarımı adlandırmıyor. Kullanıcı md. 11/1-g kapsamındaki otomatik analize itiraz hakkından haberdar edilmiyor.
 - **Not:** Hangi işleyenin hangi bölgede barındığı (ör. Upstash ve R2 bölgesi, PostHog EU/US) yalnız koddan kesinleşmez. Bu bilgi doğrulanmadı. Ancak en az Groq (ABD) ve Vercel fra1 için yurt dışı aktarım kod ve konfigürasyondan açıkça görülüyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL korundu (`app/(okuma)/kvkk-aydinlatma-metni`). P0-34 dalgasının envanterden türeyen içeriği korunarak ortak `LegalDocument` kabuğuna taşındı; tablo üretimi `lib/legal/inventory-view.ts`'e çıkarıldı (Gizlilik Politikası da aynı kaynağı kullanır). Sürüm 2.1. Test: `__tests__/lib/legal-documents.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1–5 | Metadata, canonical, LD'ler, breadcrumb | ÇALIŞIYOR | `buildLegalMetadata` (OG/Twitter dahil), canonical tabanlı Breadcrumb LD |
+| 6 | Sayfa başlığı | ÇALIŞIYOR | `h1`, admin ezmesi yansır |
+| 7 | Veri sorumlusu kimliği | KISMİ | QRateX + iletişim e-postası; ticari unvan/adres/MERSİS/VERBİS bilinmiyor — uydurulmadı |
+| 8 | Veri kategorileri | ÇALIŞIYOR | envanterden (10 grup) |
+| 9 | Amaçlar | ÇALIŞIYOR | |
+| 10 | Hukuki sebepler | ÇALIŞIYOR | tabloda kategori × sebep |
+| 11 | Toplama yöntemi | ÇALIŞIYOR | konum izni dahil |
+| 12 | Aktarım + yurt dışı | ÇALIŞIYOR | sağlayıcılar ad ad (`ProcessorTable`), KVKK m.9 dayanağı |
+| 13 | m.11 hakları | ÇALIŞIYOR | 8 hak; eylemi olanlar bağlantılı |
+| 14 | Başvuru kanalı | ÇALIŞIYOR | `mailto:` + uygulama içi; `privacy-request` ucu P0'da güvenli hale getirildi |
+| 15 | Son güncelleme | ÇALIŞIYOR | sürüm + yürürlük + geçmiş |
+| 16 | Saklama süreleri | ÇALIŞIYOR | envanterden |
+| 17 | Uygulama içi hak kullanımı | ÇALIŞIYOR | Ayarlar › Gizlilik derin bağlantıları |
+| 18 | Sürüm geçmişi | ÇALIŞIYOR | değişiklik geçmişi bölümü |
+| 19 | İçindekiler | ÇALIŞIYOR | numaralı bölümler, scroll-spy, mobil açılır |
+| 20 | İngilizce | ÇALIŞIYOR (kısmi kapsam) | TR-only notu |
+| 21 | Yazdır / PDF | ÇALIŞIYOR | |
+| 22 | Açık rızanın ayrı sunumu | ÇALIŞIYOR (çerez/izleme) | tercih merkezi ayrı; kayıt formundaki onay → kalan |
+| 23 | Kayıt formundan erişim | KALAN (başka yüzey) | auth yüzeyi; bu sayfa `#kategoriler` vb. çapalar sunuyor |
+| 24 | QR formundan erişim | KALAN (başka yüzey) | geri bildirim yüzeyi; bağlantı hedefi `/kvkk-aydinlatma-metni#toplama` |
+| 25 | Footer | ÇALIŞIYOR | |
+| 26 | Sitemap | ÇALIŞIYOR | yürürlük tarihi |
+| 27 | Ortak layout | ÇALIŞIYOR | sakin okuma kabuğu |
+| 28 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | |
+| 29 | Tipografi / satır uzunluğu | ÇALIŞIYOR | gövde 16px tam kontrast, içerik sütunu sınırlı, e-posta tıklanabilir |
+
+### Kapanan bulgular
+1 (tarih), 2 (asgari başlıklar — sağlayıcılar artık adıyla), 4 (sürüm/yürürlük; kabul kaydı hariç), 6 (h1 + ezme), 7 (okunabilirlik, mailto), 8 (haklar ↔ eylemler), 9 (ortak kabuk). Bulgu 3 (privacy-request) P0'da kapanmıştı (doğrulandı). Kısmen: 10 (TR-only notu).
+
+### Kalanlar
+- **Bulgu 5** (toplama anında aydınlatma: QR formu, kayıt, konum izni, doğum günü) — o yüzeylerin sahipleri bu sayfanın bölüm çapalarına bağlantı vermeli.
+- **ŞEMA İSTEĞİ:** `LegalAcceptance` (kabul edilen sürüm kaydı), tam metin arşivi için `LegalDocumentVersion`.
+- `lib/innovation-config.ts` içindeki `deletionRequestContactEmail: 'kvkk@example.com'` yer tutucusu (bu yüzeyin dosyası değil) gerçek adresle (`LEGAL_CONTACT_EMAIL`) değiştirilmeli.
+- Veri sorumlusu ticari bilgileri ve hukuk danışmanı onayı.

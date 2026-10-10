@@ -208,3 +208,52 @@ Salt okunur inceleme; kod, veritabanı, build veya test çalıştırılmadı. He
 - **Kanıt düzeltmesi:** `schema.prisma:87-88` `latitude/longitude` müşterinin değil işletme profilinin koordinatıdır. Müşteri konumu ise `app/customer/nearby/page.tsx:118-133` ile alınıp `localStorage`'a yazılıyor ve `/api/customer/discovery?lat=..&lng=..` sorgusuyla (`:181-193`) sunucuya gönderiliyor; yani kalıcı saklama doğrulanmadı ama sunucuda işleniyor ve bu da politikada geçmiyor.
 - Otomatik profil çıkarımı (rozet kategorisi, AI duygu analizi) metinde hiç anılmıyor; bu iddia doğru.
 - **Senaryo:** Kayıt olan müşteri politikayı okuyup onaylıyor; geri bildirim metni Groq'a (ABD) gönderiliyor, oturumu PostHog'a kaydediliyor, doğum tarihi saklanıyor — kullanıcı bunların hiçbirinden metin üzerinden haberdar olamıyor. Hukuki değerlendirme bu incelemenin kapsamı dışında; teknik olgular kodla doğrulandı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL korundu (`app/(okuma)/gizlilik-politikasi`). Ortak `LegalDocument` kabuğu (`components/public/p-blog-yasal/legal-document.tsx`); veri grupları + saklama `lib/legal/inventory-view.ts` (kişisel veri envanterinden), sağlayıcılar `lib/legal/processors.ts`, sürüm `lib/legal/documents.ts`. Metin sürümü 2.0 (yürürlük 10 Ekim 2026). Test: `__tests__/lib/legal-documents.test.ts` (sağlayıcı ↔ package.json, render anı tarihi yasağı, envanter görünümü).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1 | Metadata + ezme | ÇALIŞIYOR | açıklamadaki "saklama süreleri" vaadi artık içerikte karşılıklı |
+| 2 | WebPage LD | ÇALIŞIYOR | sürüm + tarihler |
+| 3 | Breadcrumb LD | ÇALIŞIYOR | canonical tabanla |
+| 4 | Görsel breadcrumb | ÇALIŞIYOR | |
+| 5 | Sayfa başlığı | ÇALIŞIYOR | `h1`, admin ezmesi yansır |
+| 6 | Giriş vaadi | ÇALIŞIYOR | "Kimlerle paylaşıyoruz" + "ne kadar süre" bölümleri var |
+| 7 | Veri kategorileri | ÇALIŞIYOR | envanterden tablo (örneklerle) |
+| 8 | Amaçlar | ÇALIŞIYOR | + hukuki sebepler için KVKK metnine bağ (aynı envanter) |
+| 9 | KVKK bağlantısı | ÇALIŞIYOR | |
+| 10 | Son güncelleme | ÇALIŞIYOR | sürüm + yürürlük + değişiklik geçmişi |
+| 11 | Üçüncü taraflar / yurt dışı | ÇALIŞIYOR | 12 sağlayıcı: ad, amaç, veri, doğrulanmış bölge ya da dürüst "yurt dışı", dayanak |
+| 12 | Saklama süreleri | ÇALIŞIYOR | otomatik uygulananlar "otomatik silinir" diye ayrılır |
+| 13 | Veri sorumlusu kimliği | KISMİ | iletişim e-postası var; ticari unvan/adres/MERSİS/VERBİS bilinmiyor — uydurulmadı |
+| 14 | Haklar + self-servis | ÇALIŞIYOR | 4 eylem kartı (indir, başvuru, hesap silme, çerez tercihleri) |
+| 15 | Çerez Politikası bağlantısı | ÇALIŞIYOR | + tercih merkezi düğmesi |
+| 16 | İçindekiler / başlıklar | ÇALIŞIYOR | numaralı h2, scroll-spy, mobil açılır |
+| 17 | Sürüm geçmişi | ÇALIŞIYOR | yeniden onay kaydı → ŞEMA İSTEĞİ |
+| 18 | İngilizce | ÇALIŞIYOR (kısmi kapsam) | TR-only notu |
+| 19 | Yazdır / kalıcı bağlantı | ÇALIŞIYOR | yazdırma görünümü; bölüm çapaları kalıcı |
+| 20 | Yükleniyor | ÇALIŞIYOR | hafif statik iskelet |
+| 21 | DB dayanıklılığı | ÇALIŞIYOR | |
+| 22 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | |
+| 23 | Skip-link | ÇALIŞIYOR | |
+| 24 | Mobil | ÇALIŞIYOR | tablolar mobilde kart listesi |
+| 25 | Panelden erişim | ÇALIŞIYOR (başka yüzey) | panelde yasal bağlantı satırı ayarlar yüzeyinin işi |
+| 26 | Rıza tutarlılığı | ÇALIŞIYOR | P0-31 + metin aynı kategorileri anlatır |
+| 27 | Sitemap | ÇALIŞIYOR | yürürlük tarihi |
+
+Yeni bölümler: "Diğer kullanıcılar neyi görür?" (sıralamada "Ad S." — `publicDisplayName`; bağışta maskeli ad; görünürlük ayarı), "Yapay zekâ ve otomatik değerlendirmeler" (Groq/ABD, güven puanı, itiraz), "Güvenlik".
+
+### Kapanan bulgular
+1 (rıza: P0 + metin), 2 (tarih), 3 (vaat edilen bölümler + gerçek envanter + aktarım), 4 (haklar eylem kartları), 6 (ortak kabuk), 7 (h1, hiyerarşi, okunabilirlik), 9 (breadcrumb tabanı), 10 (sakin kabuk, hafif yükleme). Kısmen: 5 (sürüm/geçmiş var; kullanıcı kabul kaydı yok), 8 (TR-only notu; panel içi bağlantı başka yüzey).
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `LegalAcceptance { userId, documentSlug, version, acceptedAt, channel, ipHash }` + yeni sürümde panelde "neler değişti" bildirimi (auth + müşteri kabuğu yüzeyleriyle).
+- Veri sorumlusunun ticari unvanı/adres/MERSİS/VERBİS: şirket bilgisi gerekiyor.
+- EN metin: hukuk onaylı çeviri.
+- Nihai metin bir KVKK hukuk danışmanınca gözden geçirilmeli (içerik kodla doğrulandı, hukuki görüş değildir).

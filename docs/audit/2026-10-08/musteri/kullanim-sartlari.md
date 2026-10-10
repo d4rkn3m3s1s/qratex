@@ -195,3 +195,55 @@
 - **Yeniden üretim:** `/kullanim-sartlari` sayfasını farklı günlerde açın; metin değişmediği hâlde "Son güncelleme" her gün (veya her yeniden doğrulamada) ileri kayar. Ekran görüntüsüyle "metin X tarihinde şuydu" iddiası çürütülemez/ispatlanamaz hâle gelir.
 - `app/sitemap.ts:36-40` `lastModified: new Date()` ikincil: SEO açısından arama motorlarına sürekli "değişti" sinyali veriyor, hukuki etkisi yok; aynı kaynaktan (`effectiveAt`) beslenmeli.
 - **Önem notu:** Gerçek ve kullanıcıyı yanıltan bir hata; ancak tek başına veri kaybı/güvenlik açığı değil, **orta** seviye. Düzeltme sabit bir `effectiveAt` değerinin (kısa vadede kodda tek bir `const`, uzun vadede `LegalDocument.effectiveAt`) dört yasal sayfada ve sitemap'te ortak kullanılması.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL korundu (`app/(okuma)/kullanim-sartlari`). Metin baştan yazıldı (sürüm 2.0) ve ortak `LegalDocument` kabuğunda: 12 numaralı bölüm, kalıcı çapalar (`#puanlar`, `#oyunlar`, `#oduller`, `#hile`, `#hesap-kapatma` …), "Kısaca" özeti, değişiklik geçmişi. **Sayısal kurallar koddan okunur**: puan tavanları `ECONOMY_CAPS` (`lib/economy/caps.ts`), turnuva ödülleri `TOURNAMENT_PRIZES`, en az oyuncu `TOURNAMENT_MIN_PARTICIPANTS` — ekranda yazan kural = uygulanan kural. Test: `__tests__/lib/legal-documents.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1 | Başlık/açıklama | ÇALIŞIYOR | |
+| 2 | Canonical | ÇALIŞIYOR | |
+| 3 | OG / Twitter | ÇALIŞIYOR | kendi url/başlık/açıklama (ana sayfa mirası yok) |
+| 4 | WebPage LD | ÇALIŞIYOR | sürüm + tarihler |
+| 5 | Breadcrumb LD | ÇALIŞIYOR | canonical tabanla |
+| 6 | Görsel breadcrumb | ÇALIŞIYOR | |
+| 7 | Sayfa başlığı | ÇALIŞIYOR | `h1`, ezme yansır |
+| 8 | Kabul + hizmet tanımı | ÇALIŞIYOR | taraflar, tanımlar, modüller |
+| 9 | Yükümlülükler | ÇALIŞIYOR | hesap ve işletme ayrı bölümler |
+| 10 | Garanti / sonlandırma | ÇALIŞIYOR | süreç + itiraz yolu |
+| 11 | Gizlilik/KVKK bağlantıları | ÇALIŞIYOR | odak halkalı `LegalLink`; Çerez Politikası ilgili belgelerde |
+| 12 | Son güncelleme | ÇALIŞIYOR | sürüm + yürürlük + geçmiş |
+| 13 | Layout | ÇALIŞIYOR | sakin okuma kabuğu |
+| 14 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | |
+| 15 | Yükleniyor | ÇALIŞIYOR | |
+| 16 | DB fail-safe | ÇALIŞIYOR | |
+| 17 | Footer | ÇALIŞIYOR | |
+| 18 | Kayıt ekranından kabul | KISMİ (başka yüzey) | bağlantı var; kabul kaydı yok → ŞEMA İSTEĞİ + auth yüzeyi |
+| 19 | Onay kaydı | KALAN | ŞEMA İSTEĞİ `LegalAcceptance` |
+| 20 | Google ile kayıtta şartlar | KALAN (başka yüzey) | auth yüzeyi (`/auth/complete` onay adımı) |
+| 21 | Sitemap | ÇALIŞIYOR | yürürlük tarihi |
+| 22 | Puan/XP/rozet/lig kuralları | ÇALIŞIYOR | nakit değeri yok, devredilemez, defter, tavan tablosu (koddan), gün sınırı açıklaması |
+| 23 | Oyun/turnuva/klan/kutu | ÇALIŞIYOR | turnuva ödülleri + en az oyuncu (koddan), klan emanet/iade/paylaşım, kutu ücretsiz ve günlük |
+| 24 | Hile / sessiz yaptırım | ÇALIŞIYOR | "kazanım bildirimsiz geçersiz sayılabilir" açıkça + itiraz (KVKK m.11/1-g, insan incelemesi) |
+| 25 | Hesap silme akıbeti | ÇALIŞIYOR | anonimleştirme, yorum metni, puan/ödül kaybı, abonelik engeli |
+| 26 | İçerik lisansı + AI | ÇALIŞIYOR | |
+| 27 | Yaş sınırı | KALAN | kodda yaş kapısı yok; sınır hukuki karar — metne uydurulmadı |
+| 28 | Kimlik, hukuk, mahkeme | KISMİ | Türk hukuku + Tüketici Hakem Heyeti/Mahkemesi + iletişim; ticari unvan/MERSİS bilinmiyor |
+| 29 | Sürüm geçmişi | ÇALIŞIYOR | yeniden onay → ŞEMA İSTEĞİ |
+| 30 | İçindekiler / çapalar | ÇALIŞIYOR | numaralı bölümler ("madde 7") + derin bağlantı |
+| 31 | İngilizce | ÇALIŞIYOR (kısmi kapsam) | TR-only, "bağlayıcı olan Türkçe" notu |
+| 32 | Panelden erişim | KALAN (başka yüzey) | ayarlar/oyun ekranları bu sayfanın çapalarına bağlanabilir |
+| 33 | Yazdır / PDF | ÇALIŞIYOR | |
+
+### Kapanan bulgular
+2 (tarih), 3 (ekonomi kapsamı, sayılar koddan), 4 (sessiz yaptırımın açıklanması + itiraz), 5 (hesap silme akıbeti), 6 (h1), 7 (OG + breadcrumb tabanı), 8 (ortak kabuk), 9 (okuma deneyimi), 11 (odak + Çerez bağlantısı). Kısmen: 10 (TR-only notu; panel bağlantıları başka yüzey), 12 (hukuk/iletişim var, ticari kimlik yok).
+
+### Kalanlar
+- **Bulgu 1 / ŞEMA İSTEĞİ:** `LegalAcceptance { id, userId, slug, version, acceptedAt, channel, ipHash, userAgent; @@unique([userId, slug, version]) }`; kayıt route'unda transaction içinde yazım ve OAuth için `/auth/complete` onayı auth yüzeyinin işi.
+- Yaş sınırı, ticari unvan/MERSİS/adres: şirket/hukuk kararı gerekiyor.
+- Not: ekonomi gün sınırı UTC'dir (`lib/economy/caps.ts`); §4.4 "zaman Europe/Istanbul" ilkesiyle ayrışıyor — metin gerçeği yazıyor, değişirse sabitten okunduğu için tablo kendiliğinden güncellenir (gün sınırı cümlesi elle güncellenmeli).

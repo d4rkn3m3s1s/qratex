@@ -268,3 +268,59 @@ Yeniden üretim: herhangi bir yazıyı aç (ör. `lib/blog-posts.ts:33` "Neden Q
 Ek not: `app/customer/nearby/page.tsx:493` aynı ölü `prose prose-sm dark:prose-invert` sınıflarını kullanıyor; orada `whitespace-pre-wrap` ile düz metin basıldığı için etki daha küçük (yalnızca beklenen tipografi yok).
 
 Öneri (ürün seviyesi): Tek doğru kaynak olarak `@tailwindcss/typography` eklenip `tailwind.config.ts` plugins dizisine kaydedilmeli; ardından `prose` için tema token'larına (`--foreground`, `--muted-foreground`, `--primary`) bağlı bir `typography` uzantısı tanımlanarak açık/koyu temada marka renkleri tutarlı hale getirilmeli. `max-w-none` yerine `max-w-prose` / ~68ch okuma genişliği kullanılmalı. Eklenti istenmiyorsa alternatif: blok tipine göre stil veren küçük bir `ArticleBody` bileşeni (h2 → `mt-10 text-2xl font-semibold scroll-mt-24` + id ile başlık çapası, ul → `list-disc pl-6 space-y-2`, p → `leading-7 [&:not(:first-child)]:mt-6`) yazılıp hem blog detayında hem ileride eklenecek rehber yüzeylerinde yeniden kullanılmalı. Hangi yol seçilirse seçilsin, `prose` sınıfı CSS'i üretilmeden kodda bırakılmamalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** `p-blog-yasal` · **Tarih:** 2026-10-10 · URL korundu (`app/(okuma)/blog/[slug]`, sakin okuma kabuğu). Dosyalar: `page.tsx`, `opengraph-image.tsx`, `not-found.tsx`; bileşenler `components/public/p-blog-yasal/` (`article-body`, `reading-progress`, `share-actions`, `toc-nav`, `post-card`, `blog-cta`, `json-ld`). Test: `__tests__/lib/blog-posts.test.ts`, `__tests__/lib/legal-documents.test.ts` (JSON-LD kaçışı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Nasıl |
+|---|---|---|---|
+| 1 | Statik üretim | ÇALIŞIYOR | `generateStaticParams` |
+| 2 | Bilinmeyen slug | ÇALIŞIYOR | blog'a özel `not-found.tsx` (son 3 yazı + tüm yazılar), metadata `noindex` |
+| 3 | Başlık | ÇALIŞIYOR | |
+| 4 | Açıklama | ÇALIŞIYOR | |
+| 5 | Canonical | ÇALIŞIYOR | |
+| 6 | OpenGraph article | ÇALIŞIYOR | url, siteName, locale, publishedTime, modifiedTime, authors, section, tags eksiksiz |
+| 7 | Yazıya özel OG görseli | ÇALIŞIYOR | `opengraph-image.tsx` (başlık, kategori, okuma süresi); X kartı og:image'a düşer |
+| 8 | Article JSON-LD | ÇALIŞIYOR | `BlogPosting`: Organization yazar, image, mainEntityOfPage, inLanguage, wordCount, timeRequired, publisher.logo; `<` kaçışlı |
+| 9 | BreadcrumbList LD | ÇALIŞIYOR | canonical tabanla |
+| 10 | Görsel breadcrumb | ÇALIŞIYOR | DS `Breadcrumbs`: mobilde yalnız "‹ Blog", masaüstünde uzun başlık kırpılır |
+| 11 | Yayın tarihi | ÇALIŞIYOR | Europe/Istanbul günü |
+| 12 | Güncellenme | ÇALIŞIYOR | gün farkı varsa |
+| 13 | H1 | ÇALIŞIYOR | |
+| 14 | Özet | ÇALIŞIYOR | |
+| 15 | Yazar | ÇALIŞIYOR | kurum simgesi + ad; yazar sayfası yok (ekip yazısı) |
+| 16 | Okuma süresi | ÇALIŞIYOR | içerikten türetilir |
+| 17 | Kapak | ÇALIŞIYOR | kategori renginden marka kapağı (21:9) |
+| 18 | Gövde tipografisi | ÇALIŞIYOR | tipli `ArticleBody` (eklentisiz), 68ch, 1.75 satır aralığı |
+| 19 | Madde listesi | ÇALIŞIYOR | `list-disc pl-6`, marka renkli işaret; ayrıca `ol`, `callout`, `quote` blokları |
+| 20 | H2 | ÇALIŞIYOR | hiyerarşi + `id` + hover/odakta bölüm bağlantısı (başlık adını kirletmez) |
+| 21 | `hr` + dipnot | KALDIRILDI | aynı hedefe ikinci bağlantıydı; yerine kitle CTA'sı + ilgili yazılar |
+| 22 | "Tüm yazılar" | ÇALIŞIYOR | ilgili yazılar başlığında |
+| 23 | Odak halkaları | ÇALIŞIYOR | |
+| 24 | Skip-link | ÇALIŞIYOR | |
+| 25 | Yetki | ÇALIŞIYOR (gerekmez) | |
+| 26 | Yükleniyor | ÇALIŞIYOR | hafif statik iskelet |
+| 27 | Hareketli arka plan | KALDIRILDI (okuma yüzeyinde) | statik zemin; `no-store` ayar isteği bu sayfalarda yok |
+| 28 | Dil tutarlılığı | ÇALIŞIYOR (kısmi kapsam) | EN arayüzde "yalnız Türkçe" notu, `<article lang="tr">` |
+| 29 | İçindekiler | ÇALIŞIYOR | ≥ 3 h2: masaüstü yapışkan scroll-spy, mobil açılır liste |
+| 30 | İlgili / önceki-sonraki | ÇALIŞIYOR | kategori → etiket → kitle → yenilik puanlaması |
+| 31 | Paylaşım | ÇALIŞIYOR | Web Share (varsa) + bağlantı kopyala, `aria-live` sonuç, `blog_share` |
+| 32 | Dönüşüm CTA | ÇALIŞIYOR | kitle/kategoriye göre; `blog_cta_click` rızaya bağlı |
+| 33 | Sitemap | ÇALIŞIYOR | `app/sitemap.ts` (eklemeli değişiklik) |
+| 34 | CMS | ÇALIŞIYOR (depo tabanlı) | deploy'suz yayın → ŞEMA İSTEĞİ (bkz. blog.md) |
+| 35 | RSS | ÇALIŞIYOR | `/feed.xml` canonical tabanla |
+
+Ek: okuma ilerleme çubuğu (yalnız `scaleX`, konum dış sarmalayıcıda, azaltılmış harekette yaylanmasız).
+
+### Kapanan bulgular
+1 (tipografi), 2 (sitemap), 3 (OG + yazıya özel görsel), 4 (JSON-LD tip/alanlar + Breadcrumb), 6 (CTA, tekrar bağlantı), 7 (okuma süresi, TOC, ilgili, paylaşım), 8 (sakin zemin + yüzey), 10 (breadcrumb, 404, `hr`). Kısmen: 9 (dil notu; içerik çevirisi yok). Güvenlik notu (JSON-LD `</script>` kaçışı) kapandı.
+
+### Kalanlar
+- **Bulgu 5 / CMS:** ŞEMA İSTEĞİ (`BlogPost`).
+- "Okur rozeti" (okumayı bitirince tek seferlik ödül) yapılmadı: puan/rozet basan yeni yol ekonomi + sunucu doğrulaması ister; bu yüzeyin kapsamı dışında.
+- Tarayıcıda görsel doğrulama yapılmadı (dev server yasak).

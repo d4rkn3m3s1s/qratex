@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { getSeoSettings } from '@/lib/seo-settings';
+import { LEGAL_DOCUMENTS, legalDateToDate } from '@/lib/legal/documents';
+import { getAllPosts, getLatestModified } from '@/lib/blog-posts';
 
 /** URL sayısı bu eşiği aşarsa ileride sitemap-index (app/sitemap.xml/route.ts) ile bölünebilir. */
 const SITEMAP_INDEX_THRESHOLD = 5000;
@@ -8,6 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const seo = await getSeoSettings();
   if (!seo.sitemapEnabled) return [];
   const base = seo.canonicalBase || seo.siteUrl;
+  const latestBlog = getLatestModified();
   const defaultEntries: MetadataRoute.Sitemap = [
     {
       url: base,
@@ -35,32 +38,37 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${base}/kullanim-sartlari`,
-      lastModified: new Date(),
+      // Yasal metnin yürürlük tarihi (render anı değil) — lib/legal/documents.ts
+      lastModified: legalDateToDate(LEGAL_DOCUMENTS['kullanim-sartlari'].effectiveDate),
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${base}/gizlilik-politikasi`,
-      lastModified: new Date(),
+      // Yasal metnin yürürlük tarihi (render anı değil) — lib/legal/documents.ts
+      lastModified: legalDateToDate(LEGAL_DOCUMENTS['gizlilik-politikasi'].effectiveDate),
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${base}/kvkk-aydinlatma-metni`,
-      lastModified: new Date(),
+      // Yasal metnin yürürlük tarihi (render anı değil) — lib/legal/documents.ts
+      lastModified: legalDateToDate(LEGAL_DOCUMENTS['kvkk-aydinlatma-metni'].effectiveDate),
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${base}/cerez-politikasi`,
-      lastModified: new Date(),
+      // Yasal metnin yürürlük tarihi (render anı değil) — lib/legal/documents.ts
+      lastModified: legalDateToDate(LEGAL_DOCUMENTS['cerez-politikasi'].effectiveDate),
       changeFrequency: 'monthly',
       priority: 0.3,
     },
     {
       url: `${base}/blog`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
+      // En son değişen yazının tarihi (her istekte "bugün" değil)
+      lastModified: latestBlog ? new Date(latestBlog) : undefined,
+      changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
@@ -70,6 +78,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     },
   ];
+
+  // Tekil blog yazıları (blog denetimi bulgu 3): değişiklik tarihi yazının kendisinden.
+  const blogEntries: MetadataRoute.Sitemap = getAllPosts().map((p) => ({
+    url: `${base}/blog/${p.slug}`,
+    lastModified: new Date(p.dateModified),
+    changeFrequency: 'monthly',
+    priority: 0.6,
+  }));
 
   const extra = seo.extraSitemapUrls ?? [];
   const extraEntries: MetadataRoute.Sitemap = extra
@@ -81,5 +97,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: typeof e.priority === 'number' ? e.priority : 0.5,
     }));
 
-  return [...defaultEntries, ...extraEntries];
+  return [...defaultEntries, ...blogEntries, ...extraEntries];
 }
