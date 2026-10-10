@@ -6,7 +6,7 @@ export const SLOGANS: string[] = [
   'Sesiniz değerli, geri bildiriminiz fark yaratır.',
   'Her yorum bir adım, birlikte daha iyiye.',
   'Puanlarınızı toplayın, ödülleri keşfedin.',
-  'Sadakatınız ödüllendirilsin.',
+  'Sadakatiniz ödüllendirilsin.',
   'Anket doldurun, rozetler kazanın.',
   'Müşteri deneyimini birlikte iyileştiriyoruz.',
   'Geri bildirim verin, farkı hissedin.',

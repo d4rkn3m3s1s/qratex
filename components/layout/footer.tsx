@@ -8,30 +8,59 @@ import { m as Motion } from 'framer-motion';
 import { Twitter, Linkedin, Instagram, Github, Mail, MapPin, Rss } from 'lucide-react';
 import { getRandomSlogan } from '@/lib/slogans';
 import { cn } from '@/lib/utils';
+import { useAppLocale } from '@/lib/app-locale';
 import { ConsentPreferencesButton } from '@/components/analytics/consent-preferences-button';
 
-const footerLinks = {
+type FooterLink = { href: string; label: { tr: string; en: string } };
+
+/**
+ * Footer bağlantıları (TR/EN). Landing yeniden tasarımı (landing.md envanter #43, Bulgu 13):
+ * eski `/#features`, `/#pricing` çapaları ve gerçek sayfası olmayan "Hakkımızda" (→ /#features)
+ * kaldırıldı; özellikler + fiyatlar işletme sayfasında, SSS ana sayfada `#sss`.
+ */
+const footerLinks: Record<'product' | 'company' | 'support' | 'legal', FooterLink[]> = {
   product: [
-    { label: 'Özellikler', href: '/#features' },
-    { label: 'Fiyatlandırma', href: '/#pricing' },
+    { label: { tr: 'Nasıl çalışır', en: 'How it works' }, href: '/#nasil-calisir' },
+    { label: { tr: 'Özellikler', en: 'Features' }, href: '/neden-qratex#ozellikler' },
+    { label: { tr: 'Fiyatlandırma', en: 'Pricing' }, href: '/neden-qratex#fiyatlar' },
   ],
   company: [
-    { label: 'Hakkımızda', href: '/#features' },
-    { label: 'Blog', href: '/blog' },
-    { label: 'Neden QRateX?', href: '/neden-qratex' },
+    { label: { tr: 'Neden QRateX?', en: 'Why QRateX?' }, href: '/neden-qratex' },
+    { label: { tr: 'Blog', en: 'Blog' }, href: '/blog' },
   ],
   support: [
-    { label: 'SSS', href: '/#faq' },
-    { label: 'RSS', href: '/feed.xml' },
+    { label: { tr: 'SSS', en: 'FAQ' }, href: '/#sss' },
+    { label: { tr: 'RSS', en: 'RSS' }, href: '/feed.xml' },
   ],
   legal: [
-    { label: 'Güven', href: '/guven' },
-    { label: 'Kullanım Şartları', href: '/kullanim-sartlari' },
-    { label: 'Gizlilik Politikası', href: '/gizlilik-politikasi' },
-    { label: 'Çerez Politikası', href: '/cerez-politikasi' },
-    { label: 'KVKK Aydınlatma Metni', href: '/kvkk-aydinlatma-metni' },
+    { label: { tr: 'Güven Merkezi', en: 'Trust Center' }, href: '/guven' },
+    { label: { tr: 'Kullanım Şartları', en: 'Terms of Use' }, href: '/kullanim-sartlari' },
+    { label: { tr: 'Gizlilik Politikası', en: 'Privacy Policy' }, href: '/gizlilik-politikasi' },
+    { label: { tr: 'Çerez Politikası', en: 'Cookie Policy' }, href: '/cerez-politikasi' },
+    { label: { tr: 'KVKK Aydınlatma Metni', en: 'KVKK Privacy Notice' }, href: '/kvkk-aydinlatma-metni' },
   ],
 };
+
+const FOOTER_TEXT = {
+  tr: {
+    tagline: 'QR tabanlı geri bildirim ve oyunlaştırma platformu: müşteriler kazanır, işletmeler duyar.',
+    product: 'Ürün',
+    company: 'Şirket',
+    support: 'Destek',
+    legal: 'Yasal',
+    rights: 'Tüm hakları saklıdır.',
+    city: 'İstanbul, Türkiye',
+  },
+  en: {
+    tagline: 'QR-based feedback and gamification platform: customers earn, businesses listen.',
+    product: 'Product',
+    company: 'Company',
+    support: 'Support',
+    legal: 'Legal',
+    rights: 'All rights reserved.',
+    city: 'Istanbul, Türkiye',
+  },
+} as const;
 
 const socialLinks = [
   { icon: Twitter, href: 'https://twitter.com/qratex', label: 'Twitter' },
@@ -44,6 +73,9 @@ export function Footer() {
   const [mounted, setMounted] = useState(false);
   const [slogan, setSlogan] = useState('');
   const { resolvedTheme } = useTheme();
+  const { locale } = useAppLocale();
+  const lang = locale === 'en' ? 'en' : 'tr';
+  const text = FOOTER_TEXT[lang];
 
   useEffect(() => {
     setMounted(true);
@@ -72,6 +104,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
             <Link href="/" className={cn('mb-6 inline-flex items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2')}>
+              <span className="sr-only">QRateX</span>
               {mounted && (
                 <>
                   <Image
@@ -92,15 +125,13 @@ export function Footer() {
                 </>
               )}
             </Link>
-            <p className="text-muted-foreground text-base mb-2 max-w-sm">
-              QR tabanlı geri bildirim ve gamification platformu ile müşteri deneyimini dönüştürün.
-            </p>
-            {slogan && (
+            <p className="text-muted-foreground text-base mb-2 max-w-sm">{text.tagline}</p>
+            {slogan && lang === 'tr' && (
               <p className="text-muted-foreground/90 text-sm italic mb-6 max-w-sm border-l-2 border-primary/30 pl-3">
                 {slogan}
               </p>
             )}
-            {!slogan && <div className="mb-6" />}
+            {!(slogan && lang === 'tr') && <div className="mb-6" />}
             <div className="flex items-center gap-3">
               {socialLinks.map((social) => (
                 <Motion.a
@@ -121,7 +152,7 @@ export function Footer() {
 
           {/* Links */}
           <div>
-            <h3 className="font-semibold text-base mb-4">Ürün</h3>
+            <h3 className="font-semibold text-base mb-4">{text.product}</h3>
             <ul className="space-y-3">
               {footerLinks.product.map((link) => (
                 <li key={link.href}>
@@ -129,7 +160,7 @@ export function Footer() {
                     href={link.href}
                     className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </Link>
                 </li>
               ))}
@@ -137,7 +168,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">Şirket</h3>
+            <h3 className="font-semibold text-base mb-4">{text.company}</h3>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.href}>
@@ -145,7 +176,7 @@ export function Footer() {
                     href={link.href}
                     className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </Link>
                 </li>
               ))}
@@ -153,7 +184,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">Destek</h3>
+            <h3 className="font-semibold text-base mb-4">{text.support}</h3>
             <ul className="space-y-3">
               {footerLinks.support.map((link) => (
                 <li key={link.href} className="flex items-center gap-1.5">
@@ -163,7 +194,7 @@ export function Footer() {
                     className={cn('text-sm text-muted-foreground', linkFocus)}
                     {...(link.href === '/feed.xml' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </Link>
                 </li>
               ))}
@@ -171,7 +202,7 @@ export function Footer() {
           </div>
 
           <div>
-            <h3 className="font-semibold text-base mb-4">Yasal</h3>
+            <h3 className="font-semibold text-base mb-4">{text.legal}</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.href}>
@@ -179,7 +210,7 @@ export function Footer() {
                     href={link.href}
                     className={cn('text-sm text-muted-foreground', linkFocus)}
                   >
-                    {link.label}
+                    {link.label[lang]}
                   </Link>
                 </li>
               ))}
@@ -194,7 +225,7 @@ export function Footer() {
         {/* Bottom */}
         <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} QRateX. Tüm hakları saklıdır.
+            © {new Date().getFullYear()} QRateX. {text.rights}
           </p>
           <div className="flex items-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
@@ -205,16 +236,11 @@ export function Footer() {
             </div>
             <div className="hidden items-center gap-2 sm:flex">
               <MapPin className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-              <span>İstanbul, Türkiye</span>
+              <span>{text.city}</span>
             </div>
           </div>
         </div>
 
-        {/* ReverBot üretici imzası (placeholder — gerçek logo geldiğinde img ile değiştir) */}
-        <div className="mt-8 flex items-center justify-center gap-1.5 text-[11px] tracking-wide text-muted-foreground/50">
-          <span>Powered by</span>
-          <span className="font-semibold text-foreground/60">ReverBot</span>
-        </div>
       </div>
     </footer>
   );

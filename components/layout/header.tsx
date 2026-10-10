@@ -9,7 +9,7 @@ import { useTheme } from 'next-themes';
 import { m as Motion } from 'framer-motion';
 import { Menu, LogIn, ChevronRight, Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,15 +20,92 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn, getInitials } from '@/lib/utils';
 import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
-import { useAppT } from '@/lib/app-locale';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { roleHome } from '@/lib/auth/post-login-target';
 
-/** Logo zaten `/` — tekrar “Ana Sayfa” linki yok. */
-const navigation = [
-  { labelKey: 'appShell.navFeatures', href: '/#features' },
-  { labelKey: 'appShell.navPricing', href: '/#pricing' },
+/**
+ * Logo zaten `/` — tekrar "Ana Sayfa" linki yok. Eski `/#features` ve `/#pricing` çapaları
+ * landing yeniden tasarımında kalktı (özellikler + fiyatlar işletme sayfasında, URL korunur);
+ * tüketici için "Nasıl çalışır" eklendi. `label` verilen öğe i18n sözlüğüne bağlı değildir.
+ */
+type NavItem = { href: string; labelKey?: string; label?: { tr: string; en: string } };
+const navigation: NavItem[] = [
+  { label: { tr: 'Nasıl çalışır', en: 'How it works' }, href: '/#nasil-calisir' },
+  { labelKey: 'appShell.navFeatures', href: '/neden-qratex#ozellikler' },
+  { labelKey: 'appShell.navPricing', href: '/neden-qratex#fiyatlar' },
   { labelKey: 'appShell.navBlog', href: '/blog' },
   { labelKey: 'appShell.navWhyQratex', href: '/neden-qratex' },
 ];
+
+/** Çapalı bağlantılar hiçbir zaman "aktif" sayılmaz; yalnız tam yol eşleşmesi. */
+function isNavActive(pathname: string | null, href: string): boolean {
+  return !href.includes('#') && pathname === href;
+}
+
+function applyThemeSelection(mode: 'light' | 'dark' | 'system', setTheme: (theme: string) => void) {
+  safeLocalStorageSetItem('qratex-theme', mode);
+  safeLocalStorageSetItem('theme', mode);
+  const resolved =
+    mode === 'system'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light'
+      : mode;
+  for (const el of [document.documentElement, document.body]) {
+    if (!el) continue;
+    el.classList.remove('light', 'dark');
+    el.classList.add(resolved);
+    el.setAttribute('data-theme', resolved);
+    el.style.colorScheme = resolved;
+  }
+  setTheme(mode);
+}
+
+/**
+ * Tema seçici — modül düzeyinde (landing.md Bulgu 15: eskiden Header gövdesinde tanımlıydı,
+ * her kaydırma durum değişiminde yeniden mount olup açık menüyü kapatıyordu). Tek `onSelect`.
+ */
+function ThemeSwitcher({ className, mounted }: { className?: string; mounted: boolean }) {
+  const t = useAppT();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={t('appShell.themeSelect')}
+          className={cn(
+            'h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200',
+            className
+          )}
+        >
+          {mounted && (theme === 'system' || !theme) ? (
+            <Monitor className="h-5 w-5" aria-hidden />
+          ) : mounted && resolvedTheme === 'dark' ? (
+            <Moon className="h-5 w-5" aria-hidden />
+          ) : mounted ? (
+            <Sun className="h-5 w-5" aria-hidden />
+          ) : (
+            <Monitor className="h-5 w-5" aria-hidden />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => applyThemeSelection('system', setTheme)}>
+          <Monitor className="h-4 w-4 mr-2" aria-hidden /> {t('appShell.themeSystem')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => applyThemeSelection('light', setTheme)}>
+          <Sun className="h-4 w-4 mr-2" aria-hidden /> {t('appShell.themeLight')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => applyThemeSelection('dark', setTheme)}>
+          <Moon className="h-4 w-4 mr-2" aria-hidden /> {t('appShell.themeDark')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function Header() {
   const t = useAppT();
@@ -38,33 +115,8 @@ export function Header() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { theme, setTheme, resolvedTheme } = useTheme();
-  const forceModeDom = (mode: 'light' | 'dark' | 'system') => {
-    const resolved =
-      mode === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-        : mode;
-    const root = document.documentElement;
-    const body = document.body;
-    root.classList.remove('light', 'dark');
-    root.classList.add(resolved);
-    root.setAttribute('data-theme', resolved);
-    root.style.colorScheme = resolved;
-    if (body) {
-      body.classList.remove('light', 'dark');
-      body.classList.add(resolved);
-      body.setAttribute('data-theme', resolved);
-      body.style.colorScheme = resolved;
-    }
-  };
-  const applyThemeSelection = (mode: 'light' | 'dark' | 'system') => {
-    safeLocalStorageSetItem('qratex-theme', mode);
-    safeLocalStorageSetItem('theme', mode);
-    forceModeDom(mode);
-    setTheme(mode);
-  };
+  const { locale } = useAppLocale();
+  const navLabel = (item: NavItem) => (item.label ? item.label[locale === 'en' ? 'en' : 'tr'] : t(item.labelKey ?? ''));
 
   useEffect(() => {
     setMounted(true);
@@ -105,62 +157,16 @@ export function Header() {
     if (isMobileMenuOpen) setIsHidden(false);
   }, [isMobileMenuOpen]);
 
-  const getDashboardLink = () => {
-    if (!session?.user) return '/auth/login';
-    switch (session.user.role) {
-      case 'ADMIN':
-        return '/admin';
-      case 'DEALER':
-        return '/dealer';
-      default:
-        return '/customer';
-    }
-  };
-
-  const ThemeSwitcher = ({ className }: { className?: string }) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={t('appShell.themeSelect')}
-          className={cn(
-            'h-11 min-h-11 min-w-11 w-11 shrink-0 touch-manipulation rounded-full transition-colors duration-200',
-            className
-          )}
-        >
-          {mounted && (theme === 'system' || !theme) ? (
-            <Monitor className="h-5 w-5" aria-hidden />
-          ) : mounted && resolvedTheme === 'dark' ? (
-            <Moon className="h-5 w-5" aria-hidden />
-          ) : mounted ? (
-            <Sun className="h-5 w-5" aria-hidden />
-          ) : (
-            <Monitor className="h-5 w-5" aria-hidden />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => applyThemeSelection('system')} onClick={() => applyThemeSelection('system')}>
-          <Monitor className="h-4 w-4 mr-2" /> {t('appShell.themeSystem')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => applyThemeSelection('light')} onClick={() => applyThemeSelection('light')}>
-          <Sun className="h-4 w-4 mr-2" /> {t('appShell.themeLight')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => applyThemeSelection('dark')} onClick={() => applyThemeSelection('dark')}>
-          <Moon className="h-4 w-4 mr-2" /> {t('appShell.themeDark')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  // Tek kaynak rol → ana sayfa (STAFF dahil; eskiden STAFF /customer'a gidip proxy ile ikinci kez yönleniyordu).
+  const getDashboardLink = () => (session?.user ? roleHome(session.user.role) : '/auth/login');
 
   return (
     <header
       className={cn(
         'safe-top fixed left-0 right-0 top-0 z-50 transition-all duration-300 will-change-transform',
         // QNB tarzı gizlen/göster (reduced-motion tercihinde CSS transition devre dışı kalır)
-        isHidden ? '-translate-y-full' : 'translate-y-0',
+        // Klavye odağı gizli üst bara girerse bar geri gelir (WCAG 2.4.11 odak örtülmesi).
+        isHidden ? '-translate-y-full focus-within:translate-y-0' : 'translate-y-0',
         isScrolled
           ? 'border-b border-border/40 bg-background/60 shadow-sm backdrop-blur-xl'
           : 'border-b border-transparent bg-background/20 backdrop-blur-md supports-[backdrop-filter]:bg-background/10'
@@ -172,6 +178,8 @@ export function Header() {
           href="/"
           className="group flex cursor-pointer items-center gap-3 rounded-lg outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         >
+          {/* SSR'da da erişilebilir ad (görseller yalnız mount sonrası çizilir). */}
+          <span className="sr-only">QRateX</span>
           <Motion.div
             className="relative h-14 w-14"
             whileHover={{ scale: 1.05, rotate: 5 }}
@@ -236,13 +244,13 @@ export function Header() {
               href={item.href}
               className={cn(
                 'group relative rounded-md px-1 py-1 text-sm font-semibold tracking-tight outline-none ring-offset-background transition-colors duration-200 hover:text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                pathname === item.href
+                isNavActive(pathname, item.href)
                   ? 'text-primary'
                   : 'text-muted-foreground'
               )}
             >
-              {t(item.labelKey)}
-              <span className="absolute -bottom-1 left-0 h-0.5 w-0 bg-primary transition-[width] duration-200 group-hover:w-full" />
+              {navLabel(item)}
+              <span aria-hidden className="absolute -bottom-1 left-0 h-0.5 w-0 bg-primary transition-[width] duration-200 group-hover:w-full" />
             </Link>
           ))}
         </div>
@@ -250,7 +258,7 @@ export function Header() {
         {/* CTA Buttons & Theme Toggle */}
         <div className="hidden items-center gap-3 md:flex">
           <LanguageSwitcher className="h-11 min-h-11 min-w-11 w-11 rounded-full" />
-          <ThemeSwitcher />
+          <ThemeSwitcher mounted={mounted} />
 
           {session?.user ? (
             <>
@@ -288,7 +296,7 @@ export function Header() {
         <div className="flex items-center gap-2 md:hidden">
           <LanguageSwitcher className="min-h-11 min-w-11 w-11 h-11 rounded-full" />
           {/* Theme Toggle Mobile */}
-          <ThemeSwitcher />
+          <ThemeSwitcher mounted={mounted} />
 
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
@@ -310,6 +318,8 @@ export function Header() {
               side="right"
               className="w-full pb-[max(1rem,env(safe-area-inset-bottom))] sm:w-80"
             >
+              {/* Diyaloğun erişilebilir adı (Radix başlıksız diyalog uyarısı + ekran okuyucu). */}
+              <SheetTitle className="sr-only">{t('appShell.siteMenu')}</SheetTitle>
               <div className="flex flex-col h-full pt-8">
                 {/* Mobile Logo */}
                 <div className="flex items-center gap-3 mb-8">
@@ -366,12 +376,12 @@ export function Header() {
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={cn(
                           'flex min-h-11 cursor-pointer touch-manipulation items-center rounded-lg text-lg font-medium outline-none ring-offset-background transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                          pathname === item.href
+                          isNavActive(pathname, item.href)
                             ? 'text-primary'
                             : 'text-muted-foreground hover:text-foreground'
                         )}
                       >
-                        {t(item.labelKey)}
+                        {navLabel(item)}
                       </Link>
                     </Motion.div>
                   ))}
