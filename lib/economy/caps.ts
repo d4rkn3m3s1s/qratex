@@ -51,6 +51,13 @@ export const DEALER_PASSIVE_DAILY_CAP = 600;
 /** Telafi teklifinin puan türü (kabulde kredi): kullanıcı × gün 1.000, kullanıcı × hafta 2.000. */
 export const REMEDY_DAILY_CAP = 1000;
 export const REMEDY_WEEKLY_CAP = 2000;
+/**
+ * Bayi (aktör) başına UTC günlük TOPLAM telafi puanı bütçesi — tüm müşterileri kapsar.
+ * Kullanıcı tavanı tek hesabı sınırlar; bu bütçe olmadan bayi N kukla hesaba (her birine
+ * QR geri bildirim → 1.000 puanlık telafi) sınırsız puan basabilirdi. Uygulama:
+ * lib/remedy-offer-service.ts `acceptRemedyOffer` (bayi kilidi altında defterden sayılır).
+ */
+export const REMEDY_DEALER_DAILY_CAP = 5000;
 
 const DEALER_PASSIVE_RULE: CapRule = {
   daily: DEALER_PASSIVE_DAILY_CAP,

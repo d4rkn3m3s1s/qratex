@@ -22,7 +22,9 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { isUniqueViolation } from '@/lib/economy/errors';
 import { mintPoints } from '@/lib/economy/mint';
+import { REMEDY_DEALER_DAILY_CAP } from '@/lib/economy/caps';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { startOfDayUTC } from '@/lib/timezone';
 import {
   findRemedySelection,
   formatRemedySelection,
@@ -47,7 +49,8 @@ export type RemedyErrorCode =
   | 'NOT_FOUND'
   | 'FORBIDDEN'
   | 'NOT_PENDING'
-  | 'INVALID_SELECTION';
+  | 'INVALID_SELECTION'
+  | 'DEALER_BUDGET_EXHAUSTED';
 
 const ERROR_STATUS: Record<RemedyErrorCode, number> = {
   OPEN_OFFER_EXISTS: 409,
@@ -58,6 +61,7 @@ const ERROR_STATUS: Record<RemedyErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_PENDING: 409,
   INVALID_SELECTION: 400,
+  DEALER_BUDGET_EXHAUSTED: 409,
 };
 
 export class RemedyOfferError extends Error {
@@ -302,6 +306,8 @@ export interface AcceptRemedyOfferResult {
  * "Puan" türü (eskiden vaat edilip hiç kredilenmiyordu): aynı tx'te `mintPoints` ile
  * tek seferlik (`remedy:<offerId>` defter anahtarı), `remedy` tavanlı, bayi atıflı kredi +
  * `completed` zaman çizelgesi olayı (`meta.creditedPoints`). Tx geri alınırsa kredi de yoktur.
+ * Ayrıca bayi başına günlük toplam telafi puanı bütçesi (`REMEDY_DEALER_DAILY_CAP`), bayi =
+ * müşteri reddi ve kaynağı moderasyonla kaldırılmış teklifin reddi.
  */
 export async function acceptRemedyOffer(
   params: { offerId: string; userId: string; selectedType: unknown; selectedValue: unknown; now?: Date },
@@ -310,17 +316,31 @@ export async function acceptRemedyOffer(
   const { offerId, userId } = params;
   const offer = await db.remedyOffer.findUnique({
     where: { id: offerId },
-    select: { id: true, userId: true, dealerId: true, status: true, options: true },
+    select: {
+      id: true,
+      userId: true,
+      dealerId: true,
+      status: true,
+      options: true,
+      feedback: { select: { deletedAt: true } },
+      consumptionReview: { select: { deletedAt: true } },
+    },
   });
   if (!offer || offer.status === 'awaiting_dealer_approval' || offer.status === 'rejected') {
     // Onay bekleyen/reddedilmiş teklifin varlığı müşteriye sızdırılmaz.
     throw new RemedyOfferError('NOT_FOUND', 'Telafi teklifi bulunamadı.');
   }
-  if (offer.userId !== userId) {
+  // Kendi kendine telafi (bayi = müşteri) asla kabul edilmez: puan basan bir döngü olurdu.
+  if (offer.userId !== userId || offer.dealerId === userId) {
     throw new RemedyOfferError('FORBIDDEN', 'Bu teklifi kabul etme yetkiniz yok.');
   }
   if (offer.status !== 'pending') {
     throw new RemedyOfferError('NOT_PENDING', 'Bu teklif zaten işlendi.');
+  }
+  // Kaynağı moderasyonla kaldırılmış (sahte/kötüye kullanım) yorumun telafisi kabul edilemez —
+  // aksi hâlde silinen sahte şikâyet, bekleyen teklif üzerinden yine puana çevrilirdi.
+  if (offer.feedback?.deletedAt || offer.consumptionReview?.deletedAt) {
+    throw new RemedyOfferError('NOT_FOUND', 'Bu telafinin bağlı olduğu yorum kaldırıldı.');
   }
 
   const selection = findRemedySelection(offer.options, params.selectedType, params.selectedValue);
@@ -350,6 +370,29 @@ export async function acceptRemedyOffer(
     });
 
     if (selection.type === 'points') {
+      // Bayi başına günlük TOPLAM telafi puanı bütçesi (tüm müşteriler). Kullanıcı tavanı
+      // (`remedy` kategorisi) tek hesabı sınırlar; bayi N kukla hesapla sınırsız basamasın.
+      // Bayi kilidi: aynı bayinin eşzamanlı kabulleri bütçeyi sırayla okur (TOCTOU yok).
+      // Aşılırsa tx geri alınır → teklif `pending` kalır; müşteri başka tür seçebilir ya da
+      // ertesi gün kabul edebilir (sessizce 0 puanla "kabul edildi" yapılmaz).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`remedy:dealer-budget:${offer.dealerId}`}))`;
+      const used = await tx.pointsLedger.aggregate({
+        where: {
+          actorId: offer.dealerId,
+          source: 'remedy',
+          status: 'posted',
+          createdAt: { gte: startOfDayUTC(acceptedAt) },
+        },
+        _sum: { delta: true },
+      });
+      const usedToday = Math.max(0, used._sum.delta ?? 0);
+      if (usedToday + selection.value > REMEDY_DEALER_DAILY_CAP) {
+        throw new RemedyOfferError(
+          'DEALER_BUDGET_EXHAUSTED',
+          'İşletmenin bugünkü puan telafisi sınırı doldu. Başka bir telafi türü seçebilir ya da yarın tekrar deneyebilirsiniz.'
+        );
+      }
+
       const minted = await mintPoints(tx, {
         userId,
         points: selection.value,

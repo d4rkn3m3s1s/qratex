@@ -11,6 +11,8 @@
  *  - AI analizi, karakter rozeti ve rozet işleri `after()` içinde (serverless'ta yarıda kesilmez).
  *  - PUT: yalnız gönderilen alanlar değişir; `text: null` / `dimensions: null` = SİL (KVKK).
  *    Metin değişmediyse AI yeniden çağrılmaz. Düzenleme yeni puan basmaz.
+ *  - Karakter rozeti: bir yorum EN FAZLA BİR KEZ sınıflandırılır (`CHARACTER_MARK_EVENT`);
+ *    düzenleme/sil-yeniden-yaz aynı yorumu başka kategoriye taşıyıp rozet açtıramaz.
  */
 import { after } from 'next/server';
 import { Prisma } from '@prisma/client';
@@ -156,8 +158,56 @@ function scheduleAnalysis(input: Parameters<typeof analyzeAndPersistConsumptionR
   );
 }
 
+/**
+ * Karakter rozeti "bu yorum sınıflandırıldı" işareti. Karakter barı yorum BAŞINA bir kez
+ * sayılmalı: işaret yoksa PUT "metni sil (kategori temizlenir) → yeni üslupta yeniden yaz"
+ * döngüsüyle AYNI yorumları kategoriden kategoriye taşıyıp her kategorinin karakterini (ve
+ * rozet ödül puanını) açtırabiliyordu. İşaret yalnız yorum id'si taşır (metin değil → KVKK
+ * silmesiyle çelişmez).
+ */
+const CHARACTER_MARK_EVENT = 'consumption_review_character_classified';
+const CHARACTER_MIN_TEXT = 8;
+
+const characterEligible = (text: string | null | undefined): text is string =>
+  typeof text === 'string' && text.trim().length >= CHARACTER_MIN_TEXT;
+
+function characterMarkData(userId: string, reviewId: string, reason: 'create' | 'edit' | 'text_deleted') {
+  return {
+    userId,
+    event: CHARACTER_MARK_EVENT,
+    category: 'character',
+    data: { reviewId, reason } as Prisma.InputJsonValue,
+  };
+}
+
+/** İşaret var mı? Okuma hatasında fail-closed: "işlenmiş" say (yeniden sınıflandırma yok). */
+async function wasCharacterProcessed(userId: string, reviewId: string): Promise<boolean> {
+  try {
+    const row = await prisma.analyticsEvent.findFirst({
+      where: { userId, event: CHARACTER_MARK_EVENT, data: { path: ['reviewId'], equals: reviewId } },
+      select: { id: true },
+    });
+    return !!row;
+  } catch {
+    return true;
+  }
+}
+
+async function markCharacterProcessed(
+  userId: string,
+  reviewId: string,
+  reason: 'create' | 'edit'
+): Promise<boolean> {
+  try {
+    await prisma.analyticsEvent.create({ data: characterMarkData(userId, reviewId, reason) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function scheduleCharacterBadge(userId: string, reviewId: string, text: string | null) {
-  if (!text || text.trim().length < 8) return;
+  if (!characterEligible(text)) return;
   after(() =>
     import('@/lib/character-badges')
       .then((m) => m.processConsumptionReviewForCharacterBadge(userId, reviewId, text))
@@ -228,23 +278,31 @@ export const POST = defineRoute(
           meta: { consumptionId: consumption.id, dealerId: consumption.dealerId, detailed: !!text && text.length >= matrix.consumptionReview.longTextThreshold },
         });
 
+        // Defter anahtarı daha önce işlenmişse (ör. yorum satırı sert silinip yeniden yazıldı)
+        // mintPoints İLK kredinin tutarını döndürür; bu istekte kredi YOK → "kazandın" denmez.
+        const credited = minted.duplicate ? 0 : minted.credited;
+        const xpCredited = minted.duplicate ? 0 : minted.xpCredited;
+        const leveledUp = !minted.duplicate && minted.isLevelUp;
+
         await tx.notification.create({
           data: {
             userId: user.id,
-            title: minted.isLevelUp ? `Seviye atladın! Seviye ${minted.level}` : 'Yorumun için teşekkürler!',
+            title: leveledUp ? `Seviye atladın! Seviye ${minted.level}` : 'Yorumun için teşekkürler!',
             message:
-              minted.credited > 0
-                ? minted.isLevelUp
-                  ? `${minted.credited} puan kazandın ve artık Seviye ${minted.level} oldun.`
-                  : `${minted.credited} puan kazandın.`
-                : 'Yorumun işletmeye ulaştı. Bugünkü yorum puanı sınırına ulaştığın için puan eklenmedi.',
+              credited > 0
+                ? leveledUp
+                  ? `${credited} puan kazandın ve artık Seviye ${minted.level} oldun.`
+                  : `${credited} puan kazandın.`
+                : minted.duplicate
+                  ? 'Yorumun işletmeye ulaştı. Bu ziyaret için yorum puanı daha önce verilmişti.'
+                  : 'Yorumun işletmeye ulaştı. Bugünkü yorum puanı sınırına ulaştığın için puan eklenmedi.',
             type: 'success',
             data: {
               reviewId: created.id,
               consumptionId: consumption.id,
-              pointsEarned: minted.credited,
-              xpEarned: minted.xpCredited,
-              leveledUp: minted.isLevelUp,
+              pointsEarned: credited,
+              xpEarned: xpCredited,
+              leveledUp,
               level: minted.level,
               ctaPath: `/customer/me/voices?id=cs-${consumption.id}`,
             },
@@ -263,10 +321,10 @@ export const POST = defineRoute(
 
         return {
           review: created,
-          credited: minted.credited,
-          xp: minted.xpCredited,
+          credited,
+          xp: xpCredited,
           capped: minted.capped,
-          leveledUp: minted.isLevelUp,
+          leveledUp,
           level: minted.level,
         };
       });
@@ -280,7 +338,11 @@ export const POST = defineRoute(
     const uid = user.id;
     const rid = result.review.id;
     scheduleAnalysis({ reviewId: rid, dealerId: consumption.dealerId, customerId: uid, rating: body.rating, text });
-    scheduleCharacterBadge(uid, rid, text);
+    if (characterEligible(text)) {
+      // İlk sınıflandırma meşru: işaret yazılamasa da çalışır (silme yolu işareti ayrıca yazar).
+      await markCharacterProcessed(uid, rid, 'create');
+      scheduleCharacterBadge(uid, rid, text);
+    }
     // Sürpriz + davranışsal rozetler ve davet nitelendirmesi (hepsi idempotent).
     after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
     after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
@@ -342,12 +404,22 @@ export const PUT = defineRoute(
     }
     // Metin silinirse metinden türemiş üslup kategorisi de silinir (karakter barı yalnız metinli yorumu sayar).
     if (textChanged && !nextText) data.characterCategory = null;
+    // Sınıflandırılmış bir yorumun kategorisi temizleniyorsa "işlendi" işareti AYNI tx'te yazılır:
+    // metin sonradan yeniden eklendiğinde yorum ikinci kez sınıflandırılıp başka kategoriye
+    // sayılamaz (rozet ilerlemesi yorum başına bir kez). İşaret yazılamazsa silme de olmaz.
+    const clearsCategory = textChanged && !nextText && !!existing.characterCategory;
 
-    const updated = await prisma.consumptionReview.update({
+    const updateArgs = {
       where: { id: existing.id },
       data,
       select: { id: true, rating: true, text: true, dimensions: true, updatedAt: true, dealerRepliedAt: true },
-    });
+    } satisfies Prisma.ConsumptionReviewUpdateArgs;
+    const updated = clearsCategory
+      ? await prisma.$transaction(async (tx) => {
+          await tx.analyticsEvent.create({ data: characterMarkData(user.id, existing.id, 'text_deleted') });
+          return tx.consumptionReview.update(updateArgs);
+        })
+      : await prisma.consumptionReview.update(updateArgs);
 
     const ratingChanged = body.rating !== undefined && body.rating !== existing.rating;
     if (textChanged || ratingChanged) {
@@ -362,9 +434,16 @@ export const PUT = defineRoute(
         });
       }
     }
-    if (textChanged && nextText && !existing.characterCategory) {
+    if (textChanged && characterEligible(nextText) && !existing.characterCategory) {
       // Hatırlatma akışı ("puan verdin ama yorum boş") PUT ile metin ekletiyor → karakter barı saysın.
-      scheduleCharacterBadge(user.id, existing.id, nextText);
+      // YALNIZ hiç sınıflandırılmamış yorum için: sil → yeniden yaz döngüsü aynı yorumu ikinci
+      // kez saydıramaz. İşaret yazılamazsa sınıflandırma da yapılmaz (fail-closed).
+      if (
+        !(await wasCharacterProcessed(user.id, existing.id)) &&
+        (await markCharacterProcessed(user.id, existing.id, 'edit'))
+      ) {
+        scheduleCharacterBadge(user.id, existing.id, nextText);
+      }
     }
 
     if ((textChanged || ratingChanged) && existing.dealerRepliedAt) {

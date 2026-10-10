@@ -350,7 +350,9 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
     // Uzunluk şartı SQL groupBy'da ifade edilemediğinden, şartlı kategoriler için ayrı sayım.
     const grouped = await prisma.consumptionReview.groupBy({
       by: ['characterCategory'],
-      where: { customerId: userId, characterCategory: { not: null } },
+      // Moderasyonla kaldırılmış (deletedAt) ve metni silinmiş yorumlar bar'a SAYILMAZ: karakter
+      // barı yalnız yayındaki metinli yorumu sayar (kaldırılan sahte yorumla rozet açılamaz).
+      where: { customerId: userId, characterCategory: { not: null }, deletedAt: null, text: { not: null } },
       _count: { _all: true },
     });
     const countByCat = new Map<string, number>();
@@ -362,7 +364,7 @@ export async function getCategoryProgress(userId: string): Promise<CategoryProgr
       const minLen = categoryMinReviewLength(cat, overrides);
       if (minLen <= 0) continue;
       const rows = await prisma.consumptionReview.findMany({
-        where: { customerId: userId, characterCategory: cat.key, text: { not: null } },
+        where: { customerId: userId, characterCategory: cat.key, deletedAt: null, text: { not: null } },
         select: { text: true },
       });
       const detailedCount = rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length;
