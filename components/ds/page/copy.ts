@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppLocale } from '@/lib/app-locale';
+import { useDsLocale } from '../a11y/copy';
 import type { CompareMode, DateRangePreset } from './date-range';
 
 /**
@@ -97,11 +97,11 @@ const COPY = {
 export type PageCopy = (typeof COPY)['tr'];
 
 export function usePageCopy(): PageCopy {
-  const { locale } = useAppLocale();
-  return COPY[locale === 'en' ? 'en' : 'tr'];
+  // useDsLocale: AppLocaleProvider yoksa (önizleme/test) `tr` — tüm DS katmanlarında aynı kaynak.
+  return COPY[useDsLocale()];
 }
 
 /** Intl yerel etiketi (tr-TR / en-US). */
 export function useLocaleTag(): 'tr-TR' | 'en-US' {
-  return useAppLocale().locale === 'en' ? 'en-US' : 'tr-TR';
+  return useDsLocale() === 'en' ? 'en-US' : 'tr-TR';
 }

@@ -6,6 +6,7 @@ import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { useA11yCopy } from './copy';
+import { useRegisterContext, type Register } from '../play/register';
 
 export type RatingScale = 'five' | 'nps';
 export type RatingAppearance = 'star' | 'emoji' | 'number';
@@ -25,7 +26,7 @@ export type RatingInputProps = LabelProps & {
   /** `md` 44px · `lg` 56px dokunma hedefi (müşteri anket akışında önerilir). */
   size?: 'md' | 'lg';
   /** `play`: seçimde küçük yaylı vurgu (azaltılmış harekette kapalı). */
-  register?: 'ops' | 'play';
+  register?: Register;
   /** Ölçek uç etiketleri (NPS'te varsayılan "Hiç olası değil" / "Kesinlikle"). `false` → gizle. */
   lowLabel?: React.ReactNode | false;
   highLabel?: React.ReactNode | false;
@@ -75,7 +76,7 @@ export function RatingInput(props: RatingInputProps) {
     onChange,
     scale = 'five',
     size = 'md',
-    register = 'ops',
+    register: registerProp,
     lowLabel,
     highLabel,
     getItemLabel,
@@ -89,6 +90,9 @@ export function RatingInput(props: RatingInputProps) {
     ref,
     onBlur,
   } = props;
+  // Prop → en yakın RegisterProvider (ör. PanelPage register) → ops.
+  const ctxRegister = useRegisterContext();
+  const register = registerProp ?? ctxRegister ?? 'ops';
   const appearance: RatingAppearance =
     props.appearance === 'emoji' && scale === 'nps' ? 'number' : (props.appearance ?? (scale === 'nps' ? 'number' : 'star'));
   const copy = useA11yCopy();

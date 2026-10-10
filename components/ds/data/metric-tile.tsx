@@ -11,6 +11,7 @@ import { useDataCopy, useLocaleInfo } from './copy';
 import { DeltaBadge } from './delta-badge';
 import { Sparkline } from './sparkline';
 import { formatMetricValue, isLowSample, type MetricValue } from './metric-format';
+import { useRegisterContext, type Register } from '../play/register';
 
 export type MetricTileProps = {
   label: ReactNode;
@@ -33,7 +34,7 @@ export type MetricTileProps = {
   /** Sparkline için erişilebilir özet (verilmezse dekoratif). */
   sparklineLabel?: string;
   /** `ops` (varsayılan): sade, tabular. `play`: display yazı, elevation 2. */
-  register?: 'ops' | 'play';
+  register?: Register;
   size?: 'default' | 'compact';
   footer?: ReactNode;
   className?: string;
@@ -58,13 +59,16 @@ export const MetricTile = forwardRef<HTMLDivElement, MetricTileProps>(function M
     hint,
     showSparkline = true,
     sparklineLabel,
-    register = 'ops',
+    register: registerProp,
     size = 'default',
     footer,
     className,
   },
   ref,
 ) {
+  // Prop → en yakın RegisterProvider (ör. PanelPage register) → ops.
+  const ctxRegister = useRegisterContext();
+  const register = registerProp ?? ctxRegister ?? 'ops';
   const copy = useDataCopy();
   const { tag, locale } = useLocaleInfo();
   const numeric = typeof metric.value === 'number' && Number.isFinite(metric.value) ? metric.value : null;

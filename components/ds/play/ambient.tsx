@@ -1,6 +1,6 @@
 'use client';
 
-import { createElement, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useMotionPolicy } from '@/lib/motion';
 import { useRegister, type Register } from './register';
 
@@ -55,14 +55,10 @@ export function Ambient({ children, fallback = null, as = 'div', register, rootM
   const running = reg === 'play' && allowAmbient && inView && pageVisible;
   const content = typeof children === 'function' ? children(running) : running ? children : fallback;
 
-  return createElement(
-    as,
-    {
-      ref,
-      'aria-hidden': true,
-      className,
-      'data-ambient': running ? 'running' : 'paused',
-    },
-    content,
+  const Root = as;
+  return (
+    <Root ref={ref as RefObject<HTMLDivElement & HTMLSpanElement>} aria-hidden className={className} data-ambient={running ? 'running' : 'paused'}>
+      {content}
+    </Root>
   );
 }

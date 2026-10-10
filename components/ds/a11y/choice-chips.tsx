@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useA11yCopy } from './copy';
 import { announce } from './live-region';
+import { useRegisterContext, type Register } from '../play/register';
 
 export type ChoiceOption<V extends string = string> = {
   value: V;
@@ -24,7 +25,7 @@ type CommonProps<V extends string> = LabelProps & {
   /** `sm` 36px (yoğun filtre çubuğu, dokunma alanı yine 44px) · `md` 44px (varsayılan). */
   size?: 'sm' | 'md';
   /** `ops`: sakin seçili durum (açık marka zemini) · `play`: dolu marka, gölge. */
-  register?: 'ops' | 'play';
+  register?: Register;
   /** Tek satırda yatay kaydır (mobil filtre şeridi) yerine sarmala (varsayılan: sarmala). */
   scroll?: boolean;
   disabled?: boolean;
@@ -69,7 +70,7 @@ export function ChoiceChips<V extends string = string>(props: ChoiceChipsProps<V
   const {
     options,
     size = 'md',
-    register = 'ops',
+    register: registerProp,
     scroll = false,
     disabled = false,
     invalid,
@@ -80,6 +81,9 @@ export function ChoiceChips<V extends string = string>(props: ChoiceChipsProps<V
     onBlur,
     ref,
   } = props;
+  // Prop → en yakın RegisterProvider (ör. PanelPage register) → ops.
+  const ctxRegister = useRegisterContext();
+  const register = registerProp ?? ctxRegister ?? 'ops';
   const copy = useA11yCopy();
   const multiple = props.mode === 'multiple';
   const selected: ReadonlyArray<V> = multiple

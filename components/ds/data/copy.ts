@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppLocale } from '@/lib/app-locale';
+import { useDsLocale } from '../a11y/copy';
 import type { Severity } from './status-meta';
 
 /** `components/ds/data` varsayılan metinleri (TR/EN). */
@@ -114,11 +114,11 @@ const COPY = {
 export type DataCopy = (typeof COPY)['tr'];
 
 export function useDataCopy(): DataCopy {
-  const { locale } = useAppLocale();
-  return COPY[locale === 'en' ? 'en' : 'tr'];
+  // useDsLocale: AppLocaleProvider yoksa (önizleme/test) `tr` — tüm DS katmanlarında aynı kaynak.
+  return COPY[useDsLocale()];
 }
 
 export function useLocaleInfo(): { locale: 'tr' | 'en'; tag: 'tr-TR' | 'en-US' } {
-  const en = useAppLocale().locale === 'en';
+  const en = useDsLocale() === 'en';
   return { locale: en ? 'en' : 'tr', tag: en ? 'en-US' : 'tr-TR' };
 }

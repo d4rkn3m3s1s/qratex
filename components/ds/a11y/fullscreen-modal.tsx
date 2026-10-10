@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useA11yCopy } from './copy';
 import { IconButton } from './icon-button';
 import { VisuallyHidden } from './visually-hidden';
+import { useRegisterContext, type Register } from '../play/register';
 
 export type FullscreenModalProps = {
   open?: boolean;
@@ -34,7 +35,7 @@ export type FullscreenModalProps = {
   /** Açılışta odaklanacak öğe (varsayılan: içerikteki ilk odaklanabilir öğe). */
   initialFocusRef?: React.RefObject<HTMLElement | null>;
   /** `ops`: düz yüzey · `play`: marka ışıltılı zemin (oyun, ödül, an sahnesi). */
-  register?: 'ops' | 'play';
+  register?: Register;
   /** Masaüstünde de tam ekran mı, yoksa ≥ sm'de ortalanmış büyük panel mi (varsayılan `panel`). */
   desktop?: 'fullscreen' | 'panel';
   /** Gövde dolgusunu kaldır (kamera önizlemesi, tuval). */
@@ -69,12 +70,15 @@ export function FullscreenModal({
   dismissible = true,
   closeLabel,
   initialFocusRef,
-  register = 'ops',
+  register: registerProp,
   desktop = 'panel',
   bleed = false,
   className,
   bodyClassName,
 }: FullscreenModalProps) {
+  // Prop → en yakın RegisterProvider (ör. PanelPage register) → ops.
+  const ctxRegister = useRegisterContext();
+  const register = registerProp ?? ctxRegister ?? 'ops';
   const copy = useA11yCopy();
   const play = register === 'play';
   const titleNode = <DialogPrimitive.Title className="qx-h2 min-w-0 truncate text-fg">{title}</DialogPrimitive.Title>;
