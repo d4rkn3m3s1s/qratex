@@ -119,7 +119,7 @@ export function useGenerateNarrative(week: string) {
 export function useAddSuggestion() {
   const refresh = useRefreshToday();
   return useMutation({
-    mutationFn: (input: { feedbackId: string; text: string; priority: string; dismiss?: boolean }) =>
+    mutationFn: (input: { feedbackId?: string; text: string; priority: string; dismiss?: boolean; source?: 'today' | 'weekly_brief' }) =>
       sendJson<{ id: string; status: string }>('/api/dealer/today/todos', 'POST', input),
     onSettled: () => {
       void refresh().catch(() => undefined);

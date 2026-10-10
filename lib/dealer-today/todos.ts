@@ -27,37 +27,45 @@ export class TodoDuplicateError extends Error {
 }
 
 export interface CreateTodoInput {
-  feedbackId: string;
+  /** Önerinin geldiği QR geri bildirimi; yoksa haftalık rapor önerisi (bayi geneli). */
+  feedbackId?: string | null;
   text: string;
   priority: TodoPriority;
   /** true → öneri yoksayıldı (status=cancelled), listeye girmez ama bir daha önerilmez. */
   dismiss?: boolean;
+  /** Kaynak etiketi (ActionItem.sourceModule). */
+  source?: 'today' | 'weekly_brief';
 }
 
 export async function createTodoFromSuggestion(dealerId: string, input: CreateTodoInput, db: Db = prisma) {
-  const feedback = await db.feedback.findFirst({
-    where: { id: input.feedbackId, qrCode: { dealerId }, deletedAt: null },
-    select: { id: true },
-  });
-  if (!feedback) throw new TodoNotFoundError('Geri bildirim bulunamadı.');
+  let feedbackId: string | null = null;
+  if (input.feedbackId) {
+    const feedback = await db.feedback.findFirst({
+      where: { id: input.feedbackId, qrCode: { dealerId }, deletedAt: null },
+      select: { id: true },
+    });
+    if (!feedback) throw new TodoNotFoundError('Geri bildirim bulunamadı.');
+    feedbackId = feedback.id;
+  }
 
   const text = input.text.trim();
   const norm = normalizeText(text);
+  // Geri bildirime bağlı öneride o kaydın bütün aksiyonları; bayi geneli öneride açık işler kıyaslanır.
   const existing = await db.actionItem.findMany({
-    where: { dealerId, feedbackId: feedback.id },
+    where: feedbackId ? { dealerId, feedbackId } : { dealerId, feedbackId: null, status: { in: ['pending', 'assigned', 'in_progress'] } },
     select: { suggestionText: true, status: true },
-    take: 100,
+    take: 200,
   });
   if (existing.some((e) => normalizeText(e.suggestionText) === norm)) throw new TodoDuplicateError();
 
   const item = await db.actionItem.create({
     data: {
       dealerId,
-      feedbackId: feedback.id,
+      feedbackId,
       suggestionText: text,
       priority: input.priority,
       status: input.dismiss ? 'cancelled' : 'pending',
-      sourceModule: 'today',
+      sourceModule: input.source ?? 'today',
       ...(input.dismiss ? { completedAt: new Date() } : {}),
     },
     select: { id: true, status: true },

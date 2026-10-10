@@ -217,6 +217,21 @@ describe('yapılacaklar', () => {
     expect(db.actionItem.create.mock.calls[1][0].data).toMatchObject({ status: 'cancelled' });
   });
 
+  it('haftalık rapor önerisi (geri bildirimsiz) bayi geneli iş olur; açık aynısı varsa 409', async () => {
+    asRole('DEALER');
+    db.actionItem.findMany.mockResolvedValue([]);
+    db.actionItem.create.mockResolvedValue({ id: 'ai-3', status: 'pending' });
+    const ok = await postTodo(req('/api/dealer/today/todos', 'POST', { text: 'Düşük puanlara 24 saatte yanıt', source: 'weekly_brief' }), {});
+    expect(ok.status).toBe(201);
+    expect(db.feedback.findFirst).not.toHaveBeenCalled();
+    expect(db.actionItem.findMany.mock.calls[0][0].where).toMatchObject({ dealerId: 'dealer-1', feedbackId: null });
+    expect(db.actionItem.create.mock.calls[0][0].data).toMatchObject({ dealerId: 'dealer-1', feedbackId: null, sourceModule: 'weekly_brief' });
+
+    db.actionItem.findMany.mockResolvedValue([{ suggestionText: 'Düşük puanlara 24 saatte yanıt', status: 'pending' }]);
+    const dup = await postTodo(req('/api/dealer/today/todos', 'POST', { text: 'düşük puanlara 24 saatte yanıt', source: 'weekly_brief' }), {});
+    expect(dup.status).toBe(409);
+  });
+
   it('ADMIN yazamaz (rol listesinde yok)', async () => {
     asRole('ADMIN', 'admin-1');
     const res = await postTodo(req('/api/dealer/today/todos?dealerId=dealer-1', 'POST', { feedbackId: 'fb-1', text: 'Garson eğitimi verin' }), {});

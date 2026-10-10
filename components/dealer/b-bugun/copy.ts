@@ -137,6 +137,7 @@ type Copy = {
     autoTitle: string;
     autoBadge: string;
     autoEmpty: string;
+    addToTodos: string;
     aiTitle: string;
     aiBadge: string;
     aiDesc: string;
@@ -316,6 +317,7 @@ const tr: Copy = {
     autoTitle: 'Haftanın önerisi',
     autoBadge: 'Otomatik · kural tabanlı',
     autoEmpty: 'Bu hafta için otomatik öneri üretilmedi.',
+    addToTodos: 'Yapılacaklara ekle',
     aiTitle: 'AI yorumu',
     aiBadge: 'AI · yalnız bu sayıları yorumlar',
     aiDesc: 'İstersen AI bu haftanın sayılarını ve konularını kısa bir metinle yorumlasın. Yeni sayı üretmez.',
@@ -495,6 +497,7 @@ const en: Copy = {
     autoTitle: 'Suggestion of the week',
     autoBadge: 'Automatic · rule-based',
     autoEmpty: 'No automatic suggestion was generated for this week.',
+    addToTodos: 'Add to to-dos',
     aiTitle: 'AI commentary',
     aiBadge: 'AI · only interprets these numbers',
     aiDesc: 'Let AI interpret this week’s numbers and topics in a short text. It does not create new numbers.',

@@ -1,5 +1,5 @@
 /**
- * `POST /api/dealer/today/todos` — AI önerisini yapılacaklara ekle ya da yoksay.
+ * `POST /api/dealer/today/todos` — AI önerisini ya da haftalık rapor önerisini yapılacaklara ekle / yoksay.
  *
  * Eski copilot "Ekle" butonu kayıt oluşturmuyordu (SAHTE, copilot B2). Yalnız DEALER; geri
  * bildirim oturumdaki bayiye ait olmalı (aksi 404); aynı öneri iki kez eklenemez (409).
@@ -11,10 +11,12 @@ import { TodoDuplicateError, TodoNotFoundError, createTodoFromSuggestion } from 
 export const dynamic = 'force-dynamic';
 
 const Body = z.object({
-  feedbackId: z.string().min(1).max(64),
+  /** Verilmezse bayi geneli öneri (haftalık raporun önerisi). */
+  feedbackId: z.string().min(1).max(64).optional(),
   text: z.string().trim().min(4).max(500),
   priority: z.enum(['low', 'medium', 'high']).default('medium'),
   dismiss: z.boolean().optional(),
+  source: z.enum(['today', 'weekly_brief']).optional(),
 });
 
 export const POST = defineRoute(

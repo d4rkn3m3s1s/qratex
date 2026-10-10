@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Download, ListChecks, MessageSquareText, Receipt, Reply, Sparkles, Star, ThumbsDown, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Download, ListChecks, Plus, MessageSquareText, Receipt, Reply, Sparkles, Star, ThumbsDown, TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { QueryState } from '@/components/states';
@@ -10,7 +10,7 @@ import { SectionCard } from '@/components/ds/page';
 import { MetricGrid, MetricTile, StatusBadge } from '@/components/ds/data';
 import type { WeeklyArchiveRow, WeeklyReport as WeeklyData, WeeklyTheme } from '@/lib/dealer-today/types';
 import { useTodayCopy } from './copy';
-import { TodayFetchError, useGenerateNarrative, useWeeklyArchive, useWeeklyReport } from './use-today';
+import { TodayFetchError, useAddSuggestion, useGenerateNarrative, useWeeklyArchive, useWeeklyReport } from './use-today';
 
 function useDayFormat() {
   const { tag } = useTodayCopy();
@@ -73,11 +73,56 @@ function WeeklyBody({ data, onWeekChange }: { data: WeeklyData; onWeekChange: (w
         <div className="space-y-4">
           <SectionCard title={copy.weekly.autoTitle} icon={<ListChecks />} density="compact" actions={<StatusBadge label={copy.weekly.autoBadge} tone="neutral" size="sm" icon={null} />}>
             <p className={cn('text-sm', data.autoRecommendation ? 'text-fg' : 'text-fg-muted')}>{data.autoRecommendation?.text ?? copy.weekly.autoEmpty}</p>
+            {data.autoRecommendation && <AddRecommendation key={data.week} text={data.autoRecommendation.text} />}
           </SectionCard>
           <Narrative data={data} />
         </div>
       </div>
     </div>
+  );
+}
+
+/** Haftanın kural tabanlı önerisini gerçek bir yapılacak maddesine çevirir (409 → zaten listede). */
+function AddRecommendation({ text }: { text: string }) {
+  const { copy } = useTodayCopy();
+  const add = useAddSuggestion();
+  const [done, setDone] = useState(false);
+  if (done) {
+    return (
+      <p role="status" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-success">
+        <Check aria-hidden className="h-3.5 w-3.5" />
+        {copy.todos.added}
+      </p>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="mt-3 min-h-11 shadow-none sm:min-h-9"
+      disabled={add.isPending}
+      aria-busy={add.isPending}
+      onClick={() =>
+        add.mutate(
+          { text, priority: 'medium', source: 'weekly_brief' },
+          {
+            onSuccess: () => {
+              setDone(true);
+              toast.success(copy.todos.added);
+            },
+            onError: (e) => {
+              if (e instanceof TodayFetchError && e.status === 409) {
+                setDone(true);
+                toast(copy.todos.duplicate);
+              } else toast.error(copy.todos.failed);
+            },
+          }
+        )
+      }
+    >
+      <Plus aria-hidden className="h-4 w-4" />
+      {copy.weekly.addToTodos}
+    </Button>
   );
 }
 
