@@ -88,7 +88,7 @@ export function VoiceActionBand({
                   <BusinessAvatar business={c.business} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="qx-small block truncate font-medium text-fg">{c.business.name}</span>
-                    <span className="qx-caption block truncate text-fg-muted">
+                    <span className="qx-caption block truncate text-fg-muted" suppressHydrationWarning>
                       {[c.product, formatRelative(c.createdAt, locale)].filter(Boolean).join(' · ')}
                     </span>
                   </span>

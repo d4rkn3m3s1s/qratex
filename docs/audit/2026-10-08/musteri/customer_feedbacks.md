@@ -256,3 +256,70 @@ Modeller: `Feedback`, `ConsumptionReview` (schema.prisma:1602), `Consumption` (s
 - **Yeniden üretim:** (a) Müşteri aynı gün tavanı doldurduktan sonra 3 tüketim yorumu daha yazar; bu yorumlar için 0 puan kredilenir ama kart "150+" gösterir, yani rakam **fazla** gösterilir ve "+" alt sınır iddiası da yanlış olur. (b) Yalnız QR geri bildirimi yapan müşteri gerçekte puan kazanmışken "0+" görür.
 - **Not:** Yalnız gösterim hatası; bakiye, cüzdan ve puan basımı etkilenmiyor (puan ekonomisi değişmezleri bozulmuyor). Bu yüzden şiddet Orta. Ancak güven açısından ödül rakamının uydurulması ürün için önemli.
 - **Düzeltme yaklaşımı:** Rakam istemcide tahmin edilmemeli. `points_credited` olaylarının (`category: 'feedback'`) kullanıcı için toplamı ya da tercihen kayıt anında `Feedback`/`ConsumptionReview` üzerine yazılan `pointsAwarded` alanı, bu raporda önerilen `GET /api/customer/feedbacks/summary` ucunda sunucuda toplanmalı; kart bu değeri "+" eki olmadan göstermeli, değer gelmezse kart gizlenmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/voices` (Ben › Seslerim). Sunucu bileşeni `app/customer/me/voices/page.tsx` özet + ilk liste sayfası + telafileri paralel ön yükler; istemci adası `components/customer/m-seslerim/**` (çekmece gövdeleri `next/dynamic` ile yalnız açılınca yüklenir). Veri katmanı `lib/customer-voices/{types,core,server}.ts`; BFF uçları `GET /api/customer/voices` (imleç sayfalı birleşik liste), `GET /api/customer/voices/summary` ("Sesin"), `GET /api/customer/voices/[key]` (detay; `fb-<id>` / `cs-<consumptionId>`), `GET /api/customer/remedy` (telafi listesi, yeniden yazıldı). Hepsi `defineRoute` (yalnız CUSTOMER, zod, hız sınırı, zarf v2). Eski rotalar sorgu parametrelerini koruyarak `permanentRedirect` ile Seslerim'e gider. Testler: `__tests__/lib/customer-voices.test.ts`, `__tests__/api/customer-voices-routes.test.ts`, `__tests__/api/customer-review-write.test.ts` (35 test, yeşil).
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Tek `PageHeader` (ds/page), mobil ve masaüstü aynı başlık. |
+| 2 | KALDIRILDI | Mobil kopya başlık gereksizdi; #1 her genişlikte çalışıyor. |
+| 3 | ÇALIŞIYOR | `generateMetadata` TR/EN, `noindex`. |
+| 4 | ÇALIŞIYOR | Sunucu ön yüklemesi kaynak başına bağımsız; istemcide `fetchJson` `!ok` ya da JSON olmayan gövdede hata fırlatır, `AbortSignal` var. |
+| 5 | ÇALIŞIYOR | `loading.tsx` (`role="status"`, statik iskelet) + `QueryState` iskeletleri. |
+| 6 | ÇALIŞIYOR | Hata, boş ve "sonuç yok" ayrı; kaynak başına `ErrorState` + "Tekrar dene". |
+| 7 | ÇALIŞIYOR | Suspense yedeği iskelet (İngilizce "Loading..." yok). |
+| 8 | ÇALIŞIYOR | Görünür arama kutusu, URL `?q=` (eski `?search=` yönlendirmede `?q=`'ya çevrilir); arama SUNUCUDA (işletme, ürün, QR noktası, metin) — yalnız ilk sayfada değil. |
+| 9 | ÇALIŞIYOR | `count` ile gerçek toplam (kesilme yok). |
+| 10 | ÇALIŞIYOR | `aggregate` ile ağırlıklı ortalama; yorum yoksa "—". |
+| 11 | ÇALIŞIYOR | SAHTE `×50` formülü kaldırıldı: `points_credited` (kategori `feedback`) defter olaylarının gerçek toplamı + bu ay (İstanbul takvim ayı). |
+| 12 | KALDIRILDI | Ayrı "Tümünü gör" gereksiz: telafiler aynı sayfada (aksiyon bandı + "Telafilerim"). |
+| 13 | ÇALIŞIYOR | "Telafilerim": insan diliyle seçim ("%20 İndirim"), puan türünde hesaba geçen miktar, durum metni TR/EN. |
+| 14 | KALDIRILDI | Teklif yoksa bölüm hiç çizilmez (boş gürültü); bekleyenler aksiyon bandında. |
+| 15 | KALDIRILDI | Bekleyenlerin hepsi bantta; 50'den eski telafi varsa `hasMore` notu. |
+| 16 | ÇALIŞIYOR | Sekme yerine URL senkronlu filtre çipleri (`?type=`, varsayılan "Tümü"). |
+| 17 | ÇALIŞIYOR | Kart başlığı sarar ve kırpar (`truncate`, `flex-wrap`). |
+| 18 | ÇALIŞIYOR | `RatingStars` `role="img"` + "5 üzerinden N yıldız". |
+| 19 | ÇALIŞIYOR | TR/EN boş metin etiketi. |
+| 20 | ÇALIŞIYOR | Boyut etiketleri tek sözlükten (form ile çekmece aynı), temizlik dahil. |
+| 21 | ÇALIŞIYOR | Çekmecede yanıt + tarih. |
+| 22 | ÇALIŞIYOR | `pickActiveRemedy`: açık > en yeni kabul > süresi dolmuş ("en eski teklif kazanır" hatası kapandı). |
+| 23 | ÇALIŞIYOR | `Intl.RelativeTimeFormat` uygulama diliyle. |
+| 24 | ÇALIŞIYOR | `StatusBadge` (ikon + metin), TR/EN. |
+| 25 | ÇALIŞIYOR | Tutar çekmecedeki makbuzda; 0 ya da boş tutar gizli, para biçimi dile göre. |
+| 26 | ÇALIŞIYOR | Aksiyon bandı, yorum bekleyen tüketimi doğrudan yazma çekmecesinde açar (hedef sayfanın filtre parametresine bağımlılık yok). |
+| 27 | ÇALIŞIYOR | BOZUK düzeldi: başlıkta bayinin işletme adı, alt satırda QR noktası. |
+| 28 | ÇALIŞIYOR | QR noktası ayrı satırda (tekrar yok). |
+| 29 | ÇALIŞIYOR | Yıldız erişilebilir; duygu ikonu müşteri kartından KALDIRILDI (analizsizken "nötr" iddiası yok). |
+| 30 | ÇALIŞIYOR | |
+| 31 | ÇALIŞIYOR | |
+| 32 | ÇALIŞIYOR | #22 ile aynı öncelik. |
+| 33 | ÇALIŞIYOR | Kartın tamamı detay çekmecesini açar (`?id=` derin link); tüketim yorumları dahil, silinmiş kayıt filtreli. |
+| 34 | KALDIRILDI | "Olumsuz" damgası iç analitik dili; yerine sonuç sinyalleri (okundu, yanıtlandı, telafi). |
+| 35 | ÇALIŞIYOR | İlk kullanım `EmptyState` + "QR okut". |
+| 36 | ÇALIŞIYOR | `listItem` bütçeli kademe (ilk 12, ≤ 0,6 sn), `useMotionPolicy`. |
+| 37 | ÇALIŞIYOR | Kart gerçek `<button>`; hover ve odak artık gerçek etkileşim. |
+| 38 | ÇALIŞIYOR | İmleç sayfalama: görünür alana yaklaşınca otomatik + "Daha eskileri göster" düğmesi. |
+| 39 | ÇALIŞIYOR | Çekmecede yorum düzenleme (PATCH semantiği). |
+| 40 | ÇALIŞIYOR | Durum filtresi: yanıtlanan, yanıt bekleyen, telafili, 1–2 yıldız; liste ay başlıklarıyla gruplu. |
+| 41 | ÇALIŞIYOR | #8. |
+| 42 | ÇALIŞIYOR | Bütün metinler `components/customer/m-seslerim/copy.ts` (TR/EN). |
+| 43 | ÇALIŞIYOR | Bu yüzey `/api/feedbacks`'i artık kullanmıyor; kendi ucu yalnız CUSTOMER + `userId` kapsamlı. (`/api/feedbacks` STAFF açığı P0-05'te kapanmıştı.) |
+| 44 | KALAN | Eski `/customer/feedbacks` CTA'sı Seslerim'e yönlenir; öğeye derin link için `lib/notify-email.ts` `ctaPath` → `/customer/me/voices?id=…` değişikliği sahiplik dışı. |
+| 45 | ÇALIŞIYOR (tüketim) / KALAN (QR) | Tüketim yorumu artık `mintPoints(source: 'review', sourceId)` ile yazılır, kartta "+N puan" defterden okunur. QR kredisi `/api/feedbacks` POST'ta kaynağa bağlanmıyor (sahiplik dışı; F1.3 defter göçü). |
+| 46 | ÇALIŞIYOR | "Yeni yanıt" işareti (cihaz başına son ziyaret anı; depolama yoksa sessizce yok). |
+
+### Kapanan bulgular
+1 (müşteri yüzeyi `/api/feedbacks`'ten çıktı; uç P0-05'te kapsamlı), 2 (`/api/customer/reviews` bu yüzeyde kullanılmıyor, zaten izin listeli), 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 — **14/14**.
+
+### Eksik özelliklerden uygulananlar
+Etki akışı (kartta durum adımları + çekmecede kronolojik yolculuk), yorum başına ödül (tüketim yorumu), bekleyen fırsatlar bandı (yorum bekleyen tüketim + açık telafi, gerçek ödül ve tavan), zaman çizelgesi + filtre, yorum düzenleme ve `?id=` derin link, yeni yanıt işareti. "Wrapped" köprüsü `/customer/my-year`'ın işi (uygulanmadı).
+
+### Kalanlar
+- E-posta ve bildirim için öğe derin linki (`lib/notify-email.ts`, `components/dashboard/notification-center.tsx`; sahiplik dışı).
+- QR geri bildirimi başına puan (defterde `sourceId` yok; `/api/feedbacks` sahiplik dışı).
+- Arama Postgres `ILIKE` ile yapılıyor; Türkçe `İ/ı` eşleşmesi veritabanı harmanlamasına bağlı (trigram/unaccent ayrı iş).

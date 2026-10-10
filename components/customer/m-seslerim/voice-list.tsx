@@ -72,7 +72,7 @@ function VoiceCard({
                 {item.place ? <span className="qx-caption min-w-0 truncate text-fg-muted">{item.place}</span> : null}
               </span>
             </span>
-            <time dateTime={item.createdAt} className="qx-caption shrink-0 text-fg-subtle">
+            <time dateTime={item.createdAt} className="qx-caption shrink-0 text-fg-subtle" suppressHydrationWarning>
               {formatRelative(item.createdAt, locale)}
             </time>
           </span>

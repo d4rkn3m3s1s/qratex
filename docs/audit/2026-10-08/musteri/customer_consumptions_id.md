@@ -234,3 +234,58 @@ Her iddia çağıran/çağrılan kod, Prisma şeması ve ilgili yardımcılar ba
 - Öneri: her iki çağrıyı `after(() => analyzeAndPersistConsumptionReview(...))` içine almak; `ai-retry` cron'una `consumptionReview where analyzedAt null and createdAt < now-15m` dalı eklemek (idempotent, sınırlı batch).
 
 **Özet:** 5 iddianın 5'i de kodda doğrulandı; ancak hiçbiri KRİTİK değil. #1 ekonomik açıdan yeni bir vektör değil (asıl zarar içerik/sinyal kirliliği), #2'deki "ikinci sekme" tespiti yanlış (yanıt varsayılan sekmede ve e-posta CTA'sı oraya gidiyor; kırık olan zil bildirimi ve detay sayfası). Gerçek öncelik sırası: #3 (silme hakkı + sessiz başarısızlık) ≈ #4 (karakter ekonomisi, hatırlatma akışıyla doğrudan tetikleniyor) > #5 > #1 > #2.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/voices` (Ben › Seslerim). Sunucu bileşeni `app/customer/me/voices/page.tsx` özet + ilk liste sayfası + telafileri paralel ön yükler; istemci adası `components/customer/m-seslerim/**` (çekmece gövdeleri `next/dynamic` ile yalnız açılınca yüklenir). Veri katmanı `lib/customer-voices/{types,core,server}.ts`; BFF uçları `GET /api/customer/voices` (imleç sayfalı birleşik liste), `GET /api/customer/voices/summary` ("Sesin"), `GET /api/customer/voices/[key]` (detay; `fb-<id>` / `cs-<consumptionId>`), `GET /api/customer/remedy` (telafi listesi, yeniden yazıldı). Hepsi `defineRoute` (yalnız CUSTOMER, zod, hız sınırı, zarf v2). Eski rotalar sorgu parametrelerini koruyarak `permanentRedirect` ile Seslerim'e gider. Testler: `__tests__/lib/customer-voices.test.ts`, `__tests__/api/customer-voices-routes.test.ts`, `__tests__/api/customer-review-write.test.ts` (35 test, yeşil).
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Sayfa çekmeceye taşındı; kapatınca kullanıcı geldiği listede kalır. Eski rota `?id=cs-<id>`'ye kalıcı yönlenir. |
+| 2 | ÇALIŞIYOR | react-query + `AbortSignal`. |
+| 3 | ÇALIŞIYOR | İskelet; gönderim sonrası tam sayfa spinner yok (sorgu geçersizleştirme). |
+| 4 | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; 404/403 ayrı durum. |
+| 5 | ÇALIŞIYOR | Gerçek "bulunamadı" durumu (otomatik yönlendirme yok). |
+| 6 | ÇALIŞIYOR | `findFirst({ id, customerId })`; 403/404 ayrımı da kalktı (varlık sızmaz). |
+| 7 | ÇALIŞIYOR | Logo + ad + "Mekânı gör" (`/customer/places/[dealerId]`). |
+| 8 | ÇALIŞIYOR | Kategori ikonu + ad; kullanılmayan alanlar ve kart token'ı artık çekilmiyor (eski GET ucu silindi). |
+| 9 | ÇALIŞIYOR | `Intl`, uygulama dili, Europe/Istanbul. |
+| 10 | ÇALIŞIYOR | 0 ya da boş tutar gizli; para biçimi dile göre. |
+| 11 | ÇALIŞIYOR | |
+| 12 | ÇALIŞIYOR | DS `RatingInput` (radiogroup, ok tuşları, görünür odak, 56px). |
+| 13 | ÇALIŞIYOR | `RatingInput`'un kendi davranışı. |
+| 14 | ÇALIŞIYOR | 5 boyut (temizlik dahil), tek tek temizlenebilir, TR/EN. İşletme türüne göre boyut seti KALAN. |
+| 15 | ÇALIŞIYOR | `<label htmlFor>`, `maxLength`. |
+| 16 | ÇALIŞIYOR | Sınır `INPUT_LIMITS` ile aynı (2000), TR/EN. |
+| 17 | ÇALIŞIYOR | Eşik SUNUCUDAN (admin matrisi), `trim` ile; ilerleme çubuğu. |
+| 18 | KALDIRILDI | SAHTE regex "AI yardımcısı" kaldırıldı. |
+| 19 | KALDIRILDI | BOZUK "Öneriyi uygula" (bonus eşiğini yapay aşırma + şikâyet şablonu) kaldırıldı. |
+| 20 | ÇALIŞIYOR | `defineRoute` + `mintPoints` (tek seferlik `consumption_review:<id>`, `feedback` tavanı, `points_credited`); P2002 → 409. |
+| 21 | ÇALIŞIYOR | PATCH semantiği: `text: null` siler (üslup kategorisi de), boyutlar silinebilir; saatlik hız sınırı; metin değiştiyse AI + karakter rozeti `after()` içinde; yanıtlanmış yorum düzenlenince bayiye bildirim. |
+| 22 | ÇALIŞIYOR | |
+| 23 | ÇALIŞIYOR | `sonner`; "Basarili:" önekli admin toast'ı yok. |
+| 24 | ÇALIŞIYOR | Gerçek kredi; tavan doluyken "+0 🎉" yerine dürüst metin. Seviye ve puan kapsülü An Motoru'ndan (mintPoints → kredi anı). |
+| 25 | ÇALIŞIYOR | SAHTE "+50/+100" yerine sunucu önizlemesi (taban/ayrıntılı + bugünkü kalan tavan). |
+| 26 | ÇALIŞIYOR | Yerinde güncelleme; kaydırma konumu korunur. |
+| 27 | KALDIRILDI | Ölü `submitted` state ve kullanılmayan importlar (dosya tümden yeniden yazıldı). |
+| 28 | ÇALIŞIYOR | İşletme yanıtı + tarih. |
+| 29 | ÇALIŞIYOR | Telafi teklifi aynı çekmecede seçilir. |
+| 30 | ÇALIŞIYOR (kısmi) | Puan kapsülü ve seviye anı An Motoru'nda; "karakter barına +1" mikro geri bildirimi KALAN (rozet sürprizini bozmadan ürün kararı gerekli). |
+| 31 | ÇALIŞIYOR | İstemci her gönderimde `Idempotency-Key` yollar; uç `idempotent: true`. |
+| 32 | ÇALIŞIYOR | Analiz `after()` içinde; kısa/boş metinde churn sinyali temizlenir. `ai-retry` cron'unun tüketim yorumlarını taraması KALAN (sahiplik dışı). |
+| 33 | ÇALIŞIYOR | PUT ile metin eklenince karakter rozeti sınıflandırması çalışır. |
+| 34 | KALAN | Eski rota çekmeceye yönlenir ve teşekkür bildirimine `ctaPath` eklendi; bildirim merkezinin `ctaPath` izlemesi sahiplik dışı. |
+| 35 | ÇALIŞIYOR | Seslerim başlığı; çekmece başlığında tür. |
+| 36 | ÇALIŞIYOR | Mobilde alttan çekmece, yazma formu en üstte, dokunma hedefleri ≥ 44px. |
+| 37 | ÇALIŞIYOR | Global hareket politikası (`MotionPolicyConfig`) + DS bileşenleri. |
+| 38 | ÇALIŞIYOR | BOZUK düzeldi: `focus-visible` halkaları ve erişilebilir adlar. |
+| 39 | ÇALIŞIYOR | Etiketler, ipuçları, tarih ve para TR/EN. |
+
+### Kapanan bulgular
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (rota yönlendirmesi; bildirim merkezi sahiplik dışı), 11, 12, 13 — **13/13**.
+
+### ŞEMA İSTEKLERİ
+- `ConsumptionReview.editedAt` / `editCount`: "düzenlendi" işareti için (`updatedAt` bayi yanıtında ve analizde de değiştiği için kullanılamıyor).

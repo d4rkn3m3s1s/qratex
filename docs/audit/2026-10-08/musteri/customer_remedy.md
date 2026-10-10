@@ -214,3 +214,51 @@
 - Kanıt: `app/customer/remedy/page.tsx:50-52` `r.ok ? await r.json() : { offers: [] }` — HTTP hata kodu istisna fırlatmadığı için react-query `isError` false kalır, `:59-61`'deki toast tetiklenmez ve `:238-254` "Henüz telafi teklifi yok" boş durumu çizilir. `app/api/customer/remedy/route.ts:11-67` try/catch ve `responseIfDatabaseUnavailable` içermiyor (detay ucu `[offerId]/route.ts:98-106` içeriyor), dolayısıyla Prisma/Neon hatası çıplak 500 olarak döner.
 - Yeniden üretim: Neon geçici kesintisi veya oturum süresi dolmuşken (401) sayfa açılır → istek 500/401 döner → kullanıcı hata mesajı yerine "teklifin yok" görür, yenileme/tekrar deneme yönlendirmesi yoktur; `staleTime: 60_000` nedeniyle bu boş sonuç bir dakika önbellekte de kalır.
 - Not: "Kritik/yüksek" değil; veri kaybı yok, yalnız yanıltıcı boş durum. Düzeltme: `!r.ok` durumunda `throw` (401'de giriş sayfasına yönlendirme), sayfada `isError` için ayrı hata kartı + "Tekrar dene" (`refetch`), API'de try/catch + `responseIfDatabaseUnavailable`.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/voices` (Ben › Seslerim). Sunucu bileşeni `app/customer/me/voices/page.tsx` özet + ilk liste sayfası + telafileri paralel ön yükler; istemci adası `components/customer/m-seslerim/**` (çekmece gövdeleri `next/dynamic` ile yalnız açılınca yüklenir). Veri katmanı `lib/customer-voices/{types,core,server}.ts`; BFF uçları `GET /api/customer/voices` (imleç sayfalı birleşik liste), `GET /api/customer/voices/summary` ("Sesin"), `GET /api/customer/voices/[key]` (detay; `fb-<id>` / `cs-<consumptionId>`), `GET /api/customer/remedy` (telafi listesi, yeniden yazıldı). Hepsi `defineRoute` (yalnız CUSTOMER, zod, hız sınırı, zarf v2). Eski rotalar sorgu parametrelerini koruyarak `permanentRedirect` ile Seslerim'e gider. Testler: `__tests__/lib/customer-voices.test.ts`, `__tests__/api/customer-voices-routes.test.ts`, `__tests__/api/customer-review-write.test.ts` (35 test, yeşil).
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Rota Seslerim'e yönlenir. |
+| 2 | ÇALIŞIYOR | |
+| 3 | ÇALIŞIYOR | |
+| 4 | ÇALIŞIYOR | `defineRoute`; HTTP hatası boş liste olmaz. |
+| 5 | ÇALIŞIYOR | Sunucu ön yüklemesi + iskelet. |
+| 6 | ÇALIŞIYOR | BOZUK düzeldi: `ErrorState` + "Tekrar dene"; admin toast yok. |
+| 7 | ÇALIŞIYOR | |
+| 8 | KALDIRILDI | Ayrı hero yok; Seslerim başlığı. |
+| 9 | ÇALIŞIYOR | Aksiyon bandı sayacı ("N telafi teklifi seçimini bekliyor"). |
+| 10 | KALDIRILDI | Sekme yerine doğal akış: bekleyen → bant, sonuçlanan → "Telafilerim" (+ liste "Telafili" filtresi). |
+| 11 | KALDIRILDI | #10. |
+| 12 | KALDIRILDI | Sekme yok; seçimler `ChoiceChips` (radiogroup). |
+| 13 | KALDIRILDI | Açık teklif URL'de (`?offer=`). |
+| 14 | ÇALIŞIYOR | |
+| 15 | ÇALIŞIYOR | `?offer=` çekmecesi (ayrı sayfa yok). |
+| 16 | ÇALIŞIYOR | Eski `?offerId=`/`?id=` → `?offer=` çekmecesini açar. |
+| 17 | ÇALIŞIYOR | İnsan diliyle seçim ("%20 İndirim", "100 puan"). |
+| 18 | ÇALIŞIYOR | Sonuçlanan kartlar da çekmeceyi açar. |
+| 19 | ÇALIŞIYOR | Tarih dile göre, interpolasyonlu cümle. |
+| 20 | ÇALIŞIYOR | Teklif zamanı müşteriye bildirim anı. |
+| 21 | KALDIRILDI | Teklif yoksa bölüm çizilmez. |
+| 22 | KALDIRILDI | Filtre sekmesi yok. |
+| 23 | ÇALIŞIYOR | Durum allowlist'i (`pending`, `accepted`, `expired`); süresi dolmuş ayrı kart. |
+| 24 | ÇALIŞIYOR (puan) / KALAN (indirim, ürün) | Puan türü kabulde kredilenir. İndirim/ürün: işletme seçimi bildirimle alır, müşteri kasada telafi kartını + kısa referansı gösterir; doğrulanabilir kod ve "kullanıldı" durumu ŞEMA + bayi okutma ister (F2.5). |
+| 25 | ÇALIŞIYOR | SAHTE kapandı: `acceptRemedyOffer` aynı transaction'da `mintPoints` (tek seferlik `remedy:<offerId>`, yeni `remedy` tavanı gün 1.000 / hafta 2.000, bayi atıflı) + `completed` olayı (gerçek miktar). |
+| 26 | ÇALIŞIYOR (kısmi) | 50 sınırı `hasMore` ile bildirilir (sessiz kesilme yok); tam imleç sayfalama KALAN (kayıt sayısı çok düşük). |
+| 27 | KALDIRILDI | Liste ucu yalnız müşterinin kendi verisi (ADMIN önizlemesi bu yüzeyin işi değil); rol reddi görünür hata. |
+| 28 | ÇALIŞIYOR | Kaynak yorum alıntısı + "Yoruma git". |
+| 29 | KALAN | ŞEMA (`expiresAt`). |
+| 30 | ÇALIŞIYOR | Kabul sonrası tüm Seslerim sorguları geçersizleşir; 30 sn tazelik. |
+| 31 | ÇALIŞIYOR | Global `LazyMotion` + `m`; yerel `LazyMotion strict` kalktı. |
+| 32 | ÇALIŞIYOR | BOZUK düzeldi: kabul aynı önbelleği günceller (bayat "Bekleyen" yok). |
+
+### Kapanan bulgular
+1 (B5/P0-22 ile sunucuda kapalıydı; UI yalnız sunucunun döndürdüğü seçenekleri sunar), 2 (puan türü teslim edildi; indirim/ürün kodu ŞEMA'ya bağlı), 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 (`hasMore`) — **14/14** (2'nin kod/kullanım kısmı hariç).
+
+### ŞEMA İSTEKLERİ
+- `RemedyOffer.expiresAt`, `redeemedAt`, `redeemedById`, `redeemCode @unique` (+ `redeemed` durumu): kasada doğrulanabilir telafi ve son kullanma (F2.5).

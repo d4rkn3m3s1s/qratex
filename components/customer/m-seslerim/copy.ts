@@ -83,6 +83,7 @@ const tr = {
   noText: 'Yalnız puan verdin',
   // Detay
   detailTitleFallback: 'Ses ayrıntısı',
+  viewPlace: 'Mekânı gör',
   receipt: 'Tüketim',
   amount: 'Tutar',
   businessNote: 'İşletme notu',
@@ -243,6 +244,7 @@ const en: Copy = {
   ratingLabel: (n) => `${n} out of 5 stars`,
   noText: 'Rating only',
   detailTitleFallback: 'Voice details',
+  viewPlace: 'View place',
   receipt: 'Purchase',
   amount: 'Amount',
   businessNote: 'Business note',

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Bot, CheckCircle2, Clock, Gift, MessageSquareReply, Pencil, Receipt, Reply, ShieldAlert, Sparkles } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronRight, Clock, Gift, MessageSquareReply, Pencil, Receipt, Reply, ShieldAlert, Sparkles } from 'lucide-react';
 import { Timeline, type TimelineEvent } from '@/components/ds/data';
 import { EmptyState, QueryState } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,24 @@ function DetailBody({ d }: { d: VoiceDetail }) {
 
   return (
     <div className="space-y-6">
+      {/* İşletme başlığı + mekân sayfası (tekrar ziyaret, teklifler, yol tarifi) */}
+      <div className="flex items-center gap-3">
+        <BusinessAvatar business={d.business} />
+        <div className="min-w-0 flex-1">
+          <p className="qx-body truncate font-semibold text-fg">{d.business.name}</p>
+          {d.place ? <p className="qx-caption truncate text-fg-muted">{d.place}</p> : null}
+        </div>
+        {d.business.id ? (
+          <Link
+            href={`/customer/places/${encodeURIComponent(d.business.id)}`}
+            className="qx-small inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copy.viewPlace}
+            <ChevronRight aria-hidden className="h-4 w-4" />
+          </Link>
+        ) : null}
+      </div>
+
       {/* Makbuz (yalnız tüketim) */}
       {d.consumption ? (
         <div className="flex items-start gap-3 rounded-card border border-subtle bg-surface-muted/50 p-3">

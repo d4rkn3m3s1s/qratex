@@ -206,3 +206,51 @@
 - **Otomatik yanıt "görüntüleme" sayılmamalı:** `dealerFirstViewedAt`'i otomatik yanıtta doldurmak yanlış olur (bayi gerçekten görmedi); doğru çözüm etiketlemek ve sıralamak.
 - **Bildirim/e-posta metni:** Otomatik yanıtta "İşletmeden otomatik yanıt" ifadesi kullanılsın; aynı kaynak alanı bildirimde de okunsun.
 - Bu, raporun "Veri / API değişiklikleri" bölümündeki `FeedbackTimelineEvent` önerisiyle birlikte tek seferde uygulanabilir.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/voices` (Ben › Seslerim). Sunucu bileşeni `app/customer/me/voices/page.tsx` özet + ilk liste sayfası + telafileri paralel ön yükler; istemci adası `components/customer/m-seslerim/**` (çekmece gövdeleri `next/dynamic` ile yalnız açılınca yüklenir). Veri katmanı `lib/customer-voices/{types,core,server}.ts`; BFF uçları `GET /api/customer/voices` (imleç sayfalı birleşik liste), `GET /api/customer/voices/summary` ("Sesin"), `GET /api/customer/voices/[key]` (detay; `fb-<id>` / `cs-<consumptionId>`), `GET /api/customer/remedy` (telafi listesi, yeniden yazıldı). Hepsi `defineRoute` (yalnız CUSTOMER, zod, hız sınırı, zarf v2). Eski rotalar sorgu parametrelerini koruyarak `permanentRedirect` ile Seslerim'e gider. Testler: `__tests__/lib/customer-voices.test.ts`, `__tests__/api/customer-voices-routes.test.ts`, `__tests__/api/customer-review-write.test.ts` (35 test, yeşil).
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Ayrı sayfa yok: çekmece (Esc/kapat), liste filtresi URL'de korunur. Eski rota `?id=fb-<id>`'ye kalıcı yönlenir. |
+| 2 | KALDIRILDI | Yerine çekmece başlığı + işletme başlığı (logo, QR noktası, "Mekânı gör"). |
+| 3 | KALDIRILDI | Rota yönlendirmeye döndü; metadata Seslerim'de. |
+| 4 | ÇALIŞIYOR | react-query (`AbortSignal`; dil değişimi sorunu yok). |
+| 5 | ÇALIŞIYOR | `QueryState` iskeleti (`role="status"`). |
+| 6 | ÇALIŞIYOR | Türkçe hata + "Tekrar dene"; JSON olmayan gövde ham `SyntaxError` göstermez. |
+| 7 | ÇALIŞIYOR | Anahtar doğrulanır; geçersizse 404 durumu (sonsuz spinner yok). |
+| 8 | ÇALIŞIYOR | |
+| 9 | ÇALIŞIYOR | Yıldız görseli; "Puan" kelimesi kullanılmıyor. |
+| 10 | ÇALIŞIYOR | Mutlak tarih/saat (Europe/Istanbul) + uygulama dili. |
+| 11 | ÇALIŞIYOR | |
+| 12 | ÇALIŞIYOR | Yalnız kayıtlı `dealerFirstViewedAt` VE yanıttan önceyse gösterilir; zaman geriye akmaz, adım uydurulmaz. Otomatik yanıt etiketi için ŞEMA isteği aşağıda. |
+| 13 | ÇALIŞIYOR | Yanıt metni + tarih ayrı blokta; "otomatik yanıt" ayrımı ŞEMA isteğine bağlı. |
+| 14 | ÇALIŞIYOR | Telafi mesajı + seçim paneli (aynı çekmecede kabul); zaman müşteriye bildirim anı. |
+| 15 | ÇALIŞIYOR | Ayrı adımlar: "Telafini seçtin" (+ seçim), "Puan hesabına eklendi" (gerçek miktar), "Süresi doldu". |
+| 16 | ÇALIŞIYOR | DS `Timeline` (`<ol>` + `<time>`). |
+| 17 | ÇALIŞIYOR | İkon + metin; bekleyen adım "İşletmenin yanıtı bekleniyor" metniyle. |
+| 18 | ÇALIŞIYOR | `findFirst({ id, userId })`; başkasının kaydı 404. |
+| 19 | ÇALIŞIYOR | |
+| 20 | ÇALIŞIYOR | BOZUK düzeldi: moderasyonla silinen kayıt `VOICE_REMOVED` (404) + açıklayıcı durum. |
+| 21 | ÇALIŞIYOR | `defineRoute` merkezi hata ve 503. |
+| 22 | ÇALIŞIYOR | Metin, medya (yalnız güvenli görsel), yıldız. |
+| 23 | ÇALIŞIYOR | Sunucu yalnız adım türünü döner; etiketler istemcide TR/EN. |
+| 24 | ÇALIŞIYOR | `private, no-store`. |
+| 25 | ÇALIŞIYOR | |
+| 26 | ÇALIŞIYOR | Odakta yeniden çekme + yanıt beklenirken sayfa görünürken 60 sn'de bir. |
+| 27 | KALAN | Eski rota yönlendirir; bildirim merkezinin `href` izlemesi sahiplik dışı. |
+| 28 | ÇALIŞIYOR | Tüketim yorumları aynı çekmecede (`cs-`). |
+| 29 | ÇALIŞIYOR (tüketim) / KALAN (QR) | Defterden; QR kredisi kaynağa bağlı değil (sahiplik dışı). |
+| 30 | ÇALIŞIYOR | Bayinin son 90 gündeki medyan yanıt süresi (en az 5 örnek; yoksa gösterilmez). |
+| 31 | ÇALIŞIYOR (kısmi) | Telafi seçimi, yorum düzenleme, "Mekânı gör" (favori ve tekrar ziyaret mekân sayfasında). Yanıta tepki ŞEMA isteğine bağlı. |
+
+### Kapanan bulgular
+1 (kronoloji + uydurma adım yok; "otomatik yanıt" etiketi ŞEMA'ya bağlı), 2, 3 (liste + tüketim yorumu; bildirim derin linki sahiplik dışı), 4, 5, 6, 7, 8, 9, 10, 11 — **11/11** (1 ve 3'teki dış bağımlılıklar hariç).
+
+### ŞEMA İSTEKLERİ
+- `Feedback.dealerReplySource` (`manual | auto_rule | auto_ai`): otomatik yanıtı "Otomatik yanıt" olarak göstermek için.
+- Yanıta tepki alanı (`Feedback.replyReaction`, `ConsumptionReview.replyReaction`).

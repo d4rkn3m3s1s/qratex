@@ -174,12 +174,8 @@ export function VoicesScreen({ initial }: { initial: VoicesInitial }) {
     set({ type: null, status: null, q: null });
   };
 
-  const titleFor = (key: string) => {
-    const it = items.find((i) => i.key === key) ?? null;
-    if (it) return it.business.name;
-    const p = summaryQ.data?.pending.reviewPreview.find((c) => c.key === key);
-    return p?.business.name ?? copy.detailTitleFallback;
-  };
+  // Çekmece başlığı türü söyler; işletme adı/avatarı çekmecenin içindeki başlıkta.
+  const titleFor = (key: string) => (key.startsWith('fb-') ? copy.typeQr : key.startsWith('cs-') ? copy.typeReview : copy.detailTitleFallback);
   const loadMore = useCallback(() => {
     if (listQ.hasNextPage && !listQ.isFetchingNextPage) void listQ.fetchNextPage();
   }, [listQ]);

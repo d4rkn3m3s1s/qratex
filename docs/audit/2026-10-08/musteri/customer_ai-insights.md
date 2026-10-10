@@ -275,3 +275,57 @@ Her iddia çağıran ve çağrılan taraflarla birlikte baştan okundu: `proxy.t
 - **Not:** Veri doğruluğu hatası, güvenlik ya da çökme değil. Bu yüzden "kritik/yüksek" yerine "orta". Toplamlar `prisma.feedback.count`/`aggregate`/`groupBy` (`deletedAt: null` ile) üzerinden ayrı hesaplanmalı. Liste sayfalı (`cursor`) dönmeli. Örneklemden hesaplanan metrikler UI'da "son 50 yorumuna göre" diye açıkça etiketlenmeli.
 
 **Doğrulama sonucu:** Beş iddianın beşi de kodda doğrulandı. Hiçbiri çürütülmedi. 4 ve 5 numaralı iddiaların ciddiyeti "orta" seviyeye indirildi. Öncelik sırası değişmiyor: 1 (çökme) → 3 (maliyet istismarı ve modül kapısı) → 2 (silinmiş veri) → 4 → 5.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/voices` (Ben › Seslerim). Sunucu bileşeni `app/customer/me/voices/page.tsx` özet + ilk liste sayfası + telafileri paralel ön yükler; istemci adası `components/customer/m-seslerim/**` (çekmece gövdeleri `next/dynamic` ile yalnız açılınca yüklenir). Veri katmanı `lib/customer-voices/{types,core,server}.ts`; BFF uçları `GET /api/customer/voices` (imleç sayfalı birleşik liste), `GET /api/customer/voices/summary` ("Sesin"), `GET /api/customer/voices/[key]` (detay; `fb-<id>` / `cs-<consumptionId>`), `GET /api/customer/remedy` (telafi listesi, yeniden yazıldı). Hepsi `defineRoute` (yalnız CUSTOMER, zod, hız sınırı, zarf v2). Eski rotalar sorgu parametrelerini koruyarak `permanentRedirect` ile Seslerim'e gider. Testler: `__tests__/lib/customer-voices.test.ts`, `__tests__/api/customer-voices-routes.test.ts`, `__tests__/api/customer-review-write.test.ts` (35 test, yeşil).
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Rota Seslerim'e yönlenir ("Sesin" kartı). |
+| 2 | ÇALIŞIYOR | Özet ve detay uçları yalnız CUSTOMER. |
+| 3 | ÇALIŞIYOR | AI türevli kısımlar (duygu tonu, konular, "AI ne anladı") sunucuda `customer_ai_insights` modül kapısına bağlı. |
+| 4 | ÇALIŞIYOR | `count`/`aggregate`/`groupBy`, `deletedAt: null`. |
+| 5 | ÇALIŞIYOR | |
+| 6 | KALDIRILDI | Toast yerine `ErrorState`. |
+| 7 | ÇALIŞIYOR | BOZUK düzeldi: hata ≠ boş. |
+| 8 | ÇALIŞIYOR | Boş durumda "QR okut". |
+| 9 | KALDIRILDI | "Derin öğrenme" abartısı. |
+| 10 | KALDIRILDI | Sekmeler kalktı. |
+| 11 | ÇALIŞIYOR | BOZUK düzeldi: gerçek `count`. |
+| 12 | ÇALIŞIYOR | Gerçek ağırlıklı ortalama (QR + tüketim). |
+| 13 | ÇALIŞIYOR | Yalnız analiz edilmiş kayıtlar, "analiz edilen N yorumuna göre" etiketiyle. |
+| 14 | KALDIRILDI | Efor skoru bayi metriği. |
+| 15 | KALDIRILDI | Yüzde kutuları yerine sayılı çubuk + lejant. |
+| 16 | ÇALIŞIYOR | `role="img"` + özet `aria-label`. |
+| 17 | KALDIRILDI | Ham İngilizce duygu etiketleri tüketiciye değer katmıyordu. |
+| 18 | ÇALIŞIYOR | TR/EN konu sözlüğü, örneklem etiketi. |
+| 19 | ÇALIŞIYOR | Ayrı analiz listesi yerine birleşik Seslerim listesi + çekmece. |
+| 20 | KALDIRILDI | Duygu, niyet ve "Acil" rozetleri (bayi triyajı). |
+| 21 | ÇALIŞIYOR | Erişilebilir yıldız + tarih. |
+| 22 | ÇALIŞIYOR | Kart `<button>` → çekmece. |
+| 23 | ÇALIŞIYOR | Yalnız `summary` alanı. |
+| 24 | KALDIRILDI | Aciliyet, efor, kaybetme riski müşteriye gösterilmez (yanıtta da yok). |
+| 25 | ÇALIŞIYOR | TR/EN. |
+| 26 | ÇALIŞIYOR | Cümle bazlı vurgu (metin etiketi + alt çizgi; yalnız renge dayanmaz). |
+| 27 | KALDIRILDI | Varlık tipleri İngilizce ve düşük değerli. |
+| 28 | ÇALIŞIYOR | |
+| 29 | ÇALIŞIYOR | Gerçek imleç sayfalama. |
+| 30–39 | KALDIRILDI | AI sohbet bu yüzeyden çıktı (yol haritası: rol farkını bilen global müşteri asistanı). `/api/customer/ai-chat` dokunulmadan duruyor (KALAN). |
+| 40 | KALDIRILDI | Yüzeyde LLM yok; `lib/ai-engine` persona ayrımı sahiplik dışı (KALAN). |
+| 41–45, 47, 48 | KALDIRILDI | Öneriler sekmesi: GET'te LLM çağrısı yasak; `/api/customer/ai-recommendations` `/customer/nearby`'nin ucu (sahiplik dışı). Çökme (#43) yüzeyle birlikte ortadan kalktı. |
+| 46 | ÇALIŞIYOR | "En çok sesini duyurduğun yer" (yorum sayısı olarak doğru etiketli, en az 2 yorum). |
+| 49 | ÇALIŞIYOR | BOZUK düzeldi: tüm sorgularda `deletedAt: null`. |
+| 50 | ÇALIŞIYOR | `bounce`/genişlik animasyonu yok; global politika. |
+| 51 | ÇALIŞIYOR | TR/EN. |
+| 52 | KALAN | AI analizinden çıkma tercihi ayarlar/gizlilik yüzeyinin işi (sahiplik dışı). |
+
+### Kapanan bulgular
+1, 2, 3 (yüzeyden LLM çağrısı kalktı; uç nearby'nin), 4 (yüzeyde asistan yok), 5, 6, 7, 8, 9 (yüzeyde AI metni yok), 10, 11, 12, 13, 14, 15 (yüzeyden; uç kalan), 16, 17, 18 — **18/18** (yüzey düzeyinde).
+
+### Kalanlar
+- `/api/customer/ai-chat` (bu sayfadan başka tüketicisi yoktu; global asistan işine bırakıldı) ve `lib/ai-engine` müşteri personası.
+- `/api/customer/ai-recommendations` maliyet ve önbellek (nearby'nin sahibi).
