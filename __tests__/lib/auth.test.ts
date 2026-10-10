@@ -2,17 +2,42 @@ import { authOptions } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 
 // Mock prisma
+// Not: `authorize` kullanıcıyı büyük/küçük harf duyarsız `findFirst` ile arar (karışık
+// harfli eski kayıtlar); jwt callback ise `findUnique` (id ile) kullanır.
 const mockFindUnique = jest.fn();
-const mockConsumeMagicLoginToken = jest.fn();
+const mockFindFirst = jest.fn();
+const mockAccountFindUnique = jest.fn();
+// Magic link iki adımlı: peek (tüketmeden oku) → 2FA gerekiyorsa kod → claim (atomik tüket).
+const mockPeekLoginLinkToken = jest.fn();
+const mockClaimAuthEmailToken = jest.fn();
 jest.mock('@/lib/auth-email-token', () => ({
-  consumeMagicLoginToken: (...args: unknown[]) => mockConsumeMagicLoginToken(...args),
+  AUTH_TOKEN_PURPOSE: {
+    PASSWORD_RESET: 'password_reset',
+    MAGIC_LOGIN: 'magic_login',
+    EMAIL_VERIFY: 'email_verify',
+    MFA_CHALLENGE: 'mfa_challenge',
+  },
+  MFA_CHALLENGE_TTL_MS: 300000,
+  peekLoginLinkToken: (...args: unknown[]) => mockPeekLoginLinkToken(...args),
+  claimAuthEmailToken: (...args: unknown[]) => mockClaimAuthEmailToken(...args),
+  createAuthEmailToken: jest.fn(),
 }));
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
+      findFirst: (...args: unknown[]) => mockFindFirst(...args),
+    },
+    account: {
+      findUnique: (...args: unknown[]) => mockAccountFindUnique(...args),
     },
   },
+}));
+jest.mock('@/lib/auth-events', () => ({
+  logLoginFailed: jest.fn(),
+  logLockout: jest.fn(),
+  logLoginSuccess: jest.fn(),
+  logRateLimit: jest.fn(),
 }));
 
 // DB-backed rate limiter / login lockout — testlerde her zaman "geçer" (kilitsiz, limit ok).
@@ -59,6 +84,9 @@ describe('auth.ts', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Varsayılan: şifre eşleşmez. Kullanıcı yokken de sahte bcrypt karşılaştırması çalışır
+    // (zamanlama eşitleme), bu yüzden mock her zaman bir Promise dönmeli.
+    mockBcryptCompare.mockResolvedValue(false);
   });
 
   describe('authOptions configuration', () => {
@@ -113,16 +141,26 @@ describe('auth.ts', () => {
 
     it('should return user when magic token is valid', async () => {
       const authorize = getAuthorize();
-      mockConsumeMagicLoginToken.mockResolvedValue({
-        id: 'm1',
-        email: 'magic@test.com',
-        name: 'Magic User',
-        role: 'CUSTOMER',
-        image: null,
-        points: 10,
-        level: 2,
-        preferredLanguage: 'tr',
+      mockPeekLoginLinkToken.mockResolvedValue({
+        tokenId: 't1',
+        purpose: 'magic_login',
+        user: {
+          id: 'm1',
+          email: 'magic@test.com',
+          name: 'Magic User',
+          role: 'CUSTOMER',
+          image: null,
+          points: 10,
+          level: 2,
+          preferredLanguage: 'tr',
+          emailVerified: new Date(),
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          suspendedAt: null,
+          anonymizedAt: null,
+        },
       });
+      mockClaimAuthEmailToken.mockResolvedValue(true);
 
       const result = await authorize({ magicToken: 'plain-token', email: '', password: '' });
 
@@ -136,71 +174,76 @@ describe('auth.ts', () => {
         level: 2,
         preferredLanguage: 'tr',
       });
-      expect(mockConsumeMagicLoginToken).toHaveBeenCalledWith('plain-token');
+      expect(mockPeekLoginLinkToken).toHaveBeenCalledWith('plain-token');
+      expect(mockClaimAuthEmailToken).toHaveBeenCalledWith('t1');
     });
 
     it('should throw when magic token is invalid', async () => {
       const authorize = getAuthorize();
-      mockConsumeMagicLoginToken.mockResolvedValue(null);
+      mockPeekLoginLinkToken.mockResolvedValue(null);
 
-      await expect(authorize({ magicToken: 'bad-token' })).rejects.toThrow('Geçersiz veya süresi dolmuş bağlantı');
+      // Sunucu makine-okunur kod fırlatır (lib/auth/login-errors); metni istemci çözer.
+      await expect(authorize({ magicToken: 'bad-token' })).rejects.toThrow('INVALID_LINK');
+      expect(mockClaimAuthEmailToken).not.toHaveBeenCalled();
     });
 
     it('should throw error when email is missing', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize({ password: 'test123' })).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize({ password: 'test123' })).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when password is missing', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize({ email: 'test@test.com' })).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize({ email: 'test@test.com' })).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when credentials is undefined', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize(undefined)).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize(undefined)).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when both email and password are missing', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize({})).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize({})).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when credentials is null', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize(null as unknown as { email?: string; password?: string })).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize(null as unknown as { email?: string; password?: string })).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when email is empty string', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize({ email: '', password: 'test123' })).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize({ email: '', password: 'test123' })).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when password is empty string', async () => {
       const authorize = getAuthorize();
       
-      await expect(authorize({ email: 'test@test.com', password: '' })).rejects.toThrow('Email ve şifre gerekli');
+      await expect(authorize({ email: 'test@test.com', password: '' })).rejects.toThrow('MISSING_CREDENTIALS');
     });
 
     it('should throw error when user is not found', async () => {
       const authorize = getAuthorize();
-      mockFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
 
       // User enumeration önlemi: "bulunamadı" da "şifre hatalı" da AYNI generic mesaj.
       await expect(
         authorize({ email: 'notfound@test.com', password: 'test123' })
-      ).rejects.toThrow('E-posta veya şifre hatalı');
+      ).rejects.toThrow('INVALID_CREDENTIALS');
+      // Kullanıcı yokken de bcrypt çalışır → "yok" ile "şifre yanlış" zamanlamadan ayırt edilemez.
+      expect(mockBcryptCompare).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error when user has no password (OAuth user)', async () => {
       const authorize = getAuthorize();
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: '1',
         email: 'oauth@test.com',
         name: 'OAuth User',
@@ -213,12 +256,12 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'oauth@test.com', password: 'test123' })
-      ).rejects.toThrow('E-posta veya şifre hatalı');
+      ).rejects.toThrow('INVALID_CREDENTIALS');
     });
 
     it('should throw error when password is invalid', async () => {
       const authorize = getAuthorize();
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: '1',
         email: 'test@test.com',
         name: 'Test User',
@@ -234,7 +277,7 @@ describe('auth.ts', () => {
 
       await expect(
         authorize({ email: 'test@test.com', password: 'wrongpassword' })
-      ).rejects.toThrow('E-posta veya şifre hatalı');
+      ).rejects.toThrow('INVALID_CREDENTIALS');
     });
 
     it('should return user object when credentials are valid', async () => {
@@ -251,7 +294,7 @@ describe('auth.ts', () => {
         preferredLanguage: 'en',
         emailVerified: new Date(),
       };
-      mockFindUnique.mockResolvedValue(mockUser);
+      mockFindFirst.mockResolvedValue(mockUser);
       mockBcryptCompare.mockResolvedValue(true);
 
       const result = await authorize({ email: 'test@test.com', password: 'correctpassword' });
@@ -270,7 +313,7 @@ describe('auth.ts', () => {
 
     it('should call prisma with correct email', async () => {
       const authorize = getAuthorize();
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: '1',
         email: 'test@test.com',
         name: 'Test User',
@@ -286,8 +329,8 @@ describe('auth.ts', () => {
 
       await authorize({ email: 'test@test.com', password: 'password123' });
 
-      expect(mockFindUnique).toHaveBeenCalledWith({
-        where: { email: 'test@test.com' },
+      expect(mockFindFirst).toHaveBeenCalledWith({
+        where: { email: { equals: 'test@test.com', mode: 'insensitive' } },
         select: {
           id: true,
           email: true,
@@ -301,13 +344,15 @@ describe('auth.ts', () => {
           emailVerified: true,
           twoFactorEnabled: true,
           twoFactorSecret: true,
+          suspendedAt: true,
+          anonymizedAt: true,
         },
       });
     });
 
     it('should call bcrypt.compare with correct arguments', async () => {
       const authorize = getAuthorize();
-      mockFindUnique.mockResolvedValue({
+      mockFindFirst.mockResolvedValue({
         id: '1',
         email: 'test@test.com',
         name: 'Test User',
@@ -491,6 +536,7 @@ describe('auth.ts', () => {
           level: true,
           image: true,
           preferredLanguage: true,
+          sessionVersion: true,
           staffProfile: { select: { dealerId: true } },
           equippedCosmetics: {
             where: { isEquipped: true },
@@ -582,19 +628,38 @@ describe('auth.ts', () => {
   describe('signIn callback', () => {
     const getSignInCallback = () => authOptions.callbacks!.signIn!;
 
-    it('should return true for OAuth provider (Google)', async () => {
+    it('should return true for a new Google user with a verified e-mail', async () => {
       const signInCallback = getSignInCallback();
+      mockAccountFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
 
       const result = await signInCallback({
         user: { id: 'user-1', email: 'test@test.com' },
         account: { provider: 'google', type: 'oauth', providerAccountId: '123' },
+        profile: { email: 'test@test.com', email_verified: true },
       } as Parameters<typeof signInCallback>[0]);
 
       expect(result).toBe(true);
     });
 
-    it('should return true for any non-credentials provider', async () => {
+    it('should reject Google sign-in when the e-mail is not reported as verified (P0-08)', async () => {
       const signInCallback = getSignInCallback();
+
+      const result = await signInCallback({
+        user: { id: 'user-1', email: 'test@test.com' },
+        account: { provider: 'google', type: 'oauth', providerAccountId: '123' },
+        profile: { email: 'test@test.com' },
+      } as Parameters<typeof signInCallback>[0]);
+
+      expect(typeof result).toBe('string');
+      expect(result).toContain('/auth/login?error=OAuthEmailUnverified');
+      expect(mockAccountFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('should return true for a new user on another OAuth provider', async () => {
+      const signInCallback = getSignInCallback();
+      mockAccountFindUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(null);
 
       const result = await signInCallback({
         user: { id: 'user-1', email: 'test@test.com' },

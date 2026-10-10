@@ -16,7 +16,7 @@
 import { MODULE_CATALOG, type ModuleScope, type ModuleControlsMap } from '@/lib/module-controls';
 
 /** Admin API ve istemciler için sürüm; katalog yapısı değişince artırılabilir. */
-export const MENU_VISIBILITY_CONTRACT_VERSION = 1;
+export const MENU_VISIBILITY_CONTRACT_VERSION = 2;
 
 export type VisibilityRole = 'dealer' | 'customer';
 export type FeatureVisibilityRole = VisibilityRole | 'system';
@@ -39,8 +39,16 @@ export const FEATURE_VISIBILITY_SETTINGS_KEY = 'featureVisibility';
 export const MENU_VISIBILITY_SETTINGS_KEY = 'menuVisibility';
 export const SYSTEM_FEATURE_VISIBILITY_SETTINGS_KEY = 'systemFeatureVisibility';
 
+// Katalog = admin'in açıp kapatabildiği GERÇEK menü öğeleri; sidebar ile iki yönlü eşleşir
+// (`__tests__/menu-visibility-catalog.test.ts`, `npm run verify:menu`). Menüde olmayan (yetim)
+// sayfalar burada YER ALMAZ — aksi halde ayarlar ekranında hiçbir şeyi gizlemeyen anahtarlar
+// görünür. Sürüm 2: redesign'da menüden çıkan operations_brief/action_items/discover (bayi) ve
+// scan/experiences/discover (müşteri) kaldırıldı; menüye eklenen öğeler kataloğa girdi.
+// DB'deki eski anahtarlar `normalizeMenuVisibility` ile sessizce düşer.
 export const DEALER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'dashboard', href: '/dealer', label: 'Dashboard', role: 'dealer' },
+  { key: 'onboarding', href: '/dealer/onboarding', label: 'Kurulum', role: 'dealer' },
+  { key: 'customers', href: '/dealer/customers', label: 'Müşteriler', role: 'dealer' },
   { key: 'business_outcomes', href: '/dealer/business-outcomes', label: 'İş Sonuçları', role: 'dealer' },
   { key: 'growth_hub', href: '/dealer/growth-hub', label: 'Büyüme merkezi', role: 'dealer' },
   { key: 'scan', href: '/dealer/scan', label: 'Kart Tara', role: 'dealer' },
@@ -52,12 +60,10 @@ export const DEALER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'remedy_queue', href: '/dealer/remedy-queue', label: 'Telafi merkezi', role: 'dealer' },
   { key: 'remedy_automation', href: '/dealer/remedy-automation', label: 'Telafi otomasyonu', role: 'dealer' },
   { key: 'analytics', href: '/dealer/analytics', label: 'Analitik', role: 'dealer' },
-  { key: 'operations_brief', href: '/dealer/operations-brief', label: 'Operasyon özeti', role: 'dealer' },
   { key: 'campaigns', href: '/dealer/campaigns', label: 'Kampanyalar', role: 'dealer' },
   { key: 'innovation_hub', href: '/dealer/innovation', label: 'İnovasyon', role: 'dealer' },
   { key: 'surveys', href: '/dealer/surveys', label: 'Anketler', role: 'dealer' },
   { key: 'incidents', href: '/dealer/incidents', label: 'Olaylar', role: 'dealer' },
-  { key: 'action_items', href: '/dealer/action-items', label: 'Aksiyonlar', role: 'dealer' },
   { key: 'churn_risk', href: '/dealer/churn-risk', label: 'Churn Risk', role: 'dealer' },
   { key: 'segment_actions', href: '/dealer/segment-actions', label: 'Segment Aksiyon Merkezi', role: 'dealer' },
   { key: 'roi', href: '/dealer/roi', label: 'ROI', role: 'dealer' },
@@ -70,7 +76,6 @@ export const DEALER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'ai_insights', href: '/dealer/ai-insights', label: 'AI İçgörüler', role: 'dealer' },
   { key: 'ai_settings', href: '/dealer/ai-settings', label: 'AI Ayarları', role: 'dealer' },
   { key: 'team', href: '/dealer/team', label: 'Personel', role: 'dealer' },
-  { key: 'discover', href: '/dealer/discover', label: 'Keşfet', role: 'dealer' },
   { key: 'settings', href: '/dealer/settings', label: 'Ayarlar', role: 'dealer' },
 ];
 
@@ -79,16 +84,16 @@ export const CUSTOMER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'progress_hub', href: '/customer/progress-hub', label: 'Gelişim merkezi', role: 'customer' },
   { key: 'my_card', href: '/customer/my-card', label: 'Kartım', role: 'customer' },
   { key: 'consumptions', href: '/customer/consumptions', label: 'Tüketimlerim', role: 'customer' },
-  { key: 'scan', href: '/customer/scan', label: 'QR Tara', role: 'customer' },
   { key: 'event_center', href: '/customer/event', label: 'Etkinlik Merkezi', role: 'customer' },
   { key: 'feedbacks', href: '/customer/feedbacks', label: 'Geri Bildirimlerim', role: 'customer' },
   { key: 'remedy', href: '/customer/remedy', label: 'Telafi Tekliflerim', role: 'customer' },
   { key: 'ai_insights', href: '/customer/ai-insights', label: 'AI Analizlerim', role: 'customer' },
   { key: 'trends', href: '/customer/trends', label: 'Trend Analizi', role: 'customer' },
   { key: 'journey_score', href: '/customer/journey-score', label: 'Yolculuk Skorum', role: 'customer' },
-  { key: 'experiences', href: '/customer/experiences', label: 'Deneyimlerim', role: 'customer' },
   { key: 'nearby', href: '/customer/nearby', label: 'Yakınımdakiler', role: 'customer' },
   { key: 'analytics', href: '/customer/analytics', label: 'Kişisel Analitik', role: 'customer' },
+  { key: 'my_year', href: '/customer/my-year', label: 'Benim Yılım', role: 'customer' },
+  { key: 'category_leaderboard', href: '/customer/category-leaderboard', label: 'Kategori Liderliği', role: 'customer' },
   { key: 'spending_overview', href: '/customer/spending-overview', label: 'Harcama özeti', role: 'customer' },
   { key: 'badges', href: '/customer/badges', label: 'Rozetlerim', role: 'customer' },
   { key: 'shop', href: '/customer/shop', label: 'Avatar Dükkanı', role: 'customer' },
@@ -96,10 +101,11 @@ export const CUSTOMER_MENU_CATALOG: MenuItemCatalogItem[] = [
   { key: 'quests', href: '/customer/quests', label: 'Görevler', role: 'customer' },
   { key: 'rewards', href: '/customer/rewards', label: 'Ödüller', role: 'customer' },
   { key: 'surprise_boxes', href: '/customer/surprise-boxes', label: 'Sürpriz Kutularım', role: 'customer' },
-  { key: 'campaigns', href: '/customer/campaigns', label: 'Kampanyalar & Davet', role: 'customer' },
+  { key: 'campaigns', href: '/customer/campaigns', label: 'Kampanyalar', role: 'customer' },
+  { key: 'referral', href: '/customer/referral', label: 'Arkadaşını Davet Et', role: 'customer' },
+  { key: 'games_hub', href: '/customer/games', label: 'Oyunlar', role: 'customer' },
   { key: 'donations', href: '/customer/donations', label: 'Sosyal Sorumluluk', role: 'customer' },
   { key: 'leaderboard', href: '/customer/leaderboard', label: 'Liderlik', role: 'customer' },
-  { key: 'discover', href: '/customer/discover', label: 'Keşfet', role: 'customer' },
   { key: 'settings', href: '/customer/settings', label: 'Ayarlar', role: 'customer' },
 ];
 
