@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { moments } from '@/lib/moments/client';
 import { primeAudio } from '@/lib/game-sounds';
 
 /**
@@ -154,7 +155,10 @@ export function useMiniGame(gameType: string) {
         // Tekrar gönderim (ağ tekrarı): kayıtlı sonuç; kutlamayı yineleme.
         if (!json.alreadyCompleted) {
           if (r.rewarded) {
-            toast.success(`🎉 ${r.rewardPoints} puan + ${r.rewardXp} XP kazandın!`);
+            // An Motoru puan kapsülü; Host yoksa eski toast yedeği (çift bildirim yok).
+            if (!moments.points({ points: r.rewardPoints, xp: r.rewardXp })) {
+              toast.success(`🎉 ${r.rewardPoints} puan + ${r.rewardXp} XP kazandın!`);
+            }
           } else if (r.reason) {
             toast.message(r.reason);
           } else if (serverWon) {
@@ -165,6 +169,8 @@ export function useMiniGame(gameType: string) {
             const fire = '🔥'.repeat(Math.min(5, Math.max(1, Math.ceil(r.streak / 3))));
             toast.success(`${fire} ${r.streak} günlük seri! +${r.streakBonusXp} bonus XP`);
           }
+          // Seviye/lig/rozet anları sunucuda kayıtlı → Host hemen çekip tam bir kez oynatır.
+          if (r.rewarded || r.streakBonusXp > 0) moments.refresh();
           // Yeni başarımlar — her biri için kutlama toast'ı.
           for (const a of r.newAchievements) {
             toast.success(`🏆 Yeni başarım: ${a.icon} ${a.title}`);

@@ -10,7 +10,10 @@
  *    (100.000 üstü sahte "yükselme"/"düşme" üretmez); çoklu lig atlamada tek an (en üst lig).
  *  - Panel bug'ının sunucu karşılığı: seviye anı yalnız bump'ı yapan çağrıda yazılır.
  */
-jest.mock('@/lib/prisma', () => ({ prisma: {} }));
+const mockSettingsFindUnique = jest.fn(async () => null as unknown);
+jest.mock('@/lib/prisma', () => ({
+  prisma: { settings: { findUnique: (...a: unknown[]) => mockSettingsFindUnique(...(a as [])) } },
+}));
 
 import {
   badgeMomentKey,
@@ -26,6 +29,7 @@ import {
 } from '@/lib/moments/server';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { DEFAULT_LEAGUE_RULES } from '@/lib/league-rules-core';
+import { clearLeagueRulesCache } from '@/lib/league-rules';
 import { calculateLevel } from '@/lib/utils';
 import type { MomentInput } from '@/lib/moments/types';
 
@@ -40,6 +44,11 @@ function makeDb(opts: { tx?: boolean; createMany?: jest.Mock } = {}) {
   if (!opts.tx) db.$transaction = jest.fn();
   return { db, createMany, exec };
 }
+
+beforeEach(() => {
+  clearLeagueRulesCache();
+  mockSettingsFindUnique.mockReset().mockResolvedValue(null);
+});
 
 const levelItem = (to: number): MomentInput => ({
   kind: 'level_up',
@@ -217,15 +226,36 @@ describe('captureCreditMoments', () => {
 
   it('lig kuralları okunamazsa varsayılanlarla devam eder, fırlatmaz', async () => {
     const { db, createMany } = makeDb();
-    (db.settings as { findUnique: jest.Mock }).findUnique.mockRejectedValue(new Error('boom'));
+    mockSettingsFindUnique.mockRejectedValue(new Error('boom'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     await expect(
       captureCreditMoments(db as never, {
         userId: 'u1', pointsAdded: 10, pointsAfter: 3001, xpAfter: 1, levelBefore: 1, levelAfter: 1, isLevelUp: false,
       })
-    ).resolves.toBeGreaterThanOrEqual(0);
-    expect(createMany).toHaveBeenCalled();
+    ).resolves.toBe(1);
+    expect(createMany.mock.calls[0][0].data[0].dedupeKey).toBe('league:s0:KOR');
     warn.mockRestore();
+  });
+
+  it("lig kuralları kredi transaction'ından DEĞİL kök istemciden (cache'li) okunur", async () => {
+    const { db } = makeDb({ tx: true });
+    const ctx = { userId: 'u1', pointsAdded: 10, pointsAfter: 3001, xpAfter: 1, levelBefore: 1, levelAfter: 1, isLevelUp: false };
+    await captureCreditMoments(db as never, ctx);
+    await captureCreditMoments(db as never, ctx);
+    expect((db.settings as { findUnique: jest.Mock }).findUnique).not.toHaveBeenCalled();
+    // İkinci çağrı cache'ten: kök istemciye tek sorgu.
+    expect(mockSettingsFindUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it('admin lig eşiklerini değiştirdiyse yeni kurallar kullanılır', async () => {
+    mockSettingsFindUnique.mockResolvedValue({
+      value: DEFAULT_LEAGUE_RULES.map((r) => (r.key === 'KOR' ? { ...r, minPoints: 500 } : r)),
+    });
+    const { db, createMany } = makeDb();
+    await captureCreditMoments(db as never, {
+      userId: 'u1', pointsAdded: 10, pointsAfter: 505, xpAfter: 1, levelBefore: 1, levelAfter: 1, isLevelUp: false,
+    });
+    expect(createMany.mock.calls[0][0].data[0].dedupeKey).toBe('league:s0:KOR');
   });
 });
 

@@ -5,6 +5,7 @@ import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { CustomerBirthdayBonusHost } from '@/components/customer/customer-birthday-bonus-host';
 import { WelcomeVideoModal } from '@/components/customer/welcome-video-modal';
+import { MomentHost } from '@/components/moments/moment-host';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -48,6 +49,8 @@ export default async function CustomerLayout({
       {/* Karşılama videosu: dosya (public/videos/welcome-customer.mp4) yoksa hiç açılmaz. */}
       <WelcomeVideoModal />
       <CustomerBirthdayBonusHost />
+      {/* An Motoru: puan kapsülü + seviye/lig/rozet anları (tam bir kez; açık dialog varken bekler). */}
+      <MomentHost />
       <WebVitalsReporter />
       {/* PWA: SW yalnız panelde kaydedilir; QR hunisinde hiç kurulmaz (P0-37). */}
       <ServiceWorkerRegistrar />

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Flame, Gift, Check } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
-import { triggerSuccessBurst } from '@/lib/effects/confetti';
+import { moments } from '@/lib/moments/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ type StreakResponse = {
  *
  * Mount olduğunda /api/customer/streak GET çağırır → bu, login streak'i günde bir
  * kez ilerletir (touchLoginStreak) ve kilometre taşında atomik puan ödülü verir.
- * Yeni bir ödül kazanıldıysa küçük bir kutlama (konfeti + toast) tetiklenir.
+ * Yeni bir ödül kazanıldıysa An Motoru puan kapsülü + kısa seri toast'ı tetiklenir.
  *
  * MİNİ OYUN serisinden ve UserStreak loyalty'den bağımsızdır.
  */
@@ -48,9 +48,13 @@ export function LoginStreakCard({ className }: { className?: string }) {
           // Bu yüklemede yeni bir kilometre taşı ödülü kazanıldıysa kutla (bir kez).
           if (json.todayClaimed && json.milestoneReward && !celebratedRef.current) {
             celebratedRef.current = true;
-            triggerSuccessBurst();
+            const { days, points } = json.milestoneReward;
+            // An Motoru puan kapsülü tutarı gösterir; toast yalnız seri bağlamını taşır
+            // (aynı puan iki kez bildirilmez). Host yoksa eski metin aynen.
+            const shown = moments.points({ points });
+            moments.refresh(); // seri ödülü seviye/lig atlatmış olabilir
             toast.success(
-              `🔥 ${json.milestoneReward.days} günlük seri! +${json.milestoneReward.points} puan kazandın!`
+              shown ? `🔥 ${days} günlük seri ödülü!` : `🔥 ${days} günlük seri! +${points} puan kazandın!`
             );
           }
         }

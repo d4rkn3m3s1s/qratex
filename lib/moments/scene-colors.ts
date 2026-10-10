@@ -130,3 +130,16 @@ export function sceneBackdrop(pair: ScenePair): string {
     `linear-gradient(180deg, ${darkenHex(a, 0.86)} 0%, ${darkenHex(b, 0.92)} 100%)`,
   ].join(', ');
 }
+
+/** Nadirlik etiketi (Türkçe) — `components/ds/play/rarity.ts` ile aynı adlar. */
+export const SCENE_RARITY_LABEL: Record<SceneRarity, string> = {
+  common: 'Yaygın',
+  rare: 'Nadir',
+  epic: 'Destansı',
+  legendary: 'Efsanevi',
+};
+
+/** Sahne çiftinden CSS doğrusal gradyan (ilerleme çubuğu, kenar ışığı). */
+export function sceneGradient(pair: ScenePair, angleDeg = 90): string {
+  return `linear-gradient(${angleDeg}deg, ${pair[0]}, ${pair[1]})`;
+}

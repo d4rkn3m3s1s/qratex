@@ -48,6 +48,12 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
   const doneRef = useRef(false);
   const [phase, setPhase] = useState<Phase>('enter');
   const [delta, setDelta] = useState({ x: 0, y: 0 });
+  // Canlı bölge boş bağlanır, içerik bir kare sonra yazılır → ekran okuyucu güvenle duyurur.
+  const [announce, setAnnounce] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setAnnounce(true), 50);
+    return () => window.clearTimeout(id);
+  }, []);
   const points = useNumberTicker(moment.points, { animateOnMount: !reduce, durationMs: 600 });
   const xp = moment.xp ?? 0;
 
@@ -80,7 +86,7 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
           setPhase('fade');
           return;
         }
-        const anchor = findAnchor();
+        const anchor = moment.points > 0 ? findAnchor() : null; // yalnız XP: puan çipine uçmaz
         const cap = capsuleRef.current;
         if (anchor && cap) {
           const a = anchor.getBoundingClientRect();
@@ -119,7 +125,12 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
         ? { duration: DURATION.slow, ease: EASE.emphasized }
         : { duration: reduce ? DURATION.fast : DURATION.slow, ease: EASE.exit };
 
-  const label = xp > 0 ? `+${formatInt(moment.points)} puan ve +${formatInt(xp)} XP kazandın` : `+${formatInt(moment.points)} puan kazandın`;
+  const hasPoints = moment.points > 0;
+  const label = !hasPoints
+    ? `+${formatInt(xp)} XP kazandın`
+    : xp > 0
+      ? `+${formatInt(moment.points)} puan ve +${formatInt(xp)} XP kazandın`
+      : `+${formatInt(moment.points)} puan kazandın`;
 
   return (
     // Konum bu sarmalayıcıda (CSS); animasyon içteki Motion öğesinde (framer transform'u Tailwind translate'ini ezmesin).
@@ -129,7 +140,7 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
       data-moment-capsule=""
     >
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {label}
+        {announce ? label : ''}
       </span>
       <Motion.div
         ref={capsuleRef}
@@ -151,16 +162,26 @@ export function PointsCapsule({ moment, onDone }: { moment: PointsMoment; onDone
         }}
         className="flex items-center gap-2 rounded-full bg-surface-2 px-4 py-2 text-fg ring-1 ring-inset ring-warning-border backdrop-blur-md qx-elevation-3"
       >
-        <span className="flex size-7 items-center justify-center rounded-full bg-warning-subtle text-warning">
-          <Coins className="size-4" strokeWidth={2.4} />
-        </span>
-        <span className="qx-num text-lg font-bold tabular-nums text-warning">+{formatInt(points)}</span>
-        <span className="qx-small font-medium text-fg-muted">puan</span>
+        {hasPoints ? (
+          <>
+            <span className="flex size-7 items-center justify-center rounded-full bg-warning-subtle text-warning">
+              <Coins className="size-4" strokeWidth={2.4} />
+            </span>
+            <span className="qx-num text-lg font-bold tabular-nums text-warning">+{formatInt(points)}</span>
+            <span className="qx-small font-medium text-fg-muted">puan</span>
+          </>
+        ) : (
+          <span className="flex size-7 items-center justify-center rounded-full bg-brand-subtle text-brand">
+            <Sparkles className="size-4" strokeWidth={2.4} />
+          </span>
+        )}
         {xp > 0 && (
           <>
-            <span className="h-4 w-px bg-border" />
-            <Sparkles className="size-3.5 text-brand" strokeWidth={2.4} />
-            <span className="qx-small font-semibold tabular-nums text-brand">+{formatInt(xp)} XP</span>
+            {hasPoints && <span className="h-4 w-px bg-border" />}
+            {hasPoints && <Sparkles className="size-3.5 text-brand" strokeWidth={2.4} />}
+            <span className={hasPoints ? 'qx-small font-semibold tabular-nums text-brand' : 'qx-num text-lg font-bold tabular-nums text-brand'}>
+              +{formatInt(xp)} XP
+            </span>
           </>
         )}
       </Motion.div>

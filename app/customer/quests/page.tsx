@@ -32,8 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/lib/admin-toast';
-import confetti from 'canvas-confetti';
-import { CHART_BRAND, CHART_HEX } from '@/lib/chart-palette';
+import { moments } from '@/lib/moments/client';
 import { useAppT } from '@/lib/app-locale';
 
 interface Quest {
@@ -260,19 +259,18 @@ export default function CustomerQuestsPage() {
         return;
       }
 
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: [CHART_BRAND, CHART_HEX.green, CHART_HEX.yellow, CHART_HEX.red],
-      });
-
       const points = data?.data?.reward?.points ?? getRewardPoints(quest.reward);
       const xp = data?.data?.reward?.xp ?? getRewardXP(quest.reward);
 
-      toast.success(t('customerQuests.claimedTitle'), {
-        description: `+${points} ${t('customerQuests.points')}, +${xp} XP ${t('customerQuests.earned')}`,
-      });
+      // An Motoru: puan kapsülü (kıvılcım + ses, azaltılmış harekette sade) ve bekleyen
+      // seviye/lig/rozet anları. Host yoksa eski toast yedeği → çift bildirim olmaz.
+      const shown = moments.points({ points: Number(points) || 0, xp: Number(xp) || 0 });
+      moments.refresh();
+      if (!shown) {
+        toast.success(t('customerQuests.claimedTitle'), {
+          description: `+${points} ${t('customerQuests.points')}, +${xp} XP ${t('customerQuests.earned')}`,
+        });
+      }
 
       setQuests((prev) =>
         prev.map((q) => (q.id === quest.id ? { ...q, claimed: true } : q))

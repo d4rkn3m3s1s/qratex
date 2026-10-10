@@ -3,6 +3,7 @@
 import { useId } from 'react';
 import { cn } from '@/lib/utils';
 import { hexToRgba, lightenHex, darkenHex, type ScenePair } from '@/lib/moments/scene-colors';
+import { GEM_SCREEN_FRACTION, RING_SCREEN_FRACTION } from './scene-math';
 
 export type StagePreset = 'ring' | 'gem' | 'medallion';
 
@@ -25,7 +26,13 @@ export function StageFallback2D({
   const [a, b] = colors;
 
   return (
-    <div aria-hidden className={cn('pointer-events-none relative grid size-full place-items-center', className)}>
+    // `containerType: size` → ölçüler kabın KÜÇÜK kenarına göre (cqmin) kurulur; 3B sahnenin
+    // kadraj sözleşmesiyle aynı oran (halka çapı = 0,56 × küçük kenar; scene-math).
+    <div
+      aria-hidden
+      className={cn('pointer-events-none relative grid size-full place-items-center', className)}
+      style={{ containerType: 'size' }}
+    >
       {/* Yumuşak ışık lekesi */}
       <div
         className="absolute inset-0"
@@ -35,7 +42,7 @@ export function StageFallback2D({
         <div
           className="relative aspect-square rounded-full"
           style={{
-            width: '56%',
+            width: `${RING_SCREEN_FRACTION * 100}cqmin`,
             padding: 'max(6px, 1.6%)',
             background: `conic-gradient(from 210deg, ${a}, ${lightenHex(b, 0.25)}, ${a}, ${b}, ${a})`,
             boxShadow: `0 0 40px ${hexToRgba(b, 0.55)}, inset 0 0 24px ${hexToRgba(a, 0.6)}`,
@@ -45,7 +52,7 @@ export function StageFallback2D({
         />
       )}
       {preset === 'gem' && (
-        <svg viewBox="0 0 100 100" className="relative" style={{ width: '46%', filter: `drop-shadow(0 0 24px ${hexToRgba(b, 0.6)})` }}>
+        <svg viewBox="0 0 100 100" className="relative" style={{ width: `${GEM_SCREEN_FRACTION * 142}cqmin`, filter: `drop-shadow(0 0 24px ${hexToRgba(b, 0.6)})` }}>
           <defs>
             <linearGradient id={`${id}-g`} x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor={lightenHex(b, 0.45)} />
@@ -62,7 +69,7 @@ export function StageFallback2D({
         <div
           className="relative aspect-square rounded-full"
           style={{
-            width: '78%',
+            width: '60cqmin',
             padding: '5%',
             background: `linear-gradient(135deg, ${lightenHex(a, 0.35)}, ${a} 45%, ${darkenHex(b, 0.25)})`,
             boxShadow: `0 0 36px ${hexToRgba(a, 0.5)}`,

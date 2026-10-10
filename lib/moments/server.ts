@@ -211,7 +211,7 @@ export interface CreditMomentContext {
  * cache'li okunur (ek sorgu yalnız cache soğukken).
  */
 export async function captureCreditMoments(
-  db: MomentsDb & { settings?: unknown },
+  db: MomentsDb,
   ctx: CreditMomentContext
 ): Promise<number> {
   try {
@@ -223,9 +223,13 @@ export async function captureCreditMoments(
     }
 
     if (ctx.pointsAdded > 0) {
+      // Kurallar KÖK istemciden (cache'li, 60 sn) okunur, kredi transaction'ından DEĞİL:
+      // tx içinde başarısız bir SELECT bile Postgres'te dış transaction'ı iptal eder ve
+      // savepoint'le sarmak sıcak yolda her krediye 2 gidiş-dönüş ekler. Ayar okuması kilit
+      // gerektirmez; cache sıcakken hiç sorgu yoktur.
       let rules: LeagueRule[];
       try {
-        rules = await getLeagueRules(db as Parameters<typeof getLeagueRules>[0]);
+        rules = await getLeagueRules();
       } catch (err) {
         console.warn('[moments] lig kuralları okunamadı, varsayılanlar kullanılıyor:', err);
         rules = DEFAULT_LEAGUE_RULES;

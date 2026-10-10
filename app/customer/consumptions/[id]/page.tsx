@@ -32,6 +32,7 @@ import { toast } from '@/lib/admin-toast';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
+import { moments } from '@/lib/moments/client';
 
 interface Consumption {
   id: string;
@@ -206,12 +207,17 @@ export default function ConsumptionDetailPage() {
       toast.success(data.message);
       
       if (data.rewards) {
-        setTimeout(() => {
-          toast.success(`+${data.rewards.points} ${t('customerConsumptionDetail.pointsEarned')}`, {
+        // An Motoru puan kapsülü; Host yoksa eski toast yedeği (çift bildirim yok).
+        const points = Number(data.rewards.points) || 0;
+        const shown = moments.points({ points, xp: Number(data.rewards.xp) || 0 });
+        if (!shown && points > 0) {
+          toast.success(`+${points} ${t('customerConsumptionDetail.pointsEarned')}`, {
             icon: '🎉',
           });
-        }, 500);
+        }
       }
+      // Seviye/lig/rozet anları sunucuda kayıtlı → Host hemen çekip tam bir kez oynatır.
+      moments.refresh();
 
       // Refresh data
       fetchConsumption();

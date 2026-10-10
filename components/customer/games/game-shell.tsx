@@ -2,32 +2,21 @@
 
 import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { m as Motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import { Loader2, Trophy, Lock, RotateCcw, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GameLeaderboard } from './game-leaderboard';
 import { GameTournament } from './game-tournament';
 import type { MiniGamePhase, MiniGameResult } from '@/lib/use-mini-game';
 import { pickVariant, type GameCopy } from '@/lib/minigame-copy';
+import { confetti } from '@/lib/moments/effects';
 
-function reducedMotion(): boolean {
-  if (typeof document === 'undefined') return true;
-  return document.documentElement.classList.contains('reduce-animations');
-}
-
-/** Ödül kazanınca neon konfeti patlatır (accent renge uyumlu). */
+/**
+ * Ödül kazanınca neon konfeti (accent renge uyumlu). TEK efekt cephesi üzerinden:
+ * azaltılmış harekette (OS VEYA `html.reduce-animations`) hiç çalmaz. Kazanılan puanın
+ * kapsülü ve olası seviye/lig/rozet anları `useMiniGame` → `moments` ile oynar.
+ */
 function celebrate(accent: string) {
-  if (reducedMotion()) return;
-  const colors = [accent, '#ffffff', '#fbbf24'];
-  confetti({ particleCount: 90, spread: 75, origin: { y: 0.55 }, colors, scalar: 0.9 });
-  setTimeout(
-    () => confetti({ particleCount: 50, angle: 60, spread: 60, origin: { x: 0, y: 0.6 }, colors }),
-    180
-  );
-  setTimeout(
-    () => confetti({ particleCount: 50, angle: 120, spread: 60, origin: { x: 1, y: 0.6 }, colors }),
-    300
-  );
+  confetti('sides', { colors: [accent, '#ffffff', '#fbbf24'] });
 }
 
 /**

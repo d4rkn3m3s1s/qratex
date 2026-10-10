@@ -33,7 +33,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
-import { triggerSuccessBurst } from '@/lib/effects/confetti';
+import { moments } from '@/lib/moments/client';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -794,9 +794,21 @@ export default function CustomerDashboard() {
             <SpinWheel
               compact
               lastSpinDate={spinStatus.lastSpin}
+              announceReward={false}
               onPrizeWon={(prize) => {
+                if (prize.type === 'nothing' || !(prize.value > 0)) return;
                 if (prize.type === 'points') setStats((prev) => ({ ...prev, points: prev.points + prize.value }));
-                triggerSuccessBurst(); // Qratex 2.0 Burst!
+                // An Motoru puan kapsülü (kıvılcım/ses; azaltılmış harekette sade). Host yoksa
+                // çarkın eski toast metni yedek olarak → bildirim ne kaybolur ne ikilenir.
+                const shown = moments.points(
+                  prize.type === 'points' ? { points: prize.value } : { points: 0, xp: prize.value }
+                );
+                if (!shown) {
+                  toast.success(
+                    prize.type === 'points' ? `🎉 ${prize.value} puan hesabına eklendi!` : `⚡ ${prize.value} XP kazandın!`
+                  );
+                }
+                moments.refresh(); // çark ödülü seviye/lig atlatmış olabilir
               }}
             />
           </div>

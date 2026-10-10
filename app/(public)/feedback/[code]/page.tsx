@@ -13,7 +13,9 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { t, Locale, defaultLocale } from '@/i18n/request';
 import { LOCALE_STORAGE_KEY, writeLocaleCookieClient } from '@/lib/locale-shared';
-import { triggerConfetti } from '@/lib/effects/confetti';
+import { confetti } from '@/lib/moments/effects';
+import { moments } from '@/lib/moments/client';
+import { MomentHost } from '@/components/moments/moment-host';
 import { track } from '@/lib/analytics';
 
 interface QRCodeData {
@@ -30,7 +32,17 @@ interface QRCodeData {
   };
 }
 
+/** QR geri bildirim sayfası + An Motoru Host'u (yalnız oturum açık müşteride etkin). */
 export default function FeedbackPage() {
+  return (
+    <>
+      <FeedbackPageContent />
+      <MomentHost />
+    </>
+  );
+}
+
+function FeedbackPageContent() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
@@ -144,14 +156,16 @@ export default function FeedbackPage() {
         pointsEarned: data.reward?.points ?? null,
       });
 
-      if (data.reward?.leveledUp) {
-        // Seviye atlayınca havai fişek!
-        const { triggerRewardShower } = await import('@/lib/effects/confetti');
-        triggerRewardShower();
-      } else {
-        triggerConfetti(); // Qratex 2.0 Celebration!
-      }
-      
+      // An Motoru: puan kapsülü + bekleyen büyük anlar (seviye/lig/rozet sunucuda kayıtlı,
+      // tam bir kez oynar). Host yoksa (misafir) ya da ödül yoksa yalnız sade kutlama.
+      const shownCapsule = moments.points({
+        points: Number(data.reward?.points) || 0,
+        xp: Number(data.reward?.xp) || 0,
+      });
+      moments.refresh();
+      if (!shownCapsule) confetti('burst');
+
+
       toast.success('Geri bildiriminiz için teşekkürler! 🎉');
     } catch (err) {
       toast.error('Bir hata oluştu');
@@ -239,7 +253,8 @@ export default function FeedbackPage() {
             </div>
             <CardContent className="pt-6 pb-8">
               <h2 className="text-2xl font-bold mb-2">{t(locale, 'publicFeedback.successMsg')}</h2>
-              <p className="text-muted-foreground mb-6">
+              {/* <p> içine <div> konamaz (hidrasyon uyarısı) → kapsayıcı div. */}
+              <div className="text-muted-foreground mb-6">
                 {t(locale, 'publicFeedback.successMsg')}
                 {rewardData && (
                   <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-2">
@@ -250,19 +265,10 @@ export default function FeedbackPage() {
                         {rewardData.xp > 0 && <span className="text-sm font-bold text-primary">+{rewardData.xp} XP</span>}
                       </div>
                     </div>
-                    {rewardData.leveledUp && (
-                      <Motion.div 
-                        initial={{ y: 10, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        className="pt-2 border-t border-primary/20 flex flex-col items-center gap-1"
-                      >
-                        <span className="text-lg font-black text-primary animate-bounce">SEVİYE ATLADIN! 🆙</span>
-                        <span className="text-xs font-bold text-muted-foreground">Yeni Seviye: {rewardData.newLevel}</span>
-                      </Motion.div>
-                    )}
+                    {/* Seviye atlama kutlaması An Motoru'nda (tam ekran sahne, tam bir kez). */}
                   </div>
                 )}
-              </p>
+              </div>
               <div className="space-y-3">
                 {session?.user ? (
                   <Button asChild variant="gradient" className="w-full">

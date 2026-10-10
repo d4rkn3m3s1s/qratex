@@ -66,7 +66,7 @@ export const MEDALLION_TIMELINE = {
 export const RING_SCREEN_FRACTION = 0.56;
 
 /** Taşın ekrandaki yaklaşık yarı yüksekliği (min boyut oranı) — lig metni bunun altına oturur. */
-export const GEM_SCREEN_FRACTION = 0.5;
+export const GEM_SCREEN_FRACTION = 0.42;
 
 // ───────────────────────────── Matematik ─────────────────────────────
 
@@ -206,7 +206,10 @@ export function classifyBadgeIcon(icon: unknown): BadgeIconKind {
   if (typeof icon !== 'string') return 'none';
   const v = icon.trim();
   if (!v) return 'none';
-  if (v.startsWith('/') && !v.startsWith('//')) return 'image';
+  // Protokol-göreli (`//host/x.png`) ve ters bölüye dönen (`/\host`, `\\host`) yollar
+  // tarayıcıda HARİCİ sunucuya gider → görsel sayılmaz (izleme pikseli / karışık içerik).
+  if (/^[\\/]{2}|^\/\\/.test(v)) return 'none';
+  if (v.startsWith('/')) return 'image';
   if (/^https:\/\//i.test(v)) return 'image';
   if (/^data:image\/(png|jpe?g|webp|gif|avif|svg\+xml)[;,]/i.test(v)) return 'image';
   if (IMAGE_EXT_RE.test(v) && !/^[a-z]+:/i.test(v)) return 'image';
@@ -234,4 +237,82 @@ export function nextFocusIndex(count: number, current: number, backwards: boolea
 export function remainingMs(totalMs: number, elapsedBefore: number, runningSince: number | null, now: number): number {
   const live = runningSince == null ? 0 : Math.max(0, now - runningSince);
   return Math.max(0, totalMs - elapsedBefore - live);
+}
+
+// ───────────────────────────── Sahne saati ─────────────────────────────
+
+/**
+ * Duraklatılabilen sahne saati. DOM zaman çizelgesi (sahne kabuğu) ve 3B sahne AYNI
+ * saati okur: sekme gizlenince kabuk saati durdurur, 3B sahne de aynı karede donar;
+ * geri gelindiğinde ikisi kaldığı yerden birlikte devam eder (senkron sözleşmeyle).
+ *
+ * `now` dışarıdan verilir (`performance.now()`): saf ve test edilebilir.
+ */
+export interface SceneClock {
+  /** İlk başlatma (sonraki çağrılar no-op). */
+  start(now: number): void;
+  /** Duraklat (çalışmıyorsa no-op). */
+  pause(now: number): void;
+  /** Devam et (başlamamış ya da zaten çalışıyorsa no-op). */
+  resume(now: number): void;
+  /** Başladığından bu yana geçen ETKİN süre (ms). Başlamadıysa 0. */
+  elapsedMs(now: number): number;
+  started(): boolean;
+  running(): boolean;
+}
+
+export function createSceneClock(): SceneClock {
+  let before = 0;
+  let since: number | null = null;
+  let begun = false;
+  return {
+    start(now) {
+      if (begun) return;
+      begun = true;
+      since = now;
+    },
+    pause(now) {
+      if (since == null) return;
+      before += Math.max(0, now - since);
+      since = null;
+    },
+    resume(now) {
+      if (!begun || since != null) return;
+      since = now;
+    },
+    elapsedMs(now) {
+      return before + (since == null ? 0 : Math.max(0, now - since));
+    },
+    started: () => begun,
+    running: () => since != null,
+  };
+}
+
+/**
+ * Zaman çizelgesi işaretleri: `elapsed` anından sonra gelecek işaretlerin kaç ms
+ * sonra tetikleneceği (artan sırada, tekrarsız). Geçmiş işaretler listede yer almaz.
+ */
+export function upcomingMarks(marksMs: readonly number[], elapsed: number): Array<{ mark: number; inMs: number }> {
+  const uniq = Array.from(new Set(marksMs.filter((m) => Number.isFinite(m) && m > elapsed))).sort((a, b) => a - b);
+  return uniq.map((mark) => ({ mark, inMs: mark - elapsed }));
+}
+
+/** Saniye cinsinden zaman çizelgesi değerini ms işaretine çevirir. */
+export function secToMs(sec: number): number {
+  return Math.round(sec * 1000);
+}
+
+/**
+ * Azaltılmış harekette sade kartın ekranda kalma süresi: okunabilsin diye normal
+ * sahneden kısa olmaz, en az 5 sn.
+ */
+export function reducedSceneDurationMs(kind: SceneKind): number {
+  return Math.max(SCENE_DURATION_MS[kind], 5000);
+}
+
+/** Türkçe binlik ayraçlı tam sayı (sunucu/istemci aynı çıktı: Intl yerine sabit kural). */
+export function formatSceneInt(value: number): string {
+  const n = Math.round(Number.isFinite(value) ? value : 0);
+  const sign = n < 0 ? '-' : '';
+  return sign + String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }

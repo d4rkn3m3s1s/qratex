@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { m, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
+import { confetti } from '@/lib/moments/effects';
 import {
   Gift,
   Star,
@@ -50,9 +50,14 @@ interface SpinWheelProps {
   compact?: boolean;
   disabled?: boolean;
   lastSpinDate?: string | null;
+  /**
+   * Kazanılan puan/XP için kendi toast'ını + konfetisini göstersin mi (varsayılan: evet).
+   * `false` → bildirimi çağıran yapar (ör. panel An Motoru puan kapsülü); çift bildirim olmaz.
+   */
+  announceReward?: boolean;
 }
 
-export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastSpinDate }: SpinWheelProps) {
+export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastSpinDate, announceReward = true }: SpinWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
@@ -174,21 +179,20 @@ export function SpinWheel({ onPrizeWon, compact = false, disabled = false, lastS
         setShowResult(true);
         setCanSpin(false);
 
-        if (prize.type === 'points') {
-          toast.success(`🎉 ${prize.value} puan hesabına eklendi!`);
-        } else if (prize.type === 'xp') {
-          toast.success(`⚡ ${prize.value} XP kazandın!`);
-        } else {
+        if (prize.type === 'nothing') {
           toast.info('Bir dahaki sefere şansın açık olsun!');
-        }
-
-        if (prize.type !== 'nothing' && prize.value >= 50) {
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: [BRAND_PRIMARY_HEX, BRAND_ACCENT_PINK_HEX, CHART_HEX.amber, CHART_HEX.green],
-          });
+        } else if (announceReward) {
+          if (prize.type === 'points') {
+            toast.success(`🎉 ${prize.value} puan hesabına eklendi!`);
+          } else {
+            toast.success(`⚡ ${prize.value} XP kazandın!`);
+          }
+          // Tek efekt cephesi: azaltılmış harekette çalmaz.
+          if (prize.value >= 50) {
+            confetti('burst', {
+              colors: [BRAND_PRIMARY_HEX, BRAND_ACCENT_PINK_HEX, CHART_HEX.amber, CHART_HEX.green],
+            });
+          }
         }
 
         if (onPrizeWon) {
