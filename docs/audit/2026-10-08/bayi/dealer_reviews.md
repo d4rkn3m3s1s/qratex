@@ -251,3 +251,75 @@ Kıyas: Google Business Profile, Yelp for Business, Medallia, Qualtrics CX, Bird
 - **"Remedy onay akışını atlıyor" doğru değil.** Yanıt yalnızca `dealerReply` metnini yazıyor (`reply/route.ts:143-149`). Herhangi bir `Remedy` kaydı, puan ya da kupon oluşturulmuyor; ekonomi tarafında para veya puan basan bir yol bulunmuyor. Metindeki bir vaat sözel kalıyor; bayi onu okuyup seçtiği için bayinin kendi beyanı sayılıyor.
 - **E-posta yanıt metnini taşımıyor.** `emailDealerReply` (`lib/notify-email.ts:112-118`) yalnızca "X yanıt verdi" bilgisini ve müşterinin kendi yorumundan bir alıntıyı gönderiyor. AI metni yalnızca uygulama içinde görünüyor (`app/customer/feedbacks/page.tsx:454`, React kaçışıyla).
 - **Gerçek olan kısım (ORTA ya da DÜŞÜK UX sorunu):** (a) Bu sayfada taslağı düzenleme imkânı yok; düzenlenebilir yanıt dialog'u yalnızca `/dealer/feedbacks` sayfasında var. (b) Gönderilen yanıtı düzenleme veya geri çekme imkânı yok. (c) `lib/groq.ts:213`'teki "telafi teklif et" talimatı, modelin "bir sonraki kahveniz bizden" gibi somut taahhütler üretmesine yol açabilir. Hedef deneyim şöyle olmalı: taslak doğrudan gönderilmek yerine düzenlenebilir bir `ReplyComposer` bileşenine yüklenmeli, kısa bir "geri al" penceresi sunulmalı, prompt'taki talimat "somut telafi vaat etme; telafi gerekiyorsa iletişime geçileceğini belirt" olarak değiştirilmeli ve somut telafi yalnızca "Telafi ekle" eylemiyle remedy akışından yapılmalı. Bunlar gövdedeki önerilerle örtüşüyor, ancak kritik ya da yüksek seviyeli bir hata veya güvenlik bulgusu değil.
+
+---
+
+## Uygulama (Dalga 2)
+
+Bu sayfa **birleştirildi**: `/dealer/reviews` artık `/dealer/inbox?source=consumption`'a kalıcı yönlendirir (`?rating=` korunur). Güçlü yanları (puan özeti, dağılım filtresi, satır içi AI taslakları) Gelen Kutusu'na taşındı; ayrıntılı mimari `dealer_feedbacks.md` → "Uygulama (Dalga 2)". Eski `GET /api/dealer/reviews` (ham `...r` yayılımı) ve `POST /api/ai/generate-reply` (hız sınırsız, şablonu "AI" diye sunan) uçları kaldırıldı; yerlerini `/api/dealer/inbox/*` aldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment meta | ÇALIŞIYOR | Gelen Kutusu meta verisi. |
+| 2 | Menü girişi | ÇALIŞIYOR | Kayıtta tek giriş (`dealer.inbox`, `legacyIds: reviews`). |
+| 3 | API rol koruması | ÇALIŞIYOR | `defineRoute` (rol + kiracı + zod + hız sınırı). |
+| 4 | Veri kapsamı | ÇALIŞIYOR | Her sorgu `consumption.dealerId`; başkasının kaydı 404. |
+| 5 | ADMIN erişimi | KALDIRILDI | Bayi sayfası proxy'de yalnız DEALER; API'de ADMIN yalnız `?dealerId=` ile salt-okunur. |
+| 6 | Hero | ÇALIŞIYOR | Kabuk `PageHeader` (elle yazılmış hero yok). |
+| 7 | "Telafi Merkezi →" | ÇALIŞIYOR | "Telafi onayı" sekmesi (modül kapalıysa gizli) + çekmecede "Telafi onayına git". |
+| 8 | Ortalama puan | ÇALIŞIYOR | Dönemli + değişim. |
+| 9 | Ortalama yıldız | ÇALIŞIYOR | Erişilebilir ad. |
+| 10 | Toplam yorum | ÇALIŞIYOR | Gerçek sayılar; liste artık kesilmiyor. |
+| 11 | Dağılım çubukları | ÇALIŞIYOR | İki kaynak, seçili dönem. |
+| 12 | Dağılıma basarak filtre | ÇALIŞIYOR | `aria-pressed` + anlamlı ad. |
+| 13 | Filtreyi temizle | ÇALIŞIYOR | Tek "Filtreleri temizle". |
+| 14 | İstatistik iskeleti | ÇALIŞIYOR | |
+| 15 | İstatistik hatası | ÇALIŞIYOR | `QueryState` + Tekrar dene. |
+| 16 | Yapışkan yan panel | KALDIRILDI | Özet üst şeritte; iç içe kaydırma yok. |
+| 17 | Liste veri çekme | ÇALIŞIYOR | React Query; oturum yenilemesi listeyi sıfırlamaz. |
+| 18 | Liste iskeleti | ÇALIŞIYOR | `keepPreviousData`: yeniden çekimde liste yerinde kalır. |
+| 19 | Boş durum | ÇALIŞIYOR | Filtreli / Yeni boş / hiç yorum yok ayrı, CTA'lı. |
+| 20 | Hata toast'ı | ÇALIŞIYOR | Sayfa hatası `QueryState`, işlem hataları toast/satır içi. |
+| 21 | Sayfalama | ÇALIŞIYOR | İmleç + sonsuz kaydırma. |
+| 22 | Kart giriş animasyonu | KALDIRILDI | ops kaydında stagger yok. |
+| 23 | `next/image` avatar | KALDIRILDI | İzin listesi dışı alan adında kırılıyordu; baş harf avatarı. |
+| 24 | Baş harf yedeği | ÇALIŞIYOR | İsimsiz/anonimde "?" (dil bağımsız). |
+| 25 | Müşteri adı | ÇALIŞIYOR | |
+| 26 | Müşteri e-postası | KALDIRILDI | KVKK veri minimizasyonu. |
+| 27 | Yorum yıldızları | ÇALIŞIYOR | |
+| 28 | Göreli zaman | ÇALIŞIYOR | + `<time dateTime>` ve mutlak tarih ipucu. |
+| 29 | Yorum metni | ÇALIŞIYOR | Ölü `comment` alanı yok. |
+| 30 | Bayi yanıtı + zaman | ÇALIŞIYOR | |
+| 31 | Ürün + tutar | ÇALIŞIYOR | null gizli, yerel para biçimi, kategori. |
+| 32 | Boyut puanları | ÇALIŞIYOR | |
+| 33 | Duygu / kayıp riski | ÇALIŞIYOR | Duygu rozeti, kayıp riski sinyali + filtre. |
+| 34 | "Yanıt üret" | ÇALIŞIYOR | Kayıt başına mutasyon (yarış yok). |
+| 35 | 3 ton taslak | ÇALIŞIYOR | |
+| 36 | "Bu yanıtı kullan" | ÇALIŞIYOR | Taslak editöre gelir; düzenleyip "Gönder". |
+| 37 | Taslakları iptal | KALDIRILDI | Taslaklar yalnız öneri kartı; editörde "Vazgeç". |
+| 38 | Şablonu "AI" diye sunma (SAHTE) | KALDIRILDI | AI yoksa dürüst neden; şablonlar ayrı "Şablon" seçicide. |
+| 39 | Yanıtlı kartta boş AI bölümü | ÇALIŞIYOR | Yanıtlıda "Yanıtı düzenle". |
+| 40 | Elle yanıt | ÇALIŞIYOR | |
+| 41 | Yanıt düzenleme / geri çekme | ÇALIŞIYOR | Düzenleme var (müşteriye tekrar bildirim gitmez, yanıt tarihi korunur); geri çekme bilinçli olarak yok (müşteri bildirimi gitmiş olur). |
+| 42 | `defaultReplyTemplate` | ÇALIŞIYOR | "Varsayılan şablonum" + otomatik yanıt kural metinleri; `{{isim}}`, `{{ürün}}`, `{{işletme}}`. |
+| 43 | Yorumdan telafi | ÇALIŞIYOR | |
+| 44 | Arama/tarih/sıralama/yanıtsız | ÇALIŞIYOR | |
+| 45 | CSV | ÇALIŞIYOR | |
+| 46 | `router.refresh()` (SAHTE) | KALDIRILDI | |
+| 47 | Bildirim + e-posta | ÇALIŞIYOR | Yalnız ilk yanıtta (tekrar engeli); e-posta gövdesi kaçışlı (`escapeEmailText`). |
+| 48 | Mobil yerleşim | ÇALIŞIYOR | Açılır filtre paneli, alttan çekmece, ≥ 44 px. |
+| 49 | İç kaydırma alanı | KALDIRILDI | Sayfa kaydırması. |
+| 50 | Erişilebilir puan | ÇALIŞIYOR | |
+| 51 | AI hız sınırı | ÇALIŞIYOR | `ai` politikası (10/dk) + kiracı bütçesi + bayi AI anahtarı. |
+| 52 | Hata ekranı | ÇALIŞIYOR | |
+
+### Kapanan bulgular (15/15)
+
+B1 sayfalama · B2 taslak düzenlenmeden gitmiyor (prompt somut telafi vaadi yasak; telafi yalnız telafi akışından) · B3 e-posta kaçışı (P0 ile kapanmıştı, doğrulandı) · B4 açık DTO · B5 oturum yenilemesi listeyi sıfırlamıyor · B6 şablon "AI" değil · B7 tek AI ucu · B8 hız sınırı + tekrar bildirim engeli · B9 varsayılan şablon kullanılıyor · B10 boş AI bölümü / hata = boş · B11 kayıt başına üretim · B12 i18n/biçim/avatar · B13 erişilebilirlik · B14 ölü kod · B15 tutarlı kabuk ve modül görünürlüğü.
+
+### Kalanlar
+
+- "Gönderdikten sonra 5 sn geri al" penceresi yok (yerine sessiz düzenleme). AI taslak dili Türkçe. Konu/tema trendi ve "VoC duvarında öne çıkar" eylemi bu dalgada yok.
+- ŞEMA İSTEĞİ: `ConsumptionReview.dealerFirstViewedAt`, yorum düzeyinde durum/atama alanları, yanıt geçmişi (ayrıntı: `dealer_feedbacks.md`).

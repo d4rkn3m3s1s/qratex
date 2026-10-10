@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { requireAuth } from '@/lib/api-auth';
 import { resolveDealerScope } from '@/lib/auth/scope';
 import { getServerLocale } from '@/lib/server-locale';
-import { normalizeInboxFilters } from '@/lib/dealer-inbox/core';
+import { legacyInboxParams, normalizeInboxFilters } from '@/lib/dealer-inbox/core';
 import { getInboxMeta, getInboxSummary, INBOX_PAGE_SIZE, listInbox } from '@/lib/dealer-inbox/server';
 import { parseDateRange, toPeriod } from '@/components/ds/page/date-range';
 import { ErrorState, SkeletonList } from '@/components/states';
@@ -42,6 +43,11 @@ async function settle<T>(p: Promise<T>): Promise<T | null> {
 
 export default async function DealerInboxPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  // Eski parametreler (`next.config` yönlendirmesi sorguyu olduğu gibi taşır): ?tab=qr → ?source=qr, ?search= → ?q=.
+  if (sp.tab !== undefined || sp.search !== undefined) {
+    const mapped = legacyInboxParams(sp);
+    redirect(`/dealer/inbox${mapped.size ? `?${mapped}` : ''}`);
+  }
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(sp)) {
     const x = Array.isArray(v) ? v[0] : v;

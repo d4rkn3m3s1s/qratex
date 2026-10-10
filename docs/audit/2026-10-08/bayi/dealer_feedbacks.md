@@ -315,3 +315,94 @@ Ayrıca: medya önizleme ve lightbox, yorumdan görev/olay oluşturma, canlı ak
 | 4 | KPI'lar sayfa örneklemi | Doğrulandı | Orta |
 | 5 | Tüketim yorumları 50'de kesiliyor | Doğrulandı | Orta |
 | 6 | Anonim telafide sahte başarı ve ekonomi riski | Çürütüldü (yüksek önem iddiası) | Düşük (UX) |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/dealer/inbox` (Gelen Kutusu → Tümü). `/dealer/feedbacks` ve `/dealer/reviews` kalıcı yönlendirmeye çevrildi (`?tab=qr` → `?source=qr`, `?search=` → `?q=`; diğer parametreler korunur). Kabuk (`app/dealer/inbox/layout.tsx`) tek `h1` + rota sekmeleri: Tümü · Telafi onayı · Vakalar · Bana atananlar (son üçü kayıttan türer, modülü kapalıysa gizli).
+
+**Mimari:** sunucu bileşeni ilk liste sayfasını, KPI özetini ve yardımcı veriyi paralel çekip istemci adasına verir (bir kaynak düşerse diğerleri gelir, düşen kaynak görünür hata). Yeni BFF uçları (`defineRoute`: rol + kiracı + zod + hız sınırı): `GET /api/dealer/inbox` (birleşik, imleçli), `/summary` (KPI, Redis 60 sn + yazımda sürüm), `/meta`, `/[key]` (detay), `POST /[key]/reply`, `/[key]/suggest` (AI), `/actions` (tekli + toplu), `/semantic`, `GET /export` (CSV). Servis: `lib/dealer-inbox/{core,server,types,tabs}.ts`; arayüz: `components/dealer/b-gelen-kutusu/**`. Test: `__tests__/lib/dealer-inbox.test.ts` (32 test). Filtre ve çekmece durumu URL'de sığ yazılır (sunucu bileşeni her değişimde yeniden çalışmaz); veri katmanı React Query (`useInfiniteQuery`, `keepPreviousData`). Çekmece gövdesi lazy yüklenir.
+
+**Durum modeli (şemasız):** Yeni / Yanıtlandı → `dealerReply`; Çözüldü, atama, SLA vadesi → kayda bağlı vaka (`Incident`, `type='inbox_case'`, `metadata.feedbackId|consumptionReviewId`). Otomatik kural (`FEEDBACK`) ve SLA aşımı (`negative_feedback_sla_breach`) olayları da aynı bağla okunur ve kapatılır (Vakalar sekmesiyle tek kayıt). SLA: olumsuz 24 sa (`NEGATIVE_FEEDBACK_SLA_HOURS`), diğer 72 sa (`INBOX_SLA_HOURS`).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment meta | ÇALIŞIYOR | Kabuk + sayfa `generateMetadata` (TR/EN). |
+| 2 | Rol koruması | ÇALIŞIYOR | Sayfa `requireAuth` + `resolveDealerScope` (DB); uçlar kiracı kapsamlı. Personel bayi sayfasını proxy nedeniyle açamaz (personel paneli ayrı yüzey). |
+| 3 | Suspense + yükleniyor | ÇALIŞIYOR | `loading.tsx` statik iskelet, Türkçe `sr-only`. |
+| 4 | Hero | ÇALIŞIYOR | Kabukta tek `h1` (`PageHeader`). |
+| 5 | Hero "toplam" sayacı | KALDIRILDI | Yanlış sayıydı; yerine gerçek durum sayaçları (Yeni/Yanıtlandı/Çözüldü/Tümü, sunucu `count`). |
+| 6 | CSV dışa aktarma | ÇALIŞIYOR | Sunucuda, filtrelenmiş setin tamamı (≤ 5.000), formül enjeksiyonu korumalı, İstanbul saati; boşsa "kayıt yok" (sahte başarı yok). |
+| 7 | PDF (yazdır penceresi) | KALDIRILDI | Yalnız ekrandaki sayfayı yazdırıp "PDF indirildi" diyordu. Tam veri CSV'de; sunucu PDF/zamanlanmış rapor kalan iş. |
+| 8 | KPI: Toplam | ÇALIŞIYOR | "Yanıt bekleyen" (gerçek, tüm zamanlar) + SLA aşan sayısı; "Yeni · en eski önce" görünümüne bağlantı. |
+| 9 | KPI: Ortalama | ÇALIŞIYOR | Sunucu `aggregate`, seçili dönem + önceki eşit döneme göre değişim, düşük örneklem uyarısı. |
+| 10 | KPI: Olumlu | KALDIRILDI | İki tanımın toplamıydı; tek tanımlı "Olumsuz oranı"na birleşti (olumlu payı dağılımda 4–5★). |
+| 11 | KPI: Olumsuz | ÇALIŞIYOR | Tek tanım: 1–2★ ya da AI duygusu olumsuz; değişim (iyi yön aşağı). |
+| 12 | AnimatedNumber | KALDIRILDI | `MetricTile` (azaltılmış harekete uyar). |
+| 13 | KPI giriş animasyonu | KALDIRILDI | ops kaydı: stagger yok. |
+| 14 | Arama | ÇALIŞIYOR | Sunucu tarafı (metin, müşteri adı, QR/ürün adı), gecikmeli, URL'de. |
+| 15 | `?search=` | ÇALIŞIYOR | `?q=`'ya çevrilir. |
+| 16 | Puan filtresi (tüketim) | ÇALIŞIYOR | |
+| 17 | Puan filtresi (QR) | ÇALIŞIYOR | Sunucuda iki kaynakta da; dağılım çubuğuna basınca da süzülür. |
+| 18 | "Manuel inceleme" (intentScore) | KALDIRILDI | Yanlış anlamdı; yerine Sinyal filtresi (acil / kayıp riski / güven-toksisite) ve "Analiz bekliyor" duygu filtresi. |
+| 19 | Sekmeler (Tüketim / QR) | ÇALIŞIYOR | Tek birleşik liste + Kaynak filtresi. |
+| 20 | Sekme sayaçları | ÇALIŞIYOR | Durum sekmelerinde gerçek sayılar; filtre açıkken yanıltmasın diye gizlenir. |
+| 21 | `?tab=qr` | ÇALIŞIYOR | `?source=qr`. |
+| 22 | Yükleniyor iskeleti | ÇALIŞIYOR | |
+| 23 | Hata durumu | ÇALIŞIYOR | `QueryState` (hata ≠ boş, "Tekrar dene"); sonraki sayfa hatası ayrı. |
+| 24 | Boş durum + CTA | ÇALIŞIYOR | Üç ayrı boş durum: filtreli ("temizle"), Yeni boş ("Tümünü göster"), hiç yorum yok (QR kodları / Kart tara). |
+| 25 | Boş durum QR | ÇALIŞIYOR | (24 ile aynı.) |
+| 26 | Avatar/ad/ürün | ÇALIŞIYOR | Baş harf avatarı (boş `src` yok). |
+| 27 | Yıldız | ÇALIŞIYOR | `role="img"` + "5 üzerinden N yıldız". |
+| 28 | Yorum metni | ÇALIŞIYOR | Listede 2 satır, çekmecede tamamı. |
+| 29 | Boyut puanları | ÇALIŞIYOR | `cleanliness` dahil çevrilir; bilinmeyen anahtar gizlenir. |
+| 30 | İşletme yanıtı kutusu | ÇALIŞIYOR | Yanıt tarihi gösterilir. |
+| 31 | Kart son 4 | ÇALIŞIYOR | Çekmecede; ham token istemciye gitmez. |
+| 32 | Tutar | ÇALIŞIYOR | null/0 gösterilmez; yerel para biçimi. |
+| 33 | Göreli zaman | ÇALIŞIYOR | Dile duyarlı + `<time>` ve mutlak tarih ipucu. |
+| 34 | Yanıtlandı / Yanıtla | ÇALIŞIYOR | + yanıt düzenleme. |
+| 35 | Telafi (tüketim) | ÇALIŞIYOR | Sunucu otoriter uygunluk (modül, açık/kabul edilmiş teklif); listede telafi durumu rozeti. |
+| 36 | Tüketim sayfalama | ÇALIŞIYOR | İki kaynaklı imleç (yeni→eski / eski→yeni), sonsuz kaydırma + "Daha fazla yükle". |
+| 37 | QR kartı | ÇALIŞIYOR | |
+| 38 | Duygu ikonu | ÇALIŞIYOR | 4 durum; "Analiz bekliyor" nötrle karışmaz (CSV'de de). |
+| 39 | Konu rozetleri | ÇALIŞIYOR | Listede 2, çekmecede tamamı. |
+| 40 | QR yanıtla | ÇALIŞIYOR | |
+| 41 | Telafi (QR, anonim) | ÇALIŞIYOR | Anonimde düğme yok + neden; sunucu 422. |
+| 42 | QR sayfalama | ÇALIŞIYOR | Birleşik imleç; filtre değişimi tek istek. |
+| 43 | Yanıt penceresi | ÇALIŞIYOR | `?id=` derin linkli çekmece: yorum, medya, boyutlar, AI sinyalleri, müşteri geçmişi, editör, telafi, takip; önceki/sonraki. |
+| 44 | Metin alanı + sayaç | ÇALIŞIYOR | `maxLength` 2000 + sayaç; Ctrl/⌘+Enter gönderir. |
+| 45 | Yanıt gönderme | ÇALIŞIYOR | İyimser eşzamanlılık (409, ezme yok); bildirim + e-posta yalnız ilk yanıtta; yeniden çekimde liste iskelete dönmez. |
+| 46 | AI yanıt önerisi | ÇALIŞIYOR | Tek geçit (`suggestResponseWithGroq`), `ai` hız sınırı; metinsiz yorumda puan/ürün/boyut bağlamı; AI yoksa dürüst neden. Yanıt dili TR (kalan). |
+| 47 | Öneriyi aktarma | ÇALIŞIYOR | Ton kartları (Profesyonel/Sıcak/Çözüm odaklı) klavye ve dokunmatikte; taslak editöre gelir. |
+| 48 | "Görüldü" | ÇALIŞIYOR | Çekmece açılınca bir kez + toplu "Okundu say" (QR). Tüketim yorumunda alan yok → ŞEMA İSTEĞİ. |
+| 49 | Telafi mesajı | ÇALIŞIYOR | `maxLength` 500 + sayaç; sunucu 400 (sessiz varsayılan yok). |
+| 50 | Önce onay kuyruğu | ÇALIŞIYOR | Varsayılan açık (güvenli yön). |
+| 51 | Telafi gönderimi | ÇALIŞIYOR | `Idempotency-Key`; 409/422 mesajları satır içinde. |
+| 52 | Liste stagger | KALDIRILDI | Yalnız durum değişiminde çıkış animasyonu (azaltılmış harekette kapalı). |
+| 53 | Kiracı izolasyonu | ÇALIŞIYOR | Yeni uçlar `tenant: 'dealer'` (STAFF aktifliği DB'den); bu yüzey artık `GET /api/feedbacks` kullanmıyor. |
+| 54 | E-posta minimizasyonu | ÇALIŞIYOR | Hiçbir uç müşteri e-postası/ham kimliği döndürmez (testle doğrulanır). |
+| 55 | Medya | ÇALIŞIYOR | Yalnız https görseller, yeni sekmede. |
+| 56 | Güven/toksisite/aciliyet/churn | ÇALIŞIYOR | Rozetler + çekmecede gerekçe ve önerilen aksiyonlar. |
+| 57 | "Yanıtlanmamış" görünümü | ÇALIŞIYOR | Varsayılan sekme "Yeni" (yanıtsız + kapatılmamış). |
+| 58 | Sıralama | ÇALIŞIYOR | En yeni / en eski (SLA triyajı). |
+| 59 | Tarih aralığı | ÇALIŞIYOR | Liste: 7/30/90 gün/tümü; KPI: dönem seçici (İstanbul günleri). |
+| 60 | QR/şube filtresi | ÇALIŞIYOR | QR kodu seçici (arşivlenmemiş). |
+| 61 | Semantik arama | ÇALIŞIYOR | "Anlamca benzerleri bul (AI)" — yeni kapsamlı uç `/api/dealer/inbox/semantic`. |
+| 62 | Toplu işlem | ÇALIŞIYOR | Okundu say · Çözüldü yap · Yeniden aç · Ata (kısmi başarı görünür). |
+| 63 | Canlı güncelleme | ÇALIŞIYOR | Görünürken 2 dk'da bir arka plan yenileme + odakta yenileme; push tabanlı "N yeni" çubuğu kalan iş. |
+| 64 | Görev/olay, atama | ÇALIŞIYOR | Atama vaka açar (yalnız sahip/aktif personel), atanan kişiye bildirim; Vakalar sekmesinde görünür. |
+
+### Kapanan bulgular (16/16)
+
+1 STAFF sızıntısı (P0-05 + yeni kapsamlı uçlar) · 2 onay kuyruğu bypass (P0-22 servisi + istemci sınırı + güvenli varsayılan) · 3 QR puan filtresi · 4 KPI'lar sunucuda · 5 sayfalama · 6 yanıt penceresi yorumu gösterir · 7 telafi sahte başarı/tekrar/modül kapısı · 8 e-posta minimizasyonu · 9 CSV formül enjeksiyonu (yeni sunucu CSV'si) · 10 veri katmanı (React Query, hata görünür) · 11 sunucu + anlamca arama · 12 Yeni görünümü, sıralama, öncelik şeridi, SLA · 13 i18n (yüzey TR/EN sözlüğü; ham anahtar yok) · 14 render hataları · 15 ölü kod (1000 satırlık istemci bileşeni yerine bölünmüş modüller) · 16 erişilebilirlik (yıldız adları, `aria-pressed`, klavye J/K/Enter/X, odak halkası, ≥ 44 px).
+
+### Kalanlar
+
+- **ŞEMA İSTEĞİ:** `ConsumptionReview.dealerFirstViewedAt`; yorum başına kalıcı durum/atama (`inboxStatus`, `resolvedAt`, `assignedToId` ya da ayrı `FeedbackCase` tablosu — bugün `Incident` + JSON bağla çözüldü); yanıt geçmişi (`ReplyRevision`); `Feedback.dealerId` denormalizasyonu (§4.4/3).
+- Yanıt geri çekme sunulmadı (müşteri bildirimi gitmiş olur; düzenleme var). AI taslak dili Türkçe (paylaşılan `lib/groq`). Push tabanlı canlı akış, kayıtlı görünümler, sunucu PDF/zamanlanmış rapor yok.
+- Paylaşılan `lib/export-utils.ts` (başka yüzeylerin CSV'si) formül korumasız kaldı; bu yüzey kendi `csvCell`'ini kullanıyor.
+- `next.config` yönlendirmesi (`lib/navigation/redirects.json`) `/dealer/reviews`'ı `source=consumption` eklemeden taşıyor (navigasyon ajanı); sayfa düzeyindeki yönlendirme ekliyor.
+- Görsel doğrulama ekran görüntüsüyle yapılmadı (dev server bu dalgada yasak).
