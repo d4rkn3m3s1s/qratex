@@ -328,7 +328,7 @@ Dosyalar: `app/dealer/page.tsx`, `app/dealer/layout.tsx`, `app/dealer/loading.ts
 | 20 | ÇALIŞIYOR | Sıradaki adımlar ve yanıt bekleyenlerle birleşti. QR ve tüketim yorumu birlikte sayılıyor. |
 | 21 | KALDIRILDI | Brifing satırının sayılarını TR sabit metinle tekrarlıyordu. |
 | 22 | KALDIRILDI | Link-yalnız "playbook" kaldırıldı. Yerine Haftalık rapor → "Haftanın önerisi" geldi: "kural tabanlı" diye etiketli ve yapılacaklara eklenebiliyor. |
-| 23 | ÇALIŞIYOR | Yanıt bekleyenler: önce olumsuzlar (en eskisi üstte), 24 saat SLA rozeti, kayda derin bağlantı (`?id=`). |
+| 23 | ÇALIŞIYOR | Yanıt bekleyenler: önce olumsuzlar (en eskisi üstte), 24 saat SLA rozeti, Gelen Kutusu kayıt çekmecesine derin bağlantı (`/dealer/inbox?id=qr-…|cr-…`). |
 | 24 | ÇALIŞIYOR | CTA'lar sayaç ve satırlarda. |
 | 25 | KALDIRILDI | Widget düzeni yok; yerleşim sabit ve sakin. `dashboard-layout` ucu ve ayarlardaki düzen bölümü artık tüketicisiz (ayarlar sahibine bildirildi). |
 | 26 | ÇALIŞIYOR | "Bugün gelen geri bildirim". Delta dün aynı saate göre, sparkline 7 gün; her biri etiketli. |
@@ -363,18 +363,18 @@ Dosyalar: `app/dealer/page.tsx`, `app/dealer/layout.tsx`, `app/dealer/loading.ts
 | 55 | ÇALIŞIYOR | `Intl.RelativeTimeFormat`; referans `generatedAt`, hidrasyon tutarlı. |
 | 56 | KAPSAM DIŞI | Bugün sabit ve etiketli pencereler kullanıyor (bugün / 7 gün / hafta). Serbest dönem seçici Analitik'te. |
 | 57 | KALAN | Şube/QR filtresi Analitik işi. |
-| 58 | ÇALIŞIYOR (kısmen) | Kayda derin bağlantı var; öneri tek tıkla iş oluyor. Satır içi yanıt Gelen Kutusu `DetailSheet`'inde (o yüzeyin sahibine). |
+| 58 | ÇALIŞIYOR | "Yanıtla" tek tıkla Gelen Kutusu'nda o kaydın çekmecesini açar (yanıt / telafi / vaka orada). Öneri tek tıkla iş oluyor. |
 | 59 | ÇALIŞIYOR (kısmen) | Haftalık arşiv CSV (yerelleştirilmiş, BOM, TR'de `;`). PDF/e-posta paylaşımı kalan. |
 | 60 | KALAN | Uyarı kuralları → Otomasyon → Uyarılar (§4.3). |
 | 61 | ÇALIŞIYOR | Yanıt oranı (7 gün, delta) ve medyan ilk yanıt süresi. |
 
-### Kapanan bulgular (16/16, biri kısmi)
+### Kapanan bulgular (16/16)
 - **B1:** Ölü banner kaldırıldı. Uç P0-18'de güvenli hale getirilmişti (DB payload'ı, atomik claim, tek tüketim servisi).
 - **B2:** Benchmark widget'ı ve ağır sorgusu panodan çıktı.
 - **B3, B4, B5, B6, B7, B8:** Tek metrik sözlüğü `lib/dealer-today/core.ts`'de. Tanımlar: ağırlıklı ortalama, `null` boşluk, gerçek dağılım, iki kanal, tek pencere, İstanbul saat dilimi. Hata zarfı görünür.
 - **B9:** Kaldırıldı.
 - **B10:** API kod döner, metin TR/EN `copy.ts`'de.
-- **B11 (kısmi):** Derin bağlantı var, satır içi yanıt Gelen Kutusu'nda.
+- **B11:** Satır kaydın çekmecesine gider (`/dealer/inbox?id=`); "telafi önerisi" olumsuzların filtreli görünümüne (`sentiment=negative&range=30&sort=oldest`) açılır.
 - **B12:** Sekme ARIA, `role="img"` yıldızlar, metin + ikonlu durum, sparkline etiketleri, `useMotionPolicy`.
 - **B13:** Tek BFF, dar `select`, tek tur.
 - **B14:** Widget düzeni yok.
@@ -383,7 +383,6 @@ Dosyalar: `app/dealer/page.tsx`, `app/dealer/layout.tsx`, `app/dealer/loading.ts
 
 ### Kalanlar
 - Gerçek zamanlı geçersiz kılma. Bugün ikinci bir SSE bağlantısı açmıyor; paylaşılan olay yolu gerekiyor.
-- Gelen Kutusu `?id=` derin bağlantısını okumalı. Bugün `/dealer/feedbacks?id=` ve `/dealer/reviews?id=` kullanıyor; inbox devreye girince yönlendirme sorguyu korur.
 - `offline-sync` ucunun istemcisi yok. Karar kasa (`/dealer/scan`) yüzeyinin.
 - Şube filtresi ve uyarı eşikleri (Analitik / Otomasyon).
 - Görsel doğrulama tarayıcıda yapılmadı (dev server yasak); `tsc` ve jest temiz.

@@ -190,7 +190,8 @@ describe('sıradaki adımlar', () => {
     });
     expect(list.map((a) => a.kind)).toEqual(['unanswered_negative', 'remedy_approval', 'open_incidents', 'unanswered_recent']);
     expect(list[0]).toMatchObject({ severity: 'critical', count: 3, params: { oldestHours: 30 } });
-    expect(list[1].href).toBe('/dealer/remedy-queue');
+    expect(list[1].href).toBe('/dealer/inbox/remedy');
+    expect(list[0].href).toBe('/dealer/inbox?sentiment=negative&range=30&sort=oldest');
   });
 
   it('puan düşüşü yalnız yeterli örneklemde; zayıf QR eşiği', () => {
@@ -248,8 +249,8 @@ describe('yardımcılar', () => {
     expect(excerpt('  a   b  ')).toBe('a b');
     expect(excerpt(null)).toBeNull();
     expect(excerpt('x'.repeat(200), 10)).toHaveLength(10);
-    expect(feedbackHref('qr', 'abc')).toBe('/dealer/feedbacks?id=abc');
-    expect(feedbackHref('consumption', 'abc')).toBe('/dealer/reviews?id=abc');
+    expect(feedbackHref('qr', 'abc')).toBe('/dealer/inbox?id=qr-abc');
+    expect(feedbackHref('consumption', 'abc')).toBe('/dealer/inbox?id=cr-abc');
   });
 
   it('emekli rota yönlendirmesi sorguyu korur, sekmeyi ekler', () => {

@@ -29,14 +29,17 @@ import type {
 // ───────────────────────────── Bağlantılar ─────────────────────────────
 
 /**
- * Hedef rotalar. Gelen Kutusu (`/dealer/inbox`) yüzeyi devreye girdiğinde eski rotalar ona
- * yönlendirilir (lib/navigation, sorgu dizesi korunur); bu yüzden bugün çalışan eski
- * yollar kullanılır ve derin bağlantı `?id=` (DetailSheet sözleşmesi) taşır.
+ * Hedef rotalar. Gelen Kutusu (`/dealer/inbox`) sözleşmesi: varsayılan görünüm "Yeni"
+ * (yanıt bekleyen), `range=30` son 30 gün, `sentiment=negative` (≤2★ ya da AI olumsuz),
+ * `sort=oldest`, kayıt çekmecesi `?id=qr-<id>` / `?id=cr-<id>` (lib/dealer-inbox/core.ts
+ * `inboxKey`). Vakalar ve "bana atananlar" alt sayfaları henüz yokken eski rotalar kullanılır;
+ * onlar devreye girince kayıt defteri yönlendirmesi sorguyu koruyarak taşır.
  */
 export const TODAY_LINKS = {
-  inbox: '/dealer/feedbacks',
-  reviews: '/dealer/reviews',
-  remedyApprovals: '/dealer/remedy-queue',
+  inbox: '/dealer/inbox',
+  inboxWaiting: '/dealer/inbox?range=30',
+  inboxNegative: '/dealer/inbox?sentiment=negative&range=30&sort=oldest',
+  remedyApprovals: '/dealer/inbox/remedy',
   incidents: '/dealer/incidents',
   todos: '/dealer/action-items',
   analytics: '/dealer/analytics',
@@ -46,9 +49,9 @@ export const TODAY_LINKS = {
   scan: '/dealer/scan',
 } as const;
 
+/** Gelen Kutusu kayıt çekmecesine derin bağlantı. */
 export function feedbackHref(source: FeedbackSource, id: string): string {
-  const base = source === 'qr' ? TODAY_LINKS.inbox : TODAY_LINKS.reviews;
-  return `${base}?id=${encodeURIComponent(id)}`;
+  return `${TODAY_LINKS.inbox}?id=${encodeURIComponent(`${source === 'qr' ? 'qr' : 'cr'}-${id}`)}`;
 }
 
 // ───────────────────────────── Zaman ─────────────────────────────
@@ -351,7 +354,7 @@ export function buildNextActions(s: ActionSignals, limit = 5): NextAction[] {
       kind: 'unanswered_negative',
       severity: oldest >= 24 ? 'critical' : 'high',
       count: s.unansweredNegative,
-      href: TODAY_LINKS.inbox,
+      href: TODAY_LINKS.inboxNegative,
       params: { oldestHours: oldest },
     });
   }
@@ -402,7 +405,7 @@ export function buildNextActions(s: ActionSignals, limit = 5): NextAction[] {
     });
   }
   if (s.unansweredRecent > 0) {
-    out.push({ kind: 'unanswered_recent', severity: 'low', count: s.unansweredRecent, href: TODAY_LINKS.inbox, params: {} });
+    out.push({ kind: 'unanswered_recent', severity: 'low', count: s.unansweredRecent, href: TODAY_LINKS.inboxWaiting, params: {} });
   }
   if (s.hasQr && s.feedback7d === 0) {
     out.push({ kind: 'quiet_week', severity: 'info', count: 0, href: TODAY_LINKS.qrCodes, params: {} });

@@ -91,7 +91,7 @@ export function WaitingList({ waiting, now }: { waiting: WaitingSection; now: Da
       density="compact"
       actions={
         waiting.total > 0 ? (
-          <Link href={TODAY_LINKS.inbox} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+          <Link href={TODAY_LINKS.inboxWaiting} prefetch={false} className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             {copy.waiting.seeAll}
             <ArrowRight aria-hidden className="h-4 w-4" />
           </Link>

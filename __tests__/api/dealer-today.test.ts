@@ -145,7 +145,7 @@ describe('GET /api/dealer/today', () => {
     expect(d.setup.visible).toBe(true); // açıklama + konum eksik
     expect(d.setup.nextKey).toBe('profile');
     expect(d.nextActions.map((a: { kind: string }) => a.kind)).toEqual(['unanswered_negative', 'remedy_approval', 'unanswered_recent']);
-    expect(d.waiting.items[0]).toMatchObject({ id: 'fb-9', href: '/dealer/feedbacks?id=fb-9', place: 'Teras' });
+    expect(d.waiting.items[0]).toMatchObject({ id: 'fb-9', href: '/dealer/inbox?id=qr-fb-9', place: 'Teras' });
     expect(d.ops.remedy.awaitingApproval).toBe(2);
 
     for (const call of db.$queryRaw.mock.calls) expect(sqlValues(call[0])).toContain('dealer-1');

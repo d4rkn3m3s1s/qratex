@@ -313,7 +313,7 @@ Her iddia, ilgili kod yeniden okunarak çürütülmeye çalışıldı. Kod deği
 | 22 | KALDIRILDI | Ham İngilizce sentiment rozeti kaldırıldı. |
 | 23 | KALDIRILDI | Aciliyet rozeti kaldırıldı. Yerine deterministik "24 saati geçti" SLA rozeti geldi. |
 | 24 | ÇALIŞIYOR | Göreli zaman. |
-| 25 | ÇALIŞIYOR | Her zaman görünen "Yanıtla" (≥44px dokunma hedefi). Kayda `?id=` ile gider (inbox okuyacak). |
+| 25 | ÇALIŞIYOR | Her zaman görünen "Yanıtla" (≥44px dokunma hedefi). Kaydın Gelen Kutusu çekmecesine gider (`/dealer/inbox?id=qr-…`). |
 | 26 | ÇALIŞIYOR | Boş durum. |
 | 27 | ÇALIŞIYOR | Yinelenen ve takipteki (açık / bitmiş / yoksayılmış) öneriler ayıklanıyor. |
 | 28 | ÇALIŞIYOR | Öncelik Yüksek/Orta/Düşük olarak yerelleştirildi. |
@@ -330,11 +330,11 @@ Her iddia, ilgili kod yeniden okunarak çürütülmeye çalışıldı. Kod deği
 | 39 | ÇALIŞIYOR | Tüketim yorumu kapsamda. |
 | 40 | ÇALIŞIYOR | Dürüst: "Copilot / AI asistan" iddiası yok. AI yalnız haftalık raporda, "yalnız bu sayıları yorumlar" etiketiyle ve istek üzerine çalışıyor. |
 
-### Kapanan bulgular (16/16, biri kısmi)
+### Kapanan bulgular (16/16)
 - **B1:** Sıralama urgency'ye dayanmıyor.
 - **B2:** Ekle gerçek kayıt açıyor.
 - **B3:** İki kanal birlikte.
-- **B4 (kısmi):** Bağlantı görünür ve kayda gidiyor; hedef sayfanın `?id=` okuması Gelen Kutusu'nda.
+- **B4:** Bağlantı her zaman görünür ve kaydın Gelen Kutusu çekmecesini açar; yanıt / telafi / vaka orada.
 - **B5:** Kampanya sinyali kaldırıldı.
 - **B6:** Tek pencere, İstanbul saati.
 - **B7:** Metinler istemcide TR/EN.
