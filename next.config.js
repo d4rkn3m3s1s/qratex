@@ -2,6 +2,8 @@ const { withSentryConfig } = require('@sentry/nextjs');
 
 const { buildPwaOptions } = require('./config/pwa');
 const { buildHeaders } = require('./config/security-headers');
+// Eski → yeni rota eşlemesi tek navigasyon kaydından türetilir (lib/navigation/registry.ts).
+const { buildNavRedirects } = require('./lib/navigation/next-redirects');
 
 // PWA seçenekleri (precache kapsamı, çalışma anı önbellekleri, push entegrasyonu) ve
 // gerekçeleri config/pwa.js içinde; testler: __tests__/config/pwa-options.test.ts
@@ -179,6 +181,11 @@ const nextConfig = {
   // (kamera izni, immutable avatarlar, SW betikleri). Testler: __tests__/config/security-headers.test.ts
   async headers() {
     return buildHeaders();
+  },
+  // Emekli rotalar → birleştirildikleri yüzey (308, sorgu korunur). Yalnız hedef sayfa var
+  // ve eski sayfa emekli koçanına çevrilmişse etkinleşir — bkz. lib/navigation/next-redirects.js.
+  async redirects() {
+    return buildNavRedirects(__dirname);
   },
 };
 

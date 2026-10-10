@@ -20,18 +20,29 @@ import {
   writeVersionedSetting,
 } from '@/lib/settings-version';
 import { z } from 'zod';
+import { canonicalizeGroupsPayload } from '@/lib/navigation/settings';
+import { NAV_SETTINGS_TAG } from '@/lib/navigation/cache-tags';
 
 export const dynamic = 'force-dynamic';
 
+// Grup başlığı: düz metin (eski, iki dilde aynı) ya da { tr, en } (B12.2).
+const labelSchema = z.union([
+  z.string().max(60),
+  z.object({ tr: z.string().max(60).optional(), en: z.string().max(60).optional() }).strict(),
+]);
+
 const rolePayloadSchema = z.object({
-  groupLabels: z.record(z.string().min(1).max(200), z.string().max(60)).optional(),
+  groupLabels: z.record(z.string().min(1).max(200), labelSchema).optional(),
   itemGroups: z.record(z.string().min(1).max(200), z.string().max(200)).optional(),
 });
 
 const putSchema = z.object({
+  admin: rolePayloadSchema.optional(),
   dealer: rolePayloadSchema.optional(),
   customer: rolePayloadSchema.optional(),
 });
+
+const GROUP_ROLES = ['admin', 'dealer', 'customer'] as const;
 
 /** GET — canlı grup override'ları + sürüm. Okuma hatası 500 (istemci formu açmaz — P0-28). */
 export async function GET() {
@@ -42,7 +53,12 @@ export async function GET() {
       where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
       select: { value: true, updatedAt: true },
     });
-    const payload = normalizeSidebarNavGroups(row?.value);
+    // Eski öğe kimlikleri kayıt kimliğine göç eder; kayıtta olmayan grup/öğe düşer.
+    const stored = normalizeSidebarNavGroups(row?.value);
+    const payload: SidebarNavGroupsPayload = {};
+    for (const role of GROUP_ROLES) {
+      if (stored[role]) payload[role] = canonicalizeGroupsPayload(role, stored[role]!).value;
+    }
     return NextResponse.json(
       {
         success: true,
@@ -86,6 +102,23 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  // Varsayılan reddet: öğe ve grup kimlikleri kayıtta (lib/navigation/registry) çözülmeli.
+  const canonical: SidebarNavGroupsPayload = {};
+  const unknown: string[] = [];
+  for (const role of GROUP_ROLES) {
+    const rp = parsed.data[role];
+    if (!rp) continue;
+    const res = canonicalizeGroupsPayload(role, rp);
+    canonical[role] = res.value;
+    unknown.push(...res.unknown.map((id) => `${role}:${id}`));
+  }
+  if (unknown.length) {
+    return NextResponse.json(
+      { success: false, error: 'Menü kaydında olmayan grup ya da öğe kimlikleri', code: 'VALIDATION', details: { unknown } },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
   const baseVersion = readBaseVersion(raw);
   if (!baseVersion) return baseVersionRequiredResponse();
 
@@ -101,8 +134,9 @@ export async function PUT(request: NextRequest) {
         value: (previous) => {
           const prev = normalizeSidebarNavGroups(previous);
           const merged: SidebarNavGroupsPayload = { ...prev };
-          if (parsed.data.dealer) merged.dealer = parsed.data.dealer;
-          if (parsed.data.customer) merged.customer = parsed.data.customer;
+          for (const role of GROUP_ROLES) {
+            if (canonical[role]) merged[role] = canonical[role];
+          }
           next = normalizeSidebarNavGroups(merged);
           return groupsPayloadForAudit(next);
         },
@@ -120,6 +154,10 @@ export async function PUT(request: NextRequest) {
       });
       return { written, next };
     });
+
+    // Sunucuda önbelleklenen kabuk menüsünü tazele (getShellConfig).
+    const { revalidateTag } = await import('next/cache');
+    revalidateTag(NAV_SETTINGS_TAG, 'max');
 
     return NextResponse.json(
       {

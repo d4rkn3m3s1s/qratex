@@ -21,6 +21,9 @@ export function Toaster() {
       theme={sonnerTheme}
       className="toaster group"
       position="bottom-right"
+      // Müşteri mobil alt sekme çubuğu varken toast onun üstünde açılır (değişken yoksa Sonner varsayılanları: 24px / mobil 16px).
+      offset={{ bottom: 'calc(var(--qx-tabbar-h, 0px) + 24px)' }}
+      mobileOffset={{ bottom: 'calc(var(--qx-tabbar-h, 0px) + 16px)' }}
       closeButton
       containerAriaLabel={t('appShell.toasterRegion')}
       dir="ltr"

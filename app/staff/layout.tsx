@@ -9,6 +9,8 @@ import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
+import { StaffNav } from '@/components/dashboard/staff-nav';
+import { getShellConfig } from '@/lib/navigation/get-shell-config';
 
 export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
@@ -31,7 +33,7 @@ export default async function StaffLayout({
   if (!session?.user || session.user.role !== 'STAFF') {
     redirect('/auth/login');
   }
-  const seo = await getSeoSettings();
+  const [seo, shell] = await Promise.all([getSeoSettings(), getShellConfig('staff')]);
   return (
     <div className="min-h-dvh flex flex-col bg-background">
       <SkipToMainContent targetId="staff-main" />
@@ -51,6 +53,7 @@ export default async function StaffLayout({
             </form>
           </div>
         </div>
+        <StaffNav nodes={shell.nodes} homeHref={shell.homeHref} />
       </header>
       <main
         id="staff-main"

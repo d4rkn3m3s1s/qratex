@@ -1,13 +1,39 @@
 'use client';
 
+/**
+ * Panel başlığı — kabuk eylemleri: menü düğmesi (bayi/admin mobil), ⌘K komut paleti
+ * (sayfalar + kısayollar + veriler), tema/dil, bildirimler ve hesap menüsü.
+ * Bayi: kalıcı "Tara" (kasa) düğmesi + ⌘J AI asistan çekmecesi.
+ * Müşteri: avatar → Ben (profil menüsü), ayarlar Ben → Ayarlar'da.
+ *
+ * Menü ve palet hedefleri `ShellProvider`'daki kayıt-türevli kabuk yapılandırmasından
+ * gelir; ayrı bir istemci isteği yoktur. Palette yalnız veri araması (`/api/search`)
+ * sorgu yazıldıkça istenir.
+ */
 import dynamic from 'next/dynamic';
-import { useState, useEffect, useCallback, useRef, useMemo, useId } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
-import { Search, Settings, User, LogOut, Moon, Sun, Monitor, Loader2 } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import {
+  Search,
+  Settings,
+  User,
+  LogOut,
+  Moon,
+  Sun,
+  Monitor,
+  Loader2,
+  Menu,
+  ScanLine,
+  Bot,
+  FileText,
+  QrCode,
+  Package,
+  Users,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -18,23 +44,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { getInitials } from '@/lib/utils';
-import { signOut } from 'next-auth/react';
 import { safeLocalStorageSetItem } from '@/lib/safe-web-storage';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { LanguageSwitcher } from '@/components/layout/language-switcher';
-import { useAppT } from '@/lib/app-locale';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { UserAvatarFrame } from '@/components/ui/avatar-frame';
-
-const GlobalSearchResults = dynamic(
-  () => import('./global-search-results').then((m) => m.GlobalSearchResults),
-  {
-    loading: () => (
-      <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground" role="status">
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-      </div>
-    ),
-  },
-);
+import { CommandPalette, type CommandPaletteItem } from '@/components/ds/command-palette';
+import { navIcon } from '@/lib/navigation/icons';
+import { useBilingual, useCanSeeTeam, useShell } from './shell-context';
 
 function NotificationCenterSkeleton() {
   const t = useAppT();
@@ -56,36 +72,49 @@ const NotificationCenter = dynamic(
   () => import('./notification-center').then((m) => m.NotificationCenter),
   {
     loading: () => <NotificationCenterSkeleton />,
-    ssr: false
+    ssr: false,
   },
 );
+
+// ⌘J asistan çekmecesi — b-asistan yüzeyinin bileşeni; yalnız açılınca yüklenir.
+const AssistantDrawer = dynamic(() => import('@/components/dealer/assistant-drawer').then((m) => m.AssistantDrawer), {
+  ssr: false,
+});
 
 interface DashboardHeaderProps {
   title?: string;
   description?: string;
+  /** Komut paletini (⌘K) göster. */
   showSearch?: boolean;
   actions?: React.ReactNode;
 }
 
-interface SearchResults {
+interface SearchApiResults {
   users: { id: string; name: string | null; email: string; businessName: string | null; role: string; href: string }[];
   feedbacks: { id: string; text: string | null; rating: number; sentiment: string | null; createdAt: string; href: string }[];
   products: { id: string; name: string; categoryName?: string; href: string }[];
   qrCodes: { id: string; name: string; code: string; businessName: string | null; href: string }[];
 }
 
+const isMacLike = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
 export function DashboardHeader({ title, description, showSearch = true, actions }: DashboardHeaderProps) {
   const t = useAppT();
+  const bl = useBilingual();
   const router = useRouter();
   const { data: session } = useSession();
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const ctx = useShell();
+  const canSeeTeam = useCanSeeTeam();
+  const shell = ctx?.shell;
+  const role = shell?.role;
+  const { locale, setLocale } = useAppLocale();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const forceModeDom = (mode: 'light' | 'dark' | 'system') => {
     const resolved =
-      mode === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-        : mode;
+      mode === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
     const root = document.documentElement;
     const body = document.body;
     root.classList.remove('light', 'dark');
@@ -105,23 +134,11 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     forceModeDom(mode);
     setTheme(mode);
   };
-  const [mounted, setMounted] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const desktopSearchInputRef = useRef<HTMLInputElement>(null);
-  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
-  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
-  const searchAbortRef = useRef<AbortController | null>(null);
-  const desktopResultsRegionId = useId();
-  const mobileResultsRegionId = useId();
-
+  // Palet eylemi her zaman güncel temayı okusun (liste memo'lu).
+  const themeRef = useRef({ resolvedTheme, apply: applyThemeSelection });
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    themeRef.current = { resolvedTheme, apply: applyThemeSelection };
+  });
 
   const handleSignOut = async () => {
     try {
@@ -133,405 +150,267 @@ export function DashboardHeader({ title, description, showSearch = true, actions
     }
   };
 
-  const getSettingsLink = () => {
-    switch (session?.user?.role) {
-      case 'ADMIN': return '/admin/settings';
-      case 'DEALER': return '/dealer/settings';
-      default: return '/customer/settings';
-    }
-  };
+  const settingsHref = shell?.links.settings ?? '/';
+  const meHref = shell?.links.me;
+  const scanHref = role === 'dealer' ? shell?.links.scan : undefined;
+  const assistantHref = role === 'dealer' ? shell?.links.assistant : undefined;
 
-  const fetchGlobalSearch = useCallback(async (q: string) => {
-    if (q.length < 2) {
-      searchAbortRef.current?.abort();
-      searchAbortRef.current = null;
-      setSearchResults(null);
-      return;
-    }
-    searchAbortRef.current?.abort();
-    const ac = new AbortController();
-    searchAbortRef.current = ac;
-    setSearchLoading(true);
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal: ac.signal });
-      const data = await res.json();
-      if (searchAbortRef.current !== ac) return;
-      if (data.success && data.results) {
-        setSearchResults(data.results);
-        setSearchOpen(true);
-      } else {
-        setSearchResults(null);
-      }
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
-      if (searchAbortRef.current !== ac) return;
-      setSearchResults(null);
-    } finally {
-      if (searchAbortRef.current === ac) {
-        searchAbortRef.current = null;
-        setSearchLoading(false);
-      }
-    }
-  }, []);
-
+  const paletteOpen = ctx?.paletteOpen ?? false;
+  const setPaletteOpen = useMemo(() => ctx?.setPaletteOpen ?? (() => {}), [ctx?.setPaletteOpen]);
+  const setAssistantOpen = ctx?.setAssistantOpen;
+  // Çekmece ilk açılışta yüklenir, sonra bağlı kalır (sohbet durumu kapatınca kaybolmasın).
+  const [assistantLoaded, setAssistantLoaded] = useState(false);
   useEffect(() => {
-    const q = searchQuery.trim();
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (q.length < 2) {
-      searchAbortRef.current?.abort();
-      searchAbortRef.current = null;
-      setSearchResults(null);
-      setSearchOpen(false);
-      setSearchLoading(false);
-      return;
-    }
-    searchDebounceRef.current = setTimeout(() => {
-      void fetchGlobalSearch(q);
-    }, 300);
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-      searchAbortRef.current?.abort();
-    };
-  }, [searchQuery, fetchGlobalSearch]);
+    if (ctx?.assistantOpen) setAssistantLoaded(true);
+  }, [ctx?.assistantOpen]);
 
+  // ⌘K / Ctrl+K: palet; ⌘J / Ctrl+J: bayi asistan çekmecesi.
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Cmd+K (mac) / Ctrl+K: global aramaya hızlı erişim. Geniş ekranda masaüstü
-  // arama girişini odaklar; dar ekranda mobil arama panelini açar. Esc kapatır.
-  useEffect(() => {
-    if (!showSearch) return;
+    if (!ctx) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key === 'k' && showSearch) {
         e.preventDefault();
-        if (window.matchMedia('(min-width: 768px)').matches) {
-          desktopSearchInputRef.current?.focus();
-          desktopSearchInputRef.current?.select();
-          if (searchResults) setSearchOpen(true);
-        } else {
-          setMobileSearchOpen(true);
-          // panel açıldıktan sonra odakla
-          setTimeout(() => mobileSearchInputRef.current?.focus(), 50);
-        }
+        ctx.setPaletteOpen(!ctx.paletteOpen);
+      } else if (key === 'j' && assistantHref) {
+        e.preventDefault();
+        ctx.setAssistantOpen(!ctx.assistantOpen);
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [showSearch, searchResults]);
+  }, [ctx, showSearch, assistantHref]);
 
-  const totalResults = useMemo(() => {
-    if (!searchResults) return 0;
-    return (
-      searchResults.users.length +
-      searchResults.feedbacks.length +
-      searchResults.products.length +
-      searchResults.qrCodes.length
-    );
-  }, [searchResults]);
+  const sections = useMemo(
+    () => ({
+      shortcuts: bl({ tr: 'Kısayollar', en: 'Shortcuts' }),
+      pages: bl({ tr: 'Sayfalar', en: 'Pages' }),
+    }),
+    [bl]
+  );
 
-  /** Ekran okuyucular: arama yüklemesi ve sonuç özeti */
-  const searchStatusAnnouncement = useMemo(() => {
-    if (!showSearch) return '';
-    const q = searchQuery.trim();
-    if (q.length === 0) return '';
-    if (q.length < 2) return t('appShell.searchMinChars');
-    if (searchLoading) return t('appShell.searching');
-    if (!searchResults) return '';
-    if (totalResults === 0) return t('appShell.noResults');
-    return `${totalResults} ${t('appShell.resultsFound')}`;
-  }, [showSearch, searchQuery, searchLoading, searchResults, totalResults, t]);
+  const paletteItems: CommandPaletteItem[] = useMemo(() => {
+    if (!shell) return [];
+    const shortcutItems: CommandPaletteItem[] = shell.shortcuts.map((sc) => ({
+      id: sc.id,
+      label: bl(sc.label),
+      section: sections.shortcuts,
+      icon: navIcon(sc.icon),
+      hint: sc.hint,
+      keywords: sc.keywords,
+      onSelect: () => {
+        if (sc.href) router.push(sc.href);
+        else if (sc.action === 'open-assistant') setAssistantOpen?.(true);
+        else if (sc.action === 'toggle-theme') themeRef.current.apply(themeRef.current.resolvedTheme === 'dark' ? 'light' : 'dark');
+      },
+    }));
+    const pageItems: CommandPaletteItem[] = shell.palette
+      .filter((p) => !p.teamOnly || canSeeTeam)
+      .map((p) => ({
+        id: p.id,
+        label: bl(p.label),
+        section: sections.pages,
+        context: p.section ? bl(p.section) : undefined,
+        icon: navIcon(p.icon),
+        keywords: p.keywords,
+        onSelect: () => router.push(p.href),
+      }));
+    return [...shortcutItems, ...pageItems];
+  }, [shell, bl, sections, router, canSeeTeam, setAssistantOpen]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q) return;
-    if (searchResults && totalResults > 0) {
-      const first =
-        searchResults.users[0] || searchResults.feedbacks[0] || searchResults.products[0] || searchResults.qrCodes[0];
-      if (first && 'href' in first) {
-        router.push(first.href);
-        setSearchOpen(false);
-        setMobileSearchOpen(false);
-        setSearchQuery('');
-      }
-    } else {
-      const base =
-        session?.user?.role === 'ADMIN'
-          ? '/admin/feedbacks'
-          : session?.user?.role === 'DEALER'
-            ? '/dealer/feedbacks'
-            : '/customer/feedbacks';
-      router.push(`${base}?search=${encodeURIComponent(q)}`);
-      setMobileSearchOpen(false);
-      setSearchQuery('');
-    }
-  };
+  const searchData = useCallback(
+    async (q: string, signal: AbortSignal): Promise<CommandPaletteItem[]> => {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, { signal, cache: 'no-store' });
+      const data = (await res.json().catch(() => null)) as { success?: boolean; results?: SearchApiResults } | null;
+      if (!res.ok || !data?.success || !data.results) throw new Error('search_failed');
+      const r = data.results;
+      const go = (href: string) => () => router.push(href);
+      return [
+        ...r.users.map((u) => ({
+          id: `u-${u.id}`,
+          label: u.businessName || u.name || u.email,
+          context: u.email,
+          section: t('appShell.globalSearchSectionUsers'),
+          icon: Users,
+          onSelect: go(u.href),
+        })),
+        ...r.feedbacks.map((f) => ({
+          id: `f-${f.id}`,
+          label: (f.text || '—').slice(0, 90),
+          context: `${f.rating}★`,
+          section: t('appShell.globalSearchSectionFeedbacks'),
+          icon: FileText,
+          onSelect: go(f.href),
+        })),
+        ...r.products.map((p) => ({
+          id: `p-${p.id}`,
+          label: p.name,
+          context: p.categoryName,
+          section: t('appShell.globalSearchSectionProducts'),
+          icon: Package,
+          onSelect: go(p.href),
+        })),
+        ...r.qrCodes.map((c) => ({
+          id: `q-${c.id}`,
+          label: c.name,
+          context: c.code,
+          section: t('appShell.globalSearchSectionQrCodes'),
+          icon: QrCode,
+          onSelect: go(c.href),
+        })),
+      ];
+    },
+    [router, t]
+  );
 
-  const navigateToResult = (href: string) => {
-    router.push(href);
-    setSearchOpen(false);
-    setMobileSearchOpen(false);
-    setSearchQuery('');
-  };
+  const paletteCopy = useMemo(
+    () => ({
+      title: bl({ tr: 'Komut paleti', en: 'Command palette' }),
+      placeholder: bl({ tr: 'Sayfa, kayıt ya da eylem ara…', en: 'Search pages, records or actions…' }),
+      empty: t('appShell.noResults'),
+      loading: t('appShell.searching'),
+      error: bl({ tr: 'Arama şu an yapılamadı. Biraz sonra tekrar dene.', en: 'Search is unavailable right now. Try again shortly.' }),
+      resultsCount: bl({ tr: '{count} sonuç', en: '{count} results' }),
+      close: bl({ tr: 'Kapat', en: 'Close' }),
+    }),
+    [bl, t]
+  );
 
-  const showSearchResults =
-    (searchResults || searchLoading) && searchQuery.trim().length >= 2;
-
-  const desktopSearchPopoverOpen = Boolean(searchOpen && showSearchResults);
-  const mobileSearchPopoverOpen = Boolean(mobileSearchOpen && showSearchResults);
-
-  const focusFirstSearchHit = useCallback((regionId: string) => {
-    if (typeof document === 'undefined') return;
-    document.getElementById(regionId)?.querySelector<HTMLButtonElement>('button[data-global-search-hit]')?.focus();
-  }, []);
-
-  const focusActiveSearchInput = useCallback(() => {
-    if (mobileSearchOpen) mobileSearchInputRef.current?.focus();
-    else desktopSearchInputRef.current?.focus();
-  }, [mobileSearchOpen]);
-
-  const dismissSearchUi = useCallback(() => {
-    setSearchOpen(false);
-    setMobileSearchOpen(false);
-  }, []);
-
-  const handleDesktopSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
-      setSearchOpen(false);
-      return;
-    }
-    if (
-      e.key === 'ArrowDown' &&
-      desktopSearchPopoverOpen &&
-      totalResults > 0 &&
-      !searchLoading
-    ) {
-      e.preventDefault();
-      focusFirstSearchHit(desktopResultsRegionId);
-    }
-  };
-
-  const handleMobileSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Escape') {
-      setMobileSearchOpen(false);
-      return;
-    }
-    if (
-      e.key === 'ArrowDown' &&
-      mobileSearchPopoverOpen &&
-      totalResults > 0 &&
-      !searchLoading
-    ) {
-      e.preventDefault();
-      focusFirstSearchHit(mobileResultsRegionId);
-    }
-  };
+  const modKey = isMacLike() ? '⌘' : 'Ctrl';
 
   return (
     <header className="sticky top-0 z-40 -ml-[max(0.75rem,env(safe-area-inset-left,0px))] -mr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:-mx-4 lg:-mx-6 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-4 sm:pr-4 lg:pl-6 lg:pr-6 py-2 sm:py-0 border-b border-border/60 bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 supports-[padding:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)] mb-3 sm:mb-4 min-h-14 sm:min-h-16">
-      {showSearch ? (
-        <p id="dashboard-global-search-status" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {searchStatusAnnouncement}
-        </p>
-      ) : null}
       <div className="flex min-h-[3.25rem] sm:h-16 items-center justify-between gap-2">
-        {/* Left - Title & Search */}
-        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+        {/* Sol — menü + başlık + palet tetikleyici */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
+          {ctx && role && role !== 'customer' && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => ctx.setNavOpen(true)}
+              className="h-11 w-11 shrink-0 touch-manipulation lg:hidden"
+              aria-label={t('appShell.openMenu')}
+              aria-expanded={ctx.navOpen}
+            >
+              <Menu className="h-5 w-5" aria-hidden />
+            </Button>
+          )}
           {title && (
-            <div className="hidden sm:block shrink-0">
-              <h1 className="text-base sm:text-lg font-semibold truncate">{title}</h1>
-              {description && (
-                <p className="text-xs sm:text-sm text-muted-foreground truncate">{description}</p>
-              )}
+            <div className="hidden shrink-0 sm:block">
+              <h1 className="truncate text-base font-semibold sm:text-lg">{title}</h1>
+              {description && <p className="truncate text-xs text-muted-foreground sm:text-sm">{description}</p>}
             </div>
           )}
-          {showSearch && (
-            <div ref={searchRef} className="relative max-w-md flex-1 min-w-0 hidden sm:block">
-              <form onSubmit={handleSearchSubmit} className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
-                  ref={desktopSearchInputRef}
-                  type="search"
-                  placeholder={t('appShell.globalSearchPlaceholder')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => searchResults && totalResults > 0 && setSearchOpen(true)}
-                  onKeyDown={handleDesktopSearchKeyDown}
-                  className="pl-10 pr-10 bg-muted/50 border-transparent focus:border-border/80 dark:focus:border-white/25 w-full"
-                  aria-label={t('appShell.globalSearch')}
-                  aria-describedby="dashboard-global-search-status"
-                  aria-expanded={desktopSearchPopoverOpen}
-                  aria-haspopup="listbox"
-                  aria-autocomplete="list"
-                  aria-controls={desktopSearchPopoverOpen ? desktopResultsRegionId : undefined}
-                />
-                {!searchQuery && !searchLoading && (
-                  <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 hidden select-none items-center gap-0.5 rounded border border-border/60 bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline-flex">
-                    ⌘K
-                  </kbd>
-                )}
-                <Button
-                  type="submit"
-                  variant="ghost"
-                  size="icon"
-                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 shrink-0 ${!searchQuery && !searchLoading ? 'lg:hidden' : ''}`}
-                  aria-label={t('appShell.search')}
-                >
-                  {searchLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Search className="h-4 w-4" aria-hidden />
-                  )}
-                </Button>
-              </form>
-
-              {searchOpen && showSearchResults && (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border bg-popover shadow-lg z-50 max-h-[min(70vh,400px)] overflow-y-auto">
-                  <GlobalSearchResults
-                    resultsRegionId={desktopResultsRegionId}
-                    visible={showSearchResults}
-                    searchLoading={searchLoading}
-                    searchResults={searchResults}
-                    totalResults={totalResults}
-                    onNavigate={navigateToResult}
-                    onRequestFocusSearch={focusActiveSearchInput}
-                    onDismiss={dismissSearchUi}
-                  />
-                </div>
-              )}
-            </div>
+          {showSearch && ctx && (
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              aria-haspopup="dialog"
+              aria-keyshortcuts="Control+K Meta+K"
+              className="hidden h-10 min-w-0 max-w-md flex-1 items-center gap-2 rounded-control border border-transparent bg-muted/60 px-3 text-left text-sm text-muted-foreground transition-colors duration-fast hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex"
+            >
+              <Search className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="flex-1 truncate">{paletteCopy.placeholder}</span>
+              <kbd className="hidden select-none rounded border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[11px] lg:inline">
+                {modKey} K
+              </kbd>
+            </button>
           )}
         </div>
 
-        {/* Right - Actions */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Page Actions */}
+        {/* Sağ — eylemler */}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {actions}
-          <LanguageSwitcher className="h-10 w-10 min-h-10 min-w-10 rounded-full sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9" />
 
-          {showSearch && (
-            <Sheet open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0 touch-manipulation transition-colors duration-200 sm:hidden min-h-11 min-w-11"
-                  aria-label={t('appShell.search')}
-                >
-                  <Search className="h-[18px] w-[18px]" aria-hidden />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="top" className="max-h-[90dvh] overflow-y-auto pt-12 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <SheetHeader className="text-left space-y-1 mb-4">
-                  <SheetTitle>{t('appShell.globalSearch')}</SheetTitle>
-                </SheetHeader>
-                <form onSubmit={handleSearchSubmit} className="relative mb-3">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                  <Input
-                    ref={mobileSearchInputRef}
-                    type="search"
-                    placeholder={t('appShell.globalSearchPlaceholderShort')}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={handleMobileSearchKeyDown}
-                    className="pl-10 pr-10 bg-muted/50 border-transparent focus:border-border/80 dark:focus:border-white/25 w-full min-h-11 text-base"
-                    autoFocus
-                    aria-label={t('appShell.globalSearch')}
-                    aria-describedby="dashboard-global-search-status"
-                    aria-expanded={mobileSearchPopoverOpen}
-                    aria-haspopup="listbox"
-                    aria-autocomplete="list"
-                    aria-controls={mobileSearchPopoverOpen ? mobileResultsRegionId : undefined}
-                  />
-                  <Button
-                    type="submit"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9 shrink-0 touch-manipulation"
-                    aria-label={t('appShell.search')}
-                  >
-                    {searchLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Search className="h-4 w-4" aria-hidden />
-                    )}
-                  </Button>
-                </form>
-                <div className="rounded-lg border bg-muted/30 max-h-[min(55dvh,320px)] overflow-y-auto">
-                  <GlobalSearchResults
-                    resultsRegionId={mobileResultsRegionId}
-                    visible={showSearchResults}
-                    searchLoading={searchLoading}
-                    searchResults={searchResults}
-                    totalResults={totalResults}
-                    onNavigate={navigateToResult}
-                    onRequestFocusSearch={focusActiveSearchInput}
-                    onDismiss={dismissSearchUi}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
+          {scanHref && (
+            <Button asChild size="sm" className="h-11 min-w-11 gap-2 px-3 sm:h-10">
+              <Link href={scanHref} aria-label={bl({ tr: 'Kasa: kart tara', en: 'Checkout: scan card' })}>
+                <ScanLine className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">{bl({ tr: 'Tara', en: 'Scan' })}</span>
+              </Link>
+            </Button>
+          )}
+          {assistantHref && ctx && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => ctx.setAssistantOpen(true)}
+              className="h-11 w-11 rounded-full"
+              aria-label={bl({ tr: `AI asistanı aç (${modKey}+J)`, en: `Open AI assistant (${modKey}+J)` })}
+              aria-keyshortcuts="Control+J Meta+J"
+              aria-haspopup="dialog"
+            >
+              <Bot className="h-5 w-5" aria-hidden />
+            </Button>
           )}
 
-          {/* Theme: Sistem / Açık / Koyu (tercih localStorage'da qratex-theme ile saklanır) */}
+          {showSearch && ctx && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setPaletteOpen(true)}
+              className="h-11 w-11 shrink-0 touch-manipulation sm:hidden"
+              aria-label={t('appShell.search')}
+              aria-haspopup="dialog"
+            >
+              <Search className="h-[18px] w-[18px]" aria-hidden />
+            </Button>
+          )}
+
+          <LanguageSwitcher className="hidden h-10 w-10 min-h-10 min-w-10 rounded-full sm:inline-flex sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9" />
+
+          {/* Tema: Sistem / Açık / Koyu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 min-h-10 min-w-10 sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted"
+                className="hidden h-10 w-10 min-h-10 min-w-10 touch-manipulation rounded-full transition-colors duration-200 hover:bg-muted sm:inline-flex sm:h-9 sm:min-h-9 sm:w-9 sm:min-w-9"
                 aria-label={t('appShell.themeSelect')}
               >
-                {mounted && (theme === 'system' || !theme) ? (
+                {!mounted || theme === 'system' || !theme ? (
                   <Monitor className="h-[18px] w-[18px]" aria-hidden />
-                ) : mounted && resolvedTheme === 'dark' ? (
-                  <Moon className="h-[18px] w-[18px] text-slate-300" aria-hidden />
-                ) : mounted ? (
-                  <Sun className="h-[18px] w-[18px] text-amber-600" aria-hidden />
+                ) : resolvedTheme === 'dark' ? (
+                  <Moon className="h-[18px] w-[18px]" aria-hidden />
                 ) : (
-                  <Monitor className="h-[18px] w-[18px]" aria-hidden />
+                  <Sun className="h-[18px] w-[18px]" aria-hidden />
                 )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => applyThemeSelection('system')} onClick={() => applyThemeSelection('system')}>
-                <Monitor className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onSelect={() => applyThemeSelection('system')}>
+                <Monitor className="mr-2 h-4 w-4" aria-hidden />
                 {t('appShell.themeSystem')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => applyThemeSelection('light')} onClick={() => applyThemeSelection('light')}>
-                <Sun className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onSelect={() => applyThemeSelection('light')}>
+                <Sun className="mr-2 h-4 w-4" aria-hidden />
                 {t('appShell.themeLight')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => applyThemeSelection('dark')} onClick={() => applyThemeSelection('dark')}>
-                <Moon className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onSelect={() => applyThemeSelection('dark')}>
+                <Moon className="mr-2 h-4 w-4" aria-hidden />
                 {t('appShell.themeDark')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Notifications */}
           <NotificationCenter />
 
-          {/* User Menu */}
+          {/* Hesap menüsü — müşteride avatar → Ben */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-12 w-12 min-h-12 min-w-12 sm:h-11 sm:min-h-11 sm:w-11 sm:min-w-11 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20"
+                className="relative h-12 w-12 min-h-12 min-w-12 touch-manipulation rounded-full p-0 transition-shadow duration-200 hover:ring-2 hover:ring-primary/20 sm:h-11 sm:min-h-11 sm:w-11 sm:min-w-11"
                 aria-label={t('appShell.accountMenu')}
               >
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <UserAvatarFrame frameId={(session?.user as any)?.equippedFrame || null}>
+                <div className="relative flex h-full w-full items-center justify-center">
+                  <UserAvatarFrame frameId={(session?.user as { equippedFrame?: string | null } | undefined)?.equippedFrame || null}>
                     <Avatar className="h-9 w-9 sm:h-8 sm:w-8">
-                      <AvatarImage src={session?.user?.image || ''} />
+                      <AvatarImage src={session?.user?.image || ''} alt="" />
                       <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-sm text-primary-foreground">
                         {getInitials(session?.user?.name)}
                       </AvatarFallback>
@@ -540,36 +419,37 @@ export function DashboardHeader({ title, description, showSearch = true, actions
                 </div>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 max-h-[85vh] overflow-y-auto">
+            <DropdownMenuContent align="end" className="max-h-[85vh] w-56 overflow-y-auto">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{session?.user?.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {session?.user?.email}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onClick={() => router.push(getSettingsLink())}
-              >
-                <User className="mr-2 h-4 w-4" />
-                {t('appShell.profile')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onClick={() => router.push(getSettingsLink())}
-              >
-                <Settings className="mr-2 h-4 w-4" />
+              {meHref && (
+                <DropdownMenuItem className="cursor-pointer" onSelect={() => router.push(meHref)}>
+                  <User className="mr-2 h-4 w-4" aria-hidden />
+                  {bl({ tr: 'Ben', en: 'Me' })}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem className="cursor-pointer" onSelect={() => router.push(settingsHref)}>
+                <Settings className="mr-2 h-4 w-4" aria-hidden />
                 {t('appShell.settings')}
               </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer sm:hidden" onSelect={() => applyThemeSelection(resolvedTheme === 'dark' ? 'light' : 'dark')}>
+                {resolvedTheme === 'dark' ? <Sun className="mr-2 h-4 w-4" aria-hidden /> : <Moon className="mr-2 h-4 w-4" aria-hidden />}
+                {resolvedTheme === 'dark' ? t('appShell.themeLight') : t('appShell.themeDark')}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer sm:hidden" onSelect={() => setLocale(locale === 'en' ? 'tr' : 'en')}>
+                <span className="mr-2 inline-flex h-4 w-4 items-center justify-center text-[10px] font-bold" aria-hidden>
+                  {locale === 'en' ? 'TR' : 'EN'}
+                </span>
+                {locale === 'en' ? t('appShell.languageTr') : t('appShell.languageEn')}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="cursor-pointer text-destructive focus:text-destructive"
-                onClick={handleSignOut}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
+              <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onSelect={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" aria-hidden />
                 {t('appShell.logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -577,7 +457,18 @@ export function DashboardHeader({ title, description, showSearch = true, actions
         </div>
       </div>
 
-
+      {showSearch && ctx && (
+        <CommandPalette
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          items={paletteItems}
+          asyncSource={role === 'staff' ? undefined : searchData}
+          copy={paletteCopy}
+        />
+      )}
+      {assistantHref && ctx && assistantLoaded && (
+        <AssistantDrawer open={ctx.assistantOpen} onOpenChange={ctx.setAssistantOpen} assistantHref={assistantHref} />
+      )}
     </header>
   );
 }

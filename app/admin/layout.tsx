@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import { DashboardHeader } from '@/components/dashboard/header';
+import { ShellProvider } from '@/components/dashboard/shell-context';
+import { getShellConfig } from '@/lib/navigation/get-shell-config';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
@@ -25,8 +27,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const seo = await getSeoSettings();
+  // Menü sunucuda, kayıttan ve önbellekten çözülür (lib/navigation) — istemci isteği yok.
+  const [seo, shell] = await Promise.all([getSeoSettings(), getShellConfig('admin')]);
   return (
+    <ShellProvider shell={shell}>
     <div className="flex min-h-dvh overflow-x-hidden">
       <SkipToMainContent />
       <Sidebar role="ADMIN" siteName={seo.siteName} />
@@ -35,7 +39,7 @@ export default async function AdminLayout({
         <main
           id="dashboard-main"
           tabIndex={-1}
-          className="flex-1 min-w-0 w-full max-w-[100vw] break-words py-3 sm:py-5 lg:py-6 overflow-x-hidden overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] sm:pb-6 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex-1 min-w-0 w-full max-w-[100vw] break-words py-3 sm:py-5 lg:py-6 overflow-x-hidden overflow-y-auto pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {children}
         </main>
@@ -43,6 +47,7 @@ export default async function AdminLayout({
       <OnboardingSheet />
       <WebVitalsReporter />
     </div>
+    </ShellProvider>
   );
 }
 

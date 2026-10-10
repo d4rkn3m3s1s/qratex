@@ -301,20 +301,21 @@ describe('menü grupları', () => {
     db.settings.set('sidebarNavGroups', {
       id: 'g1',
       key: 'sidebarNavGroups',
-      value: { dealer: { groupLabels: { system: 'Sistem' } } },
+      value: { dealer: { groupLabels: { business: 'İşletme' } } },
       category: 'admin',
       updatedAt: T0,
     });
     const { PUT } = await import('@/app/api/admin/settings/sidebar-groups/route');
-    expect((await PUT(req('/api/admin/settings/sidebar-groups', 'PUT', { customer: { groupLabels: {} } }))).status).toBe(428);
+    expect((await PUT(req('/api/admin/settings/sidebar-groups', 'PUT', { admin: { groupLabels: {} } }))).status).toBe(428);
     expectNoWrites();
 
     const res = await PUT(
-      req('/api/admin/settings/sidebar-groups', 'PUT', { customer: { groupLabels: { rewards: 'Ödüller' } }, baseVersion: T0.toISOString() })
+      // Grup kimlikleri navigasyon kaydındaki (lib/navigation/registry) gruplar olmalı.
+      req('/api/admin/settings/sidebar-groups', 'PUT', { admin: { groupLabels: { ai: { tr: 'YZ', en: 'AI' } } }, baseVersion: T0.toISOString() })
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.payload).toEqual({ dealer: { groupLabels: { system: 'Sistem' } }, customer: { groupLabels: { rewards: 'Ödüller' } } });
+    expect(body.payload).toEqual({ admin: { groupLabels: { ai: { tr: 'YZ', en: 'AI' } } }, dealer: { groupLabels: { business: 'İşletme' } } });
     expect(mockAuditCreate).toHaveBeenCalledTimes(1);
   });
 });

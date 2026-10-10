@@ -12,6 +12,8 @@ import {
   type SidebarNavOrderPayload,
 } from '@/lib/sidebar-order-settings';
 import { z } from 'zod';
+import { canonicalizeOrderIds } from '@/lib/navigation/settings';
+import { NAV_SETTINGS_TAG } from '@/lib/navigation/cache-tags';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +30,12 @@ export async function GET() {
     where: { key: SIDEBAR_NAV_ORDER_SETTINGS_KEY },
     select: { value: true, updatedAt: true },
   });
-  const payload = normalizeSidebarNavOrder(row?.value);
+  // Eski kimlikler (key/href) okumada kayıt kimliğine göç eder (lib/navigation/registry).
+  const stored = normalizeSidebarNavOrder(row?.value);
+  const payload: SidebarNavOrderPayload = {};
+  for (const role of ['admin', 'dealer', 'customer'] as const) {
+    if (stored[role]) payload[role] = canonicalizeOrderIds(role, stored[role]!).value;
+  }
   return NextResponse.json(
     {
       success: true,
@@ -63,15 +70,31 @@ export async function PUT(request: NextRequest) {
       { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  // Varsayılan reddet: her kimlik kayıtta çözülmeli; çözülenler kayıt kimliğiyle saklanır.
+  const canonical: SidebarNavOrderPayload = {};
+  const unknown: string[] = [];
+  for (const role of ['admin', 'dealer', 'customer'] as const) {
+    const ids = parsed.data[role];
+    if (!ids) continue;
+    const res = canonicalizeOrderIds(role, ids);
+    canonical[role] = res.value;
+    unknown.push(...res.unknown.map((id) => `${role}:${id}`));
+  }
+  if (unknown.length) {
+    return NextResponse.json(
+      { success: false, error: 'Menü kaydında olmayan öğe kimlikleri', code: 'VALIDATION', details: { unknown } },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
   const existing = await prisma.settings.findUnique({
     where: { key: SIDEBAR_NAV_ORDER_SETTINGS_KEY },
     select: { id: true, value: true },
   });
   const prev = normalizeSidebarNavOrder(existing?.value);
   const next: SidebarNavOrderPayload = { ...prev };
-  if (parsed.data.admin) next.admin = parsed.data.admin;
-  if (parsed.data.dealer) next.dealer = parsed.data.dealer;
-  if (parsed.data.customer) next.customer = parsed.data.customer;
+  if (canonical.admin) next.admin = canonical.admin;
+  if (canonical.dealer) next.dealer = canonical.dealer;
+  if (canonical.customer) next.customer = canonical.customer;
 
   const saved = await prisma.settings.upsert({
     where: { key: SIDEBAR_NAV_ORDER_SETTINGS_KEY },
@@ -94,6 +117,10 @@ export async function PUT(request: NextRequest) {
       ...getAuditRequestMeta(request),
     },
   });
+
+  // Sunucuda önbelleklenen kabuk menüsünü tazele (getShellConfig).
+  const { revalidateTag } = await import('next/cache');
+  revalidateTag(NAV_SETTINGS_TAG, 'max');
 
   return NextResponse.json(
     { success: true, payload: next, updatedAt: saved.updatedAt.toISOString() },

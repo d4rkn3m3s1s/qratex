@@ -1,0 +1,378 @@
+[
+  {
+    "source": "/admin/ab-testing",
+    "destination": "/admin/features"
+  },
+  {
+    "source": "/admin/accessibility",
+    "destination": "/admin/design-system"
+  },
+  {
+    "source": "/admin/agent-council/agents",
+    "destination": "/admin/agent-council"
+  },
+  {
+    "source": "/admin/agent-council/history",
+    "destination": "/admin/agent-council"
+  },
+  {
+    "source": "/admin/ai-dashboard",
+    "destination": "/admin/ai"
+  },
+  {
+    "source": "/admin/ai-detailed",
+    "destination": "/admin/ai"
+  },
+  {
+    "source": "/admin/ai-learning",
+    "destination": "/admin/ai/studio"
+  },
+  {
+    "source": "/admin/ai-quality",
+    "destination": "/admin/ai/quality"
+  },
+  {
+    "source": "/admin/ai-settings",
+    "destination": "/admin/ai/studio"
+  },
+  {
+    "source": "/admin/api-catalog",
+    "destination": "/admin/integrations"
+  },
+  {
+    "source": "/admin/api-keys",
+    "destination": "/admin/integrations"
+  },
+  {
+    "source": "/admin/character-test",
+    "destination": "/admin/badges"
+  },
+  {
+    "source": "/admin/character-thresholds",
+    "destination": "/admin/badges"
+  },
+  {
+    "source": "/admin/compliance",
+    "destination": "/admin/privacy"
+  },
+  {
+    "source": "/admin/design-language",
+    "destination": "/admin/design-system"
+  },
+  {
+    "source": "/admin/economy-sim",
+    "destination": "/admin/economy"
+  },
+  {
+    "source": "/admin/ecosystem",
+    "destination": "/admin"
+  },
+  {
+    "source": "/admin/experience-pulse",
+    "destination": "/admin"
+  },
+  {
+    "source": "/admin/fraud-prevention",
+    "destination": "/admin/trust"
+  },
+  {
+    "source": "/admin/gamification-settings",
+    "destination": "/admin/economy"
+  },
+  {
+    "source": "/admin/innovation/segment-proposals",
+    "destination": "/admin/segments"
+  },
+  {
+    "source": "/admin/insights",
+    "destination": "/admin/analytics"
+  },
+  {
+    "source": "/admin/league-settings",
+    "destination": "/admin/economy"
+  },
+  {
+    "source": "/admin/menu-groups",
+    "destination": "/admin/navigation"
+  },
+  {
+    "source": "/admin/modules",
+    "destination": "/admin/features"
+  },
+  {
+    "source": "/admin/modules/ai-tones",
+    "destination": "/admin/ai/studio"
+  },
+  {
+    "source": "/admin/partners",
+    "destination": "/admin/integrations"
+  },
+  {
+    "source": "/admin/platform-pulse",
+    "destination": "/admin"
+  },
+  {
+    "source": "/admin/playbooks",
+    "destination": "/admin/dealers-health"
+  },
+  {
+    "source": "/admin/points-matrix",
+    "destination": "/admin/economy"
+  },
+  {
+    "source": "/admin/privacy-requests",
+    "destination": "/admin/privacy"
+  },
+  {
+    "source": "/admin/qra-chat-logs",
+    "destination": "/admin/ai/quality"
+  },
+  {
+    "source": "/admin/seasonal-campaigns",
+    "destination": "/admin/campaigns-calendar"
+  },
+  {
+    "source": "/admin/seasonal-concepts",
+    "destination": "/admin/campaigns-calendar"
+  },
+  {
+    "source": "/admin/shop",
+    "destination": "/admin/rewards"
+  },
+  {
+    "source": "/admin/sidebar-order",
+    "destination": "/admin/navigation"
+  },
+  {
+    "source": "/admin/squads/battles",
+    "destination": "/admin/squads"
+  },
+  {
+    "source": "/admin/tech/add",
+    "destination": "/admin/integrations"
+  },
+  {
+    "source": "/admin/themes",
+    "destination": "/admin/design-system"
+  },
+  {
+    "source": "/admin/trust-command",
+    "destination": "/admin/trust"
+  },
+  {
+    "source": "/admin/webhooks",
+    "destination": "/admin/integrations"
+  },
+  {
+    "source": "/customer/ai-insights",
+    "destination": "/customer/me/voices"
+  },
+  {
+    "source": "/customer/analytics",
+    "destination": "/customer/me/progress"
+  },
+  {
+    "source": "/customer/badges",
+    "destination": "/customer/me/badges"
+  },
+  {
+    "source": "/customer/campaigns",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/category-leaderboard",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/consumptions",
+    "destination": "/customer/wallet/activity"
+  },
+  {
+    "source": "/customer/discover",
+    "destination": "/customer"
+  },
+  {
+    "source": "/customer/donations",
+    "destination": "/customer/wallet/donate"
+  },
+  {
+    "source": "/customer/event",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/experiences",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/favorites",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/feedbacks",
+    "destination": "/customer/me/voices"
+  },
+  {
+    "source": "/customer/journey-score",
+    "destination": "/customer/me/progress"
+  },
+  {
+    "source": "/customer/lounge",
+    "destination": "/customer/wallet/card"
+  },
+  {
+    "source": "/customer/my-card",
+    "destination": "/customer/wallet/card"
+  },
+  {
+    "source": "/customer/my-year",
+    "destination": "/customer/me/year"
+  },
+  {
+    "source": "/customer/nearby",
+    "destination": "/customer/places"
+  },
+  {
+    "source": "/customer/progress-hub",
+    "destination": "/customer/me/progress"
+  },
+  {
+    "source": "/customer/referral",
+    "destination": "/customer/me/invite"
+  },
+  {
+    "source": "/customer/remedy",
+    "destination": "/customer/me/voices"
+  },
+  {
+    "source": "/customer/rewards",
+    "destination": "/customer/wallet/rewards"
+  },
+  {
+    "source": "/customer/settings",
+    "destination": "/customer/me/settings"
+  },
+  {
+    "source": "/customer/shop",
+    "destination": "/customer/wallet/rewards"
+  },
+  {
+    "source": "/customer/spending-overview",
+    "destination": "/customer/wallet/activity"
+  },
+  {
+    "source": "/customer/surprise-boxes",
+    "destination": "/customer/wallet/owned"
+  },
+  {
+    "source": "/customer/trends",
+    "destination": "/customer/me/progress"
+  },
+  {
+    "source": "/dealer/action-items",
+    "destination": "/dealer/inbox/assigned"
+  },
+  {
+    "source": "/dealer/ai-chat",
+    "destination": "/dealer/assistant"
+  },
+  {
+    "source": "/dealer/ai-insights",
+    "destination": "/dealer/analytics/insights"
+  },
+  {
+    "source": "/dealer/ai-settings",
+    "destination": "/dealer/settings"
+  },
+  {
+    "source": "/dealer/ask-analytics",
+    "destination": "/dealer/assistant"
+  },
+  {
+    "source": "/dealer/benchmark",
+    "destination": "/dealer/analytics/benchmark"
+  },
+  {
+    "source": "/dealer/billing",
+    "destination": "/dealer/settings"
+  },
+  {
+    "source": "/dealer/business-outcomes",
+    "destination": "/dealer/analytics/impact"
+  },
+  {
+    "source": "/dealer/churn-risk",
+    "destination": "/dealer/customers"
+  },
+  {
+    "source": "/dealer/copilot",
+    "destination": "/dealer"
+  },
+  {
+    "source": "/dealer/discover",
+    "destination": "/dealer"
+  },
+  {
+    "source": "/dealer/experience-guide",
+    "destination": "/dealer"
+  },
+  {
+    "source": "/dealer/feedbacks",
+    "destination": "/dealer/inbox"
+  },
+  {
+    "source": "/dealer/growth-hub",
+    "destination": "/dealer/analytics"
+  },
+  {
+    "source": "/dealer/heatmap",
+    "destination": "/dealer/analytics/heatmap"
+  },
+  {
+    "source": "/dealer/incidents",
+    "destination": "/dealer/inbox/incidents"
+  },
+  {
+    "source": "/dealer/onboarding",
+    "destination": "/dealer"
+  },
+  {
+    "source": "/dealer/operations-brief",
+    "destination": "/dealer"
+  },
+  {
+    "source": "/dealer/radar",
+    "destination": "/dealer/customers"
+  },
+  {
+    "source": "/dealer/remedy-automation",
+    "destination": "/dealer/automation/remedy"
+  },
+  {
+    "source": "/dealer/remedy-automation/templates",
+    "destination": "/dealer/automation/remedy"
+  },
+  {
+    "source": "/dealer/remedy-queue",
+    "destination": "/dealer/inbox/remedy"
+  },
+  {
+    "source": "/dealer/reviews",
+    "destination": "/dealer/inbox"
+  },
+  {
+    "source": "/dealer/roi",
+    "destination": "/dealer/analytics/impact"
+  },
+  {
+    "source": "/dealer/segment-actions",
+    "destination": "/dealer/customers"
+  },
+  {
+    "source": "/dealer/settings/auto-replies",
+    "destination": "/dealer/automation/replies"
+  },
+  {
+    "source": "/dealer/weekly-brief",
+    "destination": "/dealer"
+  }
+]
