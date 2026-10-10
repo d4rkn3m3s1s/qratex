@@ -52,6 +52,13 @@ jest.mock('@/lib/prisma', () => ({
     segmentCampaignProposal: { create: (...a: unknown[]) => mockProposalCreate(...a) },
     feedback: { findMany: (...a: unknown[]) => mockFeedbackFindMany(...a) },
     analyticsEvent: { create: (...a: unknown[]) => mockAnalyticsCreate(...a) },
+    // P0-35: gönderim uçları alıcıların bildirim tercihini okur (lib/marketing-delivery).
+    // Tercihi olmayan müşteri hesapları → varsayılan açık.
+    user: {
+      findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({ id, role: 'CUSTOMER', anonymizedAt: null, notificationPrefs: null })),
+      ),
+    },
   },
   isPrismaConnectivityError: () => false,
 }));

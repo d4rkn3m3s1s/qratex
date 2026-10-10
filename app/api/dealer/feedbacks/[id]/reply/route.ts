@@ -49,6 +49,7 @@ export async function POST(
     if (body.action === 'suggest') {
       let text = '';
       let rating = 3;
+      let ownerDealerId: string | undefined;
 
       if (replyType === 'review') {
         const review = await prisma.consumptionReview.findUnique({
@@ -67,6 +68,7 @@ export async function POST(
         }
         text = review.text || '';
         rating = review.rating;
+        ownerDealerId = review.consumption.dealerId;
       } else {
         const feedback = await prisma.feedback.findUnique({
           where: { id },
@@ -80,13 +82,15 @@ export async function POST(
         }
         text = feedback.text || '';
         rating = feedback.rating;
+        ownerDealerId = feedback.qrCode.dealerId;
       }
 
       if (!text) {
         return NextResponse.json({ error: 'Yorum bulunamadı veya metin yok' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
       }
 
-      const suggestions = await suggestResponseWithGroq(text, rating);
+      // P0-32: bayi AI kapalıysa LLM çağrılmaz; kiracı kotası uygulanır.
+      const suggestions = await suggestResponseWithGroq(text, rating, { dealerId: ownerDealerId });
       return NextResponse.json({ success: true, suggestions }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 

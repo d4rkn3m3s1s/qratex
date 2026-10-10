@@ -7,8 +7,27 @@ import {
   escapeEmailHtml,
   getTransactionalEmailLogoUrl,
 } from '@/lib/transactional-email';
+import { escapeEmailText } from '@/lib/security/escape-html';
+import { renderEmailLinesText } from '@/lib/notify-email';
 
 const fromEmail = process.env.EMAIL_FROM || 'QRATEX <onboarding@resend.dev>';
+
+/**
+ * Kullanıcı adı SERBEST METİNDİR ve doğrulama e-postası kayıtta verilen HERHANGİ bir adrese gider:
+ * "Hesabınız askıda: kotu-site.com" gibi bir ad, Qratex markalı e-postada tıklanabilir bağlantıya
+ * dönüşüyordu (P0-35). HTML'de kaçış + otomatik bağlantı kırma, düz metinde bağlantı kırma.
+ */
+const NAME_MAX = 60;
+function greetingHtml(userName?: string): string {
+  const name = userName?.trim();
+  return `<p>Merhaba${name ? ` ${escapeEmailText(name, { maxLength: NAME_MAX })}` : ''},</p>`;
+}
+function greetingText(userName?: string): string {
+  const name = userName?.trim();
+  if (!name) return 'Merhaba,';
+  const short = name.length > NAME_MAX ? `${name.slice(0, NAME_MAX).trimEnd()}…` : name;
+  return renderEmailLinesText([`Merhaba ${short},`])[0] ?? 'Merhaba,';
+}
 
 function transactionalBranding() {
   const siteUrl = getPublicAppOrigin();
@@ -27,7 +46,7 @@ export async function sendVerificationEmail(to: string, verifyUrl: string, userN
   const { logoUrl, brandLinkHref } = transactionalBranding();
   const html = buildTransactionalEmailHtml({
     heading: 'QRATEX',
-    bodyHtml: `<p>Merhaba${userName ? ` ${escapeEmailHtml(userName)}` : ''},</p>
+    bodyHtml: `${greetingHtml(userName)}
   <p>Hesabınızı oluşturdunuz. Giriş yapmak için aşağıdaki butona tıklayarak e-posta adresinizi doğrulayın:</p>`,
     cta: { href: verifyUrl, label: 'E-postamı doğrula' },
     footnoteHtml: `<p class="tx-email-muted" style="font-size: 14px; color: #666;">Bu link 24 saat geçerlidir. Eğer bu kaydı siz yapmadıysanız bu e-postayı yok sayabilirsiniz.</p>`,
@@ -37,7 +56,7 @@ export async function sendVerificationEmail(to: string, verifyUrl: string, userN
   const text = buildTransactionalPlainText({
     heading: 'QRATEX',
     bodyLines: [
-      userName ? `Merhaba ${userName},` : 'Merhaba,',
+      greetingText(userName),
       'Hesabınızı oluşturdunuz. Giriş yapmak için aşağıdaki bağlantıyı kullanın:',
     ],
     cta: { href: verifyUrl, label: 'E-postamı doğrula' },
@@ -97,7 +116,7 @@ export async function sendPasswordResetEmail(
   const { logoUrl, brandLinkHref } = transactionalBranding();
   const html = buildTransactionalEmailHtml({
     heading: 'QRATEX',
-    bodyHtml: `<p>Merhaba${userName ? ` ${escapeEmailHtml(userName)}` : ''},</p>
+    bodyHtml: `${greetingHtml(userName)}
   <p>Şifrenizi sıfırlamak için aşağıdaki bağlantıya tıklayın. Bu isteği siz yapmadıysanız e-postayı yok sayın.</p>`,
     cta: { href: resetUrl, label: 'Şifremi sıfırla' },
     footnoteHtml: `<p class="tx-email-muted" style="font-size: 14px; color: #666;">Link yaklaşık 1 saat geçerlidir.</p>`,
@@ -107,7 +126,7 @@ export async function sendPasswordResetEmail(
   const text = buildTransactionalPlainText({
     heading: 'QRATEX',
     bodyLines: [
-      userName ? `Merhaba ${userName},` : 'Merhaba,',
+      greetingText(userName),
       'Şifrenizi sıfırlamak için aşağıdaki bağlantıyı kullanın. Bu isteği siz yapmadıysanız bu e-postayı yok sayın.',
     ],
     cta: { href: resetUrl, label: 'Şifremi sıfırla' },
@@ -127,7 +146,7 @@ export async function sendMagicLinkEmail(
   const { logoUrl, brandLinkHref } = transactionalBranding();
   const html = buildTransactionalEmailHtml({
     heading: 'QRATEX',
-    bodyHtml: `<p>Merhaba${userName ? ` ${escapeEmailHtml(userName)}` : ''},</p>
+    bodyHtml: `${greetingHtml(userName)}
   <p>Tek kullanımlık giriş bağlantınız:</p>`,
     cta: { href: magicUrl, label: 'Giriş yap' },
     footnoteHtml: `<p class="tx-email-muted" style="font-size: 14px; color: #666;">Link kısa süre geçerlidir; yalnızca bir kez kullanılabilir.</p>`,
@@ -136,7 +155,7 @@ export async function sendMagicLinkEmail(
   });
   const text = buildTransactionalPlainText({
     heading: 'QRATEX',
-    bodyLines: [userName ? `Merhaba ${userName},` : 'Merhaba,', 'Tek kullanımlık giriş bağlantınız:'],
+    bodyLines: [greetingText(userName), 'Tek kullanımlık giriş bağlantınız:'],
     cta: { href: magicUrl, label: 'Giriş yap' },
     footnoteLines: ['Link kısa süre geçerlidir; yalnızca bir kez kullanılabilir.'],
   });
