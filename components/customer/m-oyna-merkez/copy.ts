@@ -1,0 +1,271 @@
+/**
+ * Oyna merkezi metinleri (TR/EN). Sunucu `getServerLocale()` ile seçer, istemci adalarına
+ * düz metin ya da `locale` olarak geçer. Oyun adları/açıklamaları sunucu yapılandırmasından
+ * (admin override dahil) gelir, burada değildir.
+ */
+export type PlayLocale = 'tr' | 'en';
+
+const tr = {
+  pageTitle: 'Oyna',
+  pageDescriptionGames: 'Her oyunda günde 1 sıralı deneme. Kazan, XP topla, serini sürdür.',
+  pageDescriptionTournament: 'Haftanın tek ödüllü turnuvası: öne çıkan oyunda en yüksek skor kazanır.',
+  tabsLabel: 'Oyna bölümleri',
+  tabs: { games: 'Oyunlar', quests: 'Görevler', tournament: 'Turnuva', squads: 'Klan', league: 'Lig' },
+
+  // Durum şeridi
+  streakTitle: 'Oyun serisi',
+  streakNone: 'Henüz seri yok. Bugün bir oyun kazanarak başlat.',
+  streakAtRisk: (n: number) => `Bugün bir oyun kazanmazsan ${n} günlük serin kopar.`,
+  streakSafe: (n: number) => `Bugün kazandın; serin ${n} gün.`,
+  streakNext: (len: number, xp: number) => `Bugün kazanırsan seri ${len} gün olur, +${xp} XP bonus.`,
+  streakMilestone: (m: number) => `Her 3. günde +30 XP ek bonus (sıradaki: ${m}. gün).`,
+  streakLongest: (n: number) => `En uzun: ${n} gün`,
+  attemptsTitle: 'Bugünkü denemeler',
+  attemptsValue: (used: number, total: number) => `${used}/${total}`,
+  attemptsHint: 'Yeni denemeler 03:00’te (TSİ) açılır',
+  resetIn: 'Yenilenmeye',
+  earningsTitle: 'Bugün oyunlardan',
+  earningsValue: (today: number, cap: number) => `${today} / ${cap} puan`,
+  earningsCapped: 'Günlük oyun puanı tavanı doldu; bugün yalnız XP kazanırsın.',
+  earningsHint: (week: number, cap: number) => `Bu hafta ${week} / ${cap} puan`,
+
+  // Öne çıkan
+  featuredEyebrow: 'Sıradaki oyunun',
+  featuredTournamentEyebrow: 'Haftanın turnuva oyunu',
+  featuredCta: 'Oyna',
+  featuredAllDoneTitle: 'Bugünkü tüm sıralı denemelerini kullandın',
+  featuredAllDoneBody: 'Yeni denemeler gece 03:00’te (TSİ) açılır. Bu arada sıralamana ve görevlerine göz at.',
+  rewardChip: (p: number, xp: number) => `+${p} puan · +${xp} XP`,
+  thresholdChip: (t: number, max: number) => `Ödül eşiği ${t}/${max}`,
+
+  // Turnuva kartı
+  tournamentTitle: 'Haftalık turnuva',
+  tournamentEndsIn: 'Bitişe',
+  tournamentMyRank: (r: number, s: number) => `Sıran #${r} · skor ${s}`,
+  tournamentNoRank: 'Bu hafta henüz sıralamada değilsin.',
+  tournamentPlayers: (n: number) => `${n} oyuncu`,
+  tournamentNeeded: (n: number) => `Ödüllerin dağıtılması için ${n} oyuncu daha gerekli.`,
+  tournamentPrizes: 'Ödüller: 1. 500 · 2. 300 · 3. 150 puan',
+  tournamentDetails: 'Turnuvaya git',
+  tournamentUnlisted: 'Bu haftanın turnuva oyunu portföy değişikliği nedeniyle Oyun Merkezi’nde listelenmiyor.',
+  tournamentNone: 'Bu hafta ödüllü turnuva yok.',
+
+  // Bekleyen ödül
+  pendingTitle: 'Bekleyen turnuva ödülün var',
+  pendingBody: (title: string, rank: number, points: number) =>
+    `Geçen hafta ${title} turnuvasında ${rank}. oldun: ${points} puan seni bekliyor.`,
+  pendingCta: 'Ödülü al',
+  pendingClaiming: 'Alınıyor…',
+  pendingDone: (points: number) => `Tebrikler! +${points} puan hesabına eklendi.`,
+
+  // Görevler
+  questsTitle: 'Günlük oyun görevleri',
+  questsDescription: 'Oyun gününe bağlı; her gece 03:00’te (TSİ) yenilenir. Ödül yalnız XP.',
+  questClaim: 'Al',
+  questClaiming: 'Alınıyor…',
+  questClaimed: 'Alındı',
+  questInProgress: 'Devam ediyor',
+  questProgressLabel: (title: string, p: number, t: number) => `${title}: ${p}/${t}`,
+  questDone: (xp: number) => `+${xp} XP eklendi`,
+
+  // Mod + ızgara
+  gamesTitle: 'Oyunlar',
+  modeLabel: 'Oyun modu',
+  modeRanked: 'Sıralı',
+  modeRankedHint: 'Günde 1 · ödüllü',
+  modePractice: 'Pratik',
+  modePracticeHint: 'Sınırsız · ödülsüz',
+  practiceEmptyTitle: 'Şu an pratik modu olan oyun yok',
+  practiceEmptyBody: 'Pratik modu, yeni oyun motoruna taşınan oyunlarda açılır. Sıralı modda oynamaya devam edebilirsin.',
+  practiceUnavailable: 'Pratik yok',
+  practiceChip: 'Ödülsüz pratik',
+  stateWon: 'Kazandın',
+  stateLost: 'Hak kullanıldı',
+  stateUnfinished: 'Yarım kaldı',
+  stateAvailable: 'Oynanmadı',
+  stateUnknown: 'Durum alınamadı',
+  stateUnfinishedHint: 'Yarım bırakılan deneme kullanılmış sayılır.',
+  personalBest: (n: number) => `En iyi: ${n}`,
+  todayScore: (n: number) => `Bugün: ${n}`,
+  classicNote: (target: string) => `${target} ile birleşecek`,
+  playCta: 'Oyna',
+  practiceCta: 'Pratik yap',
+  cardAria: (title: string, state: string) => `${title} — ${state}`,
+  gamesEmptyTitle: 'Şu anda açık oyun yok',
+  gamesEmptyBody: 'Oyunlar yönetici tarafından geçici olarak kapatılmış olabilir. Daha sonra tekrar bak.',
+  todayError: 'Bugünkü deneme durumların alınamadı; kartlarda durum gösterilmiyor.',
+
+  // Paso
+  passTitle: 'Oyun Pasosu',
+  passSeason: (label: string) => `${label} sezonu`,
+  passDescription: 'Bu ay oyunlardan kazandığın XP ile kademe atla. Sezon ay sonunda yenilenir.',
+  passXp: (xp: number) => `${xp} XP`,
+  passTier: (n: number, name: string) => `Kademe ${n} · ${name}`,
+  passNoTier: 'Henüz kademe yok',
+  passToNext: (xp: number, name: string) => `${name} kademesine ${xp} XP`,
+  passMax: 'Son kademedesin. Tebrikler!',
+  passEndsIn: 'Sezon sonuna',
+  passAria: (xp: number, tier: number) => `Oyun Pasosu: ${xp} XP, kademe ${tier}`,
+
+  // Başarımlar
+  achievementsTitle: 'Oyun başarımları',
+  achievementsCount: (u: number, t: number) => `${u}/${t} açıldı`,
+  achievementsNearest: 'En yakın başarımların',
+  achievementsAll: 'Tüm başarımları göster',
+  achievementsAllDone: 'Tüm oyun başarımlarını açtın!',
+  achievementProgress: (p: number, t: number) => `${p}/${t}`,
+
+  // Emekli
+  retiredTitle: (t: string) => `${t} artık oynanmıyor`,
+  retiredBody: 'Oyun portföyü sadeleşti; bu oyun emekliye ayrıldı. Geçmiş skorların ve kazandığın puanlar korunuyor.',
+  retiredSuccessor: (t: string) => `Yerine ${t} oyununu dene`,
+
+  // Turnuva sekmesi
+  tTabLeaderboard: 'Bu haftanın sıralaması',
+  tTabEmpty: 'Bu hafta henüz kimse skor kaydetmedi. İlk sen ol!',
+  tTabYou: 'Sen',
+  tTabRules: 'Kurallar',
+  tTabRulesBody: (min: number) =>
+    `Sıralama, haftanın öne çıkan oyunundaki en yüksek sıralı skorundur; eşitlikte o skoru önce yapan önde. En az ${min} oyuncu katılırsa ilk 3 ödül alır. Ödül, hafta kapandıktan sonra (Pazartesi 03:00 TSİ) Oyna sayfasından alınır.`,
+  tTabMyWeek: 'Bu hafta en iyi skorların',
+  tTabMyWeekEmpty: 'Bu hafta henüz kazanılmış bir sıralı denemen yok.',
+  tTabRankCol: 'Sıra',
+  tTabPlayerCol: 'Oyuncu',
+  tTabScoreCol: 'Skor',
+  tTabPrizeCol: 'Ödül',
+  points: (n: number) => `${n} puan`,
+
+  sectionErrorTitle: 'Bu bölüm yüklenemedi',
+  sectionUnavailable: 'Sunucuya şu an ulaşılamıyor. Birazdan tekrar dene.',
+  retry: 'Tekrar dene',
+};
+
+export type PlayHubCopy = typeof tr;
+
+const en: PlayHubCopy = {
+  pageTitle: 'Play',
+  pageDescriptionGames: 'One ranked attempt per game per day. Win, earn XP, keep your streak.',
+  pageDescriptionTournament: 'The single prize tournament of the week: top score in the featured game wins.',
+  tabsLabel: 'Play sections',
+  tabs: { games: 'Games', quests: 'Quests', tournament: 'Tournament', squads: 'Squad', league: 'League' },
+
+  streakTitle: 'Game streak',
+  streakNone: 'No streak yet. Win a game today to start one.',
+  streakAtRisk: (n) => `Win a game today or your ${n}-day streak ends.`,
+  streakSafe: (n) => `You won today; your streak is ${n} days.`,
+  streakNext: (len, xp) => `Win today to reach ${len} days, +${xp} XP bonus.`,
+  streakMilestone: (m) => `Every 3rd day +30 XP extra (next: day ${m}).`,
+  streakLongest: (n) => `Longest: ${n} days`,
+  attemptsTitle: 'Today’s attempts',
+  attemptsValue: (used, total) => `${used}/${total}`,
+  attemptsHint: 'New attempts open at 03:00 (TRT)',
+  resetIn: 'Resets in',
+  earningsTitle: 'From games today',
+  earningsValue: (today, cap) => `${today} / ${cap} pts`,
+  earningsCapped: 'Daily game points cap reached; you only earn XP today.',
+  earningsHint: (week, cap) => `This week ${week} / ${cap} pts`,
+
+  featuredEyebrow: 'Your next game',
+  featuredTournamentEyebrow: 'Tournament game of the week',
+  featuredCta: 'Play',
+  featuredAllDoneTitle: 'You used all of today’s ranked attempts',
+  featuredAllDoneBody: 'New attempts open at 03:00 (TRT). Meanwhile check your rank and quests.',
+  rewardChip: (p, xp) => `+${p} pts · +${xp} XP`,
+  thresholdChip: (t, max) => `Reward at ${t}/${max}`,
+
+  tournamentTitle: 'Weekly tournament',
+  tournamentEndsIn: 'Ends in',
+  tournamentMyRank: (r, s) => `Rank #${r} · score ${s}`,
+  tournamentNoRank: 'You are not ranked this week yet.',
+  tournamentPlayers: (n) => `${n} players`,
+  tournamentNeeded: (n) => `${n} more players needed for prizes.`,
+  tournamentPrizes: 'Prizes: 1st 500 · 2nd 300 · 3rd 150 pts',
+  tournamentDetails: 'Open tournament',
+  tournamentUnlisted: 'This week’s tournament game is not listed in the Game Center due to a portfolio change.',
+  tournamentNone: 'No prize tournament this week.',
+
+  pendingTitle: 'You have a tournament prize',
+  pendingBody: (title, rank, points) => `You placed #${rank} in last week’s ${title} tournament: ${points} points await.`,
+  pendingCta: 'Claim prize',
+  pendingClaiming: 'Claiming…',
+  pendingDone: (points) => `Congrats! +${points} points added.`,
+
+  questsTitle: 'Daily game quests',
+  questsDescription: 'Tied to the game day; resets at 03:00 (TRT). Rewards are XP only.',
+  questClaim: 'Claim',
+  questClaiming: 'Claiming…',
+  questClaimed: 'Claimed',
+  questInProgress: 'In progress',
+  questProgressLabel: (title, p, t) => `${title}: ${p}/${t}`,
+  questDone: (xp) => `+${xp} XP added`,
+
+  gamesTitle: 'Games',
+  modeLabel: 'Game mode',
+  modeRanked: 'Ranked',
+  modeRankedHint: '1 per day · rewarded',
+  modePractice: 'Practice',
+  modePracticeHint: 'Unlimited · no rewards',
+  practiceEmptyTitle: 'No game has practice mode right now',
+  practiceEmptyBody: 'Practice opens in games moved to the new engine. You can keep playing in ranked mode.',
+  practiceUnavailable: 'No practice',
+  practiceChip: 'Practice, no rewards',
+  stateWon: 'Won',
+  stateLost: 'Attempt used',
+  stateUnfinished: 'Unfinished',
+  stateAvailable: 'Not played',
+  stateUnknown: 'Status unavailable',
+  stateUnfinishedHint: 'An abandoned attempt counts as used.',
+  personalBest: (n) => `Best: ${n}`,
+  todayScore: (n) => `Today: ${n}`,
+  classicNote: (target) => `Merging into ${target}`,
+  playCta: 'Play',
+  practiceCta: 'Practice',
+  cardAria: (title, state) => `${title} — ${state}`,
+  gamesEmptyTitle: 'No games are open right now',
+  gamesEmptyBody: 'Games may be temporarily disabled by an administrator. Check back later.',
+  todayError: 'Could not load today’s attempts; cards do not show status.',
+
+  passTitle: 'Game Pass',
+  passSeason: (label) => `${label} season`,
+  passDescription: 'Level up with XP earned from games this month. The season resets at month end.',
+  passXp: (xp) => `${xp} XP`,
+  passTier: (n, name) => `Tier ${n} · ${name}`,
+  passNoTier: 'No tier yet',
+  passToNext: (xp, name) => `${xp} XP to ${name}`,
+  passMax: 'You reached the final tier. Congrats!',
+  passEndsIn: 'Season ends in',
+  passAria: (xp, tier) => `Game Pass: ${xp} XP, tier ${tier}`,
+
+  achievementsTitle: 'Game achievements',
+  achievementsCount: (u, t) => `${u}/${t} unlocked`,
+  achievementsNearest: 'Closest achievements',
+  achievementsAll: 'Show all achievements',
+  achievementsAllDone: 'You unlocked every game achievement!',
+  achievementProgress: (p, t) => `${p}/${t}`,
+
+  retiredTitle: (t) => `${t} is no longer playable`,
+  retiredBody: 'The game portfolio was simplified and this game was retired. Your past scores and earned points are kept.',
+  retiredSuccessor: (t) => `Try ${t} instead`,
+
+  tTabLeaderboard: 'This week’s ranking',
+  tTabEmpty: 'Nobody has scored this week yet. Be the first!',
+  tTabYou: 'You',
+  tTabRules: 'Rules',
+  tTabRulesBody: (min) =>
+    `Ranking is your best ranked score in the featured game; ties go to whoever reached it first. With at least ${min} players the top 3 win. Prizes are claimed on the Play page after the week closes (Monday 03:00 TRT).`,
+  tTabMyWeek: 'Your best scores this week',
+  tTabMyWeekEmpty: 'No won ranked attempt this week yet.',
+  tTabRankCol: 'Rank',
+  tTabPlayerCol: 'Player',
+  tTabScoreCol: 'Score',
+  tTabPrizeCol: 'Prize',
+  points: (n) => `${n} pts`,
+
+  sectionErrorTitle: 'This section could not load',
+  sectionUnavailable: 'The server is unreachable right now. Try again shortly.',
+  retry: 'Try again',
+};
+
+export function playHubCopy(locale: PlayLocale | string | undefined): PlayHubCopy {
+  return locale === 'en' ? en : tr;
+}

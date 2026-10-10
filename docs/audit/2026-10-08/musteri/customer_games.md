@@ -224,3 +224,81 @@ Dosyalar: `app/customer/games/page.tsx`, `components/customer/games/games-hub.ts
 - *A — Hak = deneme (lobi rapor Bulgu 1 ile tutarlı, önerilen):* `start` route'larında `status !== 'active'` (yani `completed` **veya** `failed`) → `canPlay:false, alreadyPlayed:true, outcome:'won'|'lost'` dönülmeli; `status` route'u `playedToday`'i `status IN ('completed','failed')` ile doldurmalı ve kart başına `todayState: 'won'|'lost'|'none'` vermeli. Hub kartı kaybedilende "Yarın tekrar dene" + kaybetme rozeti göstermeli, ilerleme şeridi "denenen" oyunları saymalı. `GameShell` kilit ekranı da `outcome`'a göre farklı metin göstermeli.
 - *B — Kaybeden aynı gün tekrar deneyebilir:* `start`'ta `failed` oturumu atomik `updateMany({ where:{ id, status:'failed' }, data:{ status:'active', startedAt: new Date(), starsCollected:0, rewardPoints:0, completedAt:null } })` ile sıfırlayıp yeniden açmalı (opsiyonel `attempts` sayacı + günlük deneme tavanı). Böylece `tooFast` yeniden anlamlı olur ve complete 409 vermez.
 Her iki seçenekte de: pacman route'ları generic koda (registry) taşınmalı ki kural tek yerde yaşasın; `complete` içindeki pahalı `computeAchievementStats` "önce" taraması `claimed.count === 1` garantilendikten sonraya (veya ucuz bir ön kontrolün arkasına) alınmalı; ve bir regresyon testi (`failed` sonrası start → `canPlay` beklenen değer; complete → 409 olmamalı) eklenmeli.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/games` — "Oyna" sekmesi hub'ı (Oyunlar · Görevler · Turnuva · Klan · Lig). Sunucu bileşeni (`app/customer/games/page.tsx`) + `lib/play-hub/*` veri katmanı + `components/customer/m-oyna-merkez/*`. Turnuva sekmesi `?tab=tournament`, pratik ızgarası `?kip=pratik`, emekli oyun notu `?emekli=<id>`.
+
+Yeni/değişen dosyalar: `app/customer/games/page.tsx`, `lib/play-hub/{catalog,quests,pass,retired,server}.ts`, `components/customer/m-oyna-merkez/*`, `app/api/customer/games/quests/route.ts` (yeni, `defineRoute`), `lib/game-achievements.ts` + `lib/game-achievement-stats.ts` (normalize skor), `app/customer/games/[game]/{page,game-host}.tsx` (eklemeli: `?kip=pratik` → `initialMode`), 6 emekli oyun sayfası (kalıcı yönlendirme). Silinen: `components/customer/games/{games-hub,achievements-panel}.tsx` (yalnız eski hub kullanıyordu). Testler: `__tests__/lib/play-hub.test.ts`, `__tests__/lib/play-hub-server.test.ts`, `__tests__/api/games-quests-claim.test.ts` (39 test, yeşil). Görsel doğrulama: SSR + derlenmiş Tailwind + headless Chrome; 390 px ve 1280 px, açık/koyu; normal / bekleyen ödül / bugünlük bitti / bölüm hatası / pratik / turnuva / emekli notu varyantları — yatay taşma 0 (ilk turda pasonun kademe şeridi mobil ızgarayı 906 px'e itiyordu; `grid-cols-1` ile ölçülerek düzeltildi).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sunucu rol kapısı | ÇALIŞIYOR | Oturumsuz → giriş (+`callbackUrl`); başka rol → kendi paneli (`roleHome`); yetki DB'den `requireAuth(['CUSTOMER'])` (oturum iptali/ban), 503'te dürüst hata ekranı. |
+| 2 | Metadata başlığı | ÇALIŞIYOR | `title: 'Oyna'` → layout şablonuyla tek sonek. |
+| 3 | Sayfa başlığı + kural açıklaması | ÇALIŞIYOR | QDL `PageHeader` mobilde de tek `h1`; açıklama sekmeye göre. |
+| 4 | Paralel durum + seri çekimi | ÇALIŞIYOR | İstemci fetch yok; `loadGamesTab` sunucuda `Promise.all` (7 bölüm). |
+| 5 | Hata durumu | ÇALIŞIYOR | Bölüm başına `Settled` → yalnız düşen bölüm `ErrorState` + "Tekrar dene" (`router.refresh`). Bugünkü durum alınamazsa kartlar durumsuz + uyarı bandı; asla "0/N". |
+| 6 | Günlük seri banner'ı | ÇALIŞIYOR | Tehlike uyarısı, bugün kazanılırsa seri uzunluğu + bonus XP, sıradaki 3'ün katı, en uzun seri. Yıldız Avı ortak `finalizeAttempt`'ten geçtiği için seri metni tüm oyunlarda doğru. |
+| 7 | Seri alevi animasyonu | ÇALIŞIYOR | `StreakFlame` (`<Ambient>`: görünürlük + `useMotionPolicy`, uygulama içi azaltma dahil). |
+| 8 | Bugünkü ilerleme (x/N) | ÇALIŞIYOR | "Bugünkü denemeler": kazanılan + kaybedilen + yarım kalan hepsi sayılır. |
+| 9 | İlerleme çubuğu | ÇALIŞIYOR | `role="progressbar"` + `aria-valuenow/max/label`. |
+| 10 | "Hepsini bitirdin" metni | KALDIRILDI | 14 oyunluk günlük hedef gerçekçi değildi; yerine günlük oyun görevleri (3 görev, XP) ve öne çıkan kartta "bugünkü tüm sıralı denemelerini kullandın" + yenilenme sayacı. |
+| 11 | Oyun kartı ızgarası | ÇALIŞIYOR | Sunucuda registry (canlı) + birleşmeyi bekleyen eski oyunlar + etkin config; oynanmamışlar önce; ilk 12 kart bütçeli kademe. |
+| 12 | Admin pasif gizleme | ÇALIŞIYOR | `enabled=false` / sunucu `hidden` kart göstermez. |
+| 13 | Admin görsel override | ÇALIŞIYOR | `accent` hex doğrulaması `mergeGameConfig` (`HEX_COLOR_RE`); hub alfa için `color-mix()` kullanır, string birleştirme yok. |
+| 14 | Pacman sabit kartı | ÇALIŞIYOR | Kayıt defterinde "Yıldız Avı" (`star-hunt`, gameType `pacman`); admin override'ı uygulanır. |
+| 15 | "Bitti" rozeti | ÇALIŞIYOR | Kazandın / Hak kullanıldı / Yarım kaldı / Oynanmadı (ikon + metin, yalnız renk değil). |
+| 16 | Kart CTA "Oyna" → 409 | ÇALIŞIYOR | Motor `failed`/yarım = oynandı sayıyor; hub aynı kuralla durumu gösteriyor. |
+| 17 | Stagger + hover | ÇALIŞIYOR | `Reveal` (ilk 12, ≤ 0,6 sn), hover 2 px; azaltılmış harekette statik. |
+| 18 | Ödül bilgisi | ÇALIŞIYOR | Kartta "+puan · +XP", bugünkü skor, kişisel en iyi; öne çıkan kartta ödül eşiği. |
+| 19 | "Daha fazla oyun yolda" (SAHTE) | KALDIRILDI | Doğrulanabilir veriye bağlı olmayan vaat. |
+| 20 | Başarımlar veri çekimi | ÇALIŞIYOR | Sunucuda; istatistik 3 toplama sorgusu (`groupBy`/`count`/ayrık gün), tüm geçmiş belleğe çekilmiyor. |
+| 21 | Başarımlar yükleniyor | ÇALIŞIYOR | Sayfa geneli sabit yükseklikli statik iskelet (`Suspense`), CLS yok. |
+| 22 | Başarımlar hata/boş | ÇALIŞIYOR | `SectionError`; tümü açıksa kutlama metni. |
+| 23 | Nadirlik rozeti | ÇALIŞIYOR | `RarityBadge` (Yaygın/Nadir/Destansı/Efsanevi, ikon + metin). |
+| 24 | Kilitli başarım ilerlemesi | ÇALIŞIYOR | `progressbar` + ≥ 12 px metin; lobide "en yakın 3", tümü `<details>` içinde. |
+| 25 | Skor başarımları (BOZUK) | ÇALIŞIYOR | `peak-80` / `peak-100`: oyunun tavan skoruna oranla (`bestScorePct`); trust-merge karo değeri bedava rozet vermiyor. |
+| 26 | Kâşif/Koleksiyoncu "oyna" | ÇALIŞIYOR | Oynanan (kazanılan + kaybedilen) farklı oyun sayılır. |
+| 27 | Başarım ödülü / kalıcı kayıt | KISMİ (açık) | Ödülsüz ve türetilmiş kalır; kalıcı açılma anı için ŞEMA İSTEĞİ (`GameAchievementUnlock`). |
+| 28 | Gün sınırı / sıfırlama | KISMİ (açık) | Arayüz dürüst: "Yeni denemeler 03:00'te (TSİ)" + gerçek sıfırlamaya geri sayım. `gameDayKey` hâlâ UTC (lib/game-session sahibi; göçte çift deneme riski → tek seferlik geçiş penceresiyle yapılmalı). |
+| 29 | Haftalık turnuva + bekleyen ödül | ÇALIŞIYOR | Lobide turnuva kartı + öncelikli "Ödülü al" bandı; ayrı Turnuva sekmesi (ilk 10, "sen", ödüller, kurallar, katılım eşiği, bu haftaki kişisel skorlar). |
+| 30 | Lobi liderlik/arkadaş özeti | ÇALIŞIYOR | Turnuva sırası + kişisel en iyi; klan ve lig alt sekmelerde. |
+| 31 | Açık/koyu tema | ÇALIŞIYOR | Yalnız QDL token'ları; iki temada ekran görüntüsüyle doğrulandı. |
+| 32 | i18n | ÇALIŞIYOR | TR/EN metin modülü (sunucu `getServerLocale`); oyun adları sunucu yapılandırmasından. |
+| 33 | Mobil ızgara | ÇALIŞIYOR | 1 → 2 (≥ 420 px) → 3 sütun; öne çıkan kart üstte; yatay taşma 0. |
+| 34 | Erişilebilirlik | ÇALIŞIYOR | Emojiler `aria-hidden`, kart `aria-label` (ad + durum + ödül), sekmeler `aria-current`, dokunma hedefi ≥ 44 px, odak halkası. |
+| 35 | IDOR | ÇALIŞIYOR | Tüm sorgular oturum kimliğiyle; turnuvada yalnız kısaltılmış ad. |
+| 36 | Route yükleniyor/hata | ÇALIŞIYOR | Sayfaya özel iskelet; bölüm hata sınırları. |
+
+**Eklenen (envanter dışı):** öne çıkan oyun (turnuva oyunu bugün denenmediyse o, değilse güne göre dönen), Sıralı/Pratik seçimi (pratik destekli oyunlar `?kip=pratik` ile açılır; şu an hiçbir canlı oyun pratik desteklemediği için dürüst boş durum — oyunlar v2 motora geçtikçe kendiliğinden açılır), günlük oyun görevleri (3 görev, yalnız XP; `POST /api/customer/games/quests` ilerlemeyi sunucuda yeniden hesaplar, `mintPoints` + `game_quest:<u>:<gün>:<görev>` tek-kez anahtarı), Oyun Pasosu (bu ay oyunlardan kazanılan XP defterden; 10 kademe; ödül vaat edilmez), bugünkü oyun puanı / 600 tavan şeffaflığı (`sumEarnedInWindow`), Oyna alt sekme başlığı (kapalı modülün sekmesi kabuk kaydından gizlenir), emekli oyun notu (halefi canlıysa bağlantılı).
+
+### Bulgular
+
+| # | Bulgu | Durum |
+|---|---|---|
+| 1 | Kaybedilen oyun "oynanmamış" + 409 | KAPANDI (motor `failed` = oynandı + hub üç durumlu) |
+| 2 | Skor başarımları birim karışıklığı | KAPANDI (tavana oran) |
+| 3 | Sessiz hata | KAPANDI (bölüm bazında hata + yeniden dene) |
+| 4 | Light temada görünmez öğeler | KAPANDI |
+| 5 | Ödül/eşik yok, düz ızgara | KAPANDI (çipler, öne çıkan, oynanmamışlar önce) |
+| 6 | Başarımlar kalıcı değil | KISMİ — maliyet düzeldi (3 toplama sorgusu); kalıcılık ŞEMA İSTEĞİ |
+| 7 | Turnuva/bekleyen ödül lobide yok | KAPANDI |
+| 8 | Gün sınırı UTC, geri sayım yok | KISMİ — geri sayım + dürüst saat; UTC → İstanbul göçü açık |
+| 9 | Üç seri kavramı | KAPANDI (hub'da "Oyun serisi", kazanılan güne bağlı, kilometre taşı görünür) |
+| 10 | Mobilde h1 yok, a11y | KAPANDI |
+| 11 | İstek şelalesi, CLS | KAPANDI (RSC + Suspense + sabit iskelet) |
+| 12 | Admin `accent` doğrulanmıyor | KAPANDI (`HEX_COLOR_RE` + `color-mix`) |
+| 13 | Dil karışıklığı, sahte kart, çift sonek | KAPANDI |
+
+Eksik özellikler: 1 (günlük hedef + öne çıkan) ✓ · 2 (ödül şeffaflığı, bugünkü kazanç) ✓ · 3 (turnuva katmanı) ✓, arkadaş karşılaştırması Klan sekmesinde · 4 (kilometre taşı) ✓, seri dondurma ✗ (harcama yolu, F4.4) · 5 (yenilenme sayacı) ✓, push hatırlatma ✗ (push merkezi sahibinde) · 6 (Wrapped) ✗ (`/customer/my-year` yüzeyi).
+
+### Kalanlar
+
+- **Emekli 4 oyun sunucuda hâlâ görünür** (`speed-order`, `memory-match`, `combo-tap`, `network-defender`; `lucky-wheel` ve `data-miner` zaten gizliydi). Hub ve sayfalar onları göstermiyor/yönlendiriyor (kayıt defterinde `RETIRED_GAMES`), ancak `lib/minigame-config` `hidden: true` hafta ortasında turnuva rotasyonunu kaydırıyor. Ölçüldü: W40 ödül oyunu `data-snake` → `trust-merge`, W41 `review-stack` → `signal-pipe` olurdu (geçen haftanın kazananları ödülsüz kalır). Turnuva sahibiyle hafta sınırında (Pazartesi 00:00 UTC) ya da aday listesi dondurulduktan sonra gizlenmeli. O zamana dek doğrudan API ile bu oyunlarda sıralı deneme açılabilir (eski, zayıf doğrulama) ve 2026-W53'te rotasyon `network-defender`'a düşer — hub bu durumda "turnuva oyunu listelenmiyor" uyarısı gösterir.
+- `gameDayKey` UTC (bkz. #28). Başarım kalıcılığı ŞEMA İSTEĞİ (bkz. #27).
+- `/api/customer/games/{status,streak,achievements}` artık hub tarafından kullanılmıyor (status yalnız testte); kaldırma kararı oyun motoru sahibinde.

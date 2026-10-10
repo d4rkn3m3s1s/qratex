@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { DataMinerGame } from '@/components/customer/games/data-miner-game';
+import { permanentRedirect } from 'next/navigation';
+import { retiredRedirectTarget } from '@/lib/play-hub/retired';
 
-export const metadata = { title: 'Veri Madencisi | QRateX' };
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function DataMinerPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Veri Madencisi ⛏️"
-        description="Holografik küpleri aç, değerli veriyi bul — bot tuzaklarına dikkat! İstediğin an çıkıp skoru kasala. Günde 1 hak!"
-      />
-      <DataMinerGame />
-    </div>
-  );
+/** Emekli oyun (yol haritası §7.3 KALDIR) → Oyna merkezi; sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: Props) {
+  permanentRedirect(retiredRedirectTarget('data-miner', await searchParams));
 }

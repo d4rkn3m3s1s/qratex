@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { NetworkDefenderGame } from '@/components/customer/games/network-defender-game';
+import { permanentRedirect } from 'next/navigation';
+import { retiredRedirectTarget } from '@/lib/play-hub/retired';
 
-export const metadata = { title: 'Ağ Savunucusu | QRateX' };
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function NetworkDefenderPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Ağ Savunucusu 🌐"
-        description="Yayılan kötü amaçlı sinyali, düğümlere dokunarak temizle. Enfeksiyon tüm ağı sarmasın! Günde 1 hak!"
-      />
-      <NetworkDefenderGame />
-    </div>
-  );
+/** Emekli oyun (yol haritası §7.3 KALDIR) → Oyna merkezi; sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: Props) {
+  permanentRedirect(retiredRedirectTarget('network-defender', await searchParams));
 }

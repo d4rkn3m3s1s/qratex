@@ -239,3 +239,74 @@
 - Çürütme denemesi: önceki haftanın verisi kapanmış ve pratikte değişmiyor (`completedAt < isoWeekStart`); aynı plan + aynı veri üzerinde Postgres'in sıralama çıktısı çoğu zaman tekrarlanabilir. İki ayrı POST'un aynı kullanıcıyı farklı sıraya koyması, beraberlerin göreli sırasının sorgular arasında değişmesine (paralel agregasyon, plan değişimi, heap düzeni) bağlı; bu Postgres tarafından **garanti edilmiyor** ama kod okumasıyla gerçekleştiği de kanıtlanamıyor. Canlı DB'ye dokunulmadığı için doğrulanmadı. Ek bir yol: önceki haftadan sıralamada üstte olan bir kullanıcı silinirse (`onDelete: Cascade`, `schema.prisma:504`) alttakiler bir basamak kayar ve daha önce talep edilmiş bir sıra ikinci kez verilebilir; bu da nadir.
 - Kesin olan sorun (daha düşük önem): beraberlikte ödül **keyfi** dağıtılıyor; 15 puanla eşit olan 4 kullanıcıdan biri ödülsüz, diğer üçü 500/…/… alıyor ve hangisinin hangi sırayı aldığı oyuncuya açıklanamaz.
 - Öneri: deterministik beraberlik kuralı (eşitlikte skora ilk ulaşma zamanı `min(completedAt)`, sonra `userId`) ve haftayı kapanışta `TournamentResult` tablosuna dondurup `@@unique([gameType, weekKey, rank])` ile sıra başına tek ödül garantisi. POST yeniden hesaplamak yerine dondurulmuş sonucu okumalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: oyun EMEKLİ** (yol haritası §7.3 #16 KALDIR; `lib/games/registry` `RETIRED_GAMES`). `app/customer/games/network-defender/page.tsx` artık tek satırlık sunucu bileşeni: `permanentRedirect` ile Oyna merkezine (`/customer/games?emekli=network-defender`, mevcut sorgu parametreleri korunur — `lib/play-hub/retired.ts`). Hub bu parametreyle tek seferlik, dürüst bir "Ağ Savunucusu artık oynanmıyor; geçmiş skorların ve puanların korunuyor" notu gösterir. Oyun kartı hub kataloğunda hiçbir koşulda yer almaz (`buildHubCatalog` emekli kimlikleri dışlar; test: `__tests__/lib/play-hub.test.ts`). Bileşen kodu ve geçmiş `MiniGameSession` verisi silinmedi (registry kuralı: geri alınabilir, arşiv).
+
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Eski | Yeni durum |
+|---|---|---|---|
+| 1 | Sunucu taraflı rol kontrolü (CUSTOMER) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 2 | Sekme başlığı (metadata) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 3 | Sayfa başlığı ve açıklaması (DashboardPageHeading) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 4 | Admin "oyun pasif" kontrolü (sayfa seviyesinde) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 5 | Neon kabuk, ızgara ve köşe aksanları | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 6 | Başlangıç ekranı: yüzen emoji, başlık, açıklama | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 7 | Başlangıç ipucu şeridi | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 8 | "🌐 Ağı Savun" başlat butonu ve nabız halkası | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 9 | Oturum başlatma (start API) ve "günde 1 hak" | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 10 | Yükleniyor durumu (starting/submitting) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 11 | Başlatma hatası toast'ı | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 12 | Haftalık turnuva paneli (sıralama, geri sayım, ödül havuzu) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 13 | Turnuva "Ödülü al" butonu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 14 | Tüm zamanlar liderlik tablosu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 15 | Ağ grafiği oluşturma (11 düğüm + kenarlar) | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 16 | Kenar çizimi (SVG) ve "tehlike" nabzı | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 17 | Düğüm konumlandırma (merkezleme) | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 18 | Başlangıç enfeksiyonu (seed) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 19 | Zamanla hızlanan enfeksiyon yayılımı | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 20 | Düğüm temizleme dokunuşu | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 21 | Skor ve her 4. temizlemede +1 bonus | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 22 | 🔥 Kombo göstergesi | SAHTE | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 23 | Enfekte sayacı (x/6) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 24 | Geri sayım (50 sn) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 25 | Karantina şarj barı ve butonu | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 26 | Karantina etkisi (yayılımı 3,5 sn durdurma) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 27 | Kayıp koşulu (6 enfekte düğüm) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 28 | Kazanma (süre sonunda eşik ya da maxScore'a erken ulaşma) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 29 | FX: burst / ring / floatText / shockwave | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 30 | Ses efektleri (Web Audio) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 31 | Dokunsal geri bildirim (haptic) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 32 | Alt ipucu satırı | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 33 | Sonuç gönderme (complete API), atomik ödül | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 34 | Ödül, seri bonusu ve başarım toast'ları | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 35 | Sonuç ekranı (trofe/💀, varyant başlık) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 36 | Sonuç skoru etiketi ("Temizlenen düğüm") | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 37 | Ödül kartı ve eşik altı notu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 38 | Kazanma konfetisi | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 39 | Sonuç ekranında liderlik tablosu | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 40 | "Bugün oynandı" kilit ekranı | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 41 | Kaybedince hub'da "oynandı" rozeti | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 42 | Tekrar oyna / Oyun Merkezi'ne dön / sıradaki oyun CTA'sı | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 43 | Nasıl oynanır / ilk oyun öğreticisi | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 44 | Duraklatma / sekme görünürlüğünde dondurma | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 45 | Ses aç/kapat | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 46 | Klavye / ekran okuyucu ile oynanabilirlik | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 47 | Azaltılmış hareket desteği (oyun içi) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 48 | Kişisel en iyi skor / dünkü sonuç / ilerleme | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+
+Toplam 48 satır KALDIRILDI. Gerekçe: §7.3 portföy kararı (tavan 12; iyi oynayan kaybediyordu; portföy tavanı nedeniyle emekli). Bu nedenle oyun içi bulgular (mekanik, animasyon, erişilebilirlik) düzeltilmedi; yüzey artık oynanmıyor.
+
+### Bulgular
+
+- Oyuna özgü bulguların tümü: **KAPANDI (yüzey kaldırıldı)** — oyun sayfası artık oyunu çizmiyor.
+- Ortak bulgular başka yerde kapandı: "kaybedilen oyun tekrar başlatılıp 409" ve "yenileyerek sınırsız deneme" (oyun motoru, `lib/game-session` — `failed`/yarım = oynandı); hub'ın kaybedilen oyunu "oynanmamış" göstermesi (Oyna merkezi üç durumlu kart); turnuva eşitlik kırıcı (`lib/game-tournament`).
+
+### Kalanlar
+
+- Sunucu kuralı (`lib/minigame-config`) henüz `hidden: true` DEĞİL: hafta ortasında gizlemek turnuva rotasyonunu kaydırıyor (ölçüldü: W40 ödül oyunu `data-snake` → `trust-merge`, W41 `review-stack` → `signal-pipe`). Turnuva sahibiyle hafta sınırında (Pazartesi 00:00 UTC) ya da aday listesi dondurulduktan sonra gizlenmeli. O zamana dek doğrudan API çağrısıyla sıralı deneme açılabilir (eski, zayıf doğrulama; günlük oyun puanı tavanı 600 sınırlar).

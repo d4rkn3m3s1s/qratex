@@ -260,3 +260,72 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu: `app/customer/game
 - **Yeniden üretim:** Skor ≥ 10 (ya da 9 ve kapalı bir gem varken) iken 3. bota bas, 700 ms içinde "Kasala"ya bas (veya önce bir gem aç) → `won:true` gider, 150 puan kazanılır.
 
 **Özet:** 4 iddianın 4'ü de doğrulandı. 1 ve 2 gerçekten kritik/yüksek (sahte skorla günlük ödül, turnuva 500 puanı ve şansın sıfırlanması). 3 bir UX/durum makinesi hatası (puan basmıyor). 4 gerçek ama düşük önemde. Hepsinin kök nedeni ortak: oyun durumu yalnız istemcide, sunucu sonucu doğrulamıyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: oyun EMEKLİ** (yol haritası §7.3 #21 KALDIR; `lib/games/registry` `RETIRED_GAMES`). `app/customer/games/data-miner/page.tsx` artık tek satırlık sunucu bileşeni: `permanentRedirect` ile Oyna merkezine (`/customer/games?emekli=data-miner`, mevcut sorgu parametreleri korunur — `lib/play-hub/retired.ts`). Hub bu parametreyle tek seferlik, dürüst bir "Veri Madencisi artık oynanmıyor; geçmiş skorların ve puanların korunuyor" notu gösterir. Oyun kartı hub kataloğunda hiçbir koşulda yer almaz (`buildHubCatalog` emekli kimlikleri dışlar; test: `__tests__/lib/play-hub.test.ts`). Bileşen kodu ve geçmiş `MiniGameSession` verisi silinmedi (registry kuralı: geri alınabilir, arşiv).
+
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Eski | Yeni durum |
+|---|---|---|---|
+| 1 | Sunucu tarafı rol kapısı (yalnız CUSTOMER) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 2 | Sayfa `<title>` | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 3 | Masaüstü sayfa başlığı (`DashboardPageHeading`) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 4 | Lobi: emoji, başlık, açıklama, ipucu şeridi | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 5 | "⛏️ Kazmaya Başla" → `POST /api/customer/games/data-miner/start` | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 6 | Yükleniyor durumları (başlatılıyor / kaydediliyor) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 7 | Haftalık turnuva kartı (geri sayım, ödül havuzu, ilk 10, kendi sıram) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 8 | Geçen haftanın turnuva ödülünü talep etme | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 9 | Tüm zamanlar liderlik tablosu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 10 | "Bugün oynadın" kilit ekranı | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 11 | HUD: can kalpleri | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 12 | HUD: anlık skor | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 13 | HUD: "Hedef: 10" | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 14 | 4×4 ızgara üretimi (4 bot, 2 nadir, 6 gem, 4 boş) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 15 | Hücre açma ve kart çevirme animasyonu | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 16 | 💠 Gem: +1, patlama, halka, "+1" yazısı, ses, titreşim | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 17 | 💎 Nadir: +3, fanfar, şok dalgası, konfeti | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 18 | 🤖 Bot tuzağı: -1 can, kırmızı patlama, "Tuzak! -1" | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 19 | Boş hücre | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 20 | Can bitince kaybetme | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 21 | Tüm güvenli hücreler açılınca turun bitmesi | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 22 | `maxScore` (20) ile otomatik kazanma | SAHTE (ölü kod) | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 23 | "💰 Çık & Skoru Kasala" | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 24 | Alt bilgi efsanesi (💠 +1 · 💎 +3 · 🤖 -1 can) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 25 | Sonucu gönderme → `POST .../complete` | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 26 | Sonuç ekranı: kazanma/kaybetme başlığı, 🏆/💀 | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 27 | Ödül rozeti ve konfeti | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 28 | Ödül, seri ve başarım toast'ları | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 29 | Günlük oyun serisi bonusu (+10 XP, her 3. gün +30) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 30 | Yeni başarım tespiti ve bildirimi | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 31 | Ödül bildirimi (Notification) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 32 | "Günde 1 hak" kuralı | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 33 | Anti-cheat (skor ve sonuç doğrulama) | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 34 | Admin'in oyunu pasifleştirmesi | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 35 | Admin override'ı (başlık, eşik, emoji, renk) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 36 | Ses ve titreşim | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 37 | Azaltılmış hareket | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 38 | Klavye ve ekran okuyucu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 39 | Mobil yerleşim | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 40 | Hata sınırı | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 41 | Oyun bitince tahtanın tamamını gösterme | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 42 | Oyun Merkezi'ne dönüş / "sıradaki oyun" önerisi | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 43 | Nasıl oynanır ve oran şeffaflığı (16 küpte 4 bot) | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 44 | Kişisel rekor ve oyun geçmişi | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 45 | Sonucu paylaşma | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 46 | Ses kapatma düğmesi | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+
+Toplam 46 satır KALDIRILDI. Gerekçe: §7.3 portföy kararı (tavan 12; saf şans; skor tavanına ulaşılamıyor). Bu nedenle oyun içi bulgular (mekanik, animasyon, erişilebilirlik) düzeltilmedi; yüzey artık oynanmıyor.
+
+### Bulgular
+
+- Oyuna özgü bulguların tümü: **KAPANDI (yüzey kaldırıldı)** — oyun sayfası artık oyunu çizmiyor.
+- Ortak bulgular başka yerde kapandı: "kaybedilen oyun tekrar başlatılıp 409" ve "yenileyerek sınırsız deneme" (oyun motoru, `lib/game-session` — `failed`/yarım = oynandı); hub'ın kaybedilen oyunu "oynanmamış" göstermesi (Oyna merkezi üç durumlu kart); turnuva eşitlik kırıcı (`lib/game-tournament`).
+
+### Kalanlar
+
+- Sunucuda zaten `hidden: true` (start 403 "emekliye ayrıldı"); turnuva rotasyonunda değil. Açık yok.

@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { ComboTapGame } from '@/components/customer/games/combo-tap-game';
+import { permanentRedirect } from 'next/navigation';
+import { retiredRedirectTarget } from '@/lib/play-hub/retired';
 
-export const metadata = { title: 'Kombo Yıldız | QRateX' };
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function ComboTapPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Kombo Yıldız 🎯"
-        description="Beliren yıldızlara hızla dokun, komboyu kaçırma! Refleksini test et. Günde 1 hak!"
-      />
-      <ComboTapGame />
-    </div>
-  );
+/** Emekli oyun (yol haritası §7.3 KALDIR) → Oyna merkezi; sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: Props) {
+  permanentRedirect(retiredRedirectTarget('combo-tap', await searchParams));
 }

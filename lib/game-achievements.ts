@@ -10,7 +10,8 @@
 export type AchievementMetric =
   | 'totalWins' // toplam kazanılan oyun
   | 'distinctGames' // kaç farklı oyun türü oynandı
-  | 'bestScore' // herhangi bir oyundaki en yüksek tek skor
+  | 'bestScore' // herhangi bir oyundaki en yüksek ham skor (ESKİ; birimler kıyaslanamaz, başarımda kullanılmaz)
+  | 'bestScorePct' // bir oyunda o oyunun tavan skoruna oranla en iyi skor (%0–100) — birimden bağımsız
   | 'totalPlays' // toplam tamamlanan oyun (kazanç/kayıp)
   | 'streak'; // en uzun günlük seri
 
@@ -30,8 +31,10 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: 'win-50', title: 'Efsane', description: '50 oyun kazan.', icon: '👑', rarity: 'legendary', metric: 'totalWins', target: 50 },
   { id: 'explorer-5', title: 'Kâşif', description: '5 farklı oyun oyna.', icon: '🧭', rarity: 'common', metric: 'distinctGames', target: 5 },
   { id: 'explorer-all', title: 'Koleksiyoncu', description: '10 farklı oyun oyna.', icon: '🎮', rarity: 'epic', metric: 'distinctGames', target: 10 },
-  { id: 'score-20', title: 'Keskin Nişancı', description: 'Tek oyunda 20+ skor yap.', icon: '🎯', rarity: 'rare', metric: 'bestScore', target: 20 },
-  { id: 'score-40', title: 'Skor Avcısı', description: 'Tek oyunda 40+ skor yap.', icon: '💥', rarity: 'epic', metric: 'bestScore', target: 40 },
+  // Skor başarımları oyunun TAVAN skoruna oranla ölçülür (eski "20+/40+ ham skor" trust-merge'de
+  // karo değeriyle bedavaya açılıyor, hafıza/bot oyunlarında hiç açılamıyordu).
+  { id: 'peak-80', title: 'Keskin Nişancı', description: 'Bir oyunda tavan skorun %80’ine ulaş.', icon: '🎯', rarity: 'rare', metric: 'bestScorePct', target: 80 },
+  { id: 'peak-100', title: 'Kusursuz', description: 'Bir oyunda tavan skora ulaş.', icon: '💥', rarity: 'epic', metric: 'bestScorePct', target: 100 },
   { id: 'play-25', title: 'Müdavim', description: 'Toplam 25 oyun tamamla.', icon: '🔁', rarity: 'rare', metric: 'totalPlays', target: 25 },
   { id: 'streak-3', title: 'Isınıyor', description: '3 günlük seri yap.', icon: '🔥', rarity: 'common', metric: 'streak', target: 3 },
   { id: 'streak-7', title: 'Haftalık Kahraman', description: '7 günlük seri yap.', icon: '⚡', rarity: 'epic', metric: 'streak', target: 7 },
@@ -42,6 +45,8 @@ export interface AchievementStats {
   totalWins: number;
   distinctGames: number;
   bestScore: number;
+  /** Tavan skora oranla en iyi skor (%0–100). Eski istemciler/mock'lar vermeyebilir → 0. */
+  bestScorePct?: number;
   totalPlays: number;
   streak: number;
 }
@@ -55,11 +60,13 @@ export interface AchievementProgress extends AchievementDef {
 /** Bir başarımın oyuncunun istatistiklerine göre durumunu hesaplar. */
 export function evaluateAchievements(stats: AchievementStats): AchievementProgress[] {
   return ACHIEVEMENTS.map((a) => {
-    const progress = Math.min(stats[a.metric], a.target);
+    const raw = Number(stats[a.metric] ?? 0);
+    const value = Number.isFinite(raw) ? raw : 0;
+    const progress = Math.min(value, a.target);
     return {
       ...a,
       progress,
-      unlocked: stats[a.metric] >= a.target,
+      unlocked: value >= a.target,
       pct: Math.round((progress / a.target) * 100),
     };
   });

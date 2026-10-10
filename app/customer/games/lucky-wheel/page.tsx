@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { LuckyWheelGame } from '@/components/customer/games/lucky-wheel-game';
+import { permanentRedirect } from 'next/navigation';
+import { retiredRedirectTarget } from '@/lib/play-hub/retired';
 
-export const metadata = { title: 'Şans Çarkı | QRateX' };
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function LuckyWheelPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Şans Çarkı 🎰"
-        description="Çarkı çevir, yeşil dilimleri yakala! Riskli kırmızılardan kaç. Günde 1 hak!"
-      />
-      <LuckyWheelGame />
-    </div>
-  );
+/** Emekli oyun (yol haritası §7.3 KALDIR) → Oyna merkezi; sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: Props) {
+  permanentRedirect(retiredRedirectTarget('lucky-wheel', await searchParams));
 }

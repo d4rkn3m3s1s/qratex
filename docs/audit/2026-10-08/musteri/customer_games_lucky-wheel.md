@@ -236,3 +236,70 @@ Salt okunur inceleme. Okunan dosyalar: `app/customer/games/lucky-wheel/page.tsx`
 - Önem: Orta-Yüksek. Varsayılan kurulumda tetiklenmiyor; admin paneli bu ayarı sunduğu anda tetikleniyor. Kalıcı çözüm: `won` kavramını istemciden kaldırıp eşik kararını tamamen sunucuya bırakmak. İstemci yalnızca `start` yanıtındaki `config`'i gösterim için kullanmalı.
 
 **Ek gözlem (iddia dışı, doğrulanmadı):** Çark fiziği kare başına sabit adımla işliyor (`velRef *= 0.985`, `lucky-wheel-game.tsx:109-110`). Bu yüzden dönüş süresi ekran yenileme hızına bağlı: 60 Hz'de çevirme başına ≈ 5 sn, 8 çevirme 45 sn'lik `ROUND_MS` sınırına çok yaklaşıyor. Yavaş cihazlarda tur, hak bitmeden süreden dolayı kesilebilir. Cihazda ölçülmedi.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: oyun EMEKLİ** (yol haritası §7.3 #20 KALDIR; `lib/games/registry` `RETIRED_GAMES`). `app/customer/games/lucky-wheel/page.tsx` artık tek satırlık sunucu bileşeni: `permanentRedirect` ile Oyna merkezine (`/customer/games?emekli=lucky-wheel`, mevcut sorgu parametreleri korunur — `lib/play-hub/retired.ts`). Hub bu parametreyle tek seferlik, dürüst bir "Şans Çarkı artık oynanmıyor; geçmiş skorların ve puanların korunuyor" notu gösterir. Oyun kartı hub kataloğunda hiçbir koşulda yer almaz (`buildHubCatalog` emekli kimlikleri dışlar; test: `__tests__/lib/play-hub.test.ts`). Bileşen kodu ve geçmiş `MiniGameSession` verisi silinmedi (registry kuralı: geri alınabilir, arşiv).
+
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Eski | Yeni durum |
+|---|---|---|---|
+| 1 | Sunucu tarafı yetki kontrolü (CUSTOMER değilse `/auth/signin`) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 2 | Sayfa `metadata.title` | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 3 | Sayfa başlığı + açıklama (`DashboardPageHeading`) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 4 | Neon kabuk (ızgara, köşe aksanları, glow) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 5 | Başlangıç ekranı: zıplayan emoji, başlık, açıklama | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 6 | "Çarkı doğru anda durdur" beceri mekaniği | SAHTE | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 7 | Başlat CTA ("🎰 Çarkı Çevir") → `POST /start` | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 8 | "Bugün oynadın" bilgisinin önceden gösterilmesi | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 9 | Kilitli ekran ("Bugünün oyununu oynadın" + sıfırlanma saati) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 10 | Yükleniyor durumları (başlatılıyor / kaydediliyor) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 11 | Haftalık turnuva kartı (geri sayım, 1-2-3 ödülleri, ilk 10, kendi sıram) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 12 | Geçen haftanın turnuva ödülünü talep etme | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 13 | Tüm zamanlar liderlik tablosu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 14 | HUD: kalan hak | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 15 | HUD: skor | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 16 | HUD: 45 sn geri sayım | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 17 | Canvas çark çizimi | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 18 | Dönüş fiziği (başlangıç hızı + sürtünme) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 19 | İbre altındaki dilimin çözümü | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 20 | "Çevir!" butonu | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 21 | Son sonuç metni ("+3 puan!", "Boş — tekrar dene!") | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 22 | Lejant (🟢 +3 · 🟡 +1 · 🔴 boş, eşik) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 23 | Ses efektleri (Web Audio) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 24 | Dokunsal geri bildirim (titreşim) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 25 | +3'te konfeti | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 26 | 20 puana ulaşınca erken bitiş | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 27 | Oyun sonu kazanma hesabı (`won = score >= threshold`) | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 28 | `POST /complete` ödül hesaplama | KISMİ | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 29 | Ödül toast'ı | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 30 | Seri (streak) bonus XP toast'ı | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 31 | Yeni başarım toast'ı + bildirim | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 32 | Ödül bildirimi (Notification) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 33 | Sonuç ekranı (kupa/kurukafa, varyant başlık, skor, ödül/eşik notu) | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 34 | Ödülde konfeti kutlaması | ÇALIŞIYOR | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 35 | Sonuç ekranında sonraki adım (başka oyun, ödül mağazası, paylaş) | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 36 | "Günde 1 hak" kuralının uygulanması | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 37 | Admin "pasif" oyun kontrolü sayfa seviyesinde | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 38 | Admin override'ın (başlık/eşik/maxScore) oyun içinde kullanılması | BOZUK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 39 | Oran şeffaflığı (olasılık, beklenen değer) | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 40 | Ses aç/kapa kontrolü | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 41 | Azaltılmış hareket modunda çark animasyonu | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 42 | Canvas için metin alternatifi / canlı bölge | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 43 | Çivi "tık" sesi / yavaşlama gerilimi / kazanan dilim vurgusu | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+| 44 | Çok dilli (EN) metinler | EKSİK | KALDIRILDI — oyun emekli; sayfa Oyna merkezine kalıcı yönlenir |
+
+Toplam 44 satır KALDIRILDI. Gerekçe: §7.3 portföy kararı (tavan 12; saf şans; sunucu otoriter günlük çarkla çakışıyor). Bu nedenle oyun içi bulgular (mekanik, animasyon, erişilebilirlik) düzeltilmedi; yüzey artık oynanmıyor.
+
+### Bulgular
+
+- Oyuna özgü bulguların tümü: **KAPANDI (yüzey kaldırıldı)** — oyun sayfası artık oyunu çizmiyor.
+- Ortak bulgular başka yerde kapandı: "kaybedilen oyun tekrar başlatılıp 409" ve "yenileyerek sınırsız deneme" (oyun motoru, `lib/game-session` — `failed`/yarım = oynandı); hub'ın kaybedilen oyunu "oynanmamış" göstermesi (Oyna merkezi üç durumlu kart); turnuva eşitlik kırıcı (`lib/game-tournament`).
+
+### Kalanlar
+
+- Sunucuda zaten `hidden: true` (start 403 "emekliye ayrıldı"); turnuva rotasyonunda değil. Açık yok.

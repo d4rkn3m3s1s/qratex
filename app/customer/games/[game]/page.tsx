@@ -65,6 +65,12 @@ function withQuery(path: string, sp: Record<string, string | string[] | undefine
   return s ? `${base}?${s}` : base;
 }
 
+/** Hub'daki mod seçimi: `?kip=pratik` → pratik (oyun destekliyorsa GameHost uygular). */
+function kipOf(v: string | string[] | undefined): 'practice' | 'ranked' | undefined {
+  const s = Array.isArray(v) ? v[0] : v;
+  return s === 'pratik' ? 'practice' : s === 'sirali' ? 'ranked' : undefined;
+}
+
 export default async function GamePage({ params, searchParams }: PageProps) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== 'CUSTOMER') {
@@ -106,7 +112,7 @@ export default async function GamePage({ params, searchParams }: PageProps) {
           }
         />
       ) : (
-        <GameHost id={entry.id} />
+        <GameHost id={entry.id} initialMode={kipOf((await searchParams).kip)} />
       )}
     </div>
   );

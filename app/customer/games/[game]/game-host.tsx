@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { GameShell } from '@/components/customer/games/game-shell';
 import { useMiniGame } from '@/lib/use-mini-game';
 import { gameFx } from '@/lib/games/engine/fx';
-import { getGameEntry, isPlayable, type GameEntry, type GameFinish, type V2GameComponent } from '@/lib/games/registry';
+import { getGameEntry, isPlayable, type GameEntry, type GameFinish, type GameMode, type V2GameComponent } from '@/lib/games/registry';
 import { getGameCopy } from '@/lib/minigame-copy';
 
 /**
@@ -40,7 +40,11 @@ function lazyComponent(entry: GameEntry & { component: NonNullable<GameEntry['co
   return C;
 }
 
-export function GameHost({ id }: { id: string }) {
+/**
+ * `initialMode`: hub'daki Sıralı/Pratik seçimi (`?kip=pratik`). Yalnız oyun pratik modunu
+ * destekliyorsa uygulanır; aksi hâlde sıralı ile açılır.
+ */
+export function GameHost({ id, initialMode }: { id: string; initialMode?: GameMode }) {
   const entry = getGameEntry(id);
   if (!isPlayable(entry)) {
     // Sunucu sayfası zaten yönlendirir; istemci kaydı ile uyumsuzluk olursa dürüst durum.
@@ -55,13 +59,15 @@ export function GameHost({ id }: { id: string }) {
     const Legacy = Comp as unknown as ComponentType<Record<string, never>>;
     return <Legacy />;
   }
-  return <V2Host entry={entry} Game={Comp as unknown as V2GameComponent} />;
+  return <V2Host entry={entry} Game={Comp as unknown as V2GameComponent} initialMode={initialMode} />;
 }
 
 /** v2 sözleşmeli oyunların kabuğu: mod, duraklatma, oturum, sonuç. */
-function V2Host({ entry, Game }: { entry: GameEntry; Game: V2GameComponent }) {
+function V2Host({ entry, Game, initialMode }: { entry: GameEntry; Game: V2GameComponent; initialMode?: GameMode }) {
   const rankedOn = entry.modes.ranked !== false;
-  const game = useMiniGame(entry.gameType, { initialMode: rankedOn ? 'ranked' : 'practice' });
+  const startMode: GameMode =
+    !rankedOn || (initialMode === 'practice' && entry.modes.practice) ? 'practice' : 'ranked';
+  const game = useMiniGame(entry.gameType, { initialMode: startMode });
   const [paused, setPaused] = useState(false);
   const copy = useMemo(() => getGameCopy(entry.gameType), [entry.gameType]);
 
