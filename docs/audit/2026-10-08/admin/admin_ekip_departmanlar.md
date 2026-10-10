@@ -265,3 +265,24 @@ Yöntem: salt okunur kod okuması. `app/api/admin/team/members/route.ts`, `app/a
 ### Ek gözlem (iddialarda yok, kodla doğrulandı)
 
 - `lib/team-access.ts:21`: `const teamRole = user?.adminTeamRole ?? sessionRole;` — DB'de `adminTeamRole` null'a çekilmiş (ekipten çıkarılmış, `members/route.ts:150`) bir kullanıcı için `??` JWT'deki bayat role düşer. JWT'deki `adminTeamRole` yalnızca girişte (`lib/auth.ts:214,252`) ve `trigger === 'update'` (`:272`) ile yenileniyor. Sonuç: ekipten çıkarılan bir yönetici, oturumu yaşadıkça ekip API'lerine (bu sayfadaki üye arama/ekleme/silme dahil) yönetici olarak erişmeye devam eder. Yorumdaki niyet ("Session bayat olabilir; DB'den güncel rolü doğrula") ile kod çelişiyor. Düzeltme: kullanıcı DB'de bulunduğunda yalnızca DB değerini kullan (`const teamRole = user ? user.adminTeamRole : null`).
+
+## Uygulama (Dalga 2)
+
+Özellik envanteri yeni durumları:
+- Önceden ÇALIŞIYOR satırlar: **ÇALIŞIYOR** (`take:200` sessiz kesme → 500 + kesilme uyarısı).
+- 16 Renk, 17 Açıklama, 18 Yeniden adlandırma, 19 Sıralama, 20 Arşivleme (EKSİK): **ÇALIŞIYOR** — `departments/department-card.tsx` + PATCH (slug sabit).
+- 25 Eklerken departman/rol seçimi (EKSİK): **ÇALIŞIYOR** — `members-panel.tsx`.
+- 32 Hayalet rozet (BOZUK): **ÇALIŞIYOR** — `lib/team/meta.ts` süzer (testli).
+- 34 Arama/filtre (EKSİK): **ÇALIŞIYOR**.
+- 35 Toplu işlem (EKSİK): **KALDIRILDI (kapsam dışı)** — küçük ekipte tek tek atama yeterli.
+- 36 Değişiklik geçmişi (EKSİK): **ÇALIŞIYOR** — `audit-panel.tsx` (`/api/admin/team/audit`).
+- 37 Pano'ya dönüş (EKSİK): **ÇALIŞIYOR** — `next/link`.
+- 38 Yetkiye duyarlı arayüz (EKSİK): **ÇALIŞIYOR** — `can.*`.
+
+Kapanan bulgular (11): 16-20, 25, 32, 34, 36, 37, 38.
+
+**Mimari:** Tek paylaşılan çalışma alanı `components/team/team-workspace.tsx` (+ `board/`, `task-detail/`, `departments/`, `dialogs/`, `initiatives/`, `lib/`) iki panelde de kullanılır; sayfalar sunucu bileşeni, ilk boyama verisi `lib/team/page-bootstrap.ts` + `lib/team/meta.ts` ile sunucuda yüklenir. teamOnly erişim (`lib/team/access.ts` requireTeamViewer, `capabilitiesFor` yetenekleri) korunur; yazma uçları `defineRoute` (rol + zod + rate limit). Test: `__tests__/team/meta.test.ts` (2/2).
+
+**Kalanlar:**
+- Eski monolit bileşenler (`components/team/team-board.tsx`, `task-detail-sheet.tsx`, `team-departments.tsx`, `team-activity.tsx`, `team-performance.tsx`, `team-files.tsx`, `ai-qa-dialog.tsx`, `ai-summary-dialog.tsx`, `automations-dialog.tsx`, `tags-dialog.tsx`, `templates-dialog.tsx`) hiçbir rotadan import edilmiyor (ölü kod); silme bu oturumda izin sınırına takıldı, sonraki temizlikte kaldırılmalı.
+- Canlı tarayıcı doğrulaması yapılmadı (dev server yasak); tip denetimi temiz.

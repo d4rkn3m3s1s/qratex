@@ -229,3 +229,23 @@
 - Gerçek kullanıcı etkisi: yanlışlıkla tek tık → departmanın tüm üye atamaları (UserDepartment, cascade) geri dönüşsüz silinir; yönetici bunu toast bile görmeden kaybeder.
 - Abartılı kısım: `CompanyTask.department` (`schema.prisma:2866`), `TaskTemplate.department` (`:2925`), `TeamAutomation.department` (`:3015`) FK'siz string; slug korunduğu için aynı adla departman yeniden oluşturulursa (`POST` slug üzerinden `upsert`, `departments/route.ts:98`) görevler/şablonlar/otomasyonlar kendiliğinden yeniden bağlanır — yani görev verisi kaybolmaz, yalnızca üye atamaları kaybolur. Yetim slug'ın etkisi görsel (ham slug görünür, departman filtresinde seçilemez) ve departman-kapsamlı otomasyonun sessizce eşleşmeyi sürdürmesidir; güvenlik etkisi yok.
 - Önem gerekçesi: KRİTİK değil; geri alınamaz üye-atama kaybı + sessiz hata nedeniyle ORTA.
+
+## Uygulama (Dalga 2)
+
+Özellik envanteri yeni durumları:
+- Önceden ÇALIŞIYOR satırlar (1, 3, 6-8, 12-13, 15, 18, 21, 25, 27): **ÇALIŞIYOR** (`components/team/departments/*`; sayfa sunucu bileşeni, ilk veri sunucuda).
+- 24 Silinmiş departmanın bayat rozeti (BOZUK): **ÇALIŞIYOR** — `loadTeamMeta` bilinmeyen slug'ları süzer (testli).
+- 28 Rol farkındalığı (EKSİK): **ÇALIŞIYOR** — üyeye salt-okunur görünüm, yönetici aksiyonları `can.*` ile.
+- 29 Departman düzenleme (ad/renk/açıklama/sıra/arşiv) (EKSİK): **ÇALIŞIYOR** — `department-card.tsx` + PATCH.
+- 30 Yıkıcı işlemlere onay (EKSİK): **ÇALIŞIYOR** — etki önizlemeli onay (`?impact=`).
+- 31 Sayfa başlığı (EKSİK): **ÇALIŞIYOR** — `metadata`.
+- 35 i18n (EKSİK): **KISMI** — metinler tam Türkçe; `t()` anahtarlarına taşınmadı (iç araç, yalnız Türkçe).
+- Ek: değişiklik geçmişi paneli (`audit-panel.tsx`), üye arama/filtre; 200 üye sessiz kesilmesi → 500 + `membersTruncated` uyarısı.
+
+Kapanan bulgular (6): 24, 28, 29, 30, 31, sessiz kesilme. Kalan: 35 (i18n).
+
+**Mimari:** Tek paylaşılan çalışma alanı `components/team/team-workspace.tsx` (+ `board/`, `task-detail/`, `departments/`, `dialogs/`, `initiatives/`, `lib/`) iki panelde de kullanılır; sayfalar sunucu bileşeni, ilk boyama verisi `lib/team/page-bootstrap.ts` + `lib/team/meta.ts` ile sunucuda yüklenir. teamOnly erişim (`lib/team/access.ts` requireTeamViewer, `capabilitiesFor` yetenekleri) korunur; yazma uçları `defineRoute` (rol + zod + rate limit). Test: `__tests__/team/meta.test.ts` (2/2).
+
+**Kalanlar:**
+- Eski monolit bileşenler (`components/team/team-board.tsx`, `task-detail-sheet.tsx`, `team-departments.tsx`, `team-activity.tsx`, `team-performance.tsx`, `team-files.tsx`, `ai-qa-dialog.tsx`, `ai-summary-dialog.tsx`, `automations-dialog.tsx`, `tags-dialog.tsx`, `templates-dialog.tsx`) hiçbir rotadan import edilmiyor (ölü kod); silme bu oturumda izin sınırına takıldı, sonraki temizlikte kaldırılmalı.
+- Canlı tarayıcı doğrulaması yapılmadı (dev server yasak); tip denetimi temiz.

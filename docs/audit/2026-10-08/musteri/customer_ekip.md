@@ -352,3 +352,21 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu: `lib/team-access.t
 - **Koşul:** Bulgu 4'teki gibi yalnızca Inngest canlıysa çalışır.
 - **Yeniden üretim:** Arşivlenmiş, bitiş tarihi 1 ay önce olan, `todo` durumundaki bir görev; her sabah atanan kişiye "Görev süresi doldu" bildirimi ve push üretir, arşivden çıkarılmadıkça veya `done` yapılmadıkça sonsuza dek.
 - **Öneri:** Sorguya `archivedAt: null` eklenmeli. Şemaya `overdueNotifiedAt` (ve "yaklaşıyor" için `dueSoonNotifiedAt`) alanı eklenip tek seferlik bildirim garanti edilmeli; `dueAt` değişince bu alanlar sıfırlanmalı. Süresiz tekrar yerine kademeli hatırlatma (1., 3., 7. gün) ve yöneticiye tek bir "gecikmiş görev özeti" gönderilmeli. `createNotification` içine `(userId, kind, taskId, gün)` tekilleştirme anahtarı eklenmesi diğer tüm cron bildirimlerini de korur.
+
+## Uygulama (Dalga 2)
+
+Özellik envanteri yeni durumları:
+- Önceden ÇALIŞIYOR olan tüm satırlar: **ÇALIŞIYOR** (yeni paylaşılan çalışma alanında korundu; hafta okları `aria-label`'lı, sürekli pulse kaldırıldı, sürükle-bırakın klavye alternatifi kart menüsünde "Taşı").
+- 9 AI Haftalık Özet (üye için BOZUK): **ÇALIŞIYOR** — buton yalnız `can.aiSummary` yeteneğinde görünür.
+- 12 Otomasyon tetikleri "Görev oluşunca / Gecikince" (SAHTE): **ÇALIŞIYOR** — `created` görev oluşturma, otomatik görev ve tekrar üretiminde; `overdue` günlük bakım cron'unda `runAutomations` ile tetiklenir.
+- 56 Tekrar "Her gün" (SAHTE): **KALDIRILDI** — cron haftalık üretir; seçenek çıkarıldı, eski `daily` kayıtları "Haftalık" gösterilir.
+- 62 Zaman takibi "Süre ekle" (üye için BOZUK): **ÇALIŞIYOR** — `can.logTime` ile üyeye açık; sunucu atanan/yönetici kuralını uygular.
+- 33 Üyenin tüm ekip yükünü görmesi: yönetici-özel bölümler yeteneğe göre gizlendi.
+
+Kapanan bulgular (5): 9, 12, 56, 62, 33 + erişilebilirlik (aria-label, klavye "Taşı", sürekli animasyon).
+
+**Mimari:** Tek paylaşılan çalışma alanı `components/team/team-workspace.tsx` (+ `board/`, `task-detail/`, `departments/`, `dialogs/`, `initiatives/`, `lib/`) iki panelde de kullanılır; sayfalar sunucu bileşeni, ilk boyama verisi `lib/team/page-bootstrap.ts` + `lib/team/meta.ts` ile sunucuda yüklenir. teamOnly erişim (`lib/team/access.ts` requireTeamViewer, `capabilitiesFor` yetenekleri) korunur; yazma uçları `defineRoute` (rol + zod + rate limit). Test: `__tests__/team/meta.test.ts` (2/2).
+
+**Kalanlar:**
+- Eski monolit bileşenler (`components/team/team-board.tsx`, `task-detail-sheet.tsx`, `team-departments.tsx`, `team-activity.tsx`, `team-performance.tsx`, `team-files.tsx`, `ai-qa-dialog.tsx`, `ai-summary-dialog.tsx`, `automations-dialog.tsx`, `tags-dialog.tsx`, `templates-dialog.tsx`) hiçbir rotadan import edilmiyor (ölü kod); silme bu oturumda izin sınırına takıldı, sonraki temizlikte kaldırılmalı.
+- Canlı tarayıcı doğrulaması yapılmadı (dev server yasak); tip denetimi temiz.

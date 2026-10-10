@@ -1,25 +1,18 @@
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/lib/auth';
+import { resolveTeamViewer } from '@/lib/team/access';
 
 /**
- * Ekip modülü erişim kapısı (müşteri paneli altında).
- * Yalnızca kendisine bir ekip rolü (adminTeamRole) atanmış kullanıcılar erişebilir.
- * ADMIN de erişir (kurulum/denetim). Diğerleri dashboard'a yönlendirilir.
- * Not: /customer/* middleware zaten CUSTOMER rolünü doğrular; bu kat ekstra rol kapısıdır.
+ * Ekip modülü erişim kapısı (müşteri paneli altında, teamOnly). Yalnız ekip rolü
+ * (adminTeamRole) atanmış kullanıcılar girer; karar DB'den, oturumdaki bayat rolden değil.
+ * Not: proxy `/customer/*` yolunu yalnız CUSTOMER rolüne açar; ADMIN ekip modülünü
+ * `/admin/ekip` üzerinden kullanır (eski "ADMIN de erişir" dalı ulaşılamaz ölü koddu).
  */
 export default async function EkipLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/auth/login');
-
-  // Session bayat olabilir; DB'den güncel ekip rolünü doğrula.
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { role: true, adminTeamRole: true },
-  });
-  const hasAccess = user?.role === 'ADMIN' || !!user?.adminTeamRole;
-  if (!hasAccess) redirect('/customer');
-
+  const viewer = await resolveTeamViewer(session.user.id);
+  if (!viewer) redirect('/customer');
   return <>{children}</>;
 }

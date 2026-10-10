@@ -34,7 +34,7 @@ export const dynamic = 'force-dynamic';
 const LIST_LIMIT = 500;
 
 const listQuery = z.object({
-  view: z.enum(['board', 'mine', 'archive', 'search']).default('board'),
+  view: z.enum(['board', 'mine', 'archive', 'search', 'review']).default('board'),
   weekKey: z.string().refine(isWeekKey, 'Geçersiz hafta').optional(),
   department: z.string().max(60).optional(),
   status: z.enum(TASK_STATUSES).optional(),
@@ -53,6 +53,7 @@ const listQuery = z.object({
  *  - `view=mine`: bana atanan açık işler (tüm haftalar) + bu hafta onaylananlar.
  *  - `view=archive`: arşivlenmiş görevler.
  *  - `view=search&q=`: tüm haftalarda arşivsiz görev arama (bağımlılık seçici; en fazla 20).
+ *  - `view=review`: onay kuyruğu — tüm haftalarda "Onayda" bekleyenler, en eski gönderim önce.
  */
 export const GET = defineRoute(
   { name: 'team.tasks.list', roles: TEAM_ROUTE_ROLES, query: listQuery, rateLimit: 'read' },
@@ -73,6 +74,10 @@ export const GET = defineRoute(
           ? { OR: [{ weekKey: week }, ...(week === current ? [{ weekKey: { lt: week }, status: { not: 'done' } }] : [])] }
           : { weekKey: week }
       );
+    }
+    if (query.view === 'review') {
+      filters.push({ status: 'review' });
+      if (!viewer.isManager) filters.push({ assignedToId: viewer.userId });
     }
     if (query.view === 'mine') {
       filters.push({ assignedToId: viewer.userId });
@@ -107,7 +112,10 @@ export const GET = defineRoute(
     const truncated = rows.length > limit;
     // Etiket: TAM jeton eşleşmesi (eski `contains` "#tas" ile "tasarım"ı da getiriyordu).
     const tagged = query.tag ? rows.slice(0, limit).filter((r) => hasTag(r.tags, query.tag!)) : rows.slice(0, limit);
-    const sorted = sortTasks(tagged, query.sort);
+    const sorted =
+      query.view === 'review'
+        ? [...tagged].sort((a, b) => (a.submittedForReviewAt?.getTime() ?? 0) - (b.submittedForReviewAt?.getTime() ?? 0))
+        : sortTasks(tagged, query.sort);
     const now = new Date();
     const items = sorted.map((r) => toTaskDto(r, { weekKey: query.view === 'board' ? week : undefined, now }));
     return {

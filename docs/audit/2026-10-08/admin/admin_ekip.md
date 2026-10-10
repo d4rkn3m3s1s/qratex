@@ -367,3 +367,24 @@ Her iddia, ilgili kod baştan okunarak çürütülmeye çalışıldı (route'lar
 | 5 | Doğrulandı | Onaysız hard delete, R2 yetim |
 | 6 | Doğrulandı | createdBy Cascade + üç gerçek kullanıcı silme yolu |
 | 7 | Doğrulandı | UTC gösterimi, TR'de 3 saat geri |
+
+## Uygulama (Dalga 2)
+
+Özellik envanteri yeni durumları:
+- Önceden ÇALIŞIYOR satırlar: **ÇALIŞIYOR** (yeni paylaşılan çalışma alanı; Departmanlar bağlantısı `next/link`; görünüm adı `window.prompt` yerine diyalog).
+- 15 Otomasyon tetikleri (SAHTE): **ÇALIŞIYOR** — `created` (tasks POST, autotask, tekrar üretimi) ve `overdue` (günlük bakım) bağlı.
+- 16 Etiket havuzu (SAHTE — kartlar rengi okumuyordu): **ÇALIŞIYOR** — `shared.tsx` etiket çipleri havuz rengini kullanır.
+- 29 Önceliğe göre sıralama (BOZUK — string sıralama): **ÇALIŞIYOR** — `priorityRank` ile (`lib/team/tasks.ts`).
+- 36 Paylaşılan görünüm (EKSİK): **ÇALIŞIYOR** — "Ekiple paylaş" (`isShared`).
+- 42 Toplu departman ata / etiket ekle (EKSİK): **ÇALIŞIYOR** — `board/bulk-bar.tsx`.
+- 48 Hafta %100 havai fişek (BOZUK — filtreli listeden hesap): **KALDIRILDI** — yanıltıcı oran yerine sunucu özeti şeridi (`summary-strip.tsx`); ops kaydı sakin.
+- 51 Sürükle-bırakın klavye alternatifi: kart menüsünde "Taşı" her ekranda.
+- Yeni: Onay kuyruğu (`view=review`, tüm haftalar, en eski önce), **Girişimler** sekmesi (`?tab=initiatives`) — /admin/roadmap buraya birleşti.
+
+Kapanan bulgular (8): 15, 16, 29, 36, 42, 48, 51, 21 (tam sayfa yenileme).
+
+**Mimari:** Tek paylaşılan çalışma alanı `components/team/team-workspace.tsx` (+ `board/`, `task-detail/`, `departments/`, `dialogs/`, `initiatives/`, `lib/`) iki panelde de kullanılır; sayfalar sunucu bileşeni, ilk boyama verisi `lib/team/page-bootstrap.ts` + `lib/team/meta.ts` ile sunucuda yüklenir. teamOnly erişim (`lib/team/access.ts` requireTeamViewer, `capabilitiesFor` yetenekleri) korunur; yazma uçları `defineRoute` (rol + zod + rate limit). Test: `__tests__/team/meta.test.ts` (2/2).
+
+**Kalanlar:**
+- Eski monolit bileşenler (`components/team/team-board.tsx`, `task-detail-sheet.tsx`, `team-departments.tsx`, `team-activity.tsx`, `team-performance.tsx`, `team-files.tsx`, `ai-qa-dialog.tsx`, `ai-summary-dialog.tsx`, `automations-dialog.tsx`, `tags-dialog.tsx`, `templates-dialog.tsx`) hiçbir rotadan import edilmiyor (ölü kod); silme bu oturumda izin sınırına takıldı, sonraki temizlikte kaldırılmalı.
+- Canlı tarayıcı doğrulaması yapılmadı (dev server yasak); tip denetimi temiz.

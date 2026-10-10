@@ -181,3 +181,26 @@
 - Yeniden üretim (kapının tamamen aşılması): Rolü ADMIN yapılmış ama cevabı bilmeyen kullanıcı, oturum çereziyle `GET /api/admin/settings/admin-gate` çağırır → yanıtta `answer` gelir → `POST /api/admin/gate` `{answer}` ile HMAC çerezini alır → `/admin` paneline tam erişir. Ara adıma gerek bile yok: `/api/admin/*` uçlarının hepsi (kullanıcılar, ayarlar, puan vb.) zaten doğrudan çağrılabiliyor.
 - Roadmap özelinde: `app/api/admin/product-roadmap/route.ts:14` yalnız repo içindeki statik JSON'u döndürüyor; bu ucun kendisi hassas değil. Bulgu, bu sayfanın değil `proxy.ts` / `requireAuth` katmanının sistemik bir açığı olarak takip edilmeli.
 - Önerilen çözüm: `requireAuth` içine (ya da yeni `requireAdmin()` yardımcısına) `allowedRoles` ADMIN içeriyorsa ve kullanıcı ADMIN ise `cookies().get('admin_gate')` + `verifyGateCookie(cookie, userId, gate.answer)` kontrolü eklenmeli (gate config Redis'te kısa TTL ile cache'lenebilir; token-replay'deki sıcak katman deseni). Muafiyet yalnız `GET/POST /api/admin/gate` için olmalı. Ek olarak `GET /api/admin/settings/admin-gate` cevabı hiç döndürmemeli (yalnız soru + "cevap ayarlı" bayrağı) ve `PUT` yeni cevabın yanında mevcut cevabın tekrar girilmesini istemeli. Alternatif/ek savunma: `proxy.ts`'te `/api/admin/*` için de edge'de `gateCookieBelongsTo` ön kontrolü.
+
+## Uygulama (Dalga 2)
+
+/admin/roadmap **emekliye ayrıldı**: `app/admin/roadmap/page.tsx` sorgu parametrelerini koruyarak `/admin/ekip?tab=initiatives` adresine `permanentRedirect` yapar; `layout.tsx`, `/api/admin/product-roadmap`, `lib/data/product-roadmap.json`, `lib/product-roadmap-types.ts` silindi. Yerine veritabanı destekli **Girişimler** (`components/team/initiatives/*`, `/api/admin/team/initiatives`, mevcut CompanyTask üzerinde — şema değişikliği yok).
+
+Özellik envanteri yeni durumları:
+- 1, 4, 7, 10, 12, 21, 33, 35: **ÇALIŞIYOR** (Girişimler sekmesindeki karşılıkları).
+- 9 Hata durumu (BOZUK): **ÇALIŞIYOR** — QueryState hata + yeniden dene.
+- 13 Sütun ID mono: **KALDIRILDI** (operatör için anlamsız).
+- 15 Sabit "shipped" maddeler (SAHTE): **KALDIRILDI** — gerçek kayıtlar.
+- 16-20 Statik madde linkleri (17 BOZUK): **KALDIRILDI** — girişimler bağlı görevlere bağlanır.
+- 23 Alt kısayollar, 24 eski GET uç: **KALDIRILDI** → `/api/admin/team/initiatives` (zod).
+- 27 Şema doğrulama, 28 Ekle/düzenle/aşama değiştir, 29 Aşamaya göre gruplama, 30 Hedef tarih/sorumlu/ilerleme (EKSİK): **ÇALIŞIYOR**.
+- 31 Changelog: **ÇALIŞIYOR** — görev etkinlik geçmişi.
+- 32 Dışa aktarım: **EKSİK (kalan)** — Girişimler'de CSV yok.
+
+Kapanan bulgular (9): 9, 15, 17, 27-31 + statik JSON'un kaldırılması.
+
+**Mimari:** Tek paylaşılan çalışma alanı `components/team/team-workspace.tsx` (+ `board/`, `task-detail/`, `departments/`, `dialogs/`, `initiatives/`, `lib/`) iki panelde de kullanılır; sayfalar sunucu bileşeni, ilk boyama verisi `lib/team/page-bootstrap.ts` + `lib/team/meta.ts` ile sunucuda yüklenir. teamOnly erişim (`lib/team/access.ts` requireTeamViewer, `capabilitiesFor` yetenekleri) korunur; yazma uçları `defineRoute` (rol + zod + rate limit). Test: `__tests__/team/meta.test.ts` (2/2).
+
+**Kalanlar:**
+- Eski monolit bileşenler (`components/team/team-board.tsx`, `task-detail-sheet.tsx`, `team-departments.tsx`, `team-activity.tsx`, `team-performance.tsx`, `team-files.tsx`, `ai-qa-dialog.tsx`, `ai-summary-dialog.tsx`, `automations-dialog.tsx`, `tags-dialog.tsx`, `templates-dialog.tsx`) hiçbir rotadan import edilmiyor (ölü kod); silme bu oturumda izin sınırına takıldı, sonraki temizlikte kaldırılmalı.
+- Canlı tarayıcı doğrulaması yapılmadı (dev server yasak); tip denetimi temiz.
