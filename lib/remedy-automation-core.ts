@@ -139,7 +139,8 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
         ? 'Yüksek kayıp riski tespit edilen bir yorum için telafi taslağı onay kuyruğunda.'
         : 'Düşük puanlı bir yorum için telafi taslağı onay kuyruğunda.',
       type: 'info',
-      data: { offerId: offer.id, feedbackId },
+      // Gelen Kutusu → Telafi onayı'nda taslağın detay çekmecesine derin link (denetim B12).
+      data: { type: 'remedy_draft', module: 'remedy_offers', offerId: offer.id, feedbackId, ctaPath: `/dealer/inbox/remedy?id=${offer.id}` },
     },
   });
 

@@ -60,4 +60,12 @@ export function buildRemedyTimeline(
 }
 
 /** Bayinin iç süreç olayları — müşteri zaman çizelgesinde gösterilmez. */
-export const CUSTOMER_HIDDEN_TIMELINE_KINDS: ReadonlySet<string> = new Set(['queued', 'rejected']);
+export const CUSTOMER_HIDDEN_TIMELINE_KINDS: ReadonlySet<string> = new Set([
+  'queued',
+  'rejected',
+  // Bayi onay kuyruğunun iç adımları (Gelen Kutusu → Telafi onayı): taslak düzenleme,
+  // reddi geri alma ve onay hatırlatması müşterinin zaman çizelgesinde görünmez.
+  'edited',
+  'restored',
+  'reminded',
+]);

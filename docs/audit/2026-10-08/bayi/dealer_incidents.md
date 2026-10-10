@@ -255,3 +255,62 @@ Salt okunur inceleme; kod değiştirilmedi, veritabanına/sunucuya dokunulmadı.
 - **Yeniden üretim:** Bir bayiye `negative-feedback-sla` cron'u olay açar → bayi yorumu yanıtlasa bile olay `open` kalır; panelden kapatılamaz; açık olay sayısı ve admin sağlık skoru kalıcı olarak bozulur.
 
 **Özet:** 4 iddianın 4'ü de doğrulandı. En yüksek önem: iddia 2 (kimliği doğrulanmış her bayi, herkese açık leaderboard'dan aldığı id'lerle platform genelindeki müşteri e-postalarını okuyabilir). Düzeltme önceliği: (1) `assertAssignableForDealer()` — atanan kişi yalnızca bu bayinin `DealerStaff` kaydı veya bayinin kendisi olabilir, aksi 400; POST'u `try/catch` + `responseIfDatabaseUnavailable` ile sarmala; (2) demo satırı yazmayı kaldır, boş durumu UI'da göster ve mevcut demo satırları tek seferlik betikle temizle (`type='other' AND title='Olaylar / Kriz Radarı'`); (3) `dedupeKey` + `@@unique([dealerId, dedupeKey])` ile `upsert`/`createMany skipDuplicates`, 7 gün penceresini kaldırıp "açık olan varsa oluşturma" kuralına geç; tespiti GET'ten çıkarıp olay-güdümlü/cron'a taşı; (4) PATCH'i durum makinesine bağla (`resolved` ⇔ `resolvedAt`), sayfaya detay çekmecesi + durum/sorumlu kontrolleri ekle.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/dealer/inbox/incidents` (Gelen Kutusu → Vakalar). `/dealer/incidents` sorgu parametrelerini koruyarak kalıcı yönlenir; eski `layout.tsx` kaldırıldı. Sunucu: `lib/dealer-queues/{incident-server,incident-catalog,radar,radar-rules,maintenance}.ts`; istemci: `components/dealer/b-gelen-kuyruklar/incidents/**`; BFF: `/api/dealer/queues/incidents` (liste + oluştur), `/incidents/[id]` (detay / PATCH), `/incidents/[id]/tasks` (vakadan görev), `/incidents/radar` (durum + "Şimdi tara"). Radar eşikleri Otomasyon → Uyarılar'dan (`/dealer/automation/alerts`) okunur, yoksa sunucu varsayılanı. Günlük iş: `/api/cron/inbox-queues` (günlük orkestratörden).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1–2 | Başlık / metadata | ÇALIŞIYOR — "Vakalar · Gelen Kutusu", tek terim |
+| 3 | Yeni vaka | ÇALIŞIYOR — `<form>` diyaloğu, Enter ile gönderim, açılışta sıfırlanır |
+| 4 | Liste başlığı | ÇALIŞIYOR |
+| 5 | Durum filtresi | ÇALIŞIYOR — sekmeler Açık / Bende / Masa sinyali / Çözülen; filtre değişince sayfa sıfırlanır |
+| 6 | Yükleme + iptal | ÇALIŞIYOR — React Query sinyali; GET yan etkisiz |
+| 7 | Yükleniyor | ÇALIŞIYOR — önceki veri korunur (titreşim yok) |
+| 8 | Boş durum | ÇALIŞIYOR — görünüme/filtreye özel |
+| 9 | Hata | ÇALIŞIYOR — QueryState + tekrar dene |
+| 10 | Başlık | ÇALIŞIYOR — tam başlık detayda |
+| 11 | Tip rozeti | ÇALIŞIYOR — katalog etiketi (sistem kodları çevrilir) |
+| 12 | Önem rozeti | ÇALIŞIYOR — DS `SeverityBadge` (tema token'ları) + önem sıralaması + sol şerit |
+| 13 | Durum rozeti | ÇALIŞIYOR |
+| 14 | Atanan kişi | ÇALIŞIYOR — seçici + `validateAssignee` (A3); e-posta dönmez |
+| 15 | Son tarih | ÇALIŞIYOR — elle + tür bazlı varsayılan; gecikme vurgusu |
+| 16 | Çözüldü | ÇALIŞIYOR — çözüm diyaloğu, `resolvedAt` tutarlı |
+| 17 | Oluşturulma zamanı | ÇALIŞIYOR |
+| 18 | Açıklama/detay | ÇALIŞIYOR — detay çekmecesi |
+| 19 | Eşik değeri | ÇALIŞIYOR — radar panelinde ölçüm/eşik çubuğu |
+| 20 | Kaynak yorum bağlantısı | ÇALIŞIYOR |
+| 21 | Animasyon | ÇALIŞIYOR — `m.li` layout/exit, azaltılmış harekete saygılı |
+| 22 | Sayfalama | ÇALIŞIYOR — aralık dışına düşünce son sayfaya çekilir |
+| 23–26 | Form alanları | ÇALIŞIYOR — tür `enum`, başlık/açıklama sınırlı, etiketli |
+| 27 | Oluştur gönderimi | ÇALIŞIYOR — hız sınırlı |
+| 28 | İptal | ÇALIŞIYOR |
+| 29 | Toast | ÇALIŞIYOR — sonner, ön eksiz, TR/EN |
+| 30 | Durum değiştirme / çözme | ÇALIŞIYOR — üstlen / başlat / çöz / yeniden aç |
+| 31 | Sorumlu atama | ÇALIŞIYOR |
+| 32 | Son tarih / SLA | ÇALIŞIYOR |
+| 33 | Otomatik eşik tespiti | ÇALIŞIYOR — olay güdümlü + günlük iş + "Şimdi tara" (POST); advisory kilit, kopya yok, 24 saat yeniden açmama |
+| 34 | Demo olay | KALDIRILDI — yazılmaz; eskiler günlük bakımda temizlenir |
+| 35 | Yeni vaka bildirimi | ÇALIŞIYOR — uygulama içi (`ctaPath`) + yüksek önemde push; atamada bildirim |
+| 36 | `incident.created` webhook | ÇALIŞIYOR |
+| 37 | Modül kapısı | ÇALIŞIYOR — sayfa + tüm uçlar `incidents` |
+| 38 | Kiracı izolasyonu | ÇALIŞIYOR |
+| 39 | Arama / tip-önem filtresi / sıralama | ÇALIŞIYOR — önem → gecikme → zaman |
+| 40 | Mobil | ÇALIŞIYOR |
+| 41 | Form a11y | ÇALIŞIYOR |
+| 42 | Tekil GET | ÇALIŞIYOR — detay çekmecesi tüketir |
+
+Ek: masa sinyali görünümü (masa kaynaklı vakalar; çözüm notu zorunlu değil), MTTR metriği, kök neden etiketi, zaman çizelgesi, vakadan görev üretimi (Bana atananlar'a düşer).
+
+### Kapanan bulgular (12/13 + 8'in yarısı)
+1 (demo olay), 2 (A3 atama doğrulama), 3 (GET yan etkisi), 4 (yaşam döngüsü), 5 (okunabilirlik), 6 (sayfa sıfırlama), 7 (hata yönetimi), 9 (dil), 10 (bildirim + webhook), 11 (SQL toplamları), 12 (modül kapısı), 13 (a11y/hiyerarşi). Bulgu 8'in girdi doğrulaması / hız sınırı kısmı kapandı.
+
+### Kalanlar
+- Bulgu 8'in ikinci yarısı: `lib/team-autotask.ts` bayi vakalarını admin iç ekip panosuna kopyalıyor — admin ekip modülünün sahipliği. ŞEMA İSTEĞİ: `Incident.source` (`system|sla|rule|manual`); şimdilik `type` kataloğundan türetilebilir.
+- CSV dışa aktarma / haftalık rapor: bu dalgada yapılmadı (analitik yüzeyinin işi).
+- Toplu çöz/ata: yapılmadı; vaka hacmi tekil işlemle yönetilebilir düzeyde.

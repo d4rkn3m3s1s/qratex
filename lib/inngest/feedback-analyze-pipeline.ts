@@ -272,6 +272,15 @@ export async function runFeedbackAnalyzePipeline(
     console.error('[REMEDY_AUTOMATION] auto-draft failed:', err);
   }
 
+  // Kriz radarı (Gelen Kutusu → Vakalar): olay güdümlü eşik değerlendirmesi. Tekil (kilitli,
+  // açık vaka varken yenisini açmaz); hata analizi bozmaz. Günlük bakım işi güvenlik ağıdır.
+  try {
+    const { runIncidentRadarForDealer } = await import('@/lib/dealer-queues/radar');
+    await runIncidentRadarForDealer(dealerId, { trigger: 'event' });
+  } catch (err) {
+    console.error('[INCIDENT_RADAR] olay güdümlü tarama başarısız:', err);
+  }
+
   await storeFeedbackEmbedding({ feedbackId, dealerId, text });
   if (completed) await maybeTriggerAdaptiveUpdate(dealerId);
   await processAutoReplies(feedbackId);

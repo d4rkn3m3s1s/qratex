@@ -1,48 +1,24 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { listRemedyOffers } from '@/lib/dealer-queues/remedy-server';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Onay bekleyen telafi teklifleri (müşteriye henüz bildirilmemiş).
+ * Eski "onay bekleyen telafiler" ucu — geriye uyumlu takma ad.
+ * Yeni yüzey: Gelen Kutusu → Telafi onayı (`/dealer/inbox/remedy`, BFF
+ * `/api/dealer/queues/remedy`). Modül kapısı + kiracı kapsamı + açık DTO (ham kullanıcı
+ * kimliği ve e-posta dönmez; müşteri adı sunucuda üretilir).
  */
-export async function GET() {
-  const auth = await requireAuth(['DEALER', 'ADMIN']);
-  if ('error' in auth) return auth.error;
-  const { session } = auth;
-
-  const dealerId = session.user.role === 'ADMIN' ? null : session.user.id;
-
-  const offers = await prisma.remedyOffer.findMany({
-    where: {
-      status: 'awaiting_dealer_approval',
-      ...(dealerId ? { dealerId } : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    include: {
-      user: { select: { id: true, name: true } },
-      feedback: {
-        select: {
-          id: true,
-          rating: true,
-          text: true,
-          createdAt: true,
-        },
-      },
-      consumptionReview: {
-        select: {
-          id: true,
-          rating: true,
-          text: true,
-          createdAt: true,
-        },
-      },
-    },
-  });
-
-  return NextResponse.json({ success: true, offers }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+export const GET = defineRoute(
+  {
+    name: 'dealer.remedy-queue.list',
+    roles: ['DEALER', 'ADMIN'],
+    tenant: 'dealer',
+    module: 'remedy_offers',
+    rateLimit: 'read',
+  },
+  async ({ tenant }) => {
+    const page = await listRemedyOffers(tenant.dealerId, { view: 'awaiting', source: 'all', q: '', cursor: null, limit: 50 });
+    return ok({ offers: page.items, nextCursor: page.nextCursor }, { legacySpread: true });
+  }
+);

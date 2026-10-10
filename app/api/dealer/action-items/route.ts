@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
-import { runActionItemsAutoTrigger } from '@/lib/action-items-ai';
 import { z } from 'zod';
 import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
 import {
@@ -16,7 +15,10 @@ export const dynamic = 'force-dynamic';
 
 /**
  * AI Action Engine (madde 36): öneri -> sahip atama -> takip.
- * GET: list action items; otomatik tetikleme (feedback suggestions + AI sidebar analizi).
+ * GET: SALT OKUMA. Eskiden her liste isteği LLM çağırıp yeni aksiyon yazıyordu (bitmeyen iş
+ * döngüsü, N+1, yarış — denetim K9). Öneriler artık Gelen Kutusu → Bana atananlar'daki
+ * "Öneriler" bandında gösterilir ve yalnız bayi kabul edince göreve dönüşür
+ * (`/api/dealer/queues/*`, `lib/dealer-queues/work-server.ts`).
  * POST: create from feedback actionSuggestions veya manuel.
  */
 
@@ -42,7 +44,6 @@ export async function GET(request: NextRequest) {
     const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
     const skip = paginationSkip(page, pageSize);
 
-    const dealerId = session.user.role === 'DEALER' ? session.user.id : null;
     const where =
       session.user.role === 'ADMIN'
         ? {
@@ -68,15 +69,6 @@ export async function GET(request: NextRequest) {
                 }
               : {}),
           };
-
-    // Otomatik tetikleme: feedback suggestions + sidebar verilerinden AI öneri
-    if (dealerId) {
-      try {
-        await runActionItemsAutoTrigger(dealerId);
-      } catch (_) {
-        // Hata listeyi bozmasın
-      }
-    }
 
     const [rows, total] = await Promise.all([
       prisma.actionItem.findMany({

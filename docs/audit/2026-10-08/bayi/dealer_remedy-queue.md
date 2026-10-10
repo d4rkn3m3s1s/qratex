@@ -237,3 +237,58 @@ Her iddia çağıran/çağrılan kod, `prisma/schema.prisma` ve müşteri taraf�
   - Teklif "kaybolmuyor": `pending` teklif müşterinin kenar çubuğundaki "Telafi" menüsünden (`components/dashboard/sidebar.tsx:294`) erişilen `/api/customer/remedy` listesinde görünüyor (`app/api/customer/remedy/route.ts:25-36`, yalnız `awaiting_dealer_approval` ve `rejected` gizli) ve `/customer/feedbacks` da bu ucu çağırıyor (`app/customer/feedbacks/page.tsx:115`).
   - `notification.create` yalnızca DB hatasında başarısız olur; bu durumda hemen ardından gelen `analyticsEvent.create` (`:126-133`) de büyük olasılıkla atar ve istemci 500 alır — "bayi başarı görür ama bildirim gitmez" senaryosu ancak tek bir insert'in seçici olarak düştüğü dar bir pencerede oluşur.
 - Kalıntı (düşük): Yayınla adımları atomik değil (status güncelleme, timeline, bildirim, analytics ayrı sorgular); bildirim düşerse yeniden deneme yok ve `notificationSent` yanlış bilgi veriyor. Öneri: status güncellemesi + bildirim + timeline'ı `$transaction` içine almak, analytics'i `after()`'a taşımak ve `notificationSent`'i gerçek sonuçtan türetmek.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/dealer/inbox/remedy` (Gelen Kutusu → Telafi onayı). `/dealer/remedy-queue` sorgu parametrelerini koruyarak `permanentRedirect` ile buraya yönlenir; eski `layout.tsx` kaldırıldı. Sunucu bileşeni ilk sayfa + sayaçları paralel çeker (`lib/dealer-queues/remedy-server.ts`), istemci adası `components/dealer/b-gelen-kuyruklar/remedy/**`. BFF: `/api/dealer/queues/remedy` (liste, imleçli), `/remedy/[id]` (detay · düzenle · yayınla/reddet/geri al), `/remedy/bulk`. Eski `/api/dealer/remedy-queue` ve `/api/dealer/remedy-offers/[id]` aynı servise bağlanan geriye uyumlu takma adlardır (defineRoute + modül kapısı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR — "Telafi onayı · Gelen Kutusu" (TR/EN), menü adıyla aynı |
+| 2 | Başlık + açıklama | ÇALIŞIYOR — kabuğun tek h1'i + bölüm h2 |
+| 3 | "Geri bildirimlere dön" | KALDIRILDI — Gelen Kutusu sekmeleri aynı işi görür; boş durumda "Gelen Kutusu'na git" |
+| 4 | Otomatik telafi ayarları linki | ÇALIŞIYOR — `/dealer/automation/remedy` |
+| 5 | "Yorumlar" köprüsü | KALDIRILDI — sekme çubuğu; sabit metin kalmadı |
+| 6 | Liste yükleme | ÇALIŞIYOR — zarf v2, `!ok` kodlu hata fırlatır |
+| 7 | Yükleniyor | ÇALIŞIYOR — `loading.tsx` + QueryState iskeleti |
+| 8 | Boş durum | ÇALIŞIYOR — görünüme özel metin + CTA (otomasyon ayarı / Gelen Kutusu) |
+| 9 | Hata durumu | ÇALIŞIYOR — QueryState hata + "Tekrar dene"; boş kuyruk sanılmaz |
+| 10 | Satır listesi | ÇALIŞIYOR |
+| 11 | Tekrarlı "Onay bekliyor" rozeti | KALDIRILDI — yerine kaynak / otomatik-elle / bekleme süresi bilgisi |
+| 12 | Göreli zaman | ÇALIŞIYOR |
+| 13 | Teklif mesajı | ÇALIŞIYOR — düzenlenebilir |
+| 14 | Müşteri adı | ÇALIŞIYOR — ad sunucuda üretilir; e-posta ve ham kimlik dönmez |
+| 15–16 | Kaynak yorum (QR / tüketim) | ÇALIŞIYOR — detayda tam metin + Gelen Kutusu derin bağlantısı |
+| 17 | Seçeneklerin gösterimi | ÇALIŞIYOR |
+| 18 | Mesaj/seçenek düzenleme | ÇALIŞIYOR — `PATCH /api/dealer/queues/remedy/[id]`, zaman çizelgesine `edited` |
+| 19 | Yayınla | ÇALIŞIYOR — onay diyaloğu, tek transaction + kaynak kilidi, gerçek `notificationSent` |
+| 20 | Reddet | ÇALIŞIYOR — neden zorunlu, zaman çizelgesine yazılır, 10 dk içinde geri alınabilir |
+| 21 | Spinner | ÇALIŞIYOR — eylem/düğme bazında |
+| 22 | Çift tık koruması | ÇALIŞIYOR |
+| 23 | Eylem sonrası yenileme | ÇALIŞIYOR — iyimser kaldırma + arka planda geçersiz kılma |
+| 24–25 | Sunucu yetki / yarış | ÇALIŞIYOR — kiracı kapsamı (`resolveDealerScope`; admin salt okunur) |
+| 26 | Modül kapısı | ÇALIŞIYOR — sayfa + tüm uçlar `remedy_offers` |
+| 27 | Sayfalama / toplam | ÇALIŞIYOR — imleçli "Daha fazla" + sekme sayaçları |
+| 28 | Filtre / arama | ÇALIŞIYOR — görünüm (bekleyen/gönderilen/kabul/kapanan) + kaynak + arama, URL'de |
+| 29 | Toplu onay/red | ÇALIŞIYOR — seçim çubuğu, her taslak kendi transaction'ında |
+| 30 | Canlı yenileme | ÇALIŞIYOR — odakta yeniden çekme (30 sn bayatlık) |
+| 31 | Kaynak bağlantısı | ÇALIŞIYOR |
+| 32 | Teklif geçmişi | ÇALIŞIYOR — Gönderilen / Kabul / Kapanan sekmeleri |
+| 33 | Otomatik/elle + tetik nedeni | ÇALIŞIYOR — `origin.trigger` |
+| 34 | SLA / süre dolumu | ÇALIŞIYOR — uzun bekleyen taslak uyarı metriği + günlük işte 30 gün sonra `expired` + onay hatırlatması |
+| 35 | Bildirimden derin link | ÇALIŞIYOR — `ctaPath: /dealer/inbox/remedy?id=…` |
+| 36 | Mobil + dokunma hedefi | ÇALIŞIYOR — ≥44px |
+| 37 | i18n | ÇALIŞIYOR — TR/EN kopya; "Basarili:" ön eki yok (sonner) |
+| 38 | Erişilebilir etiketler | ÇALIŞIYOR — `aria-label` müşteri bağlamlı |
+| 39 | Azaltılmış hareket | ÇALIŞIYOR — `useMotionPolicy` |
+
+### Kapanan bulgular (13/13)
+B1 (seçenekler görünür), B2 (hata görünür), B3 (müşteri adı), B4 (yinelenen taslak: kaynak kilidi + kabul edilmiş telafi varsa 409), B5 (atomik yayın), B6 (onay + düzenleme + gerekçe + geri al), B7 (müşteri kabulü allowlist — `lib/remedy-offer-service.ts`), B8 (yaşam döngüsü sekmeleri), B9 (modül kapısı), B10 (spinner/iyimser güncelleme), B11 (dil), B12 (derin link), B13 (a11y/44px).
+
+### Kalanlar
+- Şube bazlı filtre: liste DTO'sunda şube yok; düşük değer, eklenmedi.
+- Müşteriler 360'a doğrudan bağlantı: 360 çekmecesi müşteri yüzeyinin sözleşmesi; kaynak yorum bağlantısı yeterli görüldü.

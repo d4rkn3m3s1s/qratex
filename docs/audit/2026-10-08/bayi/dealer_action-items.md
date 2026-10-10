@@ -256,3 +256,58 @@
 **Yeniden üretim:** Yüzlerce/binlerce analizli geri bildirimi olan bayi aksiyon sayfasında arama kutusuna yazar; her debounce'lu istek N+1 sorgu turu çalıştırır. Açık iş < 3 ise her istek ayrıca LLM yanıtını bekler ve yükleme göstergesi saniyelerce takılı kalır.
 
 **Öneri:** Okuma ucu yalnızca okumalı (bkz. İddia 1). Feedback'ten aksiyona dönüşüm, analiz tamamlandığı anda tek geri bildirim için çalıştırılmalı; geçmiş kayıtlar için bir kerelik backfill işi yeterli. Geçici çözüm gerekirse: tek `groupBy({ by: ['feedbackId'], _count })` ile sayılar toplu alınmalı, yalnızca aksiyonu henüz üretilmemiş geri bildirimler (ör. `Feedback.actionItemsMaterializedAt IS NULL`) seçilip `take` ile sınırlandırılmalı. LLM çağrısı `AbortSignal.timeout(~8s)` ve `maxRetries: 0/1` ile sınırlanmalı, istek yolundan `after()`/Inngest arka plan işine alınmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/dealer/inbox/assigned` (Gelen Kutusu → Bana atananlar): görev + vaka birleşik kuyruğu. `/dealer/action-items` sorgu parametrelerini koruyarak kalıcı yönlenir; eski `layout.tsx` kaldırıldı. Sunucu: `lib/dealer-queues/{work-core,work-server,assignees}.ts`; istemci: `components/dealer/b-gelen-kuyruklar/assigned/**` (`assigned-screen`, `work-row`, `task-detail`, `suggestions-panel`); BFF: `/api/dealer/queues/work` (liste + özet; STAFF yalnız kendine atananları görür), `/work/suggestions` (öneriler; GET'te LLM yok; gizle), `/tasks` (oluştur), `/tasks/[id]` (detay / PATCH). Eski `/api/dealer/action-items` GET'i salt okumaya çevrildi. Test: `__tests__/dealer/b-gelen-kuyruklar/work.test.ts` (9 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1–3 | Başlık / metadata / liste başlığı | ÇALIŞIYOR — "Bana atananlar · Gelen Kutusu" |
+| 4 | Arama | ÇALIŞIYOR — görev metni + vaka başlık/açıklaması; etiket doğru |
+| 5 | `?q=` derin bağlantı | ÇALIŞIYOR — sunucu ilk sayfayı `q` ile çeker; arama URL'ye yazılır |
+| 6 | Durum filtresi | KALDIRILDI — yerine kapsam sekmeleri (Bana / Ekibe / Atanmamış / Kapanan) + tür filtresi; ölü "Atandı/İşlemde" seçenekleri yok |
+| 7 | Sayfalama | ÇALIŞIYOR — "Daha fazla" (ofset); aralık dışına düşme yok |
+| 8 | Yükleniyor | ÇALIŞIYOR — önceki veri korunur |
+| 9 | Boş durum | ÇALIŞIYOR — kapsama özel, iç jargon yok |
+| 10 | Hata | ÇALIŞIYOR — QueryState + tekrar dene |
+| 11 | Aksiyon metni | ÇALIŞIYOR — başlık/ayrıntı ayrılır, `whitespace-pre-line` |
+| 12 | Bağlı geri bildirim | ÇALIŞIYOR — silinmişler filtrelenir; Gelen Kutusu bağlantısı |
+| 13 | Kaynak etiketi | ÇALIŞIYOR — tüm kaynaklar etiketli |
+| 14 | Öncelik rozeti | ÇALIŞIYOR — DS token'ları (koyu tema uyumlu) |
+| 15 | Durum rozeti | ÇALIŞIYOR |
+| 16 | Atanan kişi | ÇALIŞIYOR — detayda seçici |
+| 17 | Son tarih | ÇALIŞIYOR — gecikme vurgusu; kapanma zamanı gösterilir |
+| 18 | Tamamla | ÇALIŞIYOR — meşgulken kilitli; detayda yeniden aç |
+| 19 | Animasyon | ÇALIŞIYOR — layout/exit, azaltılmış hareket |
+| 20 | Toast | ÇALIŞIYOR |
+| 21 | GET'te AI üretimi | KALDIRILDI — GET salt okuma; öneriler "Önerilen işler" panelinde, bayi kabul edince göreve döner |
+| 22 | Öneriden otomatik oluşturma | KALDIRILDI (otomatik) → elle kabul; öneriler metin anahtarıyla birleştirilir, kanıt sayılı |
+| 23 | Sahiplik | ÇALIŞIYOR |
+| 24 | `assignedToId` doğrulaması | ÇALIŞIYOR — `validateAssignee` (oluştur + PATCH + eski uçlar); e-posta dönmez |
+| 25 | Modül kapısı | ÇALIŞIYOR — `action_items`; vaka modülü kapalıysa vakalar listelenmez ve not gösterilir |
+| 26 | Navigasyon | ÇALIŞIYOR — Gelen Kutusu sekmesi (kayıt navigasyon ajanının) |
+| 27 | Durum değiştirme | ÇALIŞIYOR — başlat / tamamla / iptal / yeniden aç (durum makinesi sunucuda) |
+| 28 | Atama + son tarih düzenleme | ÇALIŞIYOR |
+| 29 | Manuel oluşturma | ÇALIŞIYOR — "Yeni görev" (aynı açık görev varsa 409) |
+| 30 | Sıralama | ÇALIŞIYOR — geciken → öncelik → son tarih |
+| 31 | Filtreler | ÇALIŞIYOR — kapsam + tür + arama |
+| 32 | Özet sayaçlar | ÇALIŞIYOR — bana açık / geciken / atanmamış / bu hafta kapanan (Europe/Istanbul haftası) |
+| 33 | Detay paneli | ÇALIŞIYOR — durum, öncelik, kaynak yorum, not, zaman çizelgesi |
+| 34 | Toplu işlem | KALDIRILDI (bu dalga) — birleşik kuyrukta görev/vaka karışık; satırda tekil hızlı eylemler var |
+| 35 | Etki skoru | ÇALIŞIYOR |
+| 36 | Etiketler | ÇALIŞIYOR |
+| 37 | Mobil | ÇALIŞIYOR — ≥44px |
+| 38 | Personel görünümü | KISMİ — API STAFF'a yalnız kendi işini döndürür; personel panelindeki sayfa personel yüzeyinin işi |
+| 39 | Yarış koruması | ÇALIŞIYOR — oluşturmada advisory kilit; GET yan etkisiz |
+
+### Kapanan bulgular (14/15)
+1 (GET yan etkisi), 2 (sınırsız sorgu / N+1 / LLM), 3 (yarış), 4 (IDOR — A3), 5 (hata görünür), 6 (atanan kişiye bildirim + Bana atananlar), 7 (durum makinesi UI), 8 (önerilerin birleştirilmesi), 9 (modül kapısı), 10 (önceliklendirme / özet / detay), 11 (sayfalama), 12 (jargon / i18n), 13 (a11y + hareket), 14 (ölü kod: eski sayfa yönlendirmeye indirildi).
+
+### Kalanlar
+- Bulgu 15 (bayi aksiyonlarının admin iç ekip panosuna kopyalanması, `lib/team-autotask.ts`): admin ekip modülünün sahipliği.
+- Personel paneline "Bana atananlar" sayfası: `/api/dealer/queues/work` hazır; personel yüzeyi bağlamalı.

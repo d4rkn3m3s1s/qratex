@@ -2,15 +2,15 @@
 export const dynamic = 'force-dynamic';
 
 /**
- * Incident/Kriz radarı (madde 35): eşik aşımında alarm + görev.
- * GET: list dealer incidents; otomatik tetikleme (puan düşüşü, şikayet artışı) sayfa açıldığında çalışır.
- * POST: create incident (manuel veya otomatik tetikleme).
+ * Eski vaka ucu (geriye uyumluluk). Yeni yüzey: Gelen Kutusu → Vakalar
+ * (`/dealer/inbox/incidents`, BFF `/api/dealer/queues/incidents`).
+ * GET artık SALT OKUMA: eşik tespiti ve demo temizliği okuma yolundan çıkarıldı
+ * (bkz. `lib/dealer-queues/radar.ts`, `lib/dealer-queues/maintenance.ts`).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
-import { runIncidentDetection, purgeLegacyDemoIncidents } from '@/lib/incident-detection';
 import { z } from 'zod';
 import {
   PRIVATE_NO_STORE_HEADERS,
@@ -44,22 +44,10 @@ export async function GET(request: NextRequest) {
     const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
     const skip = paginationSkip(page, pageSize);
 
-    const dealerId = session.user.role === 'DEALER' ? session.user.id : null;
     const where =
       session.user.role === 'ADMIN'
         ? (status ? { status } : {})
         : { dealerId: session.user.id, ...(status ? { status } : {}) };
-
-    // Otomatik tetikleme: sadece dealer için; eşik aşımında olay oluştur.
-    // Sahte "demo olay" artık YAZILMAZ (D11); eskiden yazılmış olanlar burada temizlenir.
-    if (dealerId) {
-      try {
-        await purgeLegacyDemoIncidents(dealerId);
-        await runIncidentDetection(dealerId);
-      } catch (_) {
-        // Detection hatası listeyi bozmasın
-      }
-    }
 
     const [rows, total] = await Promise.all([
       prisma.incident.findMany({
