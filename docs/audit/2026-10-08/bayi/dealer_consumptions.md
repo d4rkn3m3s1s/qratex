@@ -220,3 +220,64 @@ Doğru olan kısım: `consumption.create` (`app/api/dealer/consumptions/route.ts
 |---|---|---|
 | B1 · Sınırsız happy-hour çarpanı | Doğrulandı | KRİTİK kalır. Herkes bayi olarak kayıt olabildiği için sömürü eşiği düşük. |
 | B2 · Atomik olmayan oluşturma | Kısmen doğrulandı | Çift kayıt mümkün, çift puan mümkün değil. Şiddet ORTA'ya düşürülmeli. |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa "İşlem defteri" olarak yeniden yazıldı: sunucu bileşeni (`app/dealer/consumptions/page.tsx`) URL filtreleriyle ilk sayfa + özet (+ önceki eşit dönem) ve ürün listesini paralel yükler; istemci adası `components/dealer/b-kasa-tuketim/ledger-screen.tsx` (React Query, `keepPreviousData`, sığ URL eşitleme). Veri `lib/dealer/kasa/server.ts#listLedger` (açık `select` DTO, İstanbul günleri). Uçlar `defineRoute`: `GET /api/dealer/consumptions` (filtreli BFF), `GET /api/dealer/consumptions/export` (CSV), `POST /api/dealer/consumptions/[id]/void` (geri alma). Testler: `__tests__/lib/dealer-kasa-core.test.ts`, `__tests__/lib/dealer-kasa-server.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Meta başlık/açıklama | ÇALIŞIYOR | Sayfada iki dilli `generateMetadata`; "anomali" vaadi kaldırıldı (layout yalın). |
+| 2 | Kenar menü + Keşfet | ÇALIŞIYOR | Navigasyon ajanının; dokunulmadı. |
+| 3 | Rol/oturum koruması | ÇALIŞIYOR | `defineRoute` roles + `requireAuth` (DB). |
+| 4 | Veri kapsamı (IDOR) | ÇALIŞIYOR | `resolveDealerScope`; her sorgu `dealerId` ile. |
+| 5 | ADMIN erişimi | ÇALIŞIYOR | `?dealerId=` ile salt okunur (geri alma/kasa düğmeleri gizli, bilgi bandı). |
+| 6 | Hero | ÇALIŞIYOR | QDL `PageHeader` (compact) + "Kasayı aç" ve "CSV indir" eylemleri. |
+| 7 | "Toplam işlem" sayacı | ÇALIŞIYOR | KPI şeridi (mobilde de görünür): ciro, işlem, ortalama sepet, yorum dönüşümü (+ tekrar gelen müşteri oranı), önceki döneme göre değişim. |
+| 8 | Liste kart başlığı | ÇALIŞIYOR | Tablo `caption` + mobil liste etiketi. |
+| 9 | Liste veri çekme | ÇALIŞIYOR | React Query (iptal + anahtar), `kasaFetch` `res.ok`/zarf kontrolü; oturum yenilemesi yeniden çekmez. |
+| 10 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState` tablo iskeleti yalnız ilk yüklemede; sayfa/filtre değişiminde önceki veri kalır. |
+| 11 | Boş durum | ÇALIŞIYOR | Filtreli boş ("Filtreleri temizle") ve hiç kayıt yok ("Kasayı aç" CTA) ayrı. |
+| 12 | Hata durumu | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; "200 + boş" yok. |
+| 13 | Müşteri avatarı | ÇALIŞIYOR | Yalnız https/yerel yol; `onError` baş harfe düşer (`next/image` yok). |
+| 14 | Müşteri adı + yedek | ÇALIŞIYOR | |
+| 15 | Kartın son 4 hanesi | ÇALIŞIYOR | Sunucuda; iç kart kimliği yanıttan çıkarıldı. |
+| 16 | Tarih/saat | ÇALIŞIYOR | İstanbul saat dilimi + göreli zaman. |
+| 17 | Ürün rozeti | ÇALIŞIYOR | Kategori adı/ikonu detayda. |
+| 18 | Bayi notu | ÇALIŞIYOR | Listede tek satır kırpma, detayda tam. |
+| 19 | Tutar | ÇALIŞIYOR | `Intl` + yerel; `0` → "İkram". |
+| 20 | Değerlendirme rozeti | ÇALIŞIYOR | "★ 4/5" renk skalası (1-2 tehlike, 3 nötr, 4-5 başarı; QDL ton token'ları, AA). Yorum metni, boyutlar, bayi yanıtı detayda; "Yanıtla / telafi teklif et" Gelen Kutusu'ndaki ilgili kayda (`/dealer/inbox?source=consumption&id=cr-…`) gider. |
+| 21 | "Değerlendirme yok" rozeti | ÇALIŞIYOR | "Değerlendirilmedi"; hatırlatma aksiyonu eklenmedi (bkz. kalanlar). |
+| 22 | Satır stagger | KALDIRILDI | Operasyon kaydı: sakin; animasyonsuz yoğun tablo. |
+| 23 | Satır hover (sahte) | ÇALIŞIYOR | Satır artık detay çekmecesini açar (klavyeyle müşteri düğmesi). |
+| 24 | Sayfa bilgisi | ÇALIŞIYOR | `aria-live`, toplam kayıt sayısıyla. |
+| 25 | Önceki/Sonraki | ÇALIŞIYOR | Yarış yok (sorgu anahtarı), sayfa değişince liste başına kaydırma + odak, URL'de. |
+| 26 | Yerel `LazyMotion` | KALDIRILDI | |
+| 27 | URL'de durum | ÇALIŞIYOR | Dönem/özel tarih/puan/ürün/arama/sıralama/sayfa URL'de (sığ `replaceState`, sunucu da okur). |
+| 28 | Tarih aralığı filtresi | ÇALIŞIYOR | Bugün/7/30/90 gün/tümü/özel (İstanbul günleri). |
+| 29 | Ürün filtresi | ÇALIŞIYOR | Ayrı kategori filtresi eklenmedi (ürün filtresi + arama yeterli). |
+| 30 | Değerlendirme filtresi | ÇALIŞIYOR | Tümü/değerlendirilmedi/1-2/3/4-5 + "Aksiyon bekleyen" (1-2★) hızlı çipi. Silinmiş yorum "değerlendirilmedi" sayılır. |
+| 31 | Arama | ÇALIŞIYOR | Müşteri adı, ürün adı, not (≥2 karakter, 300 ms bekleme). |
+| 32 | Sıralama | ÇALIŞIYOR | En yeni/en eski/tutar ↑↓ (null tutarlar sonda). |
+| 33 | Dışa aktarma | ÇALIŞIYOR | CSV (`;`, UTF-8 BOM, formül enjeksiyonu nötr, ≤5000 satır, 10/dk). |
+| 34 | Özet KPI'lar | ÇALIŞIYOR | Bkz. #7; önceki 0 iken değişim uydurulmaz. |
+| 35 | Kayıt detayı | ÇALIŞIYOR | `DetailSheet` (önceki/sonraki gezinme): özet, pasif puan (defterden), yorum + boyutlar + yanıt, geri alma. |
+| 36 | İptal/düzeltme | ÇALIŞIYOR | 15 dk + değerlendirilmemiş; gerekçe zorunlu; puan `debitPoints` ile ters kayıt, klan düşümü, `CONSUMPTION_VOIDED` denetimi, müşteriye bildirim (tek tx). Düzeltme = geri al + kasada yeniden gir. |
+| 37 | Kaydı oluşturan personel | KISMİ | Aktör kart denetiminde (`CONSUMPTION_ADDED.userId`) ve mint meta'sında `staffId`; listede sütun yok (şema alanı yok — ŞEMA İSTEĞİ). |
+| 38 | Anomali işaretleme | KALDIRILDI | Vaat metadata'dan çıkarıldı; puan tarafı anomali Dalga 1 velocity/tavanlarında. |
+| 39 | Canlı güncelleme | ÇALIŞIYOR | İlk sayfadayken 30 sn'de bir tazeleme (sekme görünürken); geri alma/kasa kaydı sonrası sorgular geçersizlenir. SSE kanalı bağlanmadı. |
+| 40 | Mobil düzen | ÇALIŞIYOR | Mobilde kart listesi, ≥44px hedefler, yatay kaydırılan dönem çipleri. |
+
+### Kapanan bulgular
+B1 (Dalga 1: çarpan zod + şelale + `mintPoints`), B2 (Dalga 1 tx + `clientOpId`; bu dalgada kasa form başına kimlik üretir), B3, B4, B5, B6 (yüzey metinleri ve para/tarih yerel; servis hata metinleri `code` ile eşlenir), B7 (açık DTO, e-posta/iç kimlikler yok), B8, B9, B10 → **10/10**.
+
+### Kalanlar
+- "Yorum hatırlat" aksiyonu: müşteriye ikinci bildirim için ayrı kural/tavan tasarımı gerekir; eklenmedi.
+- Kategori filtresi ve tutar aralığı filtresi eklenmedi (ürün filtresi + sıralama ile karşılanıyor).
+- Gerçek zamanlı (SSE) `consumption_created` olayı yok; 30 sn yoklama.
+- **ŞEMA İSTEĞİ:** `Consumption.voidedAt`, `voidReason`, `voidedById`, `createdByStaffId`, `locationId` — yumuşak iptal (şu an silme + denetim anlık görüntüsü) ve personel/şube sütunu için.

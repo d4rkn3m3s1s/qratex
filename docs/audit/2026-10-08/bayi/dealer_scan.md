@@ -230,3 +230,80 @@
 - Sonuç: QR kadrajda kaldıkça ~10/sn `GET /api/dealer/cards/scan/[token]` + bip. Başarılı yolda kamera ancak ilk fetch dönünce durur (`page.tsx:285`), bu arada uçuşta olan istek sayısı kadar `SCANNED` CardAuditLog yazılır (`app/api/dealer/cards/scan/[token]/route.ts:85-89`; bu uçta hız sınırı yok). Hata yolunda (`page.tsx:271-281`) `stopCamera` çağrılmadığı için geçersiz/bloklu/aktive edilmemiş kartta istek ve hata toast'ı kart kadrajdan çekilene kadar sürer (bu yolda audit log yazılmaz, yalnız istek + DB okuma fırtınası).
 - Yeniden üretim (kamera düzeltildikten sonra veya başlığı uygulamayan tarayıcıda): `/dealer/scan` → kamerayı aç → BLOCKED bir kartın QR'ını 3 sn tut → ağ sekmesinde ~30 GET ve ~30 hata toast'ı; aktif kartta 2-5 adet SCANNED audit kaydı.
 - Düzeltme yönü: tekrar-okuma kilidini state yerine `useRef` ile tut (`lastCodeRef`, `inFlightRef`), callback'te ilk iş `scanner.pause(true)` çağır ve işlem bitince başarıda `stop`, hatada kısa bekleme sonrası `resume`; bu mantık `useQrScanner` kancasına taşınıp `/customer/scan` ile paylaşılmalı. Sunucu tarafında scan GET'ine bayi başına hafif hız sınırı ve aynı kart+bayi için kısa pencere içinde SCANNED audit tekilleştirmesi eklenmeli.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa "Kasa modu" olarak yeniden yazıldı: sunucu bileşeni (`app/dealer/scan/page.tsx`) ürün kataloğu + hızlı tuşlar + "bugün" akışını tek seferde yükler; istemci adası `components/dealer/b-kasa-tuketim/**` (tarayıcı, müşteri kartı, işlem oluşturucu, başarı anı, bugün akışı, çevrimdışı kuyruk). Sunucu mantığı `lib/dealer/kasa/{core,server,types,http}.ts`; uçlar `defineRoute` (rol + kiracı + rate limit). Testler: `__tests__/lib/dealer-kasa-core.test.ts`, `__tests__/lib/dealer-kasa-server.test.ts` (+ mevcut `dealer-consumption-gates`, `consumption-service` yeşil).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR | Hero kaldırıldı; QDL `PageHeader` (compact) + "İşlem defteri" bağlantısı. |
+| 2 | Segment metadata | ÇALIŞIYOR | Sayfada iki dilli `generateMetadata`; layout yalın. |
+| 3 | Rol erişimi | ÇALIŞIYOR | Sayfa + API: DEALER ve AKTİF STAFF (`resolveDealerScope`, DB'den). ADMIN kasada yazamaz. |
+| 4 | Kategori yükleme | KALDIRILDI | Kategori→ürün iki seviye yerine sunucuda tek ürün listesi (aktif, bayinin + global, kategori adıyla) + istemcide arama. Yükleme hatası görünür (`KasaLoadError`, yeniden dene). |
+| 5 | Kamerayı aç | ÇALIŞIYOR | P0-36 ile `camera=(self)`; D1 `useQrScanner`. |
+| 6 | Kamera hata mesajları | ÇALIŞIYOR | Kancanın hata kodları (izin/politika/meşgul/güvensiz bağlam) `InlineError` + yeniden dene. |
+| 7 | Çift tık koruması | ÇALIŞIYOR | Kanca durum makinesi; açılırken düğme yok. |
+| 8 | Tam ekran katman | KALDIRILDI | Sayfa içi vizör; hata/sonuç artık kameranın arkasında kalmaz, FAB çakışması yok. |
+| 9 | Tarama çerçevesi animasyonu | ÇALIŞIYOR | Sonsuz döngü kaldırıldı; yalnız okuma anında 320 ms kilit vurgusu (azaltılmış harekette yok); çerçeveyi kütüphanenin gerçek qrbox gölgesi çizer. |
+| 10 | "Tarama aktif" göstergesi | ÇALIŞIYOR | `role=status aria-live` metin (nabız döngüsü yok). |
+| 11 | Kamerayı kapat | ÇALIŞIYOR | |
+| 12 | Kamera çevir | ÇALIŞIYOR | Kanca `switchCamera` (bayat kapanım yok). |
+| 13 | Ses aç/kapat | ÇALIŞIYOR | Tercih `localStorage`'da; işleyici her render güncel. |
+| 14 | Bip sesi | ÇALIŞIYOR | Tek paylaşılan `AudioContext`, unmount'ta kapanır; `navigator.vibrate(30)` (hareket politikası izin verirse). |
+| 15 | Aynı kodu tekrar okuma engeli | ÇALIŞIYOR | Kanca kilidi + 4 sn dedupe; kart bulununca kamera durur. |
+| 16 | URL'den token | ÇALIŞIYOR | `extractCardToken`; `?token=` derin bağlantısı korunur. |
+| 17 | Manuel token | ÇALIŞIYOR | `<form>` + tek uçuş kilidi, doğrulama mesajı, başarıda alan temizlenir. |
+| 18 | "Doğrulanıyor" katmanı | ÇALIŞIYOR | |
+| 19 | Kart tarama API'si | ÇALIŞIYOR | `defineRoute` + kiracı; maskeli DTO. |
+| 20 | `SCANNED` denetim kaydı | ÇALIŞIYOR | Aynı kart + aktör için 60 sn tekilleştirme; `getClientIp`; aktör başına 60/dk. |
+| 21 | Kart durumu hataları | ÇALIŞIYOR | Sunucu `code` → istemci iki dilli metin; arşivli kart ve kendi kartı da kapsanır. |
+| 22 | Hata kartı + tekrar dene | ÇALIŞIYOR | Hata kartı vizörün altında; geçersiz kartta istek fırtınası yok (kanca kilidi). |
+| 23 | Müşteri kimlik kartı | ÇALIŞIYOR | E-posta KALDIRILDI; ad maskeli ("Ayşe K."), baş harf yedekli avatar (yalnız https/yerel yol). |
+| 24 | Toplam tüketim | ÇALIŞIYOR | "Ziyaret" sayısı + "N. ziyaret / İlk ziyaret" vurgusu. |
+| 25 | "Son 5" sayacı | KALDIRILDI | Bilgi taşımıyordu; yerine son ziyaret (göreli) ve bu işletmedeki toplam harcama. |
+| 26 | Son tüketimler | ÇALIŞIYOR | 5'in tamamı; tutar + yıldız + yerel göreli zaman. |
+| 27 | "Tüketim ekle" | ÇALIŞIYOR | Ayrı dialog yok; oluşturucu doğrudan müşteri kartının altında. |
+| 28 | Sıfırla | ÇALIŞIYOR | "Vazgeç · Yeni müşteri" etiketli düğme. |
+| 29 | Boş durum | ÇALIŞIYOR | |
+| 30 | Kategori seçimi | KALDIRILDI | Bkz. #4 (rakip ürün sayısı sızıntısı da kalktı). |
+| 31 | Ürün seçimi | ÇALIŞIYOR | Aranabilir tek liste (radio grubu); ürün değişince fiyattan gelen tutar güncellenir, ürün kaldırılınca temizlenir. |
+| 32 | Fiyat otomatik doldurma | ÇALIŞIYOR | Fiyat 0 dahil; çıplak "0" basılmaz. |
+| 33 | Tutar alanı | ÇALIŞIYOR | `inputMode=decimal`, TR biçim ("1.250,50") ayrıştırma, 0–1.000.000 sınırı (sunucuda da). |
+| 34 | Fiş OCR | ÇALIŞIYOR | Yeni `receipt-ocr.tsx`: TR binlik düzeltildi, sonuç "Fişte okunan … · Kullan" onay çipi, iki dilli. Eski `components/ocr/receipt-amount-scanner.tsx` silindi (tek kullanıcı buydu). |
+| 35 | Not alanı | ÇALIŞIYOR | `maxLength=500`. |
+| 36 | Kaydet | ÇALIŞIYOR | Tek tx (Dalga 1 servisi) + form başına `clientOpId`; 5xx'te "tekrar göndermek güvenli" mesajı. |
+| 37 | İptal | ÇALIŞIYOR | Oluşturucu her kart için yeniden kurulur (`key`), form taşınmaz. |
+| 38 | Kayıt sonrası tazeleme | ÇALIŞIYOR | Tekrar tarama YOK; yanıt `passivePoints`, `multiplier`, `passiveCapped`, `visitCountHere` döner; başarı paneli (sayaçlı puan) + bugün akışı yenilenir. |
+| 39 | Müşteriye bildirim | ÇALIŞIYOR | Servis tx'i içinde (metin sunucuda TR; bkz. kalanlar). |
+| 40 | Pasif + klan puanı | ÇALIŞIYOR | `mintPoints` + `points_credited` (Dalga 1, P0-13). |
+| 41 | Happy hour + sezon | ÇALIŞIYOR | Çarpan şelalesi ≤ 4 (Dalga 1). |
+| 42 | Isı haritası + ziyaret görevi | ÇALIŞIYOR | `after()` (Dalga 1). |
+| 43 | Hız sınırı | ÇALIŞIYOR | Kart+bayi 5/dk + `mutation` politikası. |
+| 44 | Ürün sahiplik kontrolü | ÇALIŞIYOR | Kasa yalnız aktif ürün listeler; hızlı tuşta aktiflik + sahiplik zorunlu. Servis `isActive`'i ayrıca denetlemez (ortak modül; kalan). |
+| 45 | Unmount kamera temizliği | ÇALIŞIYOR | Kanca idempotent teardown. |
+| 46 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun; müşteri bulununca başlığa odak + kaydırma; masaüstünde 3 sütun (kamera / müşteri+işlem / bugün). Pano kısayolu navigasyon ajanının. |
+| 47 | Erişilebilirlik | ÇALIŞIYOR | İkon düğmelerde `aria-label`, `Label htmlFor`, `aria-live` durumlar, ≥44px hedefler, odak yönetimi. |
+| 48 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`; sonsuz döngü yok; sayaç/yay geçişleri azaltılmışta anlık. |
+| 49 | Çok dillilik | ÇALIŞIYOR | Yüzey metinleri `copy.ts` (TR/EN), para/tarih `Intl` + yerel; API kodları istemcide eşlenir. |
+| 50 | Personel ile tarama | ÇALIŞIYOR (API + sayfa) | Uçlar ve sayfa STAFF'ı kabul eder; denetimde aktör, mint meta'sında `staffId`; personel kendi kartına işlem yazamaz. Proxy STAFF'ı `/dealer/*`'a almıyorsa giriş noktası proxy/navigasyon sahibinde. |
+| 51 | Hızlı hazır ayarlar | ÇALIŞIYOR | Hızlı tuş ızgarası: tek dokunuşla kayıt; "Hızlı tuş yap", düzenle/kaldır (yalnız DEALER); `quick-presets` uçları zod + sahiplik + 24 tuş tavanıyla yeniden yazıldı. |
+| 52 | Çevrimdışı kuyruk | ÇALIŞIYOR | Cihaz kuyruğu (`use-offline-queue.ts`): ağ yokken/ağ hatasında işlem aynı `clientOpId` ile bekler, bağlantı gelince sırayla gönderilir (sunucu tekilleştirir); kalıcı ret listelenir; çevrimdışıyken kart "doğrulamadan kuyruğa al" ile kaydedilebilir (sunucu gönderimde doğrular). |
+| 53 | Geri alma/düzeltme | ÇALIŞIYOR | `POST /api/dealer/consumptions/[id]/void`: 15 dk + değerlendirilmemiş; `debitPoints` ters kayıt, defter satırı `reversed`, klan düşümü, `CONSUMPTION_VOIDED` tam anlık görüntü, müşteriye bildirim — tek tx. Başarı panelinde ve bugün akışında geri sayımlı "Geri al". |
+| 54 | Ödül/kupon kullanımı | EKSİK (bilerek) | Bayiye bağlı "kullanılabilir ödül" modeli yok; uydurma rozet gösterilmedi. |
+| 55 | Şüpheli aktivite kontrolü | KISMİ | Puan tarafı Dalga 1'de `mintPoints` tavanları + velocity ile kapsanıyor; `lib/security.ts` ortak modül, bu yüzeyden bağlanmadı. |
+| 56 | Bugünkü kayıtlar / oturum özeti | ÇALIŞIYOR | "Bugün" paneli: işlem, ciro, yorum oranı + son 10 işlem (İstanbul günü), 60 sn'de bir tazelenir, geri alma. |
+
+### Kapanan bulgular
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 → **12/12** (#7'de manuel kod yolu yetkiye bağlanmadı; bkz. kalanlar).
+
+### Kalanlar
+- Dinamik (dönen) müşteri kodu: müşteri uygulaması + imzalı kod gerektirir; bu yüzeyin dışı. Manuel kod yolu açık kalır (token 21 karakter, numaralandırılamaz; aktör başına 60/dk).
+- İşlem tetikli davet zamanlaması/kanal seçimi yok; bildirim servis tx'inde anında gider.
+- Servis bildirim metni sabit TR (`lib/consumption/service.ts`, offline-sync ile ortak).
+- Geri alma kaydı SİLER (yorumlu kayıt geri alınamaz; tam anlık görüntü kart denetiminde arşivlenir). **ŞEMA İSTEĞİ:** `Consumption.voidedAt DateTime?`, `voidReason String?`, `voidedById String?` (+ `createdByStaffId String?`) — silmek yerine yumuşak iptal ve personel atfı için. Isı haritası kovası ve ziyaret görevi ilerlemesi geri alınmaz.
