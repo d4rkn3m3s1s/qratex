@@ -121,10 +121,13 @@ export async function withIdempotency<T>(
   try {
     if (existing) {
       // Süresi geçmiş eski kayıt var → in-progress'e resetle (sadece süresi geçmişse).
-      await prisma.idempotencyKey.updateMany({
+      const reset = await prisma.idempotencyKey.updateMany({
         where: { key, expiresAt: { lte: now } },
         data: { route, statusCode: 0, responseBody: '', expiresAt },
       });
+      // 0 satır = anahtar süresi dolmamış başka bir kayda ait (başka rota) ya da paralel bir
+      // istek az önce sıfırladı. Rezervasyon YOK → işlemeden 409 (eskiden rezervasyonsuz işleniyordu).
+      if (reset.count === 0) throw new Error('idempotency key not reserved');
     } else {
       await prisma.idempotencyKey.create({ data: { key, route, statusCode: 0, responseBody: '', expiresAt } });
     }
@@ -137,7 +140,22 @@ export async function withIdempotency<T>(
   }
 
   // İşle + gerçek sonucu yaz.
-  const result = await handler();
-  await storeIdempotency(key, route, result.statusCode, result.body);
+  // Handler fırlatırsa ya da 5xx dönerse rezervasyon SİLİNİR (denetim O7): eskiden statusCode=0
+  // kaydı kalıyor, aynı anahtarla her yeniden deneme 24 saat boyunca 409 IN_PROGRESS alıyordu.
+  // Sunucu hatası önbelleğe alınmaz; istemci aynı anahtarla güvenle yeniden deneyebilir.
+  const releaseReservation = () =>
+    prisma.idempotencyKey.deleteMany({ where: { key, statusCode: 0 } }).catch(() => undefined);
+  let result: { statusCode: number; body: T };
+  try {
+    result = await handler();
+  } catch (e) {
+    await releaseReservation();
+    throw e;
+  }
+  if (result.statusCode >= 500) {
+    await releaseReservation();
+  } else {
+    await storeIdempotency(key, route, result.statusCode, result.body);
+  }
   return NextResponse.json(result.body, { status: result.statusCode, headers: PRIVATE_NO_STORE_HEADERS });
 }

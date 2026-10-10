@@ -48,3 +48,24 @@ export function dueRelativeLabel(dueAt: Date, now: Date): 'overdue' | 'today' | 
   if (diff === 1) return 'tomorrow';
   return 'later';
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+/** Önümüzdeki 24 saat içinde biten görevler hatırlatılır. */
+export const TASK_DUE_LOOKAHEAD_MS = 24 * HOUR_MS;
+/**
+ * Hatırlatması gönderilemeden bitiş tarihi geçen görevler (dünkü koşu başarısız oldu ya da görev
+ * koşudan sonra eklendi) bu kadar geriye kadar yine yakalanır — "pencere dışına düştü, hatırlatma
+ * kalıcı olarak kayboldu" durumu (denetim Y2) olmasın. Günde tek koşuda 24 saatten uzun olmalı.
+ */
+export const TASK_DUE_LOOKBACK_MS = 36 * HOUR_MS;
+
+/**
+ * Görev hatırlatma penceresi: mutlak zaman, sunucunun saat diliminden bağımsız (denetim O8).
+ * Eski "TR günü" penceresi UTC sunucuda [TR 03:00, ertesi gün 02:59] oluyordu.
+ */
+export function taskDueWindow(now: Date): { from: Date; to: Date } {
+  return {
+    from: new Date(now.getTime() - TASK_DUE_LOOKBACK_MS),
+    to: new Date(now.getTime() + TASK_DUE_LOOKAHEAD_MS),
+  };
+}
