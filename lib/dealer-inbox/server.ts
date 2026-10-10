@@ -674,7 +674,10 @@ export async function getInboxMeta(dealerId: string, actorId: string): Promise<I
     assignees,
     qrCodes: qrCodes.map((q) => ({ id: q.id, name: q.name })),
     templates,
-    sla: inboxSlaHours(),
+    sla: (() => {
+      const h = inboxSlaHours();
+      return { negativeHours: h.negative, defaultHours: h.default };
+    })(),
     remedyEnabled,
     aiEnabled,
     business: { name: businessName },

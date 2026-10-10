@@ -56,6 +56,11 @@ export type DetailSheetProps = {
   onClose?: () => void;
   /** URL yazımı: `replace` (varsayılan) ya da `push`. */
   history?: SetUrlStateOptions['history'];
+  /**
+   * Kontrollü kullanımda önceki/sonraki gezinmesi (`siblings` ile birlikte). URL modunda
+   * yok sayılır (kanca kendisi yazar). Ör. sığ URL durumu tutan sayfalar.
+   */
+  onNavigate?: (id: string) => void;
   className?: string;
 };
 
@@ -166,7 +171,7 @@ function DetailSheetView({
   );
 }
 
-function DetailSheetUrl({ paramKey = 'id', history, onClose, ...rest }: DetailSheetProps) {
+function DetailSheetUrl({ paramKey = 'id', history, onClose, onNavigate: _ignored, ...rest }: DetailSheetProps) {
   const { get, set } = useUrlState();
   const id = get(paramKey) || null;
   const onOpenChange = useCallback(
@@ -194,12 +199,13 @@ function DetailSheetUrl({ paramKey = 'id', history, onClose, ...rest }: DetailSh
  */
 export function DetailSheet(props: DetailSheetProps) {
   if (props.open !== undefined) {
-    const { open, onOpenChange, id, paramKey: _p, history: _h, onClose, ...rest } = props;
+    const { open, onOpenChange, id, paramKey: _p, history: _h, onClose, onNavigate, ...rest } = props;
     return (
       <DetailSheetView
         {...rest}
         id={open ? id ?? '' : null}
         open={open}
+        onNavigate={onNavigate}
         onOpenChange={(next) => {
           onOpenChange?.(next);
           if (!next) onClose?.();

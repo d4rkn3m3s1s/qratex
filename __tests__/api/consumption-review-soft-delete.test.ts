@@ -117,14 +117,16 @@ describe('P0-23 tekrar kredi döngüsü', () => {
 });
 
 describe('P0-23 görünürlük', () => {
-  it('bayi yorum listesi ve istatistiği soft-delete edilmiş yorumları dışlar', async () => {
-    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'dealer-1', role: 'DEALER' } } });
-    db.consumptionReview.aggregate.mockResolvedValue({ _avg: { rating: null }, _count: 0 });
-    const { GET } = await import('@/app/api/dealer/reviews/route');
-    const res = await GET(new NextRequest('http://localhost/api/dealer/reviews'));
-    expect(res.status).toBe(200);
-    expect(db.consumptionReview.findMany.mock.calls[0][0].where).toMatchObject({ deletedAt: null });
-    expect(db.consumptionReview.groupBy.mock.calls[0][0].where).toMatchObject({ deletedAt: null });
-    expect(db.consumptionReview.aggregate.mock.calls[0][0].where).toMatchObject({ deletedAt: null });
+  it('bayi gelen kutusu listesi ve özeti soft-delete edilmiş yorumları dışlar', async () => {
+    db.consumptionReview.aggregate.mockResolvedValue({ _avg: { rating: null }, _count: { _all: 0 } });
+    db.feedback.aggregate.mockResolvedValue({ _avg: { rating: null }, _count: { _all: 0 } });
+    const { listInbox, getInboxSummary } = await import('@/lib/dealer-inbox/server');
+    const { normalizeInboxFilters } = await import('@/lib/dealer-inbox/core');
+    await listInbox('dealer-1', 'dealer-1', normalizeInboxFilters({ status: 'all' }));
+    expect(JSON.stringify(db.consumptionReview.findMany.mock.calls[0][0].where)).toContain('"deletedAt":null');
+    expect(JSON.stringify(db.feedback.findMany.mock.calls[0][0].where)).toContain('"deletedAt":null');
+    await getInboxSummary('dealer-1', { from: new Date('2026-09-01T00:00:00Z'), to: new Date('2026-10-01T00:00:00Z') });
+    expect(JSON.stringify(db.consumptionReview.groupBy.mock.calls[0][0].where)).toContain('"deletedAt":null');
+    expect(JSON.stringify(db.consumptionReview.aggregate.mock.calls[0][0].where)).toContain('"deletedAt":null');
   });
 });
