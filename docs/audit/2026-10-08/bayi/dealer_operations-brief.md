@@ -232,3 +232,79 @@ Yeniden üretim: ≥3 geri bildirimi olan, puanları geçen haftayla aynı seyre
 |---|---|---|
 | 1 | Rate-limit/önbellek/kalıcılık/modül kontrolü olmayan LLM çağrısı | Doğrulandı (sağlayıcı Groq; etki paylaşılan kota tükenmesi + cost-guard'ın atlanması) |
 | 2 | Uydurma skor/trend/tahmin; `stable` → kırmızı "Düşüş" | Doğrulandı |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: birleştir.** `/dealer/operations-brief` artık `/dealer` (Bugün) adresine 308 ile yönlendiriyor; sorgu korunuyor. Sayaçlar Bugün'de **Operasyon özeti** bölümünde, günlük seri **Günlük akış**ta. "Önerilen sıradaki adımlar" veriye dayanan **Sıradaki adımlar** oldu. AI paneli yerine **Haftalık rapor → AI yorumu** geldi: GET'te LLM yok, üretim POST ile, rate limit ve `ai_features` kapısı arkasında, sonuç önbellekte. Uydurma skor, trend ve tahmin yok.
+
+Silinenler: `app/api/dealer/operations-brief`, `app/api/dealer/ai-proactive-analysis`, `components/dealer/operations-brief-daily-chart.tsx`, `app/dealer/operations-brief/layout.tsx`.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Bugün metadata'sı. |
+| 2 | ÇALIŞIYOR | "Son güncelleme HH:MM" dürüst (30 sn önbellek; "Yenile" atlar). |
+| 3 | ÇALIŞIYOR | `defineRoute` + kiracı kapsamı (testli). |
+| 4 | ÇALIŞIYOR | SSR + React Query (iptal / yarış yönetimi kütüphanede). |
+| 5 | ÇALIŞIYOR | Statik iskelet, `role="status"` (`QueryState`). |
+| 6 | ÇALIŞIYOR | Hata kartı ve "Tekrar dene"; 401/403/503 ayrımı. |
+| 7 | ÇALIŞIYOR | Yeni işletmede kurulum kartı; sakin günde "Her şey yolunda". |
+| 8 | ÇALIŞIYOR | CSV haftalık arşivde: yerelleştirilmiş başlıklar, satır başına hafta, BOM, TR'de `;`, `revokeObjectURL` sonraki tikte. |
+| 9 | KALDIRILDI | Toast yok; indirmenin kendisi geri bildirim. |
+| 10 | ÇALIŞIYOR | "Yanıt bekleyen" = `dealerReply` boş; sidebar rozetiyle aynı tanım. Tüketim yorumları dahil. |
+| 11 | ÇALIŞIYOR | Önem rozeti + 24 saat SLA (deterministik eşikler). |
+| 12 | ÇALIŞIYOR | 7 İstanbul takvim günü; kart ve grafik aynı pencereyi kullanıyor. |
+| 13 | ÇALIŞIYOR | "Bugünkü işlem" İstanbul gece yarısından başlıyor; dün aynı saate göre delta. |
+| 14 | KALDIRILDI | Haftalık tüketim → Haftalık rapor "İşlem" (önceki haftaya göre). |
+| 15 | ÇALIŞIYOR | Açık iş sayacı (+ süresi geçen). |
+| 16 | KALDIRILDI | 7 günde tamamlanan aksiyon kararı değiştirmiyordu; tamamlama Yapılacaklar'da. |
+| 17 | ÇALIŞIYOR | İşletmenin **onayını bekleyen** telafi birincil, "müşteride bekleyen" ikincil satır. En eskinin yaşı sıradaki adımlarda. |
+| 18 | ÇALIŞIYOR | Günlük akış: İstanbul kovaları (`AT TIME ZONE`), `Intl` gün adları, sr tablosu, token renkleri. |
+| 19 | ÇALIŞIYOR | Grafik kütüphanesi yok; CSS çubuk, ilk boyamada hazır. |
+| 20 | ÇALIŞIYOR | Aktif QR (+ şube sayısı). |
+| 21 | ÇALIŞIYOR | Aktif ürün. |
+| 22 | ÇALIŞIYOR | Sabit üç link yerine veriye dayalı, önceliklendirilmiş sıradaki adımlar. |
+| 23 | ÇALIŞIYOR | Redis 30 sn. Yenile ve yazma sonrası `fresh` önbelleği atlıyor. |
+| 24 | KALDIRILDI | Soft-delete yoklaması kaldırıldı; `deletedAt IS NULL` her sorguda sabit. |
+| 25 | ÇALIŞIYOR | AI yalnız POST ile: saatte 6 + `guardAiCall` (bayi dakikalık ve günlük token tavanı), `ai_features` modül kapısı, bayi AI ana anahtarı. Sonuç Redis'te (tamamlanan hafta için 60 gün). |
+| 26 | ÇALIŞIYOR | Arayüz metinleri TR/EN. LLM çıktısı Türkçe (istem Türkçe); bkz. Kalanlar. |
+| 27 | KALDIRILDI | LLM öneri çipleri kaldırıldı. Yerine geri bildirime bağlı AI önerileri geldi; "Listeye ekle" ile gerçek iş açılıyor. |
+| 28 | KALDIRILDI | Uydurma "Genel Performans Skoru". |
+| 29 | KALDIRILDI | Uydurma trend kaldırıldı. Yerine deterministik delta (`DeltaBadge`: yukarı / aşağı / değişim yok) geldi. |
+| 30 | KALDIRILDI | Kanıtsız "sonraki dönem tahmini". |
+| 31 | KALDIRILDI | LLM uyarı kartları kaldırıldı. Yerine deterministik sıradaki adımlar geldi (her biri ilgili listeye gider). |
+| 32 | ÇALIŞIYOR | AI bölümünün durumları: kapalı / yapılandırılmamış, yazılıyor, hata (toast), yazıldı (zamanı ile). |
+| 33 | ÇALIŞIYOR | `module: 'ai_features'` (403 `MODULE_DISABLED`, testli). |
+| 34 | KALDIRILDI | Rota emekli. `operations_brief` modül/menü anahtarı tüketicisiz (katalog sahibine bildirildi). |
+| 35 | ÇALIŞIYOR | Bugün, menünün birincil girişi (`dealer.today`). |
+| 36 | ÇALIŞIYOR | TR/EN; kullanıcıya "UTC" gösterilmiyor. |
+| 37 | ÇALIŞIYOR | `toLocaleString(tag)`. |
+| 38 | ÇALIŞIYOR | Duyarlı yerleşim, 44px dokunma hedefleri. |
+| 39 | ÇALIŞIYOR | Nabız yok; hareket `useMotionPolicy` ile. |
+| 40 | ÇALIŞIYOR | Yenile + tazelik göstergesi. |
+| 41 | ÇALIŞIYOR | Her metrikte önceki döneme göre delta. |
+| 42 | KALAN | Şube filtresi (Analitik). |
+| 43 | ÇALIŞIYOR | Bütün sayaç ve metrik kutuları ilgili listeye bağlantı. |
+
+### Kapanan bulgular (12/12, biri kısmi)
+- **1:** Maliyet ve kota korumalı.
+- **2:** Uydurmalar kaldırıldı.
+- **3 (kısmi):** AI kapısı API'de; `operations_brief` anahtarının katalogdan çıkarılması katalog sahibinde.
+- **4:** Onay kuyruğu.
+- **5:** Tek tanım, iki kanal.
+- **6:** İstanbul saati.
+- **7:** Tek pencere.
+- **8:** i18n, durumlar ve `deletedAt`.
+- **9:** Yoklama kaldırıldı.
+- **10:** Erişilebilirlik.
+- **11:** CSV.
+- **12:** Veri tabanlı adımlar.
+
+### Kalanlar
+- Şube filtresi.
+- Sabah özet e-postası / push aboneliği (Otomasyon).
+- AI yorumunun dili: İngilizce arayüzde de Türkçe yazılır. İstemciye locale geçirmek için `runChatCompletion` istemi genişletilebilir.

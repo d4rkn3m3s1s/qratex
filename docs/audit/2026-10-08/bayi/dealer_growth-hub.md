@@ -156,3 +156,57 @@
 | `/dealer/operations-brief`, dealer dashboard (`/dealer`) | Hub alt chip'i operasyon özetine gidiyor; dashboard da günlük özet işlevi taşıyor. | Operasyon özeti dashboard'a eritilmeli; büyüme kokpiti "dönemsel/stratejik", dashboard "bugün/operasyonel" olarak ayrışmalı. |
 
 **Sonuç:** Bugünkü hâliyle sayfa, sistemdeki "hub enflasyonu"nun (growth-hub, discover, experience-guide, progress-hub benzeri sayfalar) bir örneği. En hızlı kazanım: sayfayı kaldırıp redirect vermek (S). En yüksek ürün değeri: sayfayı paylaşılan nav kataloğu + tek özet API ile gerçek bir "Büyüme kokpiti"ne dönüştürüp discover/experience-guide'ı emekliye ayırmak (L).
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: KALDIR → Analitik.** `app/dealer/growth-hub/page.tsx` artık `/dealer/analytics` adresine 308 ile yönlendiren emekli koçanı; sorgu korunuyor (kayıt defterinde `dealer.analytics.redirectFrom` ile uyumlu). `app/dealer/growth-hub/layout.tsx` silindi.
+
+Statik kısayol panosu yerine:
+- "Şimdi ne yapmalıyım?" sorusunu Bugün'deki **Sıradaki adımlar** yanıtlıyor (kural tabanlı, gerçek sayılarla, önceliklendirilmiş).
+- "İşim nasıl gidiyor?" sorusunu Bugün metrikleri ve **Haftalık rapor** yanıtlıyor (önceki haftaya göre delta).
+- Dönemsel/stratejik kırılım **Analitik**'te kalıyor.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Sayfa emekli; metadata Analitik'te. |
+| 2 | ÇALIŞIYOR | Rol kapısı (yönlendirme dahil). |
+| 3 | KALDIRILDI | Bilgi taşımayan hero. |
+| 4 | KALDIRILDI | Sayfa emekli. |
+| 5 | KALDIRILDI | Tekrar eden giriş paragrafı. |
+| 6 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 7 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 8 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 9 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 10 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 11 | KALDIRILDI | Statik kart; menü / ⌘K ve Analitik altında. |
+| 12 | KALDIRILDI | Sabit açıklamalar. |
+| 13 | KALDIRILDI | Tekrarlanan "Aç". |
+| 14 | KALDIRILDI | Sayfa emekli. |
+| 15 | KALDIRILDI | Operasyon özetine arka kapı; Bugün'e birleşti. |
+| 16 | KALDIRILDI | Hub ↔ hub döngüsü bitti. |
+| 17 | KALDIRILDI | Sayfa emekli. |
+| 18 | KALDIRILDI | Filtresiz liste yok; menü görünürlüğü kabukta sunucuda çözülüyor. |
+| 19 | KALDIRILDI | Kopya liste yok. |
+| 20 | ÇALIŞIYOR (kısmen) | Canlı sayılar Bugün'de: geri bildirim, işlem, ortalama puan, yanıt oranı, telafi, vaka, iş. ROI / kayıp riski / kampanya özeti Analitik → Etki ve Müşteriler → Risk'te. |
+| 21 | KALDIRILDI | Jargon sorunu sayfayla gitti. |
+| 22 | ÇALIŞIYOR | Bugün'de odak halkaları. |
+| 23 | KALDIRILDI | Sayfa emekli. |
+| 24 | KALDIRILDI | Sayfa emekli. |
+| 25 | KALDIRILDI | `growth_hub` menü öğesi artık tüketicisiz (navigasyon / katalog sahibine bildirildi). |
+| 26 | KALDIRILDI | `growth_hub` modül anahtarı tüketicisiz. |
+| 27 | ÇALIŞIYOR | "Bugün ne yapmalıyım?" Bugün → Sıradaki adımlar (deterministik, testli). |
+| 28 | ÇALIŞIYOR | Segment durumları. |
+
+### Kapanan bulgular
+- **1, 3, 4, 6, 7, 8:** Kopya hub ve dil/erişilebilirlik sorunları sayfayla gitti.
+- **2:** Kill-switch sızıntısı kapandı.
+- **5 (kısmi):** Canlı özet Bugün'de. Büyümeye özgü ROI / kayıp riski kartları Analitik / Müşteriler yüzeylerinin işi.
+
+### Kalanlar
+- Büyüme KPI'larının (ROI, kayıp riski, kampanya dönüşümü) Analitik genel bakışta birleşik gösterimi (Analitik sahibi).
+- `growth_hub` katalog anahtarlarının temizliği.

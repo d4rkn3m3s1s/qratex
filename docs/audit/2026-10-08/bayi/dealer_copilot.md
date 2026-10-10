@@ -277,3 +277,78 @@ Her iddia, ilgili kod yeniden okunarak çürütülmeye çalışıldı. Kod deği
 - `app/dealer/feedbacks/page.tsx:168`: bayi geri bildirim sayfası varsayılan olarak `consumption` sekmesiyle açılıyor. Yani ürün tüketim yorumlarını birincil geri bildirim kanalı olarak sunuyor. Copilot ise "Toplam {count} negatif geri bildirim" diyerek (`messages/tr.json:1283`) bu kanalı dışarıda bırakıyor.
 - **Yeniden üretim:** Bayi yalnızca kart/tüketim akışını kullanıyor, QR geri bildirimi yok. Son 7 günde üç adet 1 yıldızlı ve olumsuz tüketim yorumu alıyor. Copilot ekranında toplam 0, negatif 0, yanıt oranı %0 görünüyor ve "Kritik sorunlar" kartı "sorun yok" boş durumunu gösteriyor (`page.tsx:362-367`). Bayi yanlış bir güven duygusuna kapılıyor.
 - **Düzeltme yaklaşımı:** Bu raporda zaten önerilen `lib/dealer-signals.ts` birleşik servisi kurulmalı. Feedback ve ConsumptionReview tek bir metrik tanımıyla birleştirilmeli, her kayıt `source: 'qr' | 'consumption'` etiketi taşımalı. Arayüzde KPI'lar kanal kırılımıyla gösterilmeli. Kritik listede tüketim yorumlarının aciliyet alanı olmadığı için şu sıralama kullanılabilir: önce `churnRisk`, sonra `rating asc`.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: birleştir.** `/dealer/copilot` artık `/dealer` (Bugün) adresine 308 ile yönlendiren bir emekli koçanı; sorgu korunuyor (`lib/dealer-today/legacy-redirect.ts`). Copilot'un işlevi Bugün'de şu bölümlere dağıldı: **sıradaki adımlar** (deterministik next-best-action), **yanıt bekleyenler** (kritik kayıtlar), **yapılacaklar** (AI önerileri gerçekten ekleniyor), **operasyon özeti** ve **haftalık rapor**. AI anlatısı haftalık raporda, istekle üretiliyor. Silinenler: `app/api/dealer/copilot-summary`, `lib/next-best-action.ts`, `components/dealer/copilot-daily-trend-chart.tsx`, `app/dealer/copilot/layout.tsx`.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Bugün metadata'sı; yanıltıcı "ön hat akışları" açıklaması gitti. |
+| 2 | ÇALIŞIYOR | `defineRoute` + kiracı kapsamı. |
+| 3 | ÇALIŞIYOR | `readEnvelope` önce `res.ok`'u denetliyor; kodlu hata `QueryState`'e gidiyor. |
+| 4 | ÇALIŞIYOR | Gerçek yerleşimi taklit eden statik iskelet. Dönen robot ve çift spinner yok. |
+| 5 | ÇALIŞIYOR | `QueryState`: "Tekrar dene" var; 401/403 için yetkisiz görünümü, ağ yokken çevrimdışı görünümü. |
+| 6 | ÇALIŞIYOR | Hero'da "AI destekli" iddiası yok. |
+| 7 | ÇALIŞIYOR | Gelen kutusu bağlantıları (metrik kutusu, yanıt bekleyenler). |
+| 8 | ÇALIŞIYOR | "Tüm işler". |
+| 9 | KALDIRILDI | Sabit TR "AI Sohbet" butonu kaldırıldı. Asistan kabuğun ⌘J kısayolunda (navigasyon sahibi). |
+| 10 | ÇALIŞIYOR | QR + tüketim yorumu birlikte. |
+| 11 | ÇALIŞIYOR | Olumsuz = ≤2★; nötr ayrı gösteriliyor. |
+| 12 | ÇALIŞIYOR | Yanıt oranı iki kanalı birlikte sayıyor. |
+| 13 | ÇALIŞIYOR | Veri yoksa "—" ve "Veri yok" (0,0 / 5 yok). |
+| 14 | ÇALIŞIYOR | `useNumberTicker` hareket politikasına uyar. |
+| 15 | ÇALIŞIYOR | Kodlu öneriler, gerçek hedefler; zayıf QR artık kullanılıyor. |
+| 16 | ÇALIŞIYOR | Günlük akış İstanbul gününe göre, `Intl` etiketli, sr tablosu var. |
+| 17 | ÇALIŞIYOR | Grafik kütüphanesi yok (CSS çubuk); ilk boyamada hazır. |
+| 18 | KALDIRILDI | Kampanya↔geri bildirim sinyali kampanya performans sayfasının işi (B5'teki atıf hatası da onunla birlikte burada yok). |
+| 19 | KALDIRILDI | #18 ile birlikte. |
+| 20 | ÇALIŞIYOR | "Yanıt bekleyenler" deterministik sıralanıyor: olumsuz önce, en eski üstte. `urgency NULLS FIRST` sorunu yapısal olarak yok; yanıtlananlar listeden düşüyor. |
+| 21 | ÇALIŞIYOR | Yıldızlar `aria-label` ile. |
+| 22 | KALDIRILDI | Ham İngilizce sentiment rozeti kaldırıldı. |
+| 23 | KALDIRILDI | Aciliyet rozeti kaldırıldı. Yerine deterministik "24 saati geçti" SLA rozeti geldi. |
+| 24 | ÇALIŞIYOR | Göreli zaman. |
+| 25 | ÇALIŞIYOR | Her zaman görünen "Yanıtla" (≥44px dokunma hedefi). Kayda `?id=` ile gider (inbox okuyacak). |
+| 26 | ÇALIŞIYOR | Boş durum. |
+| 27 | ÇALIŞIYOR | Yinelenen ve takipteki (açık / bitmiş / yoksayılmış) öneriler ayıklanıyor. |
+| 28 | ÇALIŞIYOR | Öncelik Yüksek/Orta/Düşük olarak yerelleştirildi. |
+| 29 | ÇALIŞIYOR | "Listeye ekle" gerçek `ActionItem` açıyor; 409 → "zaten listende". "Yoksay" iptal kaydı bırakıyor. |
+| 30 | ÇALIŞIYOR | `<a><button>` iç içeliği yok. |
+| 31 | ÇALIŞIYOR | Operasyon özeti sayacı + "açık vaka" önerisi (en yüksek önemle). |
+| 32 | KALDIRILDI | Churn sayacı müşteri değil kayıt sayıyordu. Müşteriler → Risk yüzeyinin işi. |
+| 33 | ÇALIŞIYOR | 30 sn Redis. "Son güncelleme" ve "Yenile" (önbelleği atlar) var; yazma sonrası taze veri. |
+| 34 | ÇALIŞIYOR | ADMIN `?dealerId=` ile salt okunur (`resolveDealerScope`); testli. |
+| 35 | KALDIRILDI | Rota emekli. `copilot` modül anahtarı artık tüketicisiz (katalog sahibine bildirildi). |
+| 36 | ÇALIŞIYOR | Mobil tek sütun; eylemler her zaman görünür. |
+| 37 | ÇALIŞIYOR | Yenile + son güncelleme. |
+| 38 | ÇALIŞIYOR (kapsamlı) | Önceki 7 güne göre delta var. Serbest dönem seçici Analitik'te. |
+| 39 | ÇALIŞIYOR | Tüketim yorumu kapsamda. |
+| 40 | ÇALIŞIYOR | Dürüst: "Copilot / AI asistan" iddiası yok. AI yalnız haftalık raporda, "yalnız bu sayıları yorumlar" etiketiyle ve istek üzerine çalışıyor. |
+
+### Kapanan bulgular (16/16, biri kısmi)
+- **B1:** Sıralama urgency'ye dayanmıyor.
+- **B2:** Ekle gerçek kayıt açıyor.
+- **B3:** İki kanal birlikte.
+- **B4 (kısmi):** Bağlantı görünür ve kayda gidiyor; hedef sayfanın `?id=` okuması Gelen Kutusu'nda.
+- **B5:** Kampanya sinyali kaldırıldı.
+- **B6:** Tek pencere, İstanbul saati.
+- **B7:** Metinler istemcide TR/EN.
+- **B8:** Dürüst adlandırma ve gerçek AI anlatısı.
+- **B9:** `QueryState`.
+- **B10:** "—".
+- **B11:** ≤2★ tanımı; churn kaldırıldı.
+- **B12:** Erişilebilirlik.
+- **B13:** Tek kaynak, `buildNextActions` testli.
+- **B14:** Kapsam / ADMIN.
+- **B15:** İskelet.
+- **B16:** `FILTER`'lı tek sorgular.
+
+### Kalanlar
+- Satır içi yanıt / telafi / atama çekmecesi Gelen Kutusu yüzeyinde.
+- Atama ve son tarih hızlı seçimi aksiyon sayfasında.
+- Proaktif uyarı aboneliği Otomasyon'da.

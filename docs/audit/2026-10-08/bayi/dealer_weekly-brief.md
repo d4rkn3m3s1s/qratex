@@ -199,3 +199,73 @@ Her iddia çürütülmeye çalışıldı; çağıran/çağrılan taraflar başta
 - Yanlış teşhis somut: varsayılan dal (:69) tüketim verisine hiç bakmıyor (`computeWeekStats` consumption sorgulamıyor, :31-37). Yeniden üretim: geçen hafta 20, bu hafta 25 geri bildirim alan, churn riski olmayan bir bayi "Sessiz memnunlar (... düşük ses)" etiketiyle "tek soruluk anket açın" önerisi görür — yani yüksek geri bildirim hacmine "sesi düşük" teşhisi konur.
 - Kısmi düzeltme: inovasyon yolundan gelen satırlar (Bulgu 1) farklı, yine şablon tabanlı (AI olmayan) metinler içerir (`lib/innovation-weekly-brief.ts:80-90`); "her zaman 3 cümle" ifadesi cron satırları için tam doğru, tüm satırlar için değil. Sonuç değişmiyor: panelde hiçbir AI çıktısı yok, etiket yanıltıcı.
 - Not: Güvenlik açığı değil; ürün doğruluğu/güven sorunu.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: birleştir.** `/dealer/weekly-brief` artık `/dealer?tab=weekly` adresine yönlendiriyor (Bugün → **Haftalık rapor** sekmesi + **Arşiv**; sorgu korunuyor). Not: kayıt defterindeki `dealer.today.redirectFrom` genel yönlendirmesi devreye girdiğinde hedef `/dealer` olur (sekme düşer); bu, navigasyon sahibine bildirildi.
+
+Yeni uçlar:
+- `GET /api/dealer/today/weekly?week=` (rapor)
+- `GET /api/dealer/today/weekly/archive?before=` (imleçli arşiv)
+- `POST /api/dealer/today/weekly/narrative` (AI yorumu)
+- `POST /api/dealer/today/todos` (`source: weekly_brief`, haftalık öneriyi işe çevirir)
+
+Eski `app/api/dealer/weekly-brief` silindi.
+
+**İçerik artık şöyle:**
+- Haftanın sayıları kayıtlardan **deterministik** hesaplanır (İstanbul Pazartesi–Pazar): geri bildirim, ortalama puan, olumsuz oranı, yanıt oranı, işlem. Her biri önceki haftaya göre delta taşır.
+- **Konuşulan konular** `Feedback.themes` alanından gelir (Türkçe tema; olumlu ve olumsuz kırılımı; önceki haftayla kıyas).
+- Cron'un önerisi **"Otomatik · kural tabanlı"** etiketiyle gösterilir ve tek tıkla yapılacaklara eklenir.
+- **AI yorumu** istek üzerine üretilir, "yalnız bu sayıları yorumlar" diye etiketlenir ve önbellekten okunur.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Bayi paneli; BFF DEALER için, ADMIN `?dealerId=` ile salt okunur. |
+| 2 | ÇALIŞIYOR | Bugün menünün birincil girişi; haftalık rapor sekmesi oradan açılıyor. |
+| 3 | ÇALIŞIYOR | Bugün metadata'sı. |
+| 4 | ÇALIŞIYOR | Eyebrow "İşletme paneli · Bugün" ("Yönetim paneli" yok). |
+| 5 | ÇALIŞIYOR | Dürüst etiketler: kural tabanlı öneri ile AI yorumu ayrı ve adlandırılmış. |
+| 6 | ÇALIŞIYOR | `readEnvelope` (`res.ok`) + React Query; `keepPreviousData` ile hafta geçişi titremiyor. |
+| 7 | ÇALIŞIYOR | `QueryState` iskeleti, `role="status"`. |
+| 8 | ÇALIŞIYOR | Boş hafta gerçek sıfırlarla görünür. Öneri yoksa "Bu hafta için otomatik öneri üretilmedi". |
+| 9 | ÇALIŞIYOR | HTTP hataları hata kartı + "Tekrar dene" (testli: 400 / 500 / 503). |
+| 10 | ÇALIŞIYOR | Arşiv tablosu (yeniden eskiye). |
+| 11 | ÇALIŞIYOR | Hafta anahtarı İstanbul Pazartesi'si; biçimleme `timeZone: 'UTC'` gün anahtarıyla (kayma yok). |
+| 12 | ÇALIŞIYOR | Yanıltıcı "otomatik AI özeti" etiketi kaldırıldı. |
+| 13 | ÇALIŞIYOR | Öneri metni etiketli; "Yapılacaklara ekle" gerçek iş açıyor (409 → zaten listede). |
+| 14 | ÇALIŞIYOR | Temalar Türkçe `themes` alanından; olumlu/olumsuz çubuğu ve önceki hafta. |
+| 15 | ÇALIŞIYOR | Hafta metrikleri kayıtlardan anlık hesaplanıyor (şema değişikliği gerekmedi). |
+| 16 | ÇALIŞIYOR (kısmen) | Önceki haftaya göre delta var. Çok haftalık trend grafiği yok; arşiv tablosu var. |
+| 17 | ÇALIŞIYOR | 8'erli imleçli arşiv ("Daha eski haftalar"); hesap 2 yılla sınırlı. |
+| 18 | ÇALIŞIYOR | "AI yorumu yaz / Yeniden yaz" (saatte 6, maliyet tavanı). |
+| 19 | ÇALIŞIYOR | Haftanın önerisi → yapılacaklar (`sourceModule: weekly_brief`). |
+| 20 | ÇALIŞIYOR (kısmen) | CSV dışa aktarım var. PDF / ekiple paylaşım / e-postayı yeniden gönder kalan. |
+| 21 | KALAN | Bildirim derin bağlantısı `lib/weekly-digest-core.ts`'de (cron sahibi). Önerilen hedef `/dealer?tab=weekly&week=<Pazartesi>`. |
+| 22 | ÇALIŞIYOR | Yetki `defineRoute` + `resolveDealerScope`. |
+| 23 | ÇALIŞIYOR | ADMIN `dealerId` olmadan 400 (testli). |
+| 24 | ÇALIŞIYOR | `private, no-store`, 503 retryable. |
+| 25 | KALAN | Üretici Inngest cron'una bağlı (sahiplik dışı). Günlük cron toplayıcısına taşınması önerilir. |
+| 26 | KALAN | İki üretici sorunu (inovasyon "yenile" cron bildirimini susturuyor). Atomik `notifiedAt` olmadan güvenli düzeltme yok → ŞEMA İSTEĞİ. Bugün tarafında inovasyon kaydı sürmekte olan hafta için "kural tabanlı öneri" olarak dürüstçe gösteriliyor. |
+| 27 | ÇALIŞIYOR | AI bölümü `ai_features` modülüne ve bayinin AI ayarına bağlı. |
+| 28 | ÇALIŞIYOR | TR/EN `copy.ts`; toast öneksiz (sonner). |
+| 29 | ÇALIŞIYOR | Hareket politikası; hafta geçişinde ani sıçrama yok. |
+| 30 | ÇALIŞIYOR | `PanelPage`; çift dolgu yok, mobilde arşiv tablosu yatay kayar. |
+| 31 | ÇALIŞIYOR | h1 → h2 bölümler; tablo `caption` ve `scope`. |
+
+### Kapanan bulgular
+- **2:** Hata maskelenmiyor.
+- **3:** AI iddiası dürüst, metrikler görünür.
+- **4 (kısmi):** Menüden erişilebilir; bildirim bağlantısı cron sahibinde.
+- **6:** Temalar.
+- **8:** Tutarlılık ve erişilebilirlik.
+
+### Kalanlar
+- **Bulgu 1 (kritik):** İki üretici aynı tabloya yazıyor ve cron bildirimi susuyor. `lib/weekly-digest-core.ts` ile `app/api/dealer/innovation/weekly-brief` bu yüzeyin değil. Güvenli düzeltme için `notifiedAt` alanı gerekiyor.
+- **Bulgu 5:** Cron ölçeklenmesi.
+- **Bulgu 7:** E-postada HTML kaçışı (`weekly-digest-core`).
+- **ŞEMA İSTEĞİ:** `DealerWeeklyBrief.notifiedAt DateTime?` ve `source String @default("cron")` (bildirim/e-posta kararı atomik `UPDATE ... WHERE notifiedAt IS NULL` ile). İsteğe bağlı olarak `summary Text?` ve `metrics Json?` (cron'un ürettiği AI özeti atılmasın).

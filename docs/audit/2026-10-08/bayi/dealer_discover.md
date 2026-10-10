@@ -208,3 +208,43 @@ Yeniden üretim:
 - **Sayfa kapısı:** `app/dealer/<modül>/layout.tsx` içinde (zaten var olan segment layout'ları) sunucu tarafı `requireModule('remedy_offers', 'dealer')` çağrısı; kapalıysa "Bu modül yönetici tarafından kapatıldı" boş-durum ekranı veya `/dealer`'a yönlendirme.
 - **API kapısı:** Katalogdaki her dealer modülü için rota → modül eşlemesi tanımlayın ve `assertModuleEnabled(key, { role: 'dealer', ... })` ile `featureVisibility.dealer`'ı da zorlayın. Öncelik: `remedy-offers/[id]` (yayın), `remedy-queue`, `surveys/*`, `innovation/*` (özellikle `segment-proposals/[id]/send` gibi dışarıya gönderim yapan uçlar), `voc-wall`.
 - **Regresyon testi:** Katalogdaki her `scope: 'dealer'` modülü için "kapalıyken API 403 döner" tablo-güdümlü bir test; yeni modül eklendiğinde kapı unutulmasın.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: KALDIR → ⌘K paleti + Bugün.** `app/dealer/discover/page.tsx` artık `/dealer` adresine 308 ile yönlendiren emekli koçanı; sorgu korunuyor. `app/dealer/discover/layout.tsx` silindi.
+
+Elle yazılmış üçüncü menü kopyası (`SECTIONS`) ortadan kalktı. Modül keşfi tek navigasyon kaydından (`lib/navigation/registry.ts`, `keywords` ile) türeyen ⌘K paletinin işi; o kayıt navigasyon ajanında. Kayıtta `dealer.today.redirectFrom` zaten `/dealer/discover` içeriyor. Bugün sayfası kendi bağlantılarını yalnız var olan ve kapatılamayan çekirdek rotalara veriyor; admin'in kapattığı modüllere "arka kapı" üretmiyor.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | KALDIRILDI | Sayfa emekli. |
+| 2 | KALDIRILDI | Sayfa emekli. |
+| 3 | ÇALIŞIYOR | Rol koruması (yönlendirme dahil). |
+| 4–28 | KALDIRILDI | 22 statik bağlantı ve 3 bölüm kartı. Hepsi menüde ve ⌘K paletinde tek kaynaktan. Telafi, aksiyon ve operasyon özeti için Bugün'de bağlamlı girişler var (sıradaki adımlar, sayaçlar). |
+| 29 | KALDIRILDI | Izgara. |
+| 30 | KALDIRILDI | TR'de İngilizce etiket sorunu sayfayla gitti. |
+| 31 | ÇALIŞIYOR | Bugün'de odak halkası ve klavye. |
+| 32 | ÇALIŞIYOR | Segment durumları. |
+| 33 | KALDIRILDI | Kill-switch'i delen liste ortadan kalktı. Kök neden (sunucu tarafı modül kapısı) ilgili modüllerin uçlarında; sahiplik dışı. |
+| 34 | KALDIRILDI | `discover` görünürlük anahtarı artık tüketicisiz (katalog sahibine bildirildi). |
+| 35 | KALDIRILDI | Menü girişi gerekmiyor. |
+| 36 | KALAN | Tüm modüllerin kapsanması ⌘K paletinde (navigasyon sahibi). |
+| 37 | KALAN | Modül açıklamaları (`registry.description`) navigasyon sahibinde. |
+| 38 | KALAN | İkonlar kayıt defterinde (navigasyon sahibi). |
+| 39 | KALAN | Modül araması: ⌘K paleti. |
+| 40 | ÇALIŞIYOR | Bekleyen iş sayaçları Bugün'de: yanıt bekleyen, onay bekleyen telafi, açık vaka, açık iş. |
+| 41 | KALAN | Son kullanılanlar / sabitleme (palet). |
+| 42 | KALDIRILDI | 22 prefetch'li bağlantı yok. Bugün'ün kendi bağlantıları `prefetch={false}`; yalnız 4 metrik kutusu DS `MetricTile` varsayılanını kullanıyor. |
+
+### Kapanan bulgular
+- **B1, B3, B4, B5, B6, B7, B8:** Sayfa ve kopya menü kaldırıldı; döngüsel hub bağlantıları bitti.
+- **B2:** Bu yüzeyden kaynaklanan sızıntı kapandı. Sistem genelinde sunucu tarafı modül kapısı kalan, sahiplik dışı.
+
+### Kalanlar
+- ⌘K paletinin modül açıklaması / durum çipleri (navigasyon).
+- Modül API kapıları: `remedy-offers/[id]`, `surveys/*`, `innovation/*`, `voc-wall` (ilgili yüzey sahipleri).

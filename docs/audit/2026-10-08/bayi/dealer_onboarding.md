@@ -260,3 +260,69 @@ API yalnız oturumdaki `user.id` ile sorgu yapıyor (`route.ts:19-36`); dışar�
 - Hata için ayrı bir `error` state'i ve "Tekrar dene" düğmesi sunmalı.
 
 Böylece aynı uç noktanın iki tüketicisi farklı hata davranışı göstermez.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: Bugün → kurulum kartı.** `/dealer/onboarding` artık `/dealer` adresine 308 ile yönlendiriyor. Kurulum, Bugün'ün en üstünde **kurulum kartı** olarak yaşıyor (`components/dealer/b-bugun/setup-card.tsx`). Adımlar kayıtlardan türetiliyor (`buildSetup`, saf ve testli). Zorunlu dört adım (profil, konum, ilk QR, ilk geri bildirim) bitince kart **hiç render edilmiyor**. "Ürün" önerilen adım; kartı tek başına açık tutmuyor.
+
+Layout'taki sahte "panel sınırlıdır" şeridi (`onboarding-gate-banner.tsx`) silindi. `OnboardingSheet` bayi layout'undan çıkarıldı. Eski `app/api/dealer/onboarding` ucu da silindi; veri Bugün BFF'inden geliyor.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Kart başlığı "Kurulumu tamamla" + açıklama. |
+| 2 | ÇALIŞIYOR | SSR + `readEnvelope` (`res.ok` denetimi); hata yanıtında çökme yok. |
+| 3 | ÇALIŞIYOR | Bugün iskeleti. |
+| 4 | ÇALIŞIYOR | `QueryState` hata kartı + "Tekrar dene"; 401/403 yetkisiz görünümü. Toast öneksiz. |
+| 5 | ÇALIŞIYOR | Sayaç yalnız zorunlu adımları sayar ("x/4 adım tamam"); %33'te "tamamlandı" çelişkisi yok. |
+| 6 | ÇALIŞIYOR | Yüzde ilerleme. |
+| 7 | ÇALIŞIYOR | `role="progressbar"` + `aria-valuenow/max/valuetext` (bozuk `Progress` kullanılmıyor). |
+| 8 | ÇALIŞIYOR (kısmen) | Zorunlular bitince kart kaybolur. Tek seferlik kutlama anı yok (kalan). |
+| 9 | ÇALIŞIYOR | Sıradaki adım vurgulu; kart daraltılınca birincil CTA tek başına kalır. |
+| 10 | ÇALIŞIYOR | Adım listesi `<ol>`. |
+| 11 | ÇALIŞIYOR | Profil = işletme adı **ve** açıklama. |
+| 12 | ÇALIŞIYOR | Konum = adres / koordinat **veya** aktif `DealerLocation`; ayarlarda alana derin bağlantı (`#dealer-address`). |
+| 13 | ÇALIŞIYOR | Arşivlenmemiş QR. |
+| 14 | ÇALIŞIYOR | Ürün (önerilen). |
+| 15 | ÇALIŞIYOR | `deletedAt` süzgeçli `findFirst`; tüketim yorumu da sayılır. |
+| 16 | KALDIRILDI | "Planını seç" ücretsiz planda hiç tamamlanmıyordu; kurulum adımı değil. |
+| 17 | ÇALIŞIYOR | "önerilen" rozeti 12px, kontrastlı. |
+| 18 | ÇALIŞIYOR | Tamamlanan adım yeşil + tik; sr metninde "Tamam". |
+| 19 | ÇALIŞIYOR | CTA'lar gerçek sayfalara gidiyor (profil/konum → ayarlar alanı). |
+| 20 | ÇALIŞIYOR | Sayfa yetkisi. |
+| 21 | ÇALIŞIYOR | API yetkisi (`defineRoute`). |
+| 22 | ÇALIŞIYOR | `private, no-store`. |
+| 23 | KALDIRILDI | Sahte kısıtlama şeridi. |
+| 24 | KALDIRILDI | Ölü dal (şeritle birlikte). |
+| 25 | KALDIRILDI | Bayi için `OnboardingSheet` kaldırıldı (admin/müşteri layout'larında sürüyor; bileşen sahiplik dışı). |
+| 26 | ÇALIŞIYOR | Ayrı "Kurulum" menü girişi yok. Kurulum Bugün'de; kayıt defterinde `dealer.today` `legacyIds: onboarding`. |
+| 27 | ÇALIŞIYOR | TR/EN `copy.ts`. |
+| 28 | ÇALIŞIYOR | `refetchOnWindowFocus`: başka sekmede QR oluşturup dönünce adım güncellenir. |
+| 29 | ÇALIŞIYOR | Kartı daralt / genişlet (bu cihazda hatırlanır; depolama yoksa sessizce yok sayılır). |
+| 30 | ÇALIŞIYOR | Mobilde adım kartları tek sütun, tam genişlik CTA, ≥44px. |
+| 31 | ÇALIŞIYOR | Hareket yok; ilerleme çubuğu `duration-base` geçişli. |
+| 32 | KALAN | Kurulum hunisi telemetrisi (PostHog) eklenmedi. |
+
+### Kapanan bulgular (12'nin 11'i, biri kısmi)
+- **1:** Çökme yok.
+- **2:** Sahte şerit kaldırıldı.
+- **3:** Plan adımı kaldırıldı.
+- **4:** Tek ölçü.
+- **5:** Profil açıklama ister, şube sayılır, derin bağlantı var.
+- **7:** Üç ayrı deneyim tek karta indi.
+- **8:** Her gezinmede sorgu yok; kart Bugün BFF'inin parçası, `findFirst` kullanılıyor.
+- **9:** i18n.
+- **10:** Mobil.
+- **11:** Ölü kod.
+- **12:** Odakta tazeleme.
+- **6 (kısmi):** Bu yüzey kendi `progressbar`'ını kullanıyor. Paylaşılan `components/ui/progress.tsx`'teki `value` hatası sahiplik dışı, kalan.
+
+### Kalanlar
+- Kutlama anı.
+- Telemetri.
+- Satır içi mini formlar (profil / QR oluşturma kartın içinde).
+- 48 saat hatırlatma e-postası / push.

@@ -151,3 +151,61 @@ Hedef ayrı bir rehber sayfası değil, **yardımın panelin içine gömülmesi*
 | `/admin/experience-pulse` + `/api/dealer/experience-pulse` | Bayi "Vardiya ritmi" içeriğini yönetiyor ama bayi tarafında gösteren ekran yok. Rehberin "Günün sırası" bölümü aynı amacı sabit metinle yapıyor. | "Günün sırası" bayi dashboard'undaki `ShiftPulseCard`'a taşınmalı ve admin içeriğine bağlanmalı (bulgu 5). |
 
 **Son karar: KALDIR.** Sayfanın benzersiz bir işlevi yok, erişilemiyor ve içeriği kullanıcıya hitap etmiyor. Tek değerli fikri olan vardiya rutini, dashboard kartı ve bağlamsal yardım çekmecesi olarak yeniden doğmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: KALDIR.** `app/dealer/experience-guide/page.tsx` artık `/dealer` (Bugün) adresine 308 ile yönlendiren emekli koçanı; sorgu korunuyor. Statik "rehber" içeriği kaldırıldı.
+
+Raporun önerdiği iki yerden biri gerçek oldu: "Günün sırası" fikri Bugün'de **kişiye özel ve veriye dayalı** biçimde yaşıyor. Bugün'de kurulum kartı, sıradaki adımlar (yanıt bekleyen olumsuzlar, onay bekleyen telafi, açık vakalar, süresi geçen işler) ve operasyon sayaçları var. İkincisi, bağlamsal yardım çekmecesi, kabuk/navigasyon işi; kalanlarda.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Rota yetkisi (proxy); yönlendirme DEALER için. |
+| 2 | KALDIRILDI | Yetim sayfa emekli; giriş noktasına gerek kalmadı. |
+| 3 | KALDIRILDI | Sayfa yok. Kullanılmayan `layoutMetadata.dealerExperienceGuide*` anahtarları paylaşılan `messages/*.json`'da (sahiplik dışı). |
+| 4 | KALDIRILDI | Dekoratif degrade. |
+| 5 | KALDIRILDI | Fazla kaydırma riski taşıyan orta çizgi. |
+| 6 | KALDIRILDI | Hero; Bugün'ün kendi hero'su var. |
+| 7 | KALDIRILDI | Yerine canlı sıradaki adımlar geldi (Bugün). |
+| 8 | KALDIRILDI | Dekor. |
+| 9 | KALDIRILDI | Geliştiriciye yönelik / yanlış içerik (SAHTE). |
+| 10 | KALDIRILDI | Yerine Bugün → yanıt bekleyenler geldi (gelen kutusuna gerçek bağlantı). |
+| 11 | KALDIRILDI | Personel / cihaz konuları ekip ve ayarlar yüzeylerinin işi. |
+| 12 | KALDIRILDI | Üçlü kodlama. |
+| 13 | KALDIRILDI | Yanıltıcı hover. |
+| 14 | KALDIRILDI | Görünüme girme animasyonu. |
+| 15 | KALDIRILDI | Kısayol şeridi. |
+| 16 | KALDIRILDI | Büyüme merkezi linki (o rota da emekli → Analitik). |
+| 17 | KALDIRILDI | Keşfet linki (emekli → ⌘K). |
+| 18 | KALDIRILDI | Operasyon özeti linki (Bugün'e birleşti). |
+| 19 | KALDIRILDI | Ayarlar linki (menüde var). |
+| 20 | KALDIRILDI | `truncate` sorunu sayfayla gitti. |
+| 21 | KALDIRILDI | Yanlış ikon. |
+| 22 | KALDIRILDI | i18n anahtarları artık tüketicisiz (ortak dosyada, sahiplik dışı). |
+| 23 | ÇALIŞIYOR | Segment durumları. |
+| 24 | KALDIRILDI | Sayfa yok. |
+| 25 | KALDIRILDI | Sayfa yok. |
+| 26 | KALDIRILDI | Sayfa yok. |
+| 27 | ÇALIŞIYOR | Kişiselleştirme ve ilerleme takibi Bugün'de (kurulum kartı, sıradaki adımlar, yapılacaklar). |
+| 28 | KALAN | Arama / SSS / destek: bağlamsal "?" yardım çekmecesi kabukta (navigasyon / kabuk sahibi). |
+| 29 | KALAN | Yardım açılma analitiği (çekmeceyle birlikte). |
+
+### Kapanan bulgular
+- **1:** Yetim sayfa emekli.
+- **2:** Yanlış içerik kaldırıldı.
+- **4:** Affordance sorunu kalktı.
+- **6:** Gereksiz istemci bileşeni yok.
+- **7:** Dekor sorunu kalktı.
+- **8:** Erişilebilirlik sorunu kalktı.
+- **5 (kısmi):** "Günün sırası" Bugün'de canlı veriyle var. Admin'in yönettiği `experience-pulse` bayi yüzü hâlâ tüketicisiz. Bugün'e pazarlama vitrini eklenmedi (ops kaydı sakin kalsın); karar admin / katalog sahibinde.
+- **3:** Bağlamsal yardım çekmecesi kalan.
+
+### Kalanlar
+- Yardım çekmecesi.
+- `experience-pulse` (admin stüdyosu) bayi tüketicisi.
+- Ölü i18n anahtarlarının temizliği.

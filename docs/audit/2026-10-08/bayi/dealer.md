@@ -290,3 +290,100 @@ Dosyalar: `app/dealer/page.tsx`, `app/dealer/layout.tsx`, `app/dealer/loading.ts
   - 30 günlük sayaçlar (`qrLast30 + crLast30`, `:256`) yalnız `feedbackGrowth` için kullanılıyor ve yanıtta ayrı bir alan olarak dönmüyor.
 - **Yeniden üretim:** 2 yıldır çalışan, son 30 günde 12 geri bildirim alan bir bayi düşünelim. Kart "Son 30 gün özeti: 1.840 geri bildirim (+20%)" gösterir. Sayı tüm zamanları kapsarken yüzde 30g/30g karşılaştırmasıdır.
 - **Hüküm:** Gerçek bir metrik hatası. Önerilen çözüm: API'ye `feedbacksLast30` alanı eklemek, karta bu alanı bağlamak ve metrik sözlüğünde dönem etiketini zorunlu kılmak.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/dealer` = **Bugün** (yol haritası §4.3). Sakin operasyon kokpiti (ops kaydı): kurulum kartı → 4 metrik → sıradaki adımlar + yanıt bekleyenler + yapılacaklar → operasyon özeti; ikinci sekme **Haftalık rapor + arşiv**. Copilot, operasyon özeti, haftalık özet, kurulum, deneyim rehberi, keşfet ve büyüme merkezi buraya birleşti ya da yönlendirildi.
+
+**Dosyalar:** `app/dealer/page.tsx` (sunucu bileşeni, SSR + `HydrationBoundary`), `components/dealer/b-bugun/**` (istemci adası; haftalık sekme `next/dynamic` ile ayrı parça), `lib/dealer-today/{types,core,load,weekly,narrative,todos,legacy-redirect}.ts`, BFF uçları `app/api/dealer/today/**` (hepsi `defineRoute`: rol + kiracı kapsamı + zod + rate limit). Testler: `__tests__/lib/dealer-today-core.test.ts` (18), `__tests__/api/dealer-today.test.ts` (17).
+
+**Silinenler:** `dealer-dashboard-client.tsx` (1030 satır), `app/dealer/types.ts`, `app/dealer/components/dealer-helpers.tsx`, `components/dealer/getting-started-card.tsx`, `components/onboarding/onboarding-gate-banner.tsx`, uçlar `stats`, `morning-briefing`, `next-best-actions` (+ `lib/next-best-action.ts`). `dashboard-layout`, `benchmark` ve `offline-sync` uçları başka tüketicileri olduğu için yerinde kaldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | `generateMetadata` korunuyor. |
+| 2 | ÇALIŞIYOR | Sayfa `requireAuth(['DEALER'])`, BFF `defineRoute` (DEALER; ADMIN yalnız `?dealerId=` ile salt okunur). |
+| 3 | ÇALIŞIYOR | Paylaşılan layout. |
+| 4 | KALDIRILDI | "Kurulum bitene kadar panel sınırlıdır" şeridi gerçek olmayan bir kısıtlama vaat ediyordu. `OnboardingSheet` turu da bayi layout'undan çıktı. Yerine Bugün'deki kurulum kartı geldi. |
+| 5 | ÇALIŞIYOR (kısmen) | Toast'lar layout'ta sürüyor. Bugün sekmeye dönüşte tazelenir, "Yenile" önbelleği atlar. SSE ile anlık geçersiz kılma kalanlarda. |
+| 6 | ÇALIŞIYOR | Segment yükleme. |
+| 7 | ÇALIŞIYOR | Segment hata sınırı. |
+| 8 | ÇALIŞIYOR | Statik iskelet; SSR başarılıysa hiç görünmez. |
+| 9 | ÇALIŞIYOR | `QueryState` ve zarf v2 kullanılıyor. Sorgu hatası 500, DB erişilemezse 503 döner; "200 + sıfırlar" yok (testli). |
+| 10 | KALDIRILDI | 60 sn yoklama kaldırıldı. Yerine odak tazeleme, "Yenile" (`?fresh=1`) ve sunucuda 30 sn Redis önbelleği var. |
+| 11 | KALDIRILDI | 7 ayrı istek ve 150 ms erteleme yerine tek BFF turu (tek `Promise.all`). |
+| 12 | ÇALIŞIYOR | İstanbul saatine göre selamlama. |
+| 13 | KALDIRILDI | Formülü açıklanmayan, TR sabit "performans skoru" halkası kaldırıldı. Yerine tanımı yazılı 4 metrik geldi. |
+| 14 | ÇALIŞIYOR | "QR oluştur". |
+| 15 | ÇALIŞIYOR | "Kart tara" birincil eylem; mobilde de görünür. |
+| 16 | ÇALIŞIYOR | Kurulum kartı adımları kayıtlardan türetir. Zorunlu 4 adım bitince kart kaybolur, daraltılabilir. Hata durumunda sıfırlarla görünmez. |
+| 17 | KALDIRILDI | Çevrimdışı banner'ın kuyruğa yazan istemcisi yoktu (SAHTE). `offline-sync` ucu P0-18 ile güvenli ve testli olduğu için kaldı (bkz. Kalanlar). |
+| 18 | ÇALIŞIYOR | Sıradaki adımlar kod + parametre döner, metni istemci üretir. Yanıtsız olumsuz son 30 güne bakar (tüm zamanlar değil). `weak_qr` gerçekten kullanılıyor; bağlantılar var olan rotalara gidiyor. |
+| 19 | KALDIRILDI | Mükerrerdi; konum adımı kurulum kartında. |
+| 20 | ÇALIŞIYOR | Sıradaki adımlar ve yanıt bekleyenlerle birleşti. QR ve tüketim yorumu birlikte sayılıyor. |
+| 21 | KALDIRILDI | Brifing satırının sayılarını TR sabit metinle tekrarlıyordu. |
+| 22 | KALDIRILDI | Link-yalnız "playbook" kaldırıldı. Yerine Haftalık rapor → "Haftanın önerisi" geldi: "kural tabanlı" diye etiketli ve yapılacaklara eklenebiliyor. |
+| 23 | ÇALIŞIYOR | Yanıt bekleyenler: önce olumsuzlar (en eskisi üstte), 24 saat SLA rozeti, kayda derin bağlantı (`?id=`). |
+| 24 | ÇALIŞIYOR | CTA'lar sayaç ve satırlarda. |
+| 25 | KALDIRILDI | Widget düzeni yok; yerleşim sabit ve sakin. `dashboard-layout` ucu ve ayarlardaki düzen bölümü artık tüketicisiz (ayarlar sahibine bildirildi). |
+| 26 | ÇALIŞIYOR | "Bugün gelen geri bildirim". Delta dün aynı saate göre, sparkline 7 gün; her biri etiketli. |
+| 27 | ÇALIŞIYOR | Son 7 gün ağırlıklı ortalama, `n` ve düşük örneklem uyarısı. Boş gün `null` (0★ değil), ondalık TR biçimli. |
+| 28 | KALDIRILDI | Toplam tarama Analitik'te; Bugün kararına katkısı yok. |
+| 29 | ÇALIŞIYOR | Operasyon özeti → "Aktif QR" (+ şube sayısı). |
+| 30 | KALDIRILDI | Dönüşüm oranı %100'ü aşabiliyordu ve #49'la mükerrerdi; Analitik'e bırakıldı. |
+| 31 | KALDIRILDI | Yerine "Açık iş / süresi geçen" sayacı geldi (aksiyon yoksa "%0" yanılgısı yok). |
+| 32 | ÇALIŞIYOR | `MetricTile` + `useNumberTicker`: hareket politikasına uyar, binlik ayırıcı var, önceki değerden sayar. |
+| 33 | ÇALIŞIYOR | Haftalık rapor: İstanbul takvim haftası ile önceki takvim haftası karşılaştırılıyor. |
+| 34 | ÇALIŞIYOR | Günlük akış: İstanbul günleri, `Intl` gün adları, ekran okuyucu tablosu. |
+| 35 | KALDIRILDI | Duygu donut'u `null` değerleri nötr sayıyordu. Yerine puana dayalı deterministik dağılım geldi. |
+| 36 | KALDIRILDI | Boş günü 0★ çizen alan grafiği kaldırıldı. Yerine boşluklu (`null`) sparkline geldi. |
+| 37 | ÇALIŞIYOR | Gerçek dağılım (son 7 günün tamamı): olumlu 4-5 / nötr 3 / olumsuz 1-2. |
+| 38 | KALDIRILDI | Yerine Bugün / Haftalık rapor `SectionTabs` geldi (Radix ARIA, ok tuşları). |
+| 39 | ÇALIŞIYOR | Yanıt bekleyen satırı: kaynak ikonu (QR / ürün), yıldızlarda `aria-label`, ürün adı gösteriliyor. |
+| 40 | ÇALIŞIYOR | Boş durum "Yanıt bekleyen yok". |
+| 41 | KALDIRILDI | İlk 6 QR listesi kaldırıldı. Zayıf QR önerisi ve QR sayacı kaldı; liste QR sayfasında. |
+| 42 | ÇALIŞIYOR | Kurulum kartında "İlk QR kodun". |
+| 43 | ÇALIŞIYOR | "Gelen kutusuna git", "Tüm işler". |
+| 44 | KALDIRILDI | Boş günü 0 sayan ortalama kaldırıldı. Yerine haftalık ağırlıklı ortalama geldi. |
+| 45 | KALDIRILDI | `null`→nötr hatası bu bölümle birlikte gitti. |
+| 46 | KALDIRILDI | Tüm zamanları "Son 30 gün" diye gösteriyordu. Haftalık rapor gerçek dönemi gösteriyor. |
+| 47 | KALDIRILDI | Düşük değerli. |
+| 48 | KALDIRILDI | Düşük değerli. |
+| 49 | KALDIRILDI | Mükerrer (#30). |
+| 50 | ÇALIŞIYOR | "Bugünkü işlem" metriği (tüketim, dün aynı saate göre). |
+| 51 | KALDIRILDI | Benchmark Analitik → Kıyas'ta. Panoda artık ağır platform sorgusu yok. |
+| 52 | KALDIRILDI | Dört tekrar eden Analitik linki yerine tek bağlantı kaldı (ortalama puan kutusu). |
+| 53 | ÇALIŞIYOR | Hover-scale/rotate ve sonsuz döngü yok. Hareket: başlık girişi, liste girişi ve satır çıkışı. Hepsi `useMotionPolicy` (OS + uygulama ayarı) ile kapanır. |
+| 54 | KALDIRILDI | Müşteri avatarı gösterilmiyor (PII azaltma). |
+| 55 | ÇALIŞIYOR | `Intl.RelativeTimeFormat`; referans `generatedAt`, hidrasyon tutarlı. |
+| 56 | KAPSAM DIŞI | Bugün sabit ve etiketli pencereler kullanıyor (bugün / 7 gün / hafta). Serbest dönem seçici Analitik'te. |
+| 57 | KALAN | Şube/QR filtresi Analitik işi. |
+| 58 | ÇALIŞIYOR (kısmen) | Kayda derin bağlantı var; öneri tek tıkla iş oluyor. Satır içi yanıt Gelen Kutusu `DetailSheet`'inde (o yüzeyin sahibine). |
+| 59 | ÇALIŞIYOR (kısmen) | Haftalık arşiv CSV (yerelleştirilmiş, BOM, TR'de `;`). PDF/e-posta paylaşımı kalan. |
+| 60 | KALAN | Uyarı kuralları → Otomasyon → Uyarılar (§4.3). |
+| 61 | ÇALIŞIYOR | Yanıt oranı (7 gün, delta) ve medyan ilk yanıt süresi. |
+
+### Kapanan bulgular (16/16, biri kısmi)
+- **B1:** Ölü banner kaldırıldı. Uç P0-18'de güvenli hale getirilmişti (DB payload'ı, atomik claim, tek tüketim servisi).
+- **B2:** Benchmark widget'ı ve ağır sorgusu panodan çıktı.
+- **B3, B4, B5, B6, B7, B8:** Tek metrik sözlüğü `lib/dealer-today/core.ts`'de. Tanımlar: ağırlıklı ortalama, `null` boşluk, gerçek dağılım, iki kanal, tek pencere, İstanbul saat dilimi. Hata zarfı görünür.
+- **B9:** Kaldırıldı.
+- **B10:** API kod döner, metin TR/EN `copy.ts`'de.
+- **B11 (kısmi):** Derin bağlantı var, satır içi yanıt Gelen Kutusu'nda.
+- **B12:** Sekme ARIA, `role="img"` yıldızlar, metin + ikonlu durum, sparkline etiketleri, `useMotionPolicy`.
+- **B13:** Tek BFF, dar `select`, tek tur.
+- **B14:** Widget düzeni yok.
+- **B15:** Her niyetin tek yeri var.
+- **B16:** Ölü kod silindi.
+
+### Kalanlar
+- Gerçek zamanlı geçersiz kılma. Bugün ikinci bir SSE bağlantısı açmıyor; paylaşılan olay yolu gerekiyor.
+- Gelen Kutusu `?id=` derin bağlantısını okumalı. Bugün `/dealer/feedbacks?id=` ve `/dealer/reviews?id=` kullanıyor; inbox devreye girince yönlendirme sorguyu korur.
+- `offline-sync` ucunun istemcisi yok. Karar kasa (`/dealer/scan`) yüzeyinin.
+- Şube filtresi ve uyarı eşikleri (Analitik / Otomasyon).
+- Görsel doğrulama tarayıcıda yapılmadı (dev server yasak); `tsc` ve jest temiz.
