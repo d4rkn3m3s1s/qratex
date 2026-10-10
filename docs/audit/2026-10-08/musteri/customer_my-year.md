@@ -222,3 +222,77 @@ Dört iddia kod baştan okunarak çürütülmeye çalışıldı. Kod çalıştı
 - **Saklama kısmı (koşullu):** `analyticsEventCleanupFn` her gün 03:00'te çalışıp **kategori ayrımı yapmadan** 90 günden eski tüm `AnalyticsEvent` satırlarını siliyor (`lib/inngest/functions.ts:134-142` → `app/api/internal/inngest/analytics-event-cleanup/route.ts:16` → `lib/analytics-event-retention.ts:9`, `:17-26`). Fonksiyon `app/api/inngest/route.ts:11` içinde kayıtlı. Admin ucu da elle silebiliyor (`app/api/admin/analytics/cleanup-events/route.ts:46`). Vercel cron'u (`vercel.json`, `/api/cron/daily`) bu temizliği çağırmıyor ve `db-cleanup` yorumu AnalyticsEvent'in silinmediğini söylüyor (`app/api/cron/db-cleanup/route.ts:11`). Dolayısıyla risk **Inngest Cloud'un canlıda bağlı olup olmamasına** bağlı. Bu repo içinden **doğrulanmadı**. Bağlıysa Ekim ayında "bu yıl kazanılan puan" yalnız Temmuz sonrasını kapsar.
 - **`::int` dönüşümü:** Okunan tüm yazım noktalarında `data.points` tamsayı kaynaklardan geliyor (sabitler, `rewardPool`, `reward.points`, `action.amount`). Ondalık ya da metin değeri yazan bir yol bulunamadı. 500 riski şu an **gerçek değil, teorik**. Yine de `(data->>'points')::numeric` ve `jsonb_typeof` koruması ucuz bir sigorta.
 - **Düzeltme yaklaşımı:** Kısa vadede `category <> 'squad_battle_refund'` filtresi ile gösterge düzelir. Doğru çözüm, analytics olayından bağımsız ve silinmeyen bir `PointsLedger` (credit/debit, kaynak, referans id, `@@unique` ile idempotent). Kazanç = pozitif kayıtlar − iade eşleşmeleri; harcama = debit kayıtları. Ayrıca `pointsSpent` alanı kalıcı olarak 0 döner (yazan yok). Ya kaldırılmalı ya da ledger'a bağlanmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/me/year` (Ben → Yılım). Eski `/customer/my-year` artık sorgu parametrelerini koruyarak `permanentRedirect` yapıyor.
+
+**Yeni yapı**
+- `app/customer/me/year/page.tsx`: sunucu bileşeni. Yetki `requireAuth(['CUSTOMER'])` ile DB'den doğrulanıyor, dönem `?year=&month=` parametresinden alınıyor, özet sunucuda hesaplanıp küçük bir istemci adasına prop olarak geçiyor. Hata durumunda ayrı bir görünüm gösteriliyor. `loading.tsx` statik bir iskelet.
+- `lib/customer-year/`: `period.ts` Europe/Istanbul dönem kurallarını, `derive.ts` saf türetmeleri, `contract.ts` zod yanıt sözleşmesini, `summary.server.ts` tek hesap kaynağını içeriyor.
+- `app/api/customer/my-year/route.ts`: `defineRoute` ile yeniden yazıldı (yalnız CUSTOMER, zod sorgu, `read` hız sınırı, zarf v2). Aynı hesap kaynağını kullanıyor.
+- `components/customer/m-yilim/`: kapak, dönem seçici, özet ızgarası, etkinlik çubukları, tam ekran hikâye (`year-story.tsx`, `next/dynamic` ile yalnız açılınca yükleniyor), slaytlar, ölçülü 2D canvas aurası, paylaşım kartı (canvas → PNG → Web Share API), TR/EN metinler.
+- Testler: `__tests__/lib/customer-year.test.ts` (18) ve `__tests__/api/customer-my-year.test.ts` (10), prisma mock'lu. 28/28 geçiyor.
+- Görsel doğrulama: bundler kullanmayan bir statik render tezgâhıyla yapıldı (sucrase + Tailwind CLI + headless Chrome). 390 px genişlikte sayfa, 9 slayt ve 1080×1920 paylaşım kartı (TR/EN) ekran görüntüsüyle kontrol edildi. Taşan çip, kırpılan kart etiketi ve büyük giriş başlığı bu sırada bulunup düzeltildi. Etkileşimli hikâye (geçiş, dokunma, otomatik ilerleme) canlı tarayıcıda çalıştırılmadı.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR | Proxy'ye ek olarak sayfa `requireAuth(['CUSTOMER'])` çağırıyor. 401 durumunda `callbackUrl` ile girişe yönlendiriyor. |
+| 2 | API oturum / IDOR | ÇALIŞIYOR | `defineRoute roles:['CUSTOMER']`. Bayi ve personel artık 403 alıyor, `userId` oturumdan geliyor. |
+| 3 | Menü girdisi | ÇALIŞIYOR | Navigasyon kaydında `/customer/me/year` olarak duruyor ve `redirectFrom` tanımlı. Bu kayıt navigasyon ajanına ait, dokunulmadı. |
+| 4 | Hero | ÇALIŞIYOR | Admin hero'su yerine play kaydında sinematik kapak: dönem, "Hikâyeyi başlat", "Kartı paylaş". |
+| 5 | Veri yükleme | ÇALIŞIYOR | Veri sunucuda ilk render'da yükleniyor. Ham `useEffect`/`fetch` kaldırıldı. Dönem değişimi `useTransition` ile ve `aria-busy` gösteriliyor. |
+| 6 | Yükleniyor | ÇALIŞIYOR | Kapak, çip ve ızgara iskeleti. Shimmer yok. |
+| 7 | Hata durumu | ÇALIŞIYOR | `ErrorState` ve "Tekrar dene" (`router.refresh`) boş durumdan ayrı. API 500/503 dönüyor, "200 + sıfırlar" yok. |
+| 8 | Boş durum | ÇALIŞIYOR | `EmptyState`: QR okut, mekân keşfet ve (varsa) geçmiş yıl CTA'ları. Sıfır kartlar gösterilmiyor. |
+| 9 | Yanıt veren işletme | ÇALIŞIYOR | Feedback ile ConsumptionReview birleşik sayılıyor. |
+| 10 | Etki oranı | ÇALIŞIYOR | Yanıt gelen yorum / toplam yorum. "10 yorumun 10'u = %100" testle kanıtlandı. |
+| 11 | Seviye | ÇALIŞIYOR | Dönem içi `level_up` anlarından "Seviye 6 → 9". Bugünkü seviye artık "bu yıl" diye gösterilmiyor. |
+| 12 | Yorum sayısı | ÇALIŞIYOR | Birleşik sayım, ikisinde de `deletedAt IS NULL`. Önceki dönemle kıyas var. |
+| 13 | Ortalama puan | ÇALIŞIYOR | Birleşik ortalama. Yıldız ikonu, dağılım ve en çok verilen puan eklendi. |
+| 14 | Ziyaret | ÇALIŞIYOR | Consumption sayısı, aktif gün sayısı, önceki dönem kıyası (DeltaBadge). |
+| 15 | Rozet | ÇALIŞIYOR | Sayı ve rozet glifleri (BadgeGlyph). |
+| 16 | Kazanılan puan | ÇALIŞIYOR | Kaynak PointsLedger (posted, `delta > 0`; escrow iadesi, ters kayıt ve açılış bakiyesi hariç) artı deftere geçmemiş eski `points_credited` olayları (ledgerId'siz, iade kategorileri hariç, `jsonb_typeof` ile güvenli). Kalan risk aşağıda. |
+| 17 | En uzun seri | ÇALIŞIYOR | Dönem içindeki ardışık aktif gün serisi (ziyaret + yorum, İstanbul günü). Tüm zamanlar değeri kullanılmıyor. |
+| 18 | Klan savaşı | ÇALIŞIYOR | Katılım ve zafer ayrı sayılıyor (`winnerId = squadId`). İkon Swords. |
+| 19 | Favori mekân | ÇALIŞIYOR | İlk 3 mekân. Ziyaret ve yorum ayrı gösteriliyor, logo ve kategori aynı SQL'de geliyor, derin bağlantı `/customer/places/[id]`. |
+| 20 | Harcanan puan | KALDIRILDI | Yazan bir yol yoktu, hep 0 dönüyordu. Harcama cüzdanın konusu, Yılım anlatısına girmiyor. |
+| 21 | Ölü alanlar | KALDIRILDI | `memberSince` artık yıl seçiciyi besliyor. `xp`, `currentPoints`, `currentStreak`, `totalSpent` kaldırıldı (harcama spending-overview'a ait). Sözleşme zod ile tanımlı. |
+| 22 | `?period=all` | KALDIRILDI | Tüm zamanlar görünümü analytics'e ait. Yerine yıl ve ay seçimi geldi. |
+| 23 | Yıl seçici | ÇALIŞIYOR | Yıl ve ay çipleri, üyelik ve bugünle sınırlı. 1 Ocak – 15 Şubat arası varsayılan dönem geçen yıl. Geçersiz istek varsayılana düşüp duyuruluyor. |
+| 24 | Paylaşım kartı | ÇALIŞIYOR | 1080×1920 PNG, yalnız sıfır olmayan gerçek değerler. Ad ve yorum metni yok. Paylaşım Web Share API ile. Dosya paylaşımı yoksa etiket dürüstçe "Kartı kaydet" oluyor. |
+| 25 | Hikâye / motion | ÇALIŞIYOR | En fazla 9 slayt, verisi olmayan slayt atlanıyor. Dokun/kaydır/basılı tut, ←/→/Home/End, Esc, görünür önceki/duraklat/sonraki düğmeleri, `aria-live`. Azaltılmış harekette otomatik ilerleme, kayma ve sayaç yok, canvas tek statik kare. |
+| 26 | Derin bağlantı | ÇALIŞIYOR | Hedefler: Seslerim, Rozetler, Cüzdan/Hareketler, Lig, Klan, mekân sayfası. |
+| 27 | i18n | ÇALIŞIYOR | Metinler TR/EN yerel tabloda (`copy.ts`), sayfa dili `getServerLocale` ile seçiliyor. Paylaşılan katalog değişmedi. Ton "sen". |
+| 28 | Önbellek / DB kesintisi | ÇALIŞIYOR | `no-store` ve 503 retryable. Kapanmış dönem Redis'te 6 saat önbellekleniyor (`my-year:v1:{user}:{dönem}`). |
+| 29 | Mobil | ÇALIŞIYOR | Çift `p-6` kaldırıldı. 390 px'te yatay taşma yok (tezgâhta ölçüldü). Hikâye mobilde tam ekran, masaüstünde 9:16 pano. |
+| 30 | Erişilebilirlik | ÇALIŞIYOR | h1/h2 hiyerarşisi, `aria-hidden` ikonlar, sayı ve cümle aynı öğede, ekran okuyucu yalnız son değeri okuyor. Dialog odak tuzağı, dokunma hedefleri 44 px veya üstü. |
+| 31 | Kıyas / yüzdelik | KISMİ | Önceki dönem kıyası (ziyaret, yorum) yapılıyor. Topluluk yüzdeliği yok: gece histogram cron'u gerekiyor, sahte veri yasak. |
+
+**Sonuç:** ÇALIŞIYOR 27 · KALDIRILDI 3 · KISMİ 1 (31 özellik)
+
+### Kapanan bulgular
+1 (etki oranı), 2 (tüketim yorumları), 3 (favori = ziyaret), 6 (Wrapped deneyimi), 7 (hata/boş ayrımı), 8 (ölü/sahte alanlar, zod sözleşmesi), 10 (soft-delete), 12 (ton, ikon, a11y, i18n, admin toast) tam kapandı.
+
+Kısmen kapananlar:
+- **4:** İade ve sayısal olmayan değer düzeltildi, defter kalıcı kaynak oldu. Eski olaylar hâlâ 90 gün retention'a açık.
+- **5:** Seviye, lig ve seri artık döneme ait. Ancak An Motoru ve defter öncesi dönemler için başlangıç seviye/lig bilgisi yok; bu durumda dürüstçe gösterilmiyor.
+- **9:** İstanbul sınırları, yıl/ay seçimi, varsayılan geçen yıl ve kapanmış dönem önbelleği tamam. Snapshot tablosu yapılmadı.
+- **11:** Veri katmanı ve topDealer tek SQL'de toplandı. İndeks için şema isteği gerekiyor.
+
+### Kalanlar
+- **Eski `points_credited` olayları 90 gün retention ile silinebilir.** Defter öncesi dönemlerin puan toplamı eksik kalabilir. `lib/analytics-event-retention.ts` paylaşılan bir dosya olduğu için dokunulmadı. Öneri: retention işinde `event='points_credited'` satırlarını hariç tutmak.
+- **Topluluk yüzdeliği ("ilk %X")** için gece histogram cron'u gerekiyor.
+- **Yıl sonu "özet açıldı" rozeti/puanı yapılmadı.** Ekonomi akışı ve tek-seferlik unique anahtar ister.
+- **Paylaşım kartına referral bağlantısı** gizlilik kararı bekliyor.
+- **RemedyOffer/ActionItem kanıtı:** "Yorumun sonrası menü değişti" anlatısı için eklenmedi.
+- **Lig/seviye başlangıcı** yalnız defter ve An Motoru kayıtlarının kapsadığı dönemlerde gösteriliyor.
+
+### Şema istekleri
+- `SquadBattleParticipant @@index([userId, createdAt])` (bulgu 11).
+- Opsiyonel `UserYearSnapshot(userId, year, payload Json, createdAt, @@unique([userId, year]))`: kapanmış yılları dondurmak ve yıl başı seviye/lig değerini kalıcı tutmak için.
