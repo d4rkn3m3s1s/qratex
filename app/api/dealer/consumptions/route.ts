@@ -1,129 +1,63 @@
-import { NextRequest, NextResponse, after } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
+import { after } from 'next/server';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
-import {
-  PRIVATE_NO_STORE_HEADERS,
-  clampPageParam,
-  clampPageSizeParam,
-  paginationSkip,
-  responseIfDatabaseUnavailable,
-} from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
-import { isEconomyError } from '@/lib/economy';
-import {
-  createConsumption,
-  isConsumptionError,
-  runConsumptionSideEffects,
-} from '@/lib/consumption/service';
+import { createConsumption, runConsumptionSideEffects } from '@/lib/consumption/service';
+import { parseLedgerFilters } from '@/lib/dealer/kasa/core';
+import { listLedger } from '@/lib/dealer/kasa/server';
+import { mapKasaErrors } from '@/lib/dealer/kasa/http';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/dealer/consumptions
- * Bayinin kaydettiği tüketimleri listele.
+ * GET /api/dealer/consumptions — İşlem defteri (BFF).
+ *
+ * Sorgu: range=today|7d|30d|90d|all|custom (+from,to YYYY-MM-DD, İstanbul günü), rating=all|none|
+ * low|mid|high, product, q (müşteri adı/not/ürün, ≥2 karakter), sort=new|old|amount_desc|
+ * amount_asc, page, pageSize (5–50). Yanıt: açık DTO satırları (ham müşteri/bayi kimliği ve
+ * e-posta yok, kart yalnız son 4), seçili aralığın özeti ve önceki eşit dönem.
+ * ADMIN yalnız `?dealerId=` ile, salt okunur.
  */
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    const { searchParams } = new URL(request.url);
-    const page = clampPageParam(searchParams.get('page'));
-    const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 20, 100);
-    const skip = paginationSkip(page, pageSize);
-
-    const [consumptions, total] = await Promise.all([
-      prisma.consumption.findMany({
-        where: { dealerId: session.user.id },
-        skip,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' },
-        // Açık select: ham müşteri/bayi kimliği (customerId, dealerId) yanıta sızmaz.
-        select: {
-          id: true,
-          amount: true,
-          note: true,
-          productId: true,
-          createdAt: true,
-          updatedAt: true,
-          card: { select: { id: true, token: true } },
-          customer: { select: { name: true, email: true, image: true } },
-          product: {
-            select: {
-              id: true,
-              name: true,
-              price: true,
-              category: { select: { id: true, name: true, icon: true } },
-            },
-          },
-          review: { select: { id: true, rating: true, text: true } },
-        },
-      }),
-      prisma.consumption.count({ where: { dealerId: session.user.id } }),
-    ]);
-
-    const items = consumptions.map((row) => {
-      const token = row.card?.token;
-      const tokenPublic = typeof token === 'string' && token.length > 0 ? token.slice(-4) : '';
-      return {
-        ...row,
-        card: row.card ? { id: row.card.id, token: tokenPublic } : row.card,
-      };
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        items,
-        pagination: {
-          total,
-          page,
-          pageSize,
-          totalPages: pageSize > 0 ? Math.ceil(total / pageSize) : 0,
-        },
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    console.error('Error fetching consumptions:', error);
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    return NextResponse.json(
-      { error: 'Tüketimler getirilemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+export const GET = defineRoute(
+  {
+    name: 'dealer.consumptions.list',
+    roles: ['DEALER', 'STAFF', 'ADMIN'],
+    tenant: 'dealer',
+    rateLimit: 'read',
+  },
+  async ({ request, tenant }) => {
+    const sp = request.nextUrl.searchParams;
+    const size = Number.parseInt(sp.get('pageSize') ?? '', 10);
+    const pageSize = Number.isInteger(size) && size >= 5 && size <= 50 ? size : undefined;
+    return ok(await listLedger(tenant.dealerId, parseLedgerFilters(sp), { pageSize }));
   }
-}
+);
 
 /**
- * POST /api/dealer/consumptions
- * Yeni tüketim kaydı oluştur. Tüm kurallar (kart durumu, oran sınırı, ürün sahipliği,
- * çarpan politikası, pasif puan `mintPoints` ile tek transaction) lib/consumption/service.ts'te.
+ * POST /api/dealer/consumptions — kasada tüketim kaydı.
  *
- * İdempotency: gövdede `clientOpId` ya da `Idempotency-Key` başlığı (8–100 karakter).
- * Aynı anahtarla tekrar gönderim yeni kayıt/puan üretmez, ilk kaydı `duplicate: true` döner.
+ * Kurallar lib/consumption/service.ts'te (kart durumu, oran sınırı, ürün sahipliği, tutar
+ * sınırı, çarpan politikası; kayıt + denetim + bildirim + `mintPoints` tek transaction).
+ * İdempotency: gövdede `clientOpId` ya da `Idempotency-Key` başlığı; aynı anahtar yeni
+ * kayıt/puan üretmez (`duplicate: true`). Personel kasası: kayıt bayiye yazılır, aktör denetimde.
  */
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
+export const POST = defineRoute(
+  {
+    name: 'dealer.consumptions.create',
+    roles: ['DEALER', 'STAFF'],
+    tenant: { kind: 'dealer', allowRoles: ['DEALER', 'STAFF'] },
+    rateLimit: 'mutation',
+    maxBodyBytes: 8_000,
+  },
+  async ({ request, tenant, user }) => {
     let body: unknown;
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { error: 'Geçersiz JSON gövdesi' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+      throw new ApiError('BAD_REQUEST', 'Geçersiz JSON gövdesi');
     }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: 'Geçersiz istek gövdesi' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+      throw new ApiError('BAD_REQUEST', 'Geçersiz istek gövdesi');
     }
     const headerKey = request.headers.get('idempotency-key');
     const input = {
@@ -132,60 +66,50 @@ export async function POST(request: NextRequest) {
     };
 
     const now = new Date();
-    const result = await createConsumption(input, {
-      dealerId: session.user.id,
-      channel: 'live',
-      now,
-      ...getAuditRequestMeta(request),
-    });
+    const result = await mapKasaErrors(() =>
+      createConsumption(input, {
+        dealerId: tenant.dealerId,
+        actorId: user.id,
+        channel: 'live',
+        now,
+        ...getAuditRequestMeta(request),
+      })
+    );
 
     if (!result.duplicate) {
       const revenue = result.consumption.amount ?? 0;
       after(() =>
-        runConsumptionSideEffects({
-          dealerId: session.user.id,
-          customerId: result.customerId,
-          revenue,
-          at: now,
-        })
+        runConsumptionSideEffects({ dealerId: tenant.dealerId, customerId: result.customerId, revenue, at: now })
       );
     }
 
-    return NextResponse.json(
+    let visitCountHere: number | null = null;
+    try {
+      visitCountHere = await prisma.consumption.count({
+        where: { dealerId: tenant.dealerId, cardId: result.consumption.cardId },
+      });
+    } catch {
+      visitCountHere = null; // Kayıt commit'lendi; sayaç yalnız bilgi amaçlı.
+    }
+
+    const c = result.consumption;
+    return ok(
       {
-        success: true,
         message: result.duplicate ? 'Bu tüketim zaten kaydedilmiş' : 'Tüketim kaydı oluşturuldu',
         duplicate: result.duplicate,
-        consumption: result.consumption,
+        consumption: {
+          id: c.id,
+          amount: c.amount,
+          note: c.note,
+          createdAt: c.createdAt,
+          product: c.product ? { id: c.product.id, name: c.product.name } : null,
+        },
         passivePoints: result.passive.credited,
+        passiveCapped: result.passive.capped,
+        multiplier: result.passive.combinedMultiplier,
+        visitCountHere,
       },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    if (isConsumptionError(error)) {
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        {
-          status: error.httpStatus,
-          headers: {
-            ...PRIVATE_NO_STORE_HEADERS,
-            ...(error.retryAfterSec ? { 'Retry-After': String(error.retryAfterSec) } : {}),
-          },
-        }
-      );
-    }
-    if (isEconomyError(error)) {
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status: error.httpStatus, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    console.error('Error creating consumption:', error);
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    return NextResponse.json(
-      { error: 'Tüketim kaydı oluşturulamadı' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+      { legacySpread: true }
     );
   }
-}
+);

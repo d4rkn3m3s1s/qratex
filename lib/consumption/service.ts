@@ -186,6 +186,11 @@ export type ConsumptionChannel = 'live' | 'offline';
 export interface CreateConsumptionContext {
   /** Tüketimi yazan işletme (bayi) kullanıcı kimliği. */
   dealerId: string;
+  /**
+   * İşlemi fiilen yapan kullanıcı (personel kasası). Verilmezse `dealerId`. Denetim kaydına
+   * yazılır ve kendi kartına işlem (kendine puan) bu kimlik için de reddedilir.
+   */
+  actorId?: string;
   channel: ConsumptionChannel;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -279,7 +284,7 @@ export async function createConsumption(
     throw new ConsumptionError('CARD_NOT_ACTIVATED', 'Bu kart henüz aktive edilmemiş');
   }
   const customerId = card.customerId;
-  if (customerId === dealerId) {
+  if (customerId === dealerId || (ctx.actorId && customerId === ctx.actorId)) {
     throw new ConsumptionError('SELF_DEALING', 'Kendi kartınıza tüketim kaydedemezsiniz');
   }
 
@@ -363,7 +368,7 @@ export async function createConsumption(
       await tx.cardAuditLog.create({
         data: {
           cardId: card.id,
-          userId: dealerId,
+          userId: ctx.actorId ?? dealerId,
           action: 'CONSUMPTION_ADDED',
           metadata: {
             consumptionId: created.id,
@@ -371,6 +376,7 @@ export async function createConsumption(
             amount: created.amount,
             channel: ctx.channel,
             clientOpId: input.clientOpId,
+            ...(ctx.actorId && ctx.actorId !== dealerId ? { staffId: ctx.actorId } : {}),
           },
           ipAddress: ctx.ipAddress ?? null,
           userAgent: ctx.userAgent ?? null,
