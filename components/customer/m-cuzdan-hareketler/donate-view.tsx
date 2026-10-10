@@ -64,6 +64,7 @@ export function DonateView({ initial }: { initial: DonateOverview | null }) {
     queryFn: ({ signal }) => fetchDonate(signal),
     initialData: initial ?? undefined,
     staleTime: 30_000,
+    refetchOnWindowFocus: true, // PWA'ya dönüşte (ör. QR sonrası) taze veri
     retry: shouldRetry,
   });
   const data = q.data;
@@ -325,6 +326,9 @@ function ProjectsTab({
 
   return (
     <div className="space-y-4">
+      {data.platform.totalDonated > 0 ? (
+        <p className="qx-caption qx-num text-fg-muted">{copy.platformLine(fmt.int(data.platform.totalDonated), fmt.int(data.platform.donors))}</p>
+      ) : null}
       {present.length > 1 ? (
         <ChoiceChips
           aria-label={copy.categoryFilter}

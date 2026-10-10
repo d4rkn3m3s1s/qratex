@@ -32,6 +32,7 @@ export function HistoryTab({ onBrowse, receiptId, onOpenReceipt, onCloseReceipt 
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
     staleTime: 30_000,
+    refetchOnWindowFocus: true, // PWA'ya dönüşte (ör. QR sonrası) taze veri
     retry: shouldRetry,
   });
   const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);

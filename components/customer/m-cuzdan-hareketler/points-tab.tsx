@@ -41,7 +41,8 @@ export function PointsTab({ initial }: { initial?: { filter: PointsFilter; page:
     getNextPageParam: (last) => last.nextCursor,
     initialData: useInitial && initial ? { pages: [initial.page], pageParams: [null] } : undefined,
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    staleTime: 10_000, // yorum yazıp geri dönünce liste kısa sürede tazelensin
+    refetchOnWindowFocus: true, // PWA'ya dönüşte (ör. QR sonrası) taze veri
     retry: shouldRetry,
   });
 

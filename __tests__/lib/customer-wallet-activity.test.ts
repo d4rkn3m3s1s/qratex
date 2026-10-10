@@ -23,7 +23,7 @@ jest.mock('@/lib/points-rules', () => ({
 import { decodeCursor, encodeCursor } from '@/lib/customer-wallet/cursor';
 import { bucketKeys, resolveSummaryPeriod, weekStartOf } from '@/lib/customer-wallet/periods';
 import { escapeCsvCell, toCsv } from '@/lib/customer-wallet/csv';
-import { buildVisitsWhere, getReviewRewardPreview, getVisitStats, getVisitsPage, validAmount } from '@/lib/customer-wallet/activity/visits';
+import { buildVisitsWhere, turkishSearchVariants, getReviewRewardPreview, getVisitStats, getVisitsPage, validAmount } from '@/lib/customer-wallet/activity/visits';
 import { getPointsHistory, getPointsOverview, getPointsEntry } from '@/lib/customer-wallet/activity/points-history';
 import { GROUP_SOURCES, groupOfSource, sourceLabel } from '@/lib/customer-wallet/activity/sources';
 import { percentDelta } from '@/lib/customer-wallet/activity/spend-summary';
@@ -122,11 +122,15 @@ describe('ziyaretler', () => {
     expect(w.customerId).toBe('u1');
     expect(w.review).toBeNull();
     expect(w.dealerId).toBe('d1');
-    expect(w.OR).toEqual([
+    expect(w.OR?.slice(0, 3)).toEqual([
       { dealer: { businessName: { contains: 'İzmir', mode: 'insensitive' } } },
       { dealer: { name: { contains: 'İzmir', mode: 'insensitive' } } },
       { product: { name: { contains: 'İzmir', mode: 'insensitive' } } },
     ]);
+    // B5: noktalı/noktasız i varyantları da aranır ("IZMIR" kaydı, "ırmak" ↔ "IRMAK").
+    expect(w.OR).toContainEqual({ dealer: { businessName: { contains: 'Izmir', mode: 'insensitive' } } });
+    expect(turkishSearchVariants('ırmak')).toContain('irmak');
+    expect(turkishSearchVariants('ist')).toContain('İst');
     expect(buildVisitsWhere('u1', { review: 'reviewed' }).review).toEqual({ isNot: null });
   });
 

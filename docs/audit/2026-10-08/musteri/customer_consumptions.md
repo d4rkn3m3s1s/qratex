@@ -199,3 +199,65 @@ Denetlenen dosyalar: `app/customer/consumptions/page.tsx` (342 satır), `app/cus
 - **Kanıt:** `app/api/customer/consumptions/route.ts:15` `PAGE_SIZE_DEFAULT = 20`, `:34-37` `page`/`pageSize` parametre yoksa 1/20'ye düşüyor (`lib/api-http.ts:62-73`), `:49-53` `skip/take` + `createdAt desc`. İstemci `app/customer/consumptions/page.tsx:80` URL'ye `page`/`pageSize` eklemiyor; `:83-88` yanıt tipi `pagination` alanını hiç okumuyor; sayfada "daha fazla yükle"/sayfa düğmesi yok; `:131-139` arama yalnız bellekteki ≤20 kayıt üzerinde süzüyor.
 - **Yeniden üretim:** 30 tüketimi (hepsi yorumsuz) olan müşteri sayfayı açar → listede 20 kart, "Toplam" kartında 30, "Bekliyor" kartında 30. En eski 10 bekleyen tüketim (her biri yorumla puan kazandırabilir) listede hiçbir sekmede görünmez; "Bekleyen" sekmesi de yalnız en yeni 20'yi döndürür. Eski bir işletme adını aramak boş sonuç verir. Yorum penceresi için süre sınırı yok (`app/api/customer/consumptions/[id]/review/route.ts` içinde `createdAt`/süre kontrolü bulunmadı), dolayısıyla bu kayıtlar hâlâ puan kazandırabilir durumda.
 - **Not:** "Hiçbir şekilde" ifadesi küçük bir abartı: tekil detay sayfası (`/customer/consumptions/[id]`) bildirim ya da doğrudan bağlantıyla hâlâ açılabilir ve yorumlanmış olanlar `/customer/feedbacks` üzerinden ayrıca listelenir. Ancak bu sayfadan (ve dolayısıyla `my-card`/`feedbacks`/genel aramanın yönlendirdiği tek liste yüzeyinden) 20'nin ötesine erişim yolu yok; bulgu geçerli. Düzeltme: API zaten `pagination` döndürüyor; istemcide imleç tabanlı sonsuz kaydırma (`useSWRInfinite` veya "Daha fazla" düğmesi) ve aramanın sunucuya `q` parametresiyle taşınması.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** Cüzdan → Hareketler → **Ziyaretler** (`/customer/wallet/activity?tab=visits`). `/customer/consumptions` artık sorgu parametrelerini koruyarak kalıcı yönlendirme (`permanentRedirect`); eski `?hasReview=false|true` derin bağlantısı yeni sayfada da anlaşılır. `/customer/consumptions/[id]` (yorum yazma/düzenleme) Seslerim yüzeyinindir, dokunulmadı.
+
+**Mimari:** sunucu bileşeni sayfa (`app/customer/wallet/activity/page.tsx`) açılan sekmenin ilk sayfasını API ile AYNI servislerle (`lib/customer-wallet/activity/visits.ts`) hazırlar → soğuk açılışta ek istek yok; istemci adası `components/customer/m-cuzdan-hareketler/visits-tab.tsx` (TanStack `useInfiniteQuery`, `keepPreviousData`). Yeni uç `GET /api/customer/wallet/activity/visits` (`defineRoute`, yalnız CUSTOMER, zod sorgu şeması, `read` hız sınırı, zarf v2). Eski `GET /api/customer/consumptions` bu ucun takma adı. Testler: `__tests__/lib/customer-wallet-activity.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR | Cüzdan kabuğunun tek `h1`'i + iç sekmeler (Puan · Ziyaretler · Özet); admin hero'su müşteri yüzeyinden çıktı |
+| 2 | Segment metadata | ÇALIŞIYOR | `generateMetadata` TR/EN ("Hareketler" / "Activity") |
+| 3 | Toplam | ÇALIŞIYOR | Filtreden bağımsız `count({customerId})` |
+| 4 | Yorum bekliyor | ÇALIŞIYOR | |
+| 5 | Yorumlandı | ÇALIŞIYOR | Ayrı sayım (silinmemiş yorumlu); fark alınmıyor → negatif imkânsız |
+| 6 | Kartların filtre olması | ÇALIŞIYOR | Üç özet kutusu `aria-pressed` filtre düğmesi |
+| 7 | Arama | ÇALIŞIYOR | Sunucuda (işletme adı/ürün, `mode: 'insensitive'` + i/ı ve I/İ varyantları), 300 ms debounce, `<label>`'lı `role="search"`, URL'de `q` |
+| 8 | Sekme: Tümü | ÇALIŞIYOR | İmleçli sayfalama, tüm kayıtlar |
+| 9 | Sekme: Bekleyen | ÇALIŞIYOR | |
+| 10 | Sekme: Yorumlanan | ÇALIŞIYOR | |
+| 11 | `?hasReview=false` derin bağlantısı | ÇALIŞIYOR | Yönlendirme + `readVisitsFilter` eski parametreyi okur |
+| 12 | Yükleniyor iskeleti | ÇALIŞIYOR | Statik iskelet yalnız ilk yüklemede; filtre değişiminde eski liste + "güncelleniyor" (titreme yok) |
+| 13 | Boş durum | ÇALIŞIYOR | |
+| 14 | CTA: QR Tara | ÇALIŞIYOR | |
+| 15 | CTA: Kartım | ÇALIŞIYOR | `/customer/wallet/card` |
+| 16 | Arama sonucu boş | ÇALIŞIYOR | Ayrı "eşleşen ziyaret yok" + "Filtreleri temizle"; bekleyen sekmesi boşsa teşekkür durumu |
+| 17 | Hata durumu | ÇALIŞIYOR | `QueryState` (hata ≠ boş, "Tekrar dene", çevrimdışı/yetkisiz ayrımı) |
+| 18 | Kart → detay | ÇALIŞIYOR | Tüm satır tek bağlantı, odak halkası, açıklayıcı `aria-label` |
+| 19 | Logo / yedek | ÇALIŞIYOR | `loading="lazy"`, sabit boyut, `onError` → Türkçe duyarlı baş harf |
+| 20 | İşletme adı yedeği | ÇALIŞIYOR | Ad yoksa "İsimsiz işletme" |
+| 21 | Yorum durumu rozeti | ÇALIŞIYOR | Yıldız + "x/5" metni; bekleyende ödül çipi |
+| 22 | Ürün + kategori emojisi | ÇALIŞIYOR | Emoji `aria-hidden` |
+| 23 | Göreli zaman | ÇALIŞIYOR | `Intl.RelativeTimeFormat` uygulama diliyle, `<time dateTime>` |
+| 24 | Tutar | ÇALIŞIYOR | Yerel para biçimi; 0/negatif/NaN/absürt tutar gösterilmez (B11) |
+| 25 | Yorum önizlemesi | ÇALIŞIYOR | 140 karakter |
+| 26 | Liste animasyonu | KALDIRILDI | ops kaydı (§4.2): yoğun listede kademeli giriş yok; filtre geçişi `keepPreviousData` ile sakin |
+| 27 | Sayfalama / sonsuz kaydırma | ÇALIŞIYOR | İmleç (`cursor`+`skip:1`), IntersectionObserver + "Daha fazla göster" yedeği, yüklenen sayı `aria-live` |
+| 28 | Yetki | ÇALIŞIYOR | `defineRoute` rol CUSTOMER, `customerId = user.id` |
+| 29 | İstek iptali | ÇALIŞIYOR | TanStack `signal` |
+| 30 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 31 | İşletme yanıtı göstergesi | ÇALIŞIYOR | "İşletme yanıtladı" rozeti + özet satırında yanıtlanan yorum sayısı |
+| 32 | Kazanılacak puan çipi | ÇALIŞIYOR | Puan matrisinden; geri bildirim tavanının bugünkü kalanıyla kırpılır, dolunca dürüst uyarı |
+| 33 | Sıralama / tarih / işletme filtresi | ÇALIŞIYOR (işletme) · KALDIRILDI (tarih aralığı, sıralama) | İşletme filtresi Özet'teki "Sık uğradıkların"dan (`?dealer=`); dönem ihtiyacı Özet sekmesinin dönem seçicisi + dönem CSV'si ile karşılanıyor, liste kronolojik zaman tüneli olarak kaldı |
+| 34 | Tarih gruplaması | ÇALIŞIYOR | İstanbul ayına göre ay başlıkları |
+| 35 | Yenile | ÇALIŞIYOR | Uygulamaya dönüşte (odak) ve detaydan geri gelişte otomatik tazeleme (10 sn bayatlık) |
+| 36 | API hata dili | ÇALIŞIYOR | Zarf v2 `code`; metinler istemcide TR/EN |
+
+### Kapanan bulgular
+B1 (filtreye bağlı/negatif sayılar), B2 (20 kayıt sınırı + istemci araması), B3 (derin bağlantı), B4 (arama/hata ≠ boş), B5 (Türkçe İ/ı araması — sunucu `insensitive` + `turkishSearchVariants`), B6 (yerelleştirme), B7 (ödül çipi, tavan, işletme yanıtı), B8 (açık `select`, `any` yok, ölü importlar gitti), B9 (etiket, ≥12px, kontrast token'ları, odak halkası, `aria-hidden`, logo yedeği), B10 (önbellek, titreme), B11 (0 tutar). **11/11.**
+
+Eksik özelliklerden uygulananlar: zaman tüneli + ay gruplaması (1), puan kuyruğu rafı "N yorumun seni bekliyor" + ödül (2), işletme yanıtı görünürlüğü (3), işletme filtresi (4, kısmen), dönem CSV'si (6, kısmen).
+
+### Kalanlar
+- Telafi (remedy) teklifi rozeti listede yok: veri Seslerim yüzeyinin (`/customer/remedy`) ve bu yüzeyin sahipliği dışında.
+- Mekân detay sayfası (`/customer/places/[dealerId]`) Keşfet yüzeyinin; hazır olunca satırdan bağlanabilir.
+- Görsel doğrulama: dev server/build bu dalgada yasak olduğundan ekran görüntüsüyle doğrulanmadı (yalnız `tsc` + jest).
+
+### Ek: Puan sekmesi (yeni, Hareketler'in varsayılan sekmesi)
+`PointsLedger` tabanlı puan defteri (`lib/customer-wallet/activity/points-history.ts`, `GET /api/customer/wallet/activity/points` ve `/points/[entryId]`): defter satırları ∪ henüz deftere taşınmamış yolların `points_credited` olayları (`data.ledgerId` taşıyan olay tekrar sayılmaz). Kazanç/harcama yönü ve 8 kaynak grubu filtresi (URL'de), İstanbul gününe göre gruplu liste, imleçli sonsuz kaydırma, satır → makbuz çekmecesi (`?entry=`; kaynak, tarih, işletme, XP, işlem sonrası bakiye, durum, kayıt no; bağış ve ziyaret kaynağına bağlantı). Üst şerit: bakiye, bu ay kazanılan/harcanan (İstanbul ayı), onay bekleyen. Gölge ban satırları kullanıcıya normal görünür ama bakiye sızdırmaz. Uzlaştırma: `User.points − Σ listelenen` > 0 ise "ayrıntısı listelenmeyen bakiye" dürüstçe açıklanır (defter öncesi bakiye ve eski yollar).

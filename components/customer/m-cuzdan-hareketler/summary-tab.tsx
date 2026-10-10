@@ -51,6 +51,7 @@ export function SummaryTab({
     initialData: initial && initial.range === range ? initial.data : undefined,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+    refetchOnWindowFocus: true, // PWA'ya dönüşte (ör. QR sonrası) taze veri
     retry: shouldRetry,
   });
 

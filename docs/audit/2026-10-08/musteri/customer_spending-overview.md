@@ -247,3 +247,62 @@
 - PATCH yalnız `ids` kabul etsin; `action/payload` DB'deki kuyruk kaydından okunsun. İşlem başında atomik sahiplenme: `updateMany({ where: { id, dealerId, status: { in: ['PENDING','FAILED'] }, retries: { lt: MAX } }, data: { status: 'PROCESSING' } })` → `count === 0` ise atla. Böylece hem tekrar oynatma hem çift sekme yarışı kapanır.
 - `retries` değeri gövdeden değil DB'den okunmalı (`DEAD` geçişi gerçekten çalışsın).
 - Offline kayıtlarda `queuedAt` asıl ziyaret zamanı olarak `createdAt`'e yansıtılsın ve offline kaynaklı kayıtlar audit log'da işaretlensin; müşteri ekranında harcama toplamı negatif değerleri dışlayacak şekilde (`amount >= 0`) hesaplanmalı — bu, veri temizlenene kadar savunmacı bir katmandır, asıl çözüm yazma yolundadır.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı (BİRLEŞTİR):** Cüzdan → Hareketler → **Özet** (`/customer/wallet/activity?tab=summary`). `/customer/spending-overview` sorgu parametrelerini koruyarak kalıcı yönlendirme; ayrı menü öğesi değil, Hareketler'in sekmesi. Eski `GET /api/customer/spending-overview` yeni `GET /api/customer/wallet/activity/summary?range=` ucunun takma adı.
+
+**Mimari:** tek servis `lib/customer-wallet/activity/spend-summary.ts` (`getSpendSummary(db, userId, range)`) — sayfa (SSR ön yükleme) ve API aynı kodu çağırır. Kovalar `date_trunc(..., ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Istanbul')`; dönem sınırları `lib/customer-wallet/periods.ts` (saf, jest'li). Önceki döneme göre değişim aynı uzunlukta dilimle (ay başından bugüne ↔ geçen ay başından aynı güne). Puan bandı puan defterinden (`sumPointsInRange`). CSV sunucuda: `GET /api/customer/wallet/activity/export?range=&lang=` (`lib/customer-wallet/csv.ts`). Modül kapısı `spending_overview` API'de (`assertCustomerModule`) ve sayfada (kapalıysa Özet sekmesi hiç görünmez). İstemci: `components/customer/m-cuzdan-hareketler/summary-tab.tsx` + recharts'sız SVG grafik (`summary-chart.tsx`, erişilebilir tablo eşlikli), sekme yalnız açıldığında yüklenir.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Meta veri | ÇALIŞIYOR | "Hareketler" TR/EN; "bayi dağılımı" jargonu yok |
+| 2 | Hero | KALDIRILDI | Cüzdan kabuğunun tek `h1`'i var; admin hero'sunun müşteri kopyası gereksiz |
+| 3 | Kimlik doğrulama | ÇALIŞIYOR | `defineRoute` rol CUSTOMER |
+| 4 | ADMIN davranışı | ÇALIŞIYOR | Rol listesinde yok → kodlu 403, açık Türkçe mesaj |
+| 5 | Modül/menü kapısı | ÇALIŞIYOR | API 403 `MODULE_DISABLED`; sayfada sekme gizlenir |
+| 6 | Yükleniyor | ÇALIŞIYOR | `role="status"` statik iskelet; SSR ön yüklemesiyle iskelet→spinner çift geçişi yok |
+| 7 | Hata | ÇALIŞIYOR | `QueryState`: tür ayrımı (çevrimdışı/yetkisiz/modül kapalı), "Tekrar dene", `role="alert"` |
+| 8 | Boş durum | ÇALIŞIYOR | "Bu dönemde ziyaret yok" + yorum bekleyen varsa "Sıradaki adım" kartı |
+| 9 | CSV | ÇALIŞIYOR | Sunucuda; formül enjeksiyonu kaçışlı; başlıklar kullanıcının dilinde; TR'de `;` + ondalık virgül; BOM; dönemdeki ziyaret satırları |
+| 10 | Dışa aktarım toast'ı | KALDIRILDI | Tarayıcı indirmesi kendisi geri bildirim; "Basarili:" önekli admin toast'ı müşteri yüzeyinden çıktı |
+| 11 | KPI: Ziyaret | ÇALIŞIYOR | + önceki döneme göre değişim rozeti |
+| 12 | KPI: İşletme | ÇALIŞIYOR | "Uğradığın mekân" |
+| 13 | KPI: Kayıtlı harcama | ÇALIŞIYOR | Kapsam ("40 ziyaretin 12 tanesinde tutar kayıtlı"); NaN/∞/≤0/≥1.000.000 tutarlar toplamdan dışlanır |
+| 14 | Harcama ipucu | ÇALIŞIYOR | Kapsam satırı + kapsam < %30 ise "Tutarı işletme girer; toplam kısmi" |
+| 15 | Ortalama puan | ÇALIŞIYOR | QR geri bildirimi + ziyaret yorumu ağırlıklı ortalama, yerel ondalık, "/ 5", kırılım |
+| 16 | Yorum sayısı | ÇALIŞIYOR | Kırılımda |
+| 17 | Aylık çubuklar | ÇALIŞIYOR | Dönemine göre gün/hafta/ay kovası, yerelleştirilmiş etiket, içinde bulunulan kova vurgulu, Ziyaret/Harcama seçimi |
+| 18 | Saat dilimi | ÇALIŞIYOR | Europe/Istanbul (SQL + sınırlar), jest ile doğrulandı |
+| 19 | En çok ziyaret edilen | ÇALIŞIYOR | Dönem bazlı ilk 6; ziyaret, harcama, son ziyaret |
+| 20 | Logo / baş harf | ÇALIŞIYOR | Tembel yükleme + `onError`; `toLocaleUpperCase('tr-TR')`; ad yoksa "İsimsiz işletme" (ham `dealerId` gösterilmez) |
+| 21 | İşletme satırı hover (SAHTE) | ÇALIŞIYOR | Gerçek düğme: Ziyaretler sekmesini o mekâna süzer (`?tab=visits&dealer=`) |
+| 22 | İşletmeler boş durumu | ÇALIŞIYOR | Dönem boşsa tüm özet boş durumuna düşer |
+| 23 | "Tüketim geçmişi" bağlantısı | ÇALIŞIYOR | Aynı sayfada Ziyaretler sekmesi |
+| 24 | "Geri bildirimlerim"/"Yakınımdakiler" bağlantıları | KALDIRILDI | Seslerim ve Keşfet kendi menülerinde; ölü `?focus=` derin bağlantısından kaçınıldı |
+| 25 | Redis önbelleği | KALDIRILDI | Bilinçli: geçersiz kılınmayan 60 sn önbellek QR sonrası eski veri gösteriyordu; indeksli sorgular paralel, her istek taze |
+| 26 | Yerel sayı/para | ÇALIŞIYOR | Puan ortalaması dahil |
+| 27 | TR/EN | ÇALIŞIYOR | Yüzeyin `copy.ts`'i; API hataları kodlu |
+| 28 | Azaltılmış hareket | ÇALIŞIYOR | Sütun büyümesi `useReducedMotionPref` ile statik |
+| 29 | Mobil yerleşim | ÇALIŞIYOR | KPI'lar mobilde 2×2; CSV araç satırında |
+| 30 | Başlık semantiği | ÇALIŞIYOR | Bölümler `h2`; sayılar başlık değil (`MetricTile`) |
+| 31 | Dönem filtresi | ÇALIŞIYOR | Bu ay · Son 3 ay · Bu yıl · Tümü (URL `range`) |
+| 32 | Harcama serisi / ortalama sepet | ÇALIŞIYOR | |
+| 33 | Önceki döneme göre değişim | ÇALIŞIYOR | Önceki 0 ise "∞" yerine rozet yok |
+| 34 | Kategori/ürün kırılımı | ÇALIŞIYOR | "En sık aldıkların" (ürün + kategori ikonu, ilk 5) |
+| 35 | Harcama → puan bağlantısı | ÇALIŞIYOR | "Bu dönemde puanın" bandı: kazanılan, harcanan, ziyaretlerden/geri bildirimlerden; "Puan defterini aç" |
+| 36 | İşletme detayına geçiş | ÇALIŞIYOR | O mekândaki ziyaretlere geçiş; mekân sayfası Keşfet'in (`/customer/places/[dealerId]`) |
+| 37 | Paylaşılabilir özet | KALDIRILDI | Yılım yüzeyinin işi; ops kaydında Wrapped kartı yok |
+| 38 | Son güncelleme | ÇALIŞIYOR | "Güncellendi: ss:dd" |
+
+### Kapanan bulgular
+B2 (modül kapısı), B3 (CSV enjeksiyonu), B4 (admin toast'ı), B5 (birleşik puan), B6 (etiket + saat dilimi), B7 (kapsam + ipucu), B8 (sahte hover, dealerId sızıntısı, Türkçe baş harf), B9 (durumlar), B10 (başlık semantiği, mobil), B11 (sunucu önce, taze veri, paralel sorgu), B12 (tek servis — bu yüzey için; analytics/my-year tüketicileri kendi yüzeylerinde), B13 (tüketici dili). **12/13.**
+
+### Kalanlar
+- **B1 (üst akış: offline-sync ile tüketim şişirme):** yazma yolu bayi uçlarında (`app/api/dealer/offline-sync`), bu yüzeyin sahipliği dışında. Bu yüzeyde savunmacı katman var (geçersiz/absürt tutarlar toplamdan dışlanır); asıl düzeltme bayi/ekonomi ajanının işi.
+- `/customer/analytics` ve `/customer/my-year`'ın aynı servisi kullanması: o yüzeylerin sahipleri `getSpendSummary`'yi çağırabilir (geriye uyumlu, salt okunur).
+- Görsel doğrulama ekran görüntüsüyle yapılmadı (dev server/build yasak).

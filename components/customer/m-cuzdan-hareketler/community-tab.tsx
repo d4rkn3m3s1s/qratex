@@ -23,6 +23,7 @@ export function CommunityTab() {
     queryKey: COMMUNITY_KEY,
     queryFn: ({ signal }) => fetchCommunity(signal),
     staleTime: 30_000,
+    refetchOnWindowFocus: true, // PWA'ya dönüşte (ör. QR sonrası) taze veri
     retry: shouldRetry,
   });
   return (

@@ -259,3 +259,85 @@ Sayfa kaldırılmamalı veya başka bir sayfaya gömülmemeli: amaç özgün ve 
 |---|---|
 | Liderlik 1–2 bağışçıda boş render | Doğrulandı (UX, güvenlik değil) |
 | GET hataları yutuluyor, yanıltıcı boş durum | Doğrulandı (UX; ek olarak kategori değişiminde bayat veri) |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** Cüzdan → **Bağış** (`/customer/wallet/donate`). `/customer/donations` sorgu parametrelerini koruyarak kalıcı yönlendirme; eski pano bağlantısı `?tab=leaderboard` Topluluk sekmesine düşer. 1242 satırlık `donations-client.tsx` silindi; yerine `components/customer/m-cuzdan-hareketler/` altında küçük bileşenler (`donate-view`, `donate-parts` — tek `ProjectCard`, `donate-sheet`, `community-tab`, `history-tab`, `donate-module-off`).
+
+**Gerçek bağış akışı:** `POST /api/customer/wallet/donate` (`defineRoute`: yalnız CUSTOMER, zod gövde, 10/dk hız sınırı, 8 KB gövde sınırı, modül+menü kapısı) → `lib/customer-wallet/donate/service.ts` `makeDonation`: tek transaction'da (1) istek anahtarı defterde varsa önceki bağış döner (çift dokunuş = tek düşüm), (2) **koşullu** `UPDATE "DonationProject"` (aktif, arşivsiz, başlangıç ≤ şimdi < bitiş, `current + puan ≤ goal`), (3) `Donation` satırı, (4) `debitPoints(tx, { source: 'donation', sourceId: donation.id, idempotencyKey })` — `lib/economy` üzerinden; `PointsLedger` satırı = makbuzun defter kaydı, eksi bakiye imkânsız, yetersizse her şey geri alınır, (5) kullanıcının dilinde bildirim. Yanıt sonrası (`after`) topluluk önbelleği sürümlenir; hedefi tamamlayan bağışta katkı veren herkese bildirim. Okuma uçları: `GET /api/customer/wallet/donate` (katalog + kişisel etki + gerçek sıra), `/community`, `/history`, `/history/[donationId]`. Eski `/api/customer/donations` yeni uçların takma adı (admin modül özeti bu yolu listeliyor). Testler: `__tests__/lib/customer-wallet-donate.test.ts` (rota dahil 18 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota kabuğu (`ssr:false`) | ÇALIŞIYOR | Sunucu bileşeni + SSR ön yükleme; Topluluk/Bağışlarım sekmeleri ve bağış paneli tembel yüklenir |
+| 2 | Segment metadata | ÇALIŞIYOR | TR/EN |
+| 3 | İkinci iskelet | ÇALIŞIYOR | Tek iskelet (`loading.tsx`), sonra SSR verisi — düzen sıçraması yok |
+| 4 | Mobil başlık kartı (çift `h1`) | KALDIRILDI | Cüzdan kabuğunun tek `h1`'i |
+| 5 | Hero | KALDIRILDI | Yerine "Senin etkin" kartı |
+| 6 | Hero çipi | KALDIRILDI | Yalnız dekoratifti |
+| 7 | "Hemen Bağış Yap" (SAHTE) | ÇALIŞIYOR | "Senin için önerilen" projenin "Bağış yap"ı paneli açar (en çok bağışladığın kategoride hedefe en yakın açık proje, sunucuda seçilir) |
+| 8 | "Nasıl çalışır" | ÇALIŞIYOR | `<details>`; video vaadi (Play ikonu) yok; görünürlük ve makbuz anlatılır |
+| 9 | Puanınız | ÇALIŞIYOR | Etki kartında bakiye |
+| 10 | Bağışınız | ÇALIŞIYOR | |
+| 11 | Toplam etki | ÇALIŞIYOR | Doğru etiketle: "Toplulukta N bağışçı toplam M puan bağışladı" |
+| 12 | Sıralamanız | ÇALIŞIYOR | Gerçek sıra (ilk 10 dışında da), "bir üst sıraya X puan" |
+| 13 | "Senin etkin" | ÇALIŞIYOR | Katalog filtresinden bağımsız (sunucuda) |
+| 14 | Etki kartları | ÇALIŞIYOR | Birim+etiket bazında toplanır; kapanmış/arşivli projelere bağışlar da sayılır ve "kapandı" diye belirtilir |
+| 15 | Toplam özet | ÇALIŞIYOR | Tutarlı ikili (puan + proje sayısı) |
+| 16 | Sekmeler | ÇALIŞIYOR | URL'de (`tab`), `leaderboard`/`activity` eski değerleri anlaşılır, `aria` sekme rolleri |
+| 17 | Kategori filtresi | ÇALIŞIYOR | İstemcide (tam sayfa iskelet yok, yarış yok), veri güdümlü (sabit liste değil), radiogroup |
+| 18 | Öne çıkan bölüm | ÇALIŞIYOR | Tek ızgarada önce sıralanır + "Öne çıkan" rozeti (iki kopya kart birleşti) |
+| 19 | Öne çıkan kart istatistiği | ÇALIŞIYOR | |
+| 20 | İlerleme | ÇALIŞIYOR | `goal = 0` → "Hedefsiz kampanya" (NaN yok), `role="progressbar"` |
+| 21 | Senin katkın | ÇALIŞIYOR | |
+| 22 | Hedefte devre dışı buton | ÇALIŞIYOR | Sunucu da koşullu güncellemeyle reddeder |
+| 23 | Tüm projeler ızgarası | ÇALIŞIYOR | |
+| 24 | Projeler boş durumu | ÇALIŞIYOR | Hata/yetkisiz/modül kapalı ayrı ekranlar |
+| 25 | Etiketler | ÇALIŞIYOR | Proje detayında |
+| 26 | Başlangıç/bitiş | ÇALIŞIYOR | Gösterilir ("12 gün kaldı") ve uygulanır (katalog + bağış) |
+| 27 | Proje detayı | ÇALIŞIYOR | `?project=` derin linkli çekmece: tam açıklama, dönüşüm oranı, tarihler, etiketler |
+| 28 | Podyum | ÇALIŞIYOR | "Sen" işareti; DOM sırası 1-2-3, görsel 2-1-3 |
+| 29 | 1–2 bağışçı | ÇALIŞIYOR | Esnek podyum, boş basamak "Bu basamak senin olabilir" |
+| 30 | Liste + "Siz" | ÇALIŞIYOR | |
+| 31 | "Daha fazla yükle" | KALDIRILDI | İlk 10 tek ekranda; kendi sıran ayrı "Senin yerin" kartında |
+| 32 | "Senin sıralaman" kartı | ÇALIŞIYOR | Gerçek sıra SQL ile |
+| 33 | Liderlik boş | ÇALIŞIYOR | |
+| 34 | Aktivite akışı | ÇALIŞIYOR | "Son bağışlar" ("Canlı" iddiası yok), elle yenile + odakta tazeleme, yerel göreli zaman |
+| 35 | Aktivite boş | ÇALIŞIYOR | |
+| 36 | Bağış paneli aç/kapat | ÇALIŞIYOR | Her açılışta sıfırlanır; işlem sürerken kapatılamaz |
+| 37 | Hızlı tutarlar | ÇALIŞIYOR | Bakiye/kalanla sınırlı + "Tümü (N)" |
+| 38 | Serbest tutar | ÇALIŞIYOR | Tam sayı; "10.5" sessizce kırpılmaz, hata gösterilir; binlik ayırıcı kabul |
+| 39 | Yetersiz bakiye | ÇALIŞIYOR | Satır içi + sunucu kodu |
+| 40 | Etki önizlemesi | ÇALIŞIYOR | Ondalıklı ("0,2 fidan"), `aria-live` |
+| 41 | Mesaj | ÇALIŞIYOR | 280 karakter sayaç; kime görüneceği yazılı; makbuzda görünür |
+| 42 | Herkese açık anahtarı | ÇALIŞIYOR | Varsayılan son tercih, hiç yoksa **gizli**; ad maskeli, foto yok; açıklama sıralamayı da anlatıyor |
+| 43 | Atomik düşüm | ÇALIŞIYOR | `lib/economy` `debitPoints` + defter + tek-kez anahtarı |
+| 44 | Başarı geri bildirimi | ÇALIŞIYOR | Kutlama paneli: onay ikonu, etki, ilerleme eski→yeni (`celebrate` bütçesi, azaltılmışta statik), yeni bakiye, makbuz bağlantısı; ekran okuyucuya duyuru |
+| 45 | Oturum puanı senkronu | ÇALIŞIYOR | + Ana Sayfa ve Hareketler önbellekleri tazelenir |
+| 46 | Bağış sonrası yenileme | ÇALIŞIYOR | Önbellek yerinde güncellenir, arkadan tazelenir; sekme/kaydırma korunur |
+| 47 | GET hata yönetimi | ÇALIŞIYOR | Zarf v2 kodlu hata → `QueryState` |
+| 48 | POST hata yönetimi | ÇALIŞIYOR | Kodlar: INSUFFICIENT_POINTS · GOAL_EXCEEDED (kalan ile) · GOAL_REACHED · PROJECT_CLOSED · MODULE_DISABLED · RATE_LIMITED |
+| 49 | Kimlik + menü + modül kapısı | ÇALIŞIYOR | API + sayfa düzeyinde (kapalıysa dürüst kilit ekranı + kendi bağış geçmişi) |
+| 50 | Zod | ÇALIŞIYOR | `points` 1–100.000 tam sayı, mesaj ≤ 280, istek anahtarı zorunlu |
+| 51 | Sunucuda hedef/bitiş | ÇALIŞIYOR | Transaction içinde koşullu UPDATE |
+| 52 | Uygulama içi bildirim | ÇALIŞIYOR | Kullanıcının dilinde; hedef tamamlanınca katkı verenlere ayrıca |
+| 53 | Puan hareket kaydı | ÇALIŞIYOR | `PointsLedger` (source `donation`); Hareketler → Puan defterinde görünür |
+| 54 | XP / rozet / görev | KALDIRILDI (bu dalgada) | Bağışa XP/puan basmak yeni bir mint yolu = ekonomi kararı (matris + tavan) ister; ürün sahibi onayı olmadan eklenmedi |
+| 55 | Çoklu dil | ÇALIŞIYOR | Arayüz, bildirim, hata, sayı/zaman biçimi; proje içeriği yöneticinin girdiği dilde (DB tek dilli) |
+| 56 | Azaltılmış hareket | ÇALIŞIYOR | Yalnız transform/opaklık animasyonu (`scaleX`); `useReducedMotionPref` ile statik |
+| 57 | Bağış geçmişi / makbuz | ÇALIŞIYOR | "Bağışlarım" sekmesi (imleçli) + `?receipt=` makbuz: makbuz no, tarih, etki, not, görünürlük, defter kaydı, bağış sonrası bakiye |
+
+### Kapanan bulgular
+B1 (1–2 bağışçıda boş liderlik), B2 (yutulan hatalar), B3 (ölü sıralama kartı), B4 (filtreye bağlı kişisel etki), B5 (hedef/tarih/yarış), B6 (sahte CTA), B7 (tam sayfa iskelet, yarış), B8 (derin bağlantı), B9 (gizlilik: maske, `isMe`, varsayılan gizli), B10 (i18n + admin toast), B11 (paralel sorgu + sürümlü önbellek + uç ayrımı), B12 (`goal = 0`, tanımsız kategori), B13 (çift başlık, sekme taşması — pill sekmeler yatay kayar, ≥ 44px), B14 (panel durum sızıntısı, form sağlamlığı), B15 (monolit + ölü importlar). **15/15.**
+
+Eksik özelliklerden uygulananlar: kişisel bağış geçmişi ve makbuz (2), topluluk hedefi anı (4: tamamlayana kutlama + katkı verenlere bildirim), "bir üst sıraya X puan" (3'ün bir kısmı).
+
+### Kalanlar
+- Partner kurum, proje güncellemeleri ve etki raporu (eksik özellik 1) — **ŞEMA İSTEĞİ:** `DonationProject.partnerName`, `partnerLogoUrl` ve `DonationProjectUpdate` ilişkisi (başlık, metin, görsel, tarih). Şema dalgası bittiği için uydurma veriyle doldurulmadı.
+- Görünürlük tercihi şu an "son bağıştaki tercih"ten türetiliyor; kalıcı profil ayarı için **ŞEMA İSTEĞİ:** `User.donationVisibilityDefault Boolean?`.
+- Bağışa XP/rozet/görev bağlantısı ve tekrarlayan bağış (eksik özellik 3'ün kalanı, 5, 6): ürün/ekonomi kararı.
+- Ortak liderlik motoruna (`/api/leaderboard?category=donations`) birleşme: Lig yüzeyinin sahipliğinde.
+- Görsel doğrulama ekran görüntüsüyle yapılmadı (dev server/build bu dalgada yasak).

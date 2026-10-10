@@ -55,7 +55,7 @@ export function StatStrip({
     >
       {items.map((it) => (
         <div key={it.id} className="min-w-0 px-3 py-3 sm:px-4">
-          <dt className="qx-caption truncate text-fg-muted">{it.label}</dt>
+          <dt className="qx-caption leading-tight text-fg-muted">{it.label}</dt>
           <dd className={cn('qx-num mt-1 truncate text-lg font-semibold sm:text-xl', it.tone === 'success' ? 'text-success' : 'text-fg')}>
             {it.value}
           </dd>

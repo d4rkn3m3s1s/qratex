@@ -101,6 +101,18 @@ export type VisitsQuery = {
   limit?: number;
 };
 
+/**
+ * Türkçe İ/ı varyantları (denetim B5): ILIKE büyük/küçük harfi katlar ama noktalı/noktasız
+ * i çiftini veritabanı yerel ayarına bağlı katlar. "ırmak" ↔ "IRMAK", "ist" ↔ "İstanbul"
+ * eşleşsin diye sorgu, i/ı ve I/İ birbirine çevrilmiş biçimleriyle de aranır.
+ */
+export function turkishSearchVariants(q: string): string[] {
+  const dotless = q.replace(/ı/g, 'i').replace(/İ/g, 'I');
+  const dotted = q.replace(/i/g, 'ı').replace(/I/g, 'İ');
+  const upperDotted = q.replace(/i/g, 'İ');
+  return [...new Set([q, dotless, dotted, upperDotted])];
+}
+
 export function buildVisitsWhere(userId: string, query: Pick<VisitsQuery, 'review' | 'q' | 'dealerId'>): Prisma.ConsumptionWhereInput {
   const where: Prisma.ConsumptionWhereInput = { customerId: userId };
   if (query.review === 'pending') where.review = null;
@@ -108,11 +120,11 @@ export function buildVisitsWhere(userId: string, query: Pick<VisitsQuery, 'revie
   if (query.dealerId) where.dealerId = query.dealerId;
   const q = query.q?.trim();
   if (q) {
-    where.OR = [
-      { dealer: { businessName: { contains: q, mode: 'insensitive' } } },
-      { dealer: { name: { contains: q, mode: 'insensitive' } } },
-      { product: { name: { contains: q, mode: 'insensitive' } } },
-    ];
+    where.OR = turkishSearchVariants(q).flatMap((v) => [
+      { dealer: { businessName: { contains: v, mode: 'insensitive' as const } } },
+      { dealer: { name: { contains: v, mode: 'insensitive' as const } } },
+      { product: { name: { contains: v, mode: 'insensitive' as const } } },
+    ]);
   }
   return where;
 }
