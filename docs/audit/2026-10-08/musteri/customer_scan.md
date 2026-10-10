@@ -211,3 +211,72 @@ Kapsam: `app/customer/scan/page.tsx` (265 satır), `app/customer/scan/layout.tsx
 - Masaüstü Chrome'da izin balonu modal değil, yani izin beklerken X'e tıklanabiliyor. Mobilde izin önceden verilmişse ısınma penceresi yeterli.
 - **Yeniden üretim:** Kamera izni verilmiş bir cihazda "Kamerayı aç"a bas, görüntü gelmeden (≈0,5 sn içinde) "Kamerayı kapat"a bas. UI kapalı görünür ama kamera göstergesi yanık kalır. Sayfa yeniden yüklenene veya sekme kapatılana kadar sönmez.
 - **Düzeltme yönü (ikisi için ortak):** Örnek ömrünü tek bir sahibe bağla. Örneğin bir `use-qr-scanner` hook'u, açık bir state machine (`idle | starting | scanning | stopping`) ve `startPromise` saklamalı. Kapatma/unmount `starting` durumundaysa `startPromise.finally(() => qr.stop())` zincirlemeli. `scanning` durumundaysa `await qr.stop()` ve ancak ondan sonra `clear()` çağırmalı. `isScanning` alanı yerine `getState()` kullanmalı. Cleanup'taki her kütüphane çağrısını try/catch'e almalı, çünkü kütüphane Error değil string fırlatıyor. Böylece `stopCamera` ile effect cleanup aynı tek kapatma yolunu kullanır.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/scan` (yeniden yazıldı; emekliye ayrılan rota yok).
+
+**Yeni mimari**
+- `app/customer/scan/page.tsx` artık **sunucu bileşeni**: oturum + `?code=` derin linki + ödül özeti (`_server/scan-summary.ts`) ilk render'da; özet hata verirse sıfır yerine görünür uyarı ve "Yeniden yükle".
+- İstemci adası `components/customer/m-tara/scan-experience.tsx` (kamera kahramanı, tam ekran vizör, elle giriş, galeri, çözüm kartı). Yan sütun (`scan-aside.tsx`) sunucu bileşeni, istemci JS'i yok. `loading.tsx` aynı ızgarada statik iskelet.
+- Kamera yaşam döngüsü ortak `lib/hooks/use-qr-scanner.ts` (D1); sayfada `Html5Qrcode` yaşam döngüsü kodu kalmadı.
+- **Yeni ortak çözücü** `lib/qr-resolve.ts` (saf): `/c/<token>` → kart, `/feedback/<kod>` → geri bildirim, düz kod → `plain` (sunucu önce QR, sonra kart dener), diğer her şey → `unknown` (istek atılmaz). Ayrıca `QR_CODE_PATTERN`, `CARD_TOKEN_PATTERN`, `feedbackHref(code, source)`, `cardHref`.
+- **Yeni BFF** `POST /api/customer/scan/resolve` (`defineRoute`, yalnız CUSTOMER, zod, 40/dk/kullanıcı): `{ result: venue{status,…} | card{state,…} | unknown }`. `qr_scanned` YAZMAZ, personel listesi çekmez; yalnız `in_app_scan_resolved` (userId + kaynak + sonuç) huni olayı yazar (`after()`).
+- Kart aktivasyonu tarama içinden: çözüm kartında "Kartı hesabıma bağla" → mevcut tek doğruluk kaynağı `POST /api/cards/[token]/activate` (koşullu yazma + denetim kaydı); `ALREADY_YOURS`, `ALREADY_ACTIVATED`, `CARD_BLOCKED`, 429 ve 401 ayrı ele alınır.
+- Metinler yüzeye özgü `components/customer/m-tara/copy.ts` (TR/EN, uygulama dilini izler); ortak `messages/*.json`'a dokunulmadı. Tarihler Europe/Istanbul gününe göre ("bugün", "dün", "12 Eki").
+
+**Özellik envanteri — yeni durum**
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota koruması | ÇALIŞIYOR | Proxy + sunucu sayfasında rol kontrolü (CUSTOMER değilse girişe). BFF `requireAuth(['CUSTOMER'])`. |
+| 2 | Segment metadata | ÇALIŞIYOR | `layout.tsx` korundu. |
+| 3 | Masaüstü sayfa başlığı | ÇALIŞIYOR | `PageHeader` (QDL): mobilde de görünür, tek `h1`. |
+| 4 | Mobil başlık kartı | KALDIRILDI | Tekrarlı ikinci `h1` gereksizdi; tek `PageHeader` her genişlikte görünüyor. |
+| 5 | "Kamera ile tara" boşta kartı | ÇALIŞIYOR | Kahraman bölüm: izin durumuna göre (prompt ön açıklaması / reddedildi rehberi / hata) değişen içerik, nefes alan mini vizör (`Ambient`, azaltılmış harekette statik). |
+| 6 | "Kamerayı Aç" butonu | ÇALIŞIYOR | Açılırken "Kamera açılıyor…", hata ya da izin reddinde "Tekrar dene". |
+| 7 | Kamera başlatma | ÇALIŞIYOR | Ortak kanca: `setTimeout` hilesi yok, açılış sürerken kapatma kamerayı gerçekten kapatır (B-2). İzin önceden verilmişse dokunmatik cihazda kendiliğinden açılır. |
+| 8 | Okunan metinden kod çıkarma | ÇALIŞIYOR | `lib/qr-resolve.ts`; `slice(-8)` kaldırıldı (B-6). Kart QR'ı da tanınıyor. |
+| 9 | Okunan kodu doğrulayıp yönlendirme | ÇALIŞIYOR | BFF çözümü + "Kod doğrulanıyor…" durumu; hata yakalanıp vizörde gösteriliyor (B-4). Yönlendirme yalnız "Geri bildirime başla" ile, `?src=in_app_<kaynak>` atfıyla. |
+| 10 | Kamerayı kapat (X) | ÇALIŞIYOR | Vizörün sol üstünde; Esc ile de kapanır, açılış sürerken de güvenli. |
+| 11 | Kamerayı kapat (alt buton) | KALDIRILDI | Tam ekran vizörde tek kapatma (X + Esc) yeterli. Yerine "Kodu elle gir" geldi: kamerayı kapatıp alana odaklanır. |
+| 12 | Kamera hatası satır içi mesajı | ÇALIŞIYOR | Kalıcı: hata kodu kahramanda kalıyor (`permission-denied`, `not-found`, `in-use`, `insecure-context`, `unsupported`, `policy-blocked` vb.) (B-5). |
+| 13 | Kamera hatası toast'ı | KALDIRILDI | Kaybolan toast yerine kalıcı satır içi durum + platforma özgü izin rehberi (iOS, Android, masaüstü). |
+| 14 | Okuma vizörü | ÇALIŞIYOR | Markalı köşeli çerçeve + dış gölge; kütüphanenin gölgesi ve "Scanner paused" yazısı gizli. Okumada çerçeve yeşile döner ve kısa bir "snap" yapar. |
+| 15 | Unmount'ta kamera temizliği | ÇALIŞIYOR | Ortak kancanın idempotent kapanışı (B-1). |
+| 16 | "veya" ayırıcı | KALDIRILDI | Bölümler kendi başlıklarıyla ayrışıyor; `bg-background` uyumsuzluğu da ortadan kalktı. |
+| 17 | Manuel kod alanı | ÇALIŞIYOR | Görünür `label`. Bağlantı yapıştırılınca kod çıkarılıp hemen çözülüyor, `maxLength` kesmesi yok. Eski tireli kodlar (`DEMO-CAFE-001`) ve kart token'ı da kabul ediliyor (B-8). |
+| 18 | Manuel gönder butonu + spinner | ÇALIŞIYOR | `aria-busy`. |
+| 19 | Enter / "Git" ile gönderme | ÇALIŞIYOR | `<form onSubmit>` + `enterKeyHint="go"`. |
+| 20 | Boş kod doğrulaması | ÇALIŞIYOR | Alan altı hata (`role="alert"`), odak alana gider. |
+| 21 | Hata ayrımı | ÇALIŞIYOR | `not_found`, `inactive`, `expired`, `revoked`, `archived` + `offline`, `network`, `rate_limited` (saniyeli), `session`, `server`; her biri eyleme dönük metinle (B-3). |
+| 22 | "Puan kazan" bilgi kartı | ÇALIŞIYOR | Statik pazarlama metni yerine gerçek veri: bakiye, puan matrisinden taban ve detaylı ödül, bugün kalan tavan (`lib/economy/caps`). Tavana ulaşıldıysa dürüst bilgi. Çözüm kartında da aynı ödül bloğu var. |
+| 23 | Giriş animasyonları | ÇALIŞIYOR | `lib/motion` token'ları + `useMotionPolicy`; stagger ≤ 0,12 sn. |
+| 24 | Tarama analitiği | ÇALIŞIYOR | Uygulama içi taramada `qr_scanned` artık tek kez yazılıyor (geri bildirim sayfası). Ek olarak `in_app_scan_resolved` (userId + kaynak + sonuç) (B-7). |
+| 25 | Tarama hız limiti | ÇALIŞIYOR | BFF 40/dk/kullanıcı; public tarama limiti uygulama içi akışta yalnız bir kez tüketiliyor. |
+| 26 | i18n | ÇALIŞIYOR | Yüzey metinleri TR/EN; `admin-toast` ve sabit "Dikkat:" öneki kaldırıldı (B-9). |
+| 27 | PWA kısayolu | ÇALIŞIYOR | Değişmedi (manifest sahiplik dışı). |
+| 28 | Menüde giriş noktası | ÇALIŞIYOR | Navigasyon kaydında merkez "Tara" sekmesi (navigasyon ajanı, `lib/navigation/registry.ts`) (B-10). |
+| 29 | Ön/arka kamera değiştirme | ÇALIŞIYOR | Birden çok kamera varsa vizörde düğme görünür. |
+| 30 | El feneri | ÇALIŞIYOR | `MediaStreamTrack` `torch` yeteneği varsa (Android Chrome) çalışır; yoksa düğme hiç gösterilmez. |
+| 31 | Galeriden QR okuma | ÇALIŞIYOR | `html5-qrcode.scanFile` (dinamik yükleme); okunamazsa açık mesaj. |
+| 32 | Haptik/görsel onay | ÇALIŞIYOR | Okumada titreşim (hareket politikasına bağlı) + yeşil çerçeve; tanınmayan kodda kısa çift titreşim. |
+| 33 | İzin ön açıklaması + red rehberi | ÇALIŞIYOR | Permissions API ile `prompt` ve `denied` ayrımı, platforma özgü adımlar, alternatifler (elle giriş, galeri). |
+| 34 | Son mekânlar | ÇALIŞIYOR | Son 4 işletme (geri bildirimlerden tekilleştirilmiş), mekân detayına (`/customer/places/[dealerId]`) bağlı; boş durumda dürüst metin. |
+| 35 | Deep link `?code=` | ÇALIŞIYOR | Açılışta çözülüyor, alan dolduruluyor, adres temizleniyor. |
+| 36 | Çevrimdışı durumu | ÇALIŞIYOR | `navigator.onLine` + fetch hatası ayrımı; net "bağlantı yok" metni. Kuyruğa alma uygulanmadı (aşağıda). |
+| 37 | Ölü kod | KALDIRILDI | Sayfa baştan yazıldı. |
+| — | **Yeni:** yakınlaştırma (zoom) | ÇALIŞIYOR | Kamera izi `zoom` destekliyorsa vizörde kaydırıcı. |
+| — | **Yeni:** kart aktivasyonu | ÇALIŞIYOR | Kart QR'ı → `unused`, `mine`, `taken`, `blocked`, `not_found`. "Bağla" → başarı anı + "Kartıma git". Aktif kartı olmayana "Kartımı okut" ipucu. |
+| — | **Yeni:** gizlilik notu | ÇALIŞIYOR | "Görüntü yalnız cihazında işlenir". |
+
+**Kapanan bulgular (12/12):** B-1, B-2 (ortak kanca), B-3, B-4, B-5, B-6, B-7, B-8, B-9, B-10 (navigasyon ajanı + bu sayfa), B-11 (sayfada kopya tarayıcı kodu kalmadı; ortak kanca), B-12 (tek `h1` + `h2` bölümler, `role="status"` vizör durumu, Radix dialog odak tuzağı/Esc/odak dönüşü, vizör `aria-label`).
+
+**Kalanlar**
+- Çevrimdışı kod **kuyruğa alma** yapılmadı. Geri bildirim ancak hedef sayfada gönderilebildiği için kuyruğa alınan kod kullanıcıyı yanıltırdı; bunun yerine açık "bağlantı yok" durumu gösteriliyor.
+- Geri bildirim sayfası (`/feedback/[code]`, sahiplik dışı) `?src=in_app_*` atfını henüz `/api/qr-codes/public` ve `/api/feedbacks` (`attributionSource`) çağrılarına taşımıyor. Bunu o yüzeyin sahibi yapmalı.
+- Mekân başına geri bildirim bekleme süresi gösterilmedi: `checkFeedbackPerQrRateLimit` IP anahtarlı ve sayacı okumak hak tüketiyor (salt-okur sorgu yok).
+- `/api/cards/[token]/activate` c_token yüzeyinin ucu; tarama onu yalnız istemci olarak çağırıyor (eski `{code}` gövdesini ve zarf v2 gövdesini okuyabiliyor).
+- Görsel doğrulama: dev server ve build bu dalgada yasak olduğundan vizör ekran görüntüsüyle doğrulanmadı. tsc, eslint ve jest (28 test) yeşil.
