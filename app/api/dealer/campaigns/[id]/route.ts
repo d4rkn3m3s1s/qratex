@@ -1,105 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+/**
+ * GET    /api/dealer/campaigns/:id — tek kampanya (editör).
+ * PATCH  /api/dealer/campaigns/:id — taslak/planlı/başarısız kampanyayı düzenler.
+ * DELETE /api/dealer/campaigns/:id — yalnız hiç gönderilmemiş kampanya silinir; gönderilmiş
+ *        kampanya arşivlenir (`/archive`). Yabancı kampanya → 404.
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import {
+  assertCampaignsAvailable,
+  loadOwnedCampaign,
+  rethrowCampaignError,
+  toCampaignDto,
+} from '@/components/dealer/b-kampanyalar/server/common';
+import { deleteCampaign, updateCampaign } from '@/components/dealer/b-kampanyalar/server/crud';
 import { campaignUpdateSchema } from '../campaign-schema';
-
-// PATCH — update campaign
 
 export const dynamic = 'force-dynamic';
 
-export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+const params = z.object({ id: z.string().min(1).max(64) });
+
+export const GET = defineRoute(
+  { name: 'dealer.campaigns.get', roles: ['DEALER', 'ADMIN'], tenant: 'dealer', rateLimit: 'read', params },
+  async ({ params: p, tenant, user, request }) => {
+    await assertCampaignsAvailable({ userId: user.id, request });
+    return ok({ campaign: toCampaignDto(await loadOwnedCampaign(tenant.dealerId, p.id)) });
+  }
+);
+
+export const PATCH = defineRoute(
+  {
+    name: 'dealer.campaigns.update',
+    roles: ['DEALER', 'ADMIN'],
+    tenant: 'dealer',
+    rateLimit: 'mutation',
+    params,
+    schema: campaignUpdateSchema,
+  },
+  async ({ params: p, body, tenant, user, request }) => {
+    await assertCampaignsAvailable({ userId: user.id, request });
     try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
-        const { id } = await params;
-
-        const existing = await prisma.campaign.findUnique({ where: { id } });
-        if (!existing) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-        if (auth.session.user.role !== 'ADMIN' && existing.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-        if (existing.status === 'sent') {
-            return NextResponse.json({ error: 'Gönderilmiş kampanya düzenlenemez' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        // POST ile aynı kurallar: geçersiz segment ya da (sahte) e-posta kanalı kaydedilemez.
-        const parsed = campaignUpdateSchema.safeParse(await request.json().catch(() => null));
-        if (!parsed.success) {
-            return NextResponse.json(
-                { error: parsed.error.errors[0]?.message ?? 'Geçersiz istek' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-        const data = Object.fromEntries(
-            Object.entries(parsed.data).filter(([, v]) => v !== undefined)
-        ) as Partial<{ title: string; message: string; targetSegment: string; channel: string }>;
-
-        if (Object.keys(data).length === 0) {
-            const campaign = await prisma.campaign.findUnique({ where: { id } });
-            return NextResponse.json({ success: true, campaign }, { headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        const where =
-            auth.session.user.role === 'ADMIN'
-                ? { id }
-                : { id, dealerId: auth.session.user.id, status: { not: 'sent' as const } };
-        const n = await prisma.campaign.updateMany({ where, data });
-        if (n.count === 0) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        const campaign = await prisma.campaign.findUnique({ where: { id } });
-        return NextResponse.json({ success: true, campaign }, { headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error updating campaign:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+      const campaign = await updateCampaign(tenant.dealerId, p.id, {
+        title: body.title,
+        message: body.message,
+        segment: body.targetSegment,
+      });
+      return ok({ campaign: toCampaignDto(campaign) });
+    } catch (err) {
+      rethrowCampaignError(err);
     }
-}
+  }
+);
 
-// DELETE — delete campaign
-export async function DELETE(
-    _request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = defineRoute(
+  { name: 'dealer.campaigns.delete', roles: ['DEALER', 'ADMIN'], tenant: 'dealer', rateLimit: 'mutation', params },
+  async ({ params: p, tenant, user, request }) => {
+    await assertCampaignsAvailable({ userId: user.id, request });
     try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
-        const { id } = await params;
-
-        const existing = await prisma.campaign.findUnique({ where: { id } });
-        if (!existing) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-        if (auth.session.user.role !== 'ADMIN' && existing.dealerId !== auth.session.user.id) {
-            return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        if (auth.session.user.role === 'ADMIN') {
-            const n = await prisma.campaign.deleteMany({ where: { id } });
-            if (n.count === 0) {
-                return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-            }
-        } else {
-            const n = await prisma.campaign.deleteMany({
-                where: { id, dealerId: auth.session.user.id },
-            });
-            if (n.count === 0) {
-                return NextResponse.json({ error: 'Kampanya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-            }
-        }
-        return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error deleting campaign:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+      await deleteCampaign(tenant.dealerId, p.id);
+      return ok({ deleted: true });
+    } catch (err) {
+      rethrowCampaignError(err);
     }
-}
+  }
+);

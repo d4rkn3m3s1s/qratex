@@ -1,118 +1,89 @@
-'use client';
+import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { notFound } from 'next/navigation';
+import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import { PanelPage, PageHeader } from '@/components/ds/page';
+import { EmptyState, ErrorState, SkeletonDetail } from '@/components/states';
+import { ApiError } from '@/lib/http/define-route';
+import { getServerLocale } from '@/lib/server-locale';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/api-auth';
+import { parseWindow } from '@/components/dealer/b-kampanyalar/domain';
+import { getCampaignCopy, toCampaignLocale } from '@/components/dealer/b-kampanyalar/copy';
+import { campaignKeys } from '@/components/dealer/b-kampanyalar/client/api';
+import { firstParam, requireCampaignsPage } from '@/components/dealer/b-kampanyalar/server/page-auth';
+import { campaignPerformance } from '@/components/dealer/b-kampanyalar/server/performance';
+import { PerformanceScreen } from '@/components/dealer/b-kampanyalar/ui/performance-screen';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft, BarChart3, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useAppT } from '@/lib/app-locale';
+export const dynamic = 'force-dynamic';
 
-export default function DealerCampaignPerformancePage() {
-  const t = useAppT();
-  const params = useParams();
-  const id = typeof params?.id === 'string' ? params.id : '';
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const r = await fetch(`/api/dealer/campaigns/${id}/performance`);
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || t('dealerCampaignPerformance.loadFailed'));
-        if (!cancelled) setData(j);
-      } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : t('dealerCampaignPerformance.genericError'));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, t]);
+/** Sekme başlığı: "{kampanya} · Performans" (yalnız sahibi için; aksi hâlde genel başlık). */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const c = getCampaignCopy(toCampaignLocale(await getServerLocale()));
+  try {
+    const { id } = await params;
+    const auth = await requireAuth(['DEALER']);
+    if ('error' in auth) return { title: c.perf.eyebrow, robots: { index: false } };
+    const row = await prisma.campaign.findFirst({ where: { id, dealerId: auth.session.user.id }, select: { title: true } });
+    return { title: row ? c.perf.metaTitle(row.title) : c.perf.eyebrow, robots: { index: false } };
+  } catch {
+    return { title: c.perf.eyebrow, robots: { index: false } };
+  }
+}
 
-  const attr = data?.attribution as
-    | {
-        matchToken: string | null;
-        matchedFeedbackCount: number;
-        avgRatingOnMatched: number | null;
-        totalFeedbackDealer30d: number;
-        shareOfVoice: number;
-      }
-    | undefined;
+/**
+ * /dealer/campaigns/[id]/performance — kampanya detayı ve gerçek huni (sunucu önce).
+ * Seçili pencerenin ölçümü sunucuda hesaplanıp önbelleğe gömülür; pencere değişimi istemcide.
+ */
+export default async function CampaignPerformancePage({ params, searchParams }: PageProps) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const locale = toCampaignLocale(await getServerLocale());
+  const c = getCampaignCopy(locale);
+  const dealerIdParam = firstParam(sp.dealerId);
+  const auth = await requireCampaignsPage(`/dealer/campaigns/${encodeURIComponent(id)}/performance`, dealerIdParam);
+
+  const header = <PageHeader eyebrow={c.perf.eyebrow} title={c.perf.eyebrow} back={{ href: '/dealer/campaigns', label: c.perf.back }} />;
+  if (auth.kind !== 'ok') {
+    return (
+      <PanelPage register="ops" header={header}>
+        {auth.kind === 'forbidden' ? (
+          <EmptyState variant="permission" title={c.page.forbiddenTitle} description={c.page.forbiddenBody} />
+        ) : auth.kind === 'disabled' ? (
+          <EmptyState variant="permission" title={c.page.disabledTitle} description={c.page.disabledBody} />
+        ) : (
+          <ErrorState variant="section" title={c.page.unavailableTitle} description={c.page.unavailableBody} />
+        )}
+      </PanelPage>
+    );
+  }
+
+  const win = parseWindow(firstParam(sp.window));
+  const queryClient = new QueryClient();
+  try {
+    const perf = await campaignPerformance(auth.dealerId, id, win);
+    queryClient.setQueryData(campaignKeys.performance(auth.dealerParam, id, win), perf);
+  } catch (error) {
+    // Yabancı ya da olmayan kampanya → 404 (varlık sızdırılmaz).
+    if (error instanceof ApiError && error.code === 'NOT_FOUND') notFound();
+    console.error('[campaign-performance] SSR yüklemesi başarısız; istemci yeniden deneyecek', error);
+  }
 
   return (
-    <div className="space-y-6 pb-10 max-w-2xl mx-auto">
-      <Button variant="ghost" size="sm" asChild className="w-fit -mb-2 touch-manipulation">
-        <Link href="/dealer/campaigns">
-          <ArrowLeft className="h-4 w-4 shrink-0 mr-2" />
-          {t('dealerCampaignPerformance.backToCampaigns')}
-        </Link>
-      </Button>
-
-      <div className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2 text-balance">
-          <BarChart3 className="h-6 w-6 shrink-0 text-primary" />
-          {t('dealerCampaignPerformance.title')}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-2 text-pretty leading-relaxed">{t('dealerCampaignPerformance.subtitle')}</p>
-      </div>
-
-      {loading && (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      {err && !loading && (
-        <Card className="border-destructive/40">
-          <CardContent className="pt-6 text-sm text-destructive">{err}</CardContent>
-        </Card>
-      )}
-
-      {!loading && !err && data && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{(data.campaign as { title?: string })?.title ?? t('dealerCampaignPerformance.fallbackCampaignTitle')}</CardTitle>
-            <CardDescription>{(data.note as string) || ''}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            {attr && (
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-lg border p-3">
-                  <dt className="text-xs text-muted-foreground">{t('dealerCampaignPerformance.matchedFeedback30')}</dt>
-                  <dd className="text-2xl font-semibold tabular-nums">{attr.matchedFeedbackCount}</dd>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <dt className="text-xs text-muted-foreground">{t('dealerCampaignPerformance.dealerTotalFeedback30')}</dt>
-                  <dd className="text-2xl font-semibold tabular-nums">{attr.totalFeedbackDealer30d}</dd>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <dt className="text-xs text-muted-foreground">{t('dealerCampaignPerformance.shareEstimated')}</dt>
-                  <dd className="text-2xl font-semibold tabular-nums">{attr.shareOfVoice}%</dd>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <dt className="text-xs text-muted-foreground">{t('dealerCampaignPerformance.matchedAvgRating')}</dt>
-                  <dd className="text-2xl font-semibold tabular-nums">
-                    {attr.avgRatingOnMatched != null ? attr.avgRatingOnMatched : '—'}
-                  </dd>
-                </div>
-                {attr.matchToken && (
-                  <div className="sm:col-span-2 rounded-lg border p-3 font-mono text-xs">
-                    {t('dealerCampaignPerformance.utmMatchKey')} {attr.matchToken}
-                  </div>
-                )}
-              </dl>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <Suspense
+        fallback={
+          <PanelPage register="ops" header={header}>
+            <SkeletonDetail />
+          </PanelPage>
+        }
+      >
+        <PerformanceScreen campaignId={id} dealerId={auth.dealerParam} readOnly={auth.readOnly} />
+      </Suspense>
+    </HydrationBoundary>
   );
 }

@@ -212,3 +212,52 @@ Yöntem: iddialar kod okunarak çürütülmeye çalışıldı; `slugToken` davra
 - Yanlış pozitif / çift sayım: "İndirim" kampanyasının token'ı `indirim`; `'kis-indirimi'.includes('indirim') === true` (denendi). Aynı geri bildirim hem "İndirim" hem (doğru yazılmışsa) "Kış İndirimi" kampanyasına sayılır; iki kartın "Pay" toplamı %100'ü aşabilir.
 - Pencere: `route.ts:39` `since = now - 30 gün`; `campaign.sentAt` (`:30`'da seçiliyor) filtrede hiç kullanılmıyor. 3 ay önce gönderilmiş bir kampanya için sayfa, kampanyayla ilgisiz son 30 günü gösterir; henüz gönderilmemiş (`draft`) kampanyalar için de metrik üretir.
 - Önem notu: Bugün `utmCampaign` hiç dolmadığı için kullanıcıya görünen ek bir sapma yok; ancak iddia 1 yalnızca "istemci UTM'yi taşısın" şeklinde yamalanırsa bu hatalar anında üretime çıkar. Bu yüzden düzeltme başlık-slug eşlemesi üzerine kurulmamalı: kampanya kimliği (`cmp=<campaignId>`) açıkça taşınmalı, eşleşme `Feedback.campaignId` (veya `CampaignRecipient`) üzerinden eşitlikle yapılmalı ve pencere `[sentAt, sentAt + attributionWindowDays]` olmalı. UTM serbest metni yalnızca harici kanal raporlaması için ayrı tutulmalı.
+
+## Uygulama (Dalga 2)
+
+Yeni yapı: sunucu bileşeni `app/dealer/campaigns/[id]/performance/page.tsx` (yetki + veri SSR, `loading.tsx` iskelet) → `components/dealer/b-kampanyalar/ui/performance-screen.tsx` (huni `funnel.tsx`, eğilim `timeline-chart.tsx`). Veri `server/performance.ts`: gönderim anında yazılan kesin alıcı listesi (gönderim kaydı) + `Notification.readAt` + izlenen push bağlantısı (`/api/campaigns/[id]/open`) + tüketim/QR geri bildirimi. UTM `contains` eşlemesi tamamen kaldırıldı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Geri dön | ÇALIŞIYOR |
+| 2 | Başlık | ÇALIŞIYOR — kampanya adı + durum + segment + kanal + gönderim tarihi |
+| 3 | Veri yükleme | ÇALIŞIYOR — SSR; istemci yenilemede `r.ok` kontrollü API istemcisi |
+| 4 | Yükleniyor | ÇALIŞIYOR — iskelet, `role="status"` |
+| 5 | Hata | ÇALIŞIYOR — QueryState, tekrar dene, `role="alert"` |
+| 6 | Kampanya başlığı | ÇALIŞIYOR |
+| 7 | Açıklama notu | KALDIRILDI — teknik UTM notu anlamsızlaştı; yerine ölçüm yöntemi açıklaması |
+| 8 | Eşleşen geri bildirim | ÇALIŞIYOR (yeniden yazıldı) — alıcıların pencere içi ziyaret/QR geri bildirimi |
+| 9 | Bayi toplam geri bildirim | KALDIRILDI — kampanyaya özgü değil; yerine alıcıların gönderim öncesi eşdeğer dönem kıyası |
+| 10 | Pay | KALDIRILDI — yerine ziyaret oranı ve (kontrol grubu varsa) artış |
+| 11 | Ortalama puan | ÇALIŞIYOR — alıcıların pencere içi ortalaması, öncesiyle kıyas |
+| 12 | UTM anahtarı | KALDIRILDI — atıf alıcı listesine dayalı, UTM gerekmiyor |
+| 13 | Yetki | ÇALIŞIYOR — yabancı kampanya 404 |
+| 14 | Modül/menü kapısı | ÇALIŞIYOR |
+| 15 | Ölçüm penceresi | ÇALIŞIYOR — `sentAt`'ten başlar, seçilebilir; taslakta "henüz gönderilmedi" durumu |
+| 16 | Meta veri | ÇALIŞIYOR |
+| 17 | Açılma oranı | ÇALIŞIYOR — `readAt` ∪ push açılışı |
+| 18 | Açıklayıcı boş durum | ÇALIŞIYOR — gönderilmedi / etkinlik yok / yetersiz örneklem |
+| 19 | Mobil | ÇALIŞIYOR — geniş ekranda iki sütun |
+| 20 | Metadata | ÇALIŞIYOR |
+| 21 | Dil | ÇALIŞIYOR — tüm metinler `copy.ts` (tam Türkçe) |
+| 22 | Dil değişimi | ÇALIŞIYOR |
+| 23 | Hata sınırı + `loading.tsx` | ÇALIŞIYOR |
+| 24 | Sunucu hata yönetimi | ÇALIŞIYOR — define-route, JSON hata gövdesi |
+| 25 | Pencere / kıyas / trend / dışa aktarma | ÇALIŞIYOR — pencere, öncesi kıyas + kontrol grubu, günlük eğilim (İstanbul günleri). Dışa aktarma eklenmedi (tek kampanya için düşük değer) |
+| 26 | Motion | ÇALIŞIYOR — huni çubukları `m` + `useMotionPolicy` |
+
+### Kapanan bulgular (10/10)
+
+1 kopuk atıf hattı, 2 gönderimin iz bırakmaması (gönderim kaydı + `data.campaignId`), 3 hatalı eşleştirme (kaldırıldı), 4 pencere, 5 hata yönetimi, 6 kapı ve 403/404, 7 bilgi mimarisi, 8 kopyalanmış atıf mantığı (bu yüzeyde kaldırıldı), 9 erişilebilirlik/dil, 10 metadata/gezinme.
+
+### Huni
+
+Gönderildi → Açıldı → Ziyaret etti → Harcadı; her adım gerçek sayım. Veri yoksa adım dürüst boş durumla gösterilir, sıfır uydurulmaz.
+
+### Kalanlar
+
+- Dalga 2 öncesi gönderimlerde alıcı kaydı yok; alıcılar `campaignId` taşıyan bildirimlerden çıkarılır, o da yoksa huni "ölçülemez" gösterilir.
+- Copilot'taki kopya `slugToken` atıfı copilot yüzeyinin sahipliğinde.
+- Çoklu varyant A/B: ŞEMA İSTEĞİ (bkz. dealer_campaigns.md).

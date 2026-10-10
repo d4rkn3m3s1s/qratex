@@ -1,88 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
+/**
+ * GET  /api/dealer/campaigns — sekmeli, aranabilir, sayfalı kampanya listesi (+ sekme sayaçları).
+ * POST /api/dealer/campaigns — taslak oluşturur.
+ *
+ * Varsayılan reddet: rol (DEALER; ADMIN yalnız `?dealerId=` ile salt-okunur), kiracı kapsamı,
+ * zod, hız sınırı, bayi rolü için modül + menü kapısı (denetim Bulgu 6).
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { CAMPAIGN_SEGMENT_KEYS, LIST_TABS } from '@/components/dealer/b-kampanyalar/domain';
+import { assertCampaignsAvailable, toCampaignDto } from '@/components/dealer/b-kampanyalar/server/common';
+import { createCampaign } from '@/components/dealer/b-kampanyalar/server/crud';
+import { listCampaigns } from '@/components/dealer/b-kampanyalar/server/list';
 import { campaignCreateSchema } from './campaign-schema';
-
 
 export const dynamic = 'force-dynamic';
 
-// Şema: ./campaign-schema.ts (POST ve PATCH aynı kuralları paylaşır; sahte e-posta kanalı yok).
-const createSchema = campaignCreateSchema;
+const listQuery = z.object({
+  tab: z.enum(LIST_TABS).catch('drafts'),
+  q: z.string().trim().max(100).optional(),
+  segment: z.enum(CAMPAIGN_SEGMENT_KEYS).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).max(10_000).catch(1),
+  dealerId: z.string().optional(),
+});
 
-// GET — list dealer's campaigns
-export async function GET() {
-    try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
-        const menuGate = await assertMenuItemVisible('campaigns', 'dealer', {
-            userId: auth.session.user.id,
-            routeKey: '/dealer/campaigns',
-        });
-        if (menuGate) return menuGate;
-        const gate = await assertModuleEnabled('campaigns', {
-            role: 'dealer',
-            userId: auth.session.user.id,
-            routeKey: '/dealer/campaigns',
-        });
-        if (gate) return gate;
+export const GET = defineRoute(
+  {
+    name: 'dealer.campaigns.list',
+    roles: ['DEALER', 'ADMIN'],
+    tenant: 'dealer',
+    rateLimit: 'read',
+    query: listQuery,
+  },
+  async ({ query, tenant, user, request }) => {
+    await assertCampaignsAvailable({ userId: user.id, request });
+    return ok(
+      await listCampaigns(tenant.dealerId, {
+        tab: query.tab,
+        q: query.q ?? null,
+        segment: query.segment ?? null,
+        page: query.page,
+      })
+    );
+  }
+);
 
-        const campaigns = await prisma.campaign.findMany({
-            where: { dealerId: auth.session.user.id },
-            orderBy: { createdAt: 'desc' },
-            take: 300,
-        });
-
-        return NextResponse.json({ success: true, campaigns }, { headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error fetching campaigns:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Kampanyalar yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-}
-
-// POST — create a campaign
-export async function POST(request: NextRequest) {
-    try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
-        const menuGate = await assertMenuItemVisible('campaigns', 'dealer', {
-            request,
-            userId: auth.session.user.id,
-            routeKey: '/dealer/campaigns',
-        });
-        if (menuGate) return menuGate;
-        const gate = await assertModuleEnabled('campaigns', {
-            role: 'dealer',
-            request,
-            userId: auth.session.user.id,
-            routeKey: '/dealer/campaigns',
-        });
-        if (gate) return gate;
-
-        const body = await request.json().catch(() => null);
-        const parsed = createSchema.safeParse(body);
-        if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        const campaign = await prisma.campaign.create({
-            data: {
-                dealerId: auth.session.user.id,
-                title: parsed.data.title,
-                message: parsed.data.message,
-                targetSegment: parsed.data.targetSegment,
-                channel: parsed.data.channel,
-            },
-        });
-
-        return NextResponse.json({ success: true, campaign }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error creating campaign:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Kampanya oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-}
+export const POST = defineRoute(
+  {
+    name: 'dealer.campaigns.create',
+    roles: ['DEALER', 'ADMIN'],
+    tenant: 'dealer',
+    rateLimit: { max: 30, windowMs: 60 * 60_000, by: 'user' },
+    schema: campaignCreateSchema,
+    idempotent: true,
+  },
+  async ({ body, tenant, user, request }) => {
+    await assertCampaignsAvailable({ userId: user.id, request });
+    const campaign = await createCampaign(tenant.dealerId, {
+      title: body.title,
+      message: body.message,
+      segment: body.targetSegment,
+    });
+    return ok({ campaign: toCampaignDto(campaign) }, { status: 201 });
+  }
+);

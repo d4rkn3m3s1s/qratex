@@ -217,3 +217,60 @@ Her iddia kod baştan okunarak çürütülmeye çalışıldı (gönderim ucu, PA
 - **Yeniden üretim:** Bayinin önceden oluşturduğu taslak (id'si önceki liste yanıtından bilinir). Admin `featureVisibility.dealer.campaigns=false` veya menüyü gizler → `GET /api/dealer/campaigns` 403 döner, ama `POST /api/dealer/campaigns/{id}/send` 200 ile müşterilere gönderir; PATCH ile mesaj değiştirilip öyle gönderilebilir.
 - Frekans sınırı: her kampanya bir kez gönderilir, ancak oluşturma ucunda (`route.ts:50-91`) ve gönderimde rate limit yok; bayi art arda sınırsız kampanya oluşturup aynı 500 kişiye peş peşe mesaj atabilir. Doğrulandı.
 - Öneri: tüm kampanya uçlarını ortak bir `assertDealerCampaignAccess(session, request)` yardımcısından geçirmek (menü + `role:'dealer'` modül kapısı), gönderime bayi başına günlük/haftalık kota ve müşteri başına frekans tavanı (ör. aynı müşteri 7 günde en fazla 2 kampanya) eklemek.
+
+## Uygulama (Dalga 2)
+
+Yeni yapı: sunucu bileşeni `app/dealer/campaigns/page.tsx` (yetki + ilk liste/özet SSR ön-yükleme, `loading.tsx` iskelet) → istemci adası `components/dealer/b-kampanyalar/ui/campaigns-screen.tsx`. Sunucu mantığı `components/dealer/b-kampanyalar/server/*` (audience, delivery, schedule, list, crud, performance, snapshot); tüm uçlar `lib/http/define-route.ts` (rol DEALER/ADMIN + zod + rate limit + kiracı kapsamı). Yeni uçlar: `audience`, `summary`, `[id]/preview`, `[id]/schedule`, `[id]/duplicate`, `[id]/archive`, `/api/campaigns/[id]/open` (izlenen push bağlantısı), `/api/cron/campaign-dispatch` (planlı gönderim).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero | ÇALIŞIYOR (QDL v2 sayfa başlığı) |
+| 2 | Playbook ipucu | ÇALIŞIYOR — playbook taslağı artık düzenlenebiliyor; kaynak rozeti satırda |
+| 3 | Yeni kampanya | ÇALIŞIYOR |
+| 4 | Liste yükleme | ÇALIŞIYOR — SSR ön-yükleme + sunucu sayfalama (300 sabit sınırı kalktı) |
+| 5 | Yükleniyor | ÇALIŞIYOR — iskelet (`loading.tsx` + QueryState) |
+| 6 | Hata + tekrar dene | ÇALIŞIYOR (QueryState) |
+| 7 | Boş durum | ÇALIŞIYOR — öğretici boş durum, sekme/filtre başına ayrı metin |
+| 8–9 | Başlık, playbook rozeti | ÇALIŞIYOR |
+| 10 | Durum rozeti | ÇALIŞIYOR — `scheduled` artık gerçek (zamanlama var); `failed`, `archived` eklendi |
+| 11 | Segment etiketi | ÇALIŞIYOR — token tabanlı rozet, koyu tema kontrastı |
+| 12 | Mesaj önizleme | ÇALIŞIYOR — önizleme diyaloğu tam mesajı gösterir |
+| 13 | "{n} müşteriye gönderildi" | ÇALIŞIYOR — teslim edilen / açılan sayısı ve dışarıda kalanlar (izin, frekans, kontrol grubu, tavan) ayrı |
+| 14 | Tarih | ÇALIŞIYOR — oluşturma/plan/gönderim tarihi, Europe/Istanbul |
+| 15 | Performans linki | ÇALIŞIYOR — yalnız gönderilmiş kampanyada; gerçek huni (performans raporu) |
+| 16 | Gönder | ÇALIŞIYOR — onay diyaloğu (net kitle + dışlananlar), satır başına bekleme durumu |
+| 17 | Sil | ÇALIŞIYOR — yalnız taslak/başarısız silinir (onaylı); gönderilmiş kampanya arşivlenir (iz kaybı yok) |
+| 18 | Animasyon | ÇALIŞIYOR — `m` + `useMotionPolicy`, azaltılmış hareket |
+| 19–21 | Oluşturma diyaloğu, başlık, mesaj | ÇALIŞIYOR — `htmlFor`, `maxLength`, karakter sayacı + push uzunluk rehberi |
+| 22 | Hedef segment | ÇALIŞIYOR — segmentler bayiye özgü yeniden tanımlandı (Sadık ≠ Aktif; VIP bu bayideki davranıştan); tanım `domain.ts`, testli |
+| 23 | Kanal | ÇALIŞIYOR — sahte "E-posta" kaldırıldı; uygulama içi + push. Eski e-posta kayıtları gönderimde açık hata ile reddedilir (`CHANNEL_UNSUPPORTED`) |
+| 24–25 | İptal / Oluştur + doğrulama | ÇALIŞIYOR (zod sunucuda otoriter) |
+| 26 | Toast | ÇALIŞIYOR — yüzeyin kendi tam Türkçe metinleri |
+| 27 | Düzenleme | ÇALIŞIYOR — taslak/planlı/başarısız düzenlenir |
+| 28 | Zamanlanmış gönderim | ÇALIŞIYOR — `[id]/schedule` + günlük cron `campaign-dispatch` (gün hassasiyeti; şemada `scheduledAt` olmadığından plan audit kaydında) |
+| 29 | Kitle önizleme / test gönderimi | ÇALIŞIYOR (kitle) — `audience` ucu: segment büyüklüğü, izinsiz/frekans tavanı düşülmüş net sayı. Test gönderimi KALDIRILDI (alıcı listesini/huniyi kirletir) |
+| 30 | Filtre/arama/sıralama/sayfalama | ÇALIŞIYOR — sekme (taslak/planlı/gönderildi/arşiv), arama, segment filtresi, sayfalama |
+| 31 | Özet şeridi | ÇALIŞIYOR — `summary` ucu: gönderim, ulaşılan kişi, açılma oranı (gerçek `readAt` + push açılışı) |
+| 32 | Bildirim tercihine saygı (E3) | ÇALIŞIYOR — `lib/marketing-delivery` (fail-closed); bildirimler `data.kind='campaign'` taşır; push da tercih filtresinden geçer |
+| 33 | Modül/menü kapısı | ÇALIŞIYOR — tüm uçlar aynı kapıdan |
+| 34 | Ön-dolu derin bağlantı | ÇALIŞIYOR — `?new=1&segment=…&title=…&message=…&source=…` |
+| 35 | Çoğalt | ÇALIŞIYOR — `[id]/duplicate` |
+| 36–38 | Rol, azaltılmış hareket, meta | ÇALIŞIYOR |
+
+### Kapanan bulgular (11/11)
+
+1 tercih/izin ihlali (fail-closed filtre), 2 sahte e-posta (kaldırıldı), 3 segment tanımları, 4 atomiklik (durum kilidi + bildirimler + gönderim kaydı tek transaction; başarısızsa yeniden denenebilir), 5 push N+1/eşzamanlılık (transaction dışı, sınırlı eşzamanlılık), 6 kapı tutarsızlığı, 7 sessiz 500 kesme (1000 tavan + kesilen sayı açıkça gösterilir), 8 sahte performans (gerçek huni), 9 onaysız geri alınamaz eylemler, 10 düzenleme yok, 11 dil/tutarlılık. Ek: müşteri başına frekans tavanı, oluşturma/gönderim rate limit.
+
+### A/B
+
+Şemada varyant alanı yok. Mevcut altyapıyla kontrol grubu (holdout) uygulandı: gönderimde seçilen oranda alıcı ileti almadan bırakılır, performansta ziyaret oranı farkı (artış, yüzde puanı) gösterilir; örneklem küçükse "yetersiz örneklem" olarak işaretlenir.
+
+### Kalanlar
+
+- Gerçek A/B (iki mesaj varyantı) — ŞEMA İSTEĞİ: `Campaign.variants Json?` ya da `CampaignVariant` modeli.
+- Saat hassasiyetli zamanlama — ŞEMA İSTEĞİ: `Campaign.scheduledAt DateTime?` + indeks; şu an plan günü audit kaydında, cron günlük.
+- E-posta kanalı — ayrı ticari ileti onayı gerekiyor: ŞEMA İSTEĞİ `User.marketingEmailConsentAt`.
+- `app/api/cron/daily/jobs.ts` içindeki `campaign-dispatch` kaydı paylaşılan dosyada (inbox-queues ile birlikte staged); o dosyanın sahibi commit'lemeli.
+- segment-actions / churn-risk / happy-hour birleşmesi diğer yüzeylerin sahipliğinde; bu yüzey ön-dolu derin bağlantıyı sağlar.
