@@ -103,7 +103,10 @@ function GridView({
   const byDays = orientation === 'days-rows';
   const nRows = byDays ? rows.length : hours.length;
   const nCols = byDays ? hours.length : rows.length;
-  const [focus, setFocus] = useState<[number, number]>([0, 0]);
+  const [rawFocus, setFocus] = useState<[number, number]>([0, 0]);
+  // Metrik/dönem değişince görünür saat sayısı değişebilir: odak hücresi hep ızgara içinde kalır
+  // (aksi hâlde hiçbir hücre tabIndex=0 almaz ve ızgara klavyeyle erişilemez olur).
+  const focus: [number, number] = [Math.min(rawFocus[0], Math.max(0, nRows - 1)), Math.min(rawFocus[1], Math.max(0, nCols - 1))];
   const refs = useRef(new Map<string, HTMLButtonElement>());
 
   const at = (r: number, c: number): { day: HeatRow; cell: HeatCell } => {

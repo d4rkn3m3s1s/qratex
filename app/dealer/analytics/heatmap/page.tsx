@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import { headers } from 'next/headers';
 import { requireAuth } from '@/lib/api-auth';
 import { getModuleControls } from '@/lib/module-gate';
 import { getServerLocale } from '@/lib/server-locale';
@@ -40,7 +41,8 @@ export default async function DealerAnalyticsHeatmapPage({ searchParams }: { sea
   }
 
   const queryClient = new QueryClient();
-  if (!('error' in auth)) {
+  const softNav = (await headers()).get('rsc') === '1';
+  if (!softNav && !('error' in auth)) {
     try {
       queryClient.setQueryData(heatmapQueryKey(query), await loadActivityHeatmap(auth.session.user.id, query));
     } catch (error) {

@@ -241,3 +241,63 @@ Sayfa çalışıyor ve sahte veri yok: Math.random önceden temizlenmiş (`3d3a3
 **4. Sahte içgörü.** Dönemde hiç feedback yoksa `hourlyData` tümü 0 → `Math.max(...)=0`, `indexOf(0)=0` (`route.ts:366`); `reduce` başlangıç değeri `dayOfWeekData[0]` = "Pazar" (`route.ts:367`). İstemci yalnızca `!data` durumunda boş durum gösteriyor (`analytics-client.tsx:529`); içgörü kartları `analytics-client.tsx:831-844` koşulsuz basılıyor. Yeniden üretim: yeni bayi veya 7 gün sessiz bayi "En yoğun saat 0:00 - 1:00, En yoğun gün Pazar" görür. Eşitlik durumunda da (ör. tek feedback) ilk eşleşen döner, yani anlamsız "zirve" üretilir. Öneri: API `peakHour/peakDay` için yeterli örneklem yoksa (ör. < 10 olay) `null` dönmeli; istemci `bestQR` gibi "Henüz veri yok" göstermeli.
 
 **5. 20k cap.** `route.ts:91-106` ve `117-121`: pencere `prevStartDate`'ten (2× dönem) başlıyor, `orderBy: { createdAt: 'asc' }`, `take: 20_000`. `route.ts:170` güncel dönem bu diziden filtreleniyor. Kodun kendi yorumu da riski kabul ediyor (`route.ts:145-148`). Yeniden üretim: 90g görünümünde son 180 günde 25.000 QR feedback'i olan bayide dizi en eski 20.000 kayıtla dolar; son ~5.000 (güncel dönemin önemli kısmı) dışarıda kalır. Manşet `totalFeedbacks` ve `avgRating` (DB agregasyonu, `route.ts:149-158`) doğru, ama duygu dağılımı, puan dağılımı, günlük trend, ısı haritası, konular ve top QR feedback sayıları eksik; ayrıca `ratingDistribution` yüzdeleri eksik örneklemden normalize ediliyor. Eşik yüksek (90g için ~111 feedback/gün, 30g için ~333/gün); şu anki canlı veride bu eşiği aşan bayi olup olmadığı doğrulanmadı (DB'ye bakılmadı). Hata gerçek ama şu an için gizli olabilir. Öneri: kırılımlar SQL `GROUP BY` ile üretilmeli (cap tamamen kalkar); geçici düzeltme olarak sıralama `desc` yapılıp güncel dönem ve önceki dönem ayrı sorgularla çekilmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rotalar: `/dealer/analytics` (Genel bakış) ve `/dealer/analytics/heatmap` (Yoğunluk alt sekmesi). Sunucu bileşeni ilk veriyi `loadAnalyticsOverview` ile önceden yükler (HydrationBoundary). Yumuşak gezinmede veriyi istemci çeker. Mantık `lib/dealer-analytics/*` altında (core/load/params/topics/csv), arayüz `components/dealer/b-analitik/*` altında. BFF ucu `GET /api/dealer/analytics`, `defineRoute` ile tanımlı: rol + kiracı + zod + hız sınırı. Dönem `{range, compare}` sözleşmesine bağlı (`components/ds/page/date-range.ts`, İstanbul günü). KPI'lar `MetricTile` + `DeltaBadge` ile birimli delta gösterir. Recharts yalnız `trend-chart.tsx` içinde, lazy parça olarak yüklenir. Testler: `__tests__/api/dealer-analytics.test.ts`, `__tests__/lib/dealer-analytics-core.test.ts`, `__tests__/lib/dealer-analytics-ui-logic.test.ts` (46/46 geçti).
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR (sayfa metadata, TR/EN) |
+| 2 | Code-split + iskelet | ÇALIŞIYOR. SSR ön-yükleme var, çift yükleme ekranı yok. Yalnız grafik parçası lazy. |
+| 3 | Rol koruması | ÇALIŞIYOR. `defineRoute` + `requireAuth` (yetki DB'den). |
+| 4 | ADMIN rolü | ÇALIŞIYOR. Kiracı kapsamı `resolveDealerScope` ile çözülür, ölü dal kalktı. |
+| 5 | Hero | ÇALIŞIYOR (QDL v2 sayfa başlığı) |
+| 6 | Dönem seçici | ÇALIŞIYOR. 7/30/90 gün ve özel aralık, karşılaştırma (önceki dönem/geçen yıl/yok). Seçim URL'de tutulur, react-query anahtarı sayesinde yarış koşulu yok. |
+| 7 | Yükleniyor durumu | ÇALIŞIYOR. `QueryState` kullanılır, dönem değişirken önceki veri yerinde kalır. |
+| 8 | Yenile | ÇALIŞIYOR. `fresh=1` önbelleği atlar (hız sınırlı), "son güncelleme" zamanı gösterilir. |
+| 9 | Hata kartı | ÇALIŞIYOR. Hata ile boş veri ayrıldı: `ErrorState` + tekrar dene. |
+| 10 | Gerçek boş durum | ÇALIŞIYOR. Hiç veri yoksa dürüst bir boş durum ve QR kodlarına giden bağlantı gösterilir. |
+| 11 | KPI toplam + büyüme | ÇALIŞIYOR. Önceki dönem 0 ise "yeni" gösterilir, sahte +%100 yok. |
+| 12 | KPI ortalama puan | ÇALIŞIYOR. Delta yıldız biriminde (ör. +0,3★), n<10 iken gizlenir. |
+| 13 | KPI dönüşüm | ÇALIŞIYOR. Pay ve payda aynı pencereden: tekilleştirilmiş `qr_scanned` olayları. Tarama yoksa "tarama verisi yok" durumu gösterilir. |
+| 14 | KPI yanıt oranı | ÇALIŞIYOR. Seçili kanal için tek payda kullanılır, tekrar eden sorgu kalktı. |
+| 15 | AnimatedNumber | KALDIRILDI. Bilgi değeri yoktu ve azaltılmış hareket tercihini yok sayıyordu. Sayılar statik `MetricTile` ile gösterilir. |
+| 16 | KPI mobil ızgara | ÇALIŞIYOR. Duyarlı ızgarada boş hücre kalmıyor. |
+| 17-19 | Trend (hacim/puan/duygu) | ÇALIŞIYOR. Recharts ile eksen, ipucu ve karşılaştırma serisi var. Verisiz günler puan çizgisinde boşluk olarak kalır. Duygu sekmesi oran/yığın gösterir. |
+| 20 | "AI Analiz Trendi" başlığı | KALDIRILDI. Başlık sahteydi, yerine "Eğilim" kullanıldı. |
+| 21 | Duygu trend çubukları | ÇALIŞIYOR. Tüm dönemi kapsar, lejantı var, renkler token'lardan gelir. Trend sekmesiyle birleştirildi. |
+| 22-24 | Dönem karşılaştırma | ÇALIŞIYOR. `DeltaBadge` birimleri: %, yüzde puanı, ★. Tüm değerler kesin SQL agregasyonundan gelir. |
+| 25 | Isı haritası 7×24 | ÇALIŞIYOR. Yoğunluk alt sekmesinde, `AT TIME ZONE 'Europe/Istanbul'` ile hesaplanır, hafta Pazartesi başlar. |
+| 26 | Lejant | ÇALIŞIYOR. Sayısal eşikler var, düşük-n hücreler taralı. |
+| 27 | Hücre ipucu | ÇALIŞIYOR. Roving-tabindex ile klavye ızgarası, odak veya dokunmayla açılan ayrıntı paneli ve tablo alternatifi var. |
+| 28 | Duygu donut | ÇALIŞIYOR. Analiz edilmemiş kayıtlar Nötr'e eklenmez, ayrı "kuyrukta" satırında görünür. Erişilebilir çubuk listesi olarak çizilir. |
+| 29-30 | Donut lejantı / boş durum | ÇALIŞIYOR |
+| 31 | Puan dağılımı | ÇALIŞIYOR. Adet ve yüzde birlikte, sıralı renk. Satırlar gelen kutusunu filtreli açar. |
+| 32-33 | En yoğun saat/gün | ÇALIŞIYOR. İstanbul saatiyle hesaplanır, gün adları çevrilir. n<10 iken "yeterli veri yok" gösterilir. |
+| 34 | En iyi QR | ÇALIŞIYOR. Dönem içi puana göre seçilir, asgari örnek n=5. |
+| 35 | Dikkat edilmeli (konu) | ÇALIŞIYOR. Konular normalize taksonomiden gelir (`topics.ts`) ve olumsuz geri bildirimlere bağlanır. |
+| 36 | QR listesi | ÇALIŞIYOR. Dönem içi tarama, geri bildirim, puan ve dönüşüm gösterir. `key=id` kullanılır. Satırlar filtreli gelen kutusunu açar. |
+| 37 | Popüler konular | ÇALIŞIYOR. Eşanlamlı ve farklı dildeki konular birleştirilir, her konu ilgili geri bildirimlere bağlanır. |
+| 38 | AI CTA | ÇALIŞIYOR |
+| 39 | Dışa aktarma | ÇALIŞIYOR. CSV dışa aktarma günlük seriyi ve QR tablosunu içerir. PDF eklenmedi, kullanılmayan importlar kalktı. |
+| 40 | Hata toast'ı | KALDIRILDI. Hatalar sayfa içinde `ErrorState` ile gösterilir, "Dikkat:" öneki yok. |
+| 41 | Redis cache | ÇALIŞIYOR. Anahtar doğrulanmış tüm filtreleri ve `CACHE_VERSION` değerini içerir. |
+| 42 | Ölü API yükü | KALDIRILDI. Yanıt yalnız kullanılan bölümleri döner. |
+| 43 | Tüketim yorumları | ÇALIŞIYOR. `ConsumptionReview.sentiment` kullanılır, metinsiz yorumlarda puan eşiğine bakılır. Kanal filtresi var. |
+| 44 | TR/EN | ÇALIŞIYOR. Metinler `copy.ts` içinde, tarih ve gün adları `Intl` ile biçimlenir. |
+| 45 | Azaltılmış hareket | ÇALIŞIYOR. setInterval veya pathLength animasyonu kalmadı. |
+| 46 | Özel aralık/karşılaştırma | ÇALIŞIYOR |
+| 47 | Şube/QR filtresi | ÇALIŞIYOR. Şube seçici ve şube→QR kırılımı var (`location-breakdown`). |
+| 48 | Drill-down | ÇALIŞIYOR. KPI, dağılım, konu ve QR satırları `/dealer/feedbacks` sayfasını filtreli açar. |
+| 49 | Grafik erişilebilirliği | ÇALIŞIYOR. Grafiklerde aria-label var, liste ve tablo alternatifleri sunulur. |
+
+**Kapanan doğrulanmış bulgular:** B-1 (dönüşüm), B-2 (birim), B-3 (saat dilimi), B-4 (sahte içgörü), B-5 (20k sınırı yerine GROUP BY), B-6 (yarış koşulu), B-8 (mobil ızgara), B-11 (sıralı sorgu dalgaları yerine tek `Promise.all`), ölü API yükü ve ölü ADMIN yetki dalı.
+
+**Kalanlar:**
+- PDF dışa aktarma eklenmedi, CSV yeterli görüldü.
+- Gömülü "Verine sor" kutusu eklenmedi. GET isteklerinde LLM çağrısı yasak olduğu için bu özellik ayrı sayfada kalıyor.
+- Dashboard widget'ının aynı KPI servisine taşınması dashboard yüzeyinin sahibinin işi.
+- Sektör ortalaması karşılaştırması benchmark yüzeyinde kalıyor.

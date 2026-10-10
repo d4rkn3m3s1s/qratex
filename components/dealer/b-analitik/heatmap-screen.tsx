@@ -226,7 +226,6 @@ function HeatmapContent({ data }: { data: ActivityHeatmap }) {
   const metricLabel = copy.metrics[metric];
   const baseline = data.totals.avgRating;
   const fmtCell = useCellFormatter(metric);
-  const total = metric === 'visits' ? data.totals.visits : metric === 'revenue' ? data.totals.revenue : data.totals.feedback;
 
   const siblings = useMemo(() => {
     const ids: string[] = [];
@@ -262,7 +261,7 @@ function HeatmapContent({ data }: { data: ActivityHeatmap }) {
     [copy, locale, metric, data],
   );
 
-  if (total === 0 && metric !== 'rating' && data.totals.feedback === 0) {
+  if (data.totals.feedback === 0 && data.totals.visits === 0) {
     return <EmptyState compact headingLevel="h2" title={copy.emptyPeriodTitle} description={copy.emptyPeriodDescription} />;
   }
 

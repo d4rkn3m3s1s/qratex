@@ -117,3 +117,4 @@ export function useFreshRefresh<T>(queryKey: readonly unknown[], load: () => Pro
   }, [qc, queryKey, load]);
   return { refresh, pending, error };
 }
+

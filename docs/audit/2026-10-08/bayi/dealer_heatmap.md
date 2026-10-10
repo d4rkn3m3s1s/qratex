@@ -236,3 +236,63 @@ Toplam: 39 özellik — 12 ÇALIŞIYOR, 16 KISMİ, 3 BOZUK, 1 SAHTE, 7 EKSİK.
 - Aynı sayfadaki "Toplam geri bildirim" kartı (`route.ts:111`, `page.tsx:294`) ise yalnız `deletedAt: null` ve puanlı geri bildirimleri sayıyor → ızgara toplamı ile kart tutarsız. Ek ayrıntı: fallback feedback sorgusu (`route.ts:53-58`) `deletedAt` filtresi uygulamıyor, silinmiş geri bildirimler de sayılıyor.
 - **Yeniden üretim:** Bayi bir günde 40 tüketim girer, 2 geri bildirim alır → "En yoğun an" kartı "42 geri bildirim" der, "Toplam geri bildirim" kartı 2 gösterir.
 - Önem notu: Veri bozulması değil, etiket/anlam hatası; ama bayi kalite yorumunu (geri bildirim yoğunluğu) aslında ziyaret yoğunluğuna dayandırır. Doğru yaklaşım: kovada `kind` boyutu (veya `visitCount`/`feedbackCount` ayrı sütunlar), arayüzde metrik seçici ("Ziyaret" / "Geri bildirim") ve etiketin seçili metrikten türetilmesi.
+
+---
+
+## Uygulama (Dalga 2)
+
+`/dealer/heatmap` emekliye ayrıldı: sayfa `permanentRedirect` ile `/dealer/analytics/heatmap` rotasına gider, sorgu parametreleri korunur. Yeni yüzey Analitik → Yoğunluk alt sekmesi (`components/dealer/b-analitik/heatmap-screen.tsx`, `week-hour-grid.tsx`). Veri `loadActivityHeatmap` ile olay tablolarından dönemli olarak hesaplanır (`AT TIME ZONE 'Europe/Istanbul'`, `ISODOW`). BFF ucu `GET /api/dealer/heatmap`, `defineRoute` ve `heatmap` modül kapısıyla korunur. Modül kapalıysa sayfa `ErrorState moduleDisabled` gösterir.
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Meta | ÇALIŞIYOR. Metin sayfayla tutarlı, metrik seçilebilir. |
+| 2 | Veri yükleme | ÇALIŞIYOR. SSR ön-yükleme ve react-query kullanılır, benchmark çağrısı kalktı. |
+| 3 | İskelet | ÇALIŞIYOR (`aria-busy`) |
+| 4 | Hata toast'ı | KALDIRILDI. Yerine sayfa içi `ErrorState` ve tekrar dene geldi. |
+| 5 | Hero | ÇALIŞIYOR |
+| 6 | Dönem rozeti | ÇALIŞIYOR. Gerçek dönem seçici var, ham "all" metni kalktı. |
+| 7 | QR Kodları butonu | ÇALIŞIYOR (boş durumdaki bağlantı) |
+| 8-9 | Komşu segment kartı ve bağlantısı | KALDIRILDI. Kart sayfanın konusu dışındaydı ve ağır bir uç çağırıyordu. Bu veri benchmark yüzeyinde. |
+| 10 | Lokasyon sayısı | ÇALIŞIYOR. Gerçek şube (DealerLocation) kırılımı gösterilir, QR'lar alt satırlarda. |
+| 11 | Toplam geri bildirim | ÇALIŞIYOR (seçili döneme göre) |
+| 12 | En yüksek puanlı | ÇALIŞIYOR. Asgari örnek eşiği uygulanır. |
+| 13 | En yoğun an | ÇALIŞIYOR. Gün doğru, saat İstanbul saati, metrik doğru etiketlenir. n<10 iken gizlenir, karşılaştırma değeri gösterilir. |
+| 14 | mostActiveLocation | KALDIRILDI (arayüzde kullanılmayan veri) |
+| 15 | 7×24 ızgara | ÇALIŞIYOR |
+| 16 | Hücre ipucu | ÇALIŞIYOR. Ok tuşlarıyla roving-tabindex gezinme ve dokunmayla açılan ayrıntı paneli var. Metrik veya dönem değişince odak ızgara içinde kalır. |
+| 17 | Lejant | ÇALIŞIYOR. Sayısal eşikler ve kantil ölçek var (`heat-scale.ts`), düşük-n hücreler taralı. |
+| 18 | 168 spring animasyonu | KALDIRILDI. Bilgi değeri yoktu. |
+| 19 | Hover halkası | ÇALIŞIYOR. Hücre seçilince ayrıntı paneli açılır, yanıltıcı tıklanabilirlik kalmadı. |
+| 20-21 | HeatmapData fallback ve yazma tarafı | KALDIRILDI (okuma tarafı). Izgara artık doğrudan olay tablolarından gelir. Yazma tarafı (`lib/heatmap-track.ts`) sahiplik dışında. |
+| 22-23 | Lokasyon bar grafiği | KALDIRILDI. Kırılım tablosuyla aynı veriyi tekrar ediyordu. |
+| 24 | Lokasyon kartları | ÇALIŞIYOR. Şube→QR tablosu olarak gösterilir, sınırsız kademe animasyonu yok. |
+| 25 | Memnuniyet şeridi | ÇALIŞIYOR. Nötr oylar ayrı gösterilir, veri yoksa "—" görünür. |
+| 26-29 | Kart alanları | ÇALIŞIYOR. Veri yokluğu 0 olarak gösterilmez. Nötr sayısı, `Intl` ile biçimlenen yüzde ve erişilebilir etiketler var. |
+| 30 | Detaya inme | ÇALIŞIYOR. QR ve şube satırları gelen kutusunu filtreli açar. |
+| 31 | Boş durum | ÇALIŞIYOR. Hata ve boş durum ayrı, bağlantı yapısı geçerli (`<a>` içinde `<button>` yok). |
+| 32 | Yetki | ÇALIŞIYOR |
+| 33 | Modül kapısı | ÇALIŞIYOR (sayfa ve API) |
+| 34 | Dönem seçici | ÇALIŞIYOR (`{range, compare}`) |
+| 35 | Metrik seçici | ÇALIŞIYOR. Geri bildirim, ziyaret, ciro ve puan seçilebilir. |
+| 36 | Şube filtresi | ÇALIŞIYOR |
+| 37 | Tarama→dönüşüm | ÇALIŞIYOR. Genel bakış QR tablosunda `qr_scanned` olaylarından hesaplanır. |
+| 38 | Dışa aktarma | ÇALIŞIYOR (CSV) |
+| 39 | i18n | ÇALIŞIYOR |
+
+**Kapanan bulgular:**
+- 1: gün etiketi kayması
+- 2: saatlerin UTC olması
+- 3: geri bildirim ve tüketimin karışması; metrikler artık ayrı
+- 4: lokasyon yerine QR sayılması
+- 5: nötr oyların kırmızıya boyanması
+- 6: `Promise.all` hatasında sağlam verinin de atılması
+- 7: asgari örnek eşiği olmaması
+- 8: benchmark ucunun maliyeti
+- 9: kademe animasyonu gecikmesi
+- 10: modül kapısı olmaması
+
+Son düzeltmeler: yumuşak gezinmede sunucudaki çift yükleme kaldırıldı. Ziyaret olup geri bildirim olmayan bir dönem artık yanlışlıkla "boş" görünmüyor. Izgara küçülünce klavye odağı ızgara dışında kalmıyor.
+
+**Kalanlar:**
+- `HeatmapData` yazma tarafı (`lib/heatmap-track.ts`) hâlâ UTC kullanıyor ve `after()` dışında çalışıyor. Bu yüzey artık onu okumuyor; temizliği paylaşılan modülün sahibinin işi.
+- PNG dışa aktarma eklenmedi, CSV yeterli görüldü.

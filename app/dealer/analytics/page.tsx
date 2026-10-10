@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import { headers } from 'next/headers';
 import { requireAuth } from '@/lib/api-auth';
 import { getModuleControls } from '@/lib/module-gate';
 import { loadAnalyticsOverview } from '@/lib/dealer-analytics/load';
@@ -23,7 +24,8 @@ export default async function DealerAnalyticsPage({ searchParams }: { searchPara
   const query = parseAnalyticsSearch(recordParams(sp));
   const queryClient = new QueryClient();
   const [auth, controls] = await Promise.all([requireAuth(['DEALER']), getModuleControls().catch(() => ({}) as Record<string, boolean>)]);
-  if (!('error' in auth)) {
+  const softNav = (await headers()).get('rsc') === '1';
+  if (!softNav && !('error' in auth)) {
     try {
       queryClient.setQueryData(overviewQueryKey(query), await loadAnalyticsOverview(auth.session.user.id, query));
     } catch (error) {
