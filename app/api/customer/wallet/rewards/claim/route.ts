@@ -10,6 +10,7 @@ import { defineRoute, ok } from '@/lib/http/define-route';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { claimReward } from '@/lib/wallet-rewards/mutations';
 import { rethrowAsApiError } from '@/lib/wallet-rewards/http';
+import { assertCustomerModule } from '@/lib/customer-wallet/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,12 +20,12 @@ export const POST = defineRoute(
   {
     name: 'customer.wallet.rewards.claim',
     roles: ['CUSTOMER'],
-    module: 'rewards',
     rateLimit: { max: 20, windowMs: 60_000, by: 'user' },
     schema: bodySchema,
     idempotent: true,
   },
   async ({ body, user, request }) => {
+    await assertCustomerModule('rewards', null, { userId: user.id, request, routeKey: 'customer.wallet.rewards.claim' });
     try {
       const result = await claimReward({
         userId: user.id,

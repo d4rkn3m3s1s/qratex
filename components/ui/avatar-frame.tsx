@@ -44,17 +44,18 @@ export const CyberpunkFrame = ({ children, className }: { children: React.ReactN
     </div>
 );
 
+// WCAG 2.3.1: saniyede 3'ten fazla parlaklık değişimi yok (eskiden 0,1–0,3 sn döngü stroboskopikti).
 export const GlitchFrame = ({ children, className }: { children: React.ReactNode, className?: string }) => (
     <div className={cn("relative w-full h-full rounded-full flex items-center justify-center p-1.5", className)}>
-        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-green-500 via-transparent to-red-500 animate-pulse mix-blend-screen opacity-70" style={{ animationDuration: '0.2s' }} />
+        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-green-500 via-transparent to-red-500 animate-pulse mix-blend-screen opacity-70" style={{ animationDuration: '1.6s' }} />
         <div className="absolute inset-0 rounded-full border-[2px] sm:border-[3px] border-green-500 border-dotted animate-[spin_2s_linear_infinite_reverse]" />
         <div className="relative z-10 w-full h-full rounded-full overflow-hidden bg-black flex items-center justify-center">
             {children}
             <div className="absolute inset-0 bg-white/5 opacity-0 hover:opacity-100 transition-opacity mix-blend-overlay" />
         </div>
         {/* Glitch slices */}
-        <div className="absolute top-1/4 -left-2 w-4 h-1 bg-green-400 animate-ping" style={{ animationDuration: '0.1s' }} />
-        <div className="absolute bottom-1/3 -right-1 w-3 h-1 bg-red-500 animate-ping" style={{ animationDuration: '0.3s' }} />
+        <div className="absolute top-1/4 -left-2 w-4 h-1 bg-green-400 animate-ping" style={{ animationDuration: '1.2s' }} />
+        <div className="absolute bottom-1/3 -right-1 w-3 h-1 bg-red-500 animate-ping" style={{ animationDuration: '1.8s' }} />
     </div>
 );
 

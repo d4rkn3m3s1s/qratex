@@ -8,6 +8,7 @@
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { ensureDailyBox } from '@/lib/wallet-rewards/mutations';
 import { rethrowAsApiError } from '@/lib/wallet-rewards/http';
+import { assertCustomerModule } from '@/lib/customer-wallet/gate';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,10 +16,10 @@ export const POST = defineRoute(
   {
     name: 'customer.wallet.boxes.daily',
     roles: ['CUSTOMER'],
-    module: 'surprise_boxes',
     rateLimit: { max: 20, windowMs: 60_000, by: 'user' },
   },
-  async ({ user }) => {
+  async ({ user, request }) => {
+    await assertCustomerModule('surprise_boxes', null, { userId: user.id, request, routeKey: 'customer.wallet.boxes.daily' });
     try {
       return ok(await ensureDailyBox({ userId: user.id }));
     } catch (err) {
