@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ShieldCheck, FileText, AlertTriangle, RefreshCw, Database, Search } from 'lucide-react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -124,7 +125,8 @@ export default function AdminCompliancePage() {
       body: JSON.stringify({ status }),
     });
     if (!res.ok) {
-      toast.error('Güncellenemedi');
+      const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      toast.error(typeof body?.error === 'string' && body.error ? body.error : 'Güncellenemedi');
       return;
     }
     toast.success('Durum güncellendi');
@@ -305,8 +307,10 @@ export default function AdminCompliancePage() {
                           <Button size="sm" variant="outline" onClick={() => void setPrivacyStatus(row.id, 'in_review')}>
                             İncelemede
                           </Button>
-                          <Button size="sm" onClick={() => void setPrivacyStatus(row.id, 'completed')}>
-                            Tamamlandı
+                          {/* P0-34: talep elle "Tamamlandı" yapılamaz (sunucu 409); türüne uygun
+                              işlem KVKK Talepleri ekranında yürütülür, talep kanıtıyla kapanır. */}
+                          <Button size="sm" asChild>
+                            <Link href="/admin/privacy-requests">Yürüt</Link>
                           </Button>
                         </td>
                       </tr>

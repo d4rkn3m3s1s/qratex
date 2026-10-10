@@ -7,20 +7,17 @@ import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
 import { prisma, withDbRetry } from '@/lib/prisma';
 import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
 import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { analyzeWithFallback } from '@/lib/ai-engine';
 import {
-  formatAdaptiveProfile,
-  getAdaptiveProfileForDealer,
-  maybeTriggerAdaptiveUpdate,
-  storeFeedbackEmbedding,
-} from '@/lib/ai-learning';
+  runAutoRepliesOnly,
+  runInlineFeedbackAnalysis,
+  shouldDispatchFeedbackAnalysis,
+} from '@/lib/feedback-ai-dispatch';
 import { getFeedbackReward, getPointsMatrix } from '@/lib/points-rules';
 import { creditPointsAndXp } from '@/lib/points-wallet';
 import { capFeedbackPoints } from '@/lib/points-caps';
 import { checkRateLimitDb, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { inngestQueueEnabled, sendFeedbackAnalyze } from '@/lib/inngest/send';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
-import { processAutoReplies } from '@/lib/auto-reply-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -452,102 +449,23 @@ export async function POST(request: NextRequest) {
         console.error('[CACHE] revalidate failed:', err);
       }
 
-      // ── Otomatik AI Analizi (arka planda) ──
-      if (text && text.trim().length >= 5) {
+      // ── Otomatik AI Analizi (arka planda) — P0-32 ──
+      // Karar bayi AI politikasından TAZE ve fail-closed okunur (ayar okunamazsa analiz yok);
+      // analiz Inngest / ai-retry ile AYNI hattan geçer (deneme talebi, koşullu tamamlama,
+      // tercihe uyan tekil uyarılar, atomik otomatik yanıt). after(): yanıttan sonra ama
+      // fonksiyon canlıyken çalışır (await'siz fire-and-forget'i Vercel öldürebiliyordu).
+      {
         const dealerId = qrCode.dealerId;
-        let shouldAnalyze = true;
-        let aiSettings: { isEnabled: boolean; autoAnalyze: boolean; customPrompt: string | null } | null = null;
-        try {
-          aiSettings = await prisma.aISettings.findUnique({
-            where: { dealerId },
-            select: { isEnabled: true, autoAnalyze: true, customPrompt: true },
-          });
-          if (aiSettings && (!aiSettings.isEnabled || !aiSettings.autoAnalyze)) shouldAnalyze = false;
-        } catch (err) {
-          console.error('[FEEDBACK] AI settings lookup failed, defaulting to analyze:', err);
-        }
-
-        if (shouldAnalyze) {
+        const feedbackId = feedback.id;
+        if (await shouldDispatchFeedbackAnalysis(dealerId, text)) {
           if (inngestQueueEnabled()) {
-            sendFeedbackAnalyze(feedback.id, dealerId).catch(console.error);
+            sendFeedbackAnalyze(feedbackId, dealerId).catch(console.error);
           } else {
-            // after(): yanıttan SONRA çalışır ama serverless fonksiyonu canlı tutar → inline
-            // AI analizi güvenilir tamamlanır (await'siz fire-and-forget'i Vercel yanıt sonrası
-            // öldürebiliyordu; ai-retry cron artık yalnız gerçek arıza için son çare).
-            after(async () => {
-            let adaptiveProfileText: string | undefined;
-            try {
-              const adaptiveProfile = await getAdaptiveProfileForDealer(dealerId);
-              adaptiveProfileText = adaptiveProfile?.profile ? formatAdaptiveProfile(adaptiveProfile.profile) : undefined;
-            } catch {}
-
-            await analyzeWithFallback(text, { customPrompt: aiSettings?.customPrompt || undefined, adaptiveProfile: adaptiveProfileText, dealerId }).then(async (analysis) => {
-              try {
-                // Gerçek LLM yoksa analyzeWithFallback 'local-fallback' döndürür.
-                // Bu durumda zayıf keyword-tabanlı sentiment'i "işlenmiş AI sonucu"
-                // gibi sunmayız: sadece kaba sentiment + isToxic yazıp aiProcessedAt'i
-                // NULL bırakırız (UI'da "AI bekliyor / yapılandırılmamış" görünür).
-                const isFallback = analysis.modelUsed === 'local-fallback';
-                await prisma.feedback.update({
-                  where: { id: feedback.id },
-                  data: isFallback
-                    ? {
-                        // Yalnızca güvenli, kaba sinyaller — gerçek AI alanları boş.
-                        isToxic: analysis.toxicity.isToxic,
-                        aiModelUsed: 'local-fallback',
-                        // aiProcessedAt bilerek set EDİLMEZ → "gerçek AI işlendi" izlenimi verilmez.
-                      }
-                    : {
-                        sentiment: analysis.sentiment.label,
-                        emotions: analysis.emotions.map(e => e.label),
-                        topics: analysis.topics,
-                        isToxic: analysis.toxicity.isToxic,
-                        aiAnalysis: JSON.parse(JSON.stringify(analysis)),
-                        intent: analysis.intent?.label || null,
-                        intentScore: analysis.intent?.score || null,
-                        urgency: analysis.urgency || null,
-                        effortScore: analysis.effortScore || null,
-                        churnRisk: analysis.churnRisk || null,
-                        entities: analysis.entities ? JSON.parse(JSON.stringify(analysis.entities)) : null,
-                        themes: analysis.themes ? JSON.parse(JSON.stringify(analysis.themes)) : null,
-                        statementSentiments: analysis.statementSentiments ? JSON.parse(JSON.stringify(analysis.statementSentiments)) : null,
-                        actionSuggestions: analysis.actionSuggestions ? JSON.parse(JSON.stringify(analysis.actionSuggestions)) : null,
-                        aiProcessedAt: new Date(),
-                        aiModelUsed: analysis.modelUsed || null,
-                        aiVersion: analysis.version || null,
-                      },
-                });
-                if (analysis.toxicity.isToxic) {
-                  await prisma.notification.create({ data: { userId: dealerId, title: '⚠️ Toksik İçerik Tespit Edildi', message: 'Bir geri bildirimde uygunsuz içerik tespit edildi.', type: 'warning' } });
-                }
-                await storeFeedbackEmbedding({ feedbackId: feedback.id, dealerId, text });
-                await maybeTriggerAdaptiveUpdate(dealerId);
-                await processAutoReplies(feedback.id);
-                // Otomatik telafi taslağı (inngest kapalıyken inline yol).
-                try {
-                  const { maybeCreateAutoRemedyForFeedback } = await import('@/lib/remedy-automation-core');
-                  await maybeCreateAutoRemedyForFeedback({
-                    feedbackId: feedback.id,
-                    dealerId,
-                    userId: session?.user?.id ?? null,
-                    rating,
-                    churnRisk: analysis.churnRisk ?? null,
-                    qrCodeId,
-                  });
-                } catch (err) {
-                  console.error('[REMEDY_AUTOMATION] inline auto-draft failed:', err);
-                }
-              } catch (err) {
-                console.error('[AI] Failed to save analysis:', err);
-              }
-            }).catch(err => console.error('[AI] Analysis failed:', err));
-            });
+            after(() => runInlineFeedbackAnalysis(feedbackId));
           }
         } else {
-          processAutoReplies(feedback.id).catch(console.error);
+          after(() => runAutoRepliesOnly(feedbackId));
         }
-      } else {
-        processAutoReplies(feedback.id).catch(console.error);
       }
 
       // NOT: Karakter rozeti sistemi artık YALNIZCA tüketim yorumlarını (ConsumptionReview)
