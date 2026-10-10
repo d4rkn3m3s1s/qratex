@@ -169,9 +169,29 @@ export type AttemptFlag =
   | 'game_disabled'
   | 'game_hidden'
   | 'score_clamped'
-  | 'client_clock_mismatch';
+  | 'client_clock_mismatch'
+  // Oyun doğrulayıcısı (lib/games/verify) bayrakları:
+  | 'proof_missing'
+  | 'proof_invalid'
+  | 'implausible'
+  | 'score_mismatch';
 
-const BLOCKING_WIN: ReadonlySet<AttemptFlag> = new Set(['expired', 'too_fast', 'rate_exceeded', 'below_threshold']);
+const BLOCKING_WIN: ReadonlySet<AttemptFlag> = new Set([
+  'expired',
+  'too_fast',
+  'rate_exceeded',
+  'below_threshold',
+  'proof_missing',
+  'proof_invalid',
+  'implausible',
+]);
+
+/** Oyun doğrulayıcısının sonucu (lib/games/verify → VerifierOutcome ile yapısal uyumlu). */
+export interface AttemptVerification {
+  verifiedScore: number;
+  flags: ReadonlyArray<'proof_missing' | 'proof_invalid' | 'implausible' | 'score_mismatch'>;
+  detail?: string;
+}
 
 export interface AttemptEvaluation {
   /** Sunucunun kabul ettiği skor (0..maxScore). */
@@ -196,12 +216,20 @@ export function evaluateAttempt(
     startedAt: Date;
     expiresAt: Date;
     now: Date;
+    /**
+     * Oyun doğrulayıcısının sonucu (varsa): skor İSTEMCİNİN değil doğrulayıcının skorudur;
+     * bloklayan bayraklar kazanmayı engeller. Yoksa istemci skoru kırpılarak kullanılır.
+     */
+    verification?: AttemptVerification | null;
   }
 ): AttemptEvaluation {
   const flags: AttemptFlag[] = [];
   const raw = Number.isFinite(input.clientScore) ? Math.floor(input.clientScore) : 0;
-  const verifiedScore = Math.max(0, Math.min(game.maxScore, raw));
+  const v = input.verification;
+  const basis = v ? (Number.isFinite(v.verifiedScore) ? Math.floor(v.verifiedScore) : 0) : raw;
+  const verifiedScore = Math.max(0, Math.min(game.maxScore, basis));
   if (raw > game.maxScore) flags.push('score_clamped');
+  if (v) for (const f of v.flags) if (!flags.includes(f)) flags.push(f);
 
   const serverElapsedSec = Math.max(0, (input.now.getTime() - input.startedAt.getTime()) / 1000);
 
@@ -229,6 +257,10 @@ export function evaluateAttempt(
 /** Kullanıcıya gösterilecek Türkçe gerekçe (kazanılamadıysa / ödül yoksa). */
 export function attemptReasonMessage(ev: AttemptEvaluation, game: Pick<GameRules, 'rewardThreshold'>): string | null {
   if (ev.flags.includes('expired')) return 'Deneme süresi doldu; bu deneme kayıp sayıldı.';
+  if (ev.flags.includes('proof_missing') || ev.flags.includes('proof_invalid')) {
+    return 'Oyun kaydı doğrulanamadı; bu deneme ödüle sayılmadı. Uygulamayı yenileyip yarın tekrar dene.';
+  }
+  if (ev.flags.includes('implausible')) return 'Oyun akışı makul görünmedi; bu deneme ödüle sayılmadı.';
   if (ev.flags.includes('too_fast')) return 'Oyun beklenenden çok kısa sürdü; bu deneme ödüle sayılmadı.';
   if (ev.flags.includes('rate_exceeded')) return 'Skor, oyun süresine göre makul değil; bu deneme ödüle sayılmadı.';
   if (ev.flags.includes('below_threshold')) return `Ödül için en az ${game.rewardThreshold} skor gerekiyordu.`;
@@ -460,6 +492,12 @@ export async function finalizeAttempt(
     token?: string | null;
     now?: Date;
     onValidated?: () => Promise<void>;
+    /**
+     * Oyun doğrulayıcısı (lib/games/verify → runVerifier). Belirteç doğrulandıktan SONRA,
+     * DB'deki tohum (istemciden değil) ve sunucu saatine göre geçen süreyle çağrılır.
+     * null dönerse yalnız ortak makullük kuralları uygulanır.
+     */
+    verify?: (ctx: { seed: string | null; serverElapsedSec: number }) => AttemptVerification | null;
   }
 ): Promise<FinalizeResult> {
   const now = params.now ?? new Date();
@@ -478,6 +516,7 @@ export async function finalizeAttempt(
       serverStartedAt: true,
       expiresAt: true,
       nonce: true,
+      seed: true,
     },
   });
   // gameType kontrolü: başka oyunun oturumu bu oyunun kuralıyla kapatılamaz (pacman B5).
@@ -501,12 +540,19 @@ export async function finalizeAttempt(
 
   const startedAt = row.serverStartedAt ?? row.startedAt;
   const expiresAt = row.expiresAt ?? new Date(startedAt.getTime() + maxDurationSecOf(game) * 1000);
+  const verification = params.verify
+    ? params.verify({
+        seed: row.seed ?? null,
+        serverElapsedSec: Math.max(0, (now.getTime() - startedAt.getTime()) / 1000),
+      })
+    : null;
   const evaluation = evaluateAttempt(game, {
     clientScore: params.clientScore,
     clientDurationSec: params.clientDurationSec,
     startedAt,
     expiresAt,
     now,
+    verification,
   });
 
   if (params.onValidated) await params.onValidated();

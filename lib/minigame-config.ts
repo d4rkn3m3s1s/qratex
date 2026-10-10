@@ -86,6 +86,13 @@ export interface MiniGameDef {
   hidden?: boolean;
   /** Gizleme gerekçesi (admin panelinde gösterilir). */
   hiddenReason?: string;
+  /**
+   * `'building'` → yeni portföy oyunu henüz yapım aşamasında (lib/games/registry `status:
+   * 'building'`). `hidden: true` ile birlikte kullanılır: hub'da, turnuva rotasyonunda ve
+   * sıralı denemede kapalı; start "henüz yayında değil" der (emekli mesajı değil).
+   * Oyun ajanı canlıya alırken `hidden` ve `release`'i birlikte kaldırır.
+   */
+  release?: 'building';
 }
 
 /** Deneme penceresi tanımsız oyunlar için varsayılan (sn). */
@@ -424,6 +431,106 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 10,
     maxScorePerSec: 5,
     maxDurationSec: 130,
+  },
+
+  // ── Yeni portföy (yol haritası §7.3, lib/games/registry) — YAPIM AŞAMASINDA ──
+  // Sunucu kuralları oyun ajanları canlıya alana dek gizli; değerler ilk tasarım hedefidir,
+  // oyun ajanı mekaniğe göre ayarlar (makullük testleri: lib/minigame-config.test).
+  {
+    gameType: 'fake-hunter',
+    labelKey: 'fake_hunter_game',
+    title: 'Sahte Avcısı',
+    description:
+      'Gerçek yorumu sahtesinden ayır: kaydır, dosyayı incele, botu yakala. Sunucu puanlar, zorluk seninle büyür.',
+    emoji: '🕵️',
+    accent: '#22d3ee',
+    maxScore: 30,
+    rewardThreshold: 14,
+    rewardPoints: 160,
+    rewardXp: 80,
+    minDurationSec: 20,
+    maxScorePerSec: 1.2,
+    maxDurationSec: 240,
+    hidden: true,
+    release: 'building',
+    hiddenReason: 'Yapım aşamasında: truth-vs-fake + review-detective + word-spot + bot-hunter birleşimi (§7.3 #1–4).',
+  },
+  {
+    gameType: 'core-defense',
+    labelKey: 'core_defense_game',
+    title: 'Çekirdek Savunması',
+    description:
+      'Qratex çekirdeğini spam ve trol dalgalarından koru: çekirdeğin canı var, dalgalar zorlaşır, aralarda yükseltme seç.',
+    emoji: '🛡️',
+    accent: '#ef4444',
+    maxScore: 80,
+    rewardThreshold: 35,
+    rewardPoints: 170,
+    rewardXp: 85,
+    minDurationSec: 20,
+    maxScorePerSec: 3.5,
+    maxDurationSec: 200,
+    hidden: true,
+    release: 'building',
+    hiddenReason: 'Yapım aşamasında: spam-defense + troll-slayer birleşimi (§7.3 #6–7).',
+  },
+  {
+    gameType: 'daily-word',
+    labelKey: 'daily_word_game',
+    title: 'Günün Kelimesi',
+    description:
+      'Herkese aynı 5 harfli Türkçe kelimeyi 6 denemede bul; her tahminde harfler renklenir.',
+    emoji: '🔤',
+    accent: '#84cc16',
+    // Skor = 7 − tahmin sayısı (1. tahminde 6 … 6. tahminde 1; bulamazsa 0).
+    maxScore: 6,
+    rewardThreshold: 1,
+    rewardPoints: 120,
+    rewardXp: 60,
+    minDurationSec: 15,
+    maxScorePerSec: 0.3,
+    maxDurationSec: 900,
+    hidden: true,
+    release: 'building',
+    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 1 (§7.3).',
+  },
+  {
+    gameType: 'match-three',
+    labelKey: 'match_three_game',
+    title: 'Eşleştir-3',
+    description:
+      'Komşu rozetleri yer değiştirerek üç ve fazlasını eşleştir; seviye hedefini hamle bitmeden tamamla.',
+    emoji: '💎',
+    accent: '#ec4899',
+    maxScore: 60,
+    rewardThreshold: 24,
+    rewardPoints: 160,
+    rewardXp: 80,
+    minDurationSec: 30,
+    maxScorePerSec: 1.5,
+    maxDurationSec: 600,
+    hidden: true,
+    release: 'building',
+    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 2; memory-match’in yerini alır (§7.3).',
+  },
+  {
+    gameType: 'venue-quiz',
+    labelKey: 'venue_quiz_game',
+    title: 'Mekân Bilgi Yarışması',
+    description:
+      'Mekânlar ve kategoriler hakkında süreli sorular; doğru cevap ve hız puan getirir.',
+    emoji: '🏆',
+    accent: '#8b5cf6',
+    maxScore: 10,
+    rewardThreshold: 6,
+    rewardPoints: 150,
+    rewardXp: 75,
+    minDurationSec: 30,
+    maxScorePerSec: 0.3,
+    maxDurationSec: 300,
+    hidden: true,
+    release: 'building',
+    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 3; canlıya çıkınca portföy tavanı (12) için en zayıf oyun emekliye ayrılır (§7.3).',
   },
 ];
 

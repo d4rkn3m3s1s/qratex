@@ -3,7 +3,8 @@
  * route'ları AYNI işleyiciyi çağırır (kural tek yerde: lib/game-session.ts).
  *
  * Yanıt sözleşmesi geriye uyumlu (lib/use-mini-game.ts ve pacman bileşeni):
- *   start    → { success, canPlay, sessionId, config, attemptToken, seed, serverStartedAt, expiresAt }
+ *   start    → { success, canPlay, mode:'ranked', sessionId, config, attemptToken, seed, serverStartedAt,
+ *                expiresAt, verification, content? (sınıflandırma ailesi: ETİKETSİZ tur) }
  *              | { success, canPlay:false, alreadyPlayed:true, outcome, session, message }
  *   complete → { success, rewarded, rewardPoints, rewardXp, won, score, streak, streakBonusXp,
  *                newAchievements, tooFast, capped, reason, alreadyCompleted? }
@@ -18,6 +19,10 @@ import {
   publicGameConfig,
 } from '@/lib/minigame-config-effective';
 import { attemptReasonMessage, finalizeAttempt, resolveStartAttempt } from '@/lib/game-session';
+import { getVerifierForGameType } from '@/lib/games/registry/server';
+import { practiceContentFor, rankedContentFor, runVerifier, type VerifierRules } from '@/lib/games/verify';
+import { randomSeed } from '@/lib/games/engine/rng';
+import type { EffectiveMiniGame } from '@/lib/minigame-config-effective';
 import { computeAchievementStats } from '@/lib/game-achievement-stats';
 import { evaluateAchievements } from '@/lib/game-achievements';
 import { isEconomyError } from '@/lib/economy';
@@ -26,22 +31,55 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: PRIVATE_NO_STORE_HEADERS });
 }
 
-/** POST start — günde 1 DENEME (başlangıçta harcanır). */
-export async function handleGameStart(gameType: string): Promise<NextResponse> {
+/** İnceleme için analytics'e yazılan bayraklar (dürüst oyuncuyu cezalandırmaz). */
+const INTEGRITY_SIGNAL_FLAGS: ReadonlySet<string> = new Set([
+  'proof_missing',
+  'proof_invalid',
+  'implausible',
+  'score_mismatch',
+  'score_clamped',
+  'client_clock_mismatch',
+  'rate_exceeded',
+]);
+
+/** Doğrulayıcının ihtiyaç duyduğu kural alt kümesi. */
+function verifierRules(game: EffectiveMiniGame): VerifierRules {
+  return {
+    gameType: game.gameType,
+    maxScore: game.maxScore,
+    rewardThreshold: game.rewardThreshold,
+    minDurationSec: game.minDurationSec,
+    maxScorePerSec: game.maxScorePerSec,
+    maxDurationSec: game.maxDurationSec,
+  };
+}
+
+/** Gizli oyunun Türkçe gerekçesi (emekli ↔ yapım aşamasında). */
+function hiddenMessage(game: EffectiveMiniGame): string {
+  return game.release === 'building'
+    ? 'Bu oyun henüz yayında değil. Oyun Merkezi’nden başka bir oyun seçebilirsin.'
+    : 'Bu oyun emekliye ayrıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin.';
+}
+
+/**
+ * POST start — günde 1 DENEME (başlangıçta harcanır).
+ * `opts.userId`: çağıran route kimliği zaten doğruladıysa (defineRoute) tekrar sorgulanmaz.
+ */
+export async function handleGameStart(gameType: string, opts: { userId?: string } = {}): Promise<NextResponse> {
   try {
     const game = await getEffectiveMiniGame(gameType);
     if (!game) return json({ error: 'Oyun bulunamadı', canPlay: false }, 404);
 
-    const auth = await requireAuth(['CUSTOMER']);
-    if ('error' in auth) return auth.error;
-    const userId = auth.session.user.id;
+    let userId = opts.userId;
+    if (!userId) {
+      const auth = await requireAuth(['CUSTOMER']);
+      if ('error' in auth) return auth.error;
+      userId = auth.session.user.id;
+    }
 
-    // Portföyden çıkarılan (§7.3) ya da admin'in kapattığı oyun yeni deneme açamaz.
+    // Portföyden çıkarılan (§7.3), yapım aşamasındaki ya da admin'in kapattığı oyun yeni deneme açamaz.
     if (game.hidden) {
-      return json(
-        { error: 'Bu oyun emekliye ayrıldı. Oyun Merkezi’nden başka bir oyun seçebilirsin.', canPlay: false },
-        403
-      );
+      return json({ error: hiddenMessage(game), canPlay: false }, 403);
     }
     if (!game.enabled) return json({ error: 'Bu oyun şu anda kullanılamıyor', canPlay: false }, 403);
 
@@ -62,9 +100,14 @@ export async function handleGameStart(gameType: string): Promise<NextResponse> {
       });
     }
 
+    // Sınıflandırma ailesi: tur tohumdan kurulur, istemciye ETİKETSİZ gider (lib/games/verify).
+    const verifier = getVerifierForGameType(gameType);
+    const content = rankedContentFor(verifier, r.seed, verifierRules(game));
+
     return json({
       success: true,
       canPlay: true,
+      mode: 'ranked',
       sessionId: r.sessionId,
       attemptToken: r.token,
       seed: r.seed,
@@ -72,6 +115,8 @@ export async function handleGameStart(gameType: string): Promise<NextResponse> {
       serverStartedAt: r.startedAt.toISOString(),
       expiresAt: r.expiresAt.toISOString(),
       config: publicGameConfig(game),
+      verification: verifier?.kind ?? 'plausibility',
+      ...(content ? { content } : {}),
     });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
@@ -88,19 +133,30 @@ export interface CompleteBody {
   /** Kozmetik: kazanma kararı sunucunundur. */
   won?: boolean;
   attemptToken?: string | null;
+  /** Oyun doğrulayıcısının kanıtı (cevaplar / girdi kaydı / checkpoint izi). Şemayı doğrulayıcı uygular. */
+  proof?: unknown;
 }
 
 /** POST complete — sunucu doğrular, karar verir, ödülü atomik basar. */
-export async function handleGameComplete(gameType: string, body: CompleteBody): Promise<NextResponse> {
+export async function handleGameComplete(
+  gameType: string,
+  body: CompleteBody,
+  opts: { userId?: string } = {}
+): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(['CUSTOMER']);
-    if ('error' in auth) return auth.error;
-    const userId = auth.session.user.id;
+    let resolvedUserId = opts.userId;
+    if (!resolvedUserId) {
+      const auth = await requireAuth(['CUSTOMER']);
+      if ('error' in auth) return auth.error;
+      resolvedUserId = auth.session.user.id;
+    }
+    const userId: string = resolvedUserId;
 
     // Puan basan karar önbelleksiz config ile (admin "kapat" = derhal ödülsüz).
     const game = await getEffectiveMiniGameFresh(gameType);
     if (!game) return json({ error: 'Oyun bulunamadı' }, 404);
 
+    const verifier = getVerifierForGameType(gameType);
     let beforeUnlocked: Set<string> | null = null;
     const result = await finalizeAttempt(prisma, {
       userId,
@@ -109,6 +165,17 @@ export async function handleGameComplete(gameType: string, body: CompleteBody): 
       clientScore: body.score,
       clientDurationSec: body.durationSec,
       token: body.attemptToken ?? null,
+      // Oyun doğrulayıcısı (varsa): tohum DB'den, süre sunucu saatinden; skor sunucunun olur.
+      verify: verifier
+        ? ({ seed, serverElapsedSec }) =>
+            runVerifier(verifier, {
+              seed: seed ?? '',
+              rules: verifierRules(game),
+              proof: body.proof,
+              clientScore: body.score,
+              serverElapsedSec,
+            })
+        : undefined,
       onValidated: async () => {
         try {
           beforeUnlocked = new Set(
@@ -149,6 +216,32 @@ export async function handleGameComplete(gameType: string, body: CompleteBody): 
     }
 
     const { evaluation } = result;
+
+    // Hile sinyali görünürlüğü (F4.1 `|client − verified|`): şüpheli bayraklı denemeler
+    // analytics'e yazılır (şema bekleyen MiniGameAttempt.flags yerine). Kritik değil.
+    const signals = evaluation.flags.filter((f) => INTEGRITY_SIGNAL_FLAGS.has(f));
+    if (signals.length > 0) {
+      try {
+        await prisma.analyticsEvent.create({
+          data: {
+            userId,
+            event: 'game_attempt_flagged',
+            category: 'game_integrity',
+            data: {
+              gameType,
+              sessionId: body.sessionId,
+              flags: signals,
+              clientScore: evaluation.clientScore,
+              verifiedScore: evaluation.verifiedScore,
+              serverElapsedSec: Math.round(evaluation.serverElapsedSec),
+              verification: verifier?.kind ?? 'plausibility',
+            },
+          },
+        });
+      } catch {
+        /* sinyal kaydı kritik değil; sonuç yine döner */
+      }
+    }
 
     if (result.credited > 0) {
       await prisma.notification
@@ -212,4 +305,44 @@ export async function handleGameComplete(gameType: string, body: CompleteBody): 
     console.error('[MINIGAME_COMPLETE]', gameType, error);
     return json({ error: 'Oyun tamamlanamadı' }, 500);
   }
+}
+
+/**
+ * Pratik turu — sınırsız, ÖDÜLSÜZ, liderliğe ve turnuvaya girmez; DB'ye yazmaz.
+ * Tohum her çağrıda yenidir. Sınıflandırma ailesinde PRATİK havuzundan ETİKETLİ tur döner
+ * (sıralı havuzdan ayrı: sınırsız pratikle sıralı etiketler kazınamaz).
+ */
+export type PracticeRoundResult =
+  | {
+      ok: true;
+      data: {
+        mode: 'practice';
+        seed: string;
+        config: ReturnType<typeof publicGameConfig>;
+        verification: string;
+        content?: unknown[];
+        answerKey?: Record<string, string>;
+      };
+    }
+  | { ok: false; status: number; error: string };
+
+export async function buildPracticeRound(gameType: string): Promise<PracticeRoundResult> {
+  const game = await getEffectiveMiniGame(gameType);
+  if (!game) return { ok: false, status: 404, error: 'Oyun bulunamadı' };
+  if (game.hidden) return { ok: false, status: 403, error: hiddenMessage(game) };
+  if (!game.enabled) return { ok: false, status: 403, error: 'Bu oyun şu anda kullanılamıyor' };
+
+  const seed = randomSeed();
+  const verifier = getVerifierForGameType(gameType);
+  const round = practiceContentFor(verifier, seed, verifierRules(game));
+  return {
+    ok: true,
+    data: {
+      mode: 'practice',
+      seed,
+      config: publicGameConfig(game),
+      verification: verifier?.kind ?? 'plausibility',
+      ...(round ? { content: round.items, answerKey: round.answerKey } : {}),
+    },
+  };
 }
