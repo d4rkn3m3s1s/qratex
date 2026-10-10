@@ -4,6 +4,8 @@
  */
 import { bucketKey, changeOf, fillSeries, parseProgressPeriod, periodWindow } from '@/components/customer/m-ben-ilerleme/period';
 import { compareDesc, decodeCursor, encodeCursor, mergeJourney } from '@/components/customer/m-ben-ilerleme/journey-cursor';
+import { periodNarrative } from '@/components/customer/m-ben-ilerleme/narrative';
+import type { Kpi } from '@/components/customer/m-ben-ilerleme/types';
 
 describe('periodWindow', () => {
   const now = new Date('2026-10-10T22:30:00Z'); // İstanbul 11 Ekim 01:30
@@ -86,5 +88,25 @@ describe('journey cursor', () => {
     expect(page2.items.map((i) => i.key)).toEqual(['cs:5', 'cs:1']);
     const seen = [...page1.items, ...page2.items].map((i) => i.key);
     expect(new Set(seen).size).toBe(4);
+  });
+});
+
+
+describe('periodNarrative (LLM yok, deterministik)', () => {
+  const kpi = (key: Kpi['key'], current: number | null, change: Kpi['change'] = { kind: 'none' }): Kpi => ({ key, current, previous: null, change });
+
+  it('sayılardan tek cümle; yön ve yüzde doğru', () => {
+    const text = periodNarrative(
+      [kpi('reviews', 5, { kind: 'pct', value: 25 }), kpi('visits', 3), kpi('places', 2), kpi('pointsEarned', 240)],
+      30,
+      'tr',
+    );
+    expect(text).toBe('Son 30 günde 5 yorum yazdın, 3 ziyaret yaptın ve 2 farklı mekânda bulundun. Bu sürede 240 puan kazandın. Yorumların önceki döneme göre %25 arttı.');
+  });
+
+  it('etkinlik yoksa dürüst boş cümle; veri yoksa null', () => {
+    expect(periodNarrative([kpi('reviews', 0), kpi('visits', 0)], 7, 'tr')).toContain('henüz bir etkinliğin yok');
+    expect(periodNarrative([kpi('reviews', null), kpi('visits', 0)], 7, 'tr')).toBeNull();
+    expect(periodNarrative([kpi('reviews', 1, { kind: 'new' }), kpi('visits', 1)], 365, 'en')).toContain('In the last year you wrote 1 review and made 1 visit.');
   });
 });

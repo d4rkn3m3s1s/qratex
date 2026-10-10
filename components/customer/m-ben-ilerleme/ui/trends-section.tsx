@@ -9,6 +9,7 @@ import { SectionCard } from '@/components/ds/page';
 import { QueryState, SkeletonBlock } from '@/components/states';
 import { formatDate, formatNumber, getMeCopy } from '../copy';
 import { fetchEnvelope } from '../fetch-json';
+import { periodNarrative } from '../narrative';
 import { PROGRESS_PERIODS, type ProgressPeriod } from '../period';
 import type { Kpi, KpiKey, PartialKey, ProgressTrends } from '../types';
 import { SectionUnavailable } from './section-unavailable';
@@ -121,17 +122,25 @@ function TrendsBody({ t }: { t: ProgressTrends }) {
     xpEarned: t.series.xpEarned,
   };
   const fromDayAfterLedger = t.ledgerSince != null && t.ledgerSince > t.fromDay;
-  const ledgerNote =
-    t.ledgerSince == null
+  const ledgerNote = t.partial.includes('points')
+    ? null
+    : t.ledgerSince == null
       ? c.ledgerNone
       : fromDayAfterLedger
         ? c.ledgerPartial(formatDate(`${t.ledgerSince}T12:00:00Z`, locale, { day: 'numeric', month: 'long', year: 'numeric' }))
         : null;
   const failed = (key: PartialKey) => t.partial.includes(key);
 
+  const narrative = failed('activity') ? null : periodNarrative(t.kpis, t.period, locale);
+
   return (
     <div className="space-y-4">
       {failed('activity') || failed('points') ? <SectionUnavailable locale={locale} /> : null}
+      {narrative && (
+        <p className="qx-body rounded-card border border-brand-border/50 bg-brand-subtle/60 px-4 py-3 text-fg" aria-live="polite">
+          {narrative}
+        </p>
+      )}
       <MetricGrid cols={5}>
         {t.kpis.map((k) => (
           <MetricTile
@@ -169,15 +178,15 @@ function TrendsBody({ t }: { t: ProgressTrends }) {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title={c.habitsTitle} description={c.habitsDescription}>
+        <SectionCard headingLevel="h3" title={c.habitsTitle} description={c.habitsDescription}>
           {t.habits ? <HabitHeatmap habits={t.habits} locale={locale} /> : <SectionUnavailable locale={locale} />}
         </SectionCard>
-        <SectionCard title={c.experienceTitle} description={c.experienceDescription}>
+        <SectionCard headingLevel="h3" title={c.experienceTitle} description={c.experienceDescription}>
           {t.experience ? <ExperienceBreakdown experience={t.experience} locale={locale} /> : <SectionUnavailable locale={locale} />}
         </SectionCard>
       </div>
 
-      <SectionCard title={c.placesTitle} description={c.placesDescription}>
+      <SectionCard headingLevel="h3" title={c.placesTitle} description={c.placesDescription}>
         {t.places ? <PlacesList places={t.places} products={t.topProducts} locale={locale} /> : <SectionUnavailable locale={locale} />}
       </SectionCard>
     </div>

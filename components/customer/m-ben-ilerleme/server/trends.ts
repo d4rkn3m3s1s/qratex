@@ -140,15 +140,17 @@ export async function computeProgressTrends(userId: string, period: ProgressPeri
       ledgerSince(),
     ]);
     const t = totals[0] ?? { ec: 0, ep: 0, xc: 0, xp: 0, sc: 0 };
+    // Defterde hiç kayıt yoksa (tablo henüz dolmadı) "0 puan" demek yanlış olur → değer yok.
+    const known = since != null;
     // Önceki dönem defter başlamadan önceyse "önceki" bilinmiyor → karşılaştırma yapılmaz.
-    const prevKnown = since != null && since <= istanbulDay(prevFrom);
+    const prevKnown = known && since <= istanbulDay(prevFrom);
     return {
-      earned: fillSeries(w.keys, buckets.map((b) => ({ k: b.k, n: num(b.earned) }))),
-      xp: fillSeries(w.keys, buckets.map((b) => ({ k: b.k, n: num(b.xp) }))),
+      earned: known ? fillSeries(w.keys, buckets.map((b) => ({ k: b.k, n: num(b.earned) }))) : null,
+      xp: known ? fillSeries(w.keys, buckets.map((b) => ({ k: b.k, n: num(b.xp) }))) : null,
       totals: {
-        earned: { cur: num(t.ec), prev: prevKnown ? num(t.ep) : null },
-        xp: { cur: num(t.xc), prev: prevKnown ? num(t.xp) : null },
-        spent: num(t.sc),
+        earned: { cur: known ? num(t.ec) : null, prev: prevKnown ? num(t.ep) : null },
+        xp: { cur: known ? num(t.xc) : null, prev: prevKnown ? num(t.xp) : null },
+        spent: known ? num(t.sc) : null,
       },
       since,
     };
@@ -275,13 +277,13 @@ export async function computeProgressTrends(userId: string, period: ProgressPeri
       key: 'pointsEarned',
       current: p ? p.totals.earned.cur : null,
       previous: p ? p.totals.earned.prev : null,
-      change: p && p.totals.earned.prev != null ? changeOf(p.totals.earned.cur, p.totals.earned.prev) : { kind: 'none' },
+      change: p && p.totals.earned.cur != null && p.totals.earned.prev != null ? changeOf(p.totals.earned.cur, p.totals.earned.prev) : { kind: 'none' },
     },
     {
       key: 'xpEarned',
       current: p ? p.totals.xp.cur : null,
       previous: p ? p.totals.xp.prev : null,
-      change: p && p.totals.xp.prev != null ? changeOf(p.totals.xp.cur, p.totals.xp.prev) : { kind: 'none' },
+      change: p && p.totals.xp.cur != null && p.totals.xp.prev != null ? changeOf(p.totals.xp.cur, p.totals.xp.prev) : { kind: 'none' },
     },
   ];
 

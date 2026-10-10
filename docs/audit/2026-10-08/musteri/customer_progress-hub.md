@@ -213,3 +213,65 @@ Aşağıdaki üç iddia, çağıran/çağrılan kod baştan okunarak çürütül
 - **Öneri:** Ortak bir `BadgeGlyph` bileşeni (yol ise `next/image`, emoji ise metin, boşsa yedek) oluşturup hub, ana panel ve rozet sayfasında aynı bileşeni kullanın; dialog'da rozet açıklaması ve nadirlik rengi de gösterilsin.
 
 **Özet:** 3 iddianın 3'ü doğrulandı; hiçbiri çürütülemedi. 1. bulgunun etki alanı iddiadan geniş (2. seviyeden itibaren yanlış; admin `set_level` veriyi de tutarsızlaştırıyor).
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/progress` (Ben → İlerleme) + Ben kabuğu `/customer/me`. Eski `/customer/progress-hub` kalıcı (308) yönlendirme koçanıdır (`app/customer/progress-hub/page.tsx`, sorgu korunur; `next.config` eşlemesi `lib/navigation/redirects.json` ile etkin). Kod: `app/customer/me/**`, `components/customer/m-ben-ilerleme/**`, `app/api/customer/me/progress/{trends,journey}`. Testler: `__tests__/customer/m-ben-ilerleme/*` (50 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment metadata | ÇALIŞIYOR | `generateMetadata` (TR/EN, noindex) |
+| 2 | Rol koruması | ÇALIŞIYOR | Sayfa `requireAuth(['CUSTOMER'])` (rol DB'den), uçlar `defineRoute` roles=['CUSTOMER'] |
+| 3 | Modül kapısı `progress_hub` | ÇALIŞIYOR | Sayfa kapalı modülde dürüst "kapalı" durumu; trend ucu `module: 'progress_hub'` → 403 MODULE_DISABLED |
+| 4 | Sidebar girişi | ÇALIŞIYOR | Kayıttan (`customer.me.progress`), navigasyon ajanının |
+| 5 | Keşfet linki | KALDIRILDI | Keşfet sayfası emekli; ⌘K/sidebar kayıttan |
+| 6 | Hero | ÇALIŞIYOR | `PageHeader` + geri bağlantısı "Ben" |
+| 7 | Yükleniyor | ÇALIŞIYOR | `loading.tsx` yerleşimi taklit eden iskelet; trendlerde önceki veri korunur |
+| 8 | Hata durumu | ÇALIŞIYOR | Bölüm bazlı `partial[]` + `SectionUnavailable`; tüm sayfa hatasında `ErrorState` + Yenile; istemcide `QueryState` (403/modül/çevrimdışı ayrımı) |
+| 9 | Fetch iptal | ÇALIŞIYOR | React Query `signal` |
+| 10 | Seviye numarası | ÇALIŞIYOR | `max(DB seviyesi, XP'den seviye)` |
+| 11 | Puan değeri | ÇALIŞIYOR | Etiket "Puan bakiyen" |
+| 12 | XP ilerleme çubuğu | ÇALIŞIYOR | `level.ts` geometrik eğri, `calculateLevel` ile sınır testli |
+| 13 | XP metni | ÇALIŞIYOR | "1.000 / 1.500 XP" + "Seviye 3 için 500 XP kaldı" |
+| 14 | Progress erişilebilirliği | ÇALIŞIYOR (bu yüzeyde) | Bu yüzey `components/ui/progress` kullanmıyor; tüm çubuklar `role=progressbar` + değer/metin. Paylaşılan bileşenin kendisi sahiplik dışı (aşağıda) |
+| 15 | Geri bildirim sayısı | ÇALIŞIYOR | Trendlerde dönemlik (QR + tüketim yorumu, `deletedAt` hariç) |
+| 16 | Rozet sayısı | ÇALIŞIYOR | `userBadge.count` |
+| 17 | Tüketim sayısı | ÇALIŞIYOR | Trend KPI "Ziyaret"; hata 0 yerine "hesaplanamadı" |
+| 18 | Bekleyen yorum | ÇALIŞIYOR | "Bugün" kartı → Seslerim (aksiyon) |
+| 19 | Aktif görev seçimi | KALDIRILDI | Görev listesi/claim Oyna → Görevler'in (`lib/quests/board.ts`); burada kopyası çelişki üretiyordu |
+| 20 | "Tamamlanmaya yakın" vaadi | KALDIRILDI | #19 ile |
+| 21 | Görev çubuğu (0 px) | KALDIRILDI | #19 ile |
+| 22 | Görev sayaç metni | KALDIRILDI | #19 ile |
+| 23 | Görev boş durumu | KALDIRILDI | #19 ile |
+| 24 | "Tüm görevler" linki | KALDIRILDI | Tamamlanan görevler yolculuk akışında görev sayfasına bağlanır |
+| 25 | Görev ikonu/ödül/bitiş | KALDIRILDI | Görevler ekranında |
+| 26 | Claim | KALDIRILDI | Tek claim yolu Görevler ekranı (ekonomi tek-sefer kuralı tek yerde) |
+| 27 | Rozet çipleri | ÇALIŞIYOR | `BadgeGlyph` + küçük WebP (`resolveBadgeThumb`), emoji yedeği |
+| 28 | Rozet önizleme tıklaması | KALDIRILDI | Önizleme diyaloğu yerine kartta ad + nadirlik + kazanılma tarihi; "Tüm rozetler" bağlantısı |
+| 29 | Önizleme içeriği | ÇALIŞIYOR | `RarityBadge` (ikon+metin, TR/EN), `earnedAt` |
+| 30 | Rozet boş durumu | ÇALIŞIYOR | |
+| 31 | "Tüm rozetler" | ÇALIŞIYOR | `customer.me.badges` |
+| 32 | Hızlı link: Yolculuk skoru | KALDIRILDI | Aynı ekranda "Katkı skorun" bölümü |
+| 33 | Hızlı link: Harcama özeti | KALDIRILDI | Cüzdan → Hareketler'in |
+| 34 | Hızlı link: Ödüller | ÇALIŞIYOR | Kahramanda en yakın gerçek ödül + "Ödüllere git" |
+| 35 | TR/EN | ÇALIŞIYOR | `copy.ts` tipli sözlük; nadirlik çevrili; API metin üretmez |
+| 36 | Sayı biçimi | ÇALIŞIYOR | `Intl` her yerde |
+| 37 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun → lg 2 sütun, ≥44px hedefler |
+| 38 | Veri tazeleme | ÇALIŞIYOR | Özet her ziyarette sunucuda; trendler/akış odakta tazelenir |
+| 39 | Günlük seri | ÇALIŞIYOR | `User.loginStreak*`, İstanbul günü, "bugün/riskte/kırıldı" + sonraki ödüllü kilometre taşı |
+| 40 | Lig konumu | ÇALIŞIYOR | `LeagueEmblem` + sonraki lige kalan puan (admin lig kuralları) |
+| 41 | Karakter gizemli bar | KALDIRILDI | Rozetler alt sayfasının (badges ajanı) imza bölümü; burada "Tüm rozetler" köprüsü |
+| 42 | Kutlama | ÇALIŞIYOR | Seviye/lig/rozet anları An Motoru'nda (`MomentHost`, tek seferlik); burada ölçülü giriş (`Reveal`, azaltılmış harekette statik) |
+| 43 | `stats.streak` sabit 0 | Sahiplik dışı | `/api/customer/stats` ana panel/ödüller/kutu tarafından kullanılıyor; bu yüzey artık o ucu kullanmıyor |
+
+### Kapanan bulgular
+1 (XP formülü — bu yüzeyde; `level.ts` + test), 2 (görev çubuğu — görev listesi kaldırıldı), 3 (rozet ikon metni), 4 (görev listesi — Görevler'e devredildi), 5 (modül kapısı sayfa+API), 6 (bu yüzeyde erişilebilir çubuklar), 7 (ağır `/api/customer/stats` yerine sunucu özeti + bölüm bazlı partial), 8 (nadirlik/hata i18n), 9 (aksiyona giden kartlar, "Puan bakiyen", en yakın ödül), 10 (iskelet + yenile). **10/10.**
+
+### Kalanlar (sahiplik dışı)
+- `components/ui/progress.tsx` `value`'yu Radix'e geçirmiyor (paylaşılan bileşen, 30 kullanım) — tasarım sistemi sahibi.
+- `/api/customer/stats` doğrusal `levelProgress` ve sabit `streak: 0` (ana panel, ödüller, sürpriz kutu kullanıyor) — ana sayfa sahibi; doğru eğri `components/customer/m-ben-ilerleme/level.ts → levelProgress()` ile hazır.
+- Sidebar `calculateLevelProgress(points)` ve admin `set_level` doğrusal XP — kabuk/admin sahibi.

@@ -20,7 +20,7 @@ export function MeProfileCard({ profile, settingsHref, locale }: { profile: MePr
   const since = formatDate(profile.memberSince, locale, { month: 'long', year: 'numeric' });
 
   return (
-    <GlowCard aria-labelledby="me-profile-name">
+    <GlowCard role="region" aria-labelledby="me-profile-name">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-4">
           {profile.image ? (

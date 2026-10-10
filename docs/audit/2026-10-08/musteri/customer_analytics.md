@@ -225,3 +225,62 @@ Sidebar'daki "Analizler" grubunda (`components/dashboard/sidebar.tsx:285-290`) v
 - Ayrıca sıfır veride `Progress` (`:342`) `0/(0+1000)` = 0, sorun yok; ama `favoriteDealers`, `topProducts`, `categoryBreakdown` boş listeler başlıklı ama içeriksiz kartlar olarak kalıyor.
 
 **Özet:** 4 iddianın 4'ü de özünde gerçek. 1–3 kullanıcıya doğrudan yanlış veri/vaat gösteriyor (yüksek); 4 doğru ama iddiadaki "8:00" ayrıntısı yanlış (gerçekte 21:00) ve hata durumunda toast olduğundan "tamamen gizleniyor" ifadesi abartılı (orta).
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/progress` (Ben → İlerleme) — "Kişisel trendlerin" (dönem 7/30/90/365) + kahraman (seviye, bakiye, en yakın gerçek ödül, lig) + "Bugün yapabileceklerin". Eski `/customer/analytics` kalıcı yönlendirme koçanı; eski uç `app/api/customer/analytics` **silindi** (tek tüketicisi bu sayfaydı). Harcama (₺) analitiği yol haritası gereği Cüzdan → Hareketler → Özet'in (spending-overview birleşimi); İlerleme para göstermez.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | |
+| 2 | Yetki | ÇALIŞIYOR | `defineRoute` CUSTOMER + modül kapısı + rate limit (eski uçta yoktu) |
+| 3 | Veri çekme (yarış) | ÇALIŞIYOR | React Query anahtarı dönemle; `signal` ile iptal; eski yanıt yenisini ezemez |
+| 4 | Dönem seçici | ÇALIŞIYOR | `ChoiceChips` radiogroup; URL `?period=` (paylaşılabilir, sunucu ilk render'ı da bu dönemle) |
+| 5 | Yenile | KALDIRILDI | Odakta tazeleme; sınırsız tıklanan buton yok |
+| 6 | Yükleniyor | ÇALIŞIYOR | İskelet; dönem değişiminde içerik yerinde kalır |
+| 7 | Hata ("veri yok" diye) | ÇALIŞIYOR | `QueryState` hata türleri + yeniden dene; bölüm hatası "hesaplanamadı" |
+| 8 | Boş durum / NaN | ÇALIŞIYOR | Grafik `max(1,…)`; sıfır dönemde "henüz etkinliğin yok" anlatısı + boş durum metinleri |
+| 9 | Başlık | ÇALIŞIYOR | `PageHeader` |
+| 10 | Hızlı erişim kartları | KALDIRILDI | Konu dışı gezinme; "Bugün" kartları aksiyona gider |
+| 11 | KPI tüketim + büyüme | ÇALIŞIYOR | "Ziyaret" KPI'sı, önceki 0 → "İlk kez" |
+| 12 | KPI harcama | KALDIRILDI | Para Cüzdan → Hareketler'in |
+| 13 | KPI puan (bakiye+büyüme karışık) | ÇALIŞIYOR | Ayrıldı: kahramanda bakiye, trendde "Kazanılan puan" (defter) + önceki dönem kıyası |
+| 14 | Günlük seri | ÇALIŞIYOR | Giriş serisi İstanbul günü, riskte durumu, sonraki ödüllü gün |
+| 15 | VIP kartı | KALDIRILDI | Statü Cüzdan → Kartım → Statü'nün; burada lig gösterilir |
+| 16 | Ziyaret başı harcama | KALDIRILDI | Para Cüzdan'ın |
+| 17 | Favori kategori | KALDIRILDI | Yerine "En çok tükettiklerin" (gerçek ürün sayımı, ilk 3) |
+| 18 | "Ücretsiz Kahve" sahte ödül | ÇALIŞIYOR | Katalogdan en yakın erişilemeyen ödül (`isActive`, arşivsiz, stoklu) + şu an alınabilecek ödül sayısı |
+| 19 | Kategori dağılımı | KALDIRILDI | Harcama/zevk analizi Cüzdan → Özet |
+| 20 | En çok ürünler (float ₺) | ÇALIŞIYOR | Adet olarak (para yok) |
+| 21 | Haftalık dağılım (UTC) | ÇALIŞIYOR | Gün × saat haritasında İstanbul `ISODOW` |
+| 22 | Saatlik ısı haritası (bozuk) | ÇALIŞIYOR | 7 × 8 (3 saatlik) tam gün, İstanbul saati, `<table>` + sayılar |
+| 23 | "En yoğun saat" | ÇALIŞIYOR | Yalnız veri varken, gün + saat dilimi |
+| 24 | Favori işletmeler | ÇALIŞIYOR | "Mekânların": ziyaret + yorum, verdiğin ort. yıldız, son ziyaret; mekân sayfasına bağlı; anahtar `dealerId` |
+| 25 | Şube memnuniyeti | ÇALIŞIYOR | #24 ile birleşti |
+| 26 | "Tahmini bekleme" (sahte) | KALDIRILDI | Gerçek bekleme verisi yok |
+| 27 | Şube boş metni | KALDIRILDI | #24 ile |
+| 28 | Aylık trend (en eski 4 ay) | ÇALIŞIYOR | 1 yıl dönemi aylık kovalar (`YYYY-MM`, eski → yeni, boş aylar 0) |
+| 29 | Aylık "Puan" (amount×2) | ÇALIŞIYOR | Defterden gerçek kazanılan puan serisi |
+| 30 | Toplam rozet | ÇALIŞIYOR | |
+| 31 | Son rozetler (hep boş) | ÇALIŞIYOR | `earnedAt` sıralı, görselli |
+| 32 | "100 Ziyaret" sahte hedef | KALDIRILDI | Yerine gerçek hedefler: sonraki seviye yolu, sonraki ödül, katkı aşaması planı |
+| 33 | `totalRedeemed/pointsSaved` | KALDIRILDI | Ölü alan |
+| 34 | Üyelik tarihi | ÇALIŞIYOR | Ben kartı + akış başlangıcı |
+| 35 | TR/EN | ÇALIŞIYOR | Uç sayı/anahtar döndürür; tüm metin `copy.ts` |
+| 36 | Animasyon + azaltılmış hareket | ÇALIŞIYOR | `Reveal`/CSS geçişleri politikaya bağlı |
+| 37 | Dışa aktarma / paylaşma | KALDIRILDI | İlerleme'de dışa aktarma yok (grafiklerin tablo karşılığı var); harcama dökümü Cüzdan'ın, paylaşılabilir özet Yılım'ın |
+| 38 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun → lg iki sütun, KPI 1/2 sütun, ısı haritası kendi kabında kayar (kodla incelendi; dev server yasak olduğundan ekran görüntüsüyle doğrulanmadı) |
+| 39 | Grafik erişilebilirliği | ÇALIŞIYOR | `role=slider` + `aria-valuetext`, gizli özet, tablo karşılığı; ısı haritası gerçek tablo |
+| 40 | Önbellek / verimlilik | ÇALIŞIYOR | Gruplama SQL'de (bellek taraması yok), paralel bağımsız sorgular, Redis 90 sn, rate limit |
+
+### Kapanan bulgular
+1 (UTC → İstanbul), 2 (aylık seri), 3 (sahte ödül/bekleme/aylık puan/hedef/rozet), 4 (hata ≠ boş, NaN), 5 (yarış + kaba yükleme), 6 (SQL gruplama, önbellek, rate limit), 7 (bakiye ≠ dönem kazancı; sıfır tabanda "İlk kez"), 8 (i18n), 9 (grafik erişilebilirliği, ızgara taşması), 10 (tek "Mekânların" listesi), 11 (ölü kod — sayfa ve uç silindi). **11/11.**
+
+### Kalanlar
+- Topluluk kıyası ("kullanıcıların %80'inden aktifsin"): k-anonim toplu istatistik altyapısı gerektirir; uydurma yüzdelik gösterilmedi.
+- Grafikten tüketim listesine drill-down: Cüzdan → Hareketler'in filtre sözleşmesi netleşince bağlanabilir.
+- `messages/*.json` `customerAnalytics.*` anahtarları kullanılmıyor.

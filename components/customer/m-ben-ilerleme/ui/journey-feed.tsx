@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Award, Crown, Flag, Gift, Loader2, MessageCircleReply, MessageSquare, Store, Target } from 'lucide-react';
 import { ChoiceChips, useDsLocale } from '@/components/ds/a11y';
@@ -54,14 +54,37 @@ function monthKey(iso: string): string {
 }
 
 /**
- * Yolculuğun — imleçli, süzülebilir, tıklanabilir olay akışı. İlk sayfa sunucudan gelir
- * ("Tümü"); süzgeç ve "Daha fazla göster" bu adadan. Tek sütun + sol zaman çizgisi
- * (eski zikzak yerleşimin yerine), ay başlıkları, `<ol>` + `<time>` (journey-score bulgu 13).
+ * Yolculuğun — imleçli, süzülebilir, tıklanabilir olay akışı. Görünür alana yaklaşınca yüklenir;
+ * süzgeç ve "Daha fazla göster" bu adadan. Tek sütun (eski zikzak yerleşimin yerine), ay
+ * başlıkları, `<ol>` + `<time>` (journey-score bulgu 13); hedefi olmayan olay link gibi görünmez.
  */
-export function JourneyFeed({ initial, memberSince }: { initial: JourneyPage | null; memberSince: string }) {
+export function JourneyFeed({ initial = null, memberSince }: { initial?: JourneyPage | null; memberSince: string }) {
   const locale = useDsLocale();
   const c = getMeCopy(locale).progress;
   const [filter, setFilter] = useState<JourneyFilter>('all');
+  // Akış sayfanın en altında: ilk sayfa ancak görünür alana yaklaşınca istenir (ilk yükte
+  // 9 kaynak sorgusu çalışmaz). Sunucudan `initial` verildiyse beklemeden gösterilir.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(initial != null);
+  useEffect(() => {
+    if (visible) return;
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '300px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
 
   const query = useInfiniteQuery({
     queryKey: ['me-progress', 'journey', filter],
@@ -74,14 +97,15 @@ export function JourneyFeed({ initial, memberSince }: { initial: JourneyPage | n
     getNextPageParam: (last) => last.nextCursor,
     initialData: filter === 'all' && initial ? { pages: [initial], pageParams: [null] } : undefined,
     staleTime: 60_000,
+    enabled: visible,
   });
 
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
-  const flat = { ...query, data: query.data ? { items } : undefined };
+  const flat = { ...query, isLoading: query.isLoading || (!visible && !query.data), data: query.data ? { items } : undefined };
 
   return (
     <SectionCard id="yolculuk" title={c.journeyTitle} description={c.journeyDescription}>
-      <div className="space-y-4">
+      <div ref={rootRef} className="space-y-4">
         <ChoiceChips<JourneyFilter>
           aria-label={c.filterLabel}
           size="sm"
@@ -105,7 +129,7 @@ export function JourneyFeed({ initial, memberSince }: { initial: JourneyPage | n
                   return (
                     <li key={e.key} className="min-w-0">
                       {showMonth && (
-                        <p className="qx-caption pb-1 pt-3 font-semibold uppercase tracking-wide text-fg-muted first:pt-0">
+                        <p className={cn('qx-caption pb-1 font-semibold uppercase tracking-wide text-fg-muted', i === 0 ? 'pt-0' : 'pt-3')}>
                           {formatDate(e.at, locale, { month: 'long', year: 'numeric' })}
                         </p>
                       )}

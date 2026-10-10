@@ -264,3 +264,68 @@ Bu bölümde her iddiayı çürütmeye çalışarak kodu yeniden okudum. Kod de�
 - Ek gözlem (doğrulandı, küçük): Skor ucu `deletedAt: null` filtresi kullanıyor, `stats/route.ts:22` satırındaki `feedback.count` ise kullanmıyor. Silinmiş geri bildirimi olan kullanıcıda iki sayfadaki sayılar bu nedenle de farklı çıkabilir.
 
 **Özet:** 4 iddianın 4'ü de kodla doğrulandı. Ancak 1 numaralı bulgu yalnızca görüntülemeyi etkilediği ve ekonomiye dokunmadığı için "orta" seviyeye indirilmeli. Gerçekten "yüksek" önemde olan bulgu 2'dir (ConsumptionReview'ın yok sayılması), çünkü kartla tüketim yapan kullanıcıların tamamını etkiliyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/progress` (Ben → İlerleme). Skor "Katkı skorun" bölümü (`#katki`), zaman çizelgesi "Yolculuğun" akışı (`#yolculuk`) oldu. Eski `/customer/journey-score` kalıcı yönlendirme koçanı; eski uçlar `app/api/customer/journey-score` ve `app/api/customer/journey-timeline` **silindi** (tek tüketicileri bu sayfaydı). Yeni uç: `GET /api/customer/me/progress/journey` (`defineRoute`, CUSTOMER, `module: 'journey_score'`, zod, rate limit). Saf mantık: `components/customer/m-ben-ilerleme/contribution.ts`, `journey-cursor.ts`; testler `__tests__/customer/m-ben-ilerleme/{contribution,period-and-cursor,server-summary-trends,routes}.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | Vaat edilen "bileşen dökümü + haftalık değişim" artık gerçekten var |
+| 2 | Kimlik doğrulama | ÇALIŞIYOR | Yalnız CUSTOMER; kimlik oturumdan |
+| 3 | Modül anahtarı `journey_score` | ÇALIŞIYOR | Kapalıyken katkı bölümü ve akış çizilmez, uç 403 MODULE_DISABLED |
+| 4 | Yükleniyor | ÇALIŞIYOR | Skor sunucuda; akış görünür alana yaklaşınca, iskeletle |
+| 5 | Hata durumu | ÇALIŞIYOR | Zarf v2 okuyucu `res.ok`'a bakar; `QueryState` hata ≠ boş; skor hatası "hesaplanamadı" (0 değil) |
+| 6 | Hero | ÇALIŞIYOR | Tek ad: "İlerleme" (menü ile aynı) |
+| 7 | "Geri bildirim yolculukları" CTA | KALDIRILDI | Her yorum olayı doğrudan kendi `/journey` ya da tüketim sayfasına bağlanır |
+| 8 | Skor halkası | ÇALIŞIYOR | 4 aşamalı halka, `role="img"` + `aria-label` |
+| 9 | Skor formülü | ÇALIŞIYOR | Katılım 35 · Ayrıntı 25 · Düzenlilik 25 · Etki 15; yıldızın yönü hiçbir bileşene girmez (girdi tipinde yok, testli) |
+| 10 | "Etkileşiminiz" iddiası | ÇALIŞIYOR | Açıklama artık doğru + "1★ dürüst yorum 5★ ile aynı değerde" güvencesi |
+| 11 | Seviye rozeti | ÇALIŞIYOR | Kahramanda, doğru eğriyle |
+| 12 | Puan rozeti | ÇALIŞIYOR | `Intl` biçimli `PointsChip` |
+| 13 | Rozet sayısı (10'da kesiliyordu) | ÇALIŞIYOR | `count()` |
+| 14 | "Toplam Yorum" (100'de kesiliyor, CR yok) | ÇALIŞIYOR | Trend KPI'sı SQL `count`, Feedback ∪ ConsumptionReview |
+| 15 | "Pozitif oran" | KALDIRILDI | Değer yargısı; yerine yargısız "Deneyimlerin" dağılımı (okunmamış ayrı) |
+| 16 | `avgRating`/`recentAvgRating` | KALDIRILDI | Puan yönü skora girmez |
+| 17 | "Timehop" başlığı | KALDIRILDI | "Yolculuğun" |
+| 18 | Maskot (543 KB SVG) | KALDIRILDI | Gereksiz ağırlık |
+| 19 | Aşama rozeti + progress bar (tekrar) | KALDIRILDI | Tek halka + 4 aşama listesi (`<ol>`, `aria-current="step"`) |
+| 20 | 4 aşama çipi | ÇALIŞIYOR | Tanışma · Katılımcı · Düzenli ses · Güvenilir ses (ölçülen davranışla uyumlu adlar) |
+| 21 | "Düzenli tüketim" ipucu | KALDIRILDI | Yerine hesaplanan plan |
+| 22 | "Sonraki adım" (5−sayı) | ÇALIŞIYOR | Sunucu planı: "N yorum daha, K'si 100+ karakter, W'si farklı haftada" (`planToReach`, testli) |
+| 23 | Zaman çizelgesi listesi | ÇALIŞIYOR | İmleçli k-yollu birleştirme, `(at, key)` imleci, "Daha fazla göster" |
+| 24 | Olay: kayıt | ÇALIŞIYOR | Akış sonunda "Yolculuğun … tarihinde başladı" (aktif kullanıcıda da görünür) |
+| 25 | Olay: geri bildirim | ÇALIŞIYOR | İşletme adı + yıldız + kaynak; `/feedbacks/[id]/journey` |
+| 26 | Olay: rozet | ÇALIŞIYOR | Görselli |
+| 27 | Olay: ödül | ÇALIŞIYOR | Cüzdan → Ödüllerim'e bağlı |
+| 28 | Olay: tüketim | ÇALIŞIYOR | Mekân + ürün; tutar gösterilmez (para Cüzdan'da) |
+| 29 | `vip` türü | KALDIRILDI | Ölü tip |
+| 30 | Diğer olay türleri | ÇALIŞIYOR | Tüketim yorumu, **işletme yanıtı ("Sesin duyuldu")**, görev, seviye, lig eklendi. Oyun/davet/kutu/turnuva puan hareketi olarak Cüzdan → Hareketler (defter) akışında; burada tekrar edilmez |
+| 31 | Yıldız çipi | ÇALIŞIYOR | Olay metninde |
+| 32 | Göreli + mutlak tarih | ÇALIŞIYOR | `<time dateTime>`, İstanbul saati, ay başlıkları |
+| 33 | Emoji/ikon yedeği | ÇALIŞIYOR | Türe göre ikon, rozette `BadgeGlyph` |
+| 34 | Olaydan detaya gitme | ÇALIŞIYOR | Hedefi olan olay `Link` + odak halkası; hedefsiz olayda hover yok |
+| 35 | Boş durum | ÇALIŞIYOR | Yalnız gerçek boşlukta ("Bu süzgeçte henüz bir olay yok"); hata ayrı |
+| 36 | Giriş animasyonu | ÇALIŞIYOR | `Reveal` (ilk 12 öğe bütçeli, azaltılmış harekette statik) |
+| 37 | `AnimatePresence` | KALDIRILDI | Ölü kod |
+| 38 | Hover gölgesi (tıklanamayan) | KALDIRILDI | |
+| 39 | Mobil çizgi hizası | KALDIRILDI | Zikzak yerine tek sütun liste |
+| 40 | i18n (arayüz) | ÇALIŞIYOR | |
+| 41 | i18n (olay metinleri) | ÇALIŞIYOR | Uç yapısal olay döndürür; metin istemcide TR/EN |
+| 42 | Filtre | ÇALIŞIYOR | Tümü · Yorumlar · Rozetler · Ödüller · Ziyaretler · Kilometre taşları |
+| 43 | Skor trendi | ÇALIŞIYOR | Son 8 haftanın skoru veriden yeniden hesaplanır (anlık görüntü tablosu gerekmedi) + "Bu hafta ±N" |
+| 44 | "Nasıl hesaplanır?" | ÇALIŞIYOR | Bileşen çubukları + tavanlar + açıklama |
+| 45 | Paylaşma kartı | KALDIRILDI | Paylaşılabilir hikâye kartı Yılım'ın kapsamı |
+| 46 | Yenile | ÇALIŞIYOR | Akış odakta tazelenir; özet her ziyarette sunucuda |
+| 47 | Ölü kod/`any` | KALDIRILDI | Sayfa ve iki uç tamamen yeniden yazıldı/silindi; tipler `types.ts` ayrık birleşim |
+
+### Kapanan bulgular
+1 (formül), 2 (ConsumptionReview skora ve akışa girdi), 3 (hata ≠ boş/0), 4 (aşama metinleri + hesaplanan plan), 5 (`count()`), 6 (yapısal olay + istemci i18n), 7 (imleçli birleşik akış), 8 (işletme yanıtı, görev, seviye, lig olayları), 9 (maskot kaldırıldı), 10 (tıklanabilir olaylar, sahte hover yok), 11 (modül kapısı API'de), 12 (tek ad, tek gauge), 13 (erişilebilirlik: `role=img`, `<ol>`, `aria-current`, `<time>`), 14 (ölü kod), 15 (iki uç → sunucu özeti + tek akış ucu). **15/15.**
+
+### Kalanlar
+- Aşama atlama push bildirimi: kalıcı aşama kaydı gerektirir (skor her istekte veriden hesaplanıyor). İstenirse **ŞEMA İSTEĞİ:** `User.contributionStage Int?` (son bildirilen aşama) — An Motoru'na yeni `stage_up` anı ile bağlanır.
+- `messages/*.json` içindeki `journeyScore.*` anahtarları artık kullanılmıyor (paylaşılan dosya; temizlik i18n sahibine).

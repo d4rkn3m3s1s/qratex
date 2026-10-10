@@ -240,3 +240,70 @@ Her iddia çürütülmeye çalışıldı; kod okunarak (salt okunur) karar veril
 | 2 | Doğrusal seviye/XP formülü | Doğrulandı |
 | 3 | "++100%" ve NaN yön | Doğrulandı |
 | 4 | UTC gün/saat kayması | Doğrulandı (önem orta) |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yüzey:** `/customer/me/progress` → "Kişisel trendlerin" bölümü (dönem 7/30/90/365, URL'de `?period=`). Eski `/customer/trends` kalıcı yönlendirme koçanı. Keşif içeriği (trend mekânlar, haftanın enleri, sponsorlar, Ayın İşletmesi, "Sen Seversin") bu yüzeyden **çıkarıldı** — yol haritası kararı: Keşfet (`/customer/places`). `/api/customer/trends` bu dalgada silinmedi (artık hiçbir ekran çağırmıyor; bkz. Kalanlar). Yeni uç: `GET /api/customer/me/progress/trends` (`defineRoute`, CUSTOMER, `progress_hub`, zod, rate limit, Redis 90 sn, kısmi sonuç önbelleğe yazılmaz). Sunucu: `components/customer/m-ben-ilerleme/server/trends.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | |
+| 2 | Masaüstü başlık | ÇALIŞIYOR | `PageHeader` mobilde de görünür |
+| 3 | Mobil başlık kartı | KALDIRILDI | Tek `h1` her genişlikte |
+| 4 | Yenile butonu | KALDIRILDI | Dönem değişimi ve odakta otomatik tazeleme; yanıltıcı "güncellendi" toast'ı yok |
+| 5 | Yükleniyor iskeleti | ÇALIŞIYOR | Yerleşimi taklit eden iskelet; dönem değişiminde önceki veri kalır |
+| 6 | Hata + tekrar dene | ÇALIŞIYOR | `QueryState` (403/modül/çevrimdışı ayrımı, bayat veri bandı) |
+| 7 | Toplam puan kartı | ÇALIŞIYOR | Kahramanda "Puan bakiyen" |
+| 8 | Seviye + XP çubuğu | ÇALIŞIYOR | Geometrik eğri (`level.ts`) |
+| 9 | Geri bildirim kartı (karışık dönem) | ÇALIŞIYOR | Dönemlik KPI: QR + tüketim yorumu aynı pencerede |
+| 10 | Seri + alev | ÇALIŞIYOR | Giriş serisi İstanbul günü; "dün sayıldı, bugün değil" = riskte (sıfırlanmaz) |
+| 11 | Haftalık değişim "++100%" | ÇALIŞIYOR | `changeOf`: önceki 0 → "İlk kez", yüzde yok (testli) |
+| 12 | Duygu skoru (−100…+100 "%") | KALDIRILDI | Yerine yargısız dağılım |
+| 13 | Rozet sayısı + ilk rozet | ÇALIŞIYOR | `count` + son rozetler gerçekten dolu |
+| 14 | Üyelik süresi | ÇALIŞIYOR | Ben kartında "… tarihinden beri üye", akış sonunda başlangıç |
+| 15 | Ayın İşletmesi | KALDIRILDI | Keşfet'in |
+| 16 | "Sen Seversin" + LLM | KALDIRILDI | Keşfet'in; GET'te LLM bu yüzeyde yok |
+| 17 | Trend mekânlar | KALDIRILDI | Keşfet'in |
+| 18 | iOS konum notu (sahte) | KALDIRILDI | |
+| 19 | Yakın mekânlar CTA | KALDIRILDI | Keşfet sekmesi |
+| 20 | Haftanın enleri | KALDIRILDI | Keşfet'in |
+| 21 | Sponsor duyuruları | KALDIRILDI | Keşfet'in |
+| 22 | Keşif modül kapısı | KALDIRILDI | Keşif çağrısı yok |
+| 23 | Sekmeler | KALDIRILDI | Tek akışlı bölümler (KPI → grafik → alışkanlık/deneyim → mekânlar) |
+| 24 | 30 günlük çubuk grafik | ÇALIŞIYOR | İstanbul kovaları (SQL), dokunma/ok tuşu ile seçim şeridi, `role=slider` + tablo karşılığı, seri seçici (yorum/ziyaret/puan/XP) |
+| 25 | 30 gün toplam rozeti | ÇALIŞIYOR | KPI kutuları (etiketli) |
+| 26 | Haftanın günleri ("Paz/Paz") | ÇALIŞIYOR | `Intl` gün adı, Pazartesi başlangıç, İstanbul `ISODOW` |
+| 27 | Geçen hafta/bu hafta | ÇALIŞIYOR | Önceki eşit dönemle KPI kıyası |
+| 28 | Duygu donut | KALDIRILDI | Yığılmış çubuk + metinli lejant |
+| 29 | Duygu lejantı | ÇALIŞIYOR | Sayı + yüzde + ad (yalnız renk değil) |
+| 30 | "Gelişim alanı var" rozeti | KALDIRILDI | Dürüst olumsuz yorumu kusur sayan çerçeve kaldırıldı |
+| 31 | Oran çubukları | KALDIRILDI | Lejantla birleşti |
+| 32 | En aktif saat (UTC) | ÇALIŞIYOR | Gün × saat haritası, İstanbul saati, en yoğun dilim cümlesi |
+| 33 | Seri rekoru (30 gün) | ÇALIŞIYOR | Gerçek en uzun giriş serisi (`loginStreakLongest`) |
+| 34 | Günlük ortalama | KALDIRILDI | Anlatı cümlesi ve KPI'lar yeterli |
+| 35 | Kazanılan rozetler | ÇALIŞIYOR | |
+| 36 | Toplam XP (3. tekrar) | KALDIRILDI | Tek yerde (kahraman) |
+| 37 | Sonraki seviyeye ~gün | ÇALIŞIYOR | Son 30 günün defter XP'si ile; tempo yoksa tahmin gizli |
+| 38 | Puan alan grafiği (tahmin) | ÇALIŞIYOR | Gerçek `PointsLedger` (kazanılan puan/XP serisi); defter başlangıcından önceki dönemde dürüst not |
+| 39 | Son rozetler (bozuk sorgu) | ÇALIŞIYOR | `userBadge … orderBy earnedAt desc` |
+| 40 | Rozet boş durumu | ÇALIŞIYOR | Yalnız gerçekten rozeti yoksa |
+| 41 | Sahte chevron | KALDIRILDI | Rozetler bölümünün "Tüm rozetler" bağlantısı gerçek |
+| 42 | Başarı özeti (tekrar) | KALDIRILDI | |
+| 43 | Redis önbellek | ÇALIŞIYOR | Kullanıcı+dönem+İstanbul günü anahtarı, 90 sn; kısmi sonuç yazılmaz |
+| 44 | Yetki | ÇALIŞIYOR | CUSTOMER, kimlik oturumdan |
+| 45 | Azaltılmış hareket | ÇALIŞIYOR | Çubuk geçişleri `motion-reduce:transition-none`, `Reveal` politikaya bağlı |
+| 46 | TR/EN | ÇALIŞIYOR | Uç yalnız sayı/anahtar döndürür |
+| 47 | Discovery hata bağı | KALDIRILDI | Keşif çağrısı yok; bölümler bağımsız (`partial[]`) |
+| 48 | Paylaş / dönem seçimi / hedef | ÇALIŞIYOR (dönem, hedef) · KALDIRILDI (paylaş) | Dönem seçici + "sonraki seviye/ödül/aşama" hedefleri; paylaşılabilir kart Yılım'ın kapsamı |
+
+### Kapanan bulgular
+1 (rozet sorgusu), 2 (seviye formülü), 3 ("++100%"), 4 (UTC → İstanbul SQL), 5 (tahmini puan grafiği → defter), 6 (karışık dönem toplamı; seri tek kaynak: giriş serisi), 7 (keşif sorgusu ve LLM bu yüzeyden çıktı), 8 (değer yargılı duygu skoru), 9 (gün adları), 10 (Promise.all bağı), 11 (yenile/toast), 12 (keşif öğeleri — Keşfet'e), 13 (tekrarlı metrikler), 14 (grafik erişilebilirliği), 15 (ölü kod — sayfa silindi). **15/15.**
+
+### Kalanlar (sahiplik dışı)
+- `/api/customer/trends` artık tüketicisiz (eski Görevler sayfası seri için çağırıyordu; Görevler `lib/quests/activity-streak.ts`'e geçti). Bozuk rozet sorgusu ve UTC kovaları o uçta duruyor; silinmesi bu dalgada izinle yapılamadı → bir sonraki temizlikte `app/api/customer/trends/` kaldırılmalı.
+- `components/customer/business-of-month-badge.tsx` ve `recommendations-section.tsx` artık yalnız Keşfet'in kullanımına aday (bu yüzey kullanmıyor).
+- `messages/*.json` `customerTrends.*` anahtarları kullanılmıyor.

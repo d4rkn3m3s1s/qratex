@@ -10,7 +10,6 @@ import { parseProgressPeriod } from '@/components/customer/m-ben-ilerleme/period
 import { requireCustomerPage } from '@/components/customer/m-ben-ilerleme/server/page-auth';
 import { getProgressSummary } from '@/components/customer/m-ben-ilerleme/server/summary';
 import { getProgressTrends } from '@/components/customer/m-ben-ilerleme/server/trends';
-import { getJourneyPage } from '@/components/customer/m-ben-ilerleme/server/journey';
 import { ProgressHero } from '@/components/customer/m-ben-ilerleme/ui/progress-hero';
 import { TodayStrip } from '@/components/customer/m-ben-ilerleme/ui/today-strip';
 import { ContributionCard } from '@/components/customer/m-ben-ilerleme/ui/contribution-card';
@@ -20,6 +19,7 @@ import { TrendsSection } from '@/components/customer/m-ben-ilerleme/ui/trends-se
 import { JourneyFeed } from '@/components/customer/m-ben-ilerleme/ui/journey-feed';
 import { SectionUnavailable } from '@/components/customer/m-ben-ilerleme/ui/section-unavailable';
 import { SOFT_BUTTON } from '@/components/customer/m-ben-ilerleme/ui/styles';
+import { Reveal } from '@/lib/motion';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,8 +43,8 @@ async function moduleState(): Promise<{ progress: boolean; journey: boolean }> {
 
 /**
  * Ben → İlerleme (eski Gelişim merkezi + Yolculuk skoru + Trendler + Kişisel analitik).
- * Sunucu önce: özet, ilk dönem trendleri ve yolculuğun ilk sayfası burada paralel okunur;
- * istemci adaları yalnız dönem seçici/grafik ve akışın süzgeç/sayfalamasıdır.
+ * Sunucu önce: özet ve seçili dönemin trendleri burada paralel okunur. İstemci adaları:
+ * dönem seçici/grafik ve sayfanın altındaki yolculuk akışı (görünür alana yaklaşınca yüklenir).
  */
 export default async function ProgressPage({ searchParams }: PageProps) {
   const locale = toMeLocale(await getServerLocale());
@@ -92,7 +92,7 @@ export default async function ProgressPage({ searchParams }: PageProps) {
   }
 
   const userId = auth.userId;
-  const [summary, trends, journey] = await Promise.all([
+  const [summary, trends] = await Promise.all([
     getProgressSummary(userId, { contributionEnabled: modules.journey }).catch((error) => {
       console.error('[me-progress] özet okunamadı', error);
       return null;
@@ -101,12 +101,6 @@ export default async function ProgressPage({ searchParams }: PageProps) {
       console.error('[me-progress] trendler okunamadı', error);
       return null;
     }),
-    modules.journey
-      ? getJourneyPage(userId, { filter: 'all' }).catch((error) => {
-          console.error('[me-progress] yolculuk okunamadı', error);
-          return null;
-        })
-      : Promise.resolve(null),
   ]);
 
   if (!summary) {
@@ -131,9 +125,11 @@ export default async function ProgressPage({ searchParams }: PageProps) {
       aria-label={c.title}
     >
       <ProgressHero summary={summary} locale={locale} />
-      <TodayStrip summary={summary} locale={locale} />
+      <Reveal index={1}>
+        <TodayStrip summary={summary} locale={locale} />
+      </Reveal>
 
-      <div className="grid items-start gap-section lg:grid-cols-2">
+      <Reveal index={2} className="grid items-start gap-section lg:grid-cols-2">
         {summary.contribution ? (
           <ContributionCard contribution={summary.contribution} pendingReviews={summary.pendingReviews} locale={locale} />
         ) : modules.journey ? (
@@ -143,11 +139,15 @@ export default async function ProgressPage({ searchParams }: PageProps) {
           <LevelPath summary={summary} locale={locale} />
           <BadgesStrip summary={summary} locale={locale} />
         </div>
-      </div>
+      </Reveal>
 
-      {trends ? <TrendsSection initial={trends} /> : <SectionUnavailable locale={locale} />}
+      <Reveal index={3}>{trends ? <TrendsSection initial={trends} /> : <SectionUnavailable locale={locale} />}</Reveal>
 
-      {modules.journey && <JourneyFeed initial={journey} memberSince={summary.memberSince} />}
+      {modules.journey && (
+        <Reveal index={4}>
+          <JourneyFeed memberSince={summary.memberSince} />
+        </Reveal>
+      )}
 
       <p className="qx-caption text-center text-fg-subtle">
         {c.asOf(formatDate(summary.asOf, locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}

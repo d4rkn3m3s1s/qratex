@@ -88,7 +88,7 @@ export function TodayStrip({ summary, locale }: { summary: ProgressSummary; loca
           <li key={card.id} className="min-w-0">
             <GlowCard accent={card.accent} className="flex h-full flex-col gap-3">
               <div className="flex items-start gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand-text">{card.icon}</span>
+                <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-control bg-brand-subtle text-brand-text">{card.icon}</span>
                 <div className="min-w-0">
                   <h3 className="qx-body font-semibold text-fg">{card.title}</h3>
                   <p className="qx-small mt-0.5 text-fg-muted">{card.body}</p>

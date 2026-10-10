@@ -21,7 +21,7 @@ export function ProgressHero({ summary, locale }: { summary: ProgressSummary; lo
   const rewardsFailed = summary.partial.includes('rewards');
 
   return (
-    <GlowCard className="overflow-hidden" aria-labelledby="me-progress-level-heading">
+    <GlowCard role="region" className="overflow-hidden" aria-labelledby="me-progress-level-heading">
       <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:items-center">
         {/* Seviye */}
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">
