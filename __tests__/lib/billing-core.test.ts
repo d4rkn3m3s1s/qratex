@@ -20,8 +20,37 @@ const mockEventUpdateMany = jest.fn();
 const mockEventFindFirst = jest.fn();
 const mockEventUpdate = jest.fn();
 
+/**
+ * pg_advisory_xact_lock taklidi: `$executeRaw` kilidi anahtar başına sıraya alır, kilit
+ * transaction geri çağrısı bitince bırakılır (Postgres xact kilidinin davranışı).
+ */
+const lockTails = new Map<string, Promise<void>>();
+const lockedKeys: string[] = [];
+const mockTransaction = jest.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) => {
+  const releases: Array<() => void> = [];
+  const tx = {
+    $executeRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+      const key = String(values[0]);
+      lockedKeys.push(key);
+      const prev = lockTails.get(key) ?? Promise.resolve();
+      let release!: () => void;
+      const mine = new Promise<void>((r) => (release = r));
+      lockTails.set(key, prev.then(() => mine));
+      releases.push(release);
+      await prev;
+      return 1;
+    },
+  };
+  try {
+    return await fn(tx);
+  } finally {
+    releases.forEach((r) => r());
+  }
+});
+
 jest.mock('@/lib/prisma', () => ({
   prisma: {
+    $transaction: (fn: (tx: unknown) => Promise<unknown>, opts?: unknown) => mockTransaction(fn, opts),
     user: {
       findUnique: (...a: unknown[]) => mockUserFindUnique(...a),
       update: (...a: unknown[]) => mockUserUpdate(...a),
@@ -99,6 +128,8 @@ function dbUser(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  lockedKeys.length = 0;
+  lockTails.clear();
   stripeEnabled = true;
   mockUserUpdate.mockResolvedValue({});
   mockAuditCreate.mockResolvedValue({});
@@ -329,6 +360,48 @@ describe('createCheckoutSession — çift abonelik engeli', () => {
     expect(stripe.customers.create.mock.calls[0][1]).toEqual({ idempotencyKey: 'qratex-customer-d1' });
     expect(mockUserUpdateMany.mock.calls[0][0].where).toEqual({ id: 'd1', stripeCustomerId: null });
     expect(stripe.checkout.sessions.create.mock.calls[0][0].customer).toBe('cus_winner');
+  });
+
+  it('P0-29 yarış: aynı anda gelen iki istek İKİ Checkout açamaz (bayi kilidi altında serileşir)', async () => {
+    mockUserFindUnique.mockImplementation(async ({ select }: { select: Record<string, boolean> }) =>
+      select.email
+        ? { id: 'd1', email: 'a@b.c', name: 'A', businessName: 'B', stripeCustomerId: 'cus_1' }
+        : { stripeSubscriptionId: null, subscriptionStatus: null }
+    );
+    // Stripe'ın gerçekçi taklidi: oluşturulan oturum sonraki listelemede "open" görünür;
+    // her çağrı bir olay döngüsü turu gecikir (iki istek gerçekten iç içe geçer).
+    const openSessions: Array<{ id: string; mode: string; metadata: { planId: string }; url: string }> = [];
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    stripe.subscriptions.list.mockImplementation(async () => {
+      await tick();
+      return { data: [] };
+    });
+    stripe.checkout.sessions.list.mockImplementation(async () => {
+      await tick();
+      return { data: [...openSessions] };
+    });
+    let n = 0;
+    stripe.checkout.sessions.create.mockImplementation(async (args: { metadata: { planId: string } }) => {
+      await tick();
+      const s = { id: `cs_${++n}`, mode: 'subscription', metadata: { planId: args.metadata.planId }, url: `https://checkout.stripe/${n}` };
+      openSessions.push(s);
+      return s;
+    });
+
+    const [a, b] = await Promise.all([createCheckoutSession('d1', 'plan_biz'), createCheckoutSession('d1', 'plan_biz')]);
+
+    expect(stripe.checkout.sessions.create).toHaveBeenCalledTimes(1);
+    expect(a).toEqual({ ok: true, url: 'https://checkout.stripe/1' });
+    expect(b).toEqual({ ok: true, url: 'https://checkout.stripe/1' });
+    expect(lockedKeys.filter((k) => k === 'billing-checkout:d1')).toHaveLength(2);
+    const opts = mockTransaction.mock.calls[0][1] as { timeout: number };
+    expect(opts.timeout).toBeGreaterThan(5_000);
+  });
+
+  it("aktif abonelik DB'den görülünce kilit hiç alınmaz (gereksiz bağlantı tutulmaz)", async () => {
+    mockUserFindUnique.mockResolvedValue(dbUser());
+    await createCheckoutSession('d1', 'plan_biz');
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });
 

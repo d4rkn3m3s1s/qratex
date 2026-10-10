@@ -12,7 +12,10 @@ import { mintPoints } from '@/lib/economy';
  *
  * GÜVENLİK (P0-27):
  *  - Çağıran uç demo kapısından geçer (üretimde ALLOW_DEMO_SEED=true şart).
- *  - Bütün hesaplar `isDemo=true` SENTETİK hesaplardır; müşteriye dönük sorgular bunları dışlar.
+ *  - Bütün hesaplar `isDemo=true` SENTETİK hesaplardır. DİKKAT: müşteriye dönük sorgularda
+ *    (keşif, yakındakiler, flash teklif) `isDemo` için merkezi bir dışlama filtresi HENÜZ YOK;
+ *    kapı açıkken üretilen demo kafeler müşterilere görünür. Bu yüzden üretimde kapı kapalı
+ *    kalmalı (yol haritası P0-27 kalan işi: merkezi filtre).
  *  - Bilinen şifre YOK: önceden hepsi `Demo123!` ile doğrulanmış hesaplardı (canlıda bayi
  *    paneline girilebiliyordu). Şifre yalnız `DEMO_CAFE_PASSWORD` (≥ 12 karakter) verilirse
  *    konur; yoksa hesaplar şifresizdir (giriş yapılamaz). Eski sürümün oluşturduğu demo

@@ -182,6 +182,31 @@ export async function createCheckoutSession(dealerId: string, planId: string): P
   const customerId = await ensureStripeCustomer(dealerId);
   if (!customerId) return fail('CUSTOMER_FAILED', 'Müşteri kaydı oluşturulamadı');
 
+  // Bayi başına SERİLEŞTİRME (P0-29 yarış kolu): "abonelik var mı → açık oturumlar → kapat →
+  // oluştur" dizisi kontrol-sonra-yaz'dır. Kilit olmadan aynı anda gelen iki istek (iki sekme,
+  // çift tık) ikisi de "abonelik yok, açık oturum yok" görüp İKİ ayrı Checkout açabiliyordu →
+  // ikisi de ödenirse iki abonelik = çift ücret. Kilit transaction sonuna kadar tutulur; ikinci
+  // istek birincinin açtığı oturumu görür (aynı plan → yeniden kullanır, farklı plan → kapatır).
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`billing-checkout:${dealerId}`}))`;
+      return openCheckoutLocked(stripe, dealerId, customerId, plan);
+    },
+    { maxWait: CHECKOUT_LOCK_MAX_WAIT_MS, timeout: CHECKOUT_LOCK_TIMEOUT_MS }
+  );
+}
+
+/** Kilit beklemesi ve kilit altındaki Stripe çağrıları için üst sınırlar. */
+const CHECKOUT_LOCK_MAX_WAIT_MS = 10_000;
+const CHECKOUT_LOCK_TIMEOUT_MS = 30_000;
+
+/** `createCheckoutSession`'ın bayi kilidi ALTINDA çalışan kısmı. */
+async function openCheckoutLocked(
+  stripe: Stripe,
+  dealerId: string,
+  customerId: string,
+  plan: PayablePlan
+): Promise<CheckoutResult> {
   // Stripe'taki gerçek durum: webhook gecikmesi ya da kaçan olay DB'yi eski bırakmış olabilir.
   const existing = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
   if (existing.data.some((s) => BLOCKING_SUBSCRIPTION_STATUSES.has(s.status))) {
