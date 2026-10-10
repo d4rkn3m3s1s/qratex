@@ -264,3 +264,55 @@ Her iddia kod baştan okunarak çürütülmeye çalışıldı (salt okunur; DB/s
 - **Yeniden üretim:** Uyuyan segmentinde ≥1 müşterisi olan bayi Segment Aksiyon Merkezi'nde "Win-back kampanyası"na tıklar → toast: "No users selected"; hiçbir bildirim gitmez.
 
 **Özet:** 5 iddianın 5'i de doğrulandı; 1. iddia "5X puan" vaadine daraltıldı (fiziksel teklifler doğrulanabilirlik eksikliği), 4. iddia kritik değil orta önemde. Öncelik sırası: 3 (tercih/uyum) ve 1 (karşılıksız puan vaadi) → 2 (mükerrer/kırpma) → 5 → 4.
+
+## Uygulama (Dalga 2)
+
+Rota emekli: `app/dealer/radar/page.tsx` → `/dealer/customers?tab=winback`. Geri kazanım sekmesi `winback-tab.tsx` + `winback-radar.tsx` (anlamlı geometri: açı = etiket, uzaklık = müşterinin kendi ziyaret ritminin kaçıncı katı; `radar-geometry.ts`), veri `GET /api/dealer/customers/winback`. Eski `/api/dealer/win-back`, `lib/dealer/win-back-offers.ts`, `dealer-radar-scope*` ve `radar-interactive.tsx` silindi.
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | |
+| 2 | ÇALIŞIYOR | Hedef sayfanın metadata'sı |
+| 3 | ÇALIŞIYOR | Tek copy kaynağı |
+| 4 | ÇALIŞIYOR | Sabit 30 gün yerine müşterinin kendi ritmine göre bant (uyanıyor / uyuyor / kayıp), öncelik sıralı |
+| 5 | ÇALIŞIYOR | Sıralama korunur |
+| 6 | ÇALIŞIYOR | |
+| 7 | KALDIRILDI | Hiçbir duruma bağlı olmayan "Radar aktif" rozeti |
+| 8 | ÇALIŞIYOR | Gerçek toplam; tavan varsa "ilk N / toplam" notu |
+| 9 | ÇALIŞIYOR | Risk altındaki aylık ciro, ₺ biçimli, veri yoksa gizli |
+| 10 | ÇALIŞIYOR | Banda toplu gönderimde alıcılar sunucuda çözülür, tavan önizlemede açık |
+| 11 | ÇALIŞIYOR | Sahte "5X puan" kaldırıldı; gerçek mesaj veya telafi şablonlarından kişisel teklif (kabulü lib/economy üzerinden) |
+| 12 | ÇALIŞIYOR | Konumlar anlamlı |
+| 13 | ÇALIŞIYOR | Dokunmatikte de çalışır |
+| 14 | KALDIRILDI | Sahte BRG/RNG sayıları |
+| 15 | ÇALIŞIYOR | Türkçe sayaç |
+| 16 | ÇALIŞIYOR | Tıklama → 360 çekmece |
+| 17 | ÇALIŞIYOR | |
+| 18 | ÇALIŞIYOR | useMotionPolicy; azaltılmış harekette süpürme yok |
+| 19 | ÇALIŞIYOR | Öncelikli liste; tamamı Liste sekmesinde sayfalı |
+| 20 | ÇALIŞIYOR | Hiç verisi olmayan bayi için ayrı boş durum |
+| 21 | ÇALIŞIYOR | |
+| 22 | ÇALIŞIYOR | E-posta yalnız 360'ta; anonim hesaplar maskeli |
+| 23 | ÇALIŞIYOR | |
+| 24 | ÇALIŞIYOR | Mobilde görünür |
+| 25 | ÇALIŞIYOR | Teklif seçenekleri gerçek telafi şablonlarından |
+| 26 | ÇALIŞIYOR | Not 280 karakter (sunucu da kırpar) |
+| 27 | ÇALIŞIYOR | Gönderilen/elenen sayıları sonuçtan, TR/EN |
+| 28 | ÇALIŞIYOR | "Ulaşıldı" durumu + aksiyon geçmişi |
+| 29 | ÇALIŞIYOR | Alıcılar sunucuda bayiye kapsanır |
+| 30 | ÇALIŞIYOR | "Kampanya & Sürprizler" tercihi saygılı (İYS ilkesi) |
+| 31 | ÇALIŞIYOR | Push, `lib/marketing-delivery` üzerinden |
+| 32 | ÇALIŞIYOR | Müşteri başı 7 gün sıklık sınırı, günlük 500 alıcı tavanı, rate limit, idempotency anahtarı |
+| 33 | ÇALIŞIYOR | Aksiyon kaydı + 14 günlük geri dönüş atfı |
+| 34 | ÇALIŞIYOR | Müşterinin dilinde şablon |
+| 35 | ÇALIŞIYOR | `businessName` kullanılır |
+| 36 | ÇALIŞIYOR | Bildirimde işletme sayfasına CTA |
+| 37 | KALDIRILDI | Ölü GET ucu silindi |
+| 38 | ÇALIŞIYOR | Modül kapısı |
+| 39 | ÇALIŞIYOR | Sekmeye özel hata kartı |
+| 40 | ÇALIŞIYOR | Sekmeye özel iskelet |
+| 41 | ÇALIŞIYOR | Ritim tabanlı eşik; filtre/arama/sıralama Liste sekmesinde |
+| 42 | ÇALIŞIYOR | CSV + çoklu seçimle gönderim |
+| 43 | ÇALIŞIYOR | Müşteriler altında (menü kaydı navigasyon ajanında) |
+
+Kapanan bulgular: sahte teklif ve HUD sayıları, 100/500 uyuşmazlığı, müşteri tercihinin yok sayılması, sınırsız tekrar gönderim, kişi adıyla gönderim, mobilde gizli düğme, ölü kod, yanıltıcı boş durum. Kalanlar: yok.

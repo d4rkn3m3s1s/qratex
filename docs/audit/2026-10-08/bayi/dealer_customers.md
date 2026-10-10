@@ -202,3 +202,50 @@
 - `page.tsx:99-102`: Boş liste "Henüz hesaplanmış müşteri verisi yok. Tüketim kaydı oluştukça günlük cron CLV üretir." metnini gösterir.
 - **Yeniden üretim:** (a) Neon geçici olarak erişilemezken bayi sayfayı açar → API 503 JSON döner → kullanıcı "henüz veri yok" görür, arızayı fark etmez. (b) ADMIN rolüyle `/dealer/customers` açılırsa sayfa `dealerId` göndermediği için API 400 döner → yine "henüz veri yok". (c) İşletmeye bağlı olmayan (`dealerId` oturumda yok) bir STAFF için `getStaffDealerId` 403 döner (`lib/api-auth.ts:158-166`) → aynı boş durum.
 - **Not:** Gerçek bir kullanıcı/veri etkisi var ama güvenlik değil, UX/gözlemlenebilirlik sorunu; önem ORTA. Çözüm: `if (!r.ok) throw` ile durum koduna göre ayrışmış hata durumu (403 → "Bu görünüme erişiminiz yok", 503 → "Geçici bağlantı sorunu, tekrar dene" düğmesiyle), API'nin `note` alanını boş durumda göstermek ve boş/hata/yükleniyor durumlarını ayrı bileşenlere bölmek. Ayrıca `sort` hızlı değiştirildiğinde eski isteğin yeni sonucu ezmemesi için `AbortController` eklenmeli (ilgili ama ayrı bir yarış durumu).
+
+## Uygulama (Dalga 2)
+
+Hedef rota: `/dealer/customers` (Müşteriler 360). Sunucu bileşeni özeti ve ilk liste sayfasını paralel çeker (`lib/dealer-customers/server.ts`), istemci adası `components/dealer/b-musteriler/**` içindedir. Tüm metrikler **yalnız bu bayinin** tüketim ve geri bildirim verisinden (DealerCustomerStats + canlı yedek) türetilir; platform geneli CLV kullanılmaz. Uçlar `lib/http/define-route.ts` ile yazıldı (rol + kiracı + zod + rate limit): `GET /api/dealer/customers`, `/summary`, `/[ref]`, `/risk`, `/winback`, `/export`, `GET|POST /actions`. Testler: `__tests__/dealer/b-musteriler/{core,routes}.test.ts` (40 test, geçiyor).
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | QDL v2 sayfa başlığı + tazelik satırı |
+| 2 | ÇALIŞIYOR | Gerçek `calculatedAt` / "canlı hesap" ve 36 saatlik bayatlık uyarısı |
+| 3 | ÇALIŞIYOR | Harcama bu işletmeye özgü |
+| 4 | ÇALIŞIYOR | Risk sıralamasında NULL'lar sona gider (`sortRows`, testli) |
+| 5 | ÇALIŞIYOR | `res.ok` denetimli istemci; hata → QueryState + Tekrar dene |
+| 6 | ÇALIŞIYOR | İskelet (`loading.tsx`, SkeletonTable); sayfa değişiminde önceki veri korunur |
+| 7 | ÇALIŞIYOR | Boş / filtreli boş / hata / yetkisiz durumları ayrı |
+| 8 | ÇALIŞIYOR | Kalıcı hata kartı + yeniden dene |
+| 9 | ÇALIŞIYOR | Anonimleştirilmiş hesaplar maskeli |
+| 10 | ÇALIŞIYOR | Avatar gösteriliyor |
+| 11 | ÇALIŞIYOR | Bayiye yalnız kaba "güvenilir" rozeti verilir (ham platform skoru verilmez) |
+| 12 | ÇALIŞIYOR | Etiketler (Risk/VIP/Sadık/Uyuyan/Yeni) bu işletmenin dağılımından; AA kontrastlı StatusBadge |
+| 13 | ÇALIŞIYOR | Toplam harcama bu işletmeye özgü |
+| 14 | ÇALIŞIYOR | Ziyaret bu işletmeye özgü |
+| 15 | ÇALIŞIYOR | Ortalama sepet bu işletmeye özgü, NULL tutar güvenli |
+| 16 | ÇALIŞIYOR | Türkçe risk düzeyi + yüzde |
+| 17 | ÇALIŞIYOR | Son ziyaret bu işletmedeki |
+| 18 | ÇALIŞIYOR | Tazelik göstergesi |
+| 19 | ÇALIŞIYOR | Sunucu sayfalama (10/20/50/100), URL'de kalıcı |
+| 20 | ÇALIŞIYOR | Özet KPI: toplam, son 30 günde aktif, bu ay yeni, riskli, uyuyan, ciro, tekrar oranı |
+| 21 | ÇALIŞIYOR | Ad/e-posta araması (sunucuda) |
+| 22 | ÇALIŞIYOR | Segment / risk / geri kazanım bandı filtreleri |
+| 23 | ÇALIŞIYOR | Sütun başlığından sıralama (`aria-sort`) |
+| 24 | ÇALIŞIYOR | 360 çekmece: gerekçeler, sinyaller (niyet/aciliyet/yanıt durumu), zaman çizelgesi, sonraki en iyi aksiyon |
+| 25 | ÇALIŞIYOR | Önizle → onayla → gönder (mesaj / kişisel teklif); tercih + sıklık + günlük tavan saygılı |
+| 26 | ÇALIŞIYOR | CSV dışa aktarma (filtreye uyar, formül enjeksiyonuna karşı kaçışlı) |
+| 27 | ÇALIŞIYOR | Kalıcı istatistikte henüz olmayan yeni müşteriler canlı yedekle dahil |
+| 28 | ÇALIŞIYOR | `Intl` ile ₺ biçimi |
+| 29 | ÇALIŞIYOR | Mobilde kart listesi, ≥44px dokunma hedefleri |
+| 30 | ÇALIŞIYOR | `aria-sort`, caption, odak halkası, klavye |
+| 31 | ÇALIŞIYOR | Yetki DB'den (`requireAuth`), kiracı kapsamı |
+| 32 | ÇALIŞIYOR | STAFF/ADMIN dalları define-route kiracı çözümüyle |
+| 33 | ÇALIŞIYOR | TR/EN `copy.ts` |
+| 34 | ÇALIŞIYOR | `ref` bayiye bağlı opak kimlik (`lib/dealer-customers/ref.ts`) |
+| 35 | ÇALIŞIYOR | `generateMetadata` |
+| 36 | ÇALIŞIYOR | Kalıcı DealerCustomerStats önce, sınırlı sorgular |
+
+Kapanan bulgular: raporun tüm doğrulanmış bulguları (çapraz kiracı metrik sızıntısı, NULLS FIRST sıralaması, sessiz hata, sayfalama/gerçek toplam yokluğu, rozet kontrastı, i18n, `ref` gizlilik iddiası, aksiyonsuz tablo). Eski kardeş rotalar `/dealer/churn-risk`, `/dealer/radar`, `/dealer/segment-actions` kalıcı yönlendirmeyle `?tab=risk|winback|segments` sekmelerine bağlandı.
+
+Kalanlar: bayiye özel müşteri notu/etiketi yazılamadı — ŞEMA İSTEĞİ: `DealerCustomerNote` (dealerId, customerId, metin, etiketler). Push/uygulama içi dışındaki kanallar (SMS/e-posta) İYS entegrasyonu olmadan açılmadı.

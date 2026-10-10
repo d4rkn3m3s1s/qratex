@@ -150,7 +150,11 @@ function WinBackView({ d }: { d: WinBackOverview }) {
         <SectionCard title={copy.radarTitle}>
           <WinBackRadar rows={rows} total={bandTotal} onOpen={openCustomer} />
         </SectionCard>
-        <SectionCard title={copy.winbackListTitle} description={copy.winbackListDesc} density="flush">
+        <SectionCard
+          title={copy.winbackListTitle}
+          description={d.total > d.rows.length ? `${copy.winbackListDesc} ${copy.winbackCapped(d.rows.length, d.total)}` : copy.winbackListDesc}
+          density="flush"
+        >
           <DataTable
             ariaLabel={copy.winbackListTitle}
             columns={columns}

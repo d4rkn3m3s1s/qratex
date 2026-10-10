@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { AlertTriangle, Crown, HeartHandshake, Moon, ShieldAlert, Sprout, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TONE_CALLOUT, type Tone } from '@/components/states';
@@ -11,6 +12,10 @@ import { useCustomersCopy, useCustomersLocale } from './copy';
 
 export function useFormat() {
   const locale = useCustomersLocale();
+  return useMemo(() => makeFormat(locale), [locale]);
+}
+
+function makeFormat(locale: 'tr' | 'en') {
   const tag = locale === 'en' ? 'en-GB' : 'tr-TR';
   const money = new Intl.NumberFormat(tag, { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 });
   const money2 = new Intl.NumberFormat(tag, { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 });

@@ -218,3 +218,43 @@ Her iddia çağıran ve çağrılan taraflar baştan okunarak çürütülmeye ç
 - Route, yalnız müşteri kümesini bayiye göre süzüyor (`app/api/dealer/segment-actions/route.ts:37-41`). Değerleri ise süzülmemiş, global CLV satırlarından alıyor (`:50-63`). Sayfa bunları "Toplam değer" ve "ort. ₺" olarak gösteriyor (`page.tsx:137,152`).
 - **Yeniden üretim:** Müşteri M, A bayisinde 100 ₺, B bayisinde 9.000 ₺ harcamış olsun. A bayisinin panelinde M "VIP" (>= 5000) segmentinde ve tek kişi olarak görünür. Kartta "1 müşteri · ort. ₺9.100" yazar. A bayisi böylece müşterinin rakip işletmelerdeki harcamasını öğrenir. Benzer şekilde B'de çok aktif olan bir müşteri A'da 30+ gündür pasif olsa bile A'da "Uyuyan" sayılmaz (global `lastPurchaseAt` kullanıldığı için). Pasif olmadığı halde B'nin olumsuz geri bildirimleri yüzünden "Risk Altında" da sayılabilir.
 - Not: Toplam bir değer gösteriliyor, kişi adı gösterilmiyor. Ancak tek kişilik segmentlerde bu değer kişiye özel veriye dönüşüyor. Raporun "Çakışmalar" bölümünde belirtildiği gibi `/dealer/customers` aynı global CLV'yi müşteri bazında gösteriyor. Sızıntı yalnız bu sayfayla sınırlı değil.
+
+## Uygulama (Dalga 2)
+
+Rota emekli: `app/dealer/segment-actions/page.tsx` → `/dealer/customers?tab=segments`. Segmentler sekmesi yeniden inşa edildi (`segments-tab.tsx`, `action-composer.tsx`, `action-history.tsx`); segmentler bu işletmenin verisinden (`segmentCards`). Kırık hedefler (`campaigns/risk-segment`, `win-back`, `innovation/segment-proposals` çağrısı) tek uç `POST /api/dealer/customers/actions` ile değiştirildi: önizle + gönder, idempotent, müşteri tercihi / sıklık / günlük tavan saygılı (E3).
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | |
+| 2 | ÇALIŞIYOR | Gerçek tazelik bilgisi |
+| 3 | ÇALIŞIYOR | Yüklenirken sayı gösterilmez |
+| 4 | ÇALIŞIYOR | |
+| 5 | ÇALIŞIYOR | `aria-busy` iskelet |
+| 6 | ÇALIŞIYOR | Boş durum hatadan ayrı |
+| 7 | ÇALIŞIYOR | Kalıcı hata kartı + Tekrar dene |
+| 8 | ÇALIŞIYOR | |
+| 9 | ÇALIŞIYOR | Renk + ikon + metin |
+| 10 | ÇALIŞIYOR | Ortalama yalnız bu işletmeden |
+| 11 | ÇALIŞIYOR | Dil doğru büyük harf |
+| 12 | ÇALIŞIYOR | Toplam değer yalnız bu işletmeden |
+| 13 | ÇALIŞIYOR | Risk bu işletmeye verilen sinyallerden |
+| 14 | ÇALIŞIYOR | Gerekçe bu işletmenin sayılarıyla |
+| 15 | ÇALIŞIYOR | Risk Altında: önizlemeli kişisel teklif / mesaj |
+| 16 | ÇALIŞIYOR | Uyuyan: geri kazanım mesajı |
+| 17 | ÇALIŞIYOR | VIP: teşekkür mesajı / kişisel teklif |
+| 18 | ÇALIŞIYOR | Sadık: teşekkür mesajı ("referans" adı yanıltıcıydı, kaldırıldı) |
+| 19 | ÇALIŞIYOR | Yeni: karşılama mesajı ("seri" iddiası kaldırıldı) |
+| 20 | ÇALIŞIYOR | |
+| 21 | ÇALIŞIYOR | Aksiyon başına gönderim durumu |
+| 22 | ÇALIŞIYOR | Sonuçtan gönderilen/elenen sayıları |
+| 23 | ÇALIŞIYOR | |
+| 24 | ÇALIŞIYOR | TR/EN |
+| 25 | ÇALIŞIYOR | Aksiyon geçmişi + geri dönüş atfı |
+| 26 | ÇALIŞIYOR | Segment → Liste sekmesinde filtreli müşteriler |
+| 27 | ÇALIŞIYOR | Önizleme/onay penceresi (alıcı sayısı, elenenler ve nedeni, örnek metin) |
+| 28 | ÇALIŞIYOR | Tazelik + bayatlık uyarısı |
+| 29 | ÇALIŞIYOR | |
+| 30 | ÇALIŞIYOR | Hareket politikası / motion-safe |
+| 31 | ÇALIŞIYOR | |
+
+Kapanan bulgular: her zaman 400 dönen 4 aksiyon, sahte başarı bildirimi, platform geneli değer/risk, onaysız gerçek gönderim, hatanın boş durum olarak gizlenmesi, erişilebilirlik eksikleri. Kalanlar: yok.

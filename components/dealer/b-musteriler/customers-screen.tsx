@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Database, Moon, ScanLine, ShieldAlert, Users, Wallet } from 'lucide-react';
 import Link from 'next/link';
@@ -56,8 +56,12 @@ export function CustomersScreen({ initial }: { initial: CustomersInitial }) {
     [compose, sheet.open, initial.canSend]
   );
 
+  // Göreli zaman yalnız tarayıcıda (sunucu ile istemci saati farkı hidrasyon uyuşmazlığı üretmesin).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const when = (iso: string) => (mounted ? fmt.relative(iso) : fmt.date(iso));
   const s = summary.data;
-  const freshness = s ? (s.source === 'live' ? copy.freshnessLive : s.calculatedAt ? copy.freshnessAt(fmt.relative(s.calculatedAt)) : null) : null;
+  const freshness = s ? (s.source === 'live' ? copy.freshnessLive : s.calculatedAt ? copy.freshnessAt(when(s.calculatedAt)) : null) : null;
 
   return (
     <CustomersActionsProvider value={actions}>
@@ -92,7 +96,7 @@ export function CustomersScreen({ initial }: { initial: CustomersInitial }) {
             <div className="space-y-6">
               {d.stale && d.calculatedAt && (
                 <Callout tone="warning" icon={AlertTriangle}>
-                  {copy.staleNote(fmt.relative(d.calculatedAt))}
+                  {copy.staleNote(when(d.calculatedAt))}
                 </Callout>
               )}
               {d.source === 'live' && <Callout tone="info">{copy.liveNote}</Callout>}

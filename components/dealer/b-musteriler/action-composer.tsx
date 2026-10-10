@@ -26,15 +26,6 @@ type Props = {
   onClose: () => void;
 };
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
-
 /**
  * Önizle → onayla → gönder penceresi. Alıcıları sunucu çözer; pencere açılınca ve seçim
  * değişince önizleme (kaç kişiye gidecek, kim neden elendi, müşterinin göreceği metin) gelir.
@@ -58,16 +49,15 @@ export function ActionComposer({ request, onClose }: Props) {
     idemKey.current = newIdempotencyKey();
   }, [request]);
 
-  const debouncedNote = useDebounced(note, 400);
-  const spec: ActionSpec = useMemo(
-    () => (type === 'message' ? { type, template, note: debouncedNote || undefined } : { type, note: debouncedNote || undefined }),
-    [type, template, debouncedNote]
-  );
+  // Önizleme notdan bağımsızdır (her tuşta sunucuya gidilmez); not örnek metne istemcide eklenir —
+  // sunucudaki `buildActionMessage` ile aynı birleştirme kuralı.
+  const previewSpec: ActionSpec = useMemo(() => (type === 'message' ? { type, template } : { type }), [type, template]);
   const audienceKey = request ? JSON.stringify(request.audience) : '';
+  const trimmedNote = note.trim();
 
   const preview = useQuery({
-    queryKey: ['dealer', 'customers', 'preview', audienceKey, spec.type, spec.type === 'message' ? spec.template : '', spec.note ?? ''],
-    queryFn: () => previewCustomerAction(request!.audience, spec),
+    queryKey: ['dealer', 'customers', 'preview', audienceKey, type, type === 'message' ? template : ''],
+    queryFn: () => previewCustomerAction(request!.audience, previewSpec),
     enabled: open,
     staleTime: 15_000,
     retry: 1,
@@ -77,7 +67,7 @@ export function ActionComposer({ request, onClose }: Props) {
     mutationFn: () =>
       executeCustomerAction(
         request!.audience,
-        type === 'message' ? { type, template, note: note.trim() || undefined } : { type, note: note.trim() || undefined },
+        type === 'message' ? { type, template, note: trimmedNote || undefined } : { type, note: trimmedNote || undefined },
         idemKey.current
       ),
     onSuccess: (res) => {
@@ -180,7 +170,11 @@ export function ActionComposer({ request, onClose }: Props) {
                 <div className="rounded-control border border-subtle bg-surface-1 p-3">
                   <p className="qx-caption mb-1 text-fg-muted">{copy.previewTitle}</p>
                   <p className="qx-small font-semibold text-fg">{p.sample.title}</p>
-                  <p className="qx-small whitespace-pre-line text-fg">{p.sample.message}</p>
+                  <p className="qx-small whitespace-pre-line text-fg">
+                    {type === 'message' ? (trimmedNote ? `${p.sample.message}
+
+${trimmedNote}` : p.sample.message) : trimmedNote || p.sample.message}
+                  </p>
                 </div>
                 {p.offerOptions && p.offerOptions.length > 0 && (
                   <div>

@@ -253,3 +253,60 @@ Her iddia, çağıran ve çağrılan kod baştan okunarak çürütülmeye çalı
 | 2 | Global CLV ile bayi bazlı müdahale | Doğrulandı (doğruluk hatası, kimlik sızıntısı yok) |
 | 3 | Hata = "risk yok" görünümü | Doğrulandı |
 | 4 | Müşteri yerine yorum sayısı | Doğrulandı |
+
+## Uygulama (Dalga 2)
+
+Rota emekli: `app/dealer/churn-risk/page.tsx` → `/dealer/customers?tab=risk` (permanentRedirect, sorgu parametreleri korunur). Risk sekmesi `components/dealer/b-musteriler/risk-tab.tsx`; veri `GET /api/dealer/customers/risk` (`getRiskOverview`), otomasyon ayarı `/api/dealer/churn-intervention` (zod doğrulamalı). Eski `churn-intervention-settings.tsx` ve `/api/dealer/churn-risk` kaldırıldı.
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Hedef sayfanın metadata'sı |
+| 2 | ÇALIŞIYOR | |
+| 3 | ÇALIŞIYOR | Modül kapısı uçta denetleniyor |
+| 4 | ÇALIŞIYOR | |
+| 5 | ÇALIŞIYOR | İskelet |
+| 6 | ÇALIŞIYOR | `res.ok` + QueryState hata/yeniden dene |
+| 7 | ÇALIŞIYOR | Ortak başlık |
+| 8 | ÇALIŞIYOR | |
+| 9 | ÇALIŞIYOR | Otomasyon özeti tek satır + ayar penceresi |
+| 10 | ÇALIŞIYOR | |
+| 11 | ÇALIŞIYOR | Eşik yüzde olarak girilir |
+| 12 | ÇALIŞIYOR | Boş girdi doğrulaması |
+| 13 | ÇALIŞIYOR | Sade etiket ve açıklama |
+| 14 | ÇALIŞIYOR | Otomatik teklif artık müşteriye bağlı gerçek kişisel teklif taslağı; metin dürüst |
+| 15 | ÇALIŞIYOR | |
+| 16 | ÇALIŞIYOR | Son koşular listelenir |
+| 17 | ÇALIŞIYOR | Bildirim Risk sekmesine götürür |
+| 18 | ÇALIŞIYOR | İşaretlenen müşteriler + durum (açık / ele alındı / geri döndü) |
+| 19 | ÇALIŞIYOR | Risk rengine göre |
+| 20 | ÇALIŞIYOR | Hata durumunda gösterilmez |
+| 21 | ÇALIŞIYOR | |
+| 22 | ÇALIŞIYOR | Birim düzeltildi: gerçekten tekil müşteri sayısı |
+| 23 | ÇALIŞIYOR | Dağılım çubuğu + metin lejant |
+| 24 | ÇALIŞIYOR | Önerilen aksiyon gerçek sayılarla |
+| 25 | ÇALIŞIYOR | Önizle-gönder penceresi, segment ön-seçili |
+| 26 | ÇALIŞIYOR | Müşteri bazlı tam liste + durum filtresi |
+| 27 | ÇALIŞIYOR | |
+| 28 | ÇALIŞIYOR | |
+| 29 | ÇALIŞIYOR | |
+| 30 | ÇALIŞIYOR | Ölü dal kaldırıldı (RiskPill) |
+| 31 | ÇALIŞIYOR | Türkçe duygu etiketi |
+| 32 | ÇALIŞIYOR | |
+| 33 | ÇALIŞIYOR | |
+| 34 | ÇALIŞIYOR | Niyet rozeti (360 sinyallerinde) |
+| 35 | ÇALIŞIYOR | "Detay" → 360 çekmece; her zaman görünür |
+| 36 | ÇALIŞIYOR | Hata ve boş ayrıldı |
+| 37 | ÇALIŞIYOR | lib/motion politikası, azaltılmış hareket |
+| 38 | ÇALIŞIYOR | Tek copy kaynağı (TR/EN) |
+| 39 | ÇALIŞIYOR | Müşteri bazında tekilleştirme |
+| 40 | ÇALIŞIYOR | Yanıtlandı / ele alındı durumu |
+| 41 | KALDIRILDI | Dönem seçici yerine müşteri bazlı güncel risk + 8 haftalık trend (tek anlamlı pencere) |
+| 42 | ÇALIŞIYOR | Haftalık trend (Europe/Istanbul) |
+| 43 | ÇALIŞIYOR | Satır içi yanıtla / kişisel teklif / mesaj |
+| 44 | ÇALIŞIYOR | "Neden riskli?" gerekçeleri (`explainReasons`) |
+| 45 | ÇALIŞIYOR | Güvenilmez/işaretli yorumlar hariç |
+| 46 | ÇALIŞIYOR | CSV (Liste sekmesi, risk filtresi) + yenile |
+| 47 | KALDIRILDI | Dekoratif gradyan QDL v2 ops kaydında yer almıyor |
+| 48 | ÇALIŞIYOR | Dil değişiminde doğru metin |
+
+Kapanan bulgular: sessiz hata, yanlış birim ("müşteri" yerine geri bildirim sayısı), kırık "Detay" bağlantısı ve yalnız fareyle görünmesi, yanıltıcı otomatik teklif anahtarı, i18n karışıklığı, modül kapısı eksikliği. Kalanlar: yok. Şema isteği: yok.

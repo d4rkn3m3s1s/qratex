@@ -69,6 +69,8 @@ function RiskView({ d }: { d: RiskOverview }) {
             <span className="block min-w-0">
               <span className="qx-caption text-fg-muted">
                 {s.rating}/5 · {fmt.relative(s.at)} · {s.replied ? copy.signalReplied : copy.signalOpen}
+                {s.intent && copy.intent[s.intent] ? ` · ${copy.intent[s.intent]}` : ''}
+                {s.urgent && <span className="ml-1 font-semibold text-danger">· {copy.urgent}</span>}
               </span>
               {s.text && <span className="qx-small line-clamp-2 block text-fg">{s.text}</span>}
             </span>

@@ -195,6 +195,8 @@ function SignalItem({ s, refId }: { s: CustomerSignal; refId: string }) {
           {s.rating}/5
         </span>
         {s.churnRisk != null && <RiskPill level={s.churnRisk >= 0.5 ? 'high' : s.churnRisk >= 0.3 ? 'medium' : 'low'} value={s.churnRisk} />}
+        {s.intent && copy.intent[s.intent] && <StatusBadge label={copy.intent[s.intent]!} tone={s.intent === 'complaint' ? 'danger' : s.intent === 'praise' ? 'success' : 'neutral'} icon={null} size="sm" />}
+        {s.urgent && <StatusBadge label={copy.urgent} tone="danger" size="sm" />}
         <StatusBadge label={s.replied ? copy.signalReplied : copy.signalOpen} tone={s.replied ? 'success' : 'warning'} size="sm" />
         <time className="qx-caption ml-auto text-fg-muted" dateTime={s.at}>
           {fmt.relative(s.at)}
