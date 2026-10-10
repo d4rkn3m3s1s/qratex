@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
+import { ApiError, errorResponse } from '@/lib/http/define-route';
+import { assertPlacesAccess } from '@/lib/places/gate.server';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { coarseLocationBucket, haversineKm } from '@/lib/innovation-geo';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
@@ -9,8 +13,23 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Yakın çevre trendleri — adres yok; kaba bölge + anonim tema etiketleri.
+ * Yalnız oturumlu MÜŞTERİ; Keşfet kapısı (menü + discovery modülü) ve dakikada 30 istek
+ * (denetim: uç anonim erişime ve toplu kazımaya açıktı). Demo/askıdaki işletmeler hariç.
  */
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(['CUSTOMER']);
+  if ('error' in auth) return auth.error;
+  const userId = auth.session.user.id;
+  try {
+    await assertPlacesAccess(userId, request);
+  } catch (e) {
+    if (e instanceof ApiError) return errorResponse(e, 'radar');
+    throw e;
+  }
+  const rl = await checkRateLimitDb(`innovation-radar:${userId}`, 30, 60_000).catch(() => null);
+  if (rl && !rl.ok) {
+    return NextResponse.json({ error: 'Çok fazla istek. Biraz sonra tekrar deneyin.' }, { status: 429, headers: PRIVATE_NO_STORE_HEADERS });
+  }
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.nearbyRadar) {
     return NextResponse.json(
@@ -37,7 +56,9 @@ export async function GET(request: NextRequest) {
   const dealers = await prisma.user.findMany({
     where: {
       role: 'DEALER',
-      latitude: { not: null },
+      isDemo: false,
+      suspendedAt: null,
+      latitude: { gte: lat - radiusKm / 111, lte: lat + radiusKm / 111 },
       longitude: { not: null },
     },
     select: {
@@ -66,7 +87,7 @@ export async function GET(request: NextRequest) {
         experienceHints: [],
         discoveryCards: [],
         disclaimer:
-          'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
+          'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özettir.',
       },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
@@ -159,7 +180,7 @@ export async function GET(request: NextRequest) {
       experienceHints,
       discoveryCards: discoveryFallback,
       disclaimer:
-        'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özetdir.',
+        'Konum kabaca gruplanmıştır; işletme adresi paylaşılmaz. Trendler toplu anonim özettir.',
     },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );

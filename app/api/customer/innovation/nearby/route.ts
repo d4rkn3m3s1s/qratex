@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
+import { ApiError, errorResponse } from '@/lib/http/define-route';
+import { assertPlacesAccess } from '@/lib/places/gate.server';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { haversineKm } from '@/lib/innovation-geo';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
@@ -9,8 +13,23 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Mutlu saat / flash — yakınımda (tam adres yok, mesafe + işletme adı).
+ * Yalnız oturumlu MÜŞTERİ; Keşfet kapısı + dakikada 30 istek (denetim: anonim toplu kazıma).
+ * Keşfet → Fırsatlar artık `/api/customer/places/deals` kullanır; bu uç geriye uyum içindir.
  */
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(['CUSTOMER']);
+  if ('error' in auth) return auth.error;
+  const userId = auth.session.user.id;
+  try {
+    await assertPlacesAccess(userId, request);
+  } catch (e) {
+    if (e instanceof ApiError) return errorResponse(e, 'flash-nearby');
+    throw e;
+  }
+  const rl = await checkRateLimitDb(`innovation-nearby:${userId}`, 30, 60_000).catch(() => null);
+  if (rl && !rl.ok) {
+    return NextResponse.json({ error: 'Çok fazla istek. Biraz sonra tekrar deneyin.' }, { status: 429, headers: PRIVATE_NO_STORE_HEADERS });
+  }
   const cfg = await getInnovationPlatformConfig();
   if (!cfg.features.flashOffers) {
     return NextResponse.json(
@@ -49,6 +68,8 @@ export async function GET(request: NextRequest) {
           name: true,
           latitude: true,
           longitude: true,
+          isDemo: true,
+          suspendedAt: true,
         },
       },
     },
@@ -71,6 +92,7 @@ export async function GET(request: NextRequest) {
     const dlat = o.dealer.latitude;
     const dlng = o.dealer.longitude;
     if (dlat == null || dlng == null) continue;
+    if (o.dealer.isDemo || o.dealer.suspendedAt) continue;
     const distanceKm = haversineKm(lat, lng, dlat, dlng);
     if (distanceKm > radiusKm) continue;
     if (o.redemptionCount >= o.maxRedemptions) continue;
@@ -83,7 +105,7 @@ export async function GET(request: NextRequest) {
       value: o.value,
       validTo: o.validTo.toISOString(),
       distanceKm: Math.round(distanceKm * 10) / 10,
-      venueLabel: o.dealer.businessName || o.dealer.name || 'İşletme',
+      venueLabel: o.dealer.businessName || 'İşletme',
       dealerId: o.dealer.id,
     });
   }

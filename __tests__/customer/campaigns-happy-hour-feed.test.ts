@@ -18,7 +18,7 @@ import {
   parseOffer,
   scheduleOffers,
   type HappyHourOffer,
-} from '@/app/customer/campaigns/_lib/happy-hour-feed';
+} from '@/lib/places/happy-hour-schedule';
 import { isHappyHourLive } from '@/lib/happy-hour-live';
 
 // 2026-10-08 Perşembe, 09:30 UTC = 12:30 İstanbul.

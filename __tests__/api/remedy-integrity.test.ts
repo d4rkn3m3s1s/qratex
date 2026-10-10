@@ -17,6 +17,8 @@ jest.mock('@/lib/api-auth', () => ({
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn().mockResolvedValue({ ok: true, remaining: 9 }) }));
 jest.mock('@/lib/capture-api-error', () => ({ captureApiError: jest.fn() }));
 jest.mock('@/lib/module-gate', () => ({ assertModuleEnabled: jest.fn().mockResolvedValue(null) }));
+// Keşfet kapısı (menü + modül) — yakın flash ucu artık oturum + kapı ister.
+jest.mock('@/lib/places/gate.server', () => ({ assertPlacesAccess: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('@/lib/idempotency', () => ({
   checkIdempotency: jest.fn().mockResolvedValue({ cached: false, key: '' }),
   storeIdempotency: jest.fn(),
@@ -285,6 +287,7 @@ describe('churn müdahalesi kişisel teklif', () => {
 
 describe('GET /api/customer/innovation/nearby', () => {
   it('eski kişisel churn taslaklarını herkese açık sorgudan dışlar', async () => {
+    mockRequireAuth.mockResolvedValue(session('cust1', 'CUSTOMER'));
     m.flashFindMany.mockResolvedValue([]);
     const res = await nearbyGET(jsonReq('/api/customer/innovation/nearby?lat=41&lng=29', 'GET'));
     expect(res.status).toBe(200);

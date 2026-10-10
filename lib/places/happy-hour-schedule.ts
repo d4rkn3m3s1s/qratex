@@ -1,5 +1,6 @@
 /**
- * Mutlu saat akışı — istemci adaptörü (saf; Jest ile test edilir).
+ * Mutlu saat akışı — zamanlama + biçimlendirme adaptörü (saf; Jest ile test edilir).
+ * Keşfet → Fırsatlar sekmesi ve mekân detayı kullanır (eski konum: app/customer/campaigns/_lib).
  *
  * P0-39 (müşteri · kampanyalar) kök nedeni: sayfa `GET /api/happy-hour` yanıtında hiç olmayan
  * `happyHours` alanını ve hiçbir nesnede üretilmeyen `isActiveNow` bayrağını okuyordu; liste
