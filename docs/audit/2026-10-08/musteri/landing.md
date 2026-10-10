@@ -292,3 +292,83 @@ Yöntem: her iddia, çağıran/çağrılan kod, `proxy.ts`, `next.config.js` CSP
 | 3 | Sahte sosyal kanıt | Doğrulandı (modül ayarına bağlı) | YÜKSEK (yanıltıcı reklam) |
 | 4 | Yanlış metrik sayımı | Doğrulandı | ORTA |
 | 5 | Fiyat/kota kopukluğu | Kısmen doğrulandı | ORTA |
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: `p-landing`. Commit'ler: `67763e8` (yeniden inşa), `9d24ab3` (public kabuk: header/footer), `c0df701` (takip düzeltmeleri).
+Yeni dosyalar: `lib/landing/{public-stats-core,public-stats,public-pricing-core,public-pricing,earn-preview-core,earn-preview,seo,content-dates}.ts`, `components/public/p-landing/**`, `public/.well-known/security.txt`, test `__tests__/lib/landing-public.test.ts` (20 test, yeşil).
+Silinen: `app/(public)/home-client.tsx`, `components/landing/` altındaki Hero/Features/AdMarquee/Demo/HowItWorks/Pricing/CTA/FAQ/Testimonials bölümleri, `lib/landing-content.ts` (`LandingBackground.tsx` yalnız `app/lab/zoom` için duruyor; lab'a dokunulmadı).
+
+**Yeni yapı.** `app/(public)/page.tsx` tamamen sunucu bileşeni: oturum açık kullanıcı sunucuda `roleHome()` ile yönlenir; istatistik (`getPublicStats`), puan kuralları (`getEarnPreview`), planlar (`getPublicPricingPlans`) sunucuda, `unstable_cache` + Redis + try/catch (build-time fail-safe). Sayfa sırası: Hero (tüketici + işletme CTA, telefon mikro-hikâyesi) → gerçek rakam bandı → "Dört adımda kazan" (puan matrisinden) → "Geri bildirimin kaç puan eder?" deneme alanı → karakter kategorileri + lig basamakları + davet/seri → işletme şeridi (DB'den başlangıç fiyatı) → SSS (`<details>`, FAQPage JSON-LD) → kapanış CTA. İstemci adaları: `HeroStory`, `TryIt`, `CtaLink`, `LocaleSync`, `Reveal`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | `buildPublicMetadata` (`title.absolute`, canonical, tam OG/Twitter, admin override); TR'de admin varsayılan başlığı, EN'de çeviri |
+| 2 | Organization/WebSite/Breadcrumb JSON-LD | ÇALIŞIYOR | `jsonLdHtml` `<`, `>`, `&`, U+2028/2029 kaçışlar; `inLanguage` görünen dille aynı |
+| 3 | FAQPage JSON-LD | ÇALIŞIYOR | Görünen SSS ile aynı dizi, aynı dil (sunucuda çevrilir) |
+| 4 | Fiyat JSON-LD | ÇALIŞIYOR (taşındı) | `/neden-qratex`'te, kartlarla aynı `PricingPlan` verisinden; uydurma `priceValidUntil` yok |
+| 5 | VideoObject JSON-LD | KALDIRILDI | Demo videosu yok (CSP de engelliyordu); sahte meta yayınlanmaz |
+| 6 | Fiyat modül anahtarı | ÇALIŞIYOR | Kapalıyken landing fiyat cümlesi/linki ve `/neden-qratex` plan kartları gizlenir, iletişim durumuna düşer; header/footer linki ölü kalmaz |
+| 7 | Reklam şeridi modül anahtarı | KALDIRILDI | Şerit sahteydi (8 uydurma marka); rızalı işletme verisi olmadan geri gelmez → ŞEMA İSTEĞİ |
+| 8 | Oturumlu kullanıcı yönlendirmesi | ÇALIŞIYOR | Sunucuda `redirect(roleHome(role))`; STAFF dahil, flaş ve geri tuşu döngüsü yok |
+| 9 | Hareketli arka plan | ÇALIŞIYOR | `PublicBackdrop`: statik gradyan + 2 statik ışık; 40 sonsuz animasyon kalktı |
+| 10 | Admin arka plan seçimi | ÇALIŞIYOR | Sunucu prop'u; önbelleksiz istemci isteği yok; sezonluk zemin lazy + `<Ambient>` (gizli sekmede/azaltılmış harekette durur) |
+| 11 | Skip-link | ÇALIŞIYOR | TR/EN |
+| 12 | Header logo | ÇALIŞIYOR | SSR'da `sr-only` ad; gizli varyantların `priority` önyüklemesi kaldırıldı |
+| 13 | Header linkleri | ÇALIŞIYOR | "Nasıl çalışır" (tüketici) + özellik/fiyat → `/neden-qratex#…`; aktif durum yalnız tam yolda |
+| 14 | Dil seçici | ÇALIŞIYOR | `LocaleSync`: istemci dili sunucunun bastığından farklıysa tek `router.refresh()` (döngüsüz) |
+| 15 | Tema seçici | ÇALIŞIYOR | Modül düzeyinde bileşen; tek `onSelect` |
+| 16 | Giriş/Kayıt/Panel butonları | ÇALIŞIYOR | Panel linki `roleHome` (STAFF → `/staff`) |
+| 17 | Kaydırınca gizlenen header | ÇALIŞIYOR | `focus-within:translate-y-0` (WCAG 2.4.11) |
+| 18 | Mobil menü | ÇALIŞIYOR | `SheetTitle` (sr-only) |
+| 19 | Hero rozeti ("Yeni: AI…") | KALDIRILDI | Yerine kalıcı değer önerisi rozeti ("Geri bildirim ver, ödül kazan") |
+| 20 | Hero başlık | ÇALIŞIYOR | LCP öğesi ilk HTML'de opak, statik CSS gradyan vurgu (JS beklemez) |
+| 21 | Hero birincil CTA | ÇALIŞIYOR | `register?role=CUSTOMER&src=landing_hero`; ikincil "İşletmem için" → `/neden-qratex` |
+| 22 | "Demo İzle" | KALDIRILDI | Yerine çalışan etkileşimli deneme alanı (#33) |
+| 23 | Hero arka plan videosu | KALDIRILDI | CSP'de engelliydi, env yoktu; hero görseli telefon mikro-hikâyesi |
+| 24 | Canlı istatistik kartı | ÇALIŞIYOR | Sunucuda gerçek değer; HyperText kaldırıldı, ekran okuyucu tek değer okur |
+| 25 | Yedek 10K+/500+/1M+/4.9 | KALDIRILDI | Eşik altı metrik gizlenir; hiçbiri geçmezse dürüst "Yeni başlıyoruz" kartı; kaynak yoksa bant hiç çizilmez |
+| 26 | `/api/public/stats` | ÇALIŞIYOR | Yalnız gerçek tüketici/işletme (demo, anonim, askıdaki hariç), silinmiş + demo geri bildirim hariç, ortalama ≥30 örneklemde; hata 503 zarfı; Redis anahtarı `stats:public:v2`; eski alan adları korunur |
+| 27 | Scroll göstergesi | KALDIRILDI | Sonsuz dekoratif döngüydü; hero artık tam ekran değil |
+| 28 | Özellik kartları | ÇALIŞIYOR (yeniden yazıldı) | Tüketici "kazanç döngüsü" (ekonomi değerleriyle) + işletme özellikleri `/neden-qratex#ozellikler`; "OpenAI ile" yanlış iddiası yok |
+| 29 | Reklam / "Bize güvenen işletmeler" | KALDIRILDI | Uydurma sosyal kanıt → ŞEMA İSTEĞİ (`User.showcaseConsent`) |
+| 30 | Marquee durdurma | KALDIRILDI | Şeritle birlikte |
+| 31 | Demo video gömme | KALDIRILDI | — |
+| 32 | Demo sahte poster | KALDIRILDI | — |
+| 33 | Yer tutucu metni | KALDIRILDI | Yerine `TryIt`: yıldız + metin → ekonominin gerçek eşik kuralıyla canlı puan/XP; hiçbir şey göndermez, `aria-live` |
+| 34 | "Nasıl çalışır" | ÇALIŞIYOR | `#nasil-calisir`, 4 adım, rakamlar puan matrisi/lig/karakter kataloğundan; işletme akışı `/neden-qratex#nasil-baslanir` |
+| 35 | Fiyat kartları | ÇALIŞIYOR (taşındı) | `PricingPlan` tek kaynak (`/neden-qratex#fiyatlar`); landing'de DB'den "₺X'ten başlayan" |
+| 36 | Plan vaatleri | ÇALIŞIYOR | Yalnız uygulanan kotalar (`maxQRCodes/maxBranches`) + admin'in plan özellikleri; sabit "aylık 100 geri bildirim" yok |
+| 37 | Plan CTA'ları | ÇALIŞIYOR | `register?role=DEALER&plan=<id>&src=pricing&callbackUrl=/dealer/billing?plan=<id>` (kayıt sayfası `role` okuyor) |
+| 38 | CTA bölümü | ÇALIŞIYOR | Kapanış CTA'sı iki rol, `src` ile |
+| 39 | "Satış ile Görüşün" | ÇALIŞIYOR (kısmi kapsam) | Görünür e-posta adresi + mailto (`/neden-qratex` hero ve fiyat boş durumu); form için ŞEMA İSTEĞİ (Lead) |
+| 40 | Spotlight | KALDIRILDI | Geçersiz CSS'li dekor bileşeniyle birlikte |
+| 41 | SSS | ÇALIŞIYOR | `<details>` akordeon; tüketici + işletme soruları; puan rakamları sunucudan |
+| 42 | Testimonials (ölü kod) | KALDIRILDI | Dosya silindi; rızalı gerçek alıntı için ŞEMA İSTEĞİ |
+| 43 | Footer linkleri | ÇALIŞIYOR | "Hakkımızda → /#features" kaldırıldı, SSS → `/#sss`, TR/EN |
+| 44 | Footer sosyal linkleri | KISMİ (açık) | Hesapların varlığı hâlâ doğrulanmadı — proje sahibinin onayı gerekir |
+| 45 | Footer slogan | ÇALIŞIYOR | "Sadakatiniz" yazımı düzeltildi; EN arayüzde TR slogan gösterilmez (mount sonrası belirme duruyor) |
+| 46 | "Powered by ReverBot" | KALDIRILDI | Yer tutucu |
+| 47 | Çerez onayı | ÇALIŞIYOR | P0-31 (Dalga 1) ile rızaya bağlandı; `CtaLink` olayları da `track()` üzerinden rızaya bağlı |
+| 48 | Yükleme ekranı | ÇALIŞIYOR | Statik iskelet, header/footer görünür, tam ekran perde yok |
+| 49 | Azaltılmış hareket | ÇALIŞIYOR | Hikâye `<Ambient>` (OS + uygulama ayarı), `Reveal` aynı politika, arka plan statik |
+| 50 | Hata durumu | ÇALIŞIYOR | İstatistik/plan okunamazsa bant gizli / dürüst plan durumu; sahte yedek yok |
+| 51 | Tüketici değer önerisi | ÇALIŞIYOR | Hero, kazanç döngüsü, deneme alanı, koleksiyon/lig |
+| 52 | Anonim "QR Okut" girişi | KISMİ (açık) | Hero'da "telefon kamerasıyla okut, uygulama gerekmez" yönlendirmesi var (QR doğrudan geri bildirim sayfasını açar); oturumsuz tarayıcı içi tarayıcı yok — `lib/qr-resolve` m-tara'nın, herkese açık tarama sayfası bu yüzeyin kapsamı dışında |
+| 53 | PWA yükleme çağrısı | KISMİ (açık) | Global `InstallBanner` sürüyor; bağlamsal çağrı eklenmedi (düşük değer) |
+
+**Kapanan bulgular:** 1 (Dalga 1'de; landing olayları da rızaya bağlı), 2, 3, 4, 5 (fiyat kaynağı + vaatler + rol/plan niyeti), 6, 7, 8, 9 (sayfa dil çerezi ve oturum yüzünden dinamik kaldı ama tüm veri önbellekli; bu sayfa için ~400 KB sözlük istemciye gitmiyor, 40 animasyon ve önbelleksiz DB isteği yok), 10, 11 (sayfa düzeyi), 12, 13, 14, 15, 16 → **16/16**.
+
+**Eksik özelliklerden uygulananlar:** 1 (tüketici değer önerisi + ödül döngüsü), 2 (oyunlaştırma önizlemesi: karakter kategorileri, lig basamakları, seri/davet/çark), 4 (gerçek, eşikli canlı sayaçlar), 6 (kitle ayrımı + plan → kayıt → faturalama hunisi). Uygulanmayanlar: 3 (anonim tarayıcı içi QR tarayıcı, yakındaki işletmeler herkese açık sürümü — konum + işletme rızası gerektirir), 5 (Wrapped tarzı örnek kart — uydurma veriyle yapılamaz).
+
+**Kalanlar (gerekçe):**
+- ŞEMA İSTEĞİ: `User.showcaseConsent Boolean @default(false)` (+ vitrin logosu onayı) → rızalı "bize güvenen işletmeler" şeridi; rızalı müşteri alıntıları için `Testimonial` (ya da `Feedback.showcaseConsentAt`); satış iletişim formu için `Lead` modeli.
+- Admin modül anahtarı `landing_marquee` artık tüketicisiz (`lib/module-controls.ts`, admin sahibinin işi: kaldırılmalı ya da showcase gelince bağlanmalı). `landing_pricing` açıklaması "landing + /neden-qratex planları" olarak güncellenmeli.
+- `messages/{tr,en}.json` içindeki `landing.*` ad alanı artık kullanılmıyor (paylaşılan dosya; i18n sahibi temizleyebilir).
+- `<html lang>` ve kök `alternates.languages` kök layout'ta (`app/layout.tsx`, paylaşılan) sabit `tr`; ayrı EN URL'si yok.
+- Kayıt sayfası `src`/`plan` parametrelerini `user_registered` olayına eklemiyor (p-auth); `/dealer/billing` `?plan=` ile planı öne çıkarmıyor (b-ayarlar).
+- Görsel doğrulama: dev server/build bu dalgada yasak olduğu için ekran görüntüsü alınmadı; tsc (bu yüzeyin dosyalarında 0 hata) ve jest ile doğrulandı.

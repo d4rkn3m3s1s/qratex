@@ -198,3 +198,53 @@ Sayfa tamamen statik bir Server Component (145 satır). Kendi API çağrısı, f
 - **Yeniden üretim:** Sayfa linki WhatsApp/LinkedIn/Facebook'ta paylaşıldığında `og:title`/`og:description` doğru, ama `og:image`, `og:url`, `og:site_name`, `og:type`, `og:locale` etiketleri yok → görselsiz, sitesiz küçük önizleme kartı.
 - **Twitter/X nüansı:** Sayfa `twitter` tanımlamadığı için kökteki `twitter` (`app/layout.tsx:86-92`) miras kalır. `postProcessMetadata` (`resolve-metadata.js:602-636`) OG'den otomatik doldurmayı yalnız twitter başlığı/açıklaması/görseli **yoksa** yapar; kökten gelen başlık dolu olduğundan doldurmaz. Sonuç: X kartı **görsel içerir** (kökteki `seo.ogImageUrl`) ama başlık/açıklama sayfanın değil sitenin varsayılanıdır (`seo.defaultTitle`/`defaultDescription`). Yani iddianın "X kartı site varsayılan başlığını gösterir" kısmı doğru; "görselsiz kart" kısmı yalnız OG tüketicileri için geçerli.
 - **Öneri (ürün seviyesi):** Sayfaya özel kopyala-yapıştır yerine ortak bir `buildPageMetadata({ path, title, description, image? })` yardımcısı: `getSeoSettings()` + `getCanonicalBase()` ile `alternates.canonical`/`languages`, tam `openGraph` (url, siteName, locale, type, images) ve `twitter` (card, title, description, images) üretsin; `/neden-qratex` `export const metadata` yerine `generateMetadata` ile bunu çağırsın. Aynı yardımcı `alternates` tanımlamayan diğer public sayfalarda da (ör. `blog` liste sayfası, `experience`, `feedback` — ayrıca kontrol edilmeli, bu incelemede doğrulanmadı) aynı mirası kapatır. İstenirse `app/(public)/neden-qratex/opengraph-image.tsx` ile sayfaya özel görsel eklenebilir; o durumda sayfa `openGraph.images` vermemeli ki dosya tabanlı görsel uygulanabilsin.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: `p-landing`. Commit'ler: `67763e8`, `9d24ab3`, `c0df701`. Karar: URL korunur; `/neden-qratex` artık **işletmeler için karar sayfası** (yol haritası §6.1'deki "işletmeler bölümü" burada yaşar). Tüketici anlatısı `/`'de; bu sayfa ona "Müşteri olarak katıl" ile bağlanır.
+
+Yerleşim: breadcrumb → "İşletmeler için / Neden QRateX?" hero (işletme kaydı + planlar + görünür satış e-postası) → gerçek rakam bandı (işletme, geri bildirim, son 30 gün, ortalama puan; eşikli) → karşılaştırma tablosu (masaüstünde `<table>`, mobilde satır başına kart) → "Üç adımda hazır" → 6 özellik → `#fiyatlar` (DB'deki planlar) → işletme SSS'si → kapanış CTA. Sunucu bileşeni; istemci adaları yalnız `CtaLink`, `LocaleSync`, `Reveal`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | `<title>` | ÇALIŞIYOR | `title.absolute` ("Neden QRateX? İşletmeler için…"), marka tekrarı yok |
+| 2 | Meta description | ÇALIŞIYOR | Admin SEO override uygulanır |
+| 3 | Canonical | ÇALIŞIYOR | `…/neden-qratex` (override varsa o) — ana sayfaya işaret etmiyor |
+| 4 | OpenGraph | ÇALIŞIYOR | `buildPublicMetadata`: url, siteName, locale, type, images tam |
+| 5 | Admin SEO override | ÇALIŞIYOR | `generateMetadata` + `getPageSeo` |
+| 6 | Twitter kartı | ÇALIŞIYOR | Sayfa başlığı/açıklaması + görsel |
+| 7 | WebPage JSON-LD | ÇALIŞIYOR | Kaçışlı (`jsonLdHtml`), `inLanguage` görünen dille aynı |
+| 8 | BreadcrumbList JSON-LD | ÇALIŞIYOR | Canonical tabanıyla (ayrışma yok) |
+| 9 | Görsel breadcrumb | ÇALIŞIYOR | — |
+| 10 | Eyebrow | ÇALIŞIYOR | "İşletmeler için" |
+| 11 | H1 + giriş | ÇALIŞIYOR | E2E smoke başlığı (`/neden qratex/i`) korunur |
+| 12 | "QRateX ile" kartı | ÇALIŞIYOR (yeniden yazıldı) | Tek karşılaştırma bileşenine birleşti; ölü `qratex` alanı yok |
+| 13 | "Klasik yöntemler" kartı | ÇALIŞIYOR (yeniden yazıldı) | Her hücre konu başlığıyla eşli; abartan ✗ yerine nötr "–" + açıklayıcı metin |
+| 14 | Karşılaştırma semantiği | ÇALIŞIYOR | `<table>` + `<caption>` + `th scope=col/row`; mobilde `dl` |
+| 15 | CTA "Ücretsiz Başla" | ÇALIŞIYOR | `register?role=DEALER&src=neden_qratex_hero` (kayıt sayfası rolü ön seçer) |
+| 16 | CTA "Fiyatlandırma" | ÇALIŞIYOR | Sayfa içi `#fiyatlar`; ana sayfa yönlendirmesine/modül çapasına bağlı değil; modül kapalıysa dürüst iletişim durumu |
+| 17 | CTA tıklama analitiği | ÇALIŞIYOR | `CtaLink` → rızaya bağlı `public_cta_click` + URL'de `src` |
+| 18 | Çok dillilik | ÇALIŞIYOR | TR/EN kopya (`why-copy.ts`), sunucuda dil çerezine göre; `LocaleSync` |
+| 19 | Yükleniyor | ÇALIŞIYOR | Statik iskelet, header görünür |
+| 20 | Hata durumu | ÇALIŞIYOR | Plan okunamazsa "yüklenemedi + e-posta", istatistik yoksa bant gizli |
+| 21 | Arka plan | ÇALIŞIYOR | Statik `PublicBackdrop` |
+| 22 | Arka planın istemcide tekrar çekilmesi | KALDIRILDI | Değer sunucudan prop |
+| 23 | Skip-link | ÇALIŞIYOR | TR/EN |
+| 24 | Odak halkası | ÇALIŞIYOR | — |
+| 25 | Karanlık tema | ÇALIŞIYOR | Yalnız QDL rol token'ları |
+| 26 | Sitemap kaydı | ÇALIŞIYOR | `lastModified` sabit içerik tarihi (`lib/landing/content-dates.ts`) |
+| 27 | Header/footer erişimi | ÇALIŞIYOR | Header "Özellikler/Fiyatlandırma" da bu sayfaya bağlı |
+| 28 | Motion | ÇALIŞIYOR | Kartlarda `Reveal` (bütçeli stagger, azaltılmış harekette statik); 3D yok (karar sayfası) |
+| 29 | Sosyal kanıt | ÇALIŞIYOR | Gerçek, eşikli rakamlar (`getPublicStats`); uydurma logo/alıntı yok |
+| 30 | Tüketici değer önerisi | ÇALIŞIYOR (kitle ayrımıyla) | Tüketici anlatısı `/`'de; bu sayfa işletmeye konuşur, kapanışta "Müşteri olarak katıl" |
+| 31 | SSS | ÇALIŞIYOR | 5 işletme sorusu + FAQPage JSON-LD + Güven sayfası linki |
+
+**Kapanan bulgular:** 1, 2, 3, 4, 5, 6, 7, 8, 9 (önbelleksiz istemci isteği kalktı), 10, 11 (ölü alan, sitemap tarihi; `container` kenar boşluğu yerine `px-4 sm:px-6`) → **11/11**.
+
+**Eksik özelliklerden uygulananlar:** 1 (kitleye göre anlatı: işletme burada, tüketici `/`), 2 (gerçek rakamlar), 4 (itiraz giderici SSS + `/guven` derin link), 5 (ölçülebilir dönüşüm). Uygulanmayanlar: 3 (ürün ekran görüntüsü/etkileşimli önizleme — gerçek panel görselleri henüz yok; landing'deki deneme alanı tüketici tarafını karşılıyor), 6 (rakip odaklı ayrı karşılaştırma sayfaları — içerik/SEO kararı).
+
+**Kalanlar:** sayfaya özel `opengraph-image` eklenmedi (kökteki OG görseli tam metadata ile geçiyor); satış formu için ŞEMA İSTEĞİ (`Lead`).

@@ -194,3 +194,49 @@ Bu yüzden envanterdeki #10 ("Satır limiti", ÇALIŞIYOR) ve #11 ("watermark", 
 1. **Hemen (S):** `page.tsx:68` metnini gerçeğe çekin. "signed URL" kaldırılmalı. Watermark, tüm export yolları gerçekten kapsanana kadar iddia edilmemeli.
 2. **Kısa vade (M):** Tüm geri bildirim dışa aktarımlarını tek bir sunucu yoluna toplayın. `/api/export/feedbacks` route'unu canlandırıp admin/dealer filtrelerini kabul eder hale getirin. İstemcideki `exportToCSV` çağrılarını bu uca yönlendirin. Watermark `session.user.id` ile sunucuda basılsın. Her export, kim/ne zaman/kaç satır bilgisiyle bir denetim kaydına yazılsın. CSV formül enjeksiyonu kaçışı da (`admin_feedbacks.md` bulgusu) aynı yerde tek seferde çözülür.
 3. **Orta vade (M):** Büyük export'lar için dosyayı R2'ye yazıp `lib/r2-storage.ts` üzerinde kısa TTL'li (ör. 5-15 dk) presigned GET URL üreten bir yardımcı ekleyin. "signed URL" iddiası sayfaya ancak bu yayına alındıktan sonra geri dönmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: `p-landing`. Commit'ler: `67763e8`, `c0df701`. Sayfa "Güven Merkezi" olarak yeniden yazıldı; ops kaydı (sakin, hareketsiz). **Kural:** her madde uygulamanın bugünkü davranışını anlatır ve koddaki bir kaynağa dayanır; iddia ↔ kanıt eşlemesi `components/public/p-landing/trust-copy.ts` başlığında tutulur. İç dosya yolları ve iş altyapısı adları yayından çıktı.
+
+Yerleşim: hero (taahhüt cümlesi + 4 çapalı güven çipi) + **canlı sistem durumu** (`/api/health?light=1`, sayfa açılınca ve "Tekrar kontrol et" ile) → "Senin verin" (ne toplanır/neden; **işletme ne görür / ne görmez**; AI'a yalnız metin; rızaya bağlı analitik + "Çerez tercihlerimi yönet"; lig görünürlüğü) → "Kontrol sende" (verilerimi indir, KVKK başvurusu, hesabımı sil → gizlilik ayarları; işletmeler için e-posta) → "İşletmeler için" (kiracı ayrımı, ekip rolleri/maskeli e-posta, Stripe'ta ödeme, dışa aktarma sınırı) → güvenlik uygulamaları (10 madde, sade dil) → alt işlemci tablosu (12 sağlayıcı, amaç, veri; yurt dışı aktarım notu + KVKK metni) → sorumlu bildirim (`/.well-known/security.txt` eklendi) + yasal belge hub'ı → gizlilik SSS'si → "Son güncelleme" (sabit tarih).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata + admin override | ÇALIŞIYOR | `buildPublicMetadata` (canonical, tam OG/Twitter) |
+| 2 | AboutPage JSON-LD | ÇALIŞIYOR | `dateModified` sabit içerik tarihi, kaçışlı |
+| 3 | BreadcrumbList JSON-LD | ÇALIŞIYOR | Artık canonical tabanıyla (env `siteUrl` ayrışması kapandı) |
+| 4 | Görsel breadcrumb | ÇALIŞIYOR | — |
+| 5 | Başlık + ikon | ÇALIŞIYOR | Dekoratif ikonlarda `aria-hidden`; h1 → h2 → h3 sırası düzgün |
+| 6 | "%99.9 uptime / aylık < 43 dk" | KALDIRILDI | Ölçülmüyordu; yerine canlı sağlık kontrolü (gerçek yanıt süresi + saat) |
+| 7 | "p95 < 300ms", "Error Rate < %0.1" | KALDIRILDI | Ölçülmüyordu |
+| 8 | "İzleme: Sentry, Vercel Analytics, Inngest" | ÇALIŞIYOR (düzeltildi) | Sentry (hata izleme) ve Vercel Analytics (çerezsiz) doğru sınıfta; Inngest listeden çıktı |
+| 9 | PII maskeleme iddiası | ÇALIŞIYOR (daraltıldı) | "Güvenlik kayıtlarında e-posta, telefon ve IP maskelenir" — gerçek kapsam |
+| 10 | Export satır limiti | KALDIRILDI (iddia) | Gerçek akış istemci tarafında; yerine doğru iddia: "yalnız yetkili oturum + işletmenin kendi verisi" |
+| 11 | Export watermark | KALDIRILDI (iddia) | Bayi dışa aktarımında yok; iddia edilmiyor |
+| 12 | Export "signed URL" | KALDIRILDI | Yanlış beyandı |
+| 13 | Oturum güvenliği | ÇALIŞIYOR | Sade dil: şifre değişince/askıda eski oturum geçersiz (`sessionVersion`), belirteç tekrarının tespiti |
+| 14 | Idempotency | ÇALIŞIYOR | "Çift işlem koruması" maddesi |
+| 15 | Yasal belge linkleri | ÇALIŞIYOR | Açıklamalı hub kartları |
+| 16 | Duyarlı grid | ÇALIŞIYOR | Tek başına kalan kart sorunu yok (1/2/3/4 kolon bölümlere göre) |
+| 17 | Yükleniyor | ÇALIŞIYOR | Statik iskelet |
+| 18 | Hata durumu | ÇALIŞIYOR | SEO fail-safe; canlı durum "çalışıyor / sorun var / alınamadı" ayrımı (ağ hatası kesinti diye raporlanmaz) |
+| 19 | Footer + sitemap | ÇALIŞIYOR | Footer'da "Güven Merkezi"; sitemap `lastModified` sabit tarih |
+| 20 | Header/panel içinden erişim | KISMİ (açık) | Landing ve `/neden-qratex` SSS'lerinden ve karşılaştırma tablosundan link var; müşteri ayarlarından geri link m-ayarlar'ın işi |
+| 21 | Son güncelleme | ÇALIŞIYOR | `TRUST_CONTENT_UPDATED_AT` (sayfa + sitemap aynı sabit) |
+| 22 | KVKK self-servis | ÇALIŞIYOR | İndir / başvuru (4 tür, 30 gün, makbuz e-postası) / sil → `/customer/settings?tab=privacy` (yeni `/customer/me/settings`'e derin linkle yönlenir); oturumsuzsa giriş istenir |
+| 23 | Tüketiciye şeffaflık | ÇALIŞIYOR | "İşletme görür / görmez" (ad + foto evet; sahibi kart kaydı varsa e-posta, personel maskeli; telefon/şifre/başka işletme/üyesiz kimlik hayır) — `app/api/feedbacks`, `app/api/dealer/customers` ile doğrulandı |
+| 24 | Canlı durum | ÇALIŞIYOR | Sayfa içi sağlık kontrolü; harici status sayfası/geçmiş uptime yok (aşağıda) |
+| 25 | security.txt / sorumlu bildirim | ÇALIŞIYOR | `public/.well-known/security.txt` (RFC 9116: Contact, Expires, Preferred-Languages) + sayfada kanal |
+| 26 | Alt işlemciler / veri konumu | ÇALIŞIYOR | 12 sağlayıcı; doğrulanabilen tek bölge iddiası Vercel `fra1` (Frankfurt); diğerleri için bölge iddia edilmedi, yurt dışı aktarım notu + KVKK metni linki |
+| 27 | SSS / iletişim | ÇALIŞIYOR | `<details>` SSS + FAQPage JSON-LD; güvenlik bildirimi e-postası |
+
+**Kapanan bulgular:** 1, 2 (ölçülmeyen rakamlar kalktı, canlı kontrol geldi), 3, 4, 5, 6, 7, 8, 9, 10, 11 → **11/11**.
+
+**Eksik özelliklerden uygulananlar:** 1, 2, 4, 5, 6 (sabit "son güncelleme"). Kısmen: 3 (canlı anlık kontrol var; geçmiş uptime/harici status sayfası yok — gerçek bir ölçüm kaynağı gerektirir, uydurma rakam konmadı).
+
+**Kalanlar:** geçmiş 30 günlük uptime şeridi için harici izleyici/cron özetinin Redis'e yazılması (altyapı işi); dışa aktarımların sunucuya alınıp watermark + denetim kaydı + presigned URL ile verilmesi (bayi/admin dışa aktarma sahiplerinin işi — o zaman iddia sayfaya geri eklenebilir); müşteri ayarlarından `/guven`'e geri link (m-ayarlar).
