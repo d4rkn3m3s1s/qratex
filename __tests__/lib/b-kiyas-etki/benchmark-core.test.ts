@@ -10,6 +10,7 @@ import {
   distribution,
   metricSample,
   quantile,
+  allowedMembers,
   resolveGroup,
   segmentInfos,
   standingAmong,
@@ -94,6 +95,20 @@ describe('segment ve sıra', () => {
     const infos = segmentInfos(snapshot(current, roster), { selfId: 'me', isDemo: false, category: 'kahve', city: 'istanbul' }, 10);
     expect(infos.find((s) => s.group === 'platform')?.contributors).toBe(5);
     expect(infos.find((s) => s.group === 'category')?.reason).toBe('ok');
+  });
+
+  it('güvenlik: fark alma — alt segment platformdan 1..k-1 eksikse kapanır; kapalı grup zorlansa da üye yok', () => {
+    const extra = ['x1', 'x2'];
+    const cur = { ...current, x1: agg(20, 2), x2: agg(20, 2) };
+    const ros = [...roster, ...extra.map((id) => ({ ...r(id), category: 'restoran' as RosterEntry['category'] }))];
+    const ctx = { selfId: 'me', isDemo: false, category: 'kahve' as const, city: null };
+    const infos = segmentInfos(snapshot(cur, ros), ctx, 10);
+    expect(infos.find((s) => s.group === 'platform')).toMatchObject({ contributors: 7, reason: 'ok' });
+    expect(infos.find((s) => s.group === 'category')).toMatchObject({ contributors: 5, reason: 'too_few' });
+    expect(allowedMembers(ros, ctx, 'category', infos)).toBeNull();
+    expect(allowedMembers(ros, ctx, 'platform', infos)).toHaveLength(7);
+    // Tümleyen 0 (alt segment = platform) güvenli.
+    expect(segmentInfos(snapshot(current, roster), ctx, 10).find((s) => s.group === 'category')?.reason).toBe('ok');
   });
 
   it('kategori yoksa not_set ve otomatik grup platform', () => {

@@ -29,7 +29,7 @@ import {
   normalizeTopic,
   resolveGroup,
   segmentInfos,
-  segmentMembers,
+  allowedMembers,
   type BucketTuple,
   type DealerAgg,
   type PlatformSnapshot,
@@ -381,7 +381,7 @@ export async function loadDealerBenchmark(
   const ctx: SegmentContext = { selfId: dealerId, isDemo: profile.isDemo, category: profile.category, city: profile.city };
   const segments = segmentInfos(snapshot, ctx, minFeedback);
   const group = resolveGroup(query.group, segments);
-  const members = segmentMembers(snapshot.roster, ctx, group);
+  const members = allowedMembers(snapshot.roster, ctx, group, segments);
   const contributors = members ? contributorsOf(members, snapshot.current, minFeedback) : [];
   const selfFeedback = snapshot.current[dealerId]?.n ?? 0;
   const insufficient = selfFeedback < minFeedback;

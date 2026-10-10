@@ -3,7 +3,7 @@ import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { createConsumption, runConsumptionSideEffects } from '@/lib/consumption/service';
-import { parseLedgerFilters } from '@/lib/dealer/kasa/core';
+import { parseLedgerFilters, scopeLedgerFilters } from '@/lib/dealer/kasa/core';
 import { listLedger } from '@/lib/dealer/kasa/server';
 import { mapKasaErrors } from '@/lib/dealer/kasa/http';
 
@@ -29,7 +29,7 @@ export const GET = defineRoute(
     const sp = request.nextUrl.searchParams;
     const size = Number.parseInt(sp.get('pageSize') ?? '', 10);
     const pageSize = Number.isInteger(size) && size >= 5 && size <= 50 ? size : undefined;
-    return ok(await listLedger(tenant.dealerId, parseLedgerFilters(sp), { pageSize }));
+    return ok(await listLedger(tenant.dealerId, scopeLedgerFilters(parseLedgerFilters(sp), tenant.via), { pageSize }));
   }
 );
 

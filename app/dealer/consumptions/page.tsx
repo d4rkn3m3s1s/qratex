@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { requireAuth } from '@/lib/api-auth';
 import { resolveDealerScope } from '@/lib/auth/scope';
 import { getServerLocale } from '@/lib/server-locale';
-import { parseLedgerFilters } from '@/lib/dealer/kasa/core';
+import { parseLedgerFilters, scopeLedgerFilters } from '@/lib/dealer/kasa/core';
 import { listKasaProducts, listLedger } from '@/lib/dealer/kasa/server';
 import type { KasaProduct, LedgerPage } from '@/lib/dealer/kasa/types';
 import { ErrorState } from '@/components/states';
@@ -46,7 +46,7 @@ export default async function DealerConsumptionsPage({ searchParams }: PageProps
     );
   }
 
-  const filters = parseLedgerFilters(sp);
+  const filters = scopeLedgerFilters(parseLedgerFilters(sp), scope.via);
   const [initial, products] = await Promise.all([
     listLedger(scope.dealerId, filters).catch((err): LedgerPage | null => {
       console.error('[dealer/consumptions] sunucu ön yüklemesi başarısız:', err);

@@ -104,6 +104,15 @@ export function parseLedgerFilters(src: ParamSource): LedgerFilters {
   };
 }
 
+/**
+ * En az yetki: personel (STAFF) defterde yalnız BUGÜNÜ görür. Dışa aktarma (CSV) personele kapalı;
+ * listeyi `range=all` + sayfalama ile gezmek aynı tam müşteri/ciro/yorum dökümünü verirdi.
+ */
+export function scopeLedgerFilters(f: LedgerFilters, via: string): LedgerFilters {
+  if (via === 'staff') return { ...f, range: 'today', from: null, to: null };
+  return f;
+}
+
 /** Filtreyi URL parametrelerine yazar (varsayılanlar yazılmaz → kısa, paylaşılabilir URL). */
 export function ledgerFiltersToParams(f: LedgerFilters, opts: { includePage?: boolean } = {}): URLSearchParams {
   const p = new URLSearchParams();

@@ -350,6 +350,28 @@ describe('planlı gönderim', () => {
     // İşletim bildirimi pazarlama tercih grubuna düşmez (susturulamaz değil, pazarlama değil).
     for (const n of dealerNotes) expect(kindToGroup((n.data as Row).kind as string)).toBeNull();
   });
+
+  it('günlük iş (güvenlik): askıya alınmış bayi ya da kapalı modül → gönderim YOK (deny-by-default)', async () => {
+    seedCampaign({ id: 'due', status: 'scheduled', sentAt: new Date(Date.now() - 60_000) });
+    const { dispatchDueCampaigns } = await import('@/components/dealer/b-kampanyalar/server/schedule');
+    (prismaMock.user.findUnique as jest.Mock).mockImplementationOnce(async () => ({ role: 'DEALER', suspendedAt: new Date() }));
+    expect(await dispatchDueCampaigns()).toMatchObject({ due: 1, sent: 0, failed: 1 });
+    expect(mockPush).not.toHaveBeenCalled();
+
+    seedCampaign({ id: 'due2', status: 'scheduled', sentAt: new Date(Date.now() - 60_000) });
+    gate.module = true;
+    try {
+      expect(await dispatchDueCampaigns()).toMatchObject({ due: 1, sent: 0, failed: 1 });
+    } finally {
+      gate.module = false;
+    }
+    // Yetki kontrolü hata verirse de gönderilmez (planlı kalır).
+    seedCampaign({ id: 'due3', status: 'scheduled', sentAt: new Date(Date.now() - 60_000) });
+    (prismaMock.user.findUnique as jest.Mock).mockImplementationOnce(async () => { throw new Error('db down'); });
+    expect(await dispatchDueCampaigns()).toMatchObject({ due: 1, sent: 0, errored: 1 });
+    expect(db.campaigns.find((c) => c.id === 'due3')).toMatchObject({ status: 'scheduled' });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/dealer/campaigns/:id/performance', () => {

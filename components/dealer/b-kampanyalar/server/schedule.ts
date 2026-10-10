@@ -20,7 +20,7 @@ import {
   SCHEDULE_MIN_DAYS_AHEAD,
 } from '../domain';
 import { buildSendPlan } from './audience';
-import { CampaignError, loadOwnedCampaign } from './common';
+import { campaignsAvailable, CampaignError, loadOwnedCampaign } from './common';
 import { actorAuditFields, deliverCampaign, type DeliveryActor } from './delivery';
 import {
   ACTION_DISPATCH_FAILED,
@@ -146,6 +146,10 @@ export async function dispatchDueCampaigns(input: { now?: Date; deadlineAt?: num
       continue;
     }
     try {
+      // Yetki gönderim anında YENİDEN doğrulanır (deny-by-default): planlamadan sonra askıya
+      // alınan / rolü değişen bayi ya da kapatılan kampanya modülü için gönderim yapılmaz.
+      // Kontrol hata verirse (DB vb.) aşağıdaki catch altyapı hatası sayar → gönderim YOK.
+      await assertDispatchAllowed(c.dealerId);
       const holdoutPct = await readScheduledHoldout(c.id);
       const result = await deliverCampaign({
         dealerId: c.dealerId,
@@ -181,6 +185,17 @@ export async function dispatchDueCampaigns(input: { now?: Date; deadlineAt?: num
     }
   }
   return summary;
+}
+
+/** Bayi hâlâ aktif DEALER mı ve kampanya modülü açık mı? Değilse alan hatası (→ failed). */
+export async function assertDispatchAllowed(dealerId: string): Promise<void> {
+  const owner = await prisma.user.findUnique({ where: { id: dealerId }, select: { role: true, suspendedAt: true } });
+  if (!owner || owner.role !== 'DEALER' || owner.suspendedAt) {
+    throw new CampaignError('NOT_SENDABLE', 'Hesap gönderime uygun değil; planlı kampanya gönderilmedi.');
+  }
+  if (!(await campaignsAvailable(dealerId))) {
+    throw new CampaignError('NOT_SENDABLE', 'Kampanyalar modülü kapalı; planlı kampanya gönderilmedi.');
+  }
 }
 
 async function markFailed(campaignId: string, dealerId: string, err: CampaignError): Promise<boolean> {

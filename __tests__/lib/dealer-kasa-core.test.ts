@@ -146,3 +146,15 @@ describe('çevrimdışı kuyruk', () => {
     expect(out[1].amount).toBeNull();
   });
 });
+
+describe('güvenlik: personel defter kapsamı (en az yetki)', () => {
+  it('STAFF yalnız bugünü görür; range=all/custom zorlansa da', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { parseLedgerFilters, scopeLedgerFilters } = require('@/lib/dealer/kasa/core');
+    const all = parseLedgerFilters(new URLSearchParams('range=all&page=3'));
+    expect(scopeLedgerFilters(all, 'staff')).toMatchObject({ range: 'today', from: null, to: null, page: 3 });
+    const custom = parseLedgerFilters(new URLSearchParams('range=custom&from=2025-01-01&to=2026-01-01'));
+    expect(scopeLedgerFilters(custom, 'staff')).toMatchObject({ range: 'today', from: null, to: null });
+    expect(scopeLedgerFilters(all, 'owner').range).toBe('all');
+  });
+});

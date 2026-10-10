@@ -210,13 +210,39 @@ export function contributorsOf(members: readonly string[], current: Record<strin
 
 export function segmentInfos(snapshot: PlatformSnapshot, ctx: SegmentContext, minFeedback: number): SegmentInfo[] {
   const groups: PeerGroup[] = ['platform', 'category', 'city'];
-  return groups.map((group) => {
+  const infos = groups.map((group) => {
     const members = segmentMembers(snapshot.roster, ctx, group);
     const key = group === 'category' ? ctx.category : group === 'city' ? ctx.city : null;
     if (!members) return { group, key, contributors: 0, reason: 'not_set' as const };
     const contributors = contributorsOf(members, snapshot.current, minFeedback).length;
     return { group, key, contributors, reason: contributors >= K_ANON_MIN ? ('ok' as const) : ('too_few' as const) };
   });
+  // Fark alma (differencing) koruması: alt segment (sektör/şehir) platformdan 1..k-1 işletme
+  // eksikse, platform ile alt segmentin dağılımlarını karşılaştırmak o küçük TÜMLEYEN kümeyi
+  // (k'nin altında) açığa çıkarır → alt segment de kapatılır. Ayrıca alt segment platformla
+  // aynı kümeyse ek bilgi taşımaz (sorun değil, tümleyen 0).
+  const platform = infos.find((i) => i.group === 'platform');
+  const total = platform?.contributors ?? 0;
+  return infos.map((i) => {
+    if (i.group === 'platform' || i.reason !== 'ok') return i;
+    const complement = total - i.contributors;
+    return complement > 0 && complement < K_ANON_MIN ? { ...i, reason: 'too_few' as const } : i;
+  });
+}
+
+/**
+ * Kıyas için KULLANILABİLİR segment üyeleri (deny-by-default): segment k-anon/fark-alma
+ * denetiminden geçmediyse (`reason !== 'ok'`) hiçbir akran verisi hesaplanmaz → `null`.
+ * İstemci kapalı bir grubu `?group=` ile zorla istese de dağılım/sıra/seri dönmez.
+ */
+export function allowedMembers(
+  roster: readonly RosterEntry[],
+  ctx: SegmentContext,
+  group: PeerGroup,
+  infos: readonly SegmentInfo[],
+): string[] | null {
+  if (infos.find((i) => i.group === group)?.reason !== 'ok') return null;
+  return segmentMembers(roster, ctx, group);
 }
 
 /** İstenen grup yoksa varsayılan: kategori uygunsa kategori, değilse platform. */
