@@ -16,7 +16,7 @@
  *   - complete: belirteç doğrulanır; skor sunucuda kırpılır; süre ve saniye başına skor
  *     makullüğü SUNUCU saatine göre denetlenir; kazanma kararı (`won`) sunucunundur —
  *     istemcinin `won` bayrağı yalnız kozmetiktir. Ödül `mintPoints` ile (atomik, tek
- *     seferlik `game:<sessionId>`, oyun kategorisi tavanı 600/gün · 3.000/hafta = capGamePoints,
+ *     seferlik `game:<sessionId>`, oyun kategorisi tavanı 600/gün · 3.000/hafta, kilit altında mintPoints içinde,
  *     aynı tx'te `points_credited`).
  *   - Tamamlanmış/başarısız denemeye tekrar complete → 409 DEĞİL, kayıtlı sonuç
  *     (idempotent; ağ tekrarı dürüst oyuncuya hata göstermez).

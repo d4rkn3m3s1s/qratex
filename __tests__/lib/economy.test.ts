@@ -5,7 +5,7 @@ process.env.ECONOMY_APPROVAL_SECRET = 'test-approval-secret-0123456789';
  * Kapsam: mintPoints (idempotency, kategori tavanı, kilit sırası, gölge ban, points_credited
  * yazımı, girdi doğrulama, kök istemcide kendi tx'i + P2002 kurtarma), ledger'lı debitPoints
  * (negatif bakiye reddi, defter + points_spent, tek-kez), adjustPointsByAdmin (gerekçe, tavan,
- * 4-göz, yetki, audit) ve capGamePoints / capDealerPassivePoints.
+ * 4-göz, yetki, audit) ve oyun / bayi pasif kategori tavanları (applyCategoryCap).
  *
  * Eşzamanlılık davranışı ayrı dosyada: __tests__/lib/economy-concurrency.test.ts
  * Gerçek DB'ye GİDİLMEZ: prisma mock'tur.
@@ -18,7 +18,6 @@ import { adjustPointsByAdmin } from '@/lib/economy/admin-adjust';
 import { applyCategoryCap, ECONOMY_CAPS, getCapRule, MAX_SINGLE_MINT } from '@/lib/economy/caps';
 import { EconomyError } from '@/lib/economy/errors';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
-import { capDealerPassivePoints, capGamePoints } from '@/lib/points-caps';
 import * as economy from '@/lib/economy';
 
 const NOW = new Date('2026-10-08T12:00:00.000Z'); // Perşembe
@@ -606,15 +605,24 @@ describe('adjustPointsByAdmin', () => {
   });
 });
 
-describe('lib/points-caps geçiş yardımcıları', () => {
-  it('capGamePoints oyun tavanını uygular', async () => {
+describe('kategori tavanları (oyun / bayi pasif)', () => {
+  it('oyun tavanı: günün kalanı kadar verilir', async () => {
     const tx = makeTx({ events: [ev(ECONOMY_CAPS.game.daily - 40)] });
-    expect(await capGamePoints('u1', 150, tx as never)).toBe(40);
+    const d = await applyCategoryCap(tx as never, { userId: 'u1', category: 'game', points: 150, now: NOW });
+    expect(d.granted).toBe(40);
+    expect(d.capped).toBe(true);
   });
 
-  it('capDealerPassivePoints müşteri × bayi tavanını uygular', async () => {
-    const tx = makeTx({ events: [ev(290, new Date(), { actorId: 'd1' })] });
-    expect(await capDealerPassivePoints('u1', 'd1', 50, tx as never)).toBe(10);
+  it('bayi pasif: müşteri × bayi günlük tavanı uygulanır', async () => {
+    const tx = makeTx({ events: [ev(290, NOW, { actorId: 'd1' })] });
+    const d = await applyCategoryCap(tx as never, {
+      userId: 'u1',
+      category: 'dealer_passive',
+      points: 50,
+      actorId: 'd1',
+      now: NOW,
+    });
+    expect(d.granted).toBe(10);
   });
 });
 

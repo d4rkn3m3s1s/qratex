@@ -9,7 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { startOfDayUTC as startOfDay, startOfWeekUTC as startOfWeek } from '@/lib/timezone';
 // Tavan değerleri TEK kaynaktan (lib/economy/caps.ts). Yeni kod doğrudan `mintPoints`
 // kullanmalı — tavan orada kilit altında, aynı tx'te uygulanır.
-import { applyCategoryCap, FEEDBACK_DAILY_CAP, FEEDBACK_WEEKLY_CAP } from '@/lib/economy/caps';
+import { FEEDBACK_DAILY_CAP, FEEDBACK_WEEKLY_CAP } from '@/lib/economy/caps';
 
 type CapsDb = Prisma.TransactionClient | typeof prisma;
 
@@ -67,27 +67,6 @@ export async function capFeedbackPoints(userId: string, points: number, db: Caps
   return Math.min(points, afterDaily, afterWeekly);
 }
 
-/**
- * Mini oyun ödülünü oyun kategorisinin günlük (600) ve haftalık (3.000) tavanına göre
- * kısaltır (P0-17). Oyun tamamlama transaction'ı içinde, kredi ÖNCESİ çağrılmalı;
- * eşzamanlılık için mümkünse doğrudan `mintPoints({ source: 'game', ... })` kullanın.
- */
-export async function capGamePoints(userId: string, points: number, db: CapsDb = prisma): Promise<number> {
-  const decision = await applyCategoryCap(db, { userId, category: 'game', points });
-  return decision.granted;
-}
-
-/**
- * Bayi pasif (tüketim) puanını müşteri × bayi × gün (300) ve müşteri × gün (600)
- * tavanına göre kısaltır (P0-13/P0-21). Geçiş yolu; yeni kod `mintPoints` +
- * `source: 'dealer_passive'` + `actorId: dealerId` kullanmalı.
- */
-export async function capDealerPassivePoints(
-  userId: string,
-  dealerId: string,
-  points: number,
-  db: CapsDb = prisma
-): Promise<number> {
-  const decision = await applyCategoryCap(db, { userId, category: 'dealer_passive', points, actorId: dealerId });
-  return decision.granted;
-}
+// Oyun (P0-17) ve bayi pasif (P0-13) tavanları için ayrı "önce kırp, sonra kredile" yardımcısı
+// YOK: tavan kilit altında ve kredi ile aynı tx'te uygulanmalı → `mintPoints({ source: 'game' |
+// 'dealer_passive', ... })` (lib/economy). Kilitsiz kırpma eşzamanlı isteklerde tavanı aşar.
