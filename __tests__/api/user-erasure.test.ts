@@ -18,7 +18,7 @@ const mockRequireAuth = jest.fn();
 jest.mock('@/lib/api-auth', () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
 }));
-jest.mock('@/lib/rate-limit', () => ({ checkAdminRateLimit: () => ({ ok: true }) }));
+jest.mock('@/lib/rate-limit', () => ({ checkAdminRateLimit: () => ({ ok: true }), checkRateLimitDb: async () => ({ ok: true }) }));
 jest.mock('@/lib/r2-storage', () => ({ isR2Configured: () => false, keyFromPublicUrl: () => null, deleteFromR2: jest.fn() }));
 
 import { prisma } from '@/lib/prisma';
@@ -196,10 +196,39 @@ describe('DELETE /api/user/delete-account (self-servis)', () => {
     expect(db.user.updateMany).not.toHaveBeenCalled();
   });
 
-  it('başarılı silme: anonimleştirme + KVKK talebi ve yürütme kanıtı aynı tx; user.delete yok', async () => {
+  it('B4: şifreli hesapta yanlış/eksik şifre → 400 REAUTH_PASSWORD, yazım yok', async () => {
+    const bcrypt = require('bcryptjs');
     mockRequireAuth.mockResolvedValue({ session: { user: { id: 'u-1', role: 'CUSTOMER', email: 'ayse@example.com' } } });
     db.user.findUnique
       .mockResolvedValueOnce(target())
+      .mockResolvedValueOnce({ password: await bcrypt.hash('Dogru-Sifre1', 4), twoFactorEnabled: false, twoFactorSecret: null });
+    const { DELETE } = await import('@/app/api/user/delete-account/route');
+    const res = await DELETE(req('http://localhost/api/user/delete-account', { body: { confirmEmail: 'ayse@example.com', password: 'yanlis' } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('REAUTH_PASSWORD');
+    expect(db.user.updateMany).not.toHaveBeenCalled();
+    expectNoUserDelete();
+  });
+
+  it('B4: şifresiz ve 2FA kapalı (yalnız Google) hesapta bayat oturum → 403 REAUTH_RECENT_LOGIN', async () => {
+    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'u-1', role: 'CUSTOMER', email: 'ayse@example.com' }, jti: 'j-1' } });
+    db.user.findUnique
+      .mockResolvedValueOnce(target())
+      .mockResolvedValueOnce({ password: null, twoFactorEnabled: false, twoFactorSecret: null });
+    db.sessionTokenUsage.findUnique.mockResolvedValue({ createdAt: new Date(Date.now() - 60 * 60_000) });
+    const { DELETE } = await import('@/app/api/user/delete-account/route');
+    const res = await DELETE(req('http://localhost/api/user/delete-account', { body: { confirmEmail: 'ayse@example.com' } }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('REAUTH_RECENT_LOGIN');
+    expect(db.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('başarılı silme: anonimleştirme + KVKK talebi ve yürütme kanıtı aynı tx; user.delete yok', async () => {
+    const bcrypt = require('bcryptjs');
+    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'u-1', role: 'CUSTOMER', email: 'ayse@example.com' } } });
+    db.user.findUnique
+      .mockResolvedValueOnce(target())
+      .mockResolvedValueOnce({ password: await bcrypt.hash('Dogru-Sifre1', 4), twoFactorEnabled: false, twoFactorSecret: null })
       .mockResolvedValueOnce({ id: 'u-1', role: 'CUSTOMER', anonymizedAt: null });
     db.user.updateMany.mockResolvedValue({ count: 1 });
     db.dataSubjectRequest.create.mockResolvedValue({ id: 'dsr-1' });
@@ -208,7 +237,7 @@ describe('DELETE /api/user/delete-account (self-servis)', () => {
     db.dataSubjectRequest.updateMany.mockResolvedValue({ count: 1 });
     db.dsrEvent.create.mockResolvedValue({ id: 'ev' });
     const { DELETE } = await import('@/app/api/user/delete-account/route');
-    const res = await DELETE(req('http://localhost/api/user/delete-account', { body: { confirmEmail: 'AYSE@example.com' } }));
+    const res = await DELETE(req('http://localhost/api/user/delete-account', { body: { confirmEmail: 'AYSE@example.com', password: 'Dogru-Sifre1' } }));
     expect(res.status).toBe(200);
     expect(db.dataSubjectRequest.create.mock.calls[0][0].data).toMatchObject({ type: 'deletion', userId: 'u-1' });
     const eventTypes = db.dsrEvent.create.mock.calls.map((c) => c[0].data.type);

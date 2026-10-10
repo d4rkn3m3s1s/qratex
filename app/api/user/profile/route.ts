@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
+import { isAllowedCustomerAvatar } from '@/lib/customer-settings/avatar-policy';
 import {
   VersionConflictError,
   isVersionConflictError,
@@ -76,6 +77,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
     const { name, image, phone, businessName, businessDesc, address, latitude, longitude, businessHours, defaultReplyTemplate, preferredLanguage, holidayMode } = parsed.data;
+    // Denetim B3 (customer_settings): müşteri `image`'a keyfi URL yazamaz (liderlikte başkalarının
+    // tarayıcısından takip pikseli). Yalnız hazır müşteri avatarı ya da zaten kayıtlı görsel.
+    if (image && session.user.role === 'CUSTOMER') {
+      const current = await prisma.user.findUnique({ where: { id: session.user.id }, select: { image: true } });
+      if (!isAllowedCustomerAvatar(image, current?.image ?? null)) {
+        return NextResponse.json(
+          { error: 'Bu avatar seçilemez. Listeden bir avatar seç.', code: 'AVATAR_NOT_ALLOWED' },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+    }
     // İsteğe bağlı iyimser kilit: `baseVersion` gönderen istemciler (bayi ayarları) için
     // kilit altında sürüm karşılaştırılır; uyuşmazlıkta 409. Göndermeyenler (müşteri ayarları,
     // dil seçici) eski davranışla devam eder.

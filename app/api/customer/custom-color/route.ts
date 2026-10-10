@@ -1,46 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ok } from '@/lib/http/define-route';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions);
+const Body = z
+  .object({
+    /** Çerçeve renk tonu (hue-rotate derecesi, 0–360) ya da sıfırlamak için null. */
+    customFrameColor: z.union([
+      z.null(),
+      z
+        .string()
+        .regex(/^\d{1,3}$/, 'Renk tonu 0–360 arasında bir sayı olmalı.')
+        .refine((v) => Number(v) <= 360, 'Renk tonu 0–360 arasında bir sayı olmalı.'),
+    ]),
+  })
+  .strict();
 
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const userId = session.user.id;
-        const { customFrameColor } = await req.json();
-
-        // customFrameColor can be null (to reset) or a string (hue-rotate degree or hex)
-        await prisma.user.update({
-            where: { id: userId },
-            data: { customFrameColor: customFrameColor || null }
-        });
-
-        if (customFrameColor) {
-            const { advanceAchievementProgress } = await import('@/lib/achievements');
-            await advanceAchievementProgress(userId, 'quest-color-wizard', 1, 'increment');
-        }
-
-        return NextResponse.json(
-            { success: true, message: 'Çerçeve rengi başarıyla güncellendi!' },
-            { headers: PRIVATE_NO_STORE_HEADERS }
-        );
-
-    } catch (error) {
-        console.error('[CUSTOM_COLOR_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
+/**
+ * POST /api/customer/custom-color — kuşanılmış avatar çerçevesinin renk tonu (Ayarlar → Profil).
+ * Denetim B14: değer artık doğrulanıyor (eskiden sınırsız uzunlukta herhangi bir metin yazılıyordu),
+ * hız sınırı var; "0" sıfırlama olarak saklanır.
+ */
+export const POST = defineRoute(
+  { name: 'customer.custom-color', roles: ['CUSTOMER'], schema: Body, rateLimit: 'mutation' },
+  async ({ user, body }) => {
+    const value = body.customFrameColor && body.customFrameColor !== '0' ? String(Number(body.customFrameColor)) : null;
+    await prisma.user.update({ where: { id: user.id }, data: { customFrameColor: value }, select: { id: true } });
+    if (value) {
+      const { advanceAchievementProgress } = await import('@/lib/achievements');
+      await advanceAchievementProgress(user.id, 'quest-color-wizard', 1, 'increment').catch((e: unknown) => {
+        console.error('[custom-color] görev ilerlemesi yazılamadı', e);
+      });
     }
-}
+    return ok({ customFrameColor: value, message: 'Çerçeve rengi güncellendi.' }, { legacySpread: true });
+  },
+);

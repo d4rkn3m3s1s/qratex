@@ -1,4 +1,12 @@
 import { prisma } from '@/lib/prisma';
+import { isChannelEnabled } from '@/lib/notification-prefs';
+
+/**
+ * Hatırlatma dürtmeleri müşterinin "Hatırlatmalar" bildirim tercihine (uygulama içi kanal)
+ * uyar; her bildirim `data.kind` taşır (`kindToGroup` → 'reminder'). Ayarlar → Bildirimler
+ * kataloğu bu gönderimi bu tercihin tüketicisi olarak kaydeder (lib/customer-settings).
+ */
+const REMINDER_GROUP = 'reminder';
 
 const INACTIVE_DAYS = 14;
 const INACTIVE_COOLDOWN_DAYS = 7;
@@ -43,6 +51,7 @@ async function createInactiveFeedbackNudge(userId: string): Promise<boolean> {
       message:
         'Uzun süredir geri bildirim paylaşmadın. 30 saniyede kısa bir değerlendirme bırak, deneyimini birlikte iyileştirelim.',
       data: {
+        kind: 'reminder-inactive-feedback',
         module: 'customer_reminder',
         nudgeType: 'inactive_feedback',
         ctaPath: '/customer/consumptions',
@@ -71,6 +80,7 @@ async function createMissingCommentNudge(
       message:
         'Puan verdin ama yorum kısmı boş kaldı. Kısa bir not eklersen ekip sorunu daha hızlı çözer.',
       data: {
+        kind: 'reminder-missing-comment',
         module: 'customer_reminder',
         nudgeType: `rated_without_comment:${pendingConsumptionId}`,
         ctaPath: `/customer/consumptions/${pendingConsumptionId}`,
@@ -87,7 +97,7 @@ export async function runCustomerReminderNudges(): Promise<{
 }> {
   const customers = await prisma.user.findMany({
     where: { role: 'CUSTOMER' },
-    select: { id: true },
+    select: { id: true, notificationPrefs: true },
     take: 1000,
   });
 
@@ -96,6 +106,8 @@ export async function runCustomerReminderNudges(): Promise<{
   const inactiveCutoff = daysAgo(INACTIVE_DAYS);
 
   for (const customer of customers) {
+    // Kullanıcı hatırlatmaları kapattıysa bu müşteri için hiç sorgu/bildirim yok.
+    if (!isChannelEnabled(customer.notificationPrefs, REMINDER_GROUP, 'app')) continue;
     const [lastQrFeedback, lastConsumptionReview, pendingReviewedWithoutComment] = await Promise.all([
       prisma.feedback.findFirst({
         where: { userId: customer.id },

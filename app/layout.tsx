@@ -29,6 +29,18 @@ const THEME_CLASS_INIT_SCRIPT = `
     el.setAttribute('data-theme', resolved);
     el.style.colorScheme = resolved;
   } catch (e) {}
+  // Erişilebilirlik tercihleri (lib/accessibility-prefs.ts) ilk boyamadan önce: yazı boyutu
+  // sıçraması ve kontrast/hareket flaşı olmasın (yol haritası §4.2 kural 1).
+  try {
+    var a = JSON.parse(localStorage.getItem('qratex-a11y') || 'null');
+    if (a) {
+      var c = document.documentElement.classList;
+      if (a.highContrast) c.add('high-contrast');
+      if (a.reduceAnimations) c.add('reduce-animations');
+      if (a.colorblindMode) c.add('colorblind');
+      if (a.textScale === 'lg' || a.textScale === 'xl') c.add('text-scale-' + a.textScale);
+    }
+  } catch (e) {}
 })();
 `;
 

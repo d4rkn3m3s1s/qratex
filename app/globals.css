@@ -886,6 +886,15 @@ html.colorblind .text-emerald-500 {
   color: hsl(var(--success-text)) !important;
 }
 
+/* Yazı boyutu — kök font-size; rem tabanlı tipografi, boşluk ve dokunma hedefleri birlikte
+   büyür (WCAG 1.4.4). Ayarlar → Görünüm; lib/accessibility-prefs.ts `textScale`. */
+html.text-scale-lg {
+  font-size: 112.5%;
+}
+html.text-scale-xl {
+  font-size: 125%;
+}
+
 /* ─────────────────────────────────────────────────────────────
    QR SCANNER STYLES (html5-qrcode)
 ───────────────────────────────────────────────────────────── */

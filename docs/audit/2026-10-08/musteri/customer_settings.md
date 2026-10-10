@@ -272,3 +272,91 @@ Salt okunur inceleme; kod değiştirilmedi, DB'ye/servislere dokunulmadı. Her i
 - CSRF: JSON gövdeli `DELETE` çapraz kökenden ön uçuş (preflight) gerektirir; next-auth çerezi + CORS yokluğu ile CSRF senaryosu kurulamadı.
 - **Yeniden üretim:** Paylaşılan/ödünç cihazda açık kalmış oturum → Ayarlar → Gizlilik → "Hesabı sil" → Profil sekmesindeki e-postayı yaz → hesap, puanlar, rozetler ve tüm cascade veriler geri dönüşsüz silinir; 2FA açık olsa da sorulmaz.
 - Değerlendirme: Bulgu gerçek, ancak tehdit modeli "oturuma zaten erişmiş saldırgan" olduğundan KRİTİK değil YÜKSEK bir sertleştirme maddesi. Öneri raporun üst kısmındaki `POST /api/me/sensitive-action` (şifre veya 2FA ile 5 dk'lık yeniden doğrulama token'ı) ile tutarlı; ek olarak soft-delete + 7–14 günlük geri alma penceresi ve silme sonrası tüm oturumların Redis token-replay katmanı üzerinden iptali önerilir.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/me/settings` (Ben → Ayarlar). Eski `/customer/settings` artık sorguyu koruyarak `permanentRedirect` yapan tek satırlık sunucu bileşeni; eski sekme adları (`?tab=preferences` → `appearance`, `?tab=cosmetics` → `profile`) yeni sayfada kanonik adrese yönlenir, `?tab=privacy` derin linkleri (KVKK e-postası, yasal sayfalar) çalışmaya devam eder.
+
+**Mimari:** sunucu bileşeni (`requireAuth(['CUSTOMER'])`, yetki DB'den) → tek paralel okuma modeli `lib/customer-settings/load.server.ts` → küçük istemci adası `components/customer/m-ayarlar/settings-experience.tsx` (`initialData`, pencere odağında yeniden çekme yok). Beş bölüm (`Profil · Bildirimler · Gizlilik · Görünüm · Güvenlik`) `SectionTabs` ile URL'de (`?tab=`); her bölüm ayrı `next/dynamic` parçası (2FA'nın QR kütüphanesi yalnız kurulumda yüklenir). QDL v2 ops kaydı (`PanelPage register="ops"`, düz `surface-1` kartlar, glow yok). Hareket yalnız durum değişimini anlatır: satır sonu "Kaydedildi" göstergesi, çerçeve tonunda `filter` geçişi; azaltılmış harekette CSS ile kapanır. Sekme başına `y:10` giriş animasyonu kaldırıldı. Yazımlar `lib/http/define-route.ts` ile (rol + zod + hız sınırı); alan bazlı autosave, iyimser güncelleme, hata olursa geri alma.
+
+**Yeni uçlar:** `GET /api/customer/me/settings`, `PATCH …/preferences`, `PATCH …/notifications` (tek hücre), `PATCH …/profile`, `POST …/sessions`, `DELETE …/push-devices/:id`. Yeniden yazılanlar: `/api/customer/settings` (geriye uyum katmanı; m-lig kullanıyor), `/api/customer/custom-color`, `/api/user/delete-account` (+ `GET` kayıp özeti). Testler: `__tests__/lib/customer-settings.test.ts` (14), `__tests__/api/customer-settings-routes.test.ts` (19), `__tests__/api/user-erasure.test.ts` (+2 yeniden doğrulama senaryosu).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Masaüstü sayfa başlığı | ÇALIŞIYOR | Tek `PageHeader` (h1), mobilde de görünür |
+| 2 | Mobil başlık kartı | KALDIRILDI | Kopya başlık gereksiz: `PageHeader` her genişlikte görünür |
+| 3 | Sekme çubuğu | ÇALIŞIYOR | `SectionTabs`: etiketler her genişlikte görünür, ≥44px, ok tuşları, URL'de durum |
+| 4 | Avatar önizleme + baş harf | ÇALIŞIYOR | Kuşanılmış çerçeve ve renk tonuyla birlikte |
+| 5 | Hover "kamera" butonu | KALDIRILDI | Dokunmatikte ve klavyede görünmüyordu; yerine görünür "Avatarı değiştir" butonu |
+| 6 | Avatar kategori seçimi | ÇALIŞIYOR | `ChoiceChips` radyo grubu |
+| 7 | Avatar ızgarası | ÇALIŞIYOR | `aria-pressed`, "Kategori · Avatar N" adı, hash'li WebP |
+| 8 | "Avatar Değiştir" | ÇALIŞIYOR | Seçim diyalogda onaylanınca sunucuya yazılır |
+| 9 | Ad Soyad | ÇALIŞIYOR | Oturum yenilemesi yazılanı silmez (B5); kirli çubuk + ayrılma uyarısı; `htmlFor` bağlı |
+| 10 | E-posta + destek | ÇALIŞIYOR | Salt okunur; "düzeltme başvurusu" bağlantısı KVKK düzeltme akışına götürür |
+| 11 | Profil kaydet | ÇALIŞIYOR | Sunucuda avatar izin listesi (B3); hata kodu kullanıcının dilinde; denetim kaydı |
+| 12 | Doğum günü yükleniyor | ÇALIŞIYOR | Veri sunucuda; ayrı yükleme yok |
+| 13 | Doğum günü "Talep et" | KALDIRILDI (taşındı) | Talep tek yerde: Cüzdan › Kartım. Ayarlar, doğum günü bugünse oraya yönlendirir |
+| 14 | "Bu yıl alındı" | ÇALIŞIYOR | Talep nedeni sunucudan (`ALREADY_CLAIMED`, `TOO_RECENT`) |
+| 15 | Yıllık bonus ipucu | ÇALIŞIYOR | Puan matrisinden |
+| 16 | Doğum tarihi | ÇALIŞIYOR | Kayıtlıysa salt okunur; ilk kayıt onay penceresiyle; `min/max` (B11) |
+| 17 | Bildirim türleri matrisi | ÇALIŞIYOR | Yalnız uygulanan hücreler (katalog); sahte hücreyi sunucu 400 ile reddeder |
+| 18 | "Tercihleri Kaydet" (matris) | KALDIRILDI | Yerine hücre başına autosave + geri alma |
+| 19 | Eski "Rozet Kazandığımda" e-posta | KALDIRILDI | `emailBadgeEarned` fonksiyonunu çağıran yok (artık sahte) |
+| 20–23 | Eski kart görev/ödül/push anahtarları | KALDIRILDI | Hiçbir gönderici okumuyordu |
+| 24 | Eski kart "Kaydet" | KALDIRILDI | Kart kaldırıldı |
+| 25 | İşletme yanıtı e-postası opt-out | ÇALIŞIYOR | Matriste "İşletme yanıtları · E-posta" (notify-email okur) |
+| 26 | Push aboneliği yönetimi | ÇALIŞIYOR | "Bu cihazda" aç/kapat, izin ve destek durumu, bildirim alan cihazlar listesi (tek tek kapatılabilir) |
+| 27 | 2FA kurulum | ÇALIŞIYOR | QR + elle anahtar + OTP alanı |
+| 28 | Kurtarma kodları | ÇALIŞIYOR | Kopyala, `.txt` indir, kodla yeniden üret, kalan sayı |
+| 29 | 2FA kapat | ÇALIŞIYOR | `window.prompt` yerine erişilebilir diyalog; Google girişi de 2FA soruyor (lib/auth, B6) |
+| 30 | Şifre kartı başlığı | ÇALIŞIYOR | Ham i18n anahtarı yok (B9) |
+| 31 | Şifre değiştir | ÇALIŞIYOR | `<form>`, `autocomplete`, göster/gizle, güç göstergesi; diğer oturumlar düşer |
+| 32 | İlk şifre oluştur | ÇALIŞIYOR | |
+| 33 | Oturumlar / her yerden çıkış | ÇALIŞIYOR | "Diğer cihazlardan çık" (sessionVersion artar, bu cihazın çerezi yenilenir) ve "Her yerden çık"; bu cihaz etiketi, oturum başlangıcı, son toplu çıkış. Ayrıntılı cihaz listesi için ŞEMA İSTEĞİ var |
+| 34 | Dil seçimi | ÇALIŞIYOR | Hesaba ve cihaza anında; yüzey metinleri TR/EN |
+| 35 | Tema seçimi | ÇALIŞIYOR | Gerçek `next-themes` (Açık/Koyu/Sistem, cihaz başına); "Sistem" artık 400 vermiyor (B1) |
+| 36 | "Profili Göster" | KALDIRILDI | Hiçbir sorgu okumuyor; tüketicisiz ayar |
+| 37 | "Liderlikte göster" | ÇALIŞIYOR | Lig ve liderlik sorguları uyguluyor; Gizlilik › Görünürlük |
+| 38 | Yüksek kontrast | ÇALIŞIYOR | Autosave; ilk boyamadan önce uygulanır |
+| 39 | Animasyonları azalt | ÇALIŞIYOR | Motion politikası (framer, konfeti, canvas, video) uygulama ayarını okuyor; OS tercihi notu |
+| 40 | Renk körü modu | ÇALIŞIYOR | |
+| 41 | "Tercihleri Kaydet" | KALDIRILDI | Yerine anahtar başına autosave; erişilebilirlik artık sonraki ziyarette geri alınmıyor |
+| yeni | Yazı boyutu | ÇALIŞIYOR | Normal/Büyük/Çok büyük (kök font-size), hesaba kayıt |
+| 42–52 | Vitrin ve çerçeve sekmesi | TAŞINDI | Çerçeve renk tonu Profil'de (doğrulamalı; çerçeve yoksa Ödüller bağlantılı boş durum). 4 slotluk vitrin düzenleyicisi ayarlardan çıktı: rozetler `/customer/me/badges`'te, süsler Ödüller'de sabitleniyor. Profil'de doluluk + kısayol |
+| 53 | Veri indirme | ÇALIŞIYOR | E1 KVKK merkezi: tam envanter, kanıtlı erişim başvurusu (B8) |
+| 54 | Hesap silme | ÇALIŞIYOR | Kayıp özeti + yeniden doğrulama (şifre / 2FA / taze giriş); yer tutucuda e-posta yok; büyük/küçük harf duyarsız; hız sınırı (B4) |
+| 55 | Silme sonrası çıkış | ÇALIŞIYOR | |
+| 56 | Yükleme hatası | ÇALIŞIYOR | `QueryState` hata + yeniden dene; varsayılan değerlerle form açılmaz (B7) |
+| 57 | Toast'lar | ÇALIŞIYOR | Önekli admin toast'ı yok; çoğu geri bildirim satır içi + canlı bölge (B13) |
+| 58 | Sekmeye derin bağlantı | ÇALIŞIYOR | `?tab=` (eski adlar dahil) |
+
+### Kapanan bulgular (14/14)
+- **B1** Tema sahteydi, "Sistem" 400 veriyordu. Seçici next-themes'e bağlandı; eski uç `system` değerini kabul ediyor; tüketicisiz `theme` saklanmıyor.
+- **B2** Gizlilik ve bildirim anahtarlarının çoğu sahteydi. Tüketicisi olmayan anahtarlar kaldırıldı. Matris yalnız uygulanan hücreleri gösteriyor, sunucu da yalnız onları yazdırıyor. Eksik uygulamalar tamamlandı: hatırlatma dürtmeleri (`lib/customer-reminders.ts`) ve sürpriz rozet bildirimi (`lib/surprise-badges.ts`) artık tercihe uyuyor. Kampanya push ve uygulama içi kanalı `lib/marketing-delivery` ile Dalga 1'den beri uygulanıyordu.
+- **B3** Keyfi avatar URL'si kabul ediliyordu. Yeni uçta ve paylaşılan `/api/user/profile` ucunda (yalnız CUSTOMER) izin listesi var.
+- **B4** Hesap silme yeniden doğrulama istemiyordu. Artık şifre, 2FA ya da taze giriş zorunlu; hız sınırı ve kayıp özeti eklendi.
+- **B5** Pencere odağı değişince yazılan ad siliniyordu. Kirli form senkronlanmıyor, odakta yeniden çekme yok.
+- **B6** 2FA Google girişinde atlanıyordu. lib/auth'taki OAuth MFA adımı bunu kapatıyor; kart metni doğru, `prompt()` kalmadı.
+- **B7** Yükleme hatasında varsayılanlar gösteriliyordu. Hata artık görünür; yazımlar alan bazlı ve advisory kilitli transaction içinde.
+- **B8** Veri indirme eksikti. E1'in tam envanter paketi kullanılıyor.
+- **B9** Ham i18n anahtarı görünüyordu. Kaldırıldı.
+- **B10** Mimari dağınıktı. 1111 satırlık tek istemci bileşeninin yerine sunucu sayfası ve bölüm parçaları geldi. İki bildirim modeli tek katalogda birleşti. Ölü dosyalar silindi: `components/settings/privacy-security.tsx`, `hooks/use-push-notifications.ts`, `components/customer/showcase-selector.tsx`. Ayarların `Settings` tablosundan tipli tabloya taşınması için ŞEMA İSTEĞİ var.
+- **B11** Doğum günü kilidi görünmüyordu, hatalar İngilizceydi, bonus aynı gün alınabiliyordu. Kart salt okunur ve onaylı; kurallar `lib/birthday` içinde (30 gün bekleme, İstanbul saati). Talep Kartım'da.
+- **B12** Erişilebilirlik ve mobil eksikleri giderildi: etiketli sekmeler, `htmlFor`, `autocomplete`, gerçek formlar, ≥44px hedefler, tema token'ları (sabit koyu renk yok), hareket politikası.
+- **B13** Toast tonu tutarsızdı. Önek kalktı, yüzey metinleri TR/EN.
+- **B14** Çerçeve rengi doğrulanmıyordu. Artık zod (0–360), hız sınırı ve `defineRoute` var.
+
+### Kalanlar (gerekçeli)
+- **Silmede 14–30 gün geri alma (soft-delete):** `User.deletionRequestedAt` alanı yok, ŞEMA İSTEĞİ. Bugün anonimleştirme anında ve kanıtlı yapılıyor (P0-25).
+- **Ayrıntılı oturum/cihaz listesi ve tekil oturum kapatma:** JWT oturumları kullanıcıya bağlı saklanmıyor (`SessionTokenUsage` tablosunda `userId` yok). ŞEMA İSTEĞİ: `SessionTokenUsage.userId` ve `deviceLabel`. Toplu iptal çalışıyor.
+- **E-posta değiştirme (doğrulama kodlu) ve Google bağla/kopar:** ayrı bir kimlik akışı gerektiriyor. Bugünkü dürüst yol KVKK düzeltme başvurusu.
+- **Sessiz saatler ve günlük özet:** bunları tüketecek gönderici yok, uydurma anahtar eklenmedi.
+- **Ekip e-postası:** `lib/team-email.ts` tercihe bakmadığı için bu hücre gösterilmiyor.
+- **KVKK merkezi metinleri** yalnız Türkçe. E1 bileşeni taşındı ama çevrilmedi.
+- **`/api/user/data-export`** artık hiçbir ekranda kullanılmıyor (içeriği eksik eski uç). Bayi ya da yönetici tüketicisi olabileceği için silinmedi.
+- **`lib/auth.ts` içindeki `jwt` update dalı** istemciden `image/points/level` kabul ediyor. Bu yalnız kişinin kendi token'ını etkiliyor, DB'ye yazmıyor. Paylaşılan auth dosyası olduğu için kimlik şeridine bırakıldı.
+- **Görsel doğrulama** (headless tezgâh) bu dalgada yapılamadı, çünkü dev server ve build yasak. İlerleme tip denetimi ve jest ile doğrulandı.

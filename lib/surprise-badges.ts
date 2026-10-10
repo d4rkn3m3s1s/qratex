@@ -13,7 +13,11 @@
  */
 import { prisma } from '@/lib/prisma';
 import { awardBadge } from '@/lib/badges/award';
+import { isUserChannelEnabled } from '@/lib/notify-prefs-server';
 import { Prisma } from '@prisma/client';
+
+/** Bildirim türü → `kindToGroup` 'campaign' (Kampanya & Sürprizler). */
+const SURPRISE_BADGE_KIND = 'surprise-badge';
 
 /** Bir kullanıcının requirement değerlendirmesi için sayaçları (tek okuma). */
 export interface UserBadgeCounters {
@@ -220,6 +224,7 @@ export async function awardEligibleSurpriseBadges(
     const ownedSet = new Set(owned.map((o) => o.badgeId));
 
     const awarded: string[] = [];
+    let appNotifyAllowed: boolean | null = null;
     for (const badge of candidates) {
       if (ownedSet.has(badge.id)) continue;
       if (charIds.has(badge.id)) continue; // dizi karakteri → kendi akışı (character-badges)
@@ -247,6 +252,10 @@ export async function awardEligibleSurpriseBadges(
       awarded.push(badge.id);
       const rewarded = outcome.points;
 
+      // Bildirim tercihi: `surprise-badge` → "Kampanya & Sürprizler" grubu, uygulama içi kanal
+      // (Ayarlar → Bildirimler). Rozet ve puan tercihten bağımsız verilir; yalnız zil susar.
+      if (appNotifyAllowed === null) appNotifyAllowed = await isUserChannelEnabled(userId, SURPRISE_BADGE_KIND, 'app');
+      if (!appNotifyAllowed) continue;
       await prisma.notification.create({
         data: {
           userId,
@@ -255,7 +264,7 @@ export async function awardEligibleSurpriseBadges(
           message: rewarded > 0
             ? `Gizli bir rozet açıldı: ${badge.name} (+${rewarded} puan)`
             : `Gizli bir rozet açıldı: ${badge.name}`,
-          data: { kind: 'surprise-badge', href: '/customer/badges' } as object,
+          data: { kind: SURPRISE_BADGE_KIND, href: '/customer/me/badges' } as object,
         },
       }).catch(() => {});
     }
