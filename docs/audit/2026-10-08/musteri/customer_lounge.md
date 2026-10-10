@@ -292,3 +292,69 @@ Doğum günü bu ekranın kalıcı kartı değil, zamanı gelince öne çıkan b
 - Rol görünürlüğü de devreye girmiyor. Katalogda scope olmadığı ve çağrıda `role` verilmediği için `role` undefined (`:96-98`), dolayısıyla `blockedByRoleVisibility` hep false (`:101`). Admin modül panelinde lounge listelenmiyor (`overview/route.ts` `MODULE_CATALOG.map`). `:71`'deki endpoint bağlaması, kataloğa karşılık gelmeyen boşta bir kayıt.
 - **Yeniden üretim:** Admin lounge'u kapatmak istese bile UI'da anahtar yok. Settings satırına elle `vip_lounge:false` eklense de `GET /api/customer/lounge` 200 dönmeye devam eder. `proxy.ts` sayfa seviyesinde lounge'a özel bir kapı içermiyor.
 - **Öneri:** Kataloğa `{ key: 'vip_lounge', scope: 'customer', severity: 'optional', detailHref: '/customer/lounge' }` eklenmeli. Kapı sayfa tarafında da uygulanmalı (menü öğesinin gizlenmesi ve doğrudan URL için bir "modül kapalı" durumu). Aynı yapısal hatayı başka modüllerde yakalamak için kapıya verilen her anahtarın katalogda bulunduğunu kontrol eden bir birim testi eklenmeli (`assertModuleEnabled` çağrılarını tarayan test).
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: birleştir.** `/customer/lounge` emekli koçanı (`permanentRedirect` → `/customer/wallet/card`, sorgu korunur). İçerik Cüzdan → Kartım'daki **Statü** bölümüne (`components/customer/m-cuzdan-kart/status-panel.tsx`) gerçek veriyle taşındı. `GET /api/customer/lounge` kaldırıldı (tek tüketicisi bu sayfaydı); statü verisi Kartım yükleyicisinden (`lib/wallet-card/load.ts`) gelir. Doğum günü kuralları tek kaynakta: `lib/birthday.ts` (Europe/Istanbul, 29 Şubat, 30 gün kuralı).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota metadata | ÇALIŞIYOR | Kartım metadata'sı; sahte "sezonluk avantaj/drop" vaadi yok |
+| 2 | Menüden giriş | ÇALIŞIYOR | Cüzdan → Kartım (kayıtta `keywords: statü, lounge, vip`) |
+| 3 | "Panele dön" | KALDIRILDI | Cüzdan sekmeleri ve alt sekme çubuğu |
+| 4 | Özel hero | KALDIRILDI | Cüzdan kabuğu başlığı |
+| 5 | Yükleniyor | ÇALIŞIYOR | Sunucu ilk render + `aria-busy` iskelet |
+| 6 | Hata | ÇALIŞIYOR | `ErrorState` + yeniden dene; JSON olmayan yanıt sözleşme hatası olarak yakalanır |
+| 7 | `vip_lounge` modül kapısı | KALDIRILDI | Uç kaldırıldı; statü ayrı modül değil, Kartım'ın parçası |
+| 8 | API kimlik/rol | ÇALIŞIYOR | `defineRoute` CUSTOMER |
+| 9 | VIP katman adı | ÇALIŞIYOR (koşullu) | Yalnız gerçekten atanmış, etkin ve süresi dolmamış kayıtta (çarpanın uygulandığı koşulun aynısı, `buildVip`). Atama yolu F4.4'te |
+| 10 | "Ömür boyu puan" | KALDIRILDI | Değer harcanabilir bakiyenin anlık görüntüsüydü |
+| 11 | "Harcama" | KALDIRILDI | Alan hiç yazılmıyordu; gerçek harcama Hareketler sekmesinde |
+| 12 | Katman yenileme | ÇALIŞIYOR | `tierExpiry` varsa "… tarihine kadar"; yoksa hiç gösterilmez |
+| 13 | "VIP yok … otomatik yükselirsiniz" | KALDIRILDI | Gerçekleşmeyen vaat |
+| 14 | Puan + seviye | ÇALIŞIYOR | `PointsChip` + seviye |
+| 15 | Sonraki katmana ilerleme | ÇALIŞIYOR | Lig ilerleme çubuğu, "X ligine N puan" (lig kuralları sunucudan) |
+| 16 | Katmanın gerçek avantajları | ÇALIŞIYOR (dar kapsam) | Gerçek mekanizması olan tek avantaj (geri bildirim çarpanı) somut oranla; `VIPTier.benefits` seed metni doğrulanamadığından gösterilmez |
+| 17 | "Öncelikli kampanya bildirimleri" | KALDIRILDI | Mekanizma yok |
+| 18 | "Doğum günü bonusu" | ÇALIŞIYOR | Doğum günü anı |
+| 19 | "Mini görev önerileri" | KALDIRILDI | Sahteydi |
+| 20 | Puan çarpanı | ÇALIŞIYOR | "Geri bildirim puanların ×1,25" (yanlış "kampanya dönemlerinde" ifadesi düzeldi) |
+| 21 | "Bağış öncelikli rozet" | KALDIRILDI | Sahteydi |
+| 22 | Doğum tarihi gösterimi | ÇALIŞIYOR | Gün/ay `timeZone: 'UTC'` ile biçimlenir (negatif ofsette kayma yok) |
+| 23 | "… gün sonra" sayacı | ÇALIŞIYOR | İstanbul takvimi, 29 Şubat → 28 Şubat |
+| 24 | "Bugün doğum günün" | ÇALIŞIYOR | İstanbul günü |
+| 25 | Bonus ipucu | ÇALIŞIYOR | Puan matrisinden |
+| 26 | Bonus talebi | ÇALIŞIYOR | An Motoru puan kapsülü (Host yoksa tek toast), `moments.refresh()`, hata sonrası durum tazelenir; Türkçe hata metinleri |
+| 27 | "Bu yıl alındı" | ÇALIŞIYOR | |
+| 28 | "Ayarlarda düzenle" | KALDIRILDI | Çıkmazdı; yerine "tarih kaydedildikten sonra değiştirilemez; hatalıysa destek" bilgisi |
+| 29 | Tarih yoksa davet | ÇALIŞIYOR | "Doğum tarihini ekle, +N puan" → Ayarlar |
+| 30 | "Sürpriz kutular" linki | KALDIRILDI | Bağlamsızdı |
+| 31 | Popup ile senkron | ÇALIŞIYOR (kısmi) | Kartım odakta yeniden çeker; başarısız talepte (ör. popup'tan alınmış) sunucudan tazelenir. Popup'ın sayfaya olay yayması ortak bileşen işi |
+| 32 | Talep backend güvenliği | ÇALIŞIYOR | `defineRoute` CUSTOMER + hız sınırı; 30 gün kuralı guard'ın `where`'inde; puan `mintPoints` (`birthday:<kullanıcı>:<yıl>` tek-kez anahtarı, defter + `points_credited` aynı tx) |
+| 33 | i18n | ÇALIŞIYOR | Sayfa TR/EN; `/api/birthday` Türkçe metin + makine kodu (`NOT_SET`, `NOT_TODAY`, `ALREADY_CLAIMED`, `TOO_RECENT`, `BIRTHDAY_LOCKED`, `INVALID_DATE`) |
+| 34 | Erişilebilirlik | ÇALIŞIYOR | Dekoratif ikonlar `aria-hidden`, `progressbar` değerleri, durumlar duyurulur |
+| 35 | Mobil | ÇALIŞIYOR | Tek sütun, ≥ 44px hedefler |
+| 36 | Hareket | ÇALIŞIYOR | Kutlama An Motoru'nda (kayıtlı, idempotent); ops bölümünde döngü yok |
+
+### Kapanan bulgular
+- **1** kısmen: yan etkili `GET /api/vip` salt okunur yapıldı (geçici bakiyeyle Platinum'a yükselip ×2 çarpanı kalıcı tutma açığı kapandı); UI yalnız gerçek kaydı gösterir, "Bronze" ile çelişen "VIP yok" vaadi kalktı. Kalan: olay güdümlü atama (F4.4, ekonomi şeridi).
+- **2** kapandı: uydurma ayrıcalıklar kaldırıldı; yalnız gerçek çarpan somut oranla.
+- **3** kapandı: `requireAuth(['CUSTOMER'])`, 30 gün kuralı (ön kontrol + atomik guard), `mintPoints` + yıllık tek-kez anahtarı, hız sınırı; `set` girdisi geçerli takvim günü / gelecekte değil / ≤ 120 yaş.
+- **4** kapandı (Kartım): CTA yerine kilit bilgisi; `GET /api/birthday` artık `locked: true` döndürür (Ayarlar input'u bunu kullanabilir).
+- **5** kapandı: kapı ve uç kaldırıldı.
+- **6** kapandı: içerik Cüzdan → Kartım'da; eski rota yönlendirir.
+- **7** kapandı: `lib/birthday.ts` (İstanbul, 29 Şubat); GET hatırlatma bildirimi İstanbul günü başına bir kez.
+- **8** kapandı: sahte/ölü alanlar kaldırıldı.
+- **9** büyük ölçüde kapandı: React Query + başarı/başarısızlık sonrası tazeleme, makine okunur hata kodları.
+- **10** kapandı: QDL v2 bölüm kartı, amblem, ilerleme, An Motoru kutlaması.
+
+### Kalanlar
+- VIP olay güdümlü atama + lig/VIP tek statü modeli kararı (F4.4).
+- `app/api/admin/modules/overview/route.ts:71` hâlâ kaldırılan `/api/customer/lounge` için boşta bir uç bağlaması tutuyor (admin yüzeyi).
+- Ayarlar'da doğum tarihi input'unun kilitli gösterilmesi (Ayarlar yüzeyi; `locked` alanı hazır).
+- Doğum günü haftası talep penceresi ve yıllık statü özeti (ürün kararı).

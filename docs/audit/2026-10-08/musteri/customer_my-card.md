@@ -259,3 +259,89 @@ Yöntem: tüm iddialar salt okunur kod okumasıyla yeniden kontrol edildi (sayfa
 - Bugünkü durum: yerel `.env*`'de `APPLE_PASS*` yok (canlı ortam doğrulanmadı). Yapılandırma yoksa uç 503 döndürüyor, UI düğmeyi koşulsuz gösteriyor (`page.tsx:744-753`) ve kullanıcı her basışta hata toast'ı görüyor. Hazır `POST /api/wallet/apple` (uygunluk kontrolü) UI'da kullanılmıyor. Ayrıca `<a download>` blob yöntemi iOS Safari'de pkpass'i Wallet'a doğrudan açmayabilir (doğrulanmadı).
 - Şiddet: veri/güvenlik etkisi yok; bugün ölü buton, yapılandırılınca sessiz başarısızlık. "Orta".
 - Öneri: `icon.png/@2x/@3x` + `logo.png` paketlensin; Team ID config kontrolüne eklensin; sayfa açılışında `POST /api/wallet/apple` ve Google karşılığı ile `{appleAvailable, googleAvailable}` alınıp yalnız uygun platformda (iOS → Apple, Android → Google) düğme gösterilsin; pkpass doğrudan `window.location` ile uca yönlendirilsin.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/customer/wallet/card` (Cüzdan → Kartım). `/customer/my-card` emekli koçanı (`permanentRedirect`, sorgu korunur; `lib/navigation/next-redirects.js#isRetirementStub` tarafından tanınır). Cüzdan kabuğu (`app/customer/wallet/layout.tsx`): tek `h1`, sekmeler `lib/navigation/registry.ts` + modül/menü görünürlüğünden türer (Kartım · Ödüller · Ödüllerim · Hareketler · Bağış), `/customer/wallet` → Kartım.
+
+**Mimari:** sunucu bileşeni önce (`app/customer/wallet/card/page.tsx` → `lib/wallet-card/load.ts`, 7 sorgu paralel, açık DTO `lib/wallet-card/dto.ts`); istemci adası `components/customer/m-cuzdan-kart/wallet-card-view.tsx` (`initialData` + BFF `GET /api/customer/wallet/card`, `defineRoute` CUSTOMER + `read` hız sınırı). `qrcode` ve `domMax` tembel. Eski `GET /api/customer/cards` kaldırıldı (tek tüketicisi bu sayfaydı).
+
+**Görsel doğrulama:** kart yüzü ve "Kasada göster" DOM'u projenin Tailwind 3.4 CLI'ı + `app/globals.css` ile derlendi, headless Chrome'da ölçüldü (320/360/390/768 px dikey + 740×360 yatay). Kart içeriği her genişlikte kart sınırları içinde (`scrollHeight == clientHeight`), yatay sayfa kaydırması yok; QR 320×640'ta 248 px, 390×844'te 318 px ve yatayda 187 px olarak tamamı görünür (gerekirse panel kaydırılır, kırpılmaz).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment metadata | ÇALIŞIYOR | `generateMetadata` (TR/EN); açıklama sayfanın gerçekten yaptığını söylüyor |
+| 2 | Yetki | ÇALIŞIYOR | Sayfa: oturum + CUSTOMER; BFF/işlem uçları `defineRoute` (requireAuth, token-replay) |
+| 3 | Yükleniyor iskeleti | ÇALIŞIYOR | Kritik veri sunucuda; `wallet/loading.tsx` (`aria-busy`), ada içi statik iskelet kart yerleşimiyle aynı |
+| 4 | Hata durumu | ÇALIŞIYOR | `parseWalletCardResponse`: hata ≠ boş; `ErrorState` + yeniden dene; 4xx → yetkisiz görünümü |
+| 5 | Masaüstü başlık | ÇALIŞIYOR | Kabuk `h1` "Cüzdan" (mobilde de görünür) |
+| 6 | Mobil başlık kartı | KALDIRILDI | Tekrardı; kabuk başlığı tüm genişliklerde |
+| 7 | Hero "Üyelik" | KALDIRILDI | İşlevsiz pazarlama bloğu; kart ilk ekranda |
+| 8 | Stat: kart sayısı | KALDIRILDI | Bilgi değeri yoktu; birden çok kartta "N kartın var" satırı |
+| 9 | Stat: tüketim | ÇALIŞIYOR | Yalnız kart yüzünde (tekrar yok) |
+| 10 | Stat: "Yorum" | ÇALIŞIYOR | "N tüketimin yorum bekliyor" bölümü, satır başına doğrudan "Puanla" |
+| 11 | "Paylaşım nasıl çalışır?" | KALDIRILDI | Yanıltıcıydı; yerine dürüst güvenlik notu (kodu paylaşma) |
+| 12 | Boş durum + "QR tara" | ÇALIŞIYOR | Tara (`/customer/scan`, `lib/qr-resolve.ts`) artık `/c/<token>` kartını tanıyıp etkinleştiriyor; CTA oraya gider + kamera yolu ipucu |
+| 13 | Çoklu kart | ÇALIŞIYOR | `[KARAKTER-TEST]` ve arşivli kartlar SORGUDA elenir; aktif önce |
+| 14 | Kart giriş stagger'ı | KALDIRILDI | ops kaydı: yerine tek seferlik parıltı (sonsuz döngü yok) |
+| 15 | EMV çip / Wifi / Crown | KALDIRILDI | Olmayan yeteneği ima ediyordu |
+| 16 | "Signature Member" | ÇALIŞIYOR | Gerçek lig adı + amblem (lig kuralları sunucudan), üst kenarda lig rengi şeridi |
+| 17 | Durum rozeti | ÇALIŞIYOR | TR/EN; "Donduruldu" durumu eklendi |
+| 18 | Kart üstü tüketim | ÇALIŞIYOR | |
+| 19 | Aktivasyon tarihi | KALDIRILDI | Yerine daha yararlı "Son kullanım X önce" (son tüketimden) |
+| 20 | Kart üstü QR önizleme | KALDIRILDI | QR kart yüzünden çıktı → "Kasada göster" tam ekranı (kırpılma kökten kalktı, ölçüldü) |
+| 21 | QR büyütme | ÇALIŞIYOR | Kart yüzü düğme + tam genişlik "Kasada göster" düğmesi → tam ekran |
+| 22 | Kart sahibi adı | ÇALIŞIYOR | Görünmeyen etiket kaldırıldı; ad beyaz, kontrast AA |
+| 23 | Maskeli token göster/gizle | ÇALIŞIYOR | Tek tutarlı maske (son 8, büyük/küçük harf korunur); tam kod yalnız tam ekranda |
+| 24 | 3D tilt | ÇALIŞIYOR | `useMotionValue` + `useSpring`, perspektif inline style; yalnız fare. Kod okumasıyla; framer çalışma anı tarayıcıda ölçülmedi |
+| 25 | Glare | ÇALIŞIYOR | Render'sız motion template |
+| 26 | Işık bandı | ÇALIŞIYOR | `via-white/[0.14]`, tek seferlik (`DURATION.celebrate`) |
+| 27 | Azaltılmış hareket | ÇALIŞIYOR | `useReducedMotionPref` (OS + uygulama ayarı); tilt/glare/parıltı çizilmez, `layoutId` politika ile kapanır |
+| 28 | "ID" kopyala | ÇALIŞIYOR | `await` + `execCommand` yedeği; sonuca göre doğru toast (sonner, önek yok) |
+| 29 | "URL" kopyala | KALDIRILDI | Bağlantı kasa yetkisi taşır; paylaşılmaz |
+| 30 | Paylaş | KALDIRILDI | B3 (davet amacı `/customer/referral`'da) |
+| 31 | Kısayol: Tüketimlerim | ÇALIŞIYOR | Tek "Tüm hareketler" → `/customer/wallet/activity` |
+| 32 | Kısayol: Harcama özetim | KALDIRILDI | Hareketler sekmesine birleşti (yol haritası §4.3) |
+| 33 | Bilgi kartı (tekrar) | KALDIRILDI | Kart yüzünün tekrarıydı |
+| 34 | Son işlemler | ÇALIŞIYOR | Son 5: işletme, ürün, deftere yazılan puan (`PointsLedger` `dealer_passive`), yorum durumu; satır detaya gider |
+| 35 | "Tüm tüketimler" | ÇALIŞIYOR | → Hareketler sekmesi |
+| 36 | İkinci "Paylaş" | KALDIRILDI | |
+| 37 | Büyük QR diyaloğu | ÇALIŞIYOR | Başlık + açıklama, QR yükleniyor/üretilemedi durumları, wake lock (alındıysa bilgi), beyaz QR zemini |
+| 38 | Diyalog URL + Kopyala | ÇALIŞIYOR | URL yerine kasiyerin elle girebileceği TAM kod (4'lü gruplar) + kopyala. Eski "son 8 hane" kısa kodu kasada kabul edilmiyordu (sahte yedek) → kaldırıldı |
+| 39 | Diyalog Paylaş | KALDIRILDI | |
+| 40 | Apple Wallet | ÇALIŞIYOR (koşullu) | Düğme yalnız yapılandırma TAM (Team ID dahil, `isAppleWalletConfigured`) + iOS/macOS'ta; pakete `icon/@2x/@3x` + `logo/@2x` (bağımlılıksız PNG) eklendi; seri numarası deterministik; doğrudan gezinme. Gerçek sertifikayla cihazda doğrulanmadı |
+| 41 | Google Wallet | ÇALIŞIYOR (koşullu) | Yapılandırılmamışsa 503 (eski "200 + fallback" sahte başarı kalktı); JWT'ye `genericClasses` eklendi; yalnız iOS dışı. Canlı hesapla doğrulanmadı |
+| 42 | Yorum bekleyen CTA | ÇALIŞIYOR | Sayfanın üst bölümünde; satır başına `/customer/consumptions/<id>` (filtre parametresine bağımlı değil) |
+| 43 | QR hedef alan adı | ÇALIŞIYOR | `NEXT_PUBLIC_APP_URL` → sayfa kökeni; sabit `demoqratex.vercel.app` yok |
+| 44 | Çevrimdışı kart | ÇALIŞIYOR | Kullanıcı anahtarlı yerel anlık görüntü (yalnız aktif kart + üretilmiş QR görseli, 30 gün), "Çevrimdışı" rozeti + tekrar dene |
+| 45 | EN yerelleştirme | ÇALIŞIYOR | Tüm metinler `m-cuzdan-kart/copy.ts` (TR/EN) |
+| 46 | Puan/seviye/lig ilerlemesi | ÇALIŞIYOR | Statü bölümü: bakiye (`PointsChip`), seviye, lig amblemi, sonraki lige kalan + `progressbar` |
+| 47 | Kayıp/dondur/yenile | ÇALIŞIYOR | `POST /api/customer/wallet/card/:id {freeze, unfreeze, rotate}`; yarış guard'ı, `CardAuditLog`, yönetim bloğu müşteri tarafından çözülemez; `ConfirmAction` ile onay |
+| 48 | Kasada göster modu | ÇALIŞIYOR | Tam ekran, wake lock, parlaklık ipucu (web'den parlaklık ayarlanamaz; dürüst ipucu), `layoutId` kart → panel geçişi, `?present=1` derin linki |
+| 49 | Dinamik (dönen) QR | EKSİK (kalan) | Bayi tüketim akışının kodu doğrulaması gerekir (bayi yüzeyi); bkz. kalanlar |
+
+### Kapanan bulgular
+- **B1** kapandı: QR kart yüzünden çıktı; kart yüzü oran içinde tasarlandı (`min-height` + `overflow-clip`), tam ekranda QR `min(100%, 22rem, 52dvh)`; 320–768 px ve yatayda ölçüldü.
+- **B2** büyük ölçüde kapandı: uygunluk sunucuda (`wallet.apple/google`), platforma göre düğme, Team ID kontrolü, `icon.png`, deterministik seri, 503, `genericClasses`; eski `POST` uygunluk uçları kaldırıldı. Kalan: PassKit web servisi / Google `PATCH` ile puan güncellemesi.
+- **B3** kapandı (bu yüzeyin payı): paylaşım tamamen kaldırıldı; müşteri dondur/çöz/yeni kod (+ `CardAuditLog`); `/api/cards/[token]` kimlik ifşası Dalga 1'de (P0-09) kapanmıştı. Kalan: bayi yanıtındaki müşteri e-postası ve kısa ömürlü kasa kodu (bayi yüzeyi).
+- **B4** kapandı: Tara kart QR'ını tanıyor ve etkinleştiriyor; boş durum oraya yönlendiriyor.
+- **B5** kapandı: hata/çevrimdışı ayrı durumlar + yerel anlık görüntü (QR görseliyle).
+- **B6** kapandı: tilt/glare motion value ile, perspektif inline, ışık bandı tek seferlik; görünmez sonsuz animasyon yok.
+- **B7** kapandı: sıra Kart → Kasada göster → bekleyen yorumlar → statü → son işlemler → yönetim; tekrarlar kaldırıldı.
+- **B8** kapandı: bekleyen her tüketim doğrudan kendi yorum sayfasına gider.
+- **B9** kapandı: kopyala/paylaş hata yönetimi; müşteri yüzünde `admin-toast` yok.
+- **B10** kapandı: açık `select` DTO (bayi notu/tutar/blok gerekçesi yok), sentetik/arşiv filtresi sorguda, sorgular paralel.
+- **B11** kısmen: web QR'ı ortam kökenini kullanıyor. Kalan: `app/admin/cards/cards-client.tsx:82` sabit alan adı (admin yüzeyi) ve wallet `NEXT_PUBLIC_APP_URL || qratex.com` yedeği.
+- **B12** kapandı: TR/EN tam, başlık menüyle uyumlu ("Kartım").
+- **B13** kapandı: etiketler ≥ 11px ve ≥ %75 beyaz, kart `aria-label`'lı düğme/grup, diyalog açıklaması, `aria-busy`, ≥ 44px hedefler, kapanışta odak "Kasada göster" düğmesine döner.
+
+### Kalanlar
+- Dinamik/kısa ömürlü kasa kodu (HMAC + zaman penceresi): bayi tüketim ucu (`app/api/dealer/consumptions`, `lib/consumption/service.ts`) kodu doğrulamalı — bayi yüzeyinin işi.
+- Wallet pass canlı güncellemesi (PassKit web servisi, Google `PATCH`), konum bildirimleri. Yeni kod üretilince eski pass'teki kod geçersiz kalır (kullanıcıya onay diyaloğunda söyleniyor).
+- Jiroskop parallax yapılmadı (mobilde tilt yok; ops kaydı ve izin akışı maliyeti).
+- `.next/types` altındaki eski `my-card/layout`, `lounge/layout` referansları üretilmiş dosyalardır; bir sonraki derlemede yenilenir.

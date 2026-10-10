@@ -182,7 +182,7 @@ export function StatusPanel({
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <LeagueEmblem leagueKey={status.league.key} name={status.league.name} size="md" />
+          <LeagueEmblem leagueKey={status.league.key} name={status.league.name} size="md" aria-hidden />
           <div className="min-w-0 flex-1">
             <p className="qx-body font-semibold text-fg">{copy.league(status.league.name)}</p>
             <p className="qx-caption text-fg-muted">{copy.level(status.level)}</p>

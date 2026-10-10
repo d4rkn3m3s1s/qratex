@@ -136,7 +136,7 @@ export function CardFace({
 
         {league && (
           <div className="flex items-center gap-2">
-            <LeagueEmblem leagueKey={league.key} name={league.name} size="sm" register="ops" />
+            <LeagueEmblem leagueKey={league.key} name={league.name} size="sm" register="ops" aria-hidden />
             <span className="text-sm font-medium text-white/90">{copy.league(league.name)}</span>
           </div>
         )}

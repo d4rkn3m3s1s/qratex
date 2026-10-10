@@ -200,7 +200,12 @@ export function PresentSheet({
                         <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/75">QRateX</p>
                         <p className="truncate text-base font-semibold">{holderName}</p>
                       </div>
-                      {league && <LeagueEmblem leagueKey={league.key} name={league.name} size="sm" register="ops" showLabel className="text-white" />}
+                      {league && (
+                        <span className="inline-flex shrink-0 items-center gap-2 text-sm font-medium text-white/90">
+                          <LeagueEmblem leagueKey={league.key} name={league.name} size="sm" register="ops" aria-hidden />
+                          {league.name}
+                        </span>
+                      )}
                     </div>
 
                     <div className="w-[min(100%,22rem,52dvh)]">
