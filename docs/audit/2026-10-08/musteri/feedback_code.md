@@ -256,3 +256,92 @@ Yöntem: Her iddia çağıran ve çağrılan tarafıyla birlikte kod okunarak ç
 - Trust skoru (`lib/trust-score.ts:81-117`) olumlu sahte yorumu işaretlemiyor. Tek nötr sinyal aynı işletmeye 24 saatte 3'ten fazla yorum (`:86`); günde ≤3 yorum hiç işaretlenmiyor.
 - Yeniden üretim: STAFF ya da DEALER hesabıyla oturum açıkken kendi işletmenin `/feedback/{code}` sayfasına girip 5 yıldız ve uzun bir metinle gönder → `trustFlagged=false`, işletme puan ortalaması yükselir, hesaba `matrix.feedback.detailed` puanı (günlük 500 / haftalık 2000 tavan dahilinde) yazılır, bu puan kupona çevrilebilir.
 - Düzeltmeler: (a) "Personel kişisel metriği şişer" kısmı yanlış, çünkü `dealerStaffId`'yi okuyan bir metrik yok (bkz. 3). (b) Sorun owner/staff'a özgü değil, dolayısıyla KRİTİK sayılmaz. Puan tavanları tüm kullanıcılara aynı uygulanıyor ve ayrı bir CUSTOMER hesabı açmak aynı sonucu verir. Puanlama şişirme ise anonim dalda trust değerlendirmesi hiç yapılmadan (`route.ts:269` yalnız oturumlu) IP başına 5/dk sınırıyla zaten mümkün. Yine de çıkar çatışması kontrolü ucuz ve açık bir sinyal. Önerilen yaklaşım: gönderen `qrCode.dealerId` ise ya da bu bayinin aktif `DealerStaff` kaydı varsa, yorum kabul edilip `trustFlagged=true` ve `trustReason='çıkar çatışması'` ile işaretlenmeli, puan/XP verilmemeli, işletme ortalamasına ve leaderboard'a dahil edilmemeli. Ayrıca anonim gönderimler için ayrı bir cihaz/IP tabanlı hafif güven değerlendirmesi düşünülmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** p-qr-geri-bildirim · **Hedef rota:** `/feedback/[code]` (URL değişmedi; dosya `app/(public)/feedback/[code]/page.tsx` → `app/(funnel)/feedback/[code]/page.tsx`, pazarlama kabuğu ve landing zemini olmadan).
+
+**Yeni yapı**
+- Sunucu sayfası `app/(funnel)/feedback/[code]/page.tsx` (+ statik `loading.tsx`): mekân, oturum (DB doğrulamalı), çıkar çatışması ve ödül önizlemesi ilk HTML'de; `generateMetadata` işletme adlı başlık + `noindex`. İstemci adası `components/customer/p-qr-geri-bildirim/**` (3 adımlı huni, durum ekranı, bağlama kartı, çevrimdışı kuyruk, fotoğraf yükleme kancası, TR/EN metin).
+- Sunucu çekirdeği `lib/feedback-funnel/**`: `submit.ts` (tek gönderim hattı), `on-feedback-created.ts` (oturumdan bağımsız yan etkiler), `claim.ts` + `claim-token.ts` (anonim yorumu sonradan hesaba bağlama), `reward.ts` (ödül zinciri + önizleme), `media.ts` (R2 fotoğraf), `scan.ts` (tekilleştirilmiş tarama olayı), `venue.ts`, `viewer.ts`, `quick-tags.ts`, `schema.ts`, `constants.ts`.
+- Yeni uçlar (hepsi `defineRoute`): `POST /api/public/feedback/[code]` (public, IP 20/dk, zod, 32 KB, `Idempotency-Key`), `POST /api/public/feedback/[code]/media` (public, IP 12/10 dk, ≤ 4 MB, sharp ile yeniden kodlama + EXIF silme → R2), `POST /api/public/feedback/[code]/scan` (public, 30 dk çerez tekilleştirme), `POST /api/public/feedback-claim` (yalnız CUSTOMER, idempotent). `POST /api/feedbacks` artık aynı çekirdeğe delege eden geriye uyumlu giriş; `GET /api/qr-codes/public/[code]` yan etkisiz ve personelde yalnız ilk ad.
+- Test: `__tests__/lib/feedback-funnel.test.ts` (20 test: anonim yan etkiler, mintPoints anahtarı, etiket/bonus, tavan, çıkar çatışması, yabancı personel, kapalı QR, QR×IP 429, medya süzgeci, belirteç kurcalama/süre, bağlama yarışı). `__tests__/api/feedbacks.test.ts` (geriye uyumluluk) geçiyor.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | QR verisini çekme | ÇALIŞIYOR | Sunucuda tek sorgu (`loadFeedbackVenue`, React `cache` ile metadata + sayfa tek okuma); DB erişilemezse `unavailable` ekranı, sayfa çökmez. |
+| 2 | Yükleniyor durumu | ÇALIŞIYOR | Son yerleşimle aynı statik iskelet (`loading.tsx`, shimmer yok) + `role=status`. |
+| 3 | Hata durumu | ÇALIŞIYOR | Nedene özel başlık/gövde (bulunamadı/pasif/süresi dolmuş/iptal/arşiv/bağlantı yok), TR+EN, "Yeniden tara" / "Tekrar dene". |
+| 4 | TR/EN dil düğmesi | ÇALIŞIYOR | Global `AppLocaleProvider.setLocale` → `<html lang>`, çerez, tüm uygulama birlikte. |
+| 5 | Oturum dil tercihi | ÇALIŞIYOR | Yerel kopya kaldırıldı; tek öncelik kuralı global sağlayıcıda. |
+| 6 | Başlık + işletme + QR adı | ÇALIŞIYOR | Üst çubukta işletme + masa/şube; soru "{işletme} deneyimin nasıldı?". |
+| 7 | İşletme logosu | ÇALIŞIYOR | Üst çubukta ve 1. adımda (logo yoksa baş harf). |
+| 8 | QR açıklaması | ÇALIŞIYOR | Karşılama metni yoksa 1. adımda gösterilir. |
+| 9 | Segment karşılama metni | ÇALIŞIYOR | `?segment=` sunucuda okunur, `segmentConfig[segment].welcomeText` gösterilir. |
+| 10 | 5 yıldız | ÇALIŞIYOR | `RatingInput` radiogroup (oklar/Home/End/rakam, tek sekme durağı, 56 px), iki dilli `aria-label`. İşaretçiyle seçimde kendiliğinden 2. adıma geçer; klavyede oklar yalnız seçimi değiştirir. |
+| 11 | Hover önizleme | ÇALIŞIYOR | Fare için `RatingInput` içinde; dokunmatikte seçim. |
+| 12 | Puan etiketi | ÇALIŞIYOR | Görsel + ekran okuyucu duyurusu. |
+| 13 | Personel seçimi | ÇALIŞIYOR | Sunucuda `{id, dealerId: qr.dealerId, isActive}` doğrulaması; aksi yok sayılır. Tüketici (bayi personel kartı) hâlâ yok → kalan açık. |
+| 14 | Personel bölümü etiketi | ÇALIŞIYOR | Sayfaya özel tip güvenli metin (`FunnelCopy`); ham anahtar sızamaz. |
+| 15 | NPS 0-10 | ÇALIŞIYOR | `RatingInput scale="nps"` (mobilde 6+5 ızgara, ≥ 44 px), uç etiketleri, "Seçimi temizle". |
+| 16 | Hızlı seçenek çipleri | ÇALIŞIYOR | `ChoiceChips` çoklu (≤ 4), puana göre bağlamsal set, iki dil, seçili durum; metni kirletmez, ayrı alan. |
+| 17 | Yorum alanı | ÇALIŞIYOR | Puana göre yer tutucu; 2000 sınırı. |
+| 18 | Karakter sayacı | ÇALIŞIYOR | |
+| 19 | "+50 bonus puan" ipucu | ÇALIŞIYOR | Sunucu matrisinden (eşik `>=`), üyede çarpanlı ve tavanla kısılmış; anonimde "üye olarak" ifadesi. |
+| 20 | Fotoğraf ekleme | ÇALIŞIYOR | İstemcide küçültme (PhotoPicker, EXIF/GPS silinir) → foto başına ayrı multipart → sunucu baytlardan biçim doğrular, sharp ile yeniden kodlar → R2. Gönderim yalnız kendi R2 alanımızdaki bu QR'a ait URL'leri kabul eder. R2 yapılandırılmamışsa bölüm gizlenir. (Canlıda denenmedi.) |
+| 21 | Önizleme + kaldırma | ÇALIŞIYOR | Kararlı id'ler, etiketli kaldır düğmesi, yükleme yüzdesi, hata + "Tekrar dene". |
+| 22 | Sınır | ÇALIŞIYOR | 3 fotoğraf, çıkış ≤ 1,5 MB, sunucu ≤ 4 MB. |
+| 23 | Fotoğrafların görüntülenmesi | ÇALIŞIYOR (müşteri) / KISMİ (bayi) | Müşterinin Seslerim detayı https medyayı gösteriyor; bayi gelen kutusu DTO'su (`lib/dealer-inbox`) `media` taşıyor, UI bileşeni o yüzeyin sahibinde. |
+| 24 | Giriş ipucu bandı | ÇALIŞIYOR | `callbackUrl=/feedback/{kod}` + taslak sessionStorage'da (dönüşte form geri gelir). |
+| 25 | Gönder + yükleniyor | ÇALIŞIYOR | Yapışkan alt CTA (güvenli alan), fotoğraf yüklenirken bekler. |
+| 26 | "Puan seçin" doğrulaması | KALDIRILDI | Ölü daldı; "Devam" puan seçilmeden pasif, sunucu zod mesajı Türkçe. |
+| 27 | Geri bildirim POST'u | ÇALIŞIYOR | Yeni BFF; eski uç aynı çekirdeğe delege. |
+| 28 | Idempotency | ÇALIŞIYOR | Taslak başına tek anahtar; yeniden dene ve çevrimdışı kuyruk çift kayıt üretmez. |
+| 29 | Gönderim hataları | ÇALIŞIYOR | `content-type` güvenli okuma; 429 geri sayım (`Retry-After`), 413, 5xx, kapalı QR mesajı; form korunur. |
+| 30 | PostHog `feedback_submitted` | ÇALIŞIYOR | Rıza kapılı; ödül durumu eklendi. |
+| 31 | Konfeti / seviye yağmuru | ÇALIŞIYOR | Yalnız `useMotionPolicy().allowCelebrate` iken ve lazy; seviye kutlaması An Motoru'nda (tam bir kez). |
+| 32 | Başarı toast'ı | KALDIRILDI | Tam ekran onay varken üçlü tekrar yaratıyordu. |
+| 33 | Başarı başlık + açıklama | ÇALIŞIYOR | "Teşekkürler!" + "Yorumun {işletme} ekibine ulaştı."; geçerli DOM. |
+| 34 | Kazanılan puan/XP | ÇALIŞIYOR | Sunucunun KREDİLEDİĞİ puan/XP (mintPoints), seviye çubuğu, sonraki seviyeye XP, klan payı, tavan açıklaması. |
+| 35 | "Seviye atladın" | ÇALIŞIYOR | Kartta metin; tam ekran sahne An Motoru'nda (sabit TR / `animate-bounce` kalktı). |
+| 36 | "Panelime dön" | ÇALIŞIYOR | Role göre (`/customer`, `/dealer`, `/staff`, `/admin`); müşteride "Yorumlarımı gör". |
+| 37 | "Kayıt ol ve puan kazan" | ÇALIŞIYOR | Gerçek bağlama: anonim gönderim 24 saatlik HMAC belirteci alır; kayıt/giriş `callbackUrl=…?claim=1` dönüşünde otomatik bağlanır, puan `mintPoints` + `feedback:<id>` anahtarıyla tek sefer. |
+| 38 | "Ana sayfaya dön" | ÇALIŞIYOR | |
+| 39 | Arka plan AI analizi | ÇALIŞIYOR | Anonim dahil her gönderimde `after()` ile (Inngest varsa kuyruk). |
+| 40 | Otomatik yanıt / webhook / ısı haritası / analytics / cache | ÇALIŞIYOR | Bulgu 1 kapandı (`scheduleFeedbackSideEffects`, oturumdan bağımsız). |
+| 41 | Puan/XP kredisi | ÇALIŞIYOR | Artık `mintPoints` (kilit, defter, tavan, gölge ban, `points_credited`); kayıt + kredi tek transaction. |
+| 42 | Güven skoru | ÇALIŞIYOR | Üye + bağlama sonrası değerlendirme; işletme içi gönderim `trustFlagged` + ödülsüz. |
+| 43 | Hız sınırları | ÇALIŞIYOR | Gönderim IP 20/dk + QR×IP 5/dk; medya 12/10 dk; tarama 30/dk; bağlama kullanıcı 10/10 dk. |
+| 44 | Sürpriz + davranışsal rozetler | ÇALIŞIYOR | Üyede ve bağlamada `after()`. |
+| 45 | `qr_scanned` | ÇALIŞIYOR | Yan etkisiz okumadan ayrıldı; beacon + 30 dk httpOnly çerez tekilleştirme; kaynak/UTM/segment yazılır. |
+| 46 | `QRCode.scanCount` | ÇALIŞIYOR | Artık gerçek (tekilleştirilmiş) taramada artar; gönderimde artmaz (admin "toplam tarama" okumalarıyla uyumlu). |
+| 47 | UTM / attribution | ÇALIŞIYOR | `utm_*` + `?src=in_app_*` (Tara yüzeyi) → `Feedback.utm*` / `attributionSource`. |
+| 48 | Meta / `noindex` | ÇALIŞIYOR | `generateMetadata` (işletme adı, `index:false`). `app/robots.ts` dokunulmadı (SEO sahibi). |
+| 49 | Taslak koruma | ÇALIŞIYOR | sessionStorage (6 saat), yüklenmiş fotoğraf URL'leri dahil. |
+| 50 | Düşük puanda kurtarma | KISMİ | 1-2 yıldızda olumsuz çip seti, yönlendirici yer tutucu ve "işletme yanıt verince bildirim alırsın" (gerçek: bayi yanıtı müşteriye bildirim yazıyor). İletişim izni/kanal ve anlık telafi önizlemesi yapılmadı (şema + remedy onayı gerekir). |
+| 51 | Sayfa kabuğu | ÇALIŞIYOR | `(funnel)` grubu: pazarlama header/footer ve landing zemini yok; asistan balonu `/feedback/` yollarında yüklenmiyor. |
+
+**Durum sayımı:** ÇALIŞIYOR 47 · KISMİ 2 (#23 bayi UI, #50) · KALDIRILDI 2 (#26, #32).
+
+### Kapanan bulgular (18/18 ele alındı)
+1. Anonim yan etkiler — KAPANDI. 2. Fotoğraf — KAPANDI (R2 + biçim doğrulama + URL süzgeci; eski base64 kayıtların taşınması kalanlarda). 3. Ham i18n anahtarı — KAPANDI. 4. `dealerStaffId` — KAPANDI. 5. Bayi/personel kendi işletmesine — KAPANDI (işaretli, ödülsüz, önizlemede uyarı). 6. Çip bonusu — KAPANDI. 7. Bağlama + `callbackUrl` — KAPANDI. 8. Atıf/tarama — KAPANDI. 9. Kredilenen değer + tavan — KAPANDI. 10. Personel/foto tüketimi — KISMİ (fotoğraf müşteri tarafında görünür; bayi UI'ı ve personel kartı başka yüzeyde); public uçta tam ad ifşası KAPANDI. 11. Başarı ekranı/i18n — KAPANDI. 12. Yerel locale — KAPANDI. 13. Erişilebilirlik — KAPANDI (radiogroup, fieldset/legend, klavyeyle fotoğraf, 44 px, adım geçişinde odak, canlı bölge). 14. Mobil/kabuk — KAPANDI. 15. Hata/idempotency — KAPANDI. 16. Azaltılmış hareket — KAPANDI. 17. `noindex` — KAPANDI (meta). 18. Küçük kalemler — KAPANDI.
+
+### Eksik özelliklerden uygulananlar
+1 (adım adım akış), 2 (gönderim öncesi gerçek ödül önizlemesi + kalan günlük tavan), 3 (anonim yorumu sonradan talep), 5 kısmen (seviye ilerlemesi, klan katkısı), 6 kısmen (işletme logosu/marka, segment karşılama metni). Ek: çevrimdışı kuyruk (localStorage, 23 saat, `online` olayında boşalır), KVKK aydınlatma bağlantısı.
+
+### Kalanlar (gerekçeli)
+- **Bayi tarafı:** fotoğraf galerisi (gelen kutusu UI'ı `b-gelen-kutusu` sahibinde; DTO hazır) ve personel bazlı puan kartı (bayi ekip yüzeyi).
+- **Kurtarma akışı (#50):** iletişim izni ve kanal saklamak şema ister; anlık telafi önizlemesi remedy onay akışına bağlı.
+- **Eski base64 kayıtlar:** canlı DB'de `media` içindeki `data:` değerlerini R2'ye taşıyan tek seferlik backfill (bu dalgada DB'ye bağlanmak yasak). Yeni kayıtlar temiz.
+- **Ölçüm:** `next build` ve dev sunucusu bu dalgada yasak olduğundan 150 KB gzip bütçesi ve görsel tezgâh doğrulaması yapılamadı. Alınan önlemler: sunucu bileşeni önce, An Motoru Host'u yalnız oturumlu görüntüleyende lazy, konfeti lazy, asistan bu yolda yüklenmiyor, zod istemciye girmiyor, DS bileşenleri dosya yolundan alınıyor.
+- **`app/robots.ts`:** `/feedback/` eklenmedi (SEO yüzeyi); sayfa meta `noindex` taşıyor.
+- **Anonim güven sinyali:** cihaz/IP tabanlı hafif değerlendirme yok (QR×IP 5/dk sınırı var).
+
+### ŞEMA İSTEKLERİ
+- `Feedback.quickTags Json?`: hızlı etiket kimlikleri ayrı sütun (şimdilik `feedback_submitted` olayında yapılandırılmış + yorum metninin altında Türkçe tek satır).
+- `DealerStaff.showOnFeedback Boolean @default(true)`: personelin herkese açık listede görünme rızası (şimdilik yalnız ilk ad + avatar).
+- İsteğe bağlı `Feedback.contactConsent` / kanal: düşük puanda "işletme benimle iletişime geçsin".

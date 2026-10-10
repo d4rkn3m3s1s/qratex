@@ -36,9 +36,6 @@ export async function GET(
     }
 
     const segment = request.nextUrl.searchParams.get('segment') ?? undefined;
-    const utmSource = request.nextUrl.searchParams.get('utm_source') ?? undefined;
-    const utmCampaign = request.nextUrl.searchParams.get('utm_campaign') ?? undefined;
-    const utmMedium = request.nextUrl.searchParams.get('utm_medium') ?? undefined;
 
     const qrCode = await prisma.qRCode.findUnique({
       where: { code },
@@ -100,26 +97,19 @@ export async function GET(
         ? config[segment]
         : null;
 
-    // Log scan event (P2-33: scan attribution utm/source/campaign)
-    await prisma.analyticsEvent.create({
-      data: {
-        event: 'qr_scanned',
-        category: 'qr',
-        data: {
-          qrCodeId: qrCode.id,
-          code: qrCode.code,
-          segment: segment ?? null,
-          ...(utmSource && { utmSource }),
-          ...(utmCampaign && { utmCampaign }),
-          ...(utmMedium && { utmMedium }),
-        },
-      },
-    });
-
+    // Bu okuma YAN ETKİSİZDİR: `qr_scanned` olayı ve `scanCount` artık geri bildirim sayfasının
+    // tekilleştirilmiş beacon'ından yazılır (POST /api/public/feedback/[code]/scan). Eskiden her
+    // GET (yenileme, uygulama içi doğrulama, bot) taramayı şişiriyordu. UTM atfı da orada.
     const { segmentConfig: _sc, archivedAt: _archived, ...rest } = qrCode;
+    // KVKK veri minimizasyonu: herkese açık yanıtta personelin yalnız İLK adı.
+    const staffMembers = rest.dealer.staffMembers.map((s) => ({
+      id: s.id,
+      user: { name: (s.user.name ?? '').trim().split(/\s+/)[0] || null, image: s.user.image },
+    }));
     return NextResponse.json({
       qrCode: {
         ...rest,
+        dealer: { ...rest.dealer, staffMembers },
         segmentExperience,
       },
     }, { headers: PRIVATE_NO_STORE_HEADERS });

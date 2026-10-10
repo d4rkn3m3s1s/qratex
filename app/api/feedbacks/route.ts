@@ -1,22 +1,10 @@
-import { NextRequest, NextResponse, after } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
-import { prisma, withDbRetry } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
 import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import {
-  runAutoRepliesOnly,
-  runInlineFeedbackAnalysis,
-  shouldDispatchFeedbackAnalysis,
-} from '@/lib/feedback-ai-dispatch';
-import { getFeedbackReward, getPointsMatrix } from '@/lib/points-rules';
-import { creditPointsAndXp } from '@/lib/points-wallet';
-import { capFeedbackPoints } from '@/lib/points-caps';
-import { checkRateLimitDb, checkFeedbackPerQrRateLimit, getClientIdentifier } from '@/lib/rate-limit';
-import { inngestQueueEnabled, sendFeedbackAnalyze } from '@/lib/inngest/send';
+import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 
 export const dynamic = 'force-dynamic';
@@ -176,6 +164,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/feedbacks — GERİYE UYUMLU giriş (sözleşme testi + sentetik izleme). Yeni huni
+ * `POST /api/public/feedback/[code]` kullanır; ikisi de AYNI çekirdeği çağırır
+ * (`lib/feedback-funnel/submit.ts`): oturumdan bağımsız yan etkiler, personel kiracı
+ * doğrulaması, çıkar çatışması, `mintPoints` ile tek seferlik kredi. Eski gövde biçimi
+ * (`qrCodeId`, `dealerStaffId`, düz UTM alanları) burada yeni gövdeye çevrilir; base64
+ * `data:` medya artık kabul edilmez (yalnız kendi R2 URL'lerimiz).
+ */
 export async function POST(request: NextRequest) {
   const clientId = getClientIdentifier(request);
   const limit = await checkRateLimitDb(`feedback:${clientId}`, 20, 60_000);
@@ -193,311 +189,66 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const session = await getServerSession(authOptions);
-
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Gönderilen veri geçerli JSON değil.' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
     const validatedData = feedbackSchema.safeParse(body);
-
     if (!validatedData.success) {
       return NextResponse.json(
         { error: validatedData.error.errors[0].message },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-
-    const { qrCodeId, rating, text, media, isPublic, npsScore, utmSource, utmCampaign, utmMedium, attributionSource, dealerStaffId } = validatedData.data;
-
-    // Check if QR code exists and is active
-    const qrCode = await prisma.qRCode.findUnique({
-      where: { id: qrCodeId },
-    });
-
-    if (!qrCode) {
-      return NextResponse.json(
-        { error: 'QR kod bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    const now = new Date();
-    const expired = qrCode.expiresAt ? now > qrCode.expiresAt : false;
-    const revoked = !!qrCode.revokedAt;
-    if (!qrCode.isActive || expired || revoked) {
-      return NextResponse.json(
-        { error: 'QR kod aktif değil, süresi dolmuş veya iptal edilmiş' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const qrLimit = await checkFeedbackPerQrRateLimit(qrCodeId, clientId);
-    if (!qrLimit.ok) {
-      return NextResponse.json(
-        { error: 'Bu QR kod için çok fazla gönderim. Lütfen kısa süre sonra tekrar deneyin.' },
-        {
-          status: 429,
-          headers: {
-            ...PRIVATE_NO_STORE_HEADERS,
-            ...(qrLimit.retryAfterMs
-              ? { 'Retry-After': String(Math.ceil(qrLimit.retryAfterMs / 1000)) }
-              : {}),
-          },
-        }
-      );
-    }
-
-    // Kiracı bütünlüğü: istemciden gelen `dealerStaffId` bu QR'ın bayisinin AKTİF personeli değilse
-    // yok sayılır (başka işletmenin personeline puan/şikâyet yazılamasın).
-    let verifiedDealerStaffId: string | null = null;
-    if (dealerStaffId) {
-      const staffRow = await prisma.dealerStaff.findFirst({
-        where: { id: dealerStaffId, dealerId: qrCode.dealerId, isActive: true },
-        select: { id: true },
-      });
-      verifiedDealerStaffId = staffRow?.id ?? null;
-    }
+    const v = validatedData.data;
 
     const idemCheck = await checkIdempotency(request, 'feedback');
     if ('error' in idemCheck) return idemCheck.error;
     if (idemCheck.cached) return idemCheck.response;
     const idemKey = idemCheck.key;
 
-    // Create feedback
-    const feedback = await prisma.feedback.create({
-      data: {
-        qrCodeId,
-        userId: session?.user?.id || null,
-        rating,
-        text,
-        media: media ?? [],
-        isPublic: isPublic ?? true,
-        ...(npsScore != null && npsScore >= 0 && npsScore <= 10 && { npsScore }),
-        ...(utmSource && { utmSource }),
-        ...(utmCampaign && { utmCampaign }),
-        ...(utmMedium && { utmMedium }),
-        ...(attributionSource && { attributionSource }),
-        ...(verifiedDealerStaffId && { dealerStaffId: verifiedDealerStaffId }),
-      },
-    });
-
-    // Update QR code scan count
-    await prisma.qRCode.update({
-      where: { id: qrCodeId },
-      data: { scanCount: { increment: 1 } },
-    });
-
-    // Trust Score: oturum açmış kullanıcı için güven sinyallerini değerlendir.
-    // Şüpheliyse yorumu İŞARETLER (silmez/gizlemez) ve User.trustScore'u günceller.
-    // Ucuz sayım sorguları; hata olsa bile feedback akışını bozmaz.
-    if (session?.user?.id) {
-      try {
-        const { applyTrustEvaluation } = await import('@/lib/trust-score');
-        await applyTrustEvaluation(feedback.id, {
-          userId: session.user.id,
-          dealerId: qrCode.dealerId,
-          rating,
-        });
-      } catch (err) {
-        console.error('[TRUST_SCORE] evaluation failed:', err);
-      }
-    }
-
-    // Award points to user if logged in (anti-exploit: günlük/haftalık tavan)
-    if (session?.user?.id) {
-      const matrix = await getPointsMatrix();
-      const reward = getFeedbackReward(text, matrix);
-      const userId = session.user.id;
-
-      let rewardData: {
-        points: number;
-        xp: number;
-        newLevel: number;
-        leveledUp: boolean;
-        squadContribution: number;
-      } | null = null;
-      let cappedPoints = 0;
-
-      // Cap hesaplama + kredi + points_credited event'i TEK transaction içinde
-      // (Serializable) yapılır; aksi halde eşzamanlı feedback POST'ları aynı
-      // "kazanılan" toplamı okuyup tavanı aşar (cap bypass).
-      const { addToSquadTreasury, addToActiveBattleScore } = await import('@/lib/gamification-engine');
-      const { applyVipMultiplier } = await import('@/lib/vip-multiplier');
-      const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
-      const { getGamificationMultipliers } = await import('@/lib/gamification-settings');
-      // Platform geneli gamification çarpanları (admin ayarı; önceden write-only'di).
-      const gamiSettings = await getGamificationMultipliers();
-      // Serializable transaction serialization-failure (40001/P2034) verebilir — bu doğru davranış
-      // (cap-bypass'ı önler) ama retry gerektirir. withDbRetry çakışmada 2 kez daha dener.
-      const result = await withDbRetry(() => prisma.$transaction(
-        async (tx) => {
-          // Çarpan zinciri: VIP (kullanıcı seviyesi) → sezonsal kampanya (zaman
-          // penceresi) → platform geneli gamification çarpanı, taban ödüle uygulanır,
-          // sonra GÜNLÜK TAVAN nihai tutara uygulanır — çarpanlar kazancı hızlandırır
-          // ama tavan ekonomi korumasını yine de uygular.
-          const vip = await applyVipMultiplier(userId, reward.points, tx);
-          const seasonal = await applySeasonalCampaignMultiplier(vip.points, new Date(), tx);
-          const withGlobal = Math.floor(seasonal.points * gamiSettings.pointMultiplier);
-          const capped = await capFeedbackPoints(userId, withGlobal, tx);
-          const xpToCredit = Math.floor(reward.xp * gamiSettings.xpMultiplier);
-          if (capped <= 0 && xpToCredit <= 0) {
-            return { capped: 0, level: 0, isLevelUp: false, squadContribution: 0, vipMultiplier: vip.multiplier };
-          }
-          const userUpdate = await creditPointsAndXp(tx, {
-            userId,
-            points: capped,
-            xp: xpToCredit,
-          });
-          const squadContribution = await addToSquadTreasury(userId, capped, tx);
-          // Klanı aktif savaştaysa kazanılan puan savaş skoruna da işlenir.
-          await addToActiveBattleScore(userId, capped, tx);
-          await tx.analyticsEvent.create({
-            data: {
-              userId,
-              event: 'points_credited',
-              category: 'feedback',
-              data: {
-                points: capped,
-                xp: xpToCredit,
-                nextLevel: userUpdate.level,
-                squadContribution,
-                vipMultiplier: vip.multiplier,
-                vipBonus: vip.bonus,
-                seasonalCampaignId: seasonal.campaignId,
-                seasonalMultiplier: seasonal.multiplier,
-                seasonalBonus: seasonal.bonusPoints,
-                globalPointMultiplier: gamiSettings.pointMultiplier,
-                globalXpMultiplier: gamiSettings.xpMultiplier,
-              },
-            },
-          });
-          return {
-            capped,
-            level: userUpdate.level,
-            isLevelUp: userUpdate.isLevelUp,
-            squadContribution,
-            vipMultiplier: vip.multiplier,
-          };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      ));
-
-      cappedPoints = result.capped;
-      if (cappedPoints > 0 || reward.xp > 0) {
-        rewardData = {
-          points: cappedPoints,
-          xp: reward.xp,
-          newLevel: result.level,
-          leveledUp: result.isLevelUp,
-          squadContribution: result.squadContribution,
-        };
-      }
-
-      if (cappedPoints > 0) {
-        await prisma.notification.create({
-          data: {
-            userId: session.user.id,
-            title: 'Puan Kazandınız! 🎉',
-            message: `Geri bildiriminiz için ${cappedPoints} puan kazandınız.`,
-            type: 'success',
-          },
-        });
-      }
-
-      const resBody = {
-        success: true,
-        feedback,
-        reward: rewardData
-      };
-
-
-      // Log analytics
-      await prisma.analyticsEvent.create({
-        data: {
-          userId: session?.user?.id || null,
-          event: 'feedback_submitted',
-          category: 'feedback',
-          data: { feedbackId: feedback.id, rating, hasText: !!text },
-        },
-      });
-
-      // Webhook: feedback.created — admin'de kayıtlı abone webhook'lara tetikle
-      // (ateşle-unut; request yolunu bloklamaz). Önceden webhook'lar hiç fire etmiyordu.
-      import('@/lib/webhook-dispatch')
-        .then(({ dispatchWebhookEvent }) =>
-          dispatchWebhookEvent('feedback.created', {
-            feedbackId: feedback.id,
-            dealerId: qrCode.dealerId,
-            rating,
-            hasText: !!text,
-            createdAt: feedback.createdAt,
-          })
-        )
-        .catch((err) => console.error('[WEBHOOK] feedback.created dispatch failed:', err));
-
-      // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut). Feedback'in
-      // geliri yok → revenue 0; yalnızca count artar.
-      import('@/lib/heatmap-track')
-        .then(({ recordHeatmapHit }) => recordHeatmapHit(qrCode.dealerId, new Date(), 0))
-        .catch((err) => console.error('[HEATMAP] feedback track failed:', err));
-
-      // Admin dashboard + leaderboard sıralama cache'ini bayatlat (yeni feedback
-      // hem toplulaştırmaları hem leaderboard sırasını etkiler).
-      try {
-        const { revalidateTag } = await import('next/cache');
-        const { ADMIN_DASHBOARD_TAG, LEADERBOARD_RANKING_TAG } = await import('@/lib/cache-tags');
-        revalidateTag(ADMIN_DASHBOARD_TAG, 'max');
-        revalidateTag(LEADERBOARD_RANKING_TAG, 'max');
-      } catch (err) {
-        console.error('[CACHE] revalidate failed:', err);
-      }
-
-      // ── Otomatik AI Analizi (arka planda) — P0-32 ──
-      // Karar bayi AI politikasından TAZE ve fail-closed okunur (ayar okunamazsa analiz yok);
-      // analiz Inngest / ai-retry ile AYNI hattan geçer (deneme talebi, koşullu tamamlama,
-      // tercihe uyan tekil uyarılar, atomik otomatik yanıt). after(): yanıttan sonra ama
-      // fonksiyon canlıyken çalışır (await'siz fire-and-forget'i Vercel öldürebiliyordu).
+    const { submitFeedback } = await import('@/lib/feedback-funnel/submit');
+    const { resolveOptionalViewer } = await import('@/lib/feedback-funnel/viewer');
+    const { ATTRIBUTION_SOURCES } = await import('@/lib/feedback-funnel/schema');
+    const source = (ATTRIBUTION_SOURCES as readonly string[]).includes(v.attributionSource ?? '')
+      ? (v.attributionSource as (typeof ATTRIBUTION_SOURCES)[number])
+      : undefined;
+    const viewer = await resolveOptionalViewer();
+    const result = await submitFeedback(
+      { id: v.qrCodeId },
       {
-        const dealerId = qrCode.dealerId;
-        const feedbackId = feedback.id;
-        if (await shouldDispatchFeedbackAnalysis(dealerId, text)) {
-          if (inngestQueueEnabled()) {
-            sendFeedbackAnalyze(feedbackId, dealerId).catch(console.error);
-          } else {
-            after(() => runInlineFeedbackAnalysis(feedbackId));
-          }
-        } else {
-          after(() => runAutoRepliesOnly(feedbackId));
-        }
-      }
+        rating: Math.round(v.rating),
+        text: v.text,
+        npsScore: v.npsScore != null ? Math.round(v.npsScore) : null,
+        staffId: v.dealerStaffId ?? null,
+        media: (v.media ?? []).map((m) => (typeof m === 'string' ? m : m.url)),
+        attribution: { source, utmSource: v.utmSource, utmCampaign: v.utmCampaign, utmMedium: v.utmMedium },
+      },
+      { viewer, clientId }
+    );
 
-      // NOT: Karakter rozeti sistemi artık YALNIZCA tüketim yorumlarını (ConsumptionReview)
-      // baz alır — QR feedback'i saymaz. Tetikleme review route'unda.
-
-      // Sürpriz rozet: yorum sayısı arttı → gizli (hiddenUntilEarned) rozetlerin koşulu
-      // sağlandıysa otomatik ver (fire-and-forget; müşteri göremediği için buton yok).
-      if (session?.user?.id) {
-        const uid = session.user.id;
-        // after(): rozet ödüllendirme yanıt sonrası ama fonksiyon canlıyken çalışsın (kaybolmasın).
-        after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
-        // Davranışsal (aktivite) rozetleri: Yeni Ses / Usta Yorumcu / Taht Sahibi vb.
-        // İdempotent — tekrar çağrı puan çoğaltmaz ([[points-economy-invariants]]).
-        after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
-        // İlk QR geri bildirimi bekleyen daveti nitelendirebilir (P0-16; tek seferlik, hata yutulur).
-        after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
-      }
-
-      if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
-      return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const resBody = { success: true, feedback };
-    if (session?.user?.id) {
-      const uid = session.user.id;
-      after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
-      after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
-      after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
-    }
+    const r = result.reward;
+    const resBody = {
+      success: true,
+      feedback: { id: result.feedbackId, createdAt: result.createdAt },
+      reward:
+        r.status === 'credited' || r.status === 'capped'
+          ? { points: r.points, xp: r.xp, newLevel: r.level, leveledUp: r.leveledUp, squadContribution: r.squadContribution }
+          : null,
+      rewardStatus: r.status,
+    };
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    const { ApiError } = await import('@/lib/http/define-route');
+    if (error instanceof ApiError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status, headers: { ...PRIVATE_NO_STORE_HEADERS, ...(error.headers ?? {}) } }
+      );
+    }
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
     const { captureApiError } = await import('@/lib/capture-api-error');
@@ -509,4 +260,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
