@@ -1,0 +1,6 @@
+# Qratex / QRateX güvenlik iletişimi (RFC 9116)
+# Bir güvenlik açığı bulduysanız lütfen açığı istismar etmeden ve başkalarının verisine
+# erişmeden bildirin. Ayrıntılar: /guven#belgeler
+Contact: mailto:info@qratex.com
+Expires: 2027-10-10T00:00:00.000Z
+Preferred-Languages: tr, en

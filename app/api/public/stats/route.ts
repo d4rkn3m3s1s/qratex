@@ -1,52 +1,56 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { getPublicStats } from '@/lib/landing/public-stats';
+import { PUBLIC_STATS_THRESHOLDS } from '@/lib/landing/public-stats-core';
 
 export const dynamic = 'force-dynamic';
 
 const CACHE_SECONDS = 300;
 
-type StatsBody = { users: number; businesses: number; feedbacks: number; rating: number };
-
-/** Public landing page stats (users, businesses/dealers, feedbacks, average rating). */
+/**
+ * GET /api/public/stats — herkese açık vitrin rakamları (girdi almaz, yalnız toplam sayı;
+ * PII yok). Ana sayfa aynı veriyi sunucuda `getPublicStats()` ile okur; bu uç cron
+ * cache-warm ve harici tüketiciler için. Denetim düzeltmeleri (landing.md Bulgu 3-4):
+ *  - `users` artık yalnız gerçek tüketici hesapları (eskiden admin/bayi/personel dahil).
+ *  - Silinen ve demo geri bildirimler sayılmaz.
+ *  - Veri yoksa ortalama UYDURULMAZ: `rating: null` (+ geriye uyum için `ratingAvailable`).
+ *  - Hata "200 + sıfır/4.9" değil, 503 + yeniden denenebilir hata zarfı.
+ * Eski alan adları (`users`, `businesses`, `feedbacks`, `rating`) korunur.
+ */
 export async function GET() {
-  try {
-    const { redisGetJson, redisSetJson } = await import('@/lib/redis');
-    // REDIS CACHE: 3 ağır count/aggregate yerine Redis'ten oku (Redis yoksa null → DB'den hesapla).
-    const cached = await redisGetJson<StatsBody>('stats:public');
-    if (cached) {
-      return NextResponse.json(cached, {
-        headers: { 'Cache-Control': `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}` },
-      });
-    }
+  const stats = await getPublicStats();
+  if (!stats) {
+    return NextResponse.json(
+      {
+        ok: false,
+        success: false,
+        code: 'SERVICE_UNAVAILABLE',
+        error: 'İstatistikler şu an hesaplanamıyor. Lütfen biraz sonra tekrar deneyin.',
+        retryable: true,
+      },
+      { status: 503, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': '60' } }
+    );
+  }
 
-    const [userCount, dealerCount, feedbackAgg] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { role: 'DEALER' } }),
-      prisma.feedback.aggregate({ _count: true, _avg: { rating: true } }),
-    ]);
-
-    const rating = feedbackAgg._avg.rating != null
-      ? Math.round(feedbackAgg._avg.rating * 10) / 10
-      : 4.9;
-
-    const body: StatsBody = {
-      users: userCount,
-      businesses: dealerCount,
-      feedbacks: feedbackAgg._count,
-      rating: Number(rating.toFixed(1)),
-    };
-
-    await redisSetJson('stats:public', body, CACHE_SECONDS); // Redis yoksa sessizce geçer
-
-    return NextResponse.json(body, {
+  return NextResponse.json(
+    {
+      users: stats.members,
+      businesses: stats.businesses,
+      feedbacks: stats.feedbacks,
+      // Geriye uyum: eski istemciler sayı bekliyor; ortalama yoksa 0 + `ratingAvailable: false`.
+      rating: stats.rating ?? 0,
+      ratingAvailable: stats.rating !== null,
+      v: 2,
+      members: stats.members,
+      feedbacksLast30d: stats.feedbacksLast30d,
+      ratingCount: stats.ratingCount,
+      computedAt: stats.computedAt,
+      thresholds: PUBLIC_STATS_THRESHOLDS,
+    },
+    {
       headers: {
         'Cache-Control': `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=${CACHE_SECONDS}`,
       },
-    });
-  } catch (error) {
-    console.error('Public stats error:', error);
-    return NextResponse.json(
-      { users: 0, businesses: 0, feedbacks: 0, rating: 4.9 }, { status: 200 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
+    }
+  );
 }

@@ -1,21 +1,25 @@
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
-import LandingBackground from '@/components/landing/LandingBackground';
+import { PublicBackdrop } from '@/components/public/p-landing/public-backdrop';
 import { getBackgroundEffect } from '@/lib/get-background-effect';
+import { getServerLocale } from '@/lib/server-locale';
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const backgroundEffect = await getBackgroundEffect();
+  // Bu grup yalnız sunucuda çevrilen pazarlama sayfalarını (/, /neden-qratex, /guven) taşır;
+  // sayfalar zaten dil çerezini okuduğundan layout'ta okumak ek dinamiklik getirmez.
+  const [backgroundEffect, locale] = await Promise.all([getBackgroundEffect(), getServerLocale()]);
   return (
     <div className="relative flex min-h-dvh flex-col">
-      {/* Tüm public sayfayı (header + içerik + footer) kaplayan tek bütünsel hareketli
-          arka plan. fixed z-0; içerik z-[1] ile üstünde durur, hepsi şeffaf zemini gösterir. */}
-      <LandingBackground initialBackgroundEffect={backgroundEffect} />
-      <SkipToMainContent targetId="main-content" label="İçeriğe atla" />
+      {/* Tüm public sayfayı kaplayan tek zemin (fixed z-0; içerik z-[1] ile üstünde).
+          Varsayılan statik gradyan; admin'in sezonluk zemini ayrı parça olarak ve yalnız
+          hareket serbestken yüklenir. Değer sunucudan gelir (istemci isteği yok). */}
+      <PublicBackdrop effect={backgroundEffect} />
+      <SkipToMainContent targetId="main-content" label={locale === 'en' ? 'Skip to content' : 'İçeriğe atla'} />
       <div className="relative z-[1] flex min-h-dvh flex-col">
         <Header />
         <main

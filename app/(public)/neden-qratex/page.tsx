@@ -1,145 +1,188 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { getSeoSettings, getCanonicalBase } from '@/lib/seo-settings';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, X, Sparkles } from 'lucide-react';
+import { ArrowRight, BarChart3, Brain, Inbox, LifeBuoy, Megaphone, Users, type LucideIcon } from 'lucide-react';
 import { BreadcrumbNav } from '@/components/seo/breadcrumb-nav';
+import { Button } from '@/components/ui/button';
+import { getSeoSettings, sanitizeSeoString } from '@/lib/seo-settings';
+import { getServerLocale } from '@/lib/server-locale';
+import { getModuleControls } from '@/lib/module-gate';
+import { getPublicStats } from '@/lib/landing/public-stats';
+import { getPublicPricingPlans } from '@/lib/landing/public-pricing';
+import { buildPricingJsonLd } from '@/lib/landing/public-pricing-core';
+import { Reveal } from '@/lib/motion/reveal';
+import {
+  breadcrumbJsonLd,
+  buildPublicMetadata,
+  faqJsonLd,
+  jsonLdHtml,
+  resolvePublicSeo,
+} from '@/lib/landing/seo';
+import { ComparisonTable } from '@/components/public/p-landing/comparison-table';
+import { CtaLink } from '@/components/public/p-landing/cta-link';
+import { FaqList } from '@/components/public/p-landing/faq-list';
+import { FinalCta } from '@/components/public/p-landing/final-cta';
+import { fmt } from '@/components/public/p-landing/fmt';
+import { getLandingCopy } from '@/components/public/p-landing/landing-copy';
+import { LocaleSync } from '@/components/public/p-landing/locale-sync';
+import { PricingPlans } from '@/components/public/p-landing/pricing-plans';
+import { PublicSection, SectionHeading } from '@/components/public/p-landing/section';
+import { StatsStrip } from '@/components/public/p-landing/stats-strip';
+import { getWhyCopy } from '@/components/public/p-landing/why-copy';
 
-export const metadata: Metadata = {
-  title: 'Neden QRateX?',
-  description:
-    'QRateX ile rakiplerinizden ayrışın: QR kodlu geri bildirim, AI analizi, gamification ve tek platformda müşteri deneyimi.',
-  openGraph: {
-    title: 'Neden QRateX?',
-    description:
-      'QR kodlu geri bildirim, AI analizi ve gamification ile müşteri deneyimini dönüştürün.',
-  },
-};
+const PATH = '/neden-qratex';
+const FEATURE_ICONS: LucideIcon[] = [Inbox, Brain, LifeBuoy, Megaphone, BarChart3, Users];
 
-const comparisons = [
-  {
-    feature: 'QR ile anında geri bildirim',
-    qratex: true,
-    classic: 'Form / e-posta',
-  },
-  {
-    feature: 'AI duygu ve konu analizi',
-    qratex: true,
-    classic: 'Manuel',
-  },
-  {
-    feature: 'Puan, rozet, görevler (gamification)',
-    qratex: true,
-    classic: 'Yok',
-  },
-  {
-    feature: 'Tek panel: bayi + müşteri',
-    qratex: true,
-    classic: 'Ayrı araçlar',
-  },
-  {
-    feature: 'KVKK uyumlu, güvenli altyapı',
-    qratex: true,
-    classic: 'Değişken',
-  },
-];
+/**
+ * `/neden-qratex` — işletmeler için karar sayfası (URL korunur; roadmap §6.1'deki
+ * "işletmeler bölümü" burada yaşar). Denetim: canonical/OG/Twitter tam (Bulgu 1-2),
+ * admin SEO override + Breadcrumb/FAQ/teklif JSON-LD (Bulgu 7), karşılaştırma tablosu
+ * (Bulgu 3), işletme rolüyle kayıt (Bulgu 4), fiyatlar sayfanın içinde (Bulgu 5), TR/EN (Bulgu 6).
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const [locale, seo] = await Promise.all([getServerLocale(), getSeoSettings()]);
+  const copy = getWhyCopy(locale);
+  const brand = sanitizeSeoString(seo.siteName) || 'QRateX';
+  return buildPublicMetadata({
+    path: PATH,
+    title: fmt(copy.meta.title, { brand }),
+    description: fmt(copy.meta.description, { brand }),
+    absoluteTitle: true,
+    locale,
+  });
+}
 
-export default async function NedenQratexPage() {
-  const seo = await getSeoSettings();
-  const base = getCanonicalBase(seo);
-
+export default async function WhyQratexPage() {
+  const [locale, seo, moduleControls, stats, plans] = await Promise.all([
+    getServerLocale(),
+    getSeoSettings(),
+    getModuleControls(),
+    getPublicStats(),
+    getPublicPricingPlans(),
+  ]);
+  const copy = getWhyCopy(locale);
+  const brand = sanitizeSeoString(seo.siteName) || 'QRateX';
+  const resolved = await resolvePublicSeo({
+    path: PATH,
+    title: fmt(copy.meta.title, { brand }),
+    description: fmt(copy.meta.description, { brand }),
+  });
+  const pricingEnabled = moduleControls.landing_pricing !== false;
+  const visiblePlans = pricingEnabled ? plans : [];
+  const crumbs = [
+    { name: copy.breadcrumb.home, path: '/' },
+    { name: fmt(copy.breadcrumb.current, { brand }), path: PATH },
+  ];
+  const pricingLd = visiblePlans ? buildPricingJsonLd(visiblePlans, { base: resolved.base, pagePath: `${PATH}#fiyatlar` }) : null;
   const webPageLd = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
-    name: 'Neden QRateX?',
-    description:
-      'QRateX ile rakiplerinizden ayrışın: QR kodlu geri bildirim, AI analizi, gamification.',
-    url: `${base}/neden-qratex`,
+    name: resolved.title,
+    description: resolved.description,
+    url: resolved.canonical,
+    inLanguage: locale === 'en' ? 'en-US' : 'tr-TR',
   };
 
   return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageLd) }}
+    <div className="relative">
+      <LocaleSync serverLocale={locale} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(webPageLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(breadcrumbJsonLd(resolved.base, crumbs)) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(faqJsonLd(copy.faq.items)) }} />
+      {pricingLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(pricingLd) }} /> : null}
+
+      {/* Hero */}
+      <section aria-labelledby="why-title" className="px-4 pb-12 pt-28 sm:px-6 sm:pt-32">
+        <div className="mx-auto w-full max-w-6xl">
+          <BreadcrumbNav items={crumbs} />
+          <div className="max-w-3xl">
+            <p className="qx-overline text-brand">{copy.hero.eyebrow}</p>
+            <h1 id="why-title" className="mt-3 text-balance text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
+              {fmt(copy.hero.title, { brand })}
+            </h1>
+            <p className="mt-5 text-pretty text-base leading-relaxed text-fg-muted sm:text-lg">{fmt(copy.hero.sub, { brand })}</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" variant="gradient" className="px-7">
+                <CtaLink href="/auth/register?role=DEALER&src=neden_qratex_hero" cta="why_register" page="neden_qratex">
+                  {copy.hero.ctaRegister}
+                  <ArrowRight className="h-5 w-5" aria-hidden />
+                </CtaLink>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="px-7">
+                <CtaLink href="#fiyatlar" cta="why_pricing" page="neden_qratex">
+                  {copy.hero.ctaPricing}
+                </CtaLink>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <StatsStrip
+        stats={stats}
+        keys={['businesses', 'feedbacks', 'feedbacksLast30d', 'rating']}
+        copy={getLandingCopy(locale).stats}
+        locale={locale}
+        brand={brand}
       />
-      <div className="container px-4 py-10 md:py-14">
-        <BreadcrumbNav
-          items={[
-            { name: 'Ana Sayfa', path: '/' },
-            { name: 'Neden QRateX?', path: '/neden-qratex' },
-          ]}
-        />
-        <span className="mb-3 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-          Karşılaştırma
-        </span>
-        <h1 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight">Neden QRateX?</h1>
-        <p className="text-lg text-muted-foreground mb-10 max-w-2xl">
-          Geleneksel geri bildirim yöntemlerinden farklı olarak QRateX, QR kodları,
-          yapay zeka ve gamification ile müşteri deneyimini tek platformda toplar.
-        </p>
 
-        <div className="grid gap-6 md:grid-cols-2 mb-12">
-          {/* QRateX ile — vurgulu, renkli */}
-          <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-card/60 to-fuchsia-500/5 shadow-lg backdrop-blur-sm">
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/20 blur-3xl" aria-hidden />
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/20 text-primary">
-                  <Sparkles className="h-5 w-5" aria-hidden />
-                </span>
-                QRateX ile
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {comparisons.map((row) => (
-                <div key={row.feature} className="flex items-start gap-3">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/15">
-                    <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
-                  </span>
-                  <span className="font-medium">{row.feature}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-          {/* Klasik yöntemler — soluk */}
-          <Card className="border-border/40 bg-card/40 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl text-muted-foreground">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-muted/60 text-muted-foreground">
-                  <X className="h-5 w-5" aria-hidden />
-                </span>
-                Klasik yöntemler
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {comparisons.map((row) => (
-                <div key={row.feature} className="flex items-start gap-3 text-muted-foreground">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-muted/40">
-                    <X className="h-3.5 w-3.5" aria-hidden />
-                  </span>
-                  <span>{row.classic}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+      <PublicSection id="karsilastirma" labelledBy="compare-title">
+        <SectionHeading id="compare-title" eyebrow={copy.comparison.eyebrow} title={copy.comparison.title} sub={copy.comparison.sub} />
+        <ComparisonTable copy={copy.comparison} brand={brand} />
+      </PublicSection>
 
-        <div className="flex flex-wrap gap-4">
-          <Link
-            href="/auth/register"
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 text-primary-foreground font-medium hover:bg-primary/90"
-          >
-            Ücretsiz Başla
-          </Link>
-          <Link
-            href="/#pricing"
-            className="inline-flex items-center justify-center rounded-lg border border-border/80 bg-background px-6 py-3 font-medium text-foreground shadow-sm hover:bg-accent dark:border-white/25 dark:bg-white/[0.07]"
-          >
-            Fiyatlandırma
-          </Link>
-        </div>
-      </div>
-    </>
+      <PublicSection id="nasil-baslanir" labelledBy="how-title" className="pt-0 sm:pt-0">
+        <SectionHeading id="how-title" eyebrow={copy.how.eyebrow} title={copy.how.title} />
+        <ol className="grid gap-4 md:grid-cols-3">
+          {copy.how.steps.map((step, i) => (
+            <Reveal as="li" index={i} key={step.title} className="list-none">
+              <div className="h-full rounded-card border border-subtle bg-surface-1/85 p-6 backdrop-blur-md">
+                <span
+                  className="grid h-10 w-10 place-items-center rounded-full bg-brand text-sm font-bold text-brand-fg qx-num"
+                  aria-hidden
+                >
+                  {i + 1}
+                </span>
+                <h3 className="mt-4 text-lg font-semibold text-fg">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-fg-muted">{step.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </ol>
+      </PublicSection>
+
+      <PublicSection id="ozellikler" labelledBy="features-title" className="pt-0 sm:pt-0">
+        <SectionHeading id="features-title" eyebrow={copy.features.eyebrow} title={copy.features.title} sub={copy.features.sub} />
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {copy.features.items.map((item, i) => {
+            const Icon = FEATURE_ICONS[i] ?? Inbox;
+            return (
+              <Reveal as="li" index={i} key={item.title} className="list-none">
+                <div className="h-full rounded-card border border-subtle bg-surface-1/85 p-6 backdrop-blur-md">
+                  <span className="grid h-11 w-11 place-items-center rounded-control bg-brand-subtle text-brand" aria-hidden>
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 text-lg font-semibold text-fg">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-fg-muted">{item.body}</p>
+                </div>
+              </Reveal>
+            );
+          })}
+        </ul>
+      </PublicSection>
+
+      <PublicSection id="fiyatlar" labelledBy="pricing-title">
+        <SectionHeading id="pricing-title" eyebrow={copy.pricing.eyebrow} title={copy.pricing.title} sub={copy.pricing.sub} />
+        <PricingPlans plans={visiblePlans} copy={copy.pricing} locale={locale} page="neden_qratex" />
+      </PublicSection>
+
+      <FaqList id="isletme-sss" eyebrow={copy.faq.eyebrow} title={copy.faq.title} items={copy.faq.items} trustLink={copy.faq.trustLink} />
+
+      <FinalCta
+        title={copy.final.title}
+        sub={copy.final.sub}
+        page="neden_qratex"
+        primary={{ label: copy.final.ctaRegister, href: '/auth/register?role=DEALER&src=neden_qratex_final', cta: 'why_final_register' }}
+        secondary={{ label: copy.final.ctaConsumer, href: '/', cta: 'why_final_consumer' }}
+      />
+    </div>
   );
 }
