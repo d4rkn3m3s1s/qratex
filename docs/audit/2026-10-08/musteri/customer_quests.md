@@ -277,3 +277,103 @@ Her iddia çürütülmeye çalışıldı; kod salt okunur incelendi (DB, script,
 - `lib/visit-missions.ts:110-114` aynı sorunu `updateMany({ completedAt:null })` ile çözmüş; achievements çözmemiş, iddia doğru.
 - **Yeniden üretim:** Kullanıcı 3 rozet/kozmetiğe sahip olsun. Önce `POST /api/customer/showcase` ile 2 öğe iğnele (UserQuest progress=2, tamamlanmamış kayıt oluşur). Sonra 3 öğeli aynı isteği paralel 10 kez gönder (`showcase/route.ts:119-120`, `set` modu, ücretsiz). Her istek `completedAt=null` okur → `quest-showcase-master` ödülü (+25/+50) birden çok kez yazılır. `quest-color-wizard` için de paralel `custom-color` çağrıları kayıt zaten mevcutken aynı sonucu verir. Etki tutarı görev başına küçük ama sınırsız eşzamanlılıkla katlanır ve bulgu 1'deki ikinci ödemeyle birleşir.
 - **Düzeltme yaklaşımı:** Tamamlama + kredi tek transaction içinde `tx.userQuest.updateMany({ where:{ id, completedAt:null }, data:{ completedAt:now, progress } })` ile koşullu yapılmalı; `count===0` ise ödeme yapılmamalı. `increment` modu atomik `progress: { increment }` ile yazılıp dönen değerle hedef karşılaştırılmalı. Uzun vadede bu mantık raporda önerilen ortak `recordQuestEvent()` motorunda tekilleştirilmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yapılan:** Sayfa baştan yazıldı (Oyna → Görevler, play kaydı). `app/customer/quests/page.tsx` artık sunucu bileşeni: oturum, modül kapısı ve ilk pano sunucuda hazırlanıyor. Etkileşim küçük bir istemci adasında (`components/customer/m-gorevler/**`). Görev mantığı tek sunucu servisinde toplandı:
+
+| Dosya | Görev |
+|---|---|
+| `lib/quests/period.ts` | Europe/Istanbul dönemleri (gün / Pazartesi haftası / ay / tek seferlik), dönem anahtarı, "bu dönemde ödendi mi", 24 saatlik ödül penceresi |
+| `lib/quests/mechanics.ts` | Mekanik sözlüğü: `give_feedback`, `feedback_with_photo`, `detailed_feedback`, `visit_businesses`, `referral` (canlı sayım), `visit_category` ve başarımlar (saklı ilerleme, otomatik ödeme), `custom` (motorsuz). Her mekanik için "nasıl ilerlerim" metni ve CTA |
+| `lib/quests/activity-streak.ts` | Yorum serisi: İstanbul günü, bugün ya da dün aktifse canlı, ilk boşlukta durur, `atRisk` |
+| `lib/quests/board.ts` + `board-types.ts` | Pano DTO'su: görevler, gruplar, durumlar, bekleyen ödül, seri, bakiye, sezon challenge'ı, dönem sonları |
+| `lib/quests/claim.ts` | Tekil ve toplu ödül alma: ilerleme sunucuda yeniden sayılır, satır kilidi + koşullu `updateMany` + `mintPoints` (dönemli görevde `quest:<uq>:<dönem>` anahtarı) + bildirim + audit |
+| `GET /api/customer/quests`, `POST /api/customer/quests/claim` | `defineRoute` ile: yalnız `CUSTOMER`, modül kapısı, rate limit, zod, idempotency. Makine-okur hata kodları |
+| `__tests__/lib/quests-board.test.ts` | 31 test: dönem sınırları, seri, mekanik sayımı, pano durumları, DTO sızıntısı, claim guard'ı, toplu alım |
+
+**Şema değişmeden dönem döngüsü:** `UserQuest` tek satır (`@@unique([userId, questId])`) olarak kaldı. İlerleme, dönem penceresindeki kaynak kayıtlardan (geri bildirim, tüketim yorumu, ziyaret, davet) türetiliyor. Gece yarısı pencere değiştiği için cron olmadan sıfırlanıyor. "Ödendi mi?" sorusunun cevabı `rewardedAt >= dönem başı`. Ödeme `OR: [rewardedAt null, rewardedAt < dönem başı]` koşullu güncellemesiyle bir kez yapılıyor. Defterdeki dönem anahtarı ikinci savunma hattı.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | ÇALIŞIYOR | `layout.tsx` değişmedi |
+| 2 | Sayfa başlığı + açıklama | ÇALIŞIYOR | QDL `PageHeader`; mobilde de görünüyor |
+| 3 | Mobil başlık kartı | KALDIRILDI | Kopya başlıktı; artık tek başlık her genişlikte görünüyor |
+| 4 | Yenile butonu | ÇALIŞIYOR | Her genişlikte `IconButton` (aria-label, 44px). Sahte "güncellendi" toast'ı yok; durum `isFetching` ile gösteriliyor |
+| 5 | Görev listesini çekme | ÇALIŞIYOR | Sunucuda ilk render + BFF. Süresi dolanlar sunucuda süzülüyor. Hata görünür |
+| 6 | Görev ilerlemesi | ÇALIŞIYOR | 5 mekanik canlı sayılıyor; ziyaret ve başarım kendi motorlarından. `custom` için motor yok, bkz. Kalanlar |
+| 7 | Günlük/haftalık/aylık sıfırlama | ÇALIŞIYOR | Zaman tabanlı, Europe/Istanbul |
+| 8 | Zorluk yıldızları | KALDIRILDI | Sahte veriydi (sıra indeksi). Ödül çipleri gerçek değeri gösteriyor |
+| 9 | Hero: günlük ilerleme | ÇALIŞIYOR | Görev başına bir segment. Günlük görev yoksa "Bugün için günlük görev yok" yazıyor |
+| 10 | %100 kıvılcımı + "tümü tamamlandı" bandı | KALDIRILDI | Segment dolumu ve An Motoru puan kapsülü bu işi görüyor. Ayrı konfeti yok |
+| 11 | Seri kartı | ÇALIŞIYOR | Yorum serisi: İstanbul günü, bugün ya da dün aktifse canlı, risk uyarısı. Ağır trend çağrısı kaldırıldı |
+| 12 | Hero mini istatistikler | KALDIRILDI | Tekrar ediyordu. Hero şeridinde bakiye, bekleyen ödül ve seri tek yerde |
+| 13 | 4 istatistik kartı | KALDIRILDI | "Kazanılan" etiketi yanlıştı ve kartlar tekrar ediyordu. Yerine "Bekleyen ödül" ve "Hepsini al" geldi |
+| 14 | "Tümü" sekmesi | KALDIRILDI | Her görev kendi grubunda; ödülü olan grup varsayılan açılıyor |
+| 15 | Günlük/Haftalık/Özel sekmeleri | ÇALIŞIYOR | Bugün · Bu hafta · Bu ay · Sezon. Metin her zaman görünür, sayaç rozeti var, ≥ 44px, `?tab=` derin bağlantı |
+| 16 | "Aylık" sekmesi | ÇALIŞIYOR | Yalnız aylık görev varsa çıkıyor (şema `monthly` kabul ediyor) |
+| 17 | "mystery" görev tipi | ÇALIŞIYOR | Bilinmeyen tür tek seferlik sayılıp Sezon grubuna giriyor. İngilizce "Quest" yedeği kalktı |
+| 18 | Sonuç sayısı rozeti | ÇALIŞIYOR | Sekme sayacı oldu, mobilde de görünüyor |
+| 19 | Yükleniyor iskeleti | ÇALIŞIYOR | Sunucu render olduğu için hero ilk boyamada "0" göstermiyor. İstemci yedeği `QueryState` iskeleti |
+| 20 | Aktif görev kartı | ÇALIŞIYOR | Kompakt satır: ikon, ad, ilerleme, durum, ödül |
+| 21 | İlerleme şeridi + sayı | ÇALIŞIYOR | Stagger bütçeli (≤ 0,6 sn). Değer değişince akıyor |
+| 22 | Ödül puan/XP | ÇALIŞIYOR | Claim görevinde `getQuestReward`; otomatik görevde gerçekte ödenen ham tutar |
+| 23 | Kalan süre | ÇALIŞIYOR | Canlı `CountdownChip` (İstanbul). Süre dolunca pano yenileniyor; süresi dolan görev listede kalmıyor |
+| 24 | Görev ikonu (`Quest.icon`) | ÇALIŞIYOR | Emoji ya da `/images/...`; yoksa mekanik ikonu |
+| 25 | Kart hover/active | ÇALIŞIYOR | Satır artık ayrıntı sayfasını açıyor (nasıl ilerlerim, CTA, dönem bilgisi) |
+| 26 | Tamamlanan görev kartı | ÇALIŞIYOR | Katlanır "Tamamlananlar" bölümünde |
+| 27 | "Ödül Al" butonu | ÇALIŞIYOR | Otomatik görevlerde buton yok (B2). Süre bitiminden sonra 24 saat ödül penceresi. İlerleme sunucuda yeniden sayılıyor |
+| 28 | Claim sonrası konfeti | KALDIRILDI | Yerine An Motoru puan kapsülü (`moments.points`): bakiye çipine uçuyor, sayarak artıyor, azaltılmış harekete uyuyor |
+| 29 | Claim toast'ları | ÇALIŞIYOR | Sunucu kod döndürüyor, istemci TR/EN metne çeviriyor |
+| 30 | Claim sonrası durum güncelleme | ÇALIŞIYOR | Bakiye önbelleği güncelleniyor, `['customer']` sorguları geçersizleniyor, `moments.refresh()` seviye anını çekiyor |
+| 31 | "Alındı" rozeti | ÇALIŞIYOR | Otomatik ödenenlerde "Otomatik verildi" yazıyor |
+| 32 | Filtreli boş durum + "Tümünü göster" | KALDIRILDI | Boş grup sekmesi hiç oluşmuyor; grup içinde dürüst boş metin var |
+| 33 | Genel boş durum | ÇALIŞIYOR | Gerçeğe uygun metin + "QR okut" CTA. "Görev açılır" vaadi kaldırıldı |
+| 34 | Hata durumu | ÇALIŞIYOR | `QueryState`: hata, yetkisiz, modül kapalı ve çevrimdışı ayrı; tekrar dene var |
+| 35 | Modül kapısı | ÇALIŞIYOR | Sunucuda ve BFF'de. Modül kapalıysa açıklayıcı kart çıkıyor |
+| 36 | GET yetkilendirmesi | ÇALIŞIYOR | Yeni BFF oturum zorunlu, `userId` parametresi yok, açık DTO. `GET /api/gamification/quests/[id]` pasif/arşiv görevleri yalnız yöneticiye gösteriyor |
+| 37 | Claim sunucu güvenliği | ÇALIŞIYOR | Kilit + koşullu güncelleme + dönem anahtarlı defter + audit; eşzamanlı istek testlerle kapsandı |
+| 38 | İkon-only kontrollerin erişilebilir adı | ÇALIŞIYOR | "Ödülü al" metinli ve ≥ 44px; sekmelerde metin; ilerlemede aria |
+| 39 | Azaltılmış hareket | ÇALIŞIYOR | `useReducedMotionPref`, `motion-reduce`, `Ambient` (alev); konfeti yok |
+| 40 | "Nasıl ilerlerim" yönlendirmesi | ÇALIŞIYOR | Ayrıntı sayfası + CTA (`/customer/scan`, `/customer/nearby`, `/customer/referral`, `/customer/shop`, `/customer/settings`) |
+| 41 | Claim bildirimi | ÇALIŞIYOR | Başlıkta emoji yok; gerçekte kredilenen tutar yazıyor |
+
+**Yeni eklenenler:** "Hepsini al" (toplu claim), bekleyen ödül göstergesi, sezon etkinliği challenge kartı (aktif `SeasonalCampaign` varsa; ödül mevcut `/api/customer/seasonal-event` ucundan alınıyor), dönem geri sayımları, bakiye çipi (puan kapsülünün hedefi).
+
+**Sayım (yeni):** ÇALIŞIYOR 32 · KALDIRILDI 9 · KISMİ/BOZUK/SAHTE/EKSİK 0 (toplam 41)
+
+### Kapanan bulgular
+
+- **Bulgu 1** (otomatik görevlerde ikinci ödeme): P0-15'te kapanmıştı. Yeni servis aynı kuralı koruyor: otomatik görev `409 QUEST_AUTO_REWARDED` dönüyor ve UI'da buton yok.
+- **Bulgu 2** (ilerleme motoru): beş mekanik için kapandı (canlı sayım). Kalan kısmı aşağıda.
+- **Bulgu 3** (periyot sıfırlama): kapandı, şema değişikliği gerekmedi.
+- **Bulgu 4** (IDOR + DTO): kapandı.
+- **Bulgu 5** (seri): kapandı.
+- **Bulgu 6** (sahte zorluk): kapandı.
+- **Bulgu 7** (sessiz hata): kapandı.
+- **Bulgu 8** (yanlış istatistik + tekrar): kapandı.
+- **Bulgu 9** (tip sözlüğü): UI tarafında kapandı (dinamik gruplar, büyük/küçük harf duyarsız, bilinmeyen tür Sezon'a gidiyor). Prisma enum kalanlarda.
+- **Bulgu 10** (mobil erişilebilirlik): kapandı.
+- **Bulgu 11** (ödül anı + global durum): kapandı.
+- **Bulgu 12** (süresi dolan görev, yanıltıcı affordance): kapandı.
+- **Bulgu 13** (CTA, `Quest.icon`): kapandı.
+- **Bulgu 14** (kod hijyeni, dil karışıklığı): kapandı. Sayfa yeniden yazıldı; hata kodları makine-okur.
+- **Bulgu 15** (başarım yarışı): P0-15'te kapanmıştı.
+
+### Kalanlar
+
+- **`custom` ("Manuel — elle ilerletilir") mekaniği:** İlerletecek bir motor da admin aracı da yok. Müşteriye yalnız ilerleme satırı varsa gösteriliyor. Çözüm admin yüzeyinde: formdaki mekanik listesi `lib/quests/mechanics.ts → LIVE_MECHANICS` ile beslenmeli ve "Manuel" seçeneği kaldırılmalı (sahibi admin/quests).
+- **`Quest.type` için Prisma enum:** Bulgu 9'un şema kısmı. Bu dalgada şema değiştirilmedi; UI her türü güvenle işliyor.
+- **Geçmiş dönem arşivi ("Geçen haftalar") ve günlük bonus sandığı:** Uygulanmadı. Tek satırlı `UserQuest` dönem geçmişi tutmuyor; sandık için arka uç yok, eklemek sahte veri olurdu. Defterdeki `meta.period` ileride geçmiş için kaynak olabilir.
+- **Seri dondurma:** Yok (F4.4 kapsamı).
+- **Kullanıcı başı Redis önbelleği:** Eklenmedi. Pano yaklaşık 10 küçük sorgu ve sorgular paralel çalışıyor.
+- **Tekrar eden hesaplar:** `progress-hub`, `weekly-card` ve `trends` hâlâ kendi görev/seri hesaplarını yapıyor (başka yüzeyler). Paylaşılan servisler hazır: `getQuestBoard`, `getActivityStreak`.
+- **Eski `POST /api/gamification/quests/[id]/claim`:** UI artık kullanmıyor. Tek seferlik semantikle güvenli (dönemli görevde `rewardedAt` doluysa reddediyor). Kaldırılması `admin/modules/overview` kataloğu ve mevcut testlerle birlikte yapılmalı.
+- **Sezon challenge ödül ucu** (`/api/customer/seasonal-event` POST) hâlâ `creditPointsAndXp` kullanıyor; bu, etkinlik yüzeyinin işi.
+- **Ziyaret görevleri:** `visit_category` görevi `daily` türünde olsa bile sıfırlanmıyor, çünkü otomatik motor (`lib/visit-missions.ts`) ömür boyu sayıyor. Bu yüzden Sezon grubunda gösteriliyor.
+- **Kullanılmayan çeviri anahtarları:** `messages/*.json` içindeki `customerQuests.*` anahtarları artık kullanılmıyor. Dosya paylaşılan olduğu için dokunulmadı.
+- **Görsel doğrulama:** dev server/build bu dalgada yasak olduğundan ekran görüntüsüyle doğrulanmadı. Yalnız tsc, eslint ve jest çalıştırıldı.

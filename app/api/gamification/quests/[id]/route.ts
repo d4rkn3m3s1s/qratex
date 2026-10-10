@@ -14,12 +14,24 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    
+
     const quest = await prisma.quest.findUnique({
       where: { id },
     });
 
-    if (!quest) {
+    // Bulgu 4 (customer_quests): pasif/arşiv görev tanımı yalnız yöneticiye döner; aktif görev
+    // modül kapısına tabidir (kapalıyken 403). Admin paneli bu GET'i kullanmıyor (PATCH/DELETE).
+    let visible = !!quest;
+    if (quest && (!quest.isActive || quest.archivedAt)) {
+      const admin = await requireAuth(['ADMIN']);
+      visible = !('error' in admin);
+    } else if (quest) {
+      const { assertModuleEnabled } = await import('@/lib/module-gate');
+      const gate = await assertModuleEnabled('quests');
+      if (gate) return gate;
+    }
+
+    if (!quest || !visible) {
       return NextResponse.json(
         { success: false, error: 'Görev bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
