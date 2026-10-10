@@ -17,6 +17,8 @@ interface PendingReward {
   rank: number;
   points: number;
   weekKey: string;
+  /** Ödülün ait olduğu (geçen haftanın öne çıkan) oyun. */
+  gameTitle?: string;
 }
 interface TournamentData {
   gameTitle: string;
@@ -26,6 +28,11 @@ interface TournamentData {
   totalPlayers: number;
   prizes: Record<string, number>;
   pendingReward: PendingReward | null;
+  /** Tek öne çıkan oyun modeli (P0-17): ödül yalnız haftanın öne çıkan oyununda. */
+  isFeatured?: boolean;
+  featured?: { gameType: string; title: string; emoji: string } | null;
+  minParticipants?: number;
+  participantsNeeded?: number;
 }
 
 /** ms → "3g 14s" / "5s 20d" / "12d" biçimi (geri sayım). */
@@ -131,7 +138,9 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
           <div className="flex items-center gap-2">
             <Gift className="h-5 w-5 text-yellow-500" />
             <div>
-              <p className="text-sm font-bold">Geçen hafta {data.pendingReward.rank}. oldun!</p>
+              <p className="text-sm font-bold">
+                Geçen hafta{data.pendingReward.gameTitle ? ` ${data.pendingReward.gameTitle} turnuvasında` : ''} {data.pendingReward.rank}. oldun!
+              </p>
               <p className="text-xs text-muted-foreground">+{data.pendingReward.points} puan seni bekliyor</p>
             </div>
           </div>
@@ -139,12 +148,26 @@ export function GameTournament({ gameType, accent }: { gameType: string; accent:
         </Motion.button>
       )}
 
-      {/* Ödül havuzu */}
-      <div className="flex justify-center gap-3 text-xs text-muted-foreground">
-        <span>🥇 {data.prizes['1']}p</span>
-        <span>🥈 {data.prizes['2']}p</span>
-        <span>🥉 {data.prizes['3']}p</span>
-      </div>
+      {/* Ödül havuzu — yalnız haftanın öne çıkan oyununda */}
+      {data.isFeatured === false ? (
+        <p className="text-center text-xs text-muted-foreground">
+          Bu oyunun sıralaması ödülsüz.{' '}
+          {data.featured ? `Bu haftanın ödüllü turnuvası: ${data.featured.emoji} ${data.featured.title}` : ''}
+        </p>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex justify-center gap-3 text-xs text-muted-foreground">
+            <span>🥇 {data.prizes['1']}p</span>
+            <span>🥈 {data.prizes['2']}p</span>
+            <span>🥉 {data.prizes['3']}p</span>
+          </div>
+          {!!data.participantsNeeded && data.participantsNeeded > 0 && (
+            <p className="text-center text-[11px] text-muted-foreground">
+              Ödüller için en az {data.minParticipants} oyuncu gerekli — {data.participantsNeeded} oyuncu daha!
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Bu haftanın sıralaması */}
       {data.leaderboard.length === 0 ? (

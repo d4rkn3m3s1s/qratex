@@ -19,6 +19,11 @@ import { cn } from '@/lib/utils';
 import { track } from '@/lib/analytics';
 import { useAppT } from '@/lib/app-locale';
 import { translateKnownMessageKey } from '@/lib/translate-known-message';
+import { normalizeEmail } from '@/lib/auth/normalize-email';
+import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
+import { useAuthCopy } from '../_components/auth-copy';
+import { VerifyPending } from '../_components/verify-pending';
+import { useOrigin } from '../_components/use-countdown';
 
 const ROLE_OPTIONS = [
   { value: 'CUSTOMER' as const, roleMsgKey: 'customer' as const, icon: User },
@@ -29,19 +34,12 @@ function interpolateAuth(template: string, vars: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
 }
 
-function EmailInTemplate({ template, email }: { template: string; email: string }) {
-  const parts = template.split('{{email}}');
-  if (parts.length !== 2) {
-    return <>{template}</>;
-  }
-  return (
-    <>
-      {parts[0]}
-      <strong>{email}</strong>
-      {parts[1]}
-    </>
-  );
-}
+type VerifyState = {
+  email: string;
+  emailSent?: boolean;
+  devVerifyUrl?: string | null;
+  referralPending?: boolean;
+};
 
 function RegisterPageFallback() {
   const t = useAppT();
@@ -57,13 +55,14 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useAppT();
+  const copy = useAuthCopy();
+  const origin = useOrigin();
   const refCode = useMemo(() => searchParams.get('ref')?.trim().toUpperCase() || null, [searchParams]);
+  const safeCallback = useMemo(() => sanitizeCallbackPath(searchParams.get('callbackUrl'), origin), [searchParams, origin]);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'CUSTOMER' | 'DEALER'>('CUSTOMER');
-  const [verifyResult, setVerifyResult] = useState<{ verifyUrl: string; email: string; emailSent?: boolean } | null>(
-    null,
-  );
+  const [verifyResult, setVerifyResult] = useState<VerifyState | null>(null);
   // OAuth butonlarını yalnız yapılandırılmış provider için göster (yapılandırılmamış
   // provider butonu tıklanınca next-auth "provider yok" hatası veriyordu).
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
@@ -91,8 +90,9 @@ function RegisterContent() {
 
   const onSubmit = async (data: RegisterInput) => {
     setIsLoading(true);
+    const email = normalizeEmail(data.email);
     try {
-      const payload = { ...data } as Record<string, unknown>;
+      const payload = { ...data, email } as Record<string, unknown>;
       if (refCode) payload.referralCode = refCode;
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -110,32 +110,32 @@ function RegisterContent() {
         return;
       }
 
-      track('user_registered', { role: selectedRole, needsVerify: !!result.verifyUrl });
+      // P0-39: e-posta kaydı HER ZAMAN doğrulama ister (sunucu `emailVerified: null` yazar).
+      // Eskiden doğrulama ekranı yalnız geliştirme ortamındaki `verifyUrl` varken açılıyor,
+      // üretimde "Giriş yapabilirsiniz" yalanı + başarısız arka plan girişi + açıklamasız
+      // login yönlendirmesi oluyordu. Yalnız sunucu açıkça `requiresVerification: false`
+      // derse (ör. ileride davetli personel) doğrudan giriş yapılır.
+      const requiresVerification = result.requiresVerification !== false;
+      track('user_registered', { role: selectedRole, needsVerify: requiresVerification });
 
-      if (result.verifyUrl) {
-        toast.success(t('auth.registerSuccessTitle'), {
-          description: t('auth.toastVerifyHint'),
-        });
+      if (requiresVerification) {
         setVerifyResult({
-          verifyUrl: result.verifyUrl,
-          email: data.email,
-          emailSent: result.emailSent === true,
+          email,
+          emailSent: typeof result.emailSent === 'boolean' ? result.emailSent : undefined,
+          devVerifyUrl: typeof result.verifyUrl === 'string' ? result.verifyUrl : null,
+          referralPending: result.referralPending === true,
         });
         return;
       }
 
-      toast.success(t('auth.registerSuccessTitle'), {
-        description: result.referralApplied ? t('auth.toastReferralBonus') : t('auth.toastCanSignIn'),
-      });
-
-      await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      });
-
-      router.push(selectedRole === 'DEALER' ? '/dealer' : '/customer');
-      router.refresh();
+      const signInResult = await signIn('credentials', { email, password: data.password, redirect: false });
+      if (signInResult?.ok && !signInResult.error) {
+        toast.success(t('auth.registerSuccessTitle'));
+        router.push(safeCallback ?? (selectedRole === 'DEALER' ? '/dealer' : '/customer'));
+        router.refresh();
+      } else {
+        router.push('/auth/login?registered=true');
+      }
     } catch {
       toast.error(t('auth.toastUnknownError'));
     } finally {
@@ -148,50 +148,47 @@ function RegisterContent() {
     setValue('role', role);
   };
 
-  const baseCallback = selectedRole === 'DEALER' ? '/dealer' : '/customer';
+  const baseCallback = safeCallback ?? (selectedRole === 'DEALER' ? '/dealer' : '/customer');
   // OAuth HER ZAMAN /auth/complete'e uğrar: yeni hesabın şifresi yoksa "şifre oluştur"
   // adımı gösterilir + varsa referral uygulanır, sonra next'e yönlendirir.
   const callbackWithRef = refCode
     ? `/auth/complete?ref=${encodeURIComponent(refCode)}&next=${encodeURIComponent(baseCallback)}`
     : `/auth/complete?next=${encodeURIComponent(baseCallback)}`;
 
-  const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl: callbackWithRef });
+  /**
+   * Hesap türü niyetini sunucuya bildir (httpOnly, 15 dk). Yalnız YENİ oluşturulan OAuth
+   * kullanıcısına uygulanır; eskiden "İşletme" seçimi OAuth yolunda sessizce kayboluyordu.
+   */
+  const startOAuth = async (provider: 'google' | 'github') => {
+    setIsLoading(true);
+    try {
+      await fetch('/api/auth/signup-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: selectedRole }),
+      });
+    } catch {
+      // Niyet yazılamazsa da OAuth devam eder; /auth/complete rol uyuşmazlığını açıklar.
+    }
+    void signIn(provider, { callbackUrl: callbackWithRef });
   };
 
-  const handleGitHubSignIn = () => {
-    signIn('github', { callbackUrl: callbackWithRef });
-  };
+  const handleGoogleSignIn = () => void startOAuth('google');
+  const handleGitHubSignIn = () => void startOAuth('github');
 
   if (verifyResult) {
-    const templateKey = verifyResult.emailSent ? 'auth.verifySentTemplate' : 'auth.verifyDevTemplate';
-    const openLabel = verifyResult.emailSent ? t('auth.verifyOpenLinkSent') : t('auth.verifyOpenLinkDev');
-    const openAria = verifyResult.emailSent ? t('auth.verifyOpenLinkSentAria') : t('auth.verifyOpenLinkDevAria');
-
     return (
       <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <Card glass>
-          <CardHeader>
-            <CardTitle className="text-center">{t('auth.verifyEmailCardTitle')}</CardTitle>
-            <CardDescription className="text-center">
-              <EmailInTemplate template={t(templateKey)} email={verifyResult.email} />
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button asChild className="w-full">
-              <a href={verifyResult.verifyUrl} aria-label={openAria}>
-                {openLabel}
-              </a>
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">{t('auth.verifyFootnote')}</p>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => setVerifyResult(null)}
-              aria-label={t('auth.verifyOtherAccountAria')}
-            >
-              {t('auth.verifyOtherAccount')}
-            </Button>
+          <CardContent className="pt-6">
+            <VerifyPending
+              email={verifyResult.email}
+              emailSent={verifyResult.emailSent}
+              devVerifyUrl={verifyResult.devVerifyUrl}
+              referralPending={verifyResult.referralPending}
+              onBack={() => setVerifyResult(null)}
+              initialCooldownSec={verifyResult.emailSent === false ? 0 : 60}
+            />
           </CardContent>
         </Card>
       </Motion.div>
@@ -212,7 +209,7 @@ function RegisterContent() {
             {t('auth.registerSubtitle')}
             {refCode && (
               <span className="mt-2 flex items-center justify-center gap-1.5 text-primary">
-                <Gift className="h-4 w-4 shrink-0" aria-hidden /> {t('auth.inviteBonusLine')}
+                <Gift className="h-4 w-4 shrink-0" aria-hidden /> {copy.registerInviteLine}
               </span>
             )}
           </CardDescription>
@@ -250,6 +247,10 @@ function RegisterContent() {
               );
             })}
           </div>
+
+          {anyOauth && selectedRole === 'DEALER' && (
+            <p className="qx-small text-fg-muted text-center text-pretty">{copy.registerDealerOAuthHint}</p>
+          )}
 
           {anyOauth && (
           <div className={`grid gap-2 ${oauth.google && oauth.github ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
@@ -446,7 +447,7 @@ function RegisterContent() {
           <p className="text-sm text-muted-foreground text-center">
             {t('auth.haveAccount')}{' '}
             <Link
-              href="/auth/login"
+              href={safeCallback ? `/auth/login?callbackUrl=${encodeURIComponent(safeCallback)}` : '/auth/login'}
               className="rounded-sm font-medium text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {t('auth.loginLinkCapitalized')}

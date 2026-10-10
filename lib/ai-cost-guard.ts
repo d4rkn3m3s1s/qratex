@@ -1,21 +1,94 @@
 /**
- * AI cost guardrails (P2-20 item 15).
- * Dealer/tenant başına günlük token limiti; limit aşımında 429.
+ * AI maliyet ve hız korumaları (P2-20 item 15 → P0-32/F0.7 genişletmesi).
+ *
+ *  - Bayi (kiracı) başına günlük token tavanı → `checkAiCostGuard` (429).
+ *  - Platform düzeyi (bayisiz: QRA sohbeti, sistem öğrenmesi) eylem bazlı günlük tavan →
+ *    `checkAiGlobalBudget` (429).
+ *  - Kiracı/aktör × görev başına dakika limiti → `checkAiRateLimit` (429). DB/Redis destekli
+ *    `checkRateLimitDb` kullanır; serverless örnekleri arasında paylaşılır. Böylece bütçe
+ *    kontrolünün check-then-act yarışı da dakikalık tavanla sınırlanır.
+ *  - Kullanım kaydı başarısız çağrıları da tutar (`success:false`, `error`), kayıt hatası
+ *    AI yanıtını asla düşürmez.
+ *
+ * Bütün LLM yolları: önce `guardAiCall`, sonra çağrı, sonra `recordAiCostUsage`.
  */
 import { prisma } from '@/lib/prisma';
 import { parsePositiveIntEnv } from '@/lib/safe-env-number';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 
 const DEFAULT_DAILY_LIMIT = parsePositiveIntEnv(
   process.env.AI_DAILY_TOKEN_LIMIT_PER_DEALER,
   100_000
 );
 
+/** Görev kimlikleri — AIUsageLog.action ile aynı sözlük. */
+export type AiTask =
+  | 'analyze'
+  | 'chat_completion'
+  | 'ask_ai'
+  | 'insights'
+  | 'theme_cluster'
+  | 'suggest_reply'
+  | 'auto_reply'
+  | 'embedding'
+  | 'dealer_learning'
+  | 'system_learning'
+  | 'qra_chat';
+
+/**
+ * Kiracı/aktör başına dakikalık çağrı tavanı. `analyze` ve `embedding` burada yok:
+ * hacimleri geri bildirim hacmine bağlı ve günlük token tavanıyla korunuyorlar.
+ */
+export const AI_TASK_RATE_PER_MINUTE: Partial<Record<AiTask, number>> = {
+  chat_completion: 30,
+  ask_ai: 20,
+  insights: 6,
+  theme_cluster: 6,
+  suggest_reply: 20,
+  auto_reply: 30,
+  dealer_learning: 4,
+  system_learning: 2,
+};
+
+/** Platform düzeyi günlük token tavanları (bayisiz yollar). */
+export const AI_GLOBAL_DAILY_TOKEN_LIMITS = {
+  qra_chat: parsePositiveIntEnv(process.env.AI_DAILY_TOKEN_LIMIT_QRA, 150_000),
+  system_learning: parsePositiveIntEnv(process.env.AI_DAILY_TOKEN_LIMIT_SYSTEM_LEARNING, 60_000),
+} as const;
+
 export class AiCostLimitExceededError extends Error {
   readonly statusCode = 429;
+  readonly code: string = 'AI_BUDGET_EXCEEDED';
   constructor(message = 'Günlük AI token limiti aşıldı. Lütfen yarın tekrar deneyin.') {
     super(message);
     this.name = 'AiCostLimitExceededError';
   }
+}
+
+export class AiRateLimitExceededError extends Error {
+  readonly statusCode = 429;
+  readonly code = 'AI_RATE_LIMIT';
+  constructor(
+    readonly retryAfterMs: number = 60_000,
+    message = 'Çok sık AI isteği gönderildi. Lütfen biraz sonra tekrar deneyin.'
+  ) {
+    super(message);
+    this.name = 'AiRateLimitExceededError';
+  }
+}
+
+/**
+ * Route'ların catch bloğunda kullanması için: AI koruma hatası mı? (429/403 eşlemesi)
+ * `AiDisabledError` (lib/ai-policy) da `statusCode`/`code` taşıdığı için kapsanır.
+ */
+export function isAiGuardError(err: unknown): err is Error & { statusCode: number; code: string; retryAfterMs?: number } {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { statusCode?: unknown; code?: unknown };
+  return (
+    typeof e.statusCode === 'number' &&
+    typeof e.code === 'string' &&
+    ['AI_BUDGET_EXCEEDED', 'AI_RATE_LIMIT', 'AI_DISABLED'].includes(e.code)
+  );
 }
 
 /** Bugünün başlangıcı (UTC). */
@@ -43,6 +116,15 @@ export async function getTodayUsage(dealerId: string): Promise<number> {
   return in_ + out;
 }
 
+/** Platform düzeyi: verilen eylem(ler) için bugünkü toplam token (bayi fark etmeksizin). */
+export async function getTodayUsageByAction(actions: string[]): Promise<number> {
+  const rows = await prisma.aIUsageLog.aggregate({
+    where: { action: { in: actions }, createdAt: { gte: startOfTodayUtc() } },
+    _sum: { inputTokens: true, outputTokens: true },
+  });
+  return (rows._sum.inputTokens ?? 0) + (rows._sum.outputTokens ?? 0);
+}
+
 /** Limit aşıldıysa AiCostLimitExceededError fırlat. */
 export async function checkAiCostGuard(dealerId: string, limit?: number): Promise<void> {
   const max = limit ?? DEFAULT_DAILY_LIMIT;
@@ -52,24 +134,69 @@ export async function checkAiCostGuard(dealerId: string, limit?: number): Promis
   }
 }
 
-/** Kullanımı kaydet. */
+/** Platform düzeyi günlük tavan (QRA, sistem öğrenmesi). Aşılırsa 429. */
+export async function checkAiGlobalBudget(action: keyof typeof AI_GLOBAL_DAILY_TOKEN_LIMITS): Promise<void> {
+  const used = await getTodayUsageByAction([action]);
+  if (used >= AI_GLOBAL_DAILY_TOKEN_LIMITS[action]) {
+    throw new AiCostLimitExceededError('Platformun günlük AI kotası doldu. Lütfen yarın tekrar deneyin.');
+  }
+}
+
+/**
+ * Kiracı/aktör × görev dakikalık limiti. Sınırlayıcı altyapısı hata verirse açık kalır
+ * (günlük token tavanı yine uygulanır); limit aşımında AiRateLimitExceededError.
+ */
+export async function checkAiRateLimit(scopeKey: string, task: AiTask): Promise<void> {
+  const max = AI_TASK_RATE_PER_MINUTE[task];
+  if (!max || !scopeKey) return;
+  let rl: { ok: boolean; retryAfterMs?: number };
+  try {
+    rl = await checkRateLimitDb(`ai:${task}:${scopeKey}`, max, 60_000);
+  } catch (err) {
+    console.error('[AI_GUARD] rate limit altyapısı hata verdi:', err instanceof Error ? err.message : err);
+    return;
+  }
+  if (!rl.ok) throw new AiRateLimitExceededError(rl.retryAfterMs ?? 60_000);
+}
+
+/**
+ * Tek giriş noktası: bir LLM çağrısından ÖNCE çağrılır.
+ *  - `dealerId` varsa: kiracı dakikalık limiti + kiracı günlük token tavanı.
+ *  - `dealerId` yoksa `actorKey` (kullanıcı id / IP parmak izi) ile dakikalık limit.
+ */
+export async function guardAiCall(params: { task: AiTask; dealerId?: string | null; actorKey?: string | null }): Promise<void> {
+  const scope = params.dealerId || params.actorKey || '';
+  if (scope) await checkAiRateLimit(scope, params.task);
+  if (params.dealerId) await checkAiCostGuard(params.dealerId);
+}
+
+/**
+ * Kullanımı kaydet. `dealerId` null olabilir (platform düzeyi çağrılar). Başarısız
+ * çağrılar `outcome.success=false` ile kaydedilir. DB hatası yutulur (AI yanıtını düşürmez).
+ */
 export async function recordAiCostUsage(
-  dealerId: string,
+  dealerId: string | null,
   inputTokens: number,
   outputTokens: number,
   action: string,
   model: string,
-  latencyMs = 0
+  latencyMs = 0,
+  outcome: { success?: boolean; error?: string } = {}
 ): Promise<void> {
-  await prisma.aIUsageLog.create({
-    data: {
-      dealerId,
-      action,
-      model,
-      inputTokens,
-      outputTokens,
-      latencyMs,
-      success: true,
-    },
-  });
+  try {
+    await prisma.aIUsageLog.create({
+      data: {
+        dealerId: dealerId ?? null,
+        action,
+        model,
+        inputTokens: Math.max(0, Math.round(inputTokens || 0)),
+        outputTokens: Math.max(0, Math.round(outputTokens || 0)),
+        latencyMs: Math.max(0, Math.round(latencyMs || 0)),
+        success: outcome.success !== false,
+        error: outcome.error ? outcome.error.slice(0, 500) : null,
+      },
+    });
+  } catch (err) {
+    console.error('[AI_GUARD] kullanım kaydı yazılamadı:', err instanceof Error ? err.message : err);
+  }
 }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { runActionItemsAutoTrigger } from '@/lib/action-items-ai';
 import { z } from 'zod';
+import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.actionItem.findMany({
         where,
         skip,
@@ -85,11 +86,14 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
         include: {
           feedback: { select: { id: true, rating: true, text: true, createdAt: true } },
-          assignedTo: { select: { id: true, name: true, email: true } },
+          assignedTo: { select: ASSIGNEE_SELECT },
         },
       }),
       prisma.actionItem.count({ where }),
     ]);
+
+    // P0-11: atanan kişi açık DTO ile (e-posta maskeli) — ham e-posta dışarı çıkmaz.
+    const items = rows.map((row) => ({ ...row, assignedTo: assigneeDto(row.assignedTo) }));
 
     return NextResponse.json(
       {
@@ -159,6 +163,12 @@ export async function POST(request: NextRequest) {
       dealerId = session.user.id;
     }
 
+    // P0-11: atanan kişi bu bayinin kendisi ya da AKTİF personeli olmalı.
+    const assignee = await validateAssignee(dealerId, parsed.data.assignedToId);
+    if (!assignee.ok) {
+      return NextResponse.json({ error: assignee.error }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
     const existingOpenItem = await prisma.actionItem.findFirst({
       where: {
         dealerId,
@@ -181,7 +191,7 @@ export async function POST(request: NextRequest) {
         suggestionText: parsed.data.suggestionText.trim(),
         priority: parsed.data.priority ?? 'medium',
         sourceModule: parsed.data.sourceModule ?? (feedbackId ? 'feedback' : 'ai_aggregate'),
-        assignedToId: parsed.data.assignedToId ?? null,
+        assignedToId: assignee.value ?? null,
         dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
       },
     });

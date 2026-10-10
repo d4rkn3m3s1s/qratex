@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import {
   customerNavItems,
   dealerNavItems,
@@ -15,6 +15,10 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useAppT } from '@/lib/app-locale';
 import { toast } from '@/lib/admin-toast';
+import { QueryState } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
+import { fetchResourceJson, requireVersion, saveVersioned } from '@/lib/versioned-resource';
+import { useVersionedDraft, useVersionedResource } from '@/hooks/use-versioned-resource';
 
 type Role = 'dealer' | 'customer';
 type RolePayload = { groupLabels?: Record<string, string>; itemGroups?: Record<string, string> };
@@ -24,37 +28,134 @@ const CATALOG: Record<Role, { items: NavItem[]; groups: NavGroup[] }> = {
   customer: { items: customerNavItems, groups: getNavGroups('customer') },
 };
 
+type RoleMaps = Record<Role, Record<string, string>>;
+type GroupsDraft = { labels: RoleMaps; assign: RoleMaps };
+
+async function loadGroups() {
+  const body = await fetchResourceJson('/api/admin/settings/sidebar-groups', 'Menü grupları alınamadı');
+  const p = (body.payload ?? {}) as Partial<Record<Role, RolePayload>>;
+  return { data: toDraft(p), version: requireVersion(body) };
+}
+
+function toDraft(p: Partial<Record<Role, RolePayload>>): GroupsDraft {
+  return {
+    labels: { dealer: { ...(p.dealer?.groupLabels ?? {}) }, customer: { ...(p.customer?.groupLabels ?? {}) } },
+    assign: { dealer: { ...(p.dealer?.itemGroups ?? {}) }, customer: { ...(p.customer?.itemGroups ?? {}) } },
+  };
+}
+
+function PageIntro({ action }: { action?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Menü Grupları</h1>
+        <p className="text-sm text-muted-foreground">
+          Sol menü gruplarının adını değiştirin ve hangi öğenin hangi gruba ait olduğunu düzenleyin.
+        </p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+/**
+ * P0-28: kayıtlı override'lar okunamazsa form AÇILMAZ (eskiden hata yutulup kod varsayılanları
+ * kayıtlı ayar gibi gösteriliyor, Kaydet o rolün tüm override'larını siliyordu).
+ */
 export default function MenuGroupsPage() {
+  const resource = useVersionedResource(loadGroups);
+
+  if (resource.status === 'ready' && resource.data && resource.version) {
+    return (
+      <MenuGroupsForm
+        key={resource.loadId}
+        initial={resource.data}
+        initialVersion={resource.version}
+        onReload={resource.reload}
+        onCommitted={resource.commit}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageIntro />
+      <QueryState
+        query={resource.query}
+        skeleton="form"
+        isEmpty={() => false}
+        loadingLabel="Menü grupları yükleniyor…"
+        error={{
+          title: 'Menü grupları yüklenemedi',
+          description: 'Kayıtlı grup ayarları okunamadığı için düzenleme kilitlendi. Mevcut menünüz değişmedi; tekrar deneyin.',
+        }}
+      >
+        {null}
+      </QueryState>
+    </div>
+  );
+}
+
+function MenuGroupsForm({
+  initial,
+  initialVersion,
+  onReload,
+  onCommitted,
+}: {
+  initial: GroupsDraft;
+  initialVersion: string;
+  onReload: () => unknown;
+  onCommitted: (draft: GroupsDraft, version: string) => void;
+}) {
   const t = useAppT();
   const [role, setRole] = useState<Role>('customer');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  // Rol bazında override state.
-  const [labels, setLabels] = useState<Record<Role, Record<string, string>>>({ dealer: {}, customer: {} });
-  const [assign, setAssign] = useState<Record<Role, Record<string, string>>>({ dealer: {}, customer: {} });
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/admin/settings/sidebar-groups', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data: { success?: boolean; payload?: Partial<Record<Role, RolePayload>> }) => {
-        if (cancelled || !data?.success) return;
-        const p = data.payload ?? {};
-        setLabels({
-          dealer: p.dealer?.groupLabels ?? {},
-          customer: p.customer?.groupLabels ?? {},
-        });
-        setAssign({
-          dealer: p.dealer?.itemGroups ?? {},
-          customer: p.customer?.itemGroups ?? {},
-        });
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+  const request = useCallback(
+    (draft: GroupsDraft, baseVersion: string) => {
+      // Her iki rol de gönderilir: taslak sunucu yükünün birebir aynasıdır, sekme değiştirince
+      // yapılan düzenlemeler kaybolmaz. i18n varsayılanıyla aynı ya da boş başlık override
+      // olarak saklanmaz (çeviri güncellemeleri o gruba da ulaşsın).
+      const payloadFor = (r: Role): RolePayload => ({
+        groupLabels: Object.fromEntries(
+          Object.entries(draft.labels[r]).filter(([key, v]) => {
+            const g = CATALOG[r].groups.find((x) => x.key === key);
+            const fallback = g ? t(`sidebarNavGroups.${r}.${g.labelKey}`) : '';
+            return typeof v === 'string' && v.trim() !== '' && v.trim() !== fallback;
+          })
+        ),
+        itemGroups: draft.assign[r],
+      });
+      return saveVersioned(
+        '/api/admin/settings/sidebar-groups',
+        'PUT',
+        { dealer: payloadFor('dealer'), customer: payloadFor('customer'), baseVersion },
+        'Kaydedilemedi'
+      );
+    },
+    [t]
+  );
+  const parse = useCallback(
+    (body: Record<string, unknown>) => ({
+      data: toDraft((body.payload ?? {}) as Partial<Record<Role, RolePayload>>),
+      version: requireVersion(body),
+    }),
+    []
+  );
+  const onSaved = useCallback(
+    (draft: GroupsDraft, version: string) => {
+      onCommitted(draft, version);
+      toast.success('Menü grupları kaydedildi.');
+    },
+    [onCommitted]
+  );
+  const onError = useCallback((e: unknown) => {
+    toast.error(e instanceof Error ? e.message : 'Kaydedilemedi');
   }, []);
+
+  const form = useVersionedDraft<GroupsDraft>({ initial, initialVersion, request, parse, onSaved, onError });
+  const labels = form.draft.labels;
+  const assign = form.draft.assign;
+  const saving = form.saving;
 
   const { items, groups } = CATALOG[role];
   const groupLabel = (g: NavGroup) =>
@@ -82,52 +183,32 @@ export default function MenuGroupsPage() {
   }, [items, assign, role]);
 
   const setLabel = (key: string, value: string) =>
-    setLabels((prev) => ({ ...prev, [role]: { ...prev[role], [key]: value } }));
+    form.setDraft((prev) => ({ ...prev, labels: { ...prev.labels, [role]: { ...prev.labels[role], [key]: value } } }));
 
   const setItemGroup = (item: NavItem, groupKey: string) => {
     const id = getNavOrderId(item);
-    setAssign((prev) => ({ ...prev, [role]: { ...prev[role], [id]: groupKey } }));
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const body: Partial<Record<Role, RolePayload>> = {
-        [role]: {
-          groupLabels: Object.fromEntries(Object.entries(labels[role]).filter(([, v]) => v && v.trim())),
-          itemGroups: assign[role],
-        },
-      };
-      const res = await fetch('/api/admin/settings/sidebar-groups', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Kaydedilemedi');
-      toast.success('Menü grupları kaydedildi.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Hata');
-    } finally {
-      setSaving(false);
-    }
+    form.setDraft((prev) => ({ ...prev, assign: { ...prev.assign, [role]: { ...prev.assign[role], [id]: groupKey } } }));
   };
 
   const itemLabel = (it: NavItem) => t(`sidebarNav.${role}.${it.labelKey}`);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Menü Grupları</h1>
-          <p className="text-sm text-muted-foreground">
-            Sol menü gruplarının adını değiştirin ve hangi öğenin hangi gruba ait olduğunu düzenleyin.
-          </p>
-        </div>
-        <Button onClick={save} disabled={saving || loading}>
-          {saving ? 'Kaydediliyor…' : 'Kaydet'}
-        </Button>
-      </div>
+      <PageIntro
+        action={
+          <Button onClick={() => void form.save()} disabled={saving || !form.dirty}>
+            {saving ? 'Kaydediliyor…' : 'Kaydet'}
+          </Button>
+        }
+      />
+
+      {form.conflict && (
+        <VersionConflictBanner
+          message={form.conflict.message}
+          onReload={onReload}
+          onOverwrite={form.conflict.currentVersion ? () => form.save({ overwrite: true }) : undefined}
+        />
+      )}
 
       <Tabs value={role} onValueChange={(v) => setRole(v as Role)}>
         <TabsList>

@@ -8,6 +8,7 @@ import { checkAdminSeoRateLimit } from '@/lib/rate-limit';
 import { SEO_SETTINGS_KEY, SEO_CACHE_TAG, type SeoSettingsPayload } from '@/lib/seo-settings';
 import { adminSeoRollbackSchema } from '@/lib/validations-admin';
 import { Prisma } from '@prisma/client';
+import { validateSeoGlobalUrls } from '@/lib/seo-url';
 
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +54,14 @@ export async function POST(request: NextRequest) {
 
     const oldPayload = log.oldData as unknown as SeoSettingsPayload;
     if (!oldPayload.global) return NextResponse.json({ error: 'Eski veri geçersiz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    // P0-39: geri dönülen sürüm boş/bozuk Site URL içeriyorsa siteyi çökertmesin.
+    const rollbackUrlErr = validateSeoGlobalUrls(oldPayload.global);
+    if (rollbackUrlErr) {
+      return NextResponse.json(
+        { error: `Bu sürüme geri dönülemez: ${rollbackUrlErr}` },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
     const current = await prisma.settings.findUnique({
       where: { key: SEO_SETTINGS_KEY },

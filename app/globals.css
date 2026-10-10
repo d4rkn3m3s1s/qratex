@@ -2,53 +2,181 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═════════════════════════════════════════════════════════════════════
+   QRATEX DESIGN LANGUAGE v2 (QDL) — TOKEN KATMANI
+   ─────────────────────────────────────────────────────────────────────
+   3 katman: tohum → rol → bileşen. Bu dosya rol token'larının TEK
+   kaynağıdır; Tailwind (tailwind.config.ts) yalnız bunları açığa çıkarır.
+
+   • Renk değerleri "H S% L%" üçlüsüdür → `hsl(var(--x) / α)` ile kullanılır.
+   • Eski shadcn adları (--primary, --destructive, --muted-foreground…) geriye
+     uyumluluk için korunur; yeni kod rol adlarını kullanır:
+       --surface-0..3, --text-1..3, --border-subtle/strong,
+       --{brand|success|warning|danger|info}{,-fg,-text,-subtle,-border},
+       --focus-ring, --overlay, --category-1..8
+   • Kontrast sözleşmesi (WCAG 2.2 AA, __tests__/design/tokens-contrast.test.ts
+     her açık/koyu × renk körü × yüksek kontrast kombinasyonunda doğrular):
+       *-text  ≥ 4.5:1  surface-0/1/2/3 ve kendi *-subtle zemini üzerinde
+       *-fg    ≥ 4.5:1  kendi dolgusu (--x) üzerinde
+       text-1/2/3 ≥ 4.5:1  tüm yüzeylerde
+       border-strong ≥ 3:1  surface-0/1 üzerinde (kontrol sınırı, 1.4.11)
+   • `text-destructive|success|warning|info|danger|brand` Tailwind'de *-text
+     rolüne gider (tailwind.config.ts → textColor); `bg-*` dolguya gider.
+     Böylece "dolgu rengini metin olarak kullanma" hatası yapısal olarak kapanır.
+   ═════════════════════════════════════════════════════════════════════ */
+
 @layer base {
   /* ─────────────────────────────────────────────────────────────
-     LIGHT MODE (DEFAULT)
+     AÇIK TEMA (VARSAYILAN)
   ───────────────────────────────────────────────────────────── */
   :root {
-    /* Açık tema: full beyaz DEĞİL — hafif lila/mor tonlu zemin (marka moru hue 262).
-       Kartlar hâlâ beyaza yakın ama zemin ve blok yüzeyleri hafif renkli, daha canlı. */
+    /* Zemin: tam beyaz DEĞİL — hafif lila (marka hue 262); kartlar beyaz. */
     --background: 264 40% 98%;
-    --foreground: 240 10% 10%;
+    --foreground: 224 30% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 224 30% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
+    --popover-foreground: 224 30% 14%;
     --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
     --secondary: 262 30% 93%;
     --secondary-foreground: 240 10% 10%;
     --muted: 264 30% 95%;
-    --muted-foreground: 240 5% 45%;
+    --muted-foreground: 220 10% 34%;
     --accent: 262 70% 95%;
-    --accent-foreground: 262 83% 40%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 262 20% 89%;
-    --input: 262 20% 89%;
+    --accent-foreground: 224 30% 20%;
+    --border: 220 14% 82%;
+    --input: 220 14% 82%;
     --ring: 262 83% 58%;
     --radius: 0.75rem;
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+
+    /* Yüzey ve metin rolleri (açık) */
+    --surface-2: 0 0% 100%;
+    --text-3: 220 9% 44%;
+    --border-strong: 220 9% 54%;
+
+    /* Marka */
+    --brand-text: 262 70% 50%;
+    --brand-subtle: 262 83% 96%;
+    --brand-border: 262 60% 82%;
+
+    /* Durum rolleri — dolgu / dolgu-üstü metin / zemin-üstü metin / açık zemin / kenarlık */
+    --success: 142 72% 29%;
+    --success-fg: 0 0% 100%;
+    --success-text: 142 72% 26%;
+    --success-subtle: 141 70% 94%;
+    --success-border: 142 45% 72%;
+
     --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 10%;
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
-    
-    /* Custom light mode colors */
+    --warning-fg: 26 83% 14%;
+    --warning-text: 28 90% 30%;
+    --warning-subtle: 45 95% 92%;
+    --warning-border: 38 80% 70%;
+
+    --danger: 0 72% 51%;
+    --danger-fg: 0 0% 100%;
+    --danger-text: 0 72% 42%;
+    --danger-subtle: 0 86% 96%;
+    --danger-border: 0 80% 82%;
+
+    --info: 201 96% 32%;
+    --info-fg: 0 0% 100%;
+    --info-text: 201 90% 30%;
+    --info-subtle: 199 90% 95%;
+    --info-border: 199 70% 78%;
+
+    --overlay: 224 40% 8%;
+
+    /* Kimlik renkleri (rozet kategorisi, oyun, grafik serisi) — dekoratif, metin değil */
+    --category-1: 262 83% 58%;
+    --category-2: 199 89% 48%;
+    --category-3: 160 84% 39%;
+    --category-4: 38 92% 50%;
+    --category-5: 347 77% 50%;
+    --category-6: 188 86% 40%;
+    --category-7: 25 95% 53%;
+    --category-8: 292 84% 61%;
+
+    /* Efekt yardımcıları (runtime tema --gradient-from/to'yu preset'e göre yazar) */
     --gradient-from: 262 83% 58%;
     --gradient-to: 292 84% 61%;
     --glass-bg: 0 0% 100%;
-    --glass-border: 0 0% 90%;
+    --glass-border: 220 16% 82%;
     --shadow-color: 240 10% 50%;
+
+    /* ── Ölçekler (moddan bağımsız) ── */
+    /* Radius: sm 8 · md 12 (kontrol) · lg 16 (kart) · xl 24 (hero/sheet/dialog) */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    /* Boşluk ritmi (4px taban) */
+    --space-card: 1rem;
+    --space-section: 1.5rem;
+
+    /* Tipografi ölçeği — bilgi taşıyan metin için alt sınır 12px (caption) */
+    --font-size-display: 2.25rem;
+    --line-height-display: 2.5rem;
+    --font-size-h1: 1.5rem;
+    --line-height-h1: 2rem;
+    --font-size-h2: 1.25rem;
+    --line-height-h2: 1.75rem;
+    --font-size-h3: 1rem;
+    --line-height-h3: 1.5rem;
+    --font-size-body: 0.875rem;
+    --line-height-body: 1.25rem;
+    --font-size-small: 0.8125rem;
+    --line-height-small: 1.125rem;
+    --font-size-caption: 0.75rem;
+    --line-height-caption: 1rem;
+
+    /* Elevation 0–3 (glow yalnız play kaydında) */
+    --elevation-0: none;
+    --elevation-1: 0 1px 2px 0 hsl(var(--shadow-color) / 0.08), 0 1px 3px 0 hsl(var(--shadow-color) / 0.06);
+    --elevation-2: 0 4px 12px -2px hsl(var(--shadow-color) / 0.14), 0 2px 4px -2px hsl(var(--shadow-color) / 0.08);
+    --elevation-3: 0 16px 40px -8px hsl(var(--shadow-color) / 0.22), 0 6px 12px -6px hsl(var(--shadow-color) / 0.12);
+
+    /* z-index katmanları */
+    --z-base: 0;
+    --z-raised: 10;
+    --z-sticky: 20;
+    --z-header: 30;
+    --z-overlay: 40;
+    --z-modal: 50;
+    --z-popover: 60;
+    --z-toast: 70;
+    --z-skip: 100;
+
+    /* Motion — lib/motion/tokens.ts ile birebir aynı */
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --motion-slow: 320ms;
+    --motion-celebrate: 1200ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  @media (min-width: 640px) {
+    :root {
+      --font-size-h1: 1.75rem;
+      --line-height-h1: 2.125rem;
+      --space-card: 1.25rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    :root {
+      --space-card: 1.5rem;
+      --space-section: 2rem;
+    }
   }
 
   /* ─────────────────────────────────────────────────────────────
-     DARK MODE
+     KOYU TEMA
   ───────────────────────────────────────────────────────────── */
   .dark {
-    /* Cool zinc base + primary brand token */
     --background: 222 47% 5%;
     --foreground: 210 40% 98%;
     --card: 222 41% 8%;
@@ -63,24 +191,82 @@
     --muted-foreground: 215 16% 68%;
     --accent: 262 45% 18%;
     --accent-foreground: 262 83% 82%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 100%;
     --border: 217 19% 16%;
     --input: 217 19% 16%;
     --ring: 262 83% 58%;
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+
+    --surface-2: 222 35% 11%;
+    --text-3: 215 12% 57%;
+    --border-strong: 217 13% 44%;
+
+    --brand-text: 262 90% 78%;
+    --brand-subtle: 262 45% 18%;
+    --brand-border: 262 45% 36%;
+
+    --success: 142 71% 45%;
+    --success-fg: 142 80% 8%;
+    --success-text: 142 69% 58%;
+    --success-subtle: 142 50% 12%;
+    --success-border: 142 45% 30%;
+
     --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 10%;
+    --warning-fg: 26 83% 14%;
+    --warning-text: 43 96% 58%;
+    --warning-subtle: 38 60% 12%;
+    --warning-border: 38 60% 32%;
+
+    /* P0-38: eski koyu --destructive (0 62% 30%) metin olarak 1,93:1 idi.
+       Dolgu artık beyaz metinle 4,8:1; metin rolü --danger-text 7,2:1. */
+    --danger: 0 72% 51%;
+    --danger-fg: 0 0% 100%;
+    --danger-text: 0 91% 71%;
+    --danger-subtle: 0 55% 15%;
+    --danger-border: 0 55% 38%;
+
     --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
-    
-    /* Custom dark mode colors */
+    --info-fg: 204 80% 10%;
+    --info-text: 199 92% 66%;
+    --info-subtle: 201 60% 13%;
+    --info-border: 201 50% 34%;
+
+    --overlay: 222 60% 2%;
+
     --gradient-from: 262 83% 58%;
     --gradient-to: 292 84% 61%;
     --glass-bg: 222 35% 10%;
     --glass-border: 217 19% 22%;
     --shadow-color: 222 47% 2%;
+
+    --elevation-1: 0 1px 2px 0 hsl(var(--shadow-color) / 0.5), inset 0 1px 0 0 hsl(0 0% 100% / 0.03);
+    --elevation-2: 0 6px 16px -4px hsl(var(--shadow-color) / 0.7), inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
+    --elevation-3: 0 20px 48px -12px hsl(var(--shadow-color) / 0.85), inset 0 1px 0 0 hsl(0 0% 100% / 0.05);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     ROL TAKMA ADLARI — çalışma zamanı teması (--background, --card,
+     --foreground…) ve iç içe `.dark` alt ağaçları (arena) değiştiğinde
+     rol token'ları da AYNI elemanda yeniden hesaplansın diye hem :root
+     hem .dark üzerinde bildirilir.
+  ───────────────────────────────────────────────────────────── */
+  :root,
+  .dark {
+    --surface-0: var(--background);
+    --surface-1: var(--card);
+    --surface-3: var(--muted);
+    --text-1: var(--foreground);
+    --text-2: var(--muted-foreground);
+    --border-subtle: var(--border);
+    --focus-ring: var(--ring);
+
+    --brand: var(--primary);
+    --brand-fg: var(--primary-foreground);
+
+    /* Eski shadcn adları → rol token'ları (geriye uyumluluk) */
+    --destructive: var(--danger);
+    --destructive-foreground: var(--danger-fg);
+    --success-foreground: var(--success-fg);
+    --warning-foreground: var(--warning-fg);
+    --info-foreground: var(--info-fg);
   }
 }
 
@@ -94,23 +280,12 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Tema geçişi anlık (next-themes disableTransitionOnChange ile tutarlı);
+     eski `transition: background-color .3s` her tema değişiminde tüm sayfayı
+     yeniden boyatıyordu. */
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
-    transition: background-color 0.3s ease, color 0.3s ease;
-  }
-
-  /* Light mode global readability overrides */
-  html:not(.dark) {
-    --foreground: 224 30% 14%;
-    --card-foreground: 224 30% 14%;
-    --popover-foreground: 224 30% 14%;
-    --muted-foreground: 220 10% 34%;
-    --accent-foreground: 224 30% 20%;
-    --border: 220 14% 82%;
-    --input: 220 14% 82%;
-    --glass-bg: 0 0% 100%;
-    --glass-border: 220 16% 82%;
   }
 
   /* Global responsive safety */
@@ -217,7 +392,9 @@
     );
   }
 
-  /* Light mode safety net: prevent "white-on-frosted-white" controls */
+  /* Light mode safety net: prevent "white-on-frosted-white" controls.
+     (Button `glass` varyantı ve hero-üstü beyaz kopyalar `on-hero` varyantına
+     göçünce silinecek — bkz. tasarım raporu O3.) */
   html:not(.dark) :where([class*='bg-white/15'][class*='text-white']) {
     color: hsl(var(--foreground)) !important;
     background-color: hsl(var(--background) / 0.86) !important;
@@ -238,7 +415,87 @@
 
 @layer components {
   /* ─────────────────────────────────────────────────────────────
-     GLASS MORPHISM
+     QDL TİPOGRAFİ — `qx-` önekli (tailwind-merge `text-*` renk sınıflarıyla
+     birleştirirken boyutu silmesin diye Tailwind fontSize anahtarı DEĞİL).
+  ───────────────────────────────────────────────────────────── */
+  .qx-display {
+    font-family: var(--font-display, var(--font-mono, var(--font-sans))), system-ui, sans-serif;
+    font-size: var(--font-size-display);
+    line-height: var(--line-height-display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .qx-h1 {
+    font-size: var(--font-size-h1);
+    line-height: var(--line-height-h1);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+
+  .qx-h2 {
+    font-size: var(--font-size-h2);
+    line-height: var(--line-height-h2);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .qx-h3 {
+    font-size: var(--font-size-h3);
+    line-height: var(--line-height-h3);
+    font-weight: 600;
+  }
+
+  .qx-body {
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+  }
+
+  .qx-small {
+    font-size: var(--font-size-small);
+    line-height: var(--line-height-small);
+  }
+
+  .qx-caption {
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption);
+  }
+
+  .qx-overline {
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .qx-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     QDL YÜZEY / ELEVATION
+  ───────────────────────────────────────────────────────────── */
+  .qx-elevation-0 {
+    box-shadow: var(--elevation-0);
+  }
+
+  .qx-elevation-1 {
+    box-shadow: var(--elevation-1);
+  }
+
+  .qx-elevation-2 {
+    box-shadow: var(--elevation-2);
+  }
+
+  .qx-elevation-3 {
+    box-shadow: var(--elevation-3);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     GLASS MORPHISM (play kaydı)
   ───────────────────────────────────────────────────────────── */
   .glass {
     @apply backdrop-blur-xl;
@@ -256,254 +513,35 @@
     border: 1px solid hsl(var(--glass-border) / 0.3);
   }
 
-  .glass-strong {
-    @apply backdrop-blur-2xl;
-    background: hsl(var(--glass-bg) / 0.95);
-    border: 1px solid hsl(var(--glass-border) / 0.6);
-  }
-
-  html:not(.dark) .glass-strong {
-    background: hsl(var(--glass-bg) / 0.98);
-    border: 1px solid hsl(var(--glass-border) / 0.9);
-  }
-
-  .dark .glass-strong {
-    background: hsl(var(--glass-bg) / 0.9);
-  }
-
-  /**
-   * Dealer / müşteri panellerinde tekrarlanan üst gradient hero kartları:
-   * ince border + ring ile “yüzen panel” hissi, tutarlı gölge.
-   */
-  /* Gradient kartlar: koyu kenarlık açık temada da okunur; koyu temada hafif highlight */
-  .panel-gradient-hero {
-    @apply relative overflow-hidden rounded-2xl shadow-lg ring-1;
-    @apply border border-black/10 ring-black/[0.06];
-    @apply dark:border-white/15 dark:ring-white/10;
-  }
-
-  html:not(.dark) .panel-gradient-hero {
-    @apply border-black/15 ring-black/[0.09];
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     GRADIENT BACKGROUNDS
-  ───────────────────────────────────────────────────────────── */
-  .gradient-primary {
-    @apply bg-gradient-to-r from-primary via-primary/90 to-primary/75;
-  }
-
-  .gradient-primary-soft {
-    background: linear-gradient(135deg, 
-      hsl(262 83% 58% / 0.15) 0%, 
-      hsl(292 84% 61% / 0.15) 100%
-    );
-  }
-
-  .dark .gradient-primary-soft {
-    background: linear-gradient(135deg, 
-      hsl(262 83% 58% / 0.25) 0%, 
-      hsl(292 84% 61% / 0.25) 100%
-    );
-  }
-
-  /* Mesh gradient for backgrounds */
+  /* Mesh gradient (auth ve landing zemini) — marka tonu preset'i izler */
   .gradient-mesh {
-    background-image: 
-      radial-gradient(at 40% 20%, hsl(262 83% 58% / 0.2) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(199 89% 48% / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, hsl(262 80% 70% / 0.15) 0px, transparent 50%),
-      radial-gradient(at 80% 50%, hsl(292 84% 61% / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(38 92% 50% / 0.1) 0px, transparent 50%),
-      radial-gradient(at 80% 100%, hsl(262 83% 58% / 0.15) 0px, transparent 50%);
+    background-image:
+      radial-gradient(at 40% 20%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsl(var(--category-2) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsl(var(--gradient-from) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, hsl(var(--gradient-to) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(var(--category-4) / 0.1) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsl(var(--gradient-from) / 0.15) 0px, transparent 50%);
   }
 
   .dark .gradient-mesh {
-    background-image: 
-      radial-gradient(at 40% 20%, hsl(262 83% 58% / 0.35) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(199 89% 48% / 0.2) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, hsl(262 80% 70% / 0.2) 0px, transparent 50%),
-      radial-gradient(at 80% 50%, hsl(292 84% 61% / 0.2) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(38 92% 50% / 0.15) 0px, transparent 50%),
-      radial-gradient(at 80% 100%, hsl(262 83% 58% / 0.2) 0px, transparent 50%);
+    background-image:
+      radial-gradient(at 40% 20%, hsl(var(--gradient-from) / 0.35) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsl(var(--category-2) / 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, hsl(var(--gradient-to) / 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsl(var(--category-4) / 0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsl(var(--gradient-from) / 0.2) 0px, transparent 50%);
   }
 
-  /* Subtle gradient for cards */
-  .gradient-card {
-    background: linear-gradient(180deg, 
-      hsl(var(--card)) 0%, 
-      hsl(var(--card) / 0.8) 100%
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     GLOW EFFECTS
-  ───────────────────────────────────────────────────────────── */
-  .glow {
-    box-shadow: 0 0 20px hsl(262 83% 58% / 0.25);
-  }
-
-  .dark .glow {
-    box-shadow: 0 0 20px hsl(262 83% 58% / 0.35);
-  }
-
-  .glow-lg {
-    box-shadow: 0 0 40px hsl(262 83% 58% / 0.3);
-  }
-
-  .dark .glow-lg {
-    box-shadow: 0 0 40px hsl(262 83% 58% / 0.45);
-  }
-
-  .glow-success {
-    box-shadow: 0 0 20px hsl(142 76% 36% / 0.3);
-  }
-
-  .glow-warning {
-    box-shadow: 0 0 20px hsl(38 92% 50% / 0.3);
-  }
-
-  .glow-destructive {
-    box-shadow: 0 0 20px hsl(0 84% 60% / 0.3);
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     CARD EFFECTS
-  ───────────────────────────────────────────────────────────── */
-  .card-hover {
-    @apply transition-all duration-300;
-  }
-
-  .card-hover:hover {
-    transform: translateY(-4px);
-    box-shadow: 
-      0 10px 30px -10px hsl(var(--shadow-color) / 0.15),
-      0 4px 6px -4px hsl(var(--shadow-color) / 0.1);
-  }
-
-  .dark .card-hover:hover {
-    box-shadow: 
-      0 10px 30px -10px hsl(262 83% 58% / 0.15),
-      0 4px 6px -4px hsl(0 0% 0% / 0.3);
-  }
-
-  .card-interactive {
-    @apply transition-all duration-200 cursor-pointer;
-    @apply hover:bg-accent/50 active:scale-[0.98];
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     TEXT GRADIENTS
-  ───────────────────────────────────────────────────────────── */
+  /* Metin gradyanı — marka tonu preset'i izler */
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, 
-      hsl(262 83% 58%) 0%, 
-      hsl(292 84% 61%) 50%,
-      hsl(262 83% 58%) 100%
+    background-image: linear-gradient(135deg,
+      hsl(var(--gradient-from)) 0%,
+      hsl(var(--gradient-to)) 50%,
+      hsl(var(--gradient-from)) 100%
     );
-  }
-
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, 
-      hsl(45 93% 47%) 0%, 
-      hsl(38 92% 50%) 50%,
-      hsl(32 95% 44%) 100%
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     SKELETON LOADING
-  ───────────────────────────────────────────────────────────── */
-  .skeleton {
-    @apply relative overflow-hidden bg-muted rounded;
-  }
-
-  .skeleton::after {
-    @apply absolute inset-0;
-    content: '';
-    background: linear-gradient(
-      90deg,
-      transparent,
-      hsl(var(--foreground) / 0.05),
-      transparent
-    );
-    animation: shimmer 2s infinite;
-  }
-
-  .dark .skeleton::after {
-    background: linear-gradient(
-      90deg,
-      transparent,
-      hsl(0 0% 100% / 0.08),
-      transparent
-    );
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     BUTTON STYLES
-  ───────────────────────────────────────────────────────────── */
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium;
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-    @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  .btn-primary:hover {
-    box-shadow: 0 4px 12px hsl(262 83% 58% / 0.3);
-  }
-
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium;
-    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
-    @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium;
-    @apply hover:bg-accent hover:text-accent-foreground;
-    @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  .btn-outline {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium;
-    @apply border border-border/80 bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground;
-    @apply dark:border-white/25 dark:bg-white/[0.07];
-    @apply dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)];
-    @apply transition-all duration-200;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:pointer-events-none disabled:opacity-50;
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     INPUT STYLES
-  ───────────────────────────────────────────────────────────── */
-  .input-base {
-    @apply flex h-11 w-full rounded-lg border border-border/80 bg-background px-3 py-2 text-sm text-foreground shadow-sm;
-    @apply ring-offset-background placeholder:text-muted-foreground dark:border-white/25 dark:bg-white/[0.07];
-    @apply dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)];
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply disabled:cursor-not-allowed disabled:opacity-50;
-    @apply transition-colors duration-200;
-  }
-
-  .input-base:focus {
-    @apply border-primary/50;
   }
 
   /* ─────────────────────────────────────────────────────────────
@@ -536,56 +574,6 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-
-  /* ─────────────────────────────────────────────────────────────
-     BADGE RARITY COLORS
-  ───────────────────────────────────────────────────────────── */
-  .badge-common {
-    @apply bg-slate-500/20 text-slate-600 border-slate-500/30;
-  }
-
-  .dark .badge-common {
-    @apply bg-slate-500/20 text-slate-400 border-slate-500/30;
-  }
-
-  .badge-rare {
-    @apply bg-blue-500/20 text-blue-600 border-blue-500/30;
-  }
-
-  .dark .badge-rare {
-    @apply bg-blue-500/20 text-blue-400 border-blue-500/30;
-  }
-
-  .badge-epic {
-    @apply border-primary/30 bg-primary/20 text-primary;
-  }
-
-  .dark .badge-epic {
-    @apply border-primary/30 bg-primary/20 text-primary;
-  }
-
-  .badge-legendary {
-    background: linear-gradient(135deg, 
-      hsl(45 93% 47% / 0.2) 0%, 
-      hsl(38 92% 50% / 0.2) 100%
-    );
-    @apply text-amber-600 border-amber-500/30;
-  }
-
-  .dark .badge-legendary {
-    background: linear-gradient(135deg, 
-      hsl(45 93% 47% / 0.25) 0%, 
-      hsl(38 92% 50% / 0.25) 100%
-    );
-    @apply text-amber-400;
-  }
-
-  /* ─────────────────────────────────────────────────────────────
-     DIVIDER
-  ───────────────────────────────────────────────────────────── */
-  .divider {
-    @apply h-px bg-gradient-to-r from-transparent via-border to-transparent;
-  }
 }
 
 @layer utilities {
@@ -599,34 +587,13 @@
     text-wrap: balance;
   }
 
-  /* Animate on scroll */
-  .animate-in {
-    animation: fade-in 0.5s ease-out forwards;
-  }
-
-  .animate-in-slow {
-    animation: fade-in 0.8s ease-out forwards;
-  }
-
-  /* Staggered animation delays */
-  .delay-100 {
-    animation-delay: 100ms;
-  }
-
-  .delay-200 {
-    animation-delay: 200ms;
-  }
-
-  .delay-300 {
-    animation-delay: 300ms;
-  }
-
-  .delay-400 {
-    animation-delay: 400ms;
-  }
-
-  .delay-500 {
-    animation-delay: 500ms;
+  /* P0-38 / K1: Proje içi giriş animasyonu. Eskiden `.animate-in` adını
+     taşıyordu ve tailwindcss-animate'in aynı adlı sınıfını (Radix Dialog /
+     Sheet / Dropdown / Select / Popover / Tooltip açılışları) eziyordu.
+     Kural: projeye özel yardımcılar `qx-` önekli; Tailwind/eklenti ad
+     alanıyla asla çakışmaz. */
+  .qx-enter {
+    animation: qx-fade-up var(--motion-slow) var(--ease-emphasized) both;
   }
 
   /* Dynamic viewport height */
@@ -648,6 +615,9 @@
 
 /* ─────────────────────────────────────────────────────────────
    KEYFRAMES
+   Not: `fade-in`, `float` adları tailwind.config.ts'teki aynı adlı
+   keyframe'lerle çakışıyordu (derlenmiş CSS'te sonuncusu kazanıyordu).
+   Proje keyframe'leri `qx-` önekli; Tailwind'inkiler config'te tek kaynak.
 ───────────────────────────────────────────────────────────── */
 @keyframes shimmer {
   0% {
@@ -658,10 +628,10 @@
   }
 }
 
-@keyframes fade-in {
+@keyframes qx-fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -676,24 +646,6 @@
   }
   50% {
     opacity: 0.75;
-  }
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 20px hsl(262 83% 58% / 0.3);
-  }
-  50% {
-    box-shadow: 0 0 30px hsl(262 83% 58% / 0.5);
-  }
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
   }
 }
 
@@ -796,7 +748,8 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   REDUCED MOTION
+   REDUCED MOTION — OS tercihi
+   (framer-motion tarafı: lib/motion → MotionPolicyConfig; aynı politika)
 ───────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -807,21 +760,15 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-
-  .card-hover:hover {
-    transform: none !important;
-  }
-
-  .skeleton::after {
-    animation: none !important;
-  }
 }
 
 /* ─────────────────────────────────────────────────────────────
    ERİŞİLEBİLİRLİK (ayarlardan açılır; <html> sınıfı olarak uygulanır)
+   Modlar YALNIZ rol token'larını yeniden tanımlar.
 ───────────────────────────────────────────────────────────── */
 
-/* Animasyonları azalt — kullanıcı tercihi (prefers-reduced-motion'dan bağımsız). */
+/* Animasyonları azalt — kullanıcı tercihi (prefers-reduced-motion'dan bağımsız).
+   framer-motion'a lib/motion/use-reduced-motion-pref.ts ile ulaşır. */
 html.reduce-animations *,
 html.reduce-animations *::before,
 html.reduce-animations *::after {
@@ -831,14 +778,50 @@ html.reduce-animations *::after {
   scroll-behavior: auto !important;
 }
 
-/* Yüksek kontrast — kenarlık ve metin zıtlığını artırır. */
+/* Yüksek kontrast — metin, kenarlık ve durum metinlerini koyulaştırır.
+   Ayrıca OS "kontrastı artır" tercihinde (prefers-contrast: more) otomatik. */
 html.high-contrast {
   --border: 0 0% 35%;
+  --input: 0 0% 35%;
   --ring: 0 0% 0%;
+  --muted-foreground: 220 15% 22%;
+  --text-3: 220 12% 30%;
+  --border-strong: 0 0% 30%;
+  --brand-text: 262 75% 38%;
+  --success-text: 142 80% 20%;
+  --warning-text: 28 95% 24%;
+  --danger-text: 0 80% 34%;
+  --info-text: 201 95% 24%;
 }
 html.dark.high-contrast {
   --border: 0 0% 70%;
+  --input: 0 0% 70%;
+  --ring: 0 0% 100%;
   --foreground: 0 0% 100%;
+  --muted-foreground: 215 20% 85%;
+  --text-3: 215 15% 75%;
+  --border-strong: 0 0% 75%;
+  --brand-text: 262 95% 86%;
+  --success-text: 142 75% 70%;
+  --warning-text: 45 98% 70%;
+  --danger-text: 0 95% 80%;
+  --info-text: 199 95% 76%;
+}
+@media (prefers-contrast: more) {
+  html:not(.dark) {
+    --border: 0 0% 35%;
+    --input: 0 0% 35%;
+    --muted-foreground: 220 15% 22%;
+    --text-3: 220 12% 30%;
+    --border-strong: 0 0% 30%;
+  }
+  html.dark {
+    --border: 0 0% 70%;
+    --input: 0 0% 70%;
+    --muted-foreground: 215 20% 85%;
+    --text-3: 215 15% 75%;
+    --border-strong: 0 0% 75%;
+  }
 }
 html.high-contrast a,
 html.high-contrast button {
@@ -849,20 +832,49 @@ html.high-contrast button {
    (mavi/turuncu — Okabe-Ito) kaydırır; tek başına renge bağımlı göstergeler
    ayırt edilebilir kalır. Ek olarak durum renkli metinlere alt çizgi eklenir. */
 html.colorblind {
-  --success: 205 90% 42%; /* yeşil → mavi */
-  --destructive: 25 95% 53%; /* kırmızı → turuncu */
-  --warning: 280 60% 55%; /* amber → mor (turuncudan ayrışsın) */
+  /* başarı → mavi */
+  --success: 205 90% 38%;
+  --success-fg: 0 0% 100%;
+  --success-text: 205 90% 32%;
+  --success-subtle: 205 90% 95%;
+  --success-border: 205 70% 75%;
+  /* hata → turuncu */
+  --danger: 25 95% 36%;
+  --danger-fg: 0 0% 100%;
+  --danger-text: 25 95% 33%;
+  --danger-subtle: 30 95% 94%;
+  --danger-border: 25 85% 72%;
+  /* uyarı → mor (turuncudan ayrışsın) */
+  --warning: 280 60% 48%;
+  --warning-fg: 0 0% 100%;
+  --warning-text: 280 60% 42%;
+  --warning-subtle: 280 70% 96%;
+  --warning-border: 280 50% 78%;
 }
 html.colorblind.dark {
-  --success: 205 90% 55%;
-  --destructive: 25 95% 60%;
-  --warning: 280 65% 65%;
+  --success: 205 90% 38%;
+  --success-fg: 0 0% 100%;
+  --success-text: 205 90% 68%;
+  --success-subtle: 205 60% 13%;
+  --success-border: 205 50% 36%;
+  --danger: 25 95% 36%;
+  --danger-fg: 0 0% 100%;
+  --danger-text: 25 95% 64%;
+  --danger-subtle: 25 60% 13%;
+  --danger-border: 25 55% 36%;
+  --warning: 280 60% 48%;
+  --warning-fg: 0 0% 100%;
+  --warning-text: 280 70% 75%;
+  --warning-subtle: 280 40% 15%;
+  --warning-border: 280 40% 40%;
 }
-/* Tailwind'in sabit kırmızı/yeşil yardımcılarını da kaydır (status göstergeleri). */
+/* Tailwind'in sabit kırmızı/yeşil yardımcılarını da kaydır (status göstergeleri).
+   Rol token'ı kullanan yeni kod (text-success / text-danger…) buna ihtiyaç duymaz. */
 html.colorblind .text-red-600,
 html.colorblind .text-red-500,
-html.colorblind .text-destructive {
-  color: hsl(25 95% 50%) !important;
+html.colorblind .text-destructive,
+html.colorblind .text-danger {
+  color: hsl(var(--danger-text)) !important;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
@@ -871,7 +883,7 @@ html.colorblind .text-green-600,
 html.colorblind .text-green-500,
 html.colorblind .text-emerald-600,
 html.colorblind .text-emerald-500 {
-  color: hsl(205 90% 45%) !important;
+  color: hsl(var(--success-text)) !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -924,15 +936,6 @@ html.colorblind .text-emerald-500 {
   display: none !important;
 }
 
-/* Sayfa geçiş fade — styled-jsx yerine burada (SSR/hydration güvenli). */
-.qx-page-fade {
-  animation: qx-page-fade 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes qx-page-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 /* Landing reklam şeridi (AdMarquee) — sonsuz kayan; hover'da durur. */
 .qx-marquee-track {
   animation: qx-marquee 32s linear infinite;
@@ -946,8 +949,12 @@ html.colorblind .text-emerald-500 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qx-page-fade,
+  .qx-enter,
   .qx-marquee-track {
     animation: none;
   }
+}
+html.reduce-animations .qx-enter,
+html.reduce-animations .qx-marquee-track {
+  animation: none;
 }

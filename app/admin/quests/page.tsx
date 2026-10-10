@@ -1,45 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m as Motion } from 'framer-motion';
-import {
-  Target,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Clock,
-  Star,
-  CheckCircle,
-  XCircle,
-  Calendar,
-} from 'lucide-react';
+import { Target, Plus, Search, Edit, Trash2, Star, CheckCircle, XCircle, Calendar, Sparkles, Loader2 } from 'lucide-react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { toast } from '@/lib/admin-toast';
+import { ConfirmAction, QueryState, TONE_CHIP, type Tone } from '@/components/states';
+import { QuestForm } from './quest-form';
+import {
+  QUEST_TYPE_LABELS,
+  initialQuestForm,
+  normalizeQuestType,
+  questToFormValues,
+  toQuestPayload,
+  validateQuestPayload,
+  type QuestFormValues,
+} from './quest-form-model';
 
 interface Quest {
   id: string;
@@ -47,7 +35,7 @@ interface Quest {
   description: string;
   icon: string;
   type: string;
-  requirement: { type?: string; count?: number } | null;
+  requirement: { type?: string; count?: number; category?: string } | null;
   reward: { points?: number; xp?: number } | null;
   isActive: boolean;
   expiresAt: string | null;
@@ -56,504 +44,353 @@ interface Quest {
   };
 }
 
-const typeLabels: Record<string, string> = {
-  daily: 'Günlük',
-  weekly: 'Haftalık',
-  monthly: 'Aylık',
-  special: 'Özel',
+const TYPE_TONES: Record<keyof typeof QUEST_TYPE_LABELS, Tone> = {
+  daily: 'success',
+  weekly: 'info',
+  monthly: 'brand',
+  special: 'warning',
 };
 
-const typeColors: Record<string, string> = {
-  daily: 'bg-green-500/10 text-green-500 border-green-500/20',
-  weekly: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  monthly: 'border-primary/20 bg-primary/10 text-primary',
-  special: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-};
+async function readJson(res: Response): Promise<Record<string, unknown> | null> {
+  return (await res.json().catch(() => null)) as Record<string, unknown> | null;
+}
+
+function errorMessage(data: Record<string, unknown> | null, fallback: string): string {
+  return typeof data?.error === 'string' && data.error ? data.error : fallback;
+}
 
 export default function AdminQuestsPage() {
-  const [quests, setQuests] = useState<Quest[]>([]);
+  const [quests, setQuests] = useState<Quest[] | null>(null);
+  const [loadError, setLoadError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState<null | 'quests' | 'achievements'>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
-  
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    icon: '🎯',
-    type: 'daily',
-    target: 1,
-    reward: 50,
-    isActive: true,
-    expiresAt: '',
-    // Görev mekaniği: 'custom' (elle ilerletilir) veya 'visit_category'
-    // (müşteri ziyaret edince otomatik ilerler). category boş = herhangi işletme.
-    requirementType: 'custom',
-    category: '',
-  });
+  const [formData, setFormData] = useState<QuestFormValues>(initialQuestForm);
 
-  useEffect(() => {
-    fetchQuests();
-  }, []);
-
-  const fetchQuests = async () => {
+  const fetchQuests = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      setLoading(true);
-      const res = await fetch('/api/gamification/quests');
-      const data = await res.json();
-      
-      if (data.success) {
-        setQuests(data.data);
-      }
-    } catch (error) {
-      toast.error('Görevler yüklenemedi');
+      const res = await fetch('/api/gamification/quests', { cache: 'no-store' });
+      const data = await readJson(res);
+      if (!res.ok || !data?.success) throw new Error(errorMessage(data, 'Görevler yüklenemedi'));
+      setQuests(Array.isArray(data.data) ? (data.data as Quest[]) : []);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e : new Error('Görevler yüklenemedi'));
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void fetchQuests();
+  }, [fetchQuests]);
+
+  const resetForm = () => setFormData(initialQuestForm);
+
+  const closeDialogs = () => {
+    setCreateDialogOpen(false);
+    setEditDialogOpen(false);
+    setSelectedQuest(null);
+    resetForm();
   };
 
-  const handleCreate = async () => {
+  const submit = async (mode: 'create' | 'update') => {
+    if (mode === 'update' && !selectedQuest) return;
+    const payload = toQuestPayload(formData, { includeActive: mode === 'update' });
+    const invalid = validateQuestPayload(payload);
+    if (invalid) {
+      toast.error(invalid);
+      return;
+    }
+    setSaving(true);
     try {
-      const questData = {
-        name: formData.name,
-        description: formData.description,
-        icon: formData.icon,
-        type: formData.type,
-        requirement: {
-          type: formData.requirementType,
-          count: formData.target,
-          ...(formData.requirementType === 'visit_category' && formData.category.trim()
-            ? { category: formData.category.trim() }
-            : {}),
-        },
-        reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
-        expiresAt: formData.expiresAt || null,
-      };
-      
-      const res = await fetch('/api/gamification/quests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(questData),
-      });
-      
-      if (res.ok) {
-        toast.success('Görev oluşturuldu');
-        setCreateDialogOpen(false);
-        resetForm();
-        fetchQuests();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Görev oluşturulamadı');
+      const res = await fetch(
+        mode === 'create' ? '/api/gamification/quests' : `/api/gamification/quests/${encodeURIComponent(selectedQuest!.id)}`,
+        {
+          method: mode === 'create' ? 'POST' : 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await readJson(res);
+      if (!res.ok || data?.success === false) {
+        throw new Error(errorMessage(data, mode === 'create' ? 'Görev oluşturulamadı' : 'Görev güncellenemedi'));
       }
-    } catch (error) {
-      toast.error('Bir hata oluştu');
+      toast.success(mode === 'create' ? 'Görev oluşturuldu' : 'Görev güncellendi');
+      closeDialogs();
+      await fetchQuests();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Bir hata oluştu');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleUpdate = async () => {
-    if (!selectedQuest) return;
-    
-    try {
-      const questData = {
-        name: formData.name,
-        description: formData.description,
-        icon: formData.icon,
-        type: formData.type,
-        requirement: {
-          type: formData.requirementType,
-          count: formData.target,
-          ...(formData.requirementType === 'visit_category' && formData.category.trim()
-            ? { category: formData.category.trim() }
-            : {}),
-        },
-        reward: { points: formData.reward, xp: Math.floor(formData.reward / 2) },
-        expiresAt: formData.expiresAt || null,
-        isActive: formData.isActive,
-      };
-      
-      const res = await fetch(`/api/gamification/quests/${selectedQuest.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(questData),
-      });
-      
-      if (res.ok) {
-        toast.success('Görev güncellendi');
-        setEditDialogOpen(false);
-        setSelectedQuest(null);
-        resetForm();
-        fetchQuests();
-      } else {
-        toast.error('Görev güncellenemedi');
-      }
-    } catch (error) {
-      toast.error('Bir hata oluştu');
-    }
-  };
-
+  /** ConfirmAction içinden çağrılır: hata fırlatırsa diyalog açık kalır ve hata gösterilir. */
   const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/gamification/quests/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (res.ok) {
-        toast.success('Görev silindi');
-        fetchQuests();
-      } else {
-        toast.error('Görev silinemedi');
-      }
-    } catch (error) {
-      toast.error('Bir hata oluştu');
-    }
+    const res = await fetch(`/api/gamification/quests/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await readJson(res);
+    if (!res.ok || data?.success === false) throw new Error(errorMessage(data, 'Görev silinemedi'));
+    toast.success('Görev kaldırıldı');
+    await fetchQuests();
   };
 
-  const bootstrapQuests = async () => {
+  const seed = async (action: 'quests_defaults' | 'seed_achievements') => {
+    setSeeding(action === 'quests_defaults' ? 'quests' : 'achievements');
     try {
       const res = await fetch('/api/admin/bootstrap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'quests_defaults' }),
+        body: JSON.stringify({ action }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'G?revler olu?turulamad?');
-      toast.success(`${data.created ?? 0} varsay?lan g?rev haz?rland?`);
-      fetchQuests();
+      const data = await readJson(res);
+      if (!res.ok || !data?.success) {
+        throw new Error(errorMessage(data, action === 'quests_defaults' ? 'Görevler oluşturulamadı' : 'Başarımlar eklenemedi'));
+      }
+      toast.success(
+        action === 'quests_defaults'
+          ? `${typeof data.created === 'number' ? data.created : 0} varsayılan görev hazırlandı`
+          : 'Başarım görevleri eklendi'
+      );
+      await fetchQuests();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'G?revler haz?rlanamad?');
+      toast.error(e instanceof Error ? e.message : 'İşlem başarısız');
+    } finally {
+      setSeeding(null);
     }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      icon: '🎯',
-      type: 'daily',
-      target: 1,
-      reward: 50,
-      isActive: true,
-      expiresAt: '',
-      requirementType: 'custom',
-      category: '',
-    });
   };
 
   const openEditDialog = (quest: Quest) => {
     setSelectedQuest(quest);
-    setFormData({
-      name: quest.name,
-      description: quest.description,
-      icon: quest.icon || '🎯',
-      type: quest.type || 'daily',
-      target: quest.requirement?.count || 1,
-      reward: quest.reward?.points || 50,
-      isActive: quest.isActive,
-      expiresAt: quest.expiresAt ? new Date(quest.expiresAt).toISOString().split('T')[0] : '',
-      requirementType: quest.requirement?.type === 'visit_category' ? 'visit_category' : 'custom',
-      category: (quest.requirement as { category?: string } | null)?.category || '',
-    });
+    setFormData(questToFormValues(quest));
     setEditDialogOpen(true);
   };
 
-  const filteredQuests = quests.filter((quest) =>
-    quest.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredQuests = useMemo(() => {
+    if (!quests) return null;
+    const q = searchQuery.toLocaleLowerCase('tr-TR').trim();
+    if (!q) return quests;
+    return quests.filter((quest) => quest.name.toLocaleLowerCase('tr-TR').includes(q));
+  }, [quests, searchQuery]);
 
-  const QuestForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Görev Adı</Label>
-        <Input
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          placeholder="Örn: Günlük Geri Bildirim"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label>Açıklama</Label>
-        <Textarea
-          value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          placeholder="Görev açıklaması..."
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Tür</Label>
-          <Select
-            value={formData.type}
-            onValueChange={(value) => setFormData({ ...formData, type: value as Quest['type'] })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="DAILY">Günlük</SelectItem>
-              <SelectItem value="WEEKLY">Haftalık</SelectItem>
-              <SelectItem value="MONTHLY">Aylık</SelectItem>
-              <SelectItem value="SPECIAL">Özel</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Hedef</Label>
-          <Input
-            type="number"
-            value={formData.target}
-            onChange={(e) => setFormData({ ...formData, target: parseInt(e.target.value) || 1 })}
-            min={1}
-          />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Mekanik</Label>
-          <select
-            className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            value={formData.requirementType}
-            onChange={(e) => setFormData({ ...formData, requirementType: e.target.value })}
-          >
-            <option value="custom">Manuel (elle ilerletilir)</option>
-            <option value="visit_category">Ziyaret (otomatik — N farklı işletme)</option>
-          </select>
-        </div>
-        {formData.requirementType === 'visit_category' && (
-          <div className="space-y-2">
-            <Label>Kategori (opsiyonel)</Label>
-            <Input
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              placeholder="cafe (boş = herhangi)"
-            />
-          </div>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Ödül (Puan)</Label>
-          <Input
-            type="number"
-            value={formData.reward}
-            onChange={(e) => setFormData({ ...formData, reward: parseInt(e.target.value) || 0 })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Bitiş Tarihi (Opsiyonel)</Label>
-          <Input
-            type="date"
-            value={formData.expiresAt}
-            onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
-          />
-        </div>
-      </div>
-      <div className="flex items-center justify-between">
-        <Label>Aktif</Label>
-        <Switch
-          checked={formData.isActive}
-          onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-        />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={() => {
-          setCreateDialogOpen(false);
-          setEditDialogOpen(false);
-          resetForm();
-        }}>
-          İptal
-        </Button>
-        <Button onClick={onSubmit}>{submitLabel}</Button>
-      </DialogFooter>
-    </div>
-  );
+  const searching = searchQuery.trim().length > 0;
 
   return (
     <div className="space-y-6">
       <AdminPremiumHero
         title="Görev Yönetimi"
-        description="Gamification görevlerini oluşturun ve yönetin"
+        description="Oyunlaştırma görevlerini oluşturun ve yönetin"
         icon={<Target className="text-white" />}
       />
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col justify-between gap-4 sm:flex-row">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             placeholder="Görev ara..."
+            aria-label="Görev ara"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={bootstrapQuests}>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => void seed('quests_defaults')} disabled={seeding !== null}>
+            {seeding === 'quests' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             Varsayılan Görevleri Ekle
           </Button>
-          <Button variant="outline" className="gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10" onClick={async () => {
-            try {
-              const res = await fetch('/api/admin/bootstrap', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'seed_achievements' }),
-              });
-              const data = await res.json();
-              if (data.success) { toast.success('Başarım görevleri eklendi!'); fetchQuests(); }
-              else toast.error(data.error || 'İşlem başarısız.');
-            } catch { toast.error('Bağlantı hatası.'); }
-          }}>
-            ✨ Başarımları Ekle
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => void seed('seed_achievements')}
+            disabled={seeding !== null}
+          >
+            {seeding === 'achievements' ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Sparkles className="h-4 w-4 text-warning" aria-hidden />
+            )}
+            Başarımları Ekle
           </Button>
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <Dialog
+            open={createDialogOpen}
+            onOpenChange={(open) => {
+              if (open) resetForm();
+              setCreateDialogOpen(open);
+            }}
+          >
             <DialogTrigger asChild>
               <Button className="gap-2">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4" aria-hidden />
                 Yeni Görev
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Yeni Görev Oluştur</DialogTitle>
-                <DialogDescription>
-                  Kullanıcıların tamamlayabileceği yeni bir görev oluşturun
-                </DialogDescription>
+                <DialogDescription>Kullanıcıların tamamlayabileceği yeni bir görev oluşturun</DialogDescription>
               </DialogHeader>
-              <QuestForm onSubmit={handleCreate} submitLabel="Oluştur" />
+              <QuestForm
+                idPrefix="quest-create"
+                value={formData}
+                onChange={setFormData}
+                onSubmit={() => void submit('create')}
+                onCancel={closeDialogs}
+                submitLabel="Oluştur"
+                saving={saving}
+                showActiveToggle={false}
+              />
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
       {/* Quests Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} glass>
-              <CardContent className="p-6">
-                <div className="animate-pulse space-y-4">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                  <div className="h-2 bg-muted rounded w-full" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : filteredQuests.length === 0 ? (
-        <Card glass>
-          <CardContent className="p-8 text-center">
-            <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Görev bulunamadı</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredQuests.map((quest, index) => (
-            <Motion.div
-              key={quest.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(index, 10) * 0.05 }}
-            >
-              <Card glass hover className="group">
-                <CardContent className="p-6 space-y-4">
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Target className="h-5 w-5 text-primary" />
+      <QueryState
+        query={{ data: filteredQuests, error: loadError, isLoading: loading && !quests, refetch: fetchQuests }}
+        skeleton="cards"
+        loadingLabel="Görevler yükleniyor"
+        empty={
+          searching
+            ? { variant: 'no-results', title: 'Aramanızla eşleşen görev yok', description: 'Farklı bir görev adı deneyin.' }
+            : {
+                variant: 'first-use',
+                title: 'Henüz görev yok',
+                description: '“Yeni Görev” ile ilk görevi oluşturun ya da varsayılan görevleri ekleyin.',
+              }
+        }
+      >
+        {(list) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {list.map((quest, index) => {
+              const typeKey = normalizeQuestType(quest.type);
+              const participants = quest._count?.users || 0;
+              return (
+                <Motion.div
+                  key={quest.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index, 10) * 0.05 }}
+                >
+                  <Card glass hover className="group">
+                    <CardContent className="space-y-4 p-6">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="rounded-lg bg-primary/10 p-2" aria-hidden>
+                            <Target className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold">{quest.name}</h3>
+                            <Badge className={`border-transparent ${TONE_CHIP[typeKey ? TYPE_TONES[typeKey] : 'neutral']}`}>
+                              {typeKey ? QUEST_TYPE_LABELS[typeKey] : quest.type || 'Tür yok'}
+                            </Badge>
+                          </div>
+                        </div>
+                        {quest.isActive ? (
+                          <CheckCircle className="h-5 w-5 shrink-0 text-success" aria-label="Aktif" />
+                        ) : (
+                          <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" aria-label="Pasif" />
+                        )}
                       </div>
-                      <div>
-                        <h3 className="font-semibold">{quest.name}</h3>
-                        <Badge className={typeColors[quest.type]}>
-                          {typeLabels[quest.type]}
-                        </Badge>
+
+                      {/* Description */}
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{quest.description}</p>
+
+                      {/* Target */}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Hedef</span>
+                        <span className="font-medium tabular-nums">{quest.requirement?.count || 1}</span>
                       </div>
-                    </div>
-                    {quest.isActive ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
 
-                  {/* Description */}
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {quest.description}
-                  </p>
+                      {/* Stats */}
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-1 text-warning">
+                          <Star className="h-4 w-4" aria-hidden />
+                          <span className="tabular-nums">{quest.reward?.points || 0} puan</span>
+                        </div>
+                        <span className="text-muted-foreground tabular-nums">{participants} katılımcı</span>
+                      </div>
 
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Hedef</span>
-                      <span className="font-medium">{quest.requirement?.count || 1}</span>
-                    </div>
-                    <Progress value={0} className="h-2" />
-                  </div>
+                      {/* Expiry */}
+                      {quest.expiresAt && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" aria-hidden />
+                          <span>Bitiş: {new Date(quest.expiresAt).toLocaleDateString('tr-TR')}</span>
+                        </div>
+                      )}
 
-                  {/* Stats */}
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1 text-yellow-500">
-                      <Star className="h-4 w-4" />
-                      <span>{quest.reward?.points || 0} puan</span>
-                    </div>
-                    <span className="text-muted-foreground">
-                      {quest._count?.users || 0} katılımcı
-                    </span>
-                  </div>
-
-                  {/* Expiry */}
-                  {quest.expiresAt && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Bitiş: {new Date(quest.expiresAt).toLocaleDateString('tr-TR')}</span>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => openEditDialog(quest)}
-                    >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Düzenle
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(quest.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </Motion.div>
-          ))}
-        </div>
-      )}
+                      {/* Actions — her zaman görünür (dokunmatikte görünmez-ama-tıklanabilir buton yok) */}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => openEditDialog(quest)}>
+                          <Edit className="mr-2 h-4 w-4" aria-hidden />
+                          Düzenle
+                        </Button>
+                        <ConfirmAction
+                          trigger={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              aria-label={`${quest.name} görevini kaldır`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </Button>
+                          }
+                          title="Görev kaldırılsın mı?"
+                          description="Görev müşteri listesinden kalkar. Kullanıcıların bu görevdeki ilerlemesi etkilenebilir."
+                          impact={[
+                            { label: 'Görev', value: quest.name },
+                            { label: 'Katılımcı', value: participants, emphasis: participants > 0 },
+                          ]}
+                          confirmPhrase={participants > 0 ? quest.name : undefined}
+                          confirmLabel="Görevi kaldır"
+                          onConfirm={() => handleDelete(quest.id)}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Motion.div>
+              );
+            })}
+          </div>
+        )}
+      </QueryState>
 
       {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeDialogs();
+          else setEditDialogOpen(true);
+        }}
+      >
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Görev Düzenle</DialogTitle>
-            <DialogDescription>
-              {selectedQuest?.name} görevini düzenleyin
-            </DialogDescription>
+            <DialogDescription>{selectedQuest?.name} görevini düzenleyin</DialogDescription>
           </DialogHeader>
-          <QuestForm onSubmit={handleUpdate} submitLabel="Güncelle" />
+          {selectedQuest ? (
+            <QuestForm
+              key={selectedQuest.id}
+              idPrefix="quest-edit"
+              value={formData}
+              onChange={setFormData}
+              onSubmit={() => void submit('update')}
+              onCancel={closeDialogs}
+              submitLabel="Güncelle"
+              saving={saving}
+              showActiveToggle
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
   );
 }
-
-
-
-

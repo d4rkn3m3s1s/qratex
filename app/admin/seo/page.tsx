@@ -44,6 +44,8 @@ import {
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { SeoGlobalSettings, SeoPageOverride, SeoSettingsPayload, ExtraSitemapEntry } from '@/lib/seo-settings';
+import { isHttpUrl, validateSeoGlobalUrls } from '@/lib/seo-url';
+import { InlineError } from '@/components/states';
 
 type AuditEntry = {
   id: string;
@@ -89,6 +91,13 @@ export default function AdminSeoPage() {
 
   const save = async () => {
     if (!payload) return;
+    // P0-39: boş/bozuk Site URL bütün siteyi çökertiyordu — sunucu da reddeder,
+    // ama admin'i kayıttan önce alanın yanında uyar.
+    const urlError = validateSeoGlobalUrls(payload.global);
+    if (urlError) {
+      toast.error(urlError);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/admin/seo', {
@@ -213,6 +222,8 @@ export default function AdminSeoPage() {
   }
 
   const g = payload.global;
+  const urlError = validateSeoGlobalUrls(g);
+  const siteUrlError = isHttpUrl(g.siteUrl) ? null : urlError;
   const visibleChecks = showOnlyFailedChecks ? healthChecks.filter((check) => !check.passed) : healthChecks;
 
   return (
@@ -222,7 +233,7 @@ export default function AdminSeoPage() {
         description="Site başlığı, açıklama, Open Graph, JSON-LD, robots ve sitemap ayarları"
       />
       <div className="flex flex-wrap items-center gap-2 justify-end">
-        {g.siteUrl && (
+        {isHttpUrl(g.siteUrl) && (
           <Button variant="outline" size="sm" asChild>
             <a href={g.siteUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
               <ExternalLink className="h-4 w-4" />
@@ -238,7 +249,12 @@ export default function AdminSeoPage() {
           <Upload className="h-4 w-4" />
           İçe aktar
         </Button>
-        <Button onClick={save} disabled={saving} className="gap-2">
+        <Button
+          onClick={save}
+          disabled={saving || Boolean(urlError)}
+          title={urlError ?? undefined}
+          className="gap-2"
+        >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Kaydet
         </Button>
@@ -420,12 +436,21 @@ export default function AdminSeoPage() {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Site URL</Label>
+                  <Label htmlFor="seo-site-url">
+                    Site URL <span className="text-danger" aria-hidden>*</span>
+                  </Label>
                   <Input
+                    id="seo-site-url"
+                    type="url"
+                    inputMode="url"
+                    required
                     value={g.siteUrl}
                     onChange={(e) => updateGlobal({ siteUrl: e.target.value })}
                     placeholder="https://qratex.com"
+                    error={Boolean(siteUrlError)}
+                    errorId="seo-site-url-error"
                   />
+                  <InlineError id="seo-site-url-error">{siteUrlError}</InlineError>
                 </div>
                 <div className="space-y-2">
                   <Label>Canonical base (boş = site URL)</Label>
@@ -443,6 +468,7 @@ export default function AdminSeoPage() {
                   onChange={(e) => updateGlobal({ ogImageUrl: e.target.value })}
                   placeholder="https://..."
                 />
+                {urlError && !siteUrlError ? <InlineError>{urlError}</InlineError> : null}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">

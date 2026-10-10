@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useRef } from 'react';
 import { m as Motion } from 'framer-motion';
 import {
   Brain,
@@ -35,6 +35,10 @@ import { toast } from '@/lib/admin-toast';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import Link from 'next/link';
 import { useAppT } from '@/lib/app-locale';
+import { ErrorState, classifyError } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
+import { diffFields, fetchResourceJson, requireVersion, saveVersioned } from '@/lib/versioned-resource';
+import { useVersionedDraft, useVersionedResource } from '@/hooks/use-versioned-resource';
 
 interface AISettingsState {
   isEnabled: boolean;
@@ -57,26 +61,6 @@ interface AISettingsState {
   customPrompt: string | null;
 }
 
-const defaultSettings: AISettingsState = {
-  isEnabled: true,
-  autoAnalyze: true,
-  analysisLanguage: 'tr',
-  sentimentEnabled: true,
-  emotionEnabled: true,
-  topicEnabled: true,
-  intentEnabled: true,
-  urgencyEnabled: true,
-  entityEnabled: true,
-  toxicityEnabled: true,
-  churnEnabled: true,
-  themeClusterEnabled: true,
-  weeklyReportEnabled: true,
-  monthlyReportEnabled: true,
-  alertOnToxic: true,
-  alertOnUrgent: true,
-  alertOnChurnRisk: true,
-  customPrompt: null,
-};
 
 const analysisFeatures = [
   { key: 'sentimentEnabled', icon: MessageSquare, color: 'text-blue-500' },
@@ -125,61 +109,138 @@ function DailyChart({ data, t }: { data: { date: string; label: string; count: n
   );
 }
 
+type AIStats = {
+  analyzedFeedbackCount: number;
+  analyzedLast24h: number;
+  usageLogsLast7d: number;
+  embeddingsCount: number;
+  correctionsCount: number;
+  learningProfile: { status: string; trainingFeedbackCount: number; correctionsUsed: number; lastTrainedAt: string | null } | null;
+};
+type DailyPoint = { date: string; label: string; count: number };
+type AISettingsResource = { settings: AISettingsState; stats: AIStats | null; dailyAnalyzed: DailyPoint[] };
+
+async function loadAISettings(): Promise<{ data: AISettingsResource; version: string }> {
+  const body = await fetchResourceJson('/api/dealer/ai-settings', 'Ayarlar yüklenemedi');
+  if (!body.settings || typeof body.settings !== 'object') throw new Error('Ayarlar beklenen biçimde gelmedi');
+  return {
+    data: {
+      settings: body.settings as AISettingsState,
+      stats: (body.stats as AIStats | undefined) ?? null,
+      dailyAnalyzed: Array.isArray(body.dailyAnalyzed) ? (body.dailyAnalyzed as DailyPoint[]) : [],
+    },
+    version: requireVersion(body),
+  };
+}
+
+function SettingsSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-busy="true">
+      <div className="h-36 rounded-2xl bg-muted/50 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-24 rounded-xl bg-muted/50 animate-pulse" />
+        ))}
+      </div>
+      <div className="h-40 rounded-xl bg-muted/50 animate-pulse" />
+    </div>
+  );
+}
+
+/**
+ * P0-28: ayarlar YALNIZ sunucudan + sürümle başarıyla yüklendiğinde düzenlenebilir. Yükleme
+ * hatası "hepsi açık, özel prompt boş" bir form olarak görünmez; kaydetme yalnız değişen
+ * alanları `baseVersion` ile gönderir (çakışmada 409 bandı).
+ */
 export default function DealerAISettingsPage() {
   const t = useAppT();
-  const [settings, setSettings] = useState<AISettingsState>(defaultSettings);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [stats, setStats] = useState<{
-    analyzedFeedbackCount: number;
-    analyzedLast24h: number;
-    usageLogsLast7d: number;
-    embeddingsCount: number;
-    correctionsCount: number;
-    learningProfile: { status: string; trainingFeedbackCount: number; correctionsUsed: number; lastTrainedAt: string | null } | null;
-  } | null>(null);
-  const [dailyAnalyzed, setDailyAnalyzed] = useState<{ date: string; label: string; count: number }[]>([]);
+  const resource = useVersionedResource<AISettingsResource>(loadAISettings);
 
-  const fetchData = async () => {
-    try {
-      const res = await fetch('/api/dealer/ai-settings');
-      const data = await res.json();
-      if (data.settings) setSettings(data.settings);
-      if (data.stats) setStats(data.stats);
-      if (data.dailyAnalyzed) setDailyAnalyzed(data.dailyAnalyzed);
-    } catch (e) {
-      console.error('Failed to fetch AI settings:', e);
-      toast.error(t('dealerAiSettings.toastLoadFailed'));
-    } finally {
-      setLoading(false);
+  if (resource.status === 'ready' && resource.data && resource.version) {
+    return (
+      <DealerAISettingsEditor
+        key={resource.loadId}
+        initial={resource.data.settings}
+        initialVersion={resource.version}
+        stats={resource.data.stats}
+        dailyAnalyzed={resource.data.dailyAnalyzed}
+        onReload={resource.reload}
+        onCommitted={(settings, version) => resource.commit({ ...resource.data!, settings }, version)}
+      />
+    );
+  }
+
+  if (resource.status === 'error') {
+    return (
+      <ErrorState
+        kind={classifyError(resource.error)}
+        title={t('dealerAiSettings.toastLoadFailed')}
+        onRetry={resource.reload}
+      />
+    );
+  }
+
+  return <SettingsSkeleton />;
+}
+
+function DealerAISettingsEditor({
+  initial,
+  initialVersion,
+  stats,
+  dailyAnalyzed,
+  onReload,
+  onCommitted,
+}: {
+  initial: AISettingsState;
+  initialVersion: string;
+  stats: AIStats | null;
+  dailyAnalyzed: DailyPoint[];
+  onReload: () => unknown;
+  onCommitted: (settings: AISettingsState, version: string) => void;
+}) {
+  const t = useAppT();
+  const baselineRef = useRef<AISettingsState>(initial);
+  const request = useCallback(
+    (draft: AISettingsState, baseVersion: string) =>
+      // Yalnız DEĞİŞEN alanlar gönderilir; dokunulmamış alan (ör. özel prompt) asla ezilmez.
+      saveVersioned(
+        '/api/dealer/ai-settings',
+        'PATCH',
+        { ...diffFields(baselineRef.current as unknown as Record<string, unknown>, draft as unknown as Record<string, unknown>), baseVersion },
+        t('dealerAiSettings.toastSaveFailed')
+      ),
+    [t]
+  );
+  const parse = useCallback((body: Record<string, unknown>) => {
+    const saved = (body.settings ?? {}) as Record<string, unknown>;
+    const next = {} as AISettingsState;
+    for (const key of Object.keys(baselineRef.current) as Array<keyof AISettingsState>) {
+      (next as unknown as Record<string, unknown>)[key] = key in saved ? saved[key] : baselineRef.current[key];
     }
-  };
-
-  useEffect(() => {
-    fetchData();
+    return { data: next, version: requireVersion(body) };
   }, []);
-
-  const saveSettings = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/dealer/ai-settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(t('dealerAiSettings.toastSaved'));
-        fetchData();
-      } else {
-        toast.error(t('dealerAiSettings.toastSaveFailed'));
-      }
-    } catch (e) {
+  const onSaved = useCallback(
+    (next: AISettingsState, version: string) => {
+      baselineRef.current = next;
+      onCommitted(next, version);
+      toast.success(t('dealerAiSettings.toastSaved'));
+    },
+    [onCommitted, t]
+  );
+  const onError = useCallback(
+    (e: unknown) => {
       console.error('Failed to save settings:', e);
-      toast.error(t('dealerAiSettings.toastGenericError'));
-    } finally {
-      setSaving(false);
-    }
+      toast.error(e instanceof Error && e.message ? e.message : t('dealerAiSettings.toastGenericError'));
+    },
+    [t]
+  );
+  const form = useVersionedDraft<AISettingsState>({ initial, initialVersion, request, parse, onSaved, onError });
+  const settings = form.draft;
+  const setSettings = form.setDraft;
+  const saving = form.saving;
+
+  const saveSettings = () => {
+    void form.save();
   };
 
   const sentimentSubLayers = ['emotionEnabled', 'intentEnabled', 'urgencyEnabled'];
@@ -203,20 +264,6 @@ export default function DealerAISettingsPage() {
   };
 
   const enabledCount = analysisFeatures.filter((f) => settings[f.key as keyof AISettingsState]).length;
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-36 rounded-2xl bg-muted/50 animate-pulse" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-muted/50 animate-pulse" />
-          ))}
-        </div>
-        <div className="h-40 rounded-xl bg-muted/50 animate-pulse" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 pb-8">
@@ -244,18 +291,26 @@ export default function DealerAISettingsPage() {
               variant="outline"
               size="sm"
               type="button"
-              onClick={fetchData}
+              onClick={() => void onReload()}
               className="border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/35 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
             >
               <RefreshCw className="h-4 w-4 mr-2" /> {t('dealerAiSettings.refresh')}
             </Button>
-            <Button type="button" onClick={saveSettings} disabled={saving}>
+            <Button type="button" onClick={saveSettings} disabled={saving || !form.dirty}>
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               {saving ? t('dealerAiSettings.saving') : t('dealerAiSettings.save')}
             </Button>
           </>
         }
       />
+
+      {form.conflict && (
+        <VersionConflictBanner
+          message={form.conflict.message}
+          onReload={onReload}
+          onOverwrite={form.conflict.currentVersion ? () => form.save({ overwrite: true }) : undefined}
+        />
+      )}
 
       {/* Stats */}
       {stats && (
@@ -537,9 +592,9 @@ export default function DealerAISettingsPage() {
         </Card>
       </Motion.div>
 
-      {/* AI Learning link */}
+      {/* AI Learning link — öğrenme profili kartı /dealer/ai-insights sayfasında (/dealer/ai-learning rotası yok) */}
       <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.65 }}>
-        <Link href="/dealer/ai-learning">
+        <Link href="/dealer/ai-insights">
           <Card className="cursor-pointer border border-border/60 border-l-4 border-l-primary shadow-md transition-shadow hover:shadow-lg">
             <CardContent className="flex items-center justify-between p-4">
               <div className="flex items-center gap-3">
@@ -557,7 +612,7 @@ export default function DealerAISettingsPage() {
 
       {/* Save Button */}
       <Motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }} className="flex justify-end">
-        <Button onClick={saveSettings} disabled={saving} size="lg">
+        <Button onClick={saveSettings} disabled={saving || !form.dirty} size="lg">
           {saving ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
           {saving ? t('dealerAiSettings.saving') : t('dealerAiSettings.saveFooter')}
         </Button>

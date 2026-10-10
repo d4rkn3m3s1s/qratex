@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { INPUT_LIMITS } from '@/lib/input-limits';
+import { pointsMatrixSchema } from '@/lib/points-matrix-schema';
 
 // ─────────────────────────────────────────────────────────────
 // LIST QUERY DEFAULTS (K1: merkezi sayfalama/arama)
@@ -82,10 +83,15 @@ export const adminWebhookCreateSchema = z.object({
   events: z.array(z.string()).optional(),
 });
 
-/** PUT /api/admin/settings/points-matrix */
-export const adminPointsMatrixPutSchema = z.object({
-  matrix: z.unknown(),
-});
+/**
+ * PUT /api/admin/settings/points-matrix — P0-21: matris TAM ve alan bazlı üst sınırlı
+ * (lib/points-matrix-schema.ts). `baseVersion` vb. ek alanlar korunur (passthrough).
+ */
+export const adminPointsMatrixPutSchema = z
+  .object({
+    matrix: pointsMatrixSchema,
+  })
+  .passthrough();
 
 /** PUT /api/admin/discovery */
 export const adminDiscoveryPutSchema = z.object({

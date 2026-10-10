@@ -7,6 +7,8 @@ import { Prisma } from '@prisma/client';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { sanitizeHexColor } from '@/lib/badge-colors';
 import { trackabilityOf } from '@/lib/badge-trackability';
+import { resolveSubjectUserId } from '@/lib/auth/subject-user';
+import { archivedListFilter } from '@/lib/data-safety/archive';
 
 
 export const dynamic = 'force-dynamic';
@@ -78,20 +80,29 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const { searchParams } = new URL(request.url);
-    const userIdParam = searchParams.get('userId');
     const category = searchParams.get('category');
 
-    // If userId is 'me', use session user
-    const userId = userIdParam === 'me' && session?.user?.id
-      ? session.user.id
-      : userIdParam;
+    // P0-09: `?userId=` yalnız `me` (oturumlu) ya da ADMIN için. Eski kod oturumsuz
+    // `?userId=<başkası>` ile başkasının puan/seviye/rozet profilini döndürüyordu.
+    const subject = resolveSubjectUserId(session, searchParams.get('userId'));
+    if (!subject.ok) {
+      return NextResponse.json(
+        { success: false, error: subject.error, code: subject.code },
+        { status: subject.status, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const userId = subject.userId;
 
     // ADMIN yönetim modu: ?admin=1 ile YALNIZCA admin, karakter (dizi) rozetlerini de
     // ve arşivli (isActive:false) rozetleri de görür/yönetir. Müşteriye asla açılmaz.
     const isAdmin = session?.user?.role === 'ADMIN';
     const adminManage = isAdmin && searchParams.get('admin') === '1';
 
-    const where: Record<string, unknown> = adminManage ? {} : { isActive: true };
+    // Arşivlenmiş ("silinmiş") rozet (P0-26) müşteriye hiç, admin'e yalnız `?archived=only|include`
+    // ile görünür.
+    const where: Record<string, unknown> = adminManage
+      ? { ...archivedListFilter(request) }
+      : { isActive: true, archivedAt: null };
 
     if (category) {
       where.category = normalizeBadgeCategory(category);

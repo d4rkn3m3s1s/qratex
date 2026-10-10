@@ -69,6 +69,14 @@ model CustomerMoment {
 
 - `level:<to>` · `league:<toKey>` (bir lige İLK girişte, ömür boyu bir kez) · `badge:<badgeId>`
 
+> **Not (2026-10-08, şema bekçisi — yol haritası §5.3):** Lig anahtarı **sezonlu** yazılmalı:
+> `league:<seasonKey>:<toKey>`. F4.4'te lig sezon XP'ye geçip her sezon sıfırlandığında ömür
+> boyu `league:<toKey>` anahtarı ikinci sezondan itibaren bütün lig kutlamalarını susturur.
+> Sezon kavramı gelene kadar `seasonKey = "all"` kullanılır (`league:all:<toKey>`), böylece
+> bugünkü "ömür boyu bir kez" davranışı korunur ve F4.4'te yalnız `seasonKey` üreticisi değişir.
+> Tablo şema penceresi #1'de oluşturuldu: `prisma/migrations/20261008000000_platform_overhaul_expand`
+> (spec'teki ayrı `<ts>_customer_moments` göçü **yazılmayacak**).
+
 ### Yakalama
 
 `lib/moments/server.ts`:

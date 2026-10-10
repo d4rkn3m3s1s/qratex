@@ -1,94 +1,101 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { resolveDealerScope, scopeErrorResponse } from '@/lib/auth/scope';
+import { maskEmail } from '@/lib/http/dto';
+import {
+  DEALER_SEGMENT_COLOR,
+  DEALER_SEGMENT_NAME,
+  churnBucketOf,
+  countDealerCustomers,
+  getDealerCustomerStats,
+  type DealerStatsSort,
+} from '@/lib/dealer-customer-stats';
+import { createHmac } from 'crypto';
 
 export const dynamic = 'force-dynamic';
 
+/** Müşteri için bayiye özgü, geri çevrilemez liste referansı (ham id sızmaz). */
+function customerRef(dealerId: string, customerId: string): string {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'qratex-customer-ref';
+  return 'c_' + createHmac('sha256', secret).update(`${dealerId}:${customerId}`).digest('hex').slice(0, 16);
+}
+
 /**
  * GET /api/dealer/customers
- * Bu bayiyle tüketimi olan müşterilerin CLV özetini (toplam harcama, ziyaret,
- * churn riski, segment) döndürür. CustomerLifetimeValue (cron ile hesaplanan)
- * verisini gerçek bir okuma yüzeyine bağlar. ?sort=spend|churn, ?limit=.
+ * Bu işletmenin müşterileri — harcama, ziyaret, son ziyaret, kayıp riski ve segment YALNIZ BU
+ * İŞLETMENİN verisinden (P0-12). ?sort=spend|churn|recent, ?limit=.
+ *
+ * Eski uç platform geneli `CustomerLifetimeValue`'yu döndürüyordu: bayi müşterinin RAKİP
+ * işletmelerdeki harcamasını, son alışverişini, global segmentini ve platform güven skorunu
+ * görüyordu (STAFF dahil). Artık:
+ *  - Kaynak `DealerCustomerStats` (kiracı kapsamlı; cron) → yoksa canlı bayi kapsamlı hesap.
+ *  - Güven skoru (platform geneli dolandırıcılık sinyali) dönmez; yalnız kaba "güvenilir" rozeti.
+ *  - Kapsam `resolveDealerScope`: STAFF yalnız AKTİF bağlı olduğu işletme; e-posta personele maskeli.
  */
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(['DEALER', 'ADMIN', 'STAFF']);
     if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    let dealerId: string;
-    if (session.user.role === 'STAFF') {
-      const staffDealer = getStaffDealerId(session);
-      if (staffDealer instanceof NextResponse) return staffDealer;
-      dealerId = staffDealer;
-    } else if (session.user.role === 'ADMIN') {
-      const qp = new URL(request.url).searchParams.get('dealerId');
-      if (!qp) {
-        return NextResponse.json(
-          { error: 'Admin için dealerId query gerekli' },
-          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-      dealerId = qp;
-    } else {
-      dealerId = session.user.id;
-    }
 
     const sp = new URL(request.url).searchParams;
-    const sort = sp.get('sort') === 'churn' ? 'churn' : 'spend';
+    const scope = await resolveDealerScope(auth.session, { dealerId: sp.get('dealerId') });
+    if (!scope.ok) return scopeErrorResponse(scope);
+    const dealerId = scope.dealerId;
+
+    const sortParam = sp.get('sort');
+    const sort: DealerStatsSort = sortParam === 'churn' ? 'churn' : sortParam === 'recent' ? 'recent' : 'spend';
     const limit = Math.min(Math.max(Number(sp.get('limit')) || 50, 1), 200);
 
-    // Bu bayiyle tüketimi olan benzersiz müşteri id'leri.
-    const customerRows = await prisma.consumption.groupBy({
-      by: ['customerId'],
-      where: { dealerId },
-      _count: { _all: true },
-    });
-    const customerIds = customerRows.map((r) => r.customerId);
-    if (customerIds.length === 0) {
-      return NextResponse.json({ customers: [], count: 0 }, { headers: PRIVATE_NO_STORE_HEADERS });
+    const [{ stats, source, calculatedAt }, total] = await Promise.all([
+      getDealerCustomerStats(dealerId, { sort, limit }),
+      countDealerCustomers(dealerId),
+    ]);
+    if (stats.length === 0) {
+      return NextResponse.json({ customers: [], count: 0, total: 0 }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const clvRows = await prisma.customerLifetimeValue.findMany({
-      where: { userId: { in: customerIds } },
-      select: {
-        userId: true,
-        totalSpent: true,
-        totalVisits: true,
-        avgOrderValue: true,
-        lastPurchaseAt: true,
-        predictedChurn: true,
-        churnRisk: true,
-        calculatedAt: true,
-        user: { select: { name: true, email: true, image: true, trustScore: true, trustTier: true } },
-        segment: { select: { name: true, color: true } },
-      },
-      orderBy: sort === 'churn' ? { predictedChurn: 'desc' } : { totalSpent: 'desc' },
-      take: limit,
+    const users = await prisma.user.findMany({
+      where: { id: { in: stats.map((s) => s.customerId) } },
+      select: { id: true, name: true, email: true, image: true, trustTier: true },
+    });
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const revealEmail = scope.actorRole !== 'STAFF';
+
+    const customers = stats.map((s) => {
+      const u = userById.get(s.customerId);
+      return {
+        ref: customerRef(dealerId, s.customerId),
+        name: u?.name ?? null,
+        email: u?.email ? (revealEmail ? u.email : maskEmail(u.email)) : null,
+        image: u?.image ?? null,
+        totalSpent: s.totalSpend,
+        totalVisits: s.visitCount,
+        avgOrderValue: Number(s.avgOrderValue.toFixed(2)),
+        lastPurchaseAt: s.lastVisitAt,
+        predictedChurn: s.churnRisk,
+        churnRisk: churnBucketOf(s.churnRisk),
+        reviewCount: s.reviewCount,
+        avgRating: s.avgRating,
+        segment: s.segmentKey
+          ? { name: DEALER_SEGMENT_NAME[s.segmentKey], color: DEALER_SEGMENT_COLOR[s.segmentKey] }
+          : null,
+        // Platform güven skoru bayiye verilmez; yalnız "güvenilir" kaba rozeti.
+        trustScore: null,
+        trustTier: u?.trustTier === 'trusted' ? 'trusted' : null,
+        calculatedAt: calculatedAt,
+      };
     });
 
-    const customers = clvRows.map((c) => ({
-      // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik). Liste anahtarı için
-      // kararlı ama geri döndürülemez kısa bir referans üretilir.
-      ref: `c_${c.userId.slice(-8)}`,
-      name: c.user.name,
-      email: c.user.email,
-      image: c.user.image,
-      totalSpent: c.totalSpent,
-      totalVisits: c.totalVisits,
-      avgOrderValue: Number(c.avgOrderValue.toFixed(2)),
-      lastPurchaseAt: c.lastPurchaseAt,
-      predictedChurn: c.predictedChurn,
-      churnRisk: c.churnRisk,
-      segment: c.segment ? { name: c.segment.name, color: c.segment.color } : null,
-      trustScore: c.user.trustScore,
-      trustTier: c.user.trustTier,
-      calculatedAt: c.calculatedAt,
-    }));
-
     return NextResponse.json(
-      { customers, count: customers.length, note: clvRows.length === 0 ? 'CLV henüz hesaplanmadı (günlük cron)' : undefined },
+      {
+        customers,
+        count: customers.length,
+        total,
+        source,
+        note: source === 'live' ? 'Özet günlük olarak yenilenir; şu an anlık hesaplanan değerler gösteriliyor.' : undefined,
+      },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (error) {

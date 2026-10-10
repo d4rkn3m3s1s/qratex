@@ -1,12 +1,17 @@
 /**
  * Voice of Customer wall (madde 50): şube içi canlı müşteri sesi panosu.
  * GET: son feedback'ler, özet metrikler, sentiment/rating dağılımı, günlük trend.
+ *
+ * P0-35: duvar mağaza TV'sinde herkese açık gösterilir → yalnız yayınlanabilir yorumlar
+ * (toksik/güven-işaretli/sahte değil, denetimden geçmiş) ve MASKELENMİŞ adlar döner.
+ * Politika: ./wall-policy.ts
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS, clampTakeParam } from '@/lib/api-http';
+import { containsBlockedLanguage, maskCustomerName, toWallText, wallEligibleWhere } from './wall-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,21 +38,23 @@ export async function GET(request: NextRequest) {
 
   // REDIS CACHE: 7 ağır sorgu (5000 satırlık 7-gün taraması dahil) → bayi+limit başına 45s. Redis yoksa DB.
   const { redisGetJson, redisSetJson } = await import('@/lib/redis');
-  const cacheKey = `voc-wall:${dealerId}:${limit}`;
+  // v2: maskesiz/filtresiz eski önbellek kayıtları yeni sürümden sonra servis edilmesin.
+  const cacheKey = `voc-wall:v2:${dealerId}:${limit}`;
   const cachedVoc = await redisGetJson<object>(cacheKey);
   if (cachedVoc) return NextResponse.json(cachedVoc, { headers: PRIVATE_NO_STORE_HEADERS });
 
   const baseWhere = { qrCode: { dealerId }, deletedAt: null };
-  const publicWhere = { ...baseWhere, isPublic: true };
+  const wallWhere = wallEligibleWhere(dealerId);
 
   const last24h = new Date();
   last24h.setHours(last24h.getHours() - 24);
 
   const [recent, stats, countLast24h, sentimentAgg, ratingAgg, recent7dFeedbacks, totalPublic] = await Promise.all([
     prisma.feedback.findMany({
-      where: publicWhere,
+      where: wallWhere,
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      // Yerel sözlük süzgeci birkaç kaydı eleyebilir → biraz fazla çek, sonra kes.
+      take: Math.min(limit * 2, 200),
       select: {
         id: true,
         rating: true,
@@ -57,7 +64,7 @@ export async function GET(request: NextRequest) {
         topics: true,
         themes: true,
         createdAt: true,
-        user: { select: { name: true } },
+        user: { select: { name: true, anonymizedAt: true } },
         qrCode: { select: { name: true } },
       },
     }),
@@ -69,14 +76,16 @@ export async function GET(request: NextRequest) {
     prisma.feedback.count({
       where: { ...baseWhere, createdAt: { gte: last24h } },
     }),
+    // Dağılımlar içerik değil, sayım: tüm (silinmemiş) geri bildirimler üzerinden — toksik
+    // olumsuzları gizlemek tabloyu olduğundan iyi gösterirdi.
     prisma.feedback.groupBy({
       by: ['sentiment'],
-      where: publicWhere,
+      where: baseWhere,
       _count: true,
     }),
     prisma.feedback.groupBy({
       by: ['rating'],
-      where: publicWhere,
+      where: baseWhere,
       _count: true,
     }),
     // Son 7 günlük geri bildirim sayıları: feedback createdAt'leri alıp JS'te grupla
@@ -86,7 +95,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: 5000,
     }),
-    prisma.feedback.count({ where: publicWhere }),
+    prisma.feedback.count({ where: wallWhere }),
   ]);
 
   const sentimentMap: Record<string, number> = { positive: 0, negative: 0, neutral: 0 };
@@ -121,18 +130,21 @@ export async function GET(request: NextRequest) {
 
   const vocPayload = {
       voc: {
-        recent: recent.map((f) => ({
-          id: f.id,
-          rating: f.rating,
-          text: f.text ? f.text.slice(0, 300) + (f.text.length > 300 ? '…' : '') : null,
-          sentiment: f.sentiment,
-          intent: f.intent,
-          topics: f.topics,
-          themes: f.themes,
-          createdAt: f.createdAt,
-          userName: f.user?.name ?? 'Anonim',
-          locationName: f.qrCode?.name ?? '—',
-        })),
+        recent: recent
+          .filter((f) => !containsBlockedLanguage(f.text))
+          .slice(0, limit)
+          .map((f) => ({
+            id: f.id,
+            rating: f.rating,
+            text: toWallText(f.text),
+            sentiment: f.sentiment,
+            intent: f.intent,
+            topics: f.topics,
+            themes: f.themes,
+            createdAt: f.createdAt,
+            userName: f.user?.anonymizedAt ? maskCustomerName(null) : maskCustomerName(f.user?.name),
+            locationName: f.qrCode?.name ?? '—',
+          })),
         stats: {
           avgRating: stats._avg.rating ?? 0,
           totalFeedback: stats._count,

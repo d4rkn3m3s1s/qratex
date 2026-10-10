@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
+import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
 import {
   analyzeWithFallback,
   analyzeComprehensive,
@@ -55,9 +56,10 @@ function normalizeSentimentPercentages(counts: { positive: number; negative: num
 }
 
 // ── Validation Schemas ──
+// P0-06: `feedbackId` verilirse istemci metni YOK SAYILIR (metin DB'den okunur).
 const analyzeSchema = z.object({
-  text: z.string().min(5, 'Metin en az 5 karakter olmalı').max(5000),
-  feedbackId: z.string().optional(),
+  text: z.string().min(5, 'Metin en az 5 karakter olmalı').max(5000).optional(),
+  feedbackId: z.string().min(1).max(191).optional(),
 });
 
 const bulkAnalyzeSchema = z.object({
@@ -95,7 +97,14 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ error: 'Oturum bulunamadı. Lütfen giriş yapın.' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    // P0-05 / P0-06: VARSAYILAN REDDET. CUSTOMER ve tanınmayan roller bu uçların HİÇBİRİNİ
+    // çağıramaz (müşteri kendi olumsuz yorumunu "olumlu" yazdırabiliyordu). Kalan roller için
+    // kapsam aşağıda `resolveAiScope` ile DB'den çözülür (STAFF → aktif bağlı bayi).
+    const actorRole = session.user.role as string;
+    if (actorRole !== 'ADMIN' && actorRole !== 'DEALER' && actorRole !== 'STAFF') {
+      return NextResponse.json({ error: 'Bu işlem için yetkiniz yok.', code: 'FORBIDDEN' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const rlAnalyze = await checkRateLimitDb(`ai_analyze:${session.user.id}`, RATE_LIMIT, 60_000);
@@ -114,7 +123,21 @@ export async function POST(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'analyze';
-    const body = await request.json();
+    const body: Record<string, any> = await request.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Geçersiz istek gövdesi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    // Kiracı kapsamı (tek kaynak): DEALER → kendi; STAFF → DB'deki AKTİF bağlı bayi (pasif → 403);
+    // ADMIN → `?dealerId=` / gövde `dealerId` ile tek bayi, verilmezse platform geneli.
+    const requestedDealerId =
+      searchParams.get('dealerId') || (typeof body.dealerId === 'string' && body.dealerId ? body.dealerId : null);
+    const scope = await resolveAiScope(session, { dealerId: requestedDealerId, allowPlatform: true });
+    if (!scope.ok) return scopeErrorResponse(scope);
+    /** Feedback sorguları için bayi filtresi (platform kapsamında boş). */
+    const tenantFeedbackWhere: Record<string, unknown> = scope.dealerId
+      ? { qrCode: { dealerId: scope.dealerId }, deletedAt: null }
+      : { deletedAt: null };
 
     switch (action) {
       // ── Tekil Feedback Analizi ──
@@ -125,8 +148,36 @@ export async function POST(request: NextRequest) {
             { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        const { text, feedbackId } = validatedData.data;
-        const dealerId = session.user.role === 'DEALER' ? session.user.id : undefined;
+        const { feedbackId } = validatedData.data;
+
+        // P0-06: Yazma yolu YALNIZ id alır; metin istemciden değil DB'den okunur ve yorumun
+        // bayisi aktörün kapsamında olmalıdır (yoksa 404 — varlık bilgisi sızmasın).
+        // `feedbackId` olmadan gelen metin yalnız ÖNİZLEME analizi yapar, hiçbir satır yazılmaz.
+        let text: string;
+        let dealerId: string | undefined = scope.dealerId ?? undefined;
+        if (feedbackId) {
+          const target = await prisma.feedback.findFirst({
+            where: { id: feedbackId, ...tenantFeedbackWhere },
+            select: { text: true, qrCode: { select: { dealerId: true } } },
+          });
+          if (!target) {
+            return NextResponse.json(
+              { error: 'Geri bildirim bulunamadı', code: 'NOT_FOUND' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+          }
+          const dbText = (target.text ?? '').trim();
+          if (dbText.length < 5) {
+            return NextResponse.json(
+              { error: 'Bu geri bildirimde analiz edilecek yeterli metin yok.' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+          }
+          text = dbText.slice(0, 5000);
+          dealerId = target.qrCode.dealerId;
+        } else if (validatedData.data.text) {
+          text = validatedData.data.text;
+        } else {
+          return NextResponse.json(
+            { error: 'Analiz için geri bildirim kimliği ya da metin gerekli.' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+
         let analysis;
         try {
           analysis = await analyzeWithFallback(text, { dealerId });
@@ -192,10 +243,6 @@ export async function POST(request: NextRequest) {
 
       // ── Toplu Analiz ──
       case 'bulk_analyze': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
         const validatedData = bulkAnalyzeSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
@@ -209,7 +256,7 @@ export async function POST(request: NextRequest) {
           where: {
             id: { in: feedbackIds },
             text: { not: null },
-            ...(session.user.role === 'DEALER' ? { qrCode: { dealerId: session.user.id } } : {}),
+            ...tenantFeedbackWhere,
           },
           select: { id: true, text: true },
         });
@@ -271,20 +318,13 @@ export async function POST(request: NextRequest) {
 
       // ── Tema Kümeleme ──
       case 'theme_clusters': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
         const validatedData = themeClusterSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
             { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        const where: Record<string, unknown> = {};
-        if (session.user.role === 'DEALER') {
-          where.qrCode = { dealerId: session.user.id };
-        }
+        const where: Record<string, unknown> = { ...tenantFeedbackWhere };
 
         const { startDate, endDate, period } = validatedData.data;
         if (startDate || endDate) {
@@ -326,8 +366,8 @@ export async function POST(request: NextRequest) {
           period || new Date().toISOString().slice(0, 7)
         );
 
-        // Save clusters to DB
-        const dealerId = session.user.role === 'DEALER' ? session.user.id : 'system';
+        // Save clusters to DB (kapsamın bayisine; platform kapsamında 'system').
+        const dealerId = scope.dealerId ?? 'system';
         const periodStr = period || new Date().toISOString().slice(0, 7);
 
         for (const cluster of clusters) {
@@ -370,10 +410,6 @@ export async function POST(request: NextRequest) {
 
       // ── AI İçgörü Raporu ──
       case 'insights': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
         const validatedData = insightsSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
@@ -382,11 +418,10 @@ export async function POST(request: NextRequest) {
 
         const { qrCodeId, startDate, endDate, period, type } = validatedData.data;
 
-        const where: Record<string, unknown> = {};
+        const where: Record<string, unknown> = { ...tenantFeedbackWhere };
         const consumptionWhere: Record<string, unknown> = {};
-        if (session.user.role === 'DEALER') {
-          where.qrCode = { dealerId: session.user.id };
-          consumptionWhere.consumption = { dealerId: session.user.id };
+        if (scope.dealerId) {
+          consumptionWhere.consumption = { dealerId: scope.dealerId };
         }
         if (qrCodeId) where.qrCodeId = qrCodeId;
         if (startDate || endDate) {
@@ -514,8 +549,8 @@ export async function POST(request: NextRequest) {
           if (f.churnRisk != null && f.churnRisk >= 0.5) highChurnCount++;
         });
 
-        // Check for previous period report
-        const dealerId = session.user.role === 'DEALER' ? session.user.id : 'system';
+        // Check for previous period report (kapsamın bayisi; platform kapsamında 'system').
+        const dealerId = scope.dealerId ?? 'system';
         let previousPeriodScore: number | undefined;
         try {
           const prevReport = await prisma.aIInsightReport.findFirst({
@@ -650,14 +685,9 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Role-based data scoping
-        const where: Record<string, unknown> = {};
-        if (session.user.role === 'DEALER') {
-          where.qrCode = { dealerId: session.user.id };
-        } else if (session.user.role === 'CUSTOMER') {
-          where.userId = session.user.id;
-        }
-        // ADMIN: tüm verilere erişir (filtre yok)
+        // Kapsam: DEALER/STAFF → bayinin verisi; ADMIN → seçili bayi ya da platform geneli.
+        // (Eski kodda STAFF filtre almıyordu → bütün kiracıların yorumları LLM bağlamına giriyordu.)
+        const where: Record<string, unknown> = { ...tenantFeedbackWhere };
 
         const [feedbackStats, recentFeedbacks, themeClusters] = await Promise.all([
           prisma.feedback.aggregate({
@@ -673,7 +703,7 @@ export async function POST(request: NextRequest) {
           }),
           prisma.aIThemeCluster.findMany({
             where: {
-              dealerId: session.user.role === 'DEALER' ? session.user.id : undefined,
+              dealerId: scope.dealerId ?? undefined,
             },
             orderBy: { count: 'desc' },
             take: 10,
@@ -813,10 +843,6 @@ export async function POST(request: NextRequest) {
 
       // ── AI Chat (Legacy) ──
       case 'chat': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
         const validatedData = chatSchema.safeParse(body);
         if (!validatedData.success) {
           return NextResponse.json(
@@ -826,7 +852,7 @@ export async function POST(request: NextRequest) {
         const { message } = validatedData.data;
 
         const user = await prisma.user.findUnique({
-          where: { id: session.user.id },
+          where: { id: scope.dealerId ?? session.user.id },
           select: { businessName: true, role: true },
         });
 
@@ -850,14 +876,10 @@ export async function POST(request: NextRequest) {
 
       // ── AI Settings ──
       case 'get_settings': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        // ADMIN: belirli dealer ayarlarını veya tüm ayarları getirebilir
-        if (session.user.role === 'ADMIN' && body?.dealerId) {
+        // ADMIN: belirli dealer ayarlarını (kapsam doğrulanmış) veya tüm ayarları getirebilir
+        if (scope.actorRole === 'ADMIN' && scope.dealerId) {
           const settings = await prisma.aISettings.findUnique({
-            where: { dealerId: body.dealerId },
+            where: { dealerId: scope.dealerId },
           });
           return NextResponse.json({
             success: true,
@@ -865,15 +887,18 @@ export async function POST(request: NextRequest) {
           }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        if (session.user.role === 'ADMIN' && body?.all) {
+        if (scope.actorRole === 'ADMIN' && body?.all) {
           const allSettings = await prisma.aISettings.findMany({
             include: { dealer: { select: { id: true, name: true, businessName: true } } },
           });
           return NextResponse.json({ success: true, allSettings }, { headers: PRIVATE_NO_STORE_HEADERS });
         }
 
+        if (!scope.dealerId) {
+          return NextResponse.json({ error: 'İşletme seçilmeden bu işlem yapılamaz.', code: 'DEALER_ID_REQUIRED' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
         const settings = await prisma.aISettings.findUnique({
-          where: { dealerId: session.user.id },
+          where: { dealerId: scope.dealerId },
         });
 
         return NextResponse.json({
@@ -883,15 +908,16 @@ export async function POST(request: NextRequest) {
       }
 
       case 'update_settings': {
-        if (session.user.role === 'CUSTOMER') {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
+        // Yazma: yalnız bayi sahibi ya da (açık `dealerId` ile) ADMIN. Personel ayar değiştiremez.
+        if (scope.actorRole === 'STAFF') {
+          return NextResponse.json({ error: 'Bu işlem için yetkiniz yok.', code: 'FORBIDDEN' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+        if (!scope.dealerId) {
+          return NextResponse.json({ error: 'İşletme seçilmeden bu işlem yapılamaz.', code: 'DEALER_ID_REQUIRED' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
         const settingsData = body;
-        // ADMIN belirli dealer ayarlarını güncelleyebilir
-        const targetDealerId = (session.user.role === 'ADMIN' && settingsData.dealerId)
-          ? settingsData.dealerId
-          : session.user.id;
+        const targetDealerId = scope.dealerId;
         const updated = await prisma.aISettings.upsert({
           where: { dealerId: targetDealerId },
           update: {

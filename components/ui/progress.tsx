@@ -17,6 +17,9 @@ const Progress = React.forwardRef<
   <div className="relative">
     <ProgressPrimitive.Root
       ref={ref}
+      // Radix aria-valuenow/data-state için `value` Root'a verilmeli (eskiden
+      // verilmiyordu → ekran okuyucu her ilerlemeyi "belirsiz" okuyordu).
+      value={value == null ? null : Math.max(0, Math.min(props.max ?? 100, value))}
       className={cn(
         'relative h-3 w-full overflow-hidden rounded-full bg-secondary',
         className

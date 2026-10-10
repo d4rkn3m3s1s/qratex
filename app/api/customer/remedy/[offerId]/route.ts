@@ -1,41 +1,42 @@
-
 export const dynamic = 'force-dynamic';
 
 /**
  * Müşteri: telafi teklifini görüntüle (GET), tür/miktar seçip kabul et (PATCH).
+ *
+ * P0-22 / D12: Kabulde seçim teklifin KENDİ seçenek listesine (allowlist) karşı doğrulanır;
+ * eskiden `{selectedType:'discount', selectedValue:'100'}` gibi teklifte olmayan bir değer
+ * 200 ile kaydedilip "%100 indirim kabul edildi" ekranı üretilebiliyordu. Kabulde seçimin
+ * anlık görüntüsü (tür/etiket/birim/değer) yazılır; durum geçişi + olay + bayi bildirimi tek tx.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { acceptRemedyOffer, describeRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
+
+const paramsSchema = z.object({ offerId: z.string().min(1).max(64) });
 
 const patchSchema = z.object({
-  selectedType: z.string().min(1),
-  selectedValue: z.string().min(1),
+  selectedType: z.string({ required_error: 'Telafi türü seçin.' }).trim().min(1, 'Telafi türü seçin.').max(32),
+  selectedValue: z
+    .union([z.string().trim().min(1, 'Miktar seçin.').max(16), z.number()], {
+      errorMap: () => ({ message: 'Miktar seçin.' }),
+    }),
 });
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ offerId: string }> }
-) {
-  try {
-    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
+/** Müşteriye görünmeyen durumlar: varlıkları da sızdırılmaz (404). */
+const HIDDEN_FROM_CUSTOMER = new Set(['awaiting_dealer_approval', 'rejected']);
 
-    const { offerId } = await params;
-    if (!offerId || offerId.length > 64) {
-      return NextResponse.json(
-        { error: 'Geçersiz teklif' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
+export const GET = defineRoute(
+  {
+    name: 'customer.remedy.get',
+    roles: ['CUSTOMER', 'ADMIN'],
+    rateLimit: 'read',
+    params: paramsSchema,
+  },
+  async ({ params, user }) => {
     const offer = await prisma.remedyOffer.findUnique({
-      where: { id: offerId },
+      where: { id: params.offerId },
       include: {
         feedback: { select: { id: true, rating: true, text: true, createdAt: true } },
         consumptionReview: { select: { id: true, rating: true, text: true, createdAt: true } },
@@ -43,166 +44,89 @@ export async function GET(
       },
     });
 
-    if (!offer) {
-      return NextResponse.json(
-        { error: 'Telafi teklifi bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    if (!offer) throw new ApiError('NOT_FOUND', 'Telafi teklifi bulunamadı.');
+    if (offer.userId !== user.id && user.role !== 'ADMIN') {
+      throw new ApiError('FORBIDDEN', 'Bu teklifi görüntüleme yetkiniz yok.');
     }
-    if (offer.userId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Bu teklifi görüntüleme yetkiniz yok' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    if (HIDDEN_FROM_CUSTOMER.has(offer.status) && user.role !== 'ADMIN') {
+      throw new ApiError('NOT_FOUND', 'Bu teklif henüz aktif değil.');
     }
-    if (offer.status === 'awaiting_dealer_approval' || offer.status === 'rejected') {
-      return NextResponse.json(
-        { error: 'Bu teklif henüz aktif değil' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+
+    const { options, selection, selectionLabel } = describeRemedyOffer(offer);
+    const base = {
+      id: offer.id,
+      message: offer.message,
+      status: offer.status,
+      dealer: offer.dealer,
+      feedbackId: offer.feedbackId,
+      consumptionReviewId: offer.consumptionReviewId,
+      feedback: offer.feedback,
+      consumptionReview: offer.consumptionReview,
+      createdAt: offer.createdAt,
+    };
+
     if (offer.status !== 'pending') {
-      return NextResponse.json(
+      return ok(
         {
           offer: {
-            id: offer.id,
-            message: offer.message,
-            status: offer.status,
+            ...base,
             selectedType: offer.selectedType,
             selectedValue: offer.selectedValue,
+            selection,
+            selectionLabel,
             acceptedAt: offer.acceptedAt,
           },
           alreadyProcessed: true,
         },
-        { headers: PRIVATE_NO_STORE_HEADERS }
+        { legacySpread: true }
       );
     }
 
-    return NextResponse.json(
-      {
-        offer: {
-          id: offer.id,
-          message: offer.message,
-          status: offer.status,
-          options: offer.options,
-          feedbackId: offer.feedbackId,
-          consumptionReviewId: offer.consumptionReviewId,
-          dealer: offer.dealer,
-          feedback: offer.feedback,
-          consumptionReview: offer.consumptionReview,
-          createdAt: offer.createdAt,
-        },
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('customer/remedy GET:', error);
-    return NextResponse.json(
-      { error: 'Teklif yüklenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    // Normalize edilmiş seçenekler: istemci yalnız sunucunun kabul edeceği değerleri görür
+    // (dizi olmayan Json alanı istemcide `options.find` çökmesine yol açmaz).
+    return ok({ offer: { ...base, options } }, { legacySpread: true });
   }
-}
+);
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ offerId: string }> }
-) {
-  try {
-    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    const { offerId } = await params;
-    if (!offerId || offerId.length > 64) {
-      return NextResponse.json(
-        { error: 'Geçersiz teklif' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const offer = await prisma.remedyOffer.findUnique({
-      where: { id: offerId },
-      select: { id: true, userId: true, status: true },
-    });
-
-    if (!offer) {
-      return NextResponse.json(
-        { error: 'Telafi teklifi bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    if (offer.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Bu teklifi kabul etme yetkiniz yok' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    if (offer.status !== 'pending') {
-      return NextResponse.json(
-        { error: 'Bu teklif zaten işlendi' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const body = await request.json().catch(() => ({}));
-    const parsed = patchSchema.safeParse(body);
+export const PATCH = defineRoute(
+  {
+    name: 'customer.remedy.accept',
+    roles: ['CUSTOMER', 'ADMIN'],
+    rateLimit: 'mutation',
+    params: paramsSchema,
+    schema: z.unknown(),
+  },
+  async ({ params, user, body: rawBody }) => {
+    const parsed = patchSchema.safeParse(rawBody);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'selectedType ve selectedValue gerekli' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+      throw new ApiError('VALIDATION', parsed.error.issues[0]?.message || 'Telafi türü ve miktarı seçin.', {
+        details: parsed.error.issues.slice(0, 5).map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
     }
 
-    const acceptedAt = new Date();
-    const n = await prisma.remedyOffer.updateMany({
-      where: { id: offerId, userId: session.user.id, status: 'pending' },
-      data: {
-        status: 'accepted',
+    try {
+      const result = await acceptRemedyOffer({
+        offerId: params.offerId,
+        userId: user.id,
         selectedType: parsed.data.selectedType,
         selectedValue: parsed.data.selectedValue,
-        acceptedAt,
-      },
-    });
-    if (n.count === 0) {
-      return NextResponse.json(
-        { error: 'Bu teklif zaten işlendi veya bulunamadı' },
-        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+      });
+      return ok(
+        {
+          offer: {
+            id: result.offerId,
+            status: result.status,
+            selectedType: result.selection.type,
+            selectedValue: String(result.selection.value),
+            selection: result.selection,
+            acceptedAt: result.acceptedAt,
+          },
+        },
+        { legacySpread: true }
       );
+    } catch (err) {
+      if (isRemedyOfferError(err)) throw new ApiError(err.code, err.message, { status: err.status });
+      throw err;
     }
-
-    const updated = await prisma.remedyOffer.findUnique({
-      where: { id: offerId },
-      select: {
-        id: true,
-        status: true,
-        selectedType: true,
-        selectedValue: true,
-        acceptedAt: true,
-      },
-    });
-
-    await appendRemedyTimelineEvent(prisma, offerId, 'accepted', 'Seçiminiz kaydedildi — teklif kullanıma hazır', {
-      selectedType: parsed.data.selectedType,
-      selectedValue: parsed.data.selectedValue,
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        offer: updated,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('customer/remedy PATCH:', error);
-    return NextResponse.json(
-      { error: 'Teklif güncellenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
   }
-}
+);

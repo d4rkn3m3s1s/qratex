@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -50,7 +50,28 @@ import { InlineLoadingStatus } from '@/components/ui/inline-loading-status';
 import { AccessibilityToggles } from '@/components/settings/accessibility-toggles';
 import { getInitials } from '@/lib/utils';
 import { avatarList } from '@/lib/avatar-options';
-import { useAppT } from '@/lib/app-locale';
+import { useAppLocale, useAppT } from '@/lib/app-locale';
+import { ErrorState, SkeletonForm, classifyError } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
+import { diffFields, fetchResourceJson, requireVersion, saveVersioned } from '@/lib/versioned-resource';
+
+type ProfileForm = {
+  name: string;
+  email: string;
+  avatar: string;
+  businessName: string;
+  phone: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  description: string;
+  businessHours: string;
+  defaultReplyTemplate: string;
+  preferredLanguage: string;
+  holidayMode: boolean;
+  /** Google/OAuth ile gelenlerde false; şifre oluşturma formu gösterilir */
+  hasPassword: boolean;
+};
 
 export default function DealerSettingsPage() {
   const t = useAppT();
@@ -68,12 +89,12 @@ export default function DealerSettingsPage() {
   const [dashboardWidgets, setDashboardWidgets] = useState<any[]>([]);
   const [loadingWidgets, setLoadingWidgets] = useState(false);
 
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<ProfileForm>({
     name: '',
     email: '',
     avatar: '',
     businessName: '',
-    phone: '+90 555 123 4567',
+    phone: '',
     address: '',
     latitude: '',
     longitude: '',
@@ -86,43 +107,71 @@ export default function DealerSettingsPage() {
     hasPassword: true,
   });
 
+  // P0-28 durum makinesi: idle → loading → ready | error. İşletme profili formu YALNIZ `ready`
+  // iken render edilir; kaydetme yalnız DEĞİŞEN alanları `baseVersion` ile gönderir.
+  const [profileStatus, setProfileStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [profileLoadError, setProfileLoadError] = useState<unknown>(null);
+  const [profileBaseline, setProfileBaseline] = useState<ProfileForm | null>(null);
+  const [profileVersion, setProfileVersion] = useState<string | null>(null);
+  const [profileConflict, setProfileConflict] = useState<{ message: string; currentVersion: string | null } | null>(null);
+  const sessionUserId = session?.user?.id;
+  const { locale } = useAppLocale();
+  const profileLoadErrorText = locale === 'en' ? 'Your business profile could not be loaded' : 'İşletme profili yüklenemedi';
+  const profileLockedText =
+    locale === 'en'
+      ? 'Editing is locked so nothing is overwritten. Your saved information has not changed; please try again.'
+      : 'Hiçbir bilgi ezilmesin diye düzenleme kilitlendi. Kayıtlı bilgileriniz değişmedi; lütfen tekrar deneyin.';
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  const loadProfile = useCallback(async () => {
+    setProfileStatus('loading');
+    setProfileConflict(null);
+    try {
+      const data = await fetchResourceJson('/api/user/profile', profileLoadErrorText);
+      const version = requireVersion(data);
+      const user = (data.user ?? {}) as Record<string, any>;
+      const su = sessionRef.current?.user;
+      const loaded: ProfileForm = {
+        name: user.name || su?.name || '',
+        email: user.email || su?.email || '',
+        avatar: user.image || su?.image || '/images/avatar/BAYİ AVATAR ERKEK 1.svg',
+        businessName: user.businessName || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        latitude: typeof user.latitude === 'number' ? String(user.latitude) : '',
+        longitude: typeof user.longitude === 'number' ? String(user.longitude) : '',
+        description: user.businessDesc || '',
+        businessHours: user.businessHours || '',
+        defaultReplyTemplate: user.defaultReplyTemplate || '',
+        preferredLanguage: user.preferredLanguage || 'tr',
+        holidayMode: user.holidayMode || false,
+        hasPassword: typeof user.hasPassword === 'boolean' ? user.hasPassword : true,
+      };
+      setProfile(loaded);
+      setProfileBaseline(loaded);
+      setProfileVersion(version);
+      setProfileLoadError(null);
+      setProfileStatus('ready');
+    } catch (error) {
+      setProfileBaseline(null);
+      setProfileVersion(null);
+      setProfileLoadError(error);
+      setProfileStatus('error');
+    }
+  }, [profileLoadErrorText]);
+
+  // Oturum nesnesi her odakta/5 dk'da yenilenir; yükleme yalnız KULLANICI değişince yapılır
+  // (eskiden `[session]` bağımlılığı yazılmakta olan formu sunucu değerleriyle eziyordu).
   useEffect(() => {
-    if (!session?.user) return;
+    if (!sessionUserId || !session?.user) return;
     setProfile(prev => ({
       ...prev,
       name: session.user.name || '',
       email: session.user.email || '',
       avatar: session.user.image || '/images/avatar/BAYİ AVATAR ERKEK 1.svg',
     }));
-
-    const loadProfile = async () => {
-      try {
-        const res = await fetch('/api/user/profile', { cache: 'no-store' });
-        const data = await res.json();
-        if (!res.ok || !data?.success) return;
-        const user = data.user;
-        setProfile(prev => ({
-          ...prev,
-          name: user.name || prev.name,
-          email: user.email || prev.email,
-          avatar: user.image || prev.avatar,
-          businessName: user.businessName || '',
-          phone: user.phone || '',
-          address: user.address || '',
-          latitude: typeof user.latitude === 'number' ? String(user.latitude) : '',
-          longitude: typeof user.longitude === 'number' ? String(user.longitude) : '',
-          description: user.businessDesc || '',
-          businessHours: user.businessHours || '',
-          defaultReplyTemplate: user.defaultReplyTemplate || '',
-          preferredLanguage: user.preferredLanguage || 'tr',
-          holidayMode: user.holidayMode || false,
-          hasPassword: typeof user.hasPassword === 'boolean' ? user.hasPassword : true,
-        }));
-      } catch {
-        // keep current values
-      }
-    };
-    loadProfile();
+    void loadProfile();
 
     const loadWidgets = async () => {
       setLoadingWidgets(true);
@@ -136,7 +185,8 @@ export default function DealerSettingsPage() {
       finally { setLoadingWidgets(false); }
     };
     loadWidgets();
-  }, [session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUserId]);
 
   const [notifications, setNotifications] = useState({
     emailFeedback: true,
@@ -158,37 +208,51 @@ export default function DealerSettingsPage() {
     toast.success(t('dealerSettings.avatarSelected'));
   };
 
-  const handleSaveProfile = async () => {
+  /** Form alanı → PATCH /api/user/profile alanı. */
+  const toProfilePayload = (p: ProfileForm): Record<string, unknown> => ({
+    name: p.name,
+    image: p.avatar,
+    businessName: p.businessName || null,
+    phone: p.phone || null,
+    businessDesc: p.description || null,
+    address: p.address || null,
+    latitude: p.latitude !== '' ? Number(p.latitude) : null,
+    longitude: p.longitude !== '' ? Number(p.longitude) : null,
+    businessHours: p.businessHours || null,
+    defaultReplyTemplate: p.defaultReplyTemplate || null,
+    preferredLanguage: p.preferredLanguage || null,
+    holidayMode: p.holidayMode,
+  });
+
+  const handleSaveProfile = async (opts?: { overwrite?: boolean }) => {
+    if (profileStatus !== 'ready' || !profileBaseline || !profileVersion) {
+      toast.error(profileLoadErrorText);
+      return;
+    }
+    // Yalnız DEĞİŞEN alanlar: dokunulmamış işletme alanı asla null/boş ile ezilmez.
+    const changed = diffFields(toProfilePayload(profileBaseline), toProfilePayload(profile));
+    if (Object.keys(changed).length === 0) {
+      toast.success(t('dealerSettings.profileUpdated'));
+      return;
+    }
+    const baseVersion = opts?.overwrite && profileConflict?.currentVersion ? profileConflict.currentVersion : profileVersion;
     setSaving(true);
     try {
-      const res = await fetch('/api/user/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: profile.name,
-          image: profile.avatar,
-          businessName: profile.businessName || null,
-          phone: profile.phone || null,
-          businessDesc: profile.description || null,
-          address: profile.address || null,
-          latitude: profile.latitude !== '' ? Number(profile.latitude) : null,
-          longitude: profile.longitude !== '' ? Number(profile.longitude) : null,
-          businessHours: profile.businessHours || null,
-          defaultReplyTemplate: profile.defaultReplyTemplate || null,
-          preferredLanguage: profile.preferredLanguage || null,
-          holidayMode: profile.holidayMode,
-        }),
-      });
-
-      if (res.ok) {
-        await update({ name: profile.name, image: profile.avatar });
-        toast.success(t('dealerSettings.profileUpdated'));
-        router.refresh();
-      } else {
-        toast.error(t('dealerSettings.profileUpdateError'));
+      const result = await saveVersioned('/api/user/profile', 'PATCH', { ...changed, baseVersion }, t('dealerSettings.profileUpdateError'));
+      if (!result.ok) {
+        setProfileConflict({ message: result.message, currentVersion: result.currentVersion });
+        return;
       }
+      setProfileVersion(requireVersion(result.body));
+      setProfileBaseline(profile);
+      setProfileConflict(null);
+      if ('name' in changed || 'image' in changed) {
+        await update({ name: profile.name, image: profile.avatar });
+      }
+      toast.success(t('dealerSettings.profileUpdated'));
+      router.refresh();
     } catch (error) {
-      toast.error(t('common.error'));
+      toast.error(error instanceof Error && error.message ? error.message : t('dealerSettings.profileUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -196,17 +260,30 @@ export default function DealerSettingsPage() {
 
   /** GPS sonrası sadece koordinat (ve varsa adres) sunucuya yazar; diğer profil alanlarına dokunmaz. */
   const persistGpsToProfile = async (lat: number, lng: number, address?: string) => {
+    if (profileStatus !== 'ready' || !profileVersion) return false;
     try {
-      const payload: Record<string, unknown> = { latitude: lat, longitude: lng };
-      if (typeof address === 'string' && address.trim().length > 0) {
-        payload.address = address.trim();
+      const payload: Record<string, unknown> = { latitude: lat, longitude: lng, baseVersion: profileVersion };
+      const trimmedAddress = typeof address === 'string' ? address.trim() : '';
+      if (trimmedAddress.length > 0) {
+        payload.address = trimmedAddress;
       }
-      const res = await fetch('/api/user/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      return res.ok;
+      const result = await saveVersioned('/api/user/profile', 'PATCH', payload, t('dealerSettings.locationPersistError'));
+      if (!result.ok) {
+        setProfileConflict({ message: result.message, currentVersion: result.currentVersion });
+        return false;
+      }
+      setProfileVersion(requireVersion(result.body));
+      setProfileBaseline((prev) =>
+        prev
+          ? {
+              ...prev,
+              latitude: lat.toFixed(6),
+              longitude: lng.toFixed(6),
+              ...(trimmedAddress.length > 0 ? { address: trimmedAddress } : {}),
+            }
+          : prev
+      );
+      return true;
     } catch {
       return false;
     }
@@ -414,6 +491,28 @@ export default function DealerSettingsPage() {
 
         {/* Profile Tab */}
         <TabsContent value="profile">
+          {profileStatus === 'error' ? (
+            <ErrorState
+              kind={classifyError(profileLoadError)}
+              title={profileLoadErrorText}
+              description={profileLockedText}
+              onRetry={loadProfile}
+            />
+          ) : profileStatus !== 'ready' ? (
+            <div role="status" aria-busy="true">
+              <span className="sr-only">{t('common.loading')}</span>
+              <SkeletonForm />
+            </div>
+          ) : (
+            <>
+              {profileConflict && (
+                <VersionConflictBanner
+                  className="mb-4"
+                  message={profileConflict.message}
+                  onReload={loadProfile}
+                  onOverwrite={profileConflict.currentVersion ? () => handleSaveProfile({ overwrite: true }) : undefined}
+                />
+              )}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -657,7 +756,7 @@ export default function DealerSettingsPage() {
                     onCheckedChange={(checked) => setProfile({ ...profile, holidayMode: checked })}
                   />
                 </div>
-                <Button onClick={handleSaveProfile} disabled={saving} className="mt-4 gap-2">
+                <Button onClick={() => void handleSaveProfile()} disabled={saving} className="mt-4 gap-2">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {saving ? t('common.processing') : t('dealerSettings.saveChanges')}
                 </Button>
@@ -686,6 +785,8 @@ export default function DealerSettingsPage() {
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         {/* Notifications Tab */}

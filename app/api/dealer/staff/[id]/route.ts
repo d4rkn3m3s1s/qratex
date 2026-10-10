@@ -3,6 +3,14 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { invalidateStaffScope } from '@/lib/auth/scope';
+import { z } from 'zod';
+
+const patchStaffSchema = z.object({
+  jobTitle: z.string().trim().max(50).nullable().optional(),
+  pinCode: z.string().regex(/^\d{4,6}$/, 'PIN 4-6 haneli olmalı').nullable().optional(),
+  isActive: z.boolean().optional(),
+});
 
 
 export const dynamic = 'force-dynamic';
@@ -16,10 +24,13 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
         const params = await props.params;
         const staffId = params.id;
-        const body = await request.json();
-        const { jobTitle, pinCode, isActive } = body;
+        const parsed = patchStaffSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json({ success: false, error: parsed.error.errors[0]?.message ?? 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        }
+        const { jobTitle, pinCode, isActive } = parsed.data;
 
-        const data: { jobTitle?: string; pinCode?: string | null; isActive?: boolean } = {};
+        const data: { jobTitle?: string | null; pinCode?: string | null; isActive?: boolean } = {};
         if (jobTitle !== undefined) data.jobTitle = jobTitle;
         if (pinCode !== undefined) data.pinCode = pinCode;
         if (isActive !== undefined) data.isActive = isActive;
@@ -49,6 +60,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         if (!updated) {
             return NextResponse.json({ success: false, error: 'Personel bulunamadı veya yetkisiz erişim' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
+        // Pasifleştirme/yeniden etkinleştirme kapsamı ANINDA etkilesin (Redis sıcak katmanı düşür).
+        if (isActive !== undefined) await invalidateStaffScope(updated.userId).catch(() => {});
 
         await prisma.auditLog.create({
             data: {
@@ -56,7 +69,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
                 action: 'UPDATE_STAFF',
                 entity: 'DealerStaff',
                 entityId: staffId,
-                newData: { jobTitle, pinCode, isActive },
+                // PIN denetim kaydına yazılmaz (yalnız değişip değişmediği).
+                newData: { jobTitle, pinChanged: pinCode !== undefined, isActive },
                 ...auditMeta,
             },
         });

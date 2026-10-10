@@ -1,4 +1,5 @@
 import { BRAND_PRIMARY_HEX, BRAND_PRIMARY_HEX_DEEP } from '@/lib/brand-colors';
+import { escapeEmailHtml, safeHref } from '@/lib/security/escape-html';
 
 export type TransactionalCta = { href: string; label: string };
 
@@ -39,20 +40,18 @@ const TX_BODY_INLINE =
 const TX_FOOTER_HTML =
   '<p class="tx-email-foot" style="font-size:12px;color:#8b7ba8;margin:0;text-align:center;line-height:1.7;">QRate<span style="color:#e879f9;">X</span> · QR Tabanlı Geri Bildirim Platformu<br>Bu otomatik bir bildirimdir, lütfen yanıtlamayın.</p>';
 
-/** href / metin içi güvenli kaçış (kullanıcı veya DB kaynaklı değerler için). */
-export function escapeEmailHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+/**
+ * href / metin içi güvenli kaçış (kullanıcı veya DB kaynaklı değerler için).
+ * TEK KAYNAK `lib/security/escape-html.ts` (P0-35): eski yerel kopya tek tırnağı kaçırmıyordu.
+ * Geriye uyumluluk için buradan yeniden dışa aktarılır.
+ */
+export { escapeEmailHtml };
 
 function ctaBlock(cta: TransactionalCta): string {
   // Landing CTA kimliği: mor→fuchsia gradient, ortalanmış "bulletproof" buton.
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
   <tr><td align="center">
-    <a href="${escapeEmailHtml(cta.href)}" target="_blank" rel="noopener noreferrer"
+    <a href="${safeHref(cta.href)}" target="_blank" rel="noopener noreferrer"
        style="display:inline-block;background:${BRAND_PRIMARY_HEX};background-image:linear-gradient(135deg, ${BRAND_PRIMARY_HEX_DEEP} 0%, ${BRAND_PRIMARY_HEX} 55%, ${BRAND_FUCHSIA} 100%);color:#ffffff;text-decoration:none;padding:15px 38px;border-radius:12px;font-weight:700;font-size:15px;letter-spacing:0.3px;box-shadow:0 6px 18px rgba(147,51,234,0.35);">
       ${escapeEmailHtml(cta.label)} &rarr;
     </a>
@@ -85,7 +84,12 @@ function logoHeaderBlock(logoUrl: string, brandLinkHref: string): string {
  * Koyu sistem teması olan istemcilerde sınırlı dark stil (Gmail çoğunlukla yalnızca açık tema gösterir).
  */
 export function buildTransactionalEmailHtml(input: {
+  /** Düz metin — burada kaçışlanır. */
   heading: string;
+  /**
+   * HAM HTML — olduğu gibi gömülür. Kullanıcı/bayi/LLM kaynaklı her değer çağıran tarafından
+   * `escapeEmailText` / `escapeEmailHtml` ile kaçışlanmış OLMALI (P0-35).
+   */
   bodyHtml: string;
   /** CTA’dan önce (ör. KVKK tablosu) */
   extraHtml?: string;

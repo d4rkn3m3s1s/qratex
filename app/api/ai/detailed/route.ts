@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, clampTakeParam } from '@/lib/api-http';
+import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/ai/detailed - Detaylı AI Feedback Verileri
@@ -15,26 +16,23 @@ const AI_DETAILED_AGG_SAMPLE_MAX = 6_000;
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    if (session.user.role === 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
+    // P0-05: VARSAYILAN REDDET kapsamı. DEALER → kendi; STAFF → DB'deki AKTİF bağlı bayi;
+    // ADMIN → `?dealerId=` ile tek bayi, verilmezse platform geneli; CUSTOMER/bilinmeyen → 403.
+    // Eski kod yalnız DEALER'ı daraltıyordu → STAFF bütün kiracıların yorum metinlerini okuyordu.
+    const scope = await resolveAiScope(session, {
+      dealerId: searchParams.get('dealerId'),
+      allowPlatform: true,
+    });
+    if (!scope.ok) return scopeErrorResponse(scope);
+
     const limit = clampTakeParam(searchParams.get('limit'), 50, 100);
 
-    const where: Record<string, unknown> = { text: { not: null } };
-    if (session.user.role === 'DEALER') {
-      where.qrCode = { dealerId: session.user.id };
-    }
+    const where = {
+      ...(scope.dealerId ? { qrCode: { dealerId: scope.dealerId } } : {}),
+      deletedAt: null,
+      text: { not: null },
+    };
 
     // İki sorgu birbirinden bağımsız → paralel (önceden sıralı await'ti).
     const [detailedFeedbacks, allFeedbacks] = await Promise.all([
@@ -54,10 +52,7 @@ export async function GET(request: NextRequest) {
       }),
       // Tüm feedbacklardan aggregation
       prisma.feedback.findMany({
-        where: {
-          ...(session.user.role === 'DEALER' ? { qrCode: { dealerId: session.user.id } } : {}),
-          text: { not: null },
-        },
+        where,
         select: {
           intent: true, urgency: true, effortScore: true, churnRisk: true,
           entities: true, themes: true, actionSuggestions: true,

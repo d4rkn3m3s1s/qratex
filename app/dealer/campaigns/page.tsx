@@ -267,7 +267,7 @@ export default function DealerCampaignsPage() {
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="notification">{t('dealerCampaigns.channelNotification')}</SelectItem>
-                    <SelectItem value="email">{t('dealerCampaigns.channelEmail')}</SelectItem>
+                    {/* P0-35: "E-posta" kanalı sahteydi (e-posta gönderilmiyordu); gerçek teslim kurulana kadar sunulmaz. */}
                   </SelectContent>
                 </Select>
               </div>

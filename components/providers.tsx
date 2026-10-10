@@ -3,7 +3,8 @@
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MotionConfig, LazyMotion, domAnimation } from 'framer-motion';
+import { LazyMotion, domAnimation } from 'framer-motion';
+import { MotionPolicyConfig } from '@/lib/motion/motion-policy-config';
 import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
 import { OfflineBanner } from '@/components/layout/offline-banner';
@@ -229,7 +230,8 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
             disableTransitionOnChange
             enableColorScheme
           >
-            <MotionConfig reducedMotion="user">
+            {/* Tek hareket politikası: OS prefers-reduced-motion VEYA uygulama ayarı (html.reduce-animations). */}
+            <MotionPolicyConfig>
               <ThemeModeSync />
               <AccessibilityClassSync />
               <SeasonalConceptApplier />
@@ -245,7 +247,7 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
                   </LazyMotion>
                 </ConfettiProvider>
               </ThemeColorsProvider>
-            </MotionConfig>
+            </MotionPolicyConfig>
           </ThemeProvider>
         </QueryClientProvider>
       </AppLocaleProvider>

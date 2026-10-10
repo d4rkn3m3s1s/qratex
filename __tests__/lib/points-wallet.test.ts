@@ -16,6 +16,13 @@ const db = {
     updateMany: (...a: unknown[]) => mockUserUpdateMany(...a),
     findUnique: (...a: unknown[]) => mockUserFindUnique(...a),
   },
+  // debitPoints defterli (lib/economy): borçla aynı tx'te PointsLedger + points_spent yazar.
+  // Ayrıntılı defter testleri: __tests__/lib/economy.test.ts
+  pointsLedger: {
+    findUnique: jest.fn(async () => null),
+    create: jest.fn(async () => ({ id: 'led1' })),
+  },
+  analyticsEvent: { create: jest.fn(async () => ({ id: 'ev1' })) },
 };
 
 jest.mock('@/lib/prisma', () => ({ prisma: {} }));

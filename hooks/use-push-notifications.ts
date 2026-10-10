@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { ensureServiceWorkerRegistration } from "@/lib/pwa/service-worker";
 
 export function usePushNotifications() {
     const [isSupported, setIsSupported] = useState(false);
@@ -18,20 +19,17 @@ export function usePushNotifications() {
 
     const registerServiceWorker = async () => {
         try {
-            const registration = await navigator.serviceWorker.register("/push-sw.js", {
-                scope: "/",
-            });
-
-            // Ensure the service worker is active before proceeding
-            if (registration.installing) {
-                registration.installing.addEventListener("statechange", (e) => {
-                    if ((e.target as ServiceWorker).state === "activated") {
-                        checkSubscription(registration);
-                    }
-                });
-            } else if (registration.active) {
-                checkSubscription(registration);
+            // Tek SW: üretimde /sw.js (push dinleyicisi importScripts ile içinde), geliştirmede
+            // bağımsız /push-sw.js. Eskiden burada /push-sw.js doğrudan "/" kapsamına
+            // kaydediliyor ve next-pwa SW'sinin yerine geçiyordu (P0-37 / perf O9).
+            const registration = await ensureServiceWorkerRegistration();
+            if (!registration) {
+                setLoading(false);
+                return;
             }
+            // Kurulum/etkinleşme sürüyorsa hazır olmasını bekle (statechange yarışından bağımsız).
+            const ready = registration.active ? registration : await navigator.serviceWorker.ready;
+            await checkSubscription(ready);
         } catch (err) {
             console.error("Service Worker registration failed:", err);
             setLoading(false);
@@ -67,6 +65,8 @@ export function usePushNotifications() {
         try {
             setLoading(true);
 
+            // Kayıt yoksa oluştur; abonelik için ETKİN worker gerekir → ready.
+            await ensureServiceWorkerRegistration();
             const registration = await navigator.serviceWorker.ready;
 
             const pwaPubKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;

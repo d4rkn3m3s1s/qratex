@@ -110,7 +110,13 @@ export default function CharacterTestPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data?.error || 'İşlem başarısız');
-      toast.success(`${action} tamam`);
+      const labels: Record<string, string> = {
+        fill: 'Sentetik yorumlar eklendi',
+        reset: 'Karakter rozetleri sıfırlandı',
+        clearCategories: 'Yorum kategorileri temizlendi',
+        cleanupTest: 'Test verisi silindi',
+      };
+      toast.success(labels[action] ?? 'İşlem tamamlandı');
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'İşlem başarısız');
@@ -257,11 +263,13 @@ export default function CharacterTestPage() {
           <div className="text-sm font-semibold">Reveal Akışı Test Araçları</div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Hedef kullanıcı (email)</Label>
+              <Label className="text-xs" htmlFor="ct-target">Test hesabı (e-posta)</Label>
               <Input
+                id="ct-target"
+                type="email"
                 value={targetEmail}
                 onChange={(e) => setTargetEmail(e.target.value)}
-                placeholder="boş = kendim (admin)"
+                placeholder="demo-musteri@ornek.com"
                 className="h-9 w-56"
               />
             </div>
@@ -280,20 +288,20 @@ export default function CharacterTestPage() {
             <Button
               variant="outline"
               disabled={!!busy}
-              onClick={() => runAction('fill', { category: fillCat, userId: targetEmail || 'me', synthetic: true })}
+              onClick={() => runAction('fill', { category: fillCat, userId: targetEmail.trim(), synthetic: true })}
             >
               {busy === 'fill' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
               <span className="ml-2">Barı Doldur (sentetik)</span>
             </Button>
-            <Button variant="outline" disabled={!!busy} onClick={() => runAction('reset', { userId: targetEmail || 'me' })}>
+            <Button variant="outline" disabled={!!busy} onClick={() => runAction('reset', { userId: targetEmail.trim() })}>
               {busy === 'reset' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
               <span className="ml-2">Rozetleri Sıfırla</span>
             </Button>
-            <Button variant="outline" disabled={!!busy} onClick={() => runAction('clearCategories', { userId: targetEmail || 'me' })}>
+            <Button variant="outline" disabled={!!busy} onClick={() => runAction('clearCategories', { userId: targetEmail.trim() })}>
               {busy === 'clearCategories' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
               <span className="ml-2">Kategorileri Temizle</span>
             </Button>
-            <Button variant="destructive" disabled={!!busy} onClick={() => runAction('cleanupTest', { userId: targetEmail || 'me' })}>
+            <Button variant="destructive" disabled={!!busy} onClick={() => runAction('cleanupTest', { userId: targetEmail.trim() })}>
               {busy === 'cleanupTest' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
               <span className="ml-2">Test Verisini Sil</span>
             </Button>
@@ -303,7 +311,8 @@ export default function CharacterTestPage() {
             <b> işaretli test yorumları</b> üretir (gerçek yorum yoksa da bar dolar) — sonra
             <b> /customer/badges</b> sayfasında reveal’i uçtan uca test edebilirsin.
             <br /><b>Test Verisini Sil:</b> üretilen sentetik tüketim/yorumları temizler (gerçek veriye dokunmaz).
-            Email boşsa işlemler <b>kendi (admin)</b> hesabına uygulanır.
+            Veri değiştiren araçlar yalnız <b>test hesaplarında</b> (demo müşteri ya da allowlist) çalışır, üretimde
+            kapalıdır ve her işlem denetim kaydına yazılır. Sıfırlama, silinen rozetlerin ödül puanını geri alır.
           </p>
         </CardContent>
       </Card>

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAppT } from '@/lib/app-locale';
+import { ErrorState } from '@/components/states';
 
 interface QuestionResult {
     questionId: string;
@@ -21,29 +22,48 @@ interface QuestionResult {
     avg?: number;
     distribution?: Record<number, number>;
     recentTexts?: string[];
+    /** Doğrulanamadığı için sayılmayan eski/kirli cevap sayısı. */
+    ignoredAnswers?: number;
 }
 
 export default function SurveyResultsPage() {
     const { id } = useParams<{ id: string }>();
     const t = useAppT();
 
-    const { data, isLoading } = useQuery<{
+    const { data, isLoading, isError, error, refetch } = useQuery<{
         success: boolean;
         survey: { id: string; title: string; description: string | null; isActive: boolean };
         totalResponses: number;
         questionResults: QuestionResult[];
     }>({
         queryKey: ['dealer', 'surveys', id, 'results'],
-        queryFn: async () => { const r = await fetch(`/api/dealer/surveys/${id}/results`); return r.json(); },
+        queryFn: async () => {
+            const r = await fetch(`/api/dealer/surveys/${id}/results`);
+            const type = r.headers.get('content-type') ?? '';
+            const d = type.includes('application/json') ? await r.json().catch(() => null) : null;
+            // !ok artık "başarı" sayılıp önbelleğe alınmaz → hata kartı + yeniden dene.
+            if (!r.ok || !d?.success) {
+                throw Object.assign(new Error(d?.error || t('dealerSurveyResults.loadFailed')), { status: r.status });
+            }
+            return d;
+        },
         staleTime: 30_000,
+        retry: (count, err) => (err as { status?: number })?.status !== 404 && count < 1,
     });
 
     if (isLoading) return <InlineLoadingStatus className="py-16" label={t('dealerSurveyResults.loading')} />;
-    if (!data?.success)
+    if (isError || !data?.success)
         return (
-            <div role="alert" className="py-12 text-center text-muted-foreground">
-                {t('dealerSurveyResults.loadFailed')}
-            </div>
+            <ErrorState
+                kind={(error as { status?: number } | null)?.status === 404 ? 'notFound' : 'generic'}
+                title={t('dealerSurveyResults.loadFailed')}
+                onRetry={() => refetch()}
+                action={
+                    <Button asChild variant="outline">
+                        <Link href="/dealer/surveys">{t('dealerSurveyCreate.backAria')}</Link>
+                    </Button>
+                }
+            />
         );
 
     const { survey, totalResponses, questionResults } = data;
@@ -51,8 +71,8 @@ export default function SurveyResultsPage() {
     return (
         <div className="space-y-6 max-w-3xl mx-auto">
             <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/40 backdrop-blur-sm p-4 sm:p-6 shadow-sm sm:flex-row sm:items-center">
-                <Button asChild variant="ghost" size="icon" className="rounded-xl shrink-0 touch-manipulation w-fit">
-                    <Link href="/dealer/surveys"><ChevronLeft className="h-5 w-5" /></Link>
+                <Button asChild variant="ghost" size="icon" className="rounded-xl shrink-0 touch-manipulation w-fit" aria-label={t('dealerSurveyCreate.backAria')}>
+                    <Link href="/dealer/surveys"><ChevronLeft className="h-5 w-5" aria-hidden /></Link>
                 </Button>
                 <div className="min-w-0 flex-1">
                     <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-balance">

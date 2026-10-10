@@ -463,31 +463,27 @@ export async function revealReadyCategoryBadge(userId: string): Promise<Characte
     if (totalReviews - takenNow * threshold < threshold) {
       return false;
     }
-    // Seçilen karakter hâlâ alınmamış mı? (createMany + skipDuplicates atomik son savunma).
-    const res = await tx.userBadge.createMany({
-      data: [{ userId, badgeId: picked.badgeId }],
-      skipDuplicates: true,
-    });
-    if (res.count === 0) return false; // aynı badgeId zaten alınmış (unique guard)
-
-    // ÖDÜL PUANI — AYNI TX: rozet eklemesiyle kredi atomik (kısmi durum yok).
-    // Yalnız count>0 iken çalışır → tekrar çağrı puan çoğaltmaz ([[points-economy-invariants]]).
-    const { creditBadgeRewardInTx } = await import('@/lib/badge-reward-points');
-    await creditBadgeRewardInTx(tx as never, {
+    // Rozet + ödül TEK servisten (lib/badges/award.ts), AYNI tx'te: unique guard (aynı
+    // badgeId zaten alınmışsa ALREADY_OWNED → puan yok), mintPoints (defter + tek-kez anahtarı
+    // + points_credited) ve An Motoru anı. Karakter rozeti `ensureCharacterBadgeRecord` ile
+    // katalogdan üretilir; admin pasifleştirmesi reveal'i kilitlemesin diye aktiflik şartı yok.
+    const { awardBadgeInTx } = await import('@/lib/badges/award');
+    const award = await awardBadgeInTx(tx, {
       userId,
       badgeId: picked.badgeId,
-      badgeName: picked.name,
-      justCreated: true,
+      source: 'character',
+      requireActive: false,
     });
-    return true;
+    if (!award.awarded) return false;
+    return { points: award.points };
   });
 
   if (!created) return null; // eşzamanlı istek eşiği tüketti → bu istek boş döner
 
   // Bildirim + koleksiyon başarımları (fire-and-forget; hata reveal'i bozmaz).
   try {
-    const { badgeRewardPoints } = await import('@/lib/badge-reward-points');
-    const rewardPts = badgeRewardPoints(picked.badgeId);
+    // Gerçekten kredilenen puan (rozet geri alınıp yeniden verildiyse ödül tekrar basılmaz → 0).
+    const rewardPts = created.points;
     await prisma.notification.create({
       data: {
         userId, type: 'badge', title: 'Yeni Karakter Rozeti! 🎭',

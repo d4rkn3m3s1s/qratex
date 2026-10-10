@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { utcMondayWeekStart } from '@/lib/innovation-week';
-import { dealerFlashGeoKey } from '@/lib/innovation-geo';
-import { computeWeeklyBriefForDealer } from '@/lib/innovation-weekly-brief';
+import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { buildInnovationDemoScenario } from '@/lib/innovation-demo-scenario';
+import { demoSeedGate, demoTargetRequiredResponse, isDemoSeedAllowed } from '@/lib/data-safety/demo-guard';
+import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
+import { seedInnovationDemoPackage } from '@/lib/innovation-demo-seed';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +18,8 @@ const bodySchema = z.object({
 
 /**
  * 120 sn hedefli adım adım senaryo + isteğe bağlı canlı seed (demo-package ile aynı).
+ * Senaryo metni her zaman döner; `runSeed` yalnız demo kapısı açıkken ve yalnız `isDemo`
+ * bayide veritabanına yazar (P0-27).
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
@@ -30,89 +32,47 @@ export async function POST(request: NextRequest) {
 
   const { dealerId, runSeed } = parsed.data;
 
-  const dealer = await prisma.user.findFirst({
-    where: { id: dealerId, role: 'DEALER' },
-    select: { id: true, latitude: true, longitude: true },
-  });
-  if (!dealer) {
-    return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+  try {
+    const dealer = await prisma.user.findFirst({
+      where: { id: dealerId, role: 'DEALER' },
+      select: { id: true, latitude: true, longitude: true, isDemo: true },
+    });
+    if (!dealer) {
+      return NextResponse.json({ error: 'Bayi bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    const scenario = buildInnovationDemoScenario(dealerId);
+
+    if (!runSeed) {
+      return NextResponse.json({
+        ...scenario,
+        seeded: null,
+        demoSeedAllowed: isDemoSeedAllowed(),
+        note: 'runSeed: true ile veritabanına demo paketi yazılır (yalnız demo bayide).',
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    const gate = demoSeedGate();
+    if (gate) return gate;
+    if (!dealer.isDemo) return demoTargetRequiredResponse();
+
+    const seeded = await seedInnovationDemoPackage(dealer, 'scenario');
+
+    await prisma.auditLog
+      .create({
+        data: auditEntry(
+          actorFromSession(auth.session),
+          { action: 'INNOVATION_DEMO_SCENARIO', entity: 'User', entityId: dealerId, newData: seeded },
+          request
+        ),
+      })
+      .catch((e) => console.error('[innovation/demo-scenario] audit failed:', e));
+
+    return NextResponse.json({ ...scenario, seeded }, { headers: PRIVATE_NO_STORE_HEADERS });
+  } catch (error) {
+    console.error('[innovation/demo-scenario]', error);
+    const db = responseIfDatabaseUnavailable(error);
+    if (db) return db;
+    return NextResponse.json({ error: 'Senaryo hazırlanamadı' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
-
-  const scenario = buildInnovationDemoScenario(dealerId);
-
-  if (!runSeed) {
-    return NextResponse.json({
-      ...scenario,
-      seeded: null,
-      note: 'runSeed: true ile veritabanına demo paketi yazılır.',
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const now = new Date();
-  const validTo = new Date(now.getTime() + 30 * 60 * 1000);
-  let geohash5: string | null = null;
-  if (dealer.latitude != null && dealer.longitude != null) {
-    geohash5 = dealerFlashGeoKey(dealer.latitude, dealer.longitude);
-  }
-
-  const [pulse, flash, briefComputed] = await Promise.all([
-    prisma.tablePulse.create({
-      data: {
-        dealerId,
-        mood: 'OK',
-        tableCode: 'DEMO120',
-        note: '120 sn senaryo — sessiz sinyal',
-      },
-    }),
-    prisma.dealerFlashOffer.create({
-      data: {
-        dealerId,
-        title: 'Senaryo: Mutlu saat %15',
-        body: 'Canlı simülasyon flash örneği — 30 dk içinde biter.',
-        offerType: 'PERCENT',
-        value: 15,
-        validFrom: now,
-        validTo,
-        isActive: true,
-        maxRedemptions: 50,
-        geohash5,
-      },
-    }),
-    computeWeeklyBriefForDealer(dealerId),
-  ]);
-
-  const weekStart = utcMondayWeekStart();
-  const brief = await prisma.dealerWeeklyBrief.upsert({
-    where: { dealerId_weekStart: { dealerId, weekStart } },
-    create: {
-      dealerId,
-      weekStart,
-      topThemes: briefComputed.topThemes as object,
-      recommendedAction: briefComputed.recommendedAction,
-    },
-    update: {
-      topThemes: briefComputed.topThemes as object,
-      recommendedAction: briefComputed.recommendedAction,
-    },
-  });
-
-  const proposal = await prisma.segmentCampaignProposal.create({
-    data: {
-      dealerId,
-      segmentKey: 'first_visit',
-      title: 'Senaryo: İlk ziyaret kampanyası',
-      message: '120 sn demo — segment taslağı metni.',
-      status: 'PENDING',
-    },
-  });
-
-  return NextResponse.json({
-    ...scenario,
-    seeded: {
-      tablePulseId: pulse.id,
-      flashOfferId: flash.id,
-      weeklyBriefId: brief.id,
-      segmentProposalId: proposal.id,
-    },
-  }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

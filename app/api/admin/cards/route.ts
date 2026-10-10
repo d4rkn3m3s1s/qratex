@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { adminCardsQuerySchema } from '@/lib/validations-admin';
+import { archivedListFilter } from '@/lib/data-safety/archive';
 
 
 export const dynamic = 'force-dynamic';
@@ -30,8 +31,10 @@ export async function GET(request: NextRequest) {
 
     const skip = (page - 1) * pageSize;
 
-    // Filter oluştur
-    const where: Record<string, unknown> = {};
+    // Filter oluştur. Arşivlenmiş ("silinmiş") kartlar varsayılan listede ve sayaçlarda yok;
+    // `?archived=only` arşivi, `?archived=include` hepsini döndürür (P0-26).
+    const archiveFilter = archivedListFilter(request);
+    const where: Record<string, unknown> = { ...archiveFilter };
 
     if (status) {
       where.status = status;
@@ -73,6 +76,7 @@ export async function GET(request: NextRequest) {
       // İstatistikler
       prisma.physicalCard.groupBy({
         by: ['status'],
+        where: archiveFilter,
         _count: { status: true },
       }),
     ]);

@@ -14,20 +14,25 @@ const badgeVariants = cva(
         destructive:
           'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
         outline: 'text-foreground',
+        // QDL rol token'ları: her temada ≥ 4.5:1 (eski green/yellow/blue-500 açık zeminde 1,9–2,3:1 idi)
         success:
-          'border-transparent bg-green-500/10 text-green-500 hover:bg-green-500/20',
+          'border-success-border bg-success-subtle text-success hover:bg-success-subtle/80',
         warning:
-          'border-transparent bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20',
+          'border-warning-border bg-warning-subtle text-warning hover:bg-warning-subtle/80',
         info:
-          'border-transparent bg-blue-500/10 text-blue-500 hover:bg-blue-500/20',
+          'border-info-border bg-info-subtle text-info hover:bg-info-subtle/80',
+        danger:
+          'border-danger-border bg-danger-subtle text-danger hover:bg-danger-subtle/80',
+        brand:
+          'border-brand-border bg-brand-subtle text-brand hover:bg-brand-subtle/80',
         common:
-          'border-transparent bg-gray-500/10 text-gray-400',
+          'border-transparent bg-gray-500/10 text-gray-600 dark:text-gray-400',
         rare:
-          'border-transparent bg-blue-500/10 text-blue-400',
+          'border-transparent bg-blue-500/10 text-blue-700 dark:text-blue-400',
         epic:
           'border-transparent bg-primary/10 text-primary',
         legendary:
-          'border-transparent bg-yellow-500/10 text-yellow-400 animate-glow-pulse',
+          'border-transparent bg-yellow-500/10 text-amber-700 dark:text-yellow-400 motion-safe:animate-glow-pulse',
       },
     },
     defaultVariants: {
@@ -40,9 +45,10 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
+/** `<span>`: paragraf/başlık içinde geçerli HTML (eski `<div>` geçersiz iç içe yapı üretiyordu). */
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <span className={cn(badgeVariants({ variant }), className)} {...props} />
   );
 }
 

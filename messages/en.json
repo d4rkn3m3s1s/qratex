@@ -763,6 +763,19 @@
         "aiInsightsDescription": "AI-powered detailed analysis and personalized recommendations",
         "viewAiInsights": "View AI Insights"
     },
+    "qrScanner": {
+        "retry": "Try again",
+        "errors": {
+            "permissionDenied": "Camera permission was denied. Allow camera access for this site from the lock icon in the address bar and try again.",
+            "policyBlocked": "The camera is disabled on this page by a security policy. Reload the page and try again; if it persists, enter the code manually.",
+            "notFound": "No camera found. Make sure your device has a working camera.",
+            "inUse": "The camera is being used by another app or tab. Close it and try again.",
+            "insecureContext": "The camera can only be opened over a secure (HTTPS) connection.",
+            "unsupported": "This browser does not support QR scanning with the camera. You can enter the code manually.",
+            "elementMissing": "The scanning area could not be prepared. Reload the page and try again.",
+            "unknown": "Could not start the camera. Try again or enter the code manually."
+        }
+    },
     "dealerScan": {
         "eyebrow": "Dealer panel",
         "title": "Scan card",
@@ -1060,7 +1073,22 @@
         "toastLinkCopied": "Survey link copied",
         "toastDeleted": "Survey deleted",
         "errorToggleFailed": "Could not update",
-        "errorDeleteFailed": "Could not delete"
+        "errorDeleteFailed": "Could not delete",
+        "errorLoad": "Surveys couldn't be loaded",
+        "deleteAria": "Delete survey: {title}",
+        "toggleAria": "Publishing status: {title}",
+        "statusLive": "Live",
+        "statusPaused": "Paused",
+        "deleteTitle": "Delete this survey permanently?",
+        "deleteDescription": "“{title}”, its questions and every response it collected will be permanently deleted. If you only want to stop collecting responses, pause the survey instead.",
+        "deleteConfirm": "Delete permanently",
+        "impactResponses": "Responses to delete",
+        "impactQuestions": "Questions to delete",
+        "impactWarning": "Deleted responses cannot be recovered.",
+        "unanswerableBadge": "{count} question(s) can't be answered",
+        "unanswerableHint": "Choice questions without options are hidden from customers. Recreate the survey with complete questions.",
+        "toastCopyFailed": "Couldn't copy the link. Copy it manually: {url}",
+        "pausedCopyWarning": "This survey is paused; the link won't work for customers until it's live again."
     },
     "dealerSurveyCreate": {
         "title": "Create survey",
@@ -1087,7 +1115,16 @@
         "toastFillQuestions": "Fill in all questions",
         "toastCreated": "Survey created!",
         "toastCreateFailed": "Could not create",
-        "toastGenericError": "Something went wrong"
+        "toastGenericError": "Something went wrong",
+        "backAria": "Back to surveys",
+        "questionLegend": "Question {n}",
+        "questionTypeAria": "Question {n} type",
+        "removeQuestionAria": "Remove question {n}",
+        "removeOptionAria": "Remove option {n}",
+        "requiredAria": "Question {n} required",
+        "questionLimit": "{count}/{max} questions",
+        "optionsHint": "Enter at least 2 distinct, non-empty options.",
+        "toastFixErrors": "Fix the highlighted fields before saving"
     },
     "dealerSurveyResults": {
         "loading": "Loading results",
@@ -1961,7 +1998,15 @@
         "error": "Error",
         "fetchNotFound": "Survey not found",
         "openTextPlaceholder": "Write your answer…",
-        "submit": "Submit"
+        "submit": "Submit",
+        "loadFailed": "The survey couldn't be loaded right now",
+        "retry": "Try again",
+        "alreadyTitle": "You've already answered this survey",
+        "alreadyBody": "Thanks for taking part. Each account can answer a survey only once.",
+        "ratingAria": "{n} out of 5",
+        "requiredSr": "(required)",
+        "noQuestions": "This survey isn't accepting responses right now.",
+        "progress": "{done}/{total} questions answered"
     },
     "privacySecurity": {
         "toast2faSetupFailed": "2FA setup failed",

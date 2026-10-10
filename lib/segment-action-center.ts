@@ -21,8 +21,28 @@ export interface SegmentSummary {
   action: SegmentAction | null;
 }
 
+/**
+ * Aksiyon TİPİ — istemcinin hangi gövdeyi hangi uca göndereceğini belirleyen sözleşme.
+ * (Eskiden yalnız `endpoint` vardı ve sayfa her uca aynı `{segment, source}` gövdesini
+ * yolluyordu → 5 butonun 4'ü her zaman 400 alıyordu. Gövde kurulumu:
+ * lib/dealer/segment-action-requests.ts.)
+ *  - `risk_offer`: risk segmentine ANINDA bildirim (onay diyaloğuyla).
+ *  - `win_back`: bu işletmeye 30+ gündür gelmeyenlere ANINDA geri kazanım teklifi.
+ *  - `segment_proposal`: kampanya TASLAĞI (admin onayından sonra /dealer/innovation'dan gönderilir).
+ */
+export type SegmentActionKind = 'risk_offer' | 'win_back' | 'segment_proposal';
+
+/** `segment_proposal` için şablon anahtarı (lib/innovation-segment-templates.ts → SegmentKey). */
+export type SegmentProposalKey = 'sleeping' | 'loyal' | 'first_visit';
+
 /** Bir segmente önerilen tek-tık aksiyon + onu uygulayan mevcut endpoint. */
 export interface SegmentAction {
+  /** Aksiyon tipi (istemci gövdeyi buna göre kurar). */
+  kind: SegmentActionKind;
+  /** Sonuç: `send` müşterilere hemen gider; `draft` yalnız taslak oluşturur. */
+  effect: 'send' | 'draft';
+  /** Yalnız `segment_proposal`: kullanılacak şablon. */
+  proposalSegmentKey?: SegmentProposalKey;
   /** Kısa etiket (buton metni). */
   label: string;
   /** Neden bu aksiyon (dealer'a açıklama). */
@@ -31,7 +51,7 @@ export interface SegmentAction {
   priority: 'high' | 'medium' | 'low';
   /** Bu aksiyonu uygulayan mevcut API endpoint'i (POST). */
   endpoint: string;
-  /** İkon (emoji). */
+  /** İkon anahtarı (geriye uyumluluk için emoji; istemci lucide ikonuna eşler). */
   icon: string;
 }
 
@@ -53,6 +73,8 @@ export function actionForSegment(name: string, count: number, avgChurn: number |
   switch (name) {
     case 'Risk Altında':
       return {
+        kind: 'risk_offer',
+        effect: 'send',
         label: 'Flash teklif gönder',
         rationale: `${count} müşteri kayıp riskinde${avgChurn != null ? ` (ort. %${Math.round(avgChurn * 100)} olasılık)` : ''}. Hızlı bir teşvik onları elde tutar.`,
         priority: 'high',
@@ -61,32 +83,43 @@ export function actionForSegment(name: string, count: number, avgChurn: number |
       };
     case 'Uyuyan':
       return {
-        label: 'Win-back kampanyası',
-        rationale: `${count} müşteri 30+ gündür pasif. Geri kazanım teklifi ile canlandır.`,
+        kind: 'win_back',
+        effect: 'send',
+        label: 'Geri kazanım teklifi gönder',
+        rationale: `${count} müşteri 30+ gündür pasif. Bu işletmeye 30+ gündür gelmeyenlere geri kazanım teklifi gönder.`,
         priority: 'high',
         endpoint: '/api/dealer/win-back',
         icon: '📨',
       };
     case 'VIP':
       return {
-        label: 'Sadakat ödülü ver',
-        rationale: `${count} yüksek değerli müşteri. Özel ödül ile bağlılığı pekiştir.`,
+        kind: 'segment_proposal',
+        effect: 'draft',
+        proposalSegmentKey: 'loyal',
+        label: 'Sadakat ödülü taslağı oluştur',
+        rationale: `${count} yüksek değerli müşteri. Teşekkür + ikram taslağı hazırla; admin onayından sonra gönderebilirsin.`,
         priority: 'medium',
         endpoint: '/api/dealer/innovation/segment-proposals',
         icon: '👑',
       };
     case 'Sadık':
       return {
-        label: 'Referans daveti',
-        rationale: `${count} sadık müşteri — en iyi tavsiye kaynağın. Referans teşviki sun.`,
+        kind: 'segment_proposal',
+        effect: 'draft',
+        proposalSegmentKey: 'loyal',
+        label: 'Teşekkür ödülü taslağı oluştur',
+        rationale: `${count} sadık müşteri — en iyi tavsiye kaynağın. Teşekkür + mikro ödül taslağı hazırla; admin onayından sonra gönderebilirsin.`,
         priority: 'medium',
         endpoint: '/api/dealer/innovation/segment-proposals',
         icon: '🤝',
       };
     case 'Yeni':
       return {
-        label: 'Karşılama serisi',
-        rationale: `${count} yeni müşteri. İkinci ziyareti getirecek bir karşılama teklifi kritik.`,
+        kind: 'segment_proposal',
+        effect: 'draft',
+        proposalSegmentKey: 'first_visit',
+        label: 'Karşılama teklifi taslağı oluştur',
+        rationale: `${count} yeni müşteri. İkinci ziyareti getirecek bir karşılama teklifi taslağı hazırla; admin onayından sonra gönderebilirsin.`,
         priority: 'medium',
         endpoint: '/api/dealer/innovation/segment-proposals',
         icon: '🌱',

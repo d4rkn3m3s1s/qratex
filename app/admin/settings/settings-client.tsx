@@ -1,7 +1,7 @@
 'use client';
 
 import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
-import { useState, useEffect, useLayoutEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import NextImage from 'next/image';
@@ -71,6 +71,8 @@ import {
 import { type BackgroundVariant } from '@/components/ui/backgrounds';
 import { avatarList } from '@/lib/avatar-options';
 import { BootstrapActionButton } from '@/components/admin/bootstrap-action-button';
+import { ErrorState, SkeletonForm, classifyError } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
 import type { ModuleControlItem, ModuleControlsMap, ModuleScope } from '@/lib/module-controls';
 import type { MenuItemCatalogItem, VisibilityRole, FeatureVisibilityRole, RoleVisibilityMap } from '@/lib/visibility-controls';
 
@@ -97,6 +99,38 @@ interface SiteSettings {
   pointsPerReferral: number;
   levelUpThreshold: number;
 }
+
+/**
+ * DB'de HİÇ satırı olmayan anahtarlar için gösterim değeri (çalışma zamanı okuyucularının
+ * varsayılanıyla aynı). P0-28: bu değerler asla kendiliğinden canlıya yazılmaz — form yalnız
+ * başarılı yüklemeden sonra açılır ve kaydetme yalnız kullanıcının DEĞİŞTİRDİĞİ anahtarları
+ * gönderir.
+ */
+const SITE_SETTINGS_UNSET_DISPLAY: SiteSettings = {
+    siteName: 'QRateX',
+    siteDescription: 'QR Kod Tabanlı Müşteri Geri Bildirim Platformu',
+    siteUrl: 'https://qratex.com',
+    logoUrl: '/logo/logo.png',
+    faviconUrl: '/favicon.ico',
+    primaryColor: BRAND_PRIMARY_HEX.toUpperCase(),
+    defaultTheme: 'dark',
+    backgroundEffect: 'original',
+    enableRegistration: true,
+    enableGoogleAuth: true,
+    enableMagicLink: false,
+    maintenanceMode: false,
+    emailFrom: 'noreply@qratex.com',
+    smtpHost: '',
+    smtpPort: '587',
+    openaiApiKey: '',
+    openaiModel: 'gpt-4-turbo-preview',
+    aiEnabled: true,
+    pointsPerFeedback: 10,
+    pointsPerReferral: 50,
+    levelUpThreshold: 100,
+};
+
+const SITE_SETTING_KEYS = Object.keys(SITE_SETTINGS_UNSET_DISPLAY) as Array<keyof SiteSettings>;
 
 type SettingsAuditEntry = {
   id: string;
@@ -253,29 +287,15 @@ export default function AdminSettingsPage() {
     confirmPassword: '',
   });
 
-  const [settings, setSettings] = useState<SiteSettings>({
-    siteName: 'QRateX',
-    siteDescription: 'QR Kod Tabanlı Müşteri Geri Bildirim Platformu',
-    siteUrl: 'https://qratex.com',
-    logoUrl: '/logo/logo.png',
-    faviconUrl: '/favicon.ico',
-    primaryColor: BRAND_PRIMARY_HEX.toUpperCase(),
-    defaultTheme: 'dark',
-    backgroundEffect: 'original',
-    enableRegistration: true,
-    enableGoogleAuth: true,
-    enableMagicLink: false,
-    maintenanceMode: false,
-    emailFrom: 'noreply@qratex.com',
-    smtpHost: '',
-    smtpPort: '587',
-    openaiApiKey: '',
-    openaiModel: 'gpt-4-turbo-preview',
-    aiEnabled: true,
-    pointsPerFeedback: 10,
-    pointsPerReferral: 50,
-    levelUpThreshold: 100,
-  });
+  const [settings, setSettings] = useState<SiteSettings>(SITE_SETTINGS_UNSET_DISPLAY);
+  // P0-28 durum makinesi: idle → loading → ready | error. Site ayarı formları YALNIZ `ready`
+  // iken render edilir; kaydetme yalnız DEĞİŞEN anahtarları `baseVersions` ile gönderir.
+  const [settingsStatus, setSettingsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [settingsLoadError, setSettingsLoadError] = useState<unknown>(null);
+  const [settingsBaseline, setSettingsBaseline] = useState<SiteSettings | null>(null);
+  const [settingsVersions, setSettingsVersions] = useState<Record<string, string>>({});
+  const [settingsConflict, setSettingsConflict] = useState<string | null>(null);
+  const [pendingConflictVersions, setPendingConflictVersions] = useState<Record<string, string>>({});
 
   useLayoutEffect(() => {
     try {
@@ -346,20 +366,42 @@ export default function AdminSettingsPage() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/settings');
-      const data = await res.json();
-      
-      if (data.entries && Array.isArray(data.entries)) {
-        const merged = { ...settings };
-        data.entries.forEach((setting: { key: string; value: unknown }) => {
-          if (setting.key in merged) {
-            (merged as Record<string, unknown>)[setting.key] = setting.value;
-          }
-        });
-        setSettings(merged);
+      setSettingsStatus('loading');
+      setSettingsConflict(null);
+      const res = await fetch('/api/admin/settings', { cache: 'no-store' });
+      let data: { entries?: Array<{ key: string; value: unknown; version?: string; updatedAt?: string }>; error?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
       }
+      if (!res.ok || !data || !Array.isArray(data.entries)) {
+        throw Object.assign(new Error(data?.error || 'Ayarlar yüklenemedi'), { status: res.status });
+      }
+      const merged: SiteSettings = { ...SITE_SETTINGS_UNSET_DISPLAY };
+      const versions: Record<string, string> = {};
+      for (const key of SITE_SETTING_KEYS) versions[key] = 'none';
+      data.entries.forEach((setting) => {
+        if (setting.key in merged) {
+          (merged as unknown as Record<string, unknown>)[setting.key] = setting.value;
+          versions[setting.key] =
+            typeof setting.version === 'string'
+              ? setting.version
+              : setting.updatedAt
+                ? new Date(setting.updatedAt).toISOString()
+                : 'none';
+        }
+      });
+      setSettings(merged);
+      setSettingsBaseline(merged);
+      setSettingsVersions(versions);
+      setSettingsLoadError(null);
+      setSettingsStatus('ready');
     } catch (error) {
       console.error('Settings fetch error:', error);
+      setSettingsBaseline(null);
+      setSettingsLoadError(error);
+      setSettingsStatus('error');
     } finally {
       setLoading(false);
     }
@@ -547,30 +589,58 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (opts?: { overwrite?: boolean }) => {
+    if (settingsStatus !== 'ready' || !settingsBaseline) {
+      settingsToasts.warn('Ayarlar yüklenmeden kaydedilemez. Önce yeniden yükleyin.');
+      return;
+    }
+    // Yalnız DEĞİŞEN anahtarlar gönderilir: dokunulmamış ayar (başka sekmedekiler dahil)
+    // asla canlı değeri ezmez.
+    const changed = SITE_SETTING_KEYS.filter(
+      (key) => JSON.stringify(settings[key]) !== JSON.stringify(settingsBaseline[key])
+    );
+    if (changed.length === 0) {
+      settingsToasts.info('Kaydedilecek değişiklik yok.');
+      return;
+    }
     try {
       setSaving(true);
-      
-      // Batch update - tek istekle tüm ayarları kaydet
-      const settingsArray = Object.entries(settings).map(([key, value]) => ({
-        key,
-        value,
-        category: 'general',
-      }));
-      
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: settingsArray }),
+        body: JSON.stringify({
+          settings: changed.map((key) => ({ key, value: settings[key], category: 'general' })),
+          baseVersions: Object.fromEntries(
+            changed.map((key) => [key, opts?.overwrite ? (pendingConflictVersions[key] ?? settingsVersions[key]) : settingsVersions[key]])
+          ),
+        }),
       });
-      
-      if (res.ok) {
-        settingsToasts.success('Ayarlar kaydedildi.');
-      } else {
-        throw new Error('Save failed');
+      let data: { versions?: Record<string, string>; code?: string; error?: string; conflicts?: Array<{ key: string; currentVersion: string }> } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
       }
+      if (res.status === 409 && data?.code === 'VERSION_CONFLICT') {
+        const conflictVersions: Record<string, string> = {};
+        for (const c of data.conflicts ?? []) conflictVersions[c.key] = c.currentVersion;
+        setPendingConflictVersions(conflictVersions);
+        setSettingsConflict(data.error || 'Bu ayarlar siz düzenlerken başka biri tarafından değiştirildi.');
+        return;
+      }
+      if (!res.ok) throw new Error(data?.error || 'Ayarlar kaydedilemedi.');
+      setSettingsVersions((prev) => ({ ...prev, ...(data?.versions ?? {}) }));
+      setSettingsBaseline((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        for (const key of changed) (next as unknown as Record<string, unknown>)[key] = settings[key];
+        return next;
+      });
+      setSettingsConflict(null);
+      setPendingConflictVersions({});
+      settingsToasts.success('Ayarlar kaydedildi.');
     } catch (error) {
-      settingsToasts.warn('Ayarlar kaydedilemedi.');
+      settingsToasts.warn(error instanceof Error ? error.message : 'Ayarlar kaydedilemedi.');
     } finally {
       setSaving(false);
     }
@@ -582,24 +652,43 @@ export default function AdminSettingsPage() {
 
   // Arka plan efektini anında kaydet
   const handleBackgroundChange = async (variant: BackgroundVariant) => {
+    if (settingsStatus !== 'ready') {
+      settingsToasts.warn('Ayarlar yüklenmeden kaydedilemez. Önce yeniden yükleyin.');
+      return;
+    }
+    const previousVariant = settings.backgroundEffect;
     setSettings((prev) => ({ ...prev, backgroundEffect: variant }));
-    
+
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          settings: [{ key: 'backgroundEffect', value: variant, category: 'appearance' }] 
+        body: JSON.stringify({
+          settings: [{ key: 'backgroundEffect', value: variant, category: 'appearance' }],
+          baseVersions: { backgroundEffect: settingsVersions.backgroundEffect ?? 'none' },
         }),
       });
-      
+      let data: { versions?: Record<string, string>; code?: string; error?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
       if (res.ok) {
-        settingsToasts.success('Arka plan efekti guncellendi.');
+        setSettingsVersions((prev) => ({ ...prev, ...(data?.versions ?? {}) }));
+        setSettingsBaseline((prev) => (prev ? { ...prev, backgroundEffect: variant } : prev));
+        settingsToasts.success('Arka plan efekti güncellendi.');
       } else {
-        settingsToasts.warn('Arka plan efekti kaydedilemedi.');
+        setSettings((prev) => ({ ...prev, backgroundEffect: previousVariant }));
+        if (res.status === 409 && data?.code === 'VERSION_CONFLICT') {
+          setSettingsConflict(data.error || 'Bu ayar siz düzenlerken başka biri tarafından değiştirildi.');
+        }
+        settingsToasts.warn(data?.error || 'Arka plan efekti kaydedilemedi.');
       }
     } catch (error) {
-      settingsToasts.warn('Beklenmeyen bir hata olustu.');
+      setSettings((prev) => ({ ...prev, backgroundEffect: previousVariant }));
+      settingsToasts.warn('Beklenmeyen bir hata oluştu.');
     }
   };
 
@@ -806,7 +895,31 @@ export default function AdminSettingsPage() {
     }
   };
 
-  if (loading) {
+  const siteSettingsGate: ReactNode =
+    settingsStatus === 'ready' ? null : settingsStatus === 'error' ? (
+      <ErrorState
+        kind={classifyError(settingsLoadError)}
+        title="Site ayarları yüklenemedi"
+        description="Canlı ayarlar okunamadığı için bu sekmelerde düzenleme kilitlendi. Kayıtlı ayarlarınız değişmedi; tekrar deneyin."
+        onRetry={fetchSettings}
+      />
+    ) : (
+      <div role="status" aria-busy="true">
+        <span className="sr-only">Ayarlar yükleniyor…</span>
+        <SkeletonForm />
+      </div>
+    );
+
+  const settingsConflictBanner = settingsConflict ? (
+    <VersionConflictBanner
+      className="mb-4"
+      message={settingsConflict}
+      onReload={fetchSettings}
+      onOverwrite={Object.keys(pendingConflictVersions).length > 0 ? () => handleSave({ overwrite: true }) : undefined}
+    />
+  ) : null;
+
+  if (loading && settingsStatus !== 'error') {
     return (
       <div className="space-y-6">
         <PageHeader title="Ayarlar" description="Platform ayarlarını yapılandırın" />
@@ -1154,6 +1267,9 @@ export default function AdminSettingsPage() {
 
         {/* General Settings */}
         <TabsContent value="general">
+          {siteSettingsGate ?? (
+            <>
+              {settingsConflictBanner}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1197,17 +1313,22 @@ export default function AdminSettingsPage() {
                     onCheckedChange={(checked) => updateSetting('maintenanceMode', checked)}
                   />
                 </div>
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         {/* Appearance Settings */}
         <TabsContent value="appearance">
+          {siteSettingsGate ?? (
+            <>
+              {settingsConflictBanner}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1269,7 +1390,7 @@ export default function AdminSettingsPage() {
                     </Select>
                   </div>
                 </div>
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
@@ -1454,10 +1575,15 @@ export default function AdminSettingsPage() {
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         {/* Auth Settings */}
         <TabsContent value="auth">
+          {siteSettingsGate ?? (
+            <>
+              {settingsConflictBanner}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1500,7 +1626,7 @@ export default function AdminSettingsPage() {
                     />
                   </div>
                 </div>
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
@@ -1706,10 +1832,15 @@ export default function AdminSettingsPage() {
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         {/* AI Settings */}
         <TabsContent value="ai">
+          {siteSettingsGate ?? (
+            <>
+              {settingsConflictBanner}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1757,17 +1888,22 @@ export default function AdminSettingsPage() {
                     </Select>
                   </div>
                 </div>
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         {/* Gamification Settings */}
         <TabsContent value="gamification">
+          {siteSettingsGate ?? (
+            <>
+              {settingsConflictBanner}
           <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1807,13 +1943,15 @@ export default function AdminSettingsPage() {
                     <p className="text-xs text-muted-foreground">Seviye başına gereken puan</p>
                   </div>
                 </div>
-                <Button onClick={handleSave} disabled={saving} className="gap-2">
+                <Button onClick={() => void handleSave()} disabled={saving} className="gap-2">
                   <Save className="h-4 w-4" />
                   {saving ? 'Kaydediliyor...' : 'Kaydet'}
                 </Button>
               </CardContent>
             </Card>
           </Motion.div>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="modules">

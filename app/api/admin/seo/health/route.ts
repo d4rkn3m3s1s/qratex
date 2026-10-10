@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getSeoSettingsFull } from '@/lib/seo-settings';
+import { isHttpUrl } from '@/lib/seo-url';
 
 
 export const dynamic = 'force-dynamic';
@@ -37,13 +38,7 @@ export async function GET() {
   const g = payload.global;
   const checks: CheckResult[] = [];
 
-  const siteUrlValid = (() => {
-    try {
-      return Boolean(new URL(g.siteUrl));
-    } catch {
-      return false;
-    }
-  })();
+  const siteUrlValid = isHttpUrl(g.siteUrl);
   checks.push({
     key: 'siteUrl',
     label: 'Site URL geçerli',

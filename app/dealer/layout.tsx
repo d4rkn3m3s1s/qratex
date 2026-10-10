@@ -5,6 +5,7 @@ import { DashboardHeader } from '@/components/dashboard/header';
 import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { OnboardingGateBanner } from '@/components/onboarding/onboarding-gate-banner';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
+import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { RealtimeNotifications } from '@/components/dashboard/realtime-notifications';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
@@ -46,6 +47,8 @@ export default async function DealerLayout({
       <OnboardingSheet />
       <WebVitalsReporter />
       <RealtimeNotifications />
+      {/* PWA: SW yalnız panelde kaydedilir; QR hunisinde hiç kurulmaz (P0-37). */}
+      <ServiceWorkerRegistrar />
     </div>
   );
 }

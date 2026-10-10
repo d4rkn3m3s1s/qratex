@@ -12,9 +12,19 @@
  */
 
 import OpenAI from 'openai';
-import { checkAiCostGuard, recordAiCostUsage } from '@/lib/ai-cost-guard';
-import { detectPromptInjection } from '@/lib/prompt-injection';
+import { guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
 import { getSystemLearningProfile } from '@/lib/ai-learning';
+import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
+import {
+  CONTEXT_LIMITS,
+  PROMPT_VERSIONS,
+  UNTRUSTED_DATA_RULE,
+  buildBoundedContextBlock,
+  detectPromptInjectionTr as detectPromptInjection,
+  sanitizeContextLine,
+  sanitizeContextText,
+  wrapUntrusted,
+} from '@/lib/ai-prompt-safety';
 import type {
   AIAnalysisResult,
   AIEntity,
@@ -92,9 +102,36 @@ export function getAIProviderStatus(): { configured: boolean; provider: string; 
 }
 
 /**
+ * Bayi kapsamlı LLM çağrısından önce: AI ana anahtarı açık mı? (P0-32)
+ * `dealerId` yoksa (platform/müşteri kapsamı) politika uygulanmaz → true.
+ */
+async function dealerAllowsAi(dealerId: string | undefined | null): Promise<boolean> {
+  if (!dealerId) return true;
+  return canUseAi(await getDealerAiPolicy(dealerId));
+}
+
+/** Başarısız çağrıyı da kullanım kaydına yaz (yalnız bayi kapsamında). */
+async function recordFailure(dealerId: string | undefined | null, task: AiTask, startedAt: number, error: unknown) {
+  if (!dealerId) return;
+  await recordAiCostUsage(dealerId, 0, 0, task, `${getModelProvider()}/${getModel()}`, Date.now() - startedAt, {
+    success: false,
+    error: error instanceof Error ? error.message : String(error),
+  });
+}
+
+type UsageLike = { usage?: { prompt_tokens?: number; completion_tokens?: number } | null };
+function usageOf(r: unknown): { in_: number; out: number } {
+  const u = (r as UsageLike | null)?.usage;
+  return { in_: u?.prompt_tokens ?? 0, out: u?.completion_tokens ?? 0 };
+}
+
+/**
  * Genel amaçlı LLM chat completion. Gerçek sağlayıcı yoksa null döner
  * (sahte/şablon yanıt ÜRETMEZ — çağıran taraf dürüstçe degraded davranır).
  * Agent Council ve diğer üretken akışlar bunu kullanır.
+ *
+ * `dealerId` verilirse: bayi AI'ı kapalıysa null (LLM çağrısı yok), dakikalık limit ve
+ * günlük token tavanı uygulanır (aşımda AiRateLimitExceededError / AiCostLimitExceededError).
  */
 export async function runChatCompletion(params: {
   system: string;
@@ -103,6 +140,10 @@ export async function runChatCompletion(params: {
   maxTokens?: number;
   jsonMode?: boolean;
   dealerId?: string;
+  /** Kullanım kaydı / limit etiketi (varsayılan chat_completion). */
+  task?: AiTask;
+  /** Bayi yoksa dakikalık limit anahtarı (kullanıcı id vb.). */
+  actorKey?: string;
 }): Promise<{ content: string; modelUsed: string } | null> {
   const client = getAIClient();
   if (!client) return null;
@@ -112,9 +153,10 @@ export async function runChatCompletion(params: {
     return null;
   }
 
-  if (params.dealerId) {
-    await checkAiCostGuard(params.dealerId);
-  }
+  if (!(await dealerAllowsAi(params.dealerId))) return null;
+
+  const task: AiTask = params.task ?? 'chat_completion';
+  await guardAiCall({ task, dealerId: params.dealerId, actorKey: params.actorKey });
 
   const start = Date.now();
   try {
@@ -134,20 +176,21 @@ export async function runChatCompletion(params: {
     if (!content) return null;
     const latencyMs = Date.now() - start;
     const modelUsed = `${getModelProvider()}/${getModel()}`;
-    logAIUsage('chat_completion', modelUsed, latencyMs, true);
+    logAIUsage(task, modelUsed, latencyMs, true);
     if (params.dealerId) {
       await recordAiCostUsage(
         params.dealerId,
         response.usage?.prompt_tokens ?? 0,
         response.usage?.completion_tokens ?? 0,
-        'chat_completion',
+        task,
         modelUsed,
         latencyMs
       );
     }
     return { content, modelUsed };
   } catch (error) {
-    logAIUsage('chat_completion', getModel(), Date.now() - start, false, error instanceof Error ? error.message : 'unknown');
+    logAIUsage(task, getModel(), Date.now() - start, false, error instanceof Error ? error.message : 'unknown');
+    await recordFailure(params.dealerId, task, start, error);
     console.error('[AI] runChatCompletion failed:', error);
     return null;
   }
@@ -264,17 +307,37 @@ JSON formatı:
   "statementSentiments": [{ "statement": "Yemekler harikaydı", "sentiment": "positive", "score": 0.95 }],
   "actionSuggestions": [{ "action": "Personeli takdir edin", "priority": "low", "impact": "Motivasyon artışı", "category": "staff_training" }],
   "summary": "Müşteri hizmetten ve yemeklerden çok memnun."
-}`;
+}
 
-function buildAnalysisSystemPrompt(customPrompt?: string, adaptiveProfile?: string) {
+${UNTRUSTED_DATA_RULE}
+Analiz edilecek metin <musteri_yorumu> etiketi içinde gelir.`;
+
+/**
+ * Analiz sistem promptu: temel prompt KODDA sabit (PROMPT_VERSIONS.analysis). Bayinin
+ * öğrenilmiş profili ve özel promptu yalnız SINIRLI ek bağlam olarak eklenir; çıktı
+ * biçimini ve güvenlik kuralını değiştiremez. İkisi de yalnız o bayinin kendi verisidir.
+ */
+export function buildAnalysisSystemPrompt(customPrompt?: string, adaptiveProfile?: string) {
   let prompt = ANALYSIS_SYSTEM_PROMPT;
 
-  if (adaptiveProfile && adaptiveProfile.trim().length > 0) {
-    prompt += `\n\n---\nÖğrenilmiş İşletme Profili (bağlam):\n${adaptiveProfile}\nBu bağlamı analizde dikkate al.`;
+  const adaptive = sanitizeContextText(adaptiveProfile, CONTEXT_LIMITS.adaptiveProfile);
+  if (adaptive) {
+    prompt += buildBoundedContextBlock(
+      'isletme_profili',
+      'Öğrenilmiş işletme profili (yalnız bu işletmenin verisinden)',
+      adaptive.split('\n'),
+      CONTEXT_LIMITS.adaptiveProfile
+    );
   }
 
-  if (customPrompt && customPrompt.trim().length > 0) {
-    prompt += `\n\n---\nÖzel Prompt (işletme bağlamı):\n${customPrompt}\nBu bağlamı analizde dikkate al.`;
+  const custom = sanitizeContextText(customPrompt, CONTEXT_LIMITS.dealerCustomPrompt);
+  if (custom) {
+    prompt += buildBoundedContextBlock(
+      'isletme_baglami',
+      'İşletmenin kendi analiz notları',
+      custom.split('\n'),
+      CONTEXT_LIMITS.dealerCustomPrompt
+    );
   }
 
   return prompt;
@@ -301,10 +364,13 @@ export async function analyzeComprehensive(
     return null;
   }
 
+  // P0-32: bayi AI'ı kapalıysa müşteri metni LLM'e gitmez (çağıran yerel analize düşer).
+  if (!(await dealerAllowsAi(options.dealerId))) return null;
+
   const startTime = Date.now();
 
   if (options.dealerId) {
-    await checkAiCostGuard(options.dealerId);
+    await guardAiCall({ task: 'analyze', dealerId: options.dealerId });
   }
 
   try {
@@ -313,7 +379,7 @@ export async function analyzeComprehensive(
         model: getModel(),
         messages: [
           { role: 'system', content: buildAnalysisSystemPrompt(options.customPrompt, options.adaptiveProfile) },
-          { role: 'user', content: `Analiz et: "${text}"` },
+          { role: 'user', content: `Analiz et:\n${wrapUntrusted('musteri_yorumu', text)}` },
         ],
         temperature: 0.2,
         max_tokens: 1200,
@@ -393,14 +459,12 @@ export async function analyzeComprehensive(
 
       // Meta
       modelUsed,
-      version: AI_VERSION,
+      version: `${AI_VERSION}/${PROMPT_VERSIONS.analysis}`,
     };
 
     logAIUsage('analyze', modelUsed, latencyMs, true);
     if (options.dealerId) {
-      const u = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
-      const in_ = u?.prompt_tokens ?? 0;
-      const out = u?.completion_tokens ?? 0;
+      const { in_, out } = usageOf(response);
       await recordAiCostUsage(options.dealerId, in_, out, 'analyze', modelUsed, latencyMs);
     }
 
@@ -408,6 +472,7 @@ export async function analyzeComprehensive(
   } catch (error) {
     console.error('Error in comprehensive analysis:', error);
     logAIUsage('analyze', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
+    await recordFailure(options.dealerId, 'analyze', startTime, error);
     return null;
   }
 }
@@ -476,23 +541,31 @@ export async function analyzeBulk(
  */
 export async function clusterThemes(
   feedbacks: { text: string; sentiment?: string; rating?: number; themes?: AITheme[] }[],
-  period: string
+  period: string,
+  opts: { dealerId?: string } = {}
 ): Promise<AIThemeClusterData[]> {
   const client = getAIClient();
-  if (!client || feedbacks.length === 0) return [];
+  if (feedbacks.length === 0) return [];
 
-  // Eğer zaten tema çıkarılmışsa, lokal kümeleme yap
+  // Eğer zaten tema çıkarılmışsa, lokal kümeleme yap (LLM çağrısı yok)
   const existingThemes = feedbacks.filter(f => f.themes && f.themes.length > 0);
   if (existingThemes.length > feedbacks.length * 0.5) {
     return clusterFromExistingThemes(existingThemes.map(f => f.themes!).flat());
   }
+  if (!client) return [];
+
+  // P0-32: bayi AI'ı kapalıysa yalnız yerel kümeleme.
+  if (!(await dealerAllowsAi(opts.dealerId))) {
+    return clusterFromExistingThemes(existingThemes.map(f => f.themes!).flat());
+  }
+  if (opts.dealerId) await guardAiCall({ task: 'theme_cluster', dealerId: opts.dealerId });
 
   // AI ile kümeleme
   const startTime = Date.now();
   try {
     const feedbackTexts = feedbacks
       .slice(0, 50) // Max 50 feedback
-      .map((f, i) => `${i + 1}. "${f.text}" (Puan: ${f.rating || '?'}, Duygu: ${f.sentiment || '?'})`)
+      .map((f, i) => `${i + 1}. ${wrapUntrusted('musteri_yorumu', f.text, 600)} (Puan: ${f.rating || '?'}, Duygu: ${f.sentiment || '?'})`)
       .join('\n');
 
     const response = await withRetry(() =>
@@ -523,7 +596,9 @@ Kurallar:
 - Her küme en az 2 feedback içermeli
 - Benzer temaları birleştir
 - Türkçe tema adları kullan
-- sampleTexts max 3 adet ve kısa olsun`,
+- sampleTexts max 3 adet ve kısa olsun
+
+${UNTRUSTED_DATA_RULE}`,
           },
           {
             role: 'user',
@@ -553,10 +628,15 @@ Kurallar:
     );
 
     logAIUsage('theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, true);
+    if (opts.dealerId) {
+      const { in_, out } = usageOf(response);
+      await recordAiCostUsage(opts.dealerId, in_, out, 'theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime);
+    }
     return clusters;
   } catch (error) {
     console.error('Error clustering themes:', error);
     logAIUsage('theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
+    await recordFailure(opts.dealerId, 'theme_cluster', startTime, error);
     return [];
   }
 }
@@ -639,25 +719,26 @@ export async function generateInsightReport(data: {
   const client = getAIClient();
   if (!client) return null;
 
+  // P0-32: bayi AI'ı kapalıysa rapor üretilmez (müşteri metinleri LLM'e gitmez).
+  if (!(await dealerAllowsAi(data.dealerId))) return null;
+  await guardAiCall({ task: 'insights', dealerId: data.dealerId });
+
   const startTime = Date.now();
 
   try {
     const feedbackSummary = data.recentFeedbacks
       .slice(0, 20)
-      .map((f, i) => `${i + 1}. "${f.text}" (⭐${f.rating}, ${f.sentiment}${f.intent ? `, Amaç: ${f.intent}` : ''}${f.urgency && f.urgency > 0.5 ? ', ⚠️ ACİL' : ''}${f.churnRisk && f.churnRisk > 0.5 ? ', 🔴 Churn Riski' : ''})`)
+      .map((f, i) => `${i + 1}. ${wrapUntrusted('musteri_yorumu', f.text, 600)} (⭐${f.rating}, ${f.sentiment}${f.intent ? `, Amaç: ${f.intent}` : ''}${f.urgency && f.urgency > 0.5 ? ', ⚠️ ACİL' : ''}${f.churnRisk && f.churnRisk > 0.5 ? ', 🔴 Churn Riski' : ''})`)
       .join('\n');
 
     const themesSummary = data.themeClusters
-      .map(t => `- ${t.theme}${t.subTheme ? ` > ${t.subTheme}` : ''}: ${t.sentiment} (${t.count} adet, skor: ${t.avgScore.toFixed(2)})`)
+      .map(t => `- ${sanitizeContextLine(t.theme, 80) ?? '-'}${t.subTheme ? ` > ${sanitizeContextLine(t.subTheme, 80) ?? ''}` : ''}: ${t.sentiment} (${t.count} adet, skor: ${Number(t.avgScore ?? 0).toFixed(2)})`)
       .join('\n');
 
-    // Sistem geneli öğrenilmiş prompt varsa bağlam olarak ekle
-    let systemPromptPrefix = '';
+    // P0-33: sistem öğrenmesi temel promptun ÖNÜNE değil, sonuna SINIRLI ek bağlam olarak.
+    let learnedBlock = '';
     try {
-      const systemProfile = await getSystemLearningProfile();
-      if (systemProfile?.systemPrompt) {
-        systemPromptPrefix = `\n\n[Sistem öğrenme bağlamı - tüm verilerden çıkarılan kurallar]\n${(systemProfile.systemPrompt as string).slice(0, 800)}\n\n`;
-      }
+      learnedBlock = buildLearnedSystemContext(await getSystemLearningProfile());
     } catch {
       // ignore
     }
@@ -668,7 +749,7 @@ export async function generateInsightReport(data: {
         messages: [
           {
             role: 'system',
-            content: `${systemPromptPrefix}Sen QRATEX'in derin öğrenme tabanlı iş zekası motorusun. Müşteri geri bildirim verilerini makine öğrenmesi ve nedensel analiz perspektifiyle değerlendiriyorsun.
+            content: `Sen QRATEX'in derin öğrenme tabanlı iş zekası motorusun. Müşteri geri bildirim verilerini makine öğrenmesi ve nedensel analiz perspektifiyle değerlendiriyorsun.
 
 Görevin:
 1. Verilerdeki kalıpları (pattern) ve korelasyonları tespit et.
@@ -717,7 +798,9 @@ Kurallar:
 - alerts: Sadece gerçek risk veya fırsat varsa ekle (toksik, yüksek aciliyet, yüksek churn, belirgin düşüş).
 - keyDrivers: Memnuniyet/puan ile en güçlü ilişkili 3-5 faktör. impact: etki büyüklüğü, correlation: verideki korelasyon.
 - predictedRating: Bir sonraki dönem için makul tahmin (mevcut trend ve önerilere göre).
-- Tüm metinler Türkçe. Sayılar gerçek veriyle tutarlı olsun.`,
+- Tüm metinler Türkçe. Sayılar gerçek veriyle tutarlı olsun.
+
+${UNTRUSTED_DATA_RULE}${learnedBlock}`,
           },
           {
             role: 'user',
@@ -804,12 +887,72 @@ Bu verilere dayanarak: (1) genel skor ve trend, (2) güçlü/zayıf yönler, (3)
     };
 
     logAIUsage('insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, true);
+    {
+      const { in_, out } = usageOf(response);
+      await recordAiCostUsage(data.dealerId, in_, out, 'insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime);
+    }
     return result;
   } catch (error) {
     console.error('Error generating insight report:', error);
     logAIUsage('insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
+    await recordFailure(data.dealerId, 'insights', startTime, error);
     return null;
   }
+}
+
+/**
+ * Sistem öğrenme profilinden SINIRLI ek bağlam bloğu (P0-33).
+ *  - Yalnız ONAYLANMIŞ alanlar okunur (öneri `profile.pendingProposal` içinde bekler, burada yok).
+ *  - Her öğe tek satıra indirilir, injection kalıplı öğeler düşer, toplam uzunluk tavanlı.
+ *  - Admin'in düzenlediği `systemPrompt` / `chatSystemPrompt` metinleri de yalnız bu blokta,
+ *    tavanla yer alır; temel promptun YERİNE asla geçmez.
+ */
+export function buildLearnedSystemContext(
+  systemProfile: { profile?: unknown; systemPrompt?: string | null; chatSystemPrompt?: string | null } | null | undefined,
+  opts: { includeChatContext?: boolean } = {}
+): string {
+  if (!systemProfile) return '';
+  const lines: string[] = [];
+  const p = (systemProfile.profile && typeof systemProfile.profile === 'object'
+    ? systemProfile.profile
+    : {}) as Record<string, unknown>;
+  const rules = Array.isArray(p.learnedRules) ? (p.learnedRules as unknown[]) : [];
+  const guidelines = (p.responseGuidelines && typeof p.responseGuidelines === 'object'
+    ? p.responseGuidelines
+    : {}) as { do?: unknown; avoid?: unknown };
+  const themes = Array.isArray(p.learnedThemes) ? (p.learnedThemes as Array<{ theme?: unknown }>) : [];
+
+  for (const r of rules.slice(0, 8)) if (typeof r === 'string') lines.push(`Kural: ${r}`);
+  if (Array.isArray(guidelines.do)) for (const d of guidelines.do.slice(0, 5)) if (typeof d === 'string') lines.push(`Yap: ${d}`);
+  if (Array.isArray(guidelines.avoid)) for (const a of guidelines.avoid.slice(0, 5)) if (typeof a === 'string') lines.push(`Kaçın: ${a}`);
+  const themeNames = themes
+    .slice(0, 6)
+    .map((t) => (typeof t?.theme === 'string' ? t.theme : null))
+    .filter((t): t is string => !!t);
+  if (themeNames.length) lines.push(`Platform genelinde sık temalar: ${themeNames.join(', ')}`);
+
+  if (lines.length === 0 && typeof systemProfile.systemPrompt === 'string') {
+    lines.push(...sanitizeContextText(systemProfile.systemPrompt, 600).split('\n'));
+  }
+  let block = buildBoundedContextBlock(
+    'ogrenilmis_ek_baglam',
+    'Platform genelinden anonim toplulaştırmayla öğrenilmiş, admin onaylı ek bağlam',
+    lines,
+    CONTEXT_LIMITS.learnedBlock
+  );
+
+  if (opts.includeChatContext && typeof systemProfile.chatSystemPrompt === 'string') {
+    const chatCtx = sanitizeContextText(systemProfile.chatSystemPrompt, CONTEXT_LIMITS.adminChatContext);
+    if (chatCtx) {
+      block += buildBoundedContextBlock(
+        'yonetici_sohbet_notlari',
+        'Yönetici sohbet notları (üslup/öncelik ipuçları)',
+        chatCtx.split('\n'),
+        CONTEXT_LIMITS.adminChatContext
+      );
+    }
+  }
+  return block;
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -160,9 +160,16 @@ export async function POST() {
       }
       // Opsiyonel özel rozet (varsa ve daha önce alınmamışsa).
       if (spec.rewardBadgeId) {
-        await tx.userBadge.createMany({
-          data: [{ userId, badgeId: spec.rewardBadgeId }],
-          skipDuplicates: true,
+        // Tek rozet servisi (P0-14 / §5.3): unique guard + An Motoru anı aynı tx'te. Etkinlik
+        // puanı yukarıda verildi; rozet ayrıca kazanım ödülü basmaz. Silinmiş rozet id'si
+        // FK hatasıyla tüm ödülü düşürmez (BADGE_NOT_FOUND → yalnız rozet atlanır).
+        const { awardBadgeInTx } = await import('@/lib/badges/award');
+        await awardBadgeInTx(tx, {
+          userId,
+          badgeId: spec.rewardBadgeId,
+          source: 'seasonal_event',
+          reward: 'none',
+          requireActive: false,
         });
       }
       await tx.notification.create({

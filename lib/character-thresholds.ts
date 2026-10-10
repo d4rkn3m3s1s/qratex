@@ -50,22 +50,59 @@ export function normalizeCategoryThresholds(value: unknown): CategoryThresholdOv
 
 const CACHE_TTL_MS = 60_000; // 60s (getPointsMatrix ile aynı)
 let cache: { value: CategoryThresholdOverrides; expiresAt: number } | null = null;
+/** Son BAŞARILI okuma — DB geçici erişilemezse runtime bunu kullanır (hata asla cache'lenmez). */
+let lastGood: CategoryThresholdOverrides | null = null;
 
 /** Admin PUT sonrası cache'i temizle (anında yansısın). */
 export function clearCategoryThresholdsCache(): void {
   cache = null;
 }
 
-/** Override tablosunu döndürür (60sn cache). Yoksa boş {} (kod-default geçerli). */
+/** Test yardımcısı: modül düzeyi durumu sıfırla. */
+export function __resetCategoryThresholdsStateForTests(): void {
+  cache = null;
+  lastGood = null;
+}
+
+/**
+ * RUNTIME okuyucu (rozet ilerlemesi/reveal): 60sn cache. DB okunamazsa son başarılı değeri,
+ * o da yoksa boş {} (kod-default) döner — ama bu geri düşüş CACHE'LENMEZ; bir sonraki istek
+ * DB'yi yeniden dener (P0-28: tek geçici hata 60sn boyunca "override yok" yayamaz).
+ */
 export async function getCategoryThresholdOverrides(
   db: SettingsReader = prisma as unknown as SettingsReader
 ): Promise<CategoryThresholdOverrides> {
   const now = Date.now();
   if (cache && cache.expiresAt > now) return cache.value;
-  const setting = await db.settings
-    .findUnique({ where: { key: CATEGORY_THRESHOLDS_SETTING_KEY }, select: { value: true } })
-    .catch(() => null);
+  let setting: { value: Prisma.JsonValue } | null;
+  try {
+    setting = await db.settings.findUnique({ where: { key: CATEGORY_THRESHOLDS_SETTING_KEY }, select: { value: true } });
+  } catch (error) {
+    console.warn('[character-thresholds] okunamadı, son geçerli değer/varsayılan kullanılıyor:', error);
+    return lastGood ?? {};
+  }
   const value = normalizeCategoryThresholds(setting?.value);
   cache = { value, expiresAt: now + CACHE_TTL_MS };
+  lastGood = value;
   return value;
+}
+
+type StrictSettingsReader = {
+  settings: {
+    findUnique: (args: unknown) => Promise<{ value: Prisma.JsonValue; updatedAt: Date } | null>;
+  };
+};
+
+/**
+ * ADMIN okuyucu: cache'siz ve FAIL-CLOSED — DB hatasını yutmaz, fırlatır. Admin GET bunu
+ * kullanır; okuma başarısızsa ekran "override yok" sanıp kaydetmeye izin vermez.
+ */
+export async function readCategoryThresholdsStrict(
+  db: StrictSettingsReader = prisma as unknown as StrictSettingsReader
+): Promise<{ overrides: CategoryThresholdOverrides; updatedAt: Date | null }> {
+  const setting = await db.settings.findUnique({
+    where: { key: CATEGORY_THRESHOLDS_SETTING_KEY },
+    select: { value: true, updatedAt: true },
+  });
+  return { overrides: normalizeCategoryThresholds(setting?.value), updatedAt: setting?.updatedAt ?? null };
 }

@@ -32,7 +32,7 @@ export default function SquadBattlesAdminPage() {
     squad2Id: '',
     startTime: '',
     endTime: '',
-    rewardPool: 500
+    rewardPool: 0
   });
 
   useEffect(() => {
@@ -69,7 +69,13 @@ export default function SquadBattlesAdminPage() {
       const res = await fetch('/api/admin/squads/battles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newBattle),
+        // datetime-local tarayıcının yerel saatidir → ISO'ya çevir (sunucu UTC'de kaymasın).
+        body: JSON.stringify({
+          ...newBattle,
+          rewardPool: 0,
+          startTime: newBattle.startTime ? new Date(newBattle.startTime).toISOString() : '',
+          endTime: newBattle.endTime ? new Date(newBattle.endTime).toISOString() : '',
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -96,7 +102,15 @@ export default function SquadBattlesAdminPage() {
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(t('adminSquadBattles.battleFinished'));
+        // Gerçek sonuç: ödül havuzu yoksa "ödüller dağıtıldı" denmez.
+        const s = data.summary as { paidOut?: number; refunded?: number } | undefined;
+        toast.success(
+          s && (s.paidOut ?? 0) > 0
+            ? `Savaş tamamlandı: ${s.paidOut!.toLocaleString('tr-TR')} puan kazananlara dağıtıldı${(s.refunded ?? 0) > 0 ? `, ${s.refunded!.toLocaleString('tr-TR')} puan iade edildi` : ''}`
+            : s && (s.refunded ?? 0) > 0
+              ? `Savaş tamamlandı; kazanan olmadığı için ${s.refunded!.toLocaleString('tr-TR')} puan iade edildi`
+              : 'Savaş tamamlandı (ödül havuzu yok)'
+        );
         fetchData();
       } else {
         toast.error(data.error || t('adminSquadBattles.finishFailed'));
@@ -109,10 +123,18 @@ export default function SquadBattlesAdminPage() {
   const handleDeleteBattle = async (id: string) => {
     if (!confirm(t('adminSquadBattles.cancel') + '?')) return;
     try {
+      // Silmez: iadeli iptal (savaş kaydı ve denetim izi korunur).
       const res = await fetch(`/api/admin/squads/battles/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Deleted');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        toast.success(
+          data.refunded > 0
+            ? `Savaş iptal edildi; ${Number(data.refunded).toLocaleString('tr-TR')} puan meydan okuyana iade edildi`
+            : 'Savaş iptal edildi'
+        );
         fetchData();
+      } else {
+        toast.error(data.error || t('adminSquadBattles.genericError'));
       }
     } catch {
       toast.error(t('adminSquadBattles.genericError'));
@@ -178,9 +200,12 @@ export default function SquadBattlesAdminPage() {
                   <Input type="datetime-local" onChange={e => setNewBattle({...newBattle, endTime: e.target.value})} />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1 rounded-md border border-border p-3">
                 <Label>{t('adminSquadBattles.rewardPool')}</Label>
-                <Input type="number" value={newBattle.rewardPool} onChange={e => setNewBattle({...newBattle, rewardPool: parseInt(e.target.value)})} />
+                <p className="text-xs text-muted-foreground">
+                  Yönetici savaşları ödülsüz onur savaşıdır. Ödül havuzu yalnız klan sahibinin meydan okumasında, kendi puanından
+                  tahsil edilerek oluşur; iptalde ya da kazanan çıkmazsa ona iade edilir.
+                </p>
               </div>
             </div>
             <DialogFooter>
@@ -234,7 +259,7 @@ export default function SquadBattlesAdminPage() {
                       <div className="flex flex-col items-center">
                         <div className="text-sm font-bold text-muted-foreground mb-2 italic">VS</div>
                         <div className="px-4 py-1 rounded-full bg-orange-500/10 text-orange-600 text-xs font-bold border border-orange-500/20">
-                          {battle.rewardPool} XP
+                          {battle.rewardPool > 0 ? `${battle.rewardPool.toLocaleString("tr-TR")} puan` : "Ödülsüz"}
                         </div>
                       </div>
 
@@ -249,10 +274,7 @@ export default function SquadBattlesAdminPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={`/admin/squads/battles/${battle.id}`}>Detaylar</a>
-                      </Button>
-                      
+                      {/* Kırık "Detaylar" linki kaldırıldı: /admin/squads/battles/[id] sayfası yok (404). */}
                       {battle.status === 'active' && (
                         <Button 
                           variant="default" 

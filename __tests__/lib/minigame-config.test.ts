@@ -8,6 +8,11 @@ import {
   MINI_GAMES,
   getMiniGame,
   computeGameReward,
+  ALL_GAME_DEFS,
+  PACMAN_GAME,
+  getGameDef,
+  visibleMiniGames,
+  DEFAULT_MAX_DURATION_SEC,
 } from '@/lib/minigame-config';
 
 describe('computeMinigameReward', () => {
@@ -86,5 +91,39 @@ describe('computeGameReward', () => {
 
   it('negatif girdi güvenli', () => {
     expect(computeGameReward(g, -10)).toEqual({ points: 0, xp: 0 });
+  });
+});
+
+describe('sunucu otoritesi parametreleri (P0-17)', () => {
+  it('her oyunda makullük oranı ve deneme penceresi tanımlı', () => {
+    for (const g of ALL_GAME_DEFS) {
+      expect(g.maxScorePerSec).toBeGreaterThan(0);
+      expect(g.maxDurationSec ?? DEFAULT_MAX_DURATION_SEC).toBeGreaterThan(g.minDurationSec);
+    }
+  });
+
+  it('dürüst oyuncu için ödül eşiği deneme penceresi içinde makullük sınırıyla ulaşılabilir', () => {
+    for (const g of ALL_GAME_DEFS) {
+      const secondsNeeded = g.rewardThreshold / (g.maxScorePerSec as number);
+      expect(secondsNeeded).toBeLessThan(g.maxDurationSec ?? DEFAULT_MAX_DURATION_SEC);
+    }
+  });
+
+  it('betik koruması: tavan skor min. sürede makullük sınırını aşar (anında tavan imkânsız)', () => {
+    for (const g of ALL_GAME_DEFS) {
+      expect(g.maxScore).toBeGreaterThan((g.maxScorePerSec as number) * g.minDurationSec);
+    }
+  });
+
+  it('pacman sunucu tanımı: getGameDef bulur, hub listesine (MINI_GAMES) girmez', () => {
+    expect(getGameDef('pacman')).toBe(PACMAN_GAME);
+    expect(MINI_GAMES.some((g) => g.gameType === 'pacman')).toBe(false);
+    expect(PACMAN_GAME.minDurationSec).toBeGreaterThanOrEqual(9);
+  });
+
+  it('portföy kararı: lucky-wheel ve data-miner gizli ama SİLİNMEDİ', () => {
+    expect(getMiniGame('lucky-wheel')?.hidden).toBe(true);
+    expect(getMiniGame('data-miner')?.hidden).toBe(true);
+    expect(visibleMiniGames().some((g) => g.hidden)).toBe(false);
   });
 });

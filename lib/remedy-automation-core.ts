@@ -7,7 +7,7 @@
  * yalnızca bildirim atıp bırakıyordu — döngü burada kapanır.
  */
 import { prisma } from '@/lib/prisma';
-import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { createRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
 import { getRemedyOptionsForQrCode } from '@/lib/remedy-options';
 
 export interface RemedyAutomationConfig {
@@ -35,7 +35,9 @@ export function parseRemedyAutomation(raw: unknown): RemedyAutomationConfig {
     if (typeof o.minRating === 'number') base.minRating = o.minRating;
     if (typeof o.maxPerRun === 'number') base.maxPerRun = o.maxPerRun;
     if (typeof o.maxMonthlyAuto === 'number') base.maxMonthlyAuto = o.maxMonthlyAuto;
-    if (typeof o.messageTemplate === 'string') base.messageTemplate = o.messageTemplate;
+    if (typeof o.messageTemplate === 'string' && o.messageTemplate.trim()) {
+      base.messageTemplate = o.messageTemplate.trim().slice(0, 500);
+    }
   }
   return base;
 }
@@ -48,7 +50,7 @@ function monthStartUTC(): Date {
 /**
  * Tek bir feedback için otomatik remedy taslağı oluşturmayı dener.
  * Koşullar: otomasyon açık, kullanıcı var, puan eşiği altında, bu feedback için
- * açık teklif yok, aylık limit aşılmamış. Döndürür: oluşturulan offer id veya null.
+ * daha önce (reddedilmiş dahil) teklif yok, aylık limit aşılmamış. Döndürür: oluşturulan offer id veya null.
  */
 export async function maybeCreateAutoRemedyForFeedback(params: {
   feedbackId: string;
@@ -84,39 +86,47 @@ export async function maybeCreateAutoRemedyForFeedback(params: {
   });
   if (monthCount >= cfg.maxMonthlyAuto) return { created: false, reason: 'monthly_limit' };
 
-  // Bu feedback için zaten açık teklif var mı?
+  // Bu feedback için DAHA ÖNCE herhangi bir teklif açıldı mı? (P0-22 / bayi P0-10)
+  // `rejected` da sayılır: bayinin açıkça reddettiği taslak otomasyonla yeniden üretilmez;
+  // `expired`/`accepted` da — aynı yoruma ikinci otomatik telafi gitmez.
   const existing = await prisma.remedyOffer.findFirst({
-    where: { feedbackId, status: { in: ['pending', 'awaiting_dealer_approval', 'accepted'] } },
+    where: { feedbackId },
     select: { id: true },
   });
   if (existing) return { created: false, reason: 'already_exists' };
 
   // Telafi seçenekleri: mekana/işletmeye özel şablonlardan (yoksa varsayılan).
   const options = await getRemedyOptionsForQrCode(dealerId, qrCodeId);
+  const trigger = highChurn ? 'high_churn' : 'low_rating';
 
-  const offer = await prisma.remedyOffer.create({
-    data: {
-      feedbackId,
+  let offerId: string;
+  try {
+    const created = await createRemedyOffer({
+      source: { kind: 'feedback', feedbackId },
       dealerId,
       userId,
       message: cfg.messageTemplate,
-      status: 'awaiting_dealer_approval',
-      options: options as object,
-    },
-  });
-
-  await appendRemedyTimelineEvent(prisma, offer.id, 'created', 'Otomasyon ile telafi taslağı oluşturuldu', {
-    preview: cfg.messageTemplate.slice(0, 120),
-    trigger: highChurn ? 'high_churn' : 'low_rating',
-  });
-  await appendRemedyTimelineEvent(prisma, offer.id, 'queued', 'Onay kuyruğunda');
+      mode: 'queue', // otomasyon ASLA doğrudan müşteriye göndermez
+      options,
+      createdLabel: 'Otomasyon ile telafi taslağı oluşturuldu',
+      createdMeta: { trigger },
+    });
+    offerId = created.offerId;
+  } catch (err) {
+    // Eşzamanlı bayi/otomasyon yarışı: servis 409 üretir → sessizce atla.
+    if (isRemedyOfferError(err)) {
+      return { created: false, reason: err.code === 'NO_OPTIONS' ? 'no_options' : 'already_exists' };
+    }
+    throw err;
+  }
+  const offer = { id: offerId };
 
   await prisma.analyticsEvent.create({
     data: {
       userId: dealerId,
       event: 'remedy_automation_queued',
       category: 'dealer',
-      data: { feedbackId, offerId: offer.id, trigger: highChurn ? 'high_churn' : 'low_rating' },
+      data: { feedbackId, offerId: offer.id, trigger },
     },
   });
 

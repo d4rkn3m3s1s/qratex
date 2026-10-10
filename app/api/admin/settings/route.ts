@@ -18,6 +18,17 @@ import {
   POINTS_MATRIX_SETTING_KEY,
 } from '@/lib/points-rules';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+// P0-01: gizli kapı ayarı bu genel uçtan okunamaz/yazılamaz (yalnız kendi uçları).
+import { PROTECTED_SETTING_KEYS, isProtectedSettingKey } from '@/lib/admin-gate';
+import {
+  isVersionConflictError,
+  readBaseVersion,
+  readBaseVersionMap,
+  versionConflictResponse,
+  versionFromDate,
+  writeVersionedSetting,
+  writeVersionedSettingsBatch,
+} from '@/lib/settings-version';
 
 const SETTINGS_LIST_SELECT = {
   id: true,
@@ -59,7 +70,7 @@ export async function GET(request: NextRequest) {
     }
 
     const settings = await prisma.settings.findMany({
-      where,
+      where: { AND: [where as Prisma.SettingsWhereInput, { key: { notIn: [...PROTECTED_SETTING_KEYS] } }] },
       orderBy: { category: 'asc' },
       select: SETTINGS_LIST_SELECT,
       take: 5000,
@@ -67,7 +78,10 @@ export async function GET(request: NextRequest) {
 
     // If specific key requested, return single value
     if (key && settings.length === 1) {
-      return NextResponse.json({ setting: settings[0] }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json(
+        { setting: { ...settings[0], version: versionFromDate(settings[0].updatedAt) } },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     if (key === POINTS_MATRIX_SETTING_KEY && settings.length === 0) {
@@ -98,6 +112,8 @@ export async function GET(request: NextRequest) {
       category: s.category,
       value: s.value,
       updatedAt: s.updatedAt,
+      // İyimser kilit (P0-28): istemci kaydederken bunu `baseVersions[key]` olarak geri gönderir.
+      version: versionFromDate(s.updatedAt),
     }));
 
     return NextResponse.json(
@@ -138,55 +154,78 @@ export async function PUT(request: NextRequest) {
     }
 
     const { key, value, category } = validatedData.data;
+    if (isProtectedSettingKey(key)) {
+      return NextResponse.json(
+        { error: 'Bu ayar yalnız kendi ekranından değiştirilebilir.', code: 'PROTECTED_SETTING' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
     const normalizedValue =
       key === POINTS_MATRIX_SETTING_KEY ? normalizePointsMatrix(value) : value;
 
-    // Get existing setting for audit
-    const existingSetting = await prisma.settings.findUnique({
-      where: { key },
-    });
-    const resolvedCategory =
-      category ||
-      existingSetting?.category ||
-      (key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general');
+    // `baseVersion` verilirse sürüm kontrolü (uyuşmazlık → 409); verilmezse eski davranış
+    // (tema/ajan ayarları gibi eski istemciler). Her iki yolda da yazma + audit tek transaction.
+    const baseVersion = readBaseVersion(body);
+    const { setting, resolvedCategory } = await prisma.$transaction(async (tx) => {
+      const existingSetting = await tx.settings.findUnique({ where: { key } });
+      const resolvedCategory =
+        category ||
+        existingSetting?.category ||
+        (key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general');
 
-    // Upsert the setting
-    const setting = await prisma.settings.upsert({
-      where: { key },
-      update: {
-        value: normalizedValue as Prisma.InputJsonValue,
-        category: resolvedCategory,
-      },
-      create: {
-        key,
-        value: normalizedValue as Prisma.InputJsonValue,
-        category: resolvedCategory,
-      },
-      select: SETTINGS_LIST_SELECT,
-    });
+      let saved: { id: string; key: string; category: string; value: Prisma.JsonValue; updatedAt: Date };
+      let oldDataValue: Prisma.JsonValue | null | undefined = existingSetting?.value;
+      if (baseVersion) {
+        const written = await writeVersionedSetting(tx, {
+          key,
+          value: normalizedValue as Prisma.InputJsonValue,
+          category: resolvedCategory,
+          baseVersion,
+        });
+        oldDataValue = written.previous;
+        saved = await tx.settings.findUniqueOrThrow({ where: { key }, select: SETTINGS_LIST_SELECT });
+      } else {
+        saved = await tx.settings.upsert({
+          where: { key },
+          update: {
+            value: normalizedValue as Prisma.InputJsonValue,
+            category: resolvedCategory,
+          },
+          create: {
+            key,
+            value: normalizedValue as Prisma.InputJsonValue,
+            category: resolvedCategory,
+          },
+          select: SETTINGS_LIST_SELECT,
+        });
+      }
 
-    // Create audit log - handle null value properly
-    const oldDataValue = existingSetting?.value;
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: existingSetting ? 'update' : 'create',
-        entity: 'settings',
-        entityId: setting.id,
-        oldData: oldDataValue !== null && oldDataValue !== undefined 
-          ? oldDataValue as Prisma.InputJsonValue 
-          : Prisma.JsonNull,
-        newData: normalizedValue as Prisma.InputJsonValue,
-        ...auditMeta,
-      },
+      await tx.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: existingSetting ? 'update' : 'create',
+          entity: 'settings',
+          entityId: saved.id,
+          oldData: oldDataValue !== null && oldDataValue !== undefined
+            ? oldDataValue as Prisma.InputJsonValue
+            : Prisma.JsonNull,
+          newData: normalizedValue as Prisma.InputJsonValue,
+          ...auditMeta,
+        },
+      });
+      return { setting: saved, resolvedCategory };
     });
 
     revalidateTag('settings', 'max');
     if (isThemeSetting(key, resolvedCategory)) {
       revalidatePublicThemeSettings();
     }
-    return NextResponse.json({ success: true, setting }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, setting: { ...setting, version: versionFromDate(setting.updatedAt) } },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    if (isVersionConflictError(error)) return versionConflictResponse(error);
     console.error('Error updating setting:', error);
     return NextResponse.json(
       { error: 'Ayar güncellenemedi' },
@@ -228,62 +267,61 @@ export async function POST(request: NextRequest) {
       );
     }
     const { settings } = parsed.data;
-    const keys = settings.map((s: { key: string }) => s.key);
-    const existing = await prisma.settings.findMany({
-      where: { key: { in: keys } },
-      select: { key: true, value: true },
-    });
-    const oldMap = existing.reduce<Record<string, unknown>>((acc, row) => {
-      acc[row.key] = row.value;
-      return acc;
-    }, {});
+    if (settings.some((s: { key: string }) => isProtectedSettingKey(s.key))) {
+      return NextResponse.json(
+        { error: 'Bu ayar yalnız kendi ekranından değiştirilebilir.', code: 'PROTECTED_SETTING' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    // İsteğe bağlı iyimser kilit (P0-28): `baseVersions: { [key]: version }`. Verilen her anahtar
+    // kilit altında kontrol edilir; biri bile uyuşmazsa HİÇBİRİ yazılmaz (409). Vermeyen eski
+    // istemciler (tema, ajan ağırlıkları) koşulsuz yazmaya devam eder.
+    const baseVersions = readBaseVersionMap(raw);
+    const valueFor = (s: { key: string; value?: unknown }) =>
+      (s.key === POINTS_MATRIX_SETTING_KEY
+        ? normalizePointsMatrix(s.value)
+        : s.value ?? {}) as Prisma.InputJsonValue;
 
-    const results = await prisma.$transaction(
-      settings.map((s: { key: string; value?: unknown; category?: string }) =>
-        prisma.settings.upsert({
-          where: { key: s.key },
-          update: {
-            value:
-              (s.key === POINTS_MATRIX_SETTING_KEY
-                ? normalizePointsMatrix(s.value)
-                : s.value ?? {}) as Prisma.InputJsonValue,
-          },
-          create: {
-            key: s.key,
-            value:
-              (s.key === POINTS_MATRIX_SETTING_KEY
-                ? normalizePointsMatrix(s.value)
-                : s.value ?? {}) as Prisma.InputJsonValue,
-            category:
-              s.category || (s.key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general'),
-          },
-        })
-      )
-    );
-    const newMap = settings.reduce<Record<string, unknown>>((acc, row) => {
-      acc[row.key] =
-        row.key === POINTS_MATRIX_SETTING_KEY ? normalizePointsMatrix(row.value) : row.value ?? {};
-      return acc;
-    }, {});
+    const batch = await prisma.$transaction(async (tx) => {
+      const written = await writeVersionedSettingsBatch(
+        tx,
+        settings.map((s: { key: string; value?: unknown; category?: string }) => ({
+          key: s.key,
+          value: valueFor(s),
+          categoryOnCreate:
+            s.category || (s.key === POINTS_MATRIX_SETTING_KEY ? 'gamification' : 'general'),
+          baseVersion: baseVersions[s.key] ?? null,
+        }))
+      );
+      const newMap = settings.reduce<Record<string, unknown>>((acc, row) => {
+        acc[row.key] = valueFor(row);
+        return acc;
+      }, {});
 
-    // Create single audit log for batch update
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'batch_update',
-        entity: 'settings',
-        oldData: oldMap as Prisma.InputJsonValue,
-        newData: newMap as Prisma.InputJsonValue,
-        ...auditMeta,
-      },
+      // Create single audit log for batch update (aynı transaction)
+      await tx.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: 'batch_update',
+          entity: 'settings',
+          oldData: written.previous as Prisma.InputJsonValue,
+          newData: newMap as Prisma.InputJsonValue,
+          ...auditMeta,
+        },
+      });
+      return written;
     });
 
     revalidateTag('settings', 'max');
     if (settings.some((s: { key: string }) => THEME_SETTING_KEYS.has(s.key))) {
       revalidatePublicThemeSettings();
     }
-    return NextResponse.json({ success: true, count: results.length }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, count: batch.count, versions: batch.versions },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    if (isVersionConflictError(error)) return versionConflictResponse(error);
     console.error('Error batch updating settings:', error);
     return NextResponse.json(
       { error: 'Ayarlar toplu güncellenemedi' },

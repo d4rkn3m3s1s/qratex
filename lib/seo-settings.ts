@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { siteUrl } from '@/lib/site-config';
+import { normalizeHttpUrl, normalizeOgImageUrl } from '@/lib/seo-url';
 
 export const SEO_SETTINGS_KEY = 'seo';
 export const SEO_CACHE_TAG = 'seo';
@@ -99,7 +100,10 @@ async function loadSeoSettingsRow(): Promise<SeoRowPayload> {
     const global: SeoGlobalSettings = {
       ...defaults,
       ...globalSource,
-      siteUrl: globalSource.siteUrl ?? defaults.siteUrl,
+      // P0-39: DB'de boş/bozuk URL kalmış olabilir → asla `new URL` patlatmasın.
+      siteUrl: normalizeHttpUrl(globalSource.siteUrl, defaults.siteUrl) || defaults.siteUrl,
+      canonicalBase: normalizeHttpUrl(globalSource.canonicalBase),
+      ogImageUrl: normalizeOgImageUrl(globalSource.ogImageUrl, defaults.ogImageUrl),
       keywords: Array.isArray(globalSource.keywords) ? globalSource.keywords : defaults.keywords,
       robotsDisallow: Array.isArray(globalSource.robotsDisallow) ? globalSource.robotsDisallow : defaults.robotsDisallow,
       extraSitemapUrls: Array.isArray(globalSource.extraSitemapUrls) ? globalSource.extraSitemapUrls : [],

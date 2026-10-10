@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
   Brain,
@@ -81,6 +82,10 @@ interface CustomerAIStats {
 
 interface RecommendationData {
   recommendations: string | null;
+  /** P0-39: 'insufficient' → en az 2 yazılı geri bildirim gerekir (uç her dalda tam `stats` döndürür). */
+  status?: 'ready' | 'insufficient';
+  recommendationsStatus?: 'ready' | 'insufficient' | 'rate_limited' | 'unavailable';
+  message?: string | null;
   stats: {
     totalFeedbacks: number;
     avgRating: number;
@@ -174,11 +179,13 @@ export default function CustomerAIInsightsPage() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   const fetchRecommendations = async () => {
+    if (recLoading) return; // çift tık / sekmeye tekrar tıklama ikinci isteği tetiklemesin
     setRecLoading(true);
     try {
       const res = await fetch('/api/customer/ai-recommendations');
       const data = await res.json();
       if (data.success) setRecData(data);
+      else toast.error(typeof data.error === 'string' ? data.error : 'AI önerileri yüklenemedi');
     } catch {
       toast.error('AI önerileri yüklenemedi');
     } finally {
@@ -354,38 +361,40 @@ export default function CustomerAIInsightsPage() {
           ) : recData ? (
             <>
               {/* Trend — yön önemli, büyük puan grid’i yok */}
-              <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    {recData.stats.ratingTrend === 'up' ? <TrendingUp className="h-5 w-5 text-emerald-500" /> :
-                     recData.stats.ratingTrend === 'down' ? <TrendingDown className="h-5 w-5 text-red-500" /> :
-                     <Activity className="h-5 w-5 text-blue-500" />}
-                    Memnuniyet trendi
-                  </CardTitle>
-                  <CardDescription>
-                    {recData.stats.ratingTrend === 'up' && 'Son dönemde genel eğiliminiz olumlu yönde.'}
-                    {recData.stats.ratingTrend === 'down' && 'Son dönemde geri bildirim tonunuz biraz düşüş gösteriyor; bu normal dalgalanma olabilir.'}
-                    {recData.stats.ratingTrend !== 'up' && recData.stats.ratingTrend !== 'down' &&
-                      'Geri bildirimlerinizde belirgin bir yükseliş veya düşüş yok; dengeli bir çizgi.'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm">
-                    <span className="inline-flex items-center gap-1.5 font-medium">
-                      {recData.stats.ratingTrend === 'up' ? (
-                        <><span className="text-emerald-500">↑</span> Yükseliş eğilimi</>
-                      ) : recData.stats.ratingTrend === 'down' ? (
-                        <><span className="text-red-500">↓</span> Düşüş eğilimi</>
-                      ) : (
-                        <><span className="text-blue-500">→</span> Stabil</>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">
-                      (Son kayıtlara göre yön; tek tek puanlar daha az önemli.)
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+              {recData.status !== 'insufficient' && (
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {recData.stats.ratingTrend === 'up' ? <TrendingUp className="h-5 w-5 text-emerald-500" /> :
+                       recData.stats.ratingTrend === 'down' ? <TrendingDown className="h-5 w-5 text-red-500" /> :
+                       <Activity className="h-5 w-5 text-blue-500" />}
+                      Memnuniyet trendi
+                    </CardTitle>
+                    <CardDescription>
+                      {recData.stats.ratingTrend === 'up' && 'Son dönemde genel eğiliminiz olumlu yönde.'}
+                      {recData.stats.ratingTrend === 'down' && 'Son dönemde geri bildirim tonunuz biraz düşüş gösteriyor; bu normal dalgalanma olabilir.'}
+                      {recData.stats.ratingTrend !== 'up' && recData.stats.ratingTrend !== 'down' &&
+                        'Geri bildirimlerinizde belirgin bir yükseliş veya düşüş yok; dengeli bir çizgi.'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm">
+                      <span className="inline-flex items-center gap-1.5 font-medium">
+                        {recData.stats.ratingTrend === 'up' ? (
+                          <><span className="text-emerald-500">↑</span> Yükseliş eğilimi</>
+                        ) : recData.stats.ratingTrend === 'down' ? (
+                          <><span className="text-red-500">↓</span> Düşüş eğilimi</>
+                        ) : (
+                          <><span className="text-blue-500">→</span> Stabil</>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground">
+                        (Son kayıtlara göre yön; tek tek puanlar daha az önemli.)
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* AI Recommendations */}
               {recData.recommendations && (
@@ -407,8 +416,23 @@ export default function CustomerAIInsightsPage() {
                 </Card>
               )}
 
+              {/* Öneri yoksa nedeni (yetersiz veri / kota / AI hizmeti) — eskiden hiç gösterilmiyordu */}
+              {!recData.recommendations && recData.message && (
+                <Card className="border-border/60 bg-card/50 backdrop-blur-sm" role="status">
+                  <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
+                    <Lightbulb className="h-10 w-10 text-muted-foreground/40" aria-hidden />
+                    <p className="text-sm text-muted-foreground">{recData.message}</p>
+                    {recData.status === 'insufficient' && (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/customer/scan">QR okut ve geri bildirim bırak</Link>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Top Businesses */}
-              {recData.stats.topBusinesses.length > 0 && (
+              {(recData.stats?.topBusinesses?.length ?? 0) > 0 && (
                 <Card className="border-border/60 bg-card/50 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">

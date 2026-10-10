@@ -115,14 +115,17 @@ export async function GET(req: Request) {
     const isAdmin = session?.user?.role === 'ADMIN';
     const isActiveFilter = status === 'inactive' ? false : status === 'active' ? true : undefined;
 
-    // Default: get all available rewards
+    // Default: get all available rewards. Arşivlenmiş ("silinmiş") ödüller listede görünmez;
+    // admin `?status=archived` ile arşivi görür (P0-26).
     const rewards = await prisma.reward.findMany({
       where: {
         ...(isAdmin
-          ? isActiveFilter !== undefined
-            ? { isActive: isActiveFilter }
-            : {}
-          : { isActive: true }),
+          ? status === 'archived'
+            ? { archivedAt: { not: null } }
+            : isActiveFilter !== undefined
+              ? { isActive: isActiveFilter, archivedAt: null }
+              : { archivedAt: null }
+          : { isActive: true, archivedAt: null }),
       },
       include: {
         _count: {
@@ -239,6 +242,7 @@ export async function PATCH(req: Request) {
           cost: true,
           stock: true,
           isActive: true,
+          archivedAt: true,
           type: true,
           metadata: true,
         },
@@ -249,7 +253,7 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: false, error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    if (!reward || !reward.isActive) {
+    if (!reward || !reward.isActive || reward.archivedAt) {
       return NextResponse.json(
         { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
@@ -284,25 +288,32 @@ export async function PATCH(req: Request) {
         }
       }
 
-      if (reward.stock !== -1) {
-        const stockUpdate = await tx.reward.updateMany({
-          where: {
-            id: reward.id,
-            stock: { gt: 0 },
-          },
-          data: {
-            stock: { decrement: 1 },
-          },
-        });
+      // Koşullu yazım hem stoğu hem "hâlâ aktif ve arşivde değil" koşulunu satır kilidiyle
+      // doğrular: okuma ile tx arasında admin ödülü arşivlediyse alım yapılmaz (P0-26).
+      const claimGuard = await tx.reward.updateMany({
+        where: {
+          id: reward.id,
+          isActive: true,
+          archivedAt: null,
+          ...(reward.stock !== -1 ? { stock: { gt: 0 } } : {}),
+        },
+        data: reward.stock !== -1 ? { stock: { decrement: 1 } } : { updatedAt: new Date() },
+      });
 
-        if (stockUpdate.count === 0) {
-          throw new Error('REWARD_OUT_OF_STOCK');
-        }
+      if (claimGuard.count === 0) {
+        const fresh = await tx.reward.findUnique({
+          where: { id: reward.id },
+          select: { isActive: true, archivedAt: true },
+        });
+        if (!fresh || !fresh.isActive || fresh.archivedAt) throw new Error('REWARD_INACTIVE');
+        throw new Error('REWARD_OUT_OF_STOCK');
       }
 
       const updatedWallet = await debitPoints(tx, {
         userId: user.id,
         points: reward.cost,
+        source: 'reward',
+        sourceId: reward.id,
       });
 
       const claimedReward = await tx.userReward.create({
@@ -382,6 +393,11 @@ export async function PATCH(req: Request) {
           success: false,
           error: `Yetersiz puan. ${Math.max(0, error.requiredPoints - error.currentPoints)} puan daha gerekiyor.`,
         }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    if (error instanceof Error && error.message === 'REWARD_INACTIVE') {
+      return NextResponse.json(
+        { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (error instanceof Error && error.message === 'REWARD_OUT_OF_STOCK') {

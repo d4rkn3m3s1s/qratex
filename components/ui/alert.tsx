@@ -9,8 +9,15 @@ const alertVariants = cva(
       variant: {
         default:
           'bg-muted/30 text-foreground shadow-sm shadow-black/5 dark:shadow-black/20',
+        // Metin `text-destructive` → --danger-text (her temada ≥ 4.5:1; eski koyu tema 1,93:1).
         destructive:
-          'border-destructive/50 bg-destructive/5 text-destructive shadow-sm shadow-destructive/10 dark:border-destructive [&>svg]:text-destructive',
+          'border-danger-border bg-danger-subtle text-danger shadow-sm [&>svg]:text-danger',
+        success:
+          'border-success-border bg-success-subtle text-fg shadow-sm [&>svg]:text-success',
+        warning:
+          'border-warning-border bg-warning-subtle text-fg shadow-sm [&>svg]:text-warning',
+        info:
+          'border-info-border bg-info-subtle text-fg shadow-sm [&>svg]:text-info',
       },
     },
     defaultVariants: {

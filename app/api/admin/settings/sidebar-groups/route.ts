@@ -11,6 +11,14 @@ import {
   SIDEBAR_NAV_GROUPS_SETTINGS_KEY,
   type SidebarNavGroupsPayload,
 } from '@/lib/sidebar-groups-settings';
+import {
+  baseVersionRequiredResponse,
+  isVersionConflictError,
+  readBaseVersion,
+  versionConflictResponse,
+  versionFromDate,
+  writeVersionedSetting,
+} from '@/lib/settings-version';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -25,18 +33,32 @@ const putSchema = z.object({
   customer: rolePayloadSchema.optional(),
 });
 
+/** GET — canlı grup override'ları + sürüm. Okuma hatası 500 (istemci formu açmaz — P0-28). */
 export async function GET() {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
-  const row = await prisma.settings.findUnique({
-    where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
-    select: { value: true, updatedAt: true },
-  });
-  const payload = normalizeSidebarNavGroups(row?.value);
-  return NextResponse.json(
-    { success: true, payload, updatedAt: row?.updatedAt?.toISOString() ?? null },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+  try {
+    const row = await prisma.settings.findUnique({
+      where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
+      select: { value: true, updatedAt: true },
+    });
+    const payload = normalizeSidebarNavGroups(row?.value);
+    return NextResponse.json(
+      {
+        success: true,
+        payload,
+        updatedAt: row?.updatedAt?.toISOString() ?? null,
+        version: versionFromDate(row?.updatedAt),
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  } catch (error) {
+    console.error('Sidebar groups fetch error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Menü grupları alınamadı' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }
 
 export async function PUT(request: NextRequest) {
@@ -64,41 +86,56 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const existing = await prisma.settings.findUnique({
-    where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
-    select: { id: true, value: true },
-  });
-  const prev = normalizeSidebarNavGroups(existing?.value);
-  // Rol bazında kısmi güncelleme (verilen rol tamamen o rolün payload'ıyla değişir).
-  const merged: SidebarNavGroupsPayload = { ...prev };
-  if (parsed.data.dealer) merged.dealer = parsed.data.dealer;
-  if (parsed.data.customer) merged.customer = parsed.data.customer;
-  const next = normalizeSidebarNavGroups(merged);
+  const baseVersion = readBaseVersion(raw);
+  if (!baseVersion) return baseVersionRequiredResponse();
 
-  const saved = await prisma.settings.upsert({
-    where: { key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY },
-    create: {
-      key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY,
-      category: 'admin',
-      value: groupsPayloadForAudit(next),
-    },
-    update: { value: groupsPayloadForAudit(next) },
-  });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      let next: SidebarNavGroupsPayload = {};
+      const written = await writeVersionedSetting(tx, {
+        key: SIDEBAR_NAV_GROUPS_SETTINGS_KEY,
+        category: 'admin',
+        baseVersion,
+        // Rol bazında kısmi güncelleme (verilen rol tamamen o rolün payload'ıyla değişir);
+        // birleştirme kilit altında okunan GÜNCEL değer üzerinden yapılır.
+        value: (previous) => {
+          const prev = normalizeSidebarNavGroups(previous);
+          const merged: SidebarNavGroupsPayload = { ...prev };
+          if (parsed.data.dealer) merged.dealer = parsed.data.dealer;
+          if (parsed.data.customer) merged.customer = parsed.data.customer;
+          next = normalizeSidebarNavGroups(merged);
+          return groupsPayloadForAudit(next);
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: auth.session.user.id,
+          action: written.created ? 'create_sidebar_nav_groups' : 'update_sidebar_nav_groups',
+          entity: 'settings',
+          entityId: written.id,
+          oldData: { [SIDEBAR_NAV_GROUPS_SETTINGS_KEY]: (written.previous ?? Prisma.JsonNull) } as Prisma.InputJsonValue,
+          newData: { [SIDEBAR_NAV_GROUPS_SETTINGS_KEY]: next } as Prisma.InputJsonValue,
+          ...getAuditRequestMeta(request),
+        },
+      });
+      return { written, next };
+    });
 
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id,
-      action: existing ? 'update_sidebar_nav_groups' : 'create_sidebar_nav_groups',
-      entity: 'settings',
-      entityId: saved.id,
-      oldData: { [SIDEBAR_NAV_GROUPS_SETTINGS_KEY]: (existing?.value ?? Prisma.JsonNull) } as Prisma.InputJsonValue,
-      newData: { [SIDEBAR_NAV_GROUPS_SETTINGS_KEY]: next } as Prisma.InputJsonValue,
-      ...getAuditRequestMeta(request),
-    },
-  });
-
-  return NextResponse.json(
-    { success: true, payload: next, updatedAt: saved.updatedAt.toISOString() },
-    { headers: PRIVATE_NO_STORE_HEADERS }
-  );
+    return NextResponse.json(
+      {
+        success: true,
+        payload: result.next,
+        updatedAt: result.written.version,
+        version: result.written.version,
+      },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  } catch (error) {
+    if (isVersionConflictError(error)) return versionConflictResponse(error);
+    console.error('Sidebar groups update error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Menü grupları kaydedilemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

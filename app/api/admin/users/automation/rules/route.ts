@@ -6,32 +6,24 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
+import { automationActionsSchema, automationConditionSchema } from '@/lib/users-automation/schema';
 
 
 export const dynamic = 'force-dynamic';
 
-const actionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('add_points'), amount: z.number(), reason: z.string().optional() }),
-  z.object({ type: z.literal('add_xp'), amount: z.number() }),
-  z.object({ type: z.literal('set_role'), role: z.enum(['ADMIN', 'DEALER', 'CUSTOMER']) }),
-  z.object({
-    type: z.literal('send_notification'),
-    title: z.string().min(1),
-    message: z.string().min(1),
-    notificationType: z.enum(['info', 'success', 'warning', 'error']).optional(),
-  }),
-]);
-
+// P0-19: koşul ve aksiyonlar ortak, sıkı şemadan (tutar tavanı, ADMIN'e yükseltme yok).
+// Yeni kural ONAYSIZ doğar; çalıştırılabilmesi için oluşturandan farklı bir yönetici onaylamalı
+// (`requiresApproval` artık yalnız gösterim amaçlı geriye uyum alanıdır).
 const createRuleSchema = z.object({
-  name: z.string().min(2),
-  description: z.string().optional(),
+  name: z.string().trim().min(2, 'Kural adı en az 2 karakter olmalı').max(120),
+  description: z.string().max(1000).optional(),
   triggerType: z.enum(['manual', 'schedule', 'event']).default('manual'),
   triggerConfig: z.record(z.string(), z.unknown()).optional(),
-  condition: z.record(z.string(), z.unknown()).default({}),
-  actions: z.array(actionSchema).min(1),
+  condition: automationConditionSchema.default({}),
+  actions: automationActionsSchema,
   isActive: z.boolean().default(true),
   priority: z.number().int().min(0).max(1000).default(100),
-  requiresApproval: z.boolean().default(false),
+  requiresApproval: z.boolean().default(true),
 });
 
 export async function GET(request: NextRequest) {
@@ -95,7 +87,8 @@ export async function POST(request: NextRequest) {
         actions: data.actions as Prisma.InputJsonValue,
         isActive: data.isActive,
         priority: data.priority,
-        requiresApproval: data.requiresApproval,
+        // Her kural dört göz ister (execute onaysız kuralı reddeder).
+        requiresApproval: true,
         createdById: session.user.id,
         updatedById: session.user.id,
       },

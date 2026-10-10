@@ -7,6 +7,17 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import {
+  NO_VERSION,
+  VersionConflictError,
+  baseVersionRequiredResponse,
+  isVersionConflictError,
+  lockResource,
+  nextUpdatedAt,
+  readBaseVersion,
+  versionConflictResponse,
+  versionFromDate,
+} from '@/lib/settings-version';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,6 +152,9 @@ export async function GET() {
   return NextResponse.json(
     {
       settings: merged,
+      // İyimser kilit (P0-28): PATCH bunu `baseVersion` olarak geri ister. Kayıt yoksa 'none'.
+      version: settings ? versionFromDate(settings.updatedAt) : NO_VERSION,
+      isDefault: !settings,
       stats: {
         analyzedFeedbackCount: analyzedCount,
         analyzedLast24h,
@@ -168,7 +182,13 @@ export async function PATCH(request: NextRequest) {
   const { session } = auth;
 
   const dealerId = session.user.role === 'DEALER' ? session.user.id : session.user.id;
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  const baseVersion = readBaseVersion(body);
+  if (!baseVersion) return baseVersionRequiredResponse();
 
   const updateData: Record<string, unknown> = {};
   const keys = [
@@ -181,31 +201,58 @@ export async function PATCH(request: NextRequest) {
     if (body[k] !== undefined) updateData[k] = body[k];
   }
 
-  const updated = await prisma.aISettings.upsert({
-    where: { dealerId },
-    update: updateData,
-    create: {
-      dealerId,
-      isEnabled: body.isEnabled ?? true,
-      autoAnalyze: body.autoAnalyze ?? true,
-      analysisLanguage: body.analysisLanguage ?? 'tr',
-      sentimentEnabled: body.sentimentEnabled ?? true,
-      emotionEnabled: body.emotionEnabled ?? true,
-      topicEnabled: body.topicEnabled ?? true,
-      intentEnabled: body.intentEnabled ?? true,
-      urgencyEnabled: body.urgencyEnabled ?? true,
-      entityEnabled: body.entityEnabled ?? true,
-      toxicityEnabled: body.toxicityEnabled ?? true,
-      churnEnabled: body.churnEnabled ?? true,
-      themeClusterEnabled: body.themeClusterEnabled ?? true,
-      weeklyReportEnabled: body.weeklyReportEnabled ?? true,
-      monthlyReportEnabled: body.monthlyReportEnabled ?? true,
-      alertOnToxic: body.alertOnToxic ?? true,
-      alertOnUrgent: body.alertOnUrgent ?? true,
-      alertOnChurnRisk: body.alertOnChurnRisk ?? true,
-      customPrompt: body.customPrompt ?? null,
-    },
-  });
+  try {
+    // Kilit → güncel sürümü oku → baseVersion ile karşılaştır → yaz (tek transaction).
+    // Yükleme hatası sonrası "varsayılanlarla Kaydet" ya da iki sekmenin birbirini ezmesi
+    // artık 409 ile durur; istemci yalnız değişen alanları gönderir.
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockResource(tx, `ai-settings:${dealerId}`);
+      const current = await tx.aISettings.findUnique({ where: { dealerId }, select: { updatedAt: true } });
+      const currentVersion = current ? versionFromDate(current.updatedAt) : NO_VERSION;
+      if (baseVersion !== currentVersion) {
+        throw new VersionConflictError(currentVersion, [{ key: 'aiSettings', currentVersion }]);
+      }
+      if (current) {
+        return tx.aISettings.update({
+          where: { dealerId },
+          data: { ...updateData, updatedAt: nextUpdatedAt(current.updatedAt) },
+        });
+      }
+      return tx.aISettings.create({
+        data: {
+          dealerId,
+          isEnabled: body.isEnabled ?? true,
+          autoAnalyze: body.autoAnalyze ?? true,
+          analysisLanguage: body.analysisLanguage ?? 'tr',
+          sentimentEnabled: body.sentimentEnabled ?? true,
+          emotionEnabled: body.emotionEnabled ?? true,
+          topicEnabled: body.topicEnabled ?? true,
+          intentEnabled: body.intentEnabled ?? true,
+          urgencyEnabled: body.urgencyEnabled ?? true,
+          entityEnabled: body.entityEnabled ?? true,
+          toxicityEnabled: body.toxicityEnabled ?? true,
+          churnEnabled: body.churnEnabled ?? true,
+          themeClusterEnabled: body.themeClusterEnabled ?? true,
+          weeklyReportEnabled: body.weeklyReportEnabled ?? true,
+          monthlyReportEnabled: body.monthlyReportEnabled ?? true,
+          alertOnToxic: body.alertOnToxic ?? true,
+          alertOnUrgent: body.alertOnUrgent ?? true,
+          alertOnChurnRisk: body.alertOnChurnRisk ?? true,
+          customPrompt: body.customPrompt ?? null,
+        },
+      });
+    });
 
-  return NextResponse.json({ success: true, settings: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, settings: updated, version: versionFromDate(updated.updatedAt) },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  } catch (error) {
+    if (isVersionConflictError(error)) return versionConflictResponse(error);
+    console.error('Dealer AI settings update error:', error);
+    return NextResponse.json(
+      { success: false, error: 'AI ayarları kaydedilemedi' },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 }

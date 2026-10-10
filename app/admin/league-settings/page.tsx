@@ -1,144 +1,170 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { QueryState } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
 import { toast } from '@/lib/admin-toast';
 import { RefreshCw, Save, Trophy } from 'lucide-react';
 import type { LeagueRule } from '@/lib/league-rules';
-import { TW_BRAND_GRADIENT_STOPS_WIDE } from '@/lib/tw-brand-classes';
+import { fetchResourceJson, requireVersion, saveVersioned } from '@/lib/versioned-resource';
+import { useVersionedDraft, useVersionedResource } from '@/hooks/use-versioned-resource';
 
+const HERO_TITLE = 'Lig ayarları';
+const HERO_DESCRIPTION =
+  'Puan aralıklarına göre lig isimleri ve eşikleri. Leaderboard ve müşteri paneli bu ayarları kullanır.';
+
+const REFRESH_BUTTON_CLASS =
+  'gap-2 border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/40 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 dark:hover:text-white';
+
+async function loadLeagueRules() {
+  const body = await fetchResourceJson('/api/admin/settings/leagues', 'Lig ayarları alınamadı');
+  if (!Array.isArray(body.rules) || body.rules.length === 0) {
+    throw new Error('Lig ayarları beklenen biçimde gelmedi');
+  }
+  return { data: body.rules as LeagueRule[], version: requireVersion(body) };
+}
+
+/**
+ * P0-28: form YALNIZ sunucudan gelen canlı kurallar + sürümle açılır. Yükleme sürerken iskelet,
+ * hata olursa "Tekrar dene" — istemcide varsayılan lig listesi yok, hata durumunda Kaydet yok.
+ */
 export default function AdminLeagueSettingsPage() {
-  const [rules, setRules] = useState<LeagueRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [initialSignature, setInitialSignature] = useState('');
+  const resource = useVersionedResource(loadLeagueRules);
 
-  const fetchRules = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/settings/leagues', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Lig ayarları alınamadı');
-      const list = Array.isArray(data.rules) && data.rules.length >= 7 ? data.rules : [
-        { key: 'BASLANGIC', name: 'Başlangıç', minPoints: 0, maxPoints: 2999, gradient: 'from-slate-500 to-slate-700' },
-        { key: 'KOR', name: 'Kor', minPoints: 3000, maxPoints: 5000, gradient: 'from-amber-700 to-orange-500' },
-        { key: 'VEYRA', name: 'Veyra', minPoints: 7500, maxPoints: 10000, gradient: 'from-slate-400 to-slate-600' },
-        { key: 'SAVASCI', name: 'Savaşçı', minPoints: 12000, maxPoints: 15000, gradient: 'from-yellow-400 to-amber-600' },
-        { key: 'ETERON', name: 'Eteron', minPoints: 18000, maxPoints: 21000, gradient: 'from-cyan-400 to-sky-600' },
-        { key: 'VETRA', name: 'Vetra', minPoints: 25000, maxPoints: 30000, gradient: 'from-primary to-primary/70' },
-        { key: 'ZENOR', name: 'Zenor', minPoints: 50000, maxPoints: 100000, gradient: TW_BRAND_GRADIENT_STOPS_WIDE },
-      ];
-      setRules(list);
-      setInitialSignature(JSON.stringify(list));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Lig ayarları alınamadı');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (resource.status === 'ready' && resource.data && resource.version) {
+    return (
+      <LeagueSettingsForm
+        key={resource.loadId}
+        initial={resource.data}
+        initialVersion={resource.version}
+        onReload={resource.reload}
+        onCommitted={resource.commit}
+      />
+    );
+  }
 
-  useEffect(() => {
-    fetchRules();
+  return (
+    <div className="space-y-6">
+      <AdminPremiumHero
+        title={HERO_TITLE}
+        description={HERO_DESCRIPTION}
+        icon={<Trophy className="text-white" />}
+        actions={
+          <Button variant="outline" onClick={() => void resource.reload()} disabled={resource.status === 'loading'} className={REFRESH_BUTTON_CLASS}>
+            <RefreshCw className={`h-4 w-4 ${resource.status === 'loading' ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+        }
+      />
+      <QueryState
+        query={resource.query}
+        skeleton="cards"
+        isEmpty={() => false}
+        loadingLabel="Lig ayarları yükleniyor…"
+        error={{
+          title: 'Lig ayarları yüklenemedi',
+          description: 'Canlı ayarlar okunamadığı için düzenleme kilitlendi. Kayıtlı ayarlarınız değişmedi; tekrar deneyin.',
+        }}
+      >
+        {null}
+      </QueryState>
+    </div>
+  );
+}
+
+function LeagueSettingsForm({
+  initial,
+  initialVersion,
+  onReload,
+  onCommitted,
+}: {
+  initial: LeagueRule[];
+  initialVersion: string;
+  onReload: () => unknown;
+  onCommitted: (rules: LeagueRule[], version: string) => void;
+}) {
+  const request = useCallback(
+    (rules: LeagueRule[], baseVersion: string) =>
+      saveVersioned('/api/admin/settings/leagues', 'PUT', { rules, baseVersion }, 'Kaydetme başarısız'),
+    []
+  );
+  const parse = useCallback(
+    (body: Record<string, unknown>) => ({ data: body.rules as LeagueRule[], version: requireVersion(body) }),
+    []
+  );
+  const onSaved = useCallback(
+    (rules: LeagueRule[], version: string) => {
+      onCommitted(rules, version);
+      toast.success('Lig ayarları güncellendi');
+    },
+    [onCommitted]
+  );
+  const onError = useCallback((e: unknown) => {
+    toast.error(e instanceof Error ? e.message : 'Kaydetme sırasında hata');
   }, []);
 
-  const isDirty = initialSignature !== JSON.stringify(rules);
+  const form = useVersionedDraft<LeagueRule[]>({ initial, initialVersion, request, parse, onSaved, onError });
+  const rules = form.draft;
 
-  const updateRule = (index: number, field: keyof LeagueRule, value: string | number) => {
-    setRules((prev) => {
+  const updateRule = (index: number, field: keyof LeagueRule, value: string) => {
+    form.setDraft((prev) => {
+      if (!prev[index]) return prev; // seyrek dizi oluşturma (eski "tek elemanlı liste" hatası)
       const next = [...prev];
-      const r = { ...next[index], [field]: value };
-      if (field === 'minPoints' || field === 'maxPoints') r[field] = Math.max(0, Math.floor(Number(value) || 0));
+      const r = { ...next[index] };
+      if (field === 'minPoints' || field === 'maxPoints') {
+        r[field] = Math.max(0, Math.floor(Number(value) || 0));
+      } else if (field === 'name' || field === 'gradient') {
+        r[field] = value;
+      }
       next[index] = r;
       return next;
     });
   };
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      const res = await fetch('/api/admin/settings/leagues', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rules }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Kaydetme başarısız');
-      setRules(data.rules ?? rules);
-      setInitialSignature(JSON.stringify(data.rules));
-      toast.success('Lig ayarları güncellendi');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Kaydetme sırasında hata');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading && rules.length === 0) {
-    return (
-      <div className="space-y-6">
-        <AdminPremiumHero
-          title="Lig ayarları"
-          description="Puan aralıklarına göre ligleri yönetin"
-          icon={<Trophy className="text-white" />}
-        />
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">Yükleniyor...</CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const defaults: LeagueRule[] = [
-    { key: 'BASLANGIC', name: 'Başlangıç', minPoints: 0, maxPoints: 2999, gradient: 'from-slate-500 to-slate-700' },
-    { key: 'KOR', name: 'Kor', minPoints: 3000, maxPoints: 5000, gradient: 'from-amber-700 to-orange-500' },
-    { key: 'VEYRA', name: 'Veyra', minPoints: 7500, maxPoints: 10000, gradient: 'from-slate-400 to-slate-600' },
-    { key: 'SAVASCI', name: 'Savaşçı', minPoints: 12000, maxPoints: 15000, gradient: 'from-yellow-400 to-amber-600' },
-    { key: 'ETERON', name: 'Eteron', minPoints: 18000, maxPoints: 21000, gradient: 'from-cyan-400 to-sky-600' },
-    { key: 'VETRA', name: 'Vetra', minPoints: 25000, maxPoints: 30000, gradient: 'from-primary to-primary/70' },
-    { key: 'ZENOR', name: 'Zenor', minPoints: 50000, maxPoints: 100000, gradient: TW_BRAND_GRADIENT_STOPS_WIDE },
-  ];
-  const displayRules = rules.length >= 7 ? rules : defaults;
-
   return (
     <div className="space-y-6">
       <AdminPremiumHero
-        title="Lig ayarları"
-        description="Puan aralıklarına göre lig isimleri ve eşikleri. Leaderboard ve müşteri paneli bu ayarları kullanır."
+        title={HERO_TITLE}
+        description={HERO_DESCRIPTION}
         icon={<Trophy className="text-white" />}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={fetchRules}
-              disabled={loading || saving}
-              className="gap-2 border-border/70 bg-background/80 text-foreground hover:bg-accent dark:border-white/40 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 dark:hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <Button variant="outline" onClick={() => void onReload()} disabled={form.saving} className={REFRESH_BUTTON_CLASS}>
+              <RefreshCw className="h-4 w-4" />
               Yenile
             </Button>
             <Button
-              onClick={handleSave}
-              disabled={loading || saving || !isDirty}
+              onClick={() => void form.save()}
+              disabled={form.saving || !form.dirty}
               className="gap-2 bg-white text-emerald-900 hover:bg-white/90 shadow-md"
             >
               <Save className="h-4 w-4" />
-              Kaydet
+              {form.saving ? 'Kaydediliyor…' : 'Kaydet'}
             </Button>
           </div>
         }
       />
+
+      {form.conflict && (
+        <VersionConflictBanner
+          message={form.conflict.message}
+          onReload={onReload}
+          onOverwrite={form.conflict.currentVersion ? () => form.save({ overwrite: true }) : undefined}
+        />
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
             Lig kuralları
-            {isDirty ? <Badge variant="secondary">Değiştirildi</Badge> : <Badge variant="outline">Güncel</Badge>}
+            {form.dirty ? <Badge variant="secondary">Değiştirildi</Badge> : <Badge variant="outline">Güncel</Badge>}
           </CardTitle>
           <CardDescription>
             Her lig için min/max puan ve görünen isim. API üzerinden kaydedilir; leaderboard ve profil ligi bu değerlere göre hesaplanır.
@@ -146,7 +172,7 @@ export default function AdminLeagueSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {displayRules.map((rule, index) => (
+            {rules.map((rule, index) => (
               <Card key={rule.key}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium">{rule.name || rule.key}</CardTitle>
@@ -154,8 +180,9 @@ export default function AdminLeagueSettingsPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">İsim</Label>
+                    <Label htmlFor={`league-${rule.key}-name`} className="text-xs">İsim</Label>
                     <Input
+                      id={`league-${rule.key}-name`}
                       value={rule.name}
                       onChange={(e) => updateRule(index, 'name', e.target.value)}
                       placeholder="Lig adı"
@@ -163,8 +190,9 @@ export default function AdminLeagueSettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-xs">Min puan</Label>
+                      <Label htmlFor={`league-${rule.key}-min`} className="text-xs">Min puan</Label>
                       <Input
+                        id={`league-${rule.key}-min`}
                         type="number"
                         min={0}
                         value={rule.minPoints}
@@ -172,8 +200,9 @@ export default function AdminLeagueSettingsPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs">Max puan</Label>
+                      <Label htmlFor={`league-${rule.key}-max`} className="text-xs">Max puan</Label>
                       <Input
+                        id={`league-${rule.key}-max`}
                         type="number"
                         min={0}
                         value={rule.maxPoints}
@@ -182,8 +211,9 @@ export default function AdminLeagueSettingsPage() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Gradient (Tailwind)</Label>
+                    <Label htmlFor={`league-${rule.key}-gradient`} className="text-xs">Gradient (Tailwind)</Label>
                     <Input
+                      id={`league-${rule.key}-gradient`}
                       value={rule.gradient}
                       onChange={(e) => updateRule(index, 'gradient', e.target.value)}
                       placeholder="from-amber-700 to-orange-500"

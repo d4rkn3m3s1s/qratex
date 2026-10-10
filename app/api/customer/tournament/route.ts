@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
-import { creditPointsAndXp } from '@/lib/points-wallet';
+import { visibleMiniGames } from '@/lib/minigame-config';
+import { mintPoints, isEconomyError } from '@/lib/economy';
 import {
   isoWeekStart,
   isoWeekEnd,
@@ -13,8 +13,21 @@ import {
   msUntilWeekEnd,
   prizeForRank,
 } from '@/lib/tournament-core';
+import {
+  TOURNAMENT_MIN_PARTICIPANTS,
+  featuredGameTypeForWeek,
+  prizeFor,
+  prizeTable,
+  rankWeekly,
+} from '@/lib/game-tournament';
 
 export const dynamic = 'force-dynamic';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: PRIVATE_NO_STORE_HEADERS });
+}
 
 /** Gizlilik: "Mehmet Yılmaz" → "Mehmet Y." */
 function shortName(name: string | null): string {
@@ -24,177 +37,206 @@ function shortName(name: string | null): string {
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-/** Bir haftalık pencere için oyun sıralaması (kullanıcı başına EN İYİ skor). */
+/** Rotasyon adayları: görünür portföy (gizliler hariç), registry sırası — kod sabiti. */
+function featuredCandidates(): string[] {
+  return visibleMiniGames().map((g) => g.gameType);
+}
+
+/** Bir haftalık pencerede oyunun belirli sıralaması (kullanıcı başına en iyi skor). */
 async function weeklyRanking(gameType: string, from: Date, to: Date) {
-  const grouped = await prisma.miniGameSession.groupBy({
-    by: ['userId'],
+  const rows = await prisma.miniGameSession.findMany({
     where: { gameType, status: 'completed', completedAt: { gte: from, lt: to } },
-    _max: { starsCollected: true },
-    orderBy: { _max: { starsCollected: 'desc' } },
-    take: 100,
+    select: { userId: true, starsCollected: true, completedAt: true },
   });
-  return grouped
-    .map((g) => ({ userId: g.userId, best: g._max.starsCollected ?? 0 }))
-    .filter((r) => r.best > 0);
+  return rankWeekly(rows);
 }
 
 /**
  * GET /api/customer/tournament?game=<gameType>
- * HAFTALIK TURNUVA: bu haftanın canlı sıralaması (skor = MiniGameSession.starsCollected,
- * yalnız bu ISO hafta) + geri sayım + ilk 3 ödülü. Ayrıca geçen (kapanmış) haftadan
- * kullanıcının hak ettiği ama HENÜZ ALMADIĞI ödül varsa bildirir (POST ile talep edilir).
+ * Haftalık turnuva: bu haftanın canlı sıralaması (her oyun için gösterilir) + geri sayım.
+ * Ödül YALNIZ haftanın öne çıkan oyununda ve en az TOURNAMENT_MIN_PARTICIPANTS oyuncu
+ * varsa verilir. Geçen haftanın öne çıkan oyununda ilk 3'teysen ve almadıysan
+ * `pendingReward` (hangi oyun sayfasında olursan ol) döner. `game` verilmezse öne çıkan oyun.
  */
 export async function GET(request: NextRequest) {
   try {
-    const gameType = new URL(request.url).searchParams.get('game') ?? '';
-    const game = await getEffectiveMiniGame(gameType);
-    if (!game) {
-      return NextResponse.json({ error: 'Oyun bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    const userId = session.user.id;
+    const auth = await requireAuth();
+    if ('error' in auth) return auth.error;
+    const userId = auth.session.user.id;
     const now = new Date();
+
+    const candidates = featuredCandidates();
+    const featuredNow = featuredGameTypeForWeek(isoWeekKey(now), candidates);
+    const requested = new URL(request.url).searchParams.get('game') || featuredNow || '';
+    const game = await getEffectiveMiniGame(requested);
+    if (!game) return json({ error: 'Oyun bulunamadı' }, 404);
+
+    const isFeatured = game.gameType === featuredNow;
+    const featuredGame = featuredNow ? await getEffectiveMiniGame(featuredNow) : null;
 
     // Bu haftanın canlı sıralaması.
     const ranked = await weeklyRanking(game.gameType, isoWeekStart(now), isoWeekEnd(now));
     const top = ranked.slice(0, 10);
-    const users = await prisma.user.findMany({
-      where: { id: { in: top.map((r) => r.userId) } },
-      select: { id: true, name: true, image: true },
-    });
+    const users = top.length
+      ? await prisma.user.findMany({
+          where: { id: { in: top.map((r) => r.userId) } },
+          select: { id: true, name: true, image: true },
+        })
+      : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
     const leaderboard = top.map((r, i) => ({
       rank: i + 1,
       name: shortName(userMap.get(r.userId)?.name ?? null),
       image: userMap.get(r.userId)?.image ?? null,
       score: r.best,
-      prize: prizeForRank(i + 1),
+      prize: isFeatured ? prizeForRank(i + 1) : 0,
       isMe: r.userId === userId,
     }));
     const myIndex = ranked.findIndex((r) => r.userId === userId);
     const me = myIndex >= 0 ? { rank: myIndex + 1, score: ranked[myIndex].best } : null;
 
-    // Geçen (kapanmış) haftadan bekleyen ödül: kullanıcı ilk 3'teyse ve henüz almadıysa.
+    // Geçen haftanın ÖNE ÇIKAN oyunundan bekleyen ödül.
     const prevWeekKey = previousIsoWeekKey(now);
-    const prevFrom = new Date(isoWeekStart(now).getTime() - 7 * 24 * 60 * 60 * 1000);
-    const prevRanked = await weeklyRanking(game.gameType, prevFrom, isoWeekStart(now));
-    const myPrevIndex = prevRanked.findIndex((r) => r.userId === userId);
-    let pendingReward: { rank: number; points: number; weekKey: string } | null = null;
-    if (myPrevIndex >= 0 && myPrevIndex < 3) {
-      const points = prizeForRank(myPrevIndex + 1);
+    const prevFeatured = featuredGameTypeForWeek(prevWeekKey, candidates);
+    let pendingReward: { rank: number; points: number; weekKey: string; gameType: string; gameTitle: string } | null = null;
+    if (prevFeatured) {
+      const prevFrom = new Date(isoWeekStart(now).getTime() - WEEK_MS);
+      const prevRanked = await weeklyRanking(prevFeatured, prevFrom, isoWeekStart(now));
+      const idx = prevRanked.findIndex((r) => r.userId === userId);
+      const points = idx >= 0 ? prizeFor(idx + 1, prevRanked.length) : 0;
       if (points > 0) {
         const alreadyClaimed = await prisma.tournamentRewardClaim.findUnique({
-          where: { userId_gameType_weekKey: { userId, gameType: game.gameType, weekKey: prevWeekKey } },
+          where: { userId_gameType_weekKey: { userId, gameType: prevFeatured, weekKey: prevWeekKey } },
           select: { id: true },
         });
         if (!alreadyClaimed) {
-          pendingReward = { rank: myPrevIndex + 1, points, weekKey: prevWeekKey };
+          const prevGame = await getEffectiveMiniGame(prevFeatured);
+          pendingReward = {
+            rank: idx + 1,
+            points,
+            weekKey: prevWeekKey,
+            gameType: prevFeatured,
+            gameTitle: prevGame?.title ?? prevFeatured,
+          };
         }
       }
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        gameType: game.gameType,
-        gameTitle: game.title,
-        weekKey: isoWeekKey(now),
-        endsInMs: msUntilWeekEnd(now),
-        leaderboard,
-        me,
-        totalPlayers: ranked.length,
-        prizes: { 1: prizeForRank(1), 2: prizeForRank(2), 3: prizeForRank(3) },
-        pendingReward,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    const prizesActive = isFeatured && ranked.length >= TOURNAMENT_MIN_PARTICIPANTS;
+    return json({
+      success: true,
+      gameType: game.gameType,
+      gameTitle: game.title,
+      weekKey: isoWeekKey(now),
+      endsInMs: msUntilWeekEnd(now),
+      leaderboard,
+      me,
+      totalPlayers: ranked.length,
+      isFeatured,
+      featured: featuredGame
+        ? { gameType: featuredGame.gameType, title: featuredGame.title, emoji: featuredGame.emoji }
+        : null,
+      minParticipants: TOURNAMENT_MIN_PARTICIPANTS,
+      participantsNeeded: isFeatured ? Math.max(0, TOURNAMENT_MIN_PARTICIPANTS - ranked.length) : 0,
+      prizesActive,
+      prizes: prizeTable(isFeatured),
+      pendingReward,
+    });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
     console.error('[TOURNAMENT_GET]', error);
-    return NextResponse.json({ error: 'Turnuva alınamadı' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
+    return json({ error: 'Turnuva alınamadı' }, 500);
   }
 }
 
 /**
- * POST /api/customer/tournament?game=<gameType>
- * GEÇEN (kapanmış) haftanın turnuva ödülünü talep eder. Sunucu, kullanıcının o haftaki
- * gerçek sırasını yeniden hesaplar (istemciye güvenmez); ilk 3'teyse ödülü ATOMİK tek-claim
- * ile verir (TournamentRewardClaim unique → çift ödül imkânsız) + points_credited (invariant #3).
+ * POST /api/customer/tournament
+ * GEÇEN haftanın öne çıkan oyununun ödülünü talep eder. Sunucu sıralamayı yeniden ve
+ * belirli biçimde hesaplar (istemciye güvenmez). Tek-claim garantileri:
+ *  - (userId, gameType, weekKey) unique → aynı kişi iki kez alamaz;
+ *  - (gameType, weekKey) danışma kilidi + "bu sıra başkasına verildi mi" kontrolü →
+ *    sıralama sonradan kaysa bile aynı sıraya iki ödül çıkmaz;
+ *  - kredi `mintPoints` (defter idempotency `tournament:<oyun>:<hafta>:<kullanıcı>`,
+ *    aynı tx'te points_credited).
  */
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    const gameType = new URL(request.url).searchParams.get('game') ?? '';
-    const game = await getEffectiveMiniGame(gameType);
-    if (!game) {
-      return NextResponse.json({ error: 'Oyun bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    const userId = session.user.id;
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const userId = auth.session.user.id;
     const now = new Date();
 
-    // Geçen haftanın penceresi + kullanıcının GERÇEK sırası (sunucu-taraflı doğrulama).
     const prevWeekKey = previousIsoWeekKey(now);
-    const prevFrom = new Date(isoWeekStart(now).getTime() - 7 * 24 * 60 * 60 * 1000);
-    const prevRanked = await weeklyRanking(game.gameType, prevFrom, isoWeekStart(now));
+    const gameType = featuredGameTypeForWeek(prevWeekKey, featuredCandidates());
+    const game = gameType ? await getEffectiveMiniGame(gameType) : null;
+    if (!gameType || !game) return json({ success: false, error: 'Geçen hafta ödüllü turnuva yoktu.' }, 400);
+
+    const prevFrom = new Date(isoWeekStart(now).getTime() - WEEK_MS);
+    const prevRanked = await weeklyRanking(gameType, prevFrom, isoWeekStart(now));
     const idx = prevRanked.findIndex((r) => r.userId === userId);
-    const points = idx >= 0 ? prizeForRank(idx + 1) : 0;
-    if (idx < 0 || idx >= 3 || points <= 0) {
-      return NextResponse.json(
-        { success: false, error: 'Geçen hafta ödül kazanmadın.' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    const rank = idx + 1;
+    const points = idx >= 0 ? prizeFor(rank, prevRanked.length) : 0;
+    if (idx < 0 || points <= 0) {
+      return json(
+        {
+          success: false,
+          error:
+            idx >= 0 && idx < 3 && prevRanked.length < TOURNAMENT_MIN_PARTICIPANTS
+              ? `Geçen hafta turnuvaya en az ${TOURNAMENT_MIN_PARTICIPANTS} oyuncu katılmadığı için ödül dağıtılmadı.`
+              : 'Geçen hafta ödül kazanmadın.',
+        },
+        400
       );
     }
 
-    // Atomik tek-claim: unique(userId, gameType, weekKey) create → kredile → event. Aynı tx.
     const result = await prisma.$transaction(async (tx) => {
+      // Aynı oyun+hafta claim'lerini sıraya sok (sıra-tekilliği kontrolü yarışsız olsun).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`tournament:${gameType}:${prevWeekKey}`}))`;
+
+      const rankTaken = await tx.tournamentRewardClaim.findFirst({
+        where: { gameType, weekKey: prevWeekKey, rank },
+        select: { userId: true },
+      });
+      if (rankTaken && rankTaken.userId !== userId) return { kind: 'rank_taken' as const };
+
       const claim = await tx.tournamentRewardClaim.createMany({
-        data: [{ userId, gameType: game.gameType, weekKey: prevWeekKey, rank: idx + 1, points }],
+        data: [{ userId, gameType, weekKey: prevWeekKey, rank, points }],
         skipDuplicates: true,
       });
-      if (claim.count === 0) return { credited: false as const }; // zaten alınmış
+      if (claim.count === 0) return { kind: 'already' as const };
 
-      await creditPointsAndXp(tx, { userId, points });
-      await tx.analyticsEvent.create({
-        data: {
-          userId,
-          event: 'points_credited',
-          category: 'tournament',
-          data: { points, gameType: game.gameType, weekKey: prevWeekKey, rank: idx + 1 },
-        },
+      const minted = await mintPoints(tx, {
+        userId,
+        points,
+        source: 'tournament',
+        sourceId: `${gameType}:${prevWeekKey}`,
+        idempotencyKey: `tournament:${gameType}:${prevWeekKey}:${userId}`,
+        capCategory: null,
+        meta: { gameType, weekKey: prevWeekKey, rank },
       });
       await tx.notification.create({
         data: {
           userId,
           type: 'success',
-          title: `🏆 Turnuva ödülü!`,
-          message: `${game.title} haftalık turnuvasında ${idx + 1}. oldun ve +${points} puan kazandın!`,
+          title: '🏆 Turnuva ödülü!',
+          message: `${game.title} haftalık turnuvasında ${rank}. oldun ve +${minted.credited} puan kazandın!`,
         },
       });
-      return { credited: true as const };
+      return { kind: 'credited' as const, credited: minted.credited };
     });
 
-    if (!result.credited) {
-      return NextResponse.json(
-        { success: false, error: 'Bu ödülü zaten aldın.' },
-        { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    if (result.kind === 'already') return json({ success: false, error: 'Bu ödülü zaten aldın.' }, 409);
+    if (result.kind === 'rank_taken') {
+      return json({ success: false, error: 'Bu sıranın ödülü başka bir oyuncuya verildi.' }, 409);
     }
 
-    return NextResponse.json(
-      { success: true, rank: idx + 1, points, weekKey: prevWeekKey },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return json({ success: true, rank, points: result.credited, weekKey: prevWeekKey, gameType });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
+    if (isEconomyError(error)) return json({ success: false, error: error.message, code: error.code }, error.httpStatus);
     console.error('[TOURNAMENT_POST]', error);
-    return NextResponse.json({ error: 'Ödül talep edilemedi' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
+    return json({ error: 'Ödül talep edilemedi' }, 500);
   }
 }

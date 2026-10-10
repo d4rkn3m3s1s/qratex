@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { requireAuth } from '@/lib/api-auth';
+import { resolveAiScope, scopeErrorResponse } from '@/lib/auth/scope';
 import { prisma, withDbRetry } from '@/lib/prisma';
 import { feedbackSchema, listQueryPageSchema } from '@/lib/validations';
 import { PRIVATE_NO_STORE_HEADERS, paginationSkip, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -25,7 +26,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    // P0-05: rol listesi AÇIK. Eski kod rol listesiz `requireAuth()` + "CUSTOMER ve DEALER'ı
+    // daralt, gerisi her şeyi görsün" idi → STAFF bütün kiracıların yorumlarını, müşteri adlarını
+    // ve e-postalarını okuyordu.
+    const auth = await requireAuth(['CUSTOMER', 'DEALER', 'STAFF', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
@@ -40,15 +44,23 @@ export async function GET(request: NextRequest) {
     const needsReview = searchParams.get('needsReview') === 'true'; // P2-27: intentScore < 0.7 manuel inceleme
     const skip = paginationSkip(page, pageSize);
 
-    let where: Record<string, unknown> = { deletedAt: null };
-    if (needsReview) (where as any).intentScore = { lt: 0.7 };
+    const where: Record<string, unknown> = { deletedAt: null };
+    if (needsReview) where.intentScore = { lt: 0.7 };
 
+    // VARSAYILAN REDDET kapsamı: CUSTOMER → yalnız kendi yorumları; DEALER → kendi bayisi;
+    // STAFF → DB'deki AKTİF bağlı bayi (pasif personel 403); ADMIN → `?dealerId=` ile tek bayi,
+    // verilmezse platform geneli. Başka her rol `requireAuth` listesinde zaten reddedilir.
+    const isAdmin = session.user.role === 'ADMIN';
     if (session.user.role === 'CUSTOMER') {
       where.userId = session.user.id;
-    } else if (session.user.role === 'DEALER') {
-      where.qrCode = { dealerId: session.user.id };
+    } else {
+      const scope = await resolveAiScope(session, {
+        dealerId: searchParams.get('dealerId'),
+        allowPlatform: true,
+      });
+      if (!scope.ok) return scopeErrorResponse(scope);
+      if (scope.dealerId) where.qrCode = { dealerId: scope.dealerId };
     }
-    // ADMIN sees all - no where filter
 
     if (qrCodeId) {
       where.qrCodeId = qrCodeId;
@@ -74,8 +86,9 @@ export async function GET(request: NextRequest) {
       dealerReply: true,
       dealerRepliedAt: true,
       createdAt: true,
+      // E-posta yalnız ADMIN'e (KVKK veri minimizasyonu); bayi/personel/müşteri listesi e-posta taşımaz.
       user: {
-        select: { id: true, name: true, email: true, image: true },
+        select: { id: true, name: true, email: isAdmin, image: true },
       },
       qrCode: {
         select: {
@@ -234,6 +247,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Kiracı bütünlüğü: istemciden gelen `dealerStaffId` bu QR'ın bayisinin AKTİF personeli değilse
+    // yok sayılır (başka işletmenin personeline puan/şikâyet yazılamasın).
+    let verifiedDealerStaffId: string | null = null;
+    if (dealerStaffId) {
+      const staffRow = await prisma.dealerStaff.findFirst({
+        where: { id: dealerStaffId, dealerId: qrCode.dealerId, isActive: true },
+        select: { id: true },
+      });
+      verifiedDealerStaffId = staffRow?.id ?? null;
+    }
+
     const idemCheck = await checkIdempotency(request, 'feedback');
     if ('error' in idemCheck) return idemCheck.error;
     if (idemCheck.cached) return idemCheck.response;
@@ -253,7 +277,7 @@ export async function POST(request: NextRequest) {
         ...(utmCampaign && { utmCampaign }),
         ...(utmMedium && { utmMedium }),
         ...(attributionSource && { attributionSource }),
-        ...(dealerStaffId && { dealerStaffId }),
+        ...(verifiedDealerStaffId && { dealerStaffId: verifiedDealerStaffId }),
       },
     });
 
@@ -538,6 +562,8 @@ export async function POST(request: NextRequest) {
         // Davranışsal (aktivite) rozetleri: Yeni Ses / Usta Yorumcu / Taht Sahibi vb.
         // İdempotent — tekrar çağrı puan çoğaltmaz ([[points-economy-invariants]]).
         after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
+        // İlk QR geri bildirimi bekleyen daveti nitelendirebilir (P0-16; tek seferlik, hata yutulur).
+        after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
       }
 
       if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
@@ -549,6 +575,7 @@ export async function POST(request: NextRequest) {
       const uid = session.user.id;
       after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
       after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
+      after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
     }
     if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });

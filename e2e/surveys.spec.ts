@@ -1,38 +1,57 @@
 import { test, expect } from '@playwright/test';
 
+/**
+ * Anket uçtan uca akışı: oluştur → (boş seçenek engeli) → yayınla → müşteri olarak doldur → sonuçta 1 yanıt.
+ * Eski sürüm "Yeni anket" bir <a> olduğu için `getByRole('button')` ile bulamıyor ve oluşturma
+ * adımını `if` ile SESSİZCE atlıyordu (sahte geçiş). Koşullu dal kaldırıldı.
+ */
 test.describe('Surveys E2E Flow', () => {
-    test('Create survey, fill survey, view results', async ({ page }) => {
-        // 1. Dealer login
+    test('Create survey (empty options blocked), fill as customer, see response in results', async ({ page, browser }) => {
+        const title = `E2E Memnuniyet ${Date.now()}`;
+
+        // 1. Bayi girişi
         await page.goto('/auth/login');
         await page.fill('input[type="email"]', 'dealer@qratex.com');
         await page.fill('input[type="password"]', 'dealer123');
         await page.click('button[type="submit"]');
         await page.waitForURL('**/dealer**');
 
-        // 2. Anketler Sayfasına ve Anket Oluşturmaya git
+        // 2. Oluşturma sayfası (link)
         await page.goto('/dealer/surveys');
+        await page.getByRole('link', { name: /yeni anket|new survey/i }).first().click();
+        await page.waitForURL('**/dealer/surveys/create');
 
-        // Yeni Anket butonu
-        const createBtn = page.getByRole('button', { name: /Yeni Anket|Anket Oluştur/i });
-        if (await createBtn.isVisible()) {
-            await createBtn.click();
+        await page.getByLabel(/anket başlığı|survey title/i).fill(title);
+        await page.getByRole('button', { name: /soru ekle|add question/i }).first().click();
+        await page.getByLabel(/^soru 1$|^question 1$/i).fill('Yemeklerimizi nasıl buldunuz?');
 
-            await page.fill('input[placeholder*="başlık" i]', 'Müşteri Memnuniyet Anketi E2E');
-            await page.fill('textarea[placeholder*="açıklama" i]', 'E2E test için.');
+        // 3. Boş seçeneklerle kaydetme ENGELLENİR (P0-39): sayfada kalınır ve hata görünür.
+        await page.getByRole('button', { name: /anketi oluştur|create survey/i }).click();
+        await expect(page).toHaveURL(/\/dealer\/surveys\/create/);
+        await expect(page.getByText(/en az 2 dolu seçenek/i).first()).toBeVisible();
 
-            // Örnek Soru Ekle
-            await page.click('button:has-text("Soru Ekle")');
-            await page.fill('input[placeholder*="Soru" i]', 'E2E Yemeklerimizi nasıl buldunuz?');
+        // 4. Seçenekleri doldur ve kaydet
+        await page.getByPlaceholder(/seçenek 1|option 1/i).fill('Harika');
+        await page.getByPlaceholder(/seçenek 2|option 2/i).fill('İdare eder');
+        await page.getByRole('button', { name: /anketi oluştur|create survey/i }).click();
+        await page.waitForURL('**/dealer/surveys');
+        const row = page.getByRole('listitem').filter({ hasText: title });
+        await expect(row).toBeVisible({ timeout: 10_000 });
 
-            // Kaydet
-            await page.getByRole('button', { name: /Kaydet|Oluştur/i }).click();
+        // 5. Müşteri (oturumsuz) olarak doldur
+        const resultsHref = await row.getByRole('link', { name: /sonuçlar|results/i }).getAttribute('href');
+        const surveyId = resultsHref?.split('/')[3];
+        expect(surveyId).toBeTruthy();
+        const anon = await browser.newContext();
+        const customer = await anon.newPage();
+        await customer.goto(`/surveys/${surveyId}`);
+        await customer.getByLabel('Harika').check();
+        await customer.getByRole('button', { name: /gönder|submit/i }).click();
+        await expect(customer.getByRole('heading', { name: /teşekkürler|thank you/i })).toBeVisible();
+        await anon.close();
 
-            // Anketin listede göründüğünü doğrula
-            await expect(page.getByText('Müşteri Memnuniyet Anketi E2E').first()).toBeVisible({ timeout: 10000 });
-        }
-
-        // 3. Sonuçları Görüntüle
-        await page.getByText('Müşteri Memnuniyet Anketi E2E').first().click();
-        await expect(page.getByText(/Sonuçlar|Yanıtlar|Detay/i).first()).toBeVisible();
+        // 6. Sonuçlarda 1 yanıt
+        await page.goto(resultsHref!);
+        await expect(page.getByText(/1 toplam yanıt|1 total responses/i)).toBeVisible();
     });
 });

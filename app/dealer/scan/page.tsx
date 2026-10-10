@@ -12,10 +12,8 @@ import {
   Loader2,
   ShoppingBag,
   Plus,
-  History,
   CreditCard,
   ArrowRight,
-  X,
   RefreshCw,
   Volume2,
   VolumeX,
@@ -34,6 +32,10 @@ import { toast } from '@/lib/admin-toast';
 import { DashboardPageHero } from '@/components/layout/dashboard-page-hero';
 import { formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { useAppT } from '@/lib/app-locale';
+import { useQrScanner, QR_SCANNER_ERROR_KEYS } from '@/lib/hooks/use-qr-scanner';
+import { extractCardToken } from '@/lib/qr-scan-targets';
+import { resolveAvatarImage } from '@/lib/avatar-options';
+import { InlineError } from '@/components/states';
 
 interface ScannedCard {
   id: string;
@@ -72,18 +74,17 @@ interface Product {
 
 export default function DealerScanPage() {
   const t = useAppT();
-  const scannerRef = useRef<any>(null);
-  const scannerContainerRef = useRef<HTMLDivElement>(null);
-  
-  const [cameraActive, setCameraActive] = useState(false);
+
   const [scanning, setScanning] = useState(false);
   const [manualToken, setManualToken] = useState('');
   const [scannedCard, setScannedCard] = useState<ScannedCard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
-  
+  // Tek uçuş: kamera + manuel giriş + "kaydet sonrası yenile" aynı anda kart sorgusu atmasın.
+  const lookupInFlightRef = useRef(false);
+  // Tek AudioContext: her bip'te yenisini açmak tarayıcı sınırına (≈6) takılıp sesi susturuyordu.
+  const audioContextRef = useRef<AudioContext | null>(null);
+
   // Consumption form
   const [showConsumptionForm, setShowConsumptionForm] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -96,12 +97,10 @@ export default function DealerScanPage() {
 
   useEffect(() => {
     fetchCategories();
-    
     return () => {
-      // Cleanup scanner on unmount
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-      }
+      const ctx = audioContextRef.current;
+      audioContextRef.current = null;
+      if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => {});
     };
   }, []);
 
@@ -127,7 +126,7 @@ export default function DealerScanPage() {
 
   const fetchProducts = async (categoryId: string) => {
     try {
-      const res = await fetch(`/api/dealer/products?categoryId=${categoryId}`);
+      const res = await fetch(`/api/dealer/products?categoryId=${encodeURIComponent(categoryId)}`);
       const data = await res.json();
       if (data.success) {
         setProducts(data.products);
@@ -140,17 +139,25 @@ export default function DealerScanPage() {
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new Ctor();
+      }
+      const audioContext = audioContextRef.current;
+      if (audioContext.state === 'suspended') void audioContext.resume().catch(() => {});
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      
+
       oscillator.frequency.value = 1000;
       oscillator.type = 'sine';
       gainNode.gain.value = 0.3;
-      
+
       oscillator.start();
       oscillator.stop(audioContext.currentTime + 0.1);
     } catch {
@@ -158,115 +165,23 @@ export default function DealerScanPage() {
     }
   }, [soundEnabled]);
 
-  const extractToken = (text: string): string => {
-    // URL'den token çıkar: https://qratex.com/c/TOKEN veya /c/TOKEN
-    const urlMatch = text.match(/\/c\/([A-Za-z0-9_-]+)/);
-    if (urlMatch) {
-      return urlMatch[1];
-    }
-    // Düz token
-    return text.trim();
-  };
-
-  const onScanSuccess = useCallback(async (decodedText: string) => {
-    // Aynı kodu tekrar taramayı engelle
-    if (lastScannedCode === decodedText) return;
-    setLastScannedCode(decodedText);
-    
-    playBeep();
-    
-    const token = extractToken(decodedText);
-    // (Debug log kaldırıldı — QR token'ı üretimde console'a basmamalı.)
-
-    // Taramayı durdur ve işle
-    await handleScan(token);
-    
-    // 3 saniye sonra tekrar taramaya izin ver
-    setTimeout(() => setLastScannedCode(null), 3000);
-  }, [lastScannedCode, playBeep]);
-
-  const startCamera = async () => {
-    try {
-      // Dynamic import for html5-qrcode (client-side only)
-      const { Html5Qrcode } = await import('html5-qrcode');
-      
-      if (!scannerContainerRef.current) {
-        toast.error(t('dealerScan.scannerContainerError'));
-        return;
-      }
-
-      // Eğer önceki scanner varsa temizle
-      if (scannerRef.current) {
-        try {
-          await scannerRef.current.stop();
-        } catch (e) {}
-      }
-
-      const scanner = new Html5Qrcode('qr-reader');
-      scannerRef.current = scanner;
-
-      const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1,
-      };
-
-      await scanner.start(
-        { facingMode },
-        config,
-        onScanSuccess,
-        (errorMessage) => {
-          // QR kodu bulunamadığında - sürekli çağrılır, ignore et
-        }
-      );
-
-      setCameraActive(true);
-      toast.success(t('dealerScan.cameraActiveSuccess'));
-    } catch (err: any) {
-      console.error('Camera error:', err);
-      if (err.name === 'NotAllowedError') {
-        toast.error(t('dealerScan.cameraPermissionDenied'));
-      } else if (err.name === 'NotFoundError') {
-        toast.error(t('dealerScan.cameraNotFound'));
-      } else {
-        toast.error(`${t('dealerScan.cameraStartFailed')}${err.message ? `: ${err.message}` : ''}`);
-      }
-    }
-  };
-
-  const stopCamera = async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current = null;
-      } catch (e) {
-        console.error('Error stopping scanner:', e);
-      }
-    }
-    setCameraActive(false);
-    setLastScannedCode(null);
-  };
-
-  const switchCamera = async () => {
-    await stopCamera();
-    setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
-    // Kamera yeniden başlatılacak
-    setTimeout(() => startCamera(), 500);
-  };
-
-  const handleScan = async (token: string) => {
-    if (!token.trim()) {
+  /** Kartı sorgular; bulunduysa true. Sürmekte olan bir sorgu varken ikinci çağrı yok sayılır. */
+  const handleScan = async (rawToken: string): Promise<boolean> => {
+    const token = rawToken.trim();
+    if (!token) {
       toast.error(t('dealerScan.tokenRequired'));
-      return;
+      return false;
     }
+    if (lookupInFlightRef.current) return false;
+    lookupInFlightRef.current = true;
 
     setScanning(true);
     setError(null);
     setScannedCard(null);
 
     try {
-      const res = await fetch(`/api/dealer/cards/scan/${encodeURIComponent(token.trim())}`);
-      const data = await res.json();
+      const res = await fetch(`/api/dealer/cards/scan/${encodeURIComponent(token)}`);
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(data.error || t('dealerScan.cardNotFound'));
@@ -275,26 +190,59 @@ export default function DealerScanPage() {
         } else if (data.code === 'CARD_BLOCKED') {
           toast.error(t('dealerScan.cardBlocked'));
         } else {
-          toast.error(data.error);
+          toast.error(data.error || t('dealerScan.cardNotFound'));
         }
-        return;
+        return false;
       }
 
       setScannedCard(data.card);
       toast.success(t('dealerScan.customerFoundToast').replace('{name}', data.card.customer.name));
-      await stopCamera();
-    } catch (err) {
+      return true;
+    } catch {
       setError(t('dealerScan.scanFailedGeneric'));
       toast.error(t('dealerScan.genericError'));
+      return false;
     } finally {
+      lookupInFlightRef.current = false;
       setScanning(false);
     }
   };
 
+  // Kamera: kilit / duraklatma / teardown hook'ta (P0-36). Kart bulunursa kamera kapanır;
+  // bulunamazsa tarama sürer ama aynı kod 4 sn boyunca yeniden sorgulanmaz.
+  const scanner = useQrScanner({
+    elementId: 'qr-reader',
+    fps: 10,
+    qrbox: { width: 250, height: 250 },
+    aspectRatio: 1,
+    dedupeMs: 4000,
+    onDecode: async (decodedText) => {
+      playBeep();
+      const token = extractCardToken(decodedText);
+      if (!token) {
+        toast.error(t('dealerScan.cardNotFound'));
+        return;
+      }
+      const found = await handleScan(token);
+      if (found) await scanner.stop();
+    },
+  });
+  const cameraActive = scanner.isActive;
+
+  useEffect(() => {
+    if (scanner.error) toast.error(t(QR_SCANNER_ERROR_KEYS[scanner.error.code]));
+  }, [scanner.error, t]);
+
   const handleManualScan = () => {
     // URL veya düz token destekle
-    const token = extractToken(manualToken);
-    handleScan(token);
+    const token = extractCardToken(manualToken);
+    if (!token) {
+      toast.error(t('dealerScan.tokenRequired'));
+      return;
+    }
+    void handleScan(token).then((found) => {
+      if (found) void scanner.stop();
+    });
   };
 
   const handleSubmitConsumption = async () => {
@@ -324,8 +272,8 @@ export default function DealerScanPage() {
       setShowConsumptionForm(false);
       resetForm();
       
-      // Kartı yeniden tara (güncel bilgi için)
-      handleScan(scannedCard.token);
+      // Kartı yeniden sorgula (güncel puan/tüketim bilgisi için)
+      void handleScan(scannedCard.token);
     } catch (err) {
       toast.error(t('dealerScan.genericError'));
     } finally {
@@ -344,7 +292,6 @@ export default function DealerScanPage() {
     setScannedCard(null);
     setManualToken('');
     setError(null);
-    setLastScannedCode(null);
   };
 
   return (
@@ -371,21 +318,26 @@ export default function DealerScanPage() {
           </CardHeader>
           <CardContent className={`space-y-4 flex-1 flex flex-col min-h-0 ${cameraActive ? 'md:flex-initial' : ''}`}>
             {/* Camera Preview - full area on mobile when active */}
-            <div className={`relative bg-muted dark:bg-slate-900 rounded-xl overflow-hidden ${cameraActive ? 'flex-1 min-h-[50vh] md:min-h-0 md:aspect-square' : 'aspect-square'}`}>
-              <div 
-                id="qr-reader" 
-                ref={scannerContainerRef}
+            <div className={`relative bg-surface-muted rounded-xl overflow-hidden ${cameraActive ? 'flex-1 min-h-[50vh] md:min-h-0 md:aspect-square' : 'aspect-square'}`}>
+                            <div
+                id="qr-reader"
                 className={`w-full h-full ${!cameraActive ? 'hidden' : ''} ${cameraActive ? 'min-h-[60vh] md:min-h-0' : ''}`}
-                style={{ 
+                style={{
                   minHeight: cameraActive ? undefined : '300px',
                 }}
               />
               
               {!cameraActive && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                  <CameraOff className="w-16 h-16 mb-4" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-fg-muted">
+                  <CameraOff className="w-16 h-16 mb-4" aria-hidden />
                   <p>{t('dealerScan.cameraOffTitle')}</p>
-                  <p className="text-xs text-slate-600 mt-2">{t('dealerScan.cameraOffHint')}</p>
+                  <p className="text-xs text-fg-subtle mt-2">{t('dealerScan.cameraOffHint')}</p>
+                </div>
+              )}
+
+              {scanner.status === 'starting' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40" role="status">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" aria-hidden />
                 </div>
               )}
 
@@ -394,7 +346,7 @@ export default function DealerScanPage() {
                   {/* Scan overlay animation */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Motion.div
-                      className="absolute inset-0 border-4 border-emerald-500/30"
+                      className="absolute inset-0 border-4 border-success-border"
                       animate={{ opacity: [0.3, 0.7, 0.3] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     />
@@ -412,27 +364,52 @@ export default function DealerScanPage() {
               )}
             </div>
 
+            {scanner.error && (
+              <InlineError
+                variant="banner"
+                onRetry={() => {
+                  scanner.resetError();
+                  void scanner.start();
+                }}
+              >
+                {t(QR_SCANNER_ERROR_KEYS[scanner.error.code])}
+              </InlineError>
+            )}
+
             {/* Camera controls */}
             <div className="flex gap-2">
               {!cameraActive ? (
-                <Button onClick={startCamera} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
-                  <Camera className="w-4 h-4 mr-2" />
+                <Button
+                  onClick={() => void scanner.start()}
+                  disabled={scanner.status === 'stopping'}
+                  className="flex-1"
+                >
+                  <Camera className="w-4 h-4 mr-2" aria-hidden />
                   {t('dealerScan.openCamera')}
                 </Button>
               ) : (
                 <>
-                  <Button onClick={stopCamera} variant="destructive" className="flex-1">
-                    <CameraOff className="w-4 h-4 mr-2" />
+                  <Button onClick={() => void scanner.stop()} variant="destructive" className="flex-1">
+                    <CameraOff className="w-4 h-4 mr-2" aria-hidden />
                     {t('dealerScan.closeCamera')}
                   </Button>
-                  <Button onClick={switchCamera} variant="outline" size="icon" title={t('dealerScan.flipCameraTitle')}>
-                    <FlipHorizontal className="w-4 h-4" />
+                  <Button
+                    onClick={() => void scanner.switchCamera()}
+                    variant="outline"
+                    size="icon"
+                    title={t('dealerScan.flipCameraTitle')}
+                    aria-label={t('dealerScan.flipCameraTitle')}
+                    disabled={scanner.status === 'starting'}
+                  >
+                    <FlipHorizontal className="w-4 h-4" aria-hidden />
                   </Button>
-                  <Button 
-                    onClick={() => setSoundEnabled(!soundEnabled)} 
-                    variant="outline" 
+                  <Button
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    variant="outline"
                     size="icon"
                     title={soundEnabled ? t('dealerScan.soundMuteTitle') : t('dealerScan.soundOnTitle')}
+                    aria-label={soundEnabled ? t('dealerScan.soundMuteTitle') : t('dealerScan.soundOnTitle')}
+                    aria-pressed={!soundEnabled}
                   >
                     {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                   </Button>
@@ -441,18 +418,22 @@ export default function DealerScanPage() {
             </div>
 
             {/* Status indicator */}
-            {cameraActive && (
-              <Motion.div 
+            {(scanner.status === 'scanning' || scanner.status === 'paused') && (
+              <Motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex items-center justify-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20"
+                role="status"
+                className="flex items-center justify-center gap-2 p-3 rounded-lg bg-success-subtle border border-success-border"
               >
-                <Motion.div 
-                  className="w-3 h-3 rounded-full bg-emerald-500"
+                <Motion.div
+                  className="w-3 h-3 rounded-full bg-success"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
+                  aria-hidden
                 />
-                <span className="text-sm text-emerald-400">{t('dealerScan.scanActiveHint')}</span>
+                <span className="text-sm text-success">
+                  {scanner.status === 'paused' ? t('dealerScan.validatingCard') : t('dealerScan.scanActiveHint')}
+                </span>
               </Motion.div>
             )}
 
@@ -464,7 +445,10 @@ export default function DealerScanPage() {
                   placeholder={t('dealerScan.manualTokenPlaceholder')}
                   value={manualToken}
                   onChange={(e) => setManualToken(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleManualScan()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !scanning) handleManualScan();
+                  }}
+                  aria-label={t('dealerScan.manualTokenLabel')}
                   className="text-sm"
                 />
                 <Button 
@@ -504,10 +488,10 @@ export default function DealerScanPage() {
                   exit={{ opacity: 0, scale: 0.9 }}
                   className="text-center py-8"
                 >
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-                    <XCircle className="w-8 h-8 text-red-500" />
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-danger-subtle flex items-center justify-center">
+                    <XCircle className="w-8 h-8 text-danger" />
                   </div>
-                  <p className="text-red-400 mb-4">{error}</p>
+                  <p className="text-danger mb-4">{error}</p>
                   <Button variant="outline" onClick={resetScan}>
                     <RefreshCw className="w-4 h-4 mr-2" />
                     {t('dealerScan.retryScan')}
@@ -522,17 +506,21 @@ export default function DealerScanPage() {
                   className="space-y-4"
                 >
                   {/* Customer info */}
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="p-4 rounded-xl bg-success-subtle border border-success-border">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center">
                         {scannedCard.customer.image ? (
-                          <img 
-                            src={scannedCard.customer.image} 
-                            alt={scannedCard.customer.name} 
+                          // eslint-disable-next-line @next/next/no-img-element -- harici (OAuth/R2) URL'ler de gelebilir
+                          <img
+                            src={resolveAvatarImage(scannedCard.customer.image) ?? scannedCard.customer.image}
+                            alt={scannedCard.customer.name}
+                            width={56}
+                            height={56}
+                            decoding="async"
                             className="w-full h-full rounded-full object-cover"
                           />
                         ) : (
-                          <User className="w-7 h-7 text-emerald-400" />
+                          <User className="w-7 h-7 text-success" />
                         )}
                       </div>
                       <div className="flex-1">
@@ -547,7 +535,7 @@ export default function DealerScanPage() {
                           </Badge>
                         </div>
                       </div>
-                      <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                      <CheckCircle2 className="w-8 h-8 text-success" />
                     </div>
                   </div>
 
@@ -581,7 +569,7 @@ export default function DealerScanPage() {
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
                     <Button 
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600"
+                      className="flex-1"
                       onClick={() => setShowConsumptionForm(true)}
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -713,11 +701,7 @@ export default function DealerScanPage() {
             <Button variant="outline" onClick={() => setShowConsumptionForm(false)}>
               {t('common.cancel')}
             </Button>
-            <Button 
-              onClick={handleSubmitConsumption} 
-              disabled={submitting}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600"
-            >
+            <Button onClick={handleSubmitConsumption} disabled={submitting}>
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

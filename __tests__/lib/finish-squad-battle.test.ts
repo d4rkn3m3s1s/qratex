@@ -1,10 +1,12 @@
 /**
  * finishSquadBattle testleri: klan savaşı sonlandırma para akışının çekirdeği.
+ * (P0-20 sonrası `finishSquadBattle` → `lib/squad-battle-service#settleSquadBattle`.)
  * Kritik garantiler:
- *  - ATOMİK CLAIM: updateMany(status active→completed) count=0 ise hiçbir ödeme
- *    yapmaz (üç sonlandırıcı eşzamanlı çalışsa bile tek kez ödenir).
+ *  - ATOMİK CLAIM: updateMany(status active→completed, paidOutAt null→now) count=0 ise hiçbir
+ *    ödeme yapmaz (üç sonlandırıcı eşzamanlı çalışsa / savaş yeniden aktifleştirilse bile tek kez).
  *  - NO-MINT: yalnızca escrow ile FONLANMIŞ (rewardFunded) havuz dağıtılır;
  *    fonlanmamış savaş puan BASMAZ.
+ *  - DEFTERLİ: ödeme ve iade `mintPoints` ile (points_credited aynı tx'te, tek-kez anahtarlı).
  *  - REFUND: kazanan yok / kalan artık → meydan okuyana iade (idempotent).
  */
 const mockTx = {
@@ -15,10 +17,10 @@ const mockTx = {
   },
   squad: { update: jest.fn() },
   notification: { create: jest.fn() },
-  analyticsEvent: { create: jest.fn() },
+  auditLog: { create: jest.fn() },
 };
 
-const mockCredit = jest.fn();
+const mockMint = jest.fn();
 
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -27,8 +29,8 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 jest.mock('@/lib/effects/confetti', () => ({ triggerConfetti: jest.fn() }));
-jest.mock('@/lib/points-wallet', () => ({
-  creditPointsAndXp: (...a: unknown[]) => mockCredit(...a),
+jest.mock('@/lib/economy/mint', () => ({
+  mintPoints: (...a: unknown[]) => mockMint(...a),
 }));
 
 import { finishSquadBattle } from '@/lib/gamification-engine';
@@ -36,11 +38,17 @@ import { finishSquadBattle } from '@/lib/gamification-engine';
 beforeEach(() => {
   mockTx.squadBattle.updateMany.mockReset();
   mockTx.squadBattle.findUnique.mockReset();
-  mockTx.squadBattle.update.mockReset().mockResolvedValue({});
+  mockTx.squadBattle.update.mockReset().mockResolvedValue({ id: 'b1' });
   mockTx.squad.update.mockReset().mockResolvedValue({});
   mockTx.notification.create.mockReset().mockResolvedValue({});
-  mockTx.analyticsEvent.create.mockReset().mockResolvedValue({});
-  mockCredit.mockReset().mockResolvedValue({ points: 0, xp: 0, level: 1, isLevelUp: false });
+  mockTx.auditLog.create.mockReset().mockResolvedValue({});
+  mockMint
+    .mockReset()
+    .mockImplementation(async (_tx: unknown, input: { points: number }) => ({
+      credited: input.points,
+      status: 'posted',
+      duplicate: false,
+    }));
 });
 
 function battle(overrides: Record<string, unknown> = {}) {
@@ -64,54 +72,59 @@ function battle(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const mintFor = (userId: string) =>
+  mockMint.mock.calls.filter((c) => (c[1] as { userId: string }).userId === userId).map((c) => c[1]);
+
 describe('finishSquadBattle — atomik claim', () => {
-  it('claim count=0 (zaten tamamlanmış) → null döner, HİÇBİR ödeme/okuma yapılmaz', async () => {
+  it('claim count=0 (zaten tamamlanmış / ödenmiş) → null döner, HİÇBİR ödeme/okuma yapılmaz', async () => {
     mockTx.squadBattle.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await finishSquadBattle('b1');
 
     expect(res).toBeNull();
     expect(mockTx.squadBattle.findUnique).not.toHaveBeenCalled();
-    expect(mockCredit).not.toHaveBeenCalled();
+    expect(mockMint).not.toHaveBeenCalled();
   });
 
-  it('claim count=1 → savaş okunur ve sonuçlandırılır', async () => {
+  it('claim count=1 → paidOutAt guard’ıyla claim edilir, savaş okunur ve sonuçlandırılır', async () => {
     mockTx.squadBattle.updateMany.mockResolvedValue({ count: 1 });
     mockTx.squadBattle.findUnique.mockResolvedValue(battle());
 
-    await finishSquadBattle('b1');
+    const res = await finishSquadBattle('b1');
 
     expect(mockTx.squadBattle.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'b1', status: 'active' }, data: { status: 'completed' } })
+      expect.objectContaining({
+        where: { id: 'b1', status: 'active', paidOutAt: null },
+        data: expect.objectContaining({ status: 'completed', paidOutAt: expect.any(Date) }),
+      })
     );
     expect(mockTx.squadBattle.findUnique).toHaveBeenCalled();
+    expect(res).toEqual({ id: 'b1' });
+    expect(mockTx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: 'SQUAD_BATTLE_SETTLE' }) })
+    );
   });
 });
 
 describe('finishSquadBattle — no-mint & escrow', () => {
-  it('FONLANMIŞ havuz: kazanan klanın üyelerine eşit dağıtılır + points_credited yazılır', async () => {
+  it('FONLANMIŞ havuz: kazanan klanın üyelerine eşit dağıtılır, defterli ve tek-kez anahtarlı', async () => {
     mockTx.squadBattle.updateMany.mockResolvedValue({ count: 1 });
     mockTx.squadBattle.findUnique.mockResolvedValue(battle()); // pool 1000, 2 kazanan → 500/kişi
 
     await finishSquadBattle('b1');
 
-    // İki kazanan katılımcıya kredi
-    expect(mockCredit).toHaveBeenCalledTimes(2);
-    expect(mockCredit).toHaveBeenCalledWith(
-      mockTx,
-      expect.objectContaining({ userId: 'a', points: 500, xp: 250 })
-    );
-    // points_credited görünürlük olayı yazılmalı
-    expect(mockTx.analyticsEvent.create).toHaveBeenCalledWith(
+    expect(mintFor('a')).toEqual([
       expect.objectContaining({
-        data: expect.objectContaining({ event: 'points_credited', category: 'squad_battle' }),
-      })
-    );
+        points: 500,
+        xp: 250,
+        source: 'squad_battle',
+        idempotencyKey: 'squad-payout:b1:a',
+        capCategory: null,
+      }),
+    ]);
+    expect(mintFor('b')).toHaveLength(1);
     // Hiç iade kalmadı (1000 = 2×500) → challenger'a iade yok
-    expect(mockCredit).not.toHaveBeenCalledWith(
-      mockTx,
-      expect.objectContaining({ userId: 'challenger' })
-    );
+    expect(mintFor('challenger')).toHaveLength(0);
   });
 
   it('FONLANMAMIŞ havuz: puan BASILMAZ (mint yok), kazanana ödeme yapılmaz', async () => {
@@ -120,7 +133,7 @@ describe('finishSquadBattle — no-mint & escrow', () => {
 
     await finishSquadBattle('b1');
 
-    expect(mockCredit).not.toHaveBeenCalled();
+    expect(mockMint).not.toHaveBeenCalled();
     expect(mockTx.squad.update).not.toHaveBeenCalled();
   });
 
@@ -132,17 +145,15 @@ describe('finishSquadBattle — no-mint & escrow', () => {
 
     await finishSquadBattle('b1');
 
-    // Kazanan yok → kimseye ödül yok, tüm pool challenger'a iade
-    expect(mockCredit).toHaveBeenCalledTimes(1);
-    expect(mockCredit).toHaveBeenCalledWith(
-      mockTx,
-      expect.objectContaining({ userId: 'challenger', points: 1000 })
-    );
-    expect(mockTx.analyticsEvent.create).toHaveBeenCalledWith(
+    expect(mockMint).toHaveBeenCalledTimes(1);
+    expect(mintFor('challenger')).toEqual([
       expect.objectContaining({
-        data: expect.objectContaining({ category: 'squad_battle_refund' }),
-      })
-    );
+        points: 1000,
+        source: 'squad_escrow_refund',
+        idempotencyKey: 'squad-escrow-refund:b1',
+        fraudGate: false,
+      }),
+    ]);
   });
 
   it("bölme artığı (3 kazanan, 1000 pool → 333×3=999) kalan 1 puan challenger'a iade edilir", async () => {
@@ -159,10 +170,6 @@ describe('finishSquadBattle — no-mint & escrow', () => {
 
     await finishSquadBattle('b1');
 
-    // 3 kazanan × 333 = 999 dağıtıldı, kalan 1 challenger'a iade
-    expect(mockCredit).toHaveBeenCalledWith(
-      mockTx,
-      expect.objectContaining({ userId: 'challenger', points: 1 })
-    );
+    expect(mintFor('challenger')).toEqual([expect.objectContaining({ points: 1 })]);
   });
 });

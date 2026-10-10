@@ -6,6 +6,7 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getSamplingConfig } from '@/lib/analytics-sampling';
 import { adminFeedbacksDeleteSchema, adminFeedbacksQuerySchema } from '@/lib/validations-admin';
 import { checkAdminRateLimit } from '@/lib/rate-limit';
+import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 
 
 export const dynamic = 'force-dynamic';
@@ -102,7 +103,8 @@ export async function GET(request: NextRequest) {
     // Tüketim yorumları filtreleri (liste + istatistik için ortak)
     let consumptionWhere: any = null;
     if (type === 'all' || type === 'consumption' || !type) {
-      const cw: any = {};
+      // Moderasyonla kaldırılmış (soft-delete) tüketim yorumları listede ve istatistikte yok (P0-23).
+      const cw: any = { deletedAt: null };
       if (minRating) cw.rating = { ...cw.rating, gte: parseInt(minRating) };
       if (maxRating) cw.rating = { ...cw.rating, lte: parseInt(maxRating) };
       if (startDate) cw.createdAt = { ...cw.createdAt, gte: new Date(startDate) };
@@ -357,30 +359,42 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const { feedbackIds, type } = parsed.data;
+    const ids = Array.from(new Set(feedbackIds));
+    const now = new Date();
 
-    if (type === 'consumption') {
-      await prisma.consumptionReview.deleteMany({
-        where: { id: { in: feedbackIds } },
+    // P0-23: tüketim yorumu da artık SOFT DELETE. Önceden `consumptionReview.deleteMany`
+    // satırı siliyordu → `consumptionId @unique` serbest kalıyor, müşteri aynı tüketime
+    // yeniden PUANLI yorum yazabiliyordu (tekrarlanabilir kredi); RemedyOffer geçmişi de
+    // cascade ile gidiyordu. Satır kaldığı için ikinci yorum (ve ikinci kredi) imkânsız.
+    const affected = await prisma.$transaction(async (tx) => {
+      const res =
+        type === 'consumption'
+          ? await tx.consumptionReview.updateMany({
+              where: { id: { in: ids }, deletedAt: null },
+              data: { deletedAt: now },
+            })
+          : await tx.feedback.updateMany({
+              where: { id: { in: ids }, deletedAt: null },
+              data: { deletedAt: now },
+            });
+      await tx.auditLog.create({
+        data: {
+          ...auditEntry(
+            actorFromSession(session),
+            {
+              action: type === 'consumption' ? 'SOFT_DELETE_CONSUMPTION_REVIEWS' : 'SOFT_DELETE_FEEDBACKS',
+              entity: type === 'consumption' ? 'ConsumptionReview' : 'Feedback',
+              entityId: ids.join(','),
+              newData: { requested: ids.length, affected: res.count, type: type ?? 'qr' },
+            }
+          ),
+          ...auditMeta,
+        },
       });
-    } else {
-      await prisma.feedback.updateMany({
-        where: { id: { in: feedbackIds } },
-        data: { deletedAt: new Date() },
-      });
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: type === 'consumption' ? 'DELETE_FEEDBACKS' : 'SOFT_DELETE_FEEDBACKS',
-        entity: type === 'consumption' ? 'ConsumptionReview' : 'Feedback',
-        entityId: feedbackIds.join(','),
-        newData: { count: feedbackIds.length, type },
-        ...auditMeta,
-      },
+      return res.count;
     });
 
-    return NextResponse.json({ success: true, deleted: feedbackIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: true, deleted: affected }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Delete feedbacks error:', error);
     return NextResponse.json({ error: 'Silme işlemi başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });

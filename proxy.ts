@@ -1,7 +1,14 @@
 import { withAuth } from 'next-auth/middleware';
+import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { gateCookieBelongsTo } from '@/lib/admin-gate-edge';
+import {
+  ADMIN_GATE_COOKIE,
+  checkGateCookieForToken,
+  isGateExemptApiPath,
+  isGatedAdminPage,
+  permissionsPolicyFor,
+} from '@/lib/admin-gate-edge';
 
 const CORS_ALLOWLIST = (
   process.env.NEXT_PUBLIC_ALLOWED_ORIGINS ||
@@ -10,11 +17,12 @@ const CORS_ALLOWLIST = (
   .split(',')
   .map((s) => s.trim());
 
-function addSecurityHeaders(res: NextResponse): void {
+function addSecurityHeaders(res: NextResponse, pathname: string): void {
   res.headers.set('X-Content-Type-Options', 'nosniff');
   res.headers.set('X-Frame-Options', 'DENY');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+  // Kamera yalnız tarama sayfalarında (P0-36): /dealer/scan, /customer/scan → camera=(self).
+  res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));
   const csp = [
     "default-src 'self'",
     // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcıda çalışır, sunucu CPU yakmaz).
@@ -42,9 +50,11 @@ function addCorsHeaders(res: NextResponse, req: NextRequest): void {
   res.headers.set('Access-Control-Max-Age', '86400');
 }
 
+type GateToken = { role?: string; sub?: string; id?: string; jti?: string };
+
 const authMiddleware = withAuth(
-  function middleware(req) {
-    const token = (req as NextRequest & { nextauth?: { token?: { role?: string; sub?: string; id?: string } } }).nextauth?.token;
+  async function middleware(req) {
+    const token = (req as NextRequest & { nextauth?: { token?: GateToken } }).nextauth?.token;
     const pathname = req.nextUrl.pathname;
 
     const roleRouteMap: Record<string, string> = {
@@ -54,11 +64,8 @@ const authMiddleware = withAuth(
       '/staff': 'STAFF',
     };
 
-    // /admin-gate gizli kapı ekranıdır — ADMIN'e açık, gate cookie GEREKMEZ (yoksa sonsuz döngü).
-    const isGatePage = pathname === '/admin-gate' || pathname.startsWith('/admin-gate/');
-
     for (const [routePrefix, requiredRole] of Object.entries(roleRouteMap)) {
-      // /admin-gate'i /admin rol kontrolüne dahil et (ADMIN gerektirir) ama gate cookie kontrolünden muaf.
+      // /admin-gate de /admin önekiyle eşleşir → ADMIN rolü gerekir (ama kapı çerezi gerekmez).
       if (pathname.startsWith(routePrefix) && token?.role !== requiredRole) {
         if (token?.role) {
           const roleRedirects: Record<string, string> = {
@@ -73,17 +80,20 @@ const authMiddleware = withAuth(
       }
     }
 
-    // ── ADMIN GİZLİ KAPI ── ADMIN rolü yetmez: gizli soruya doğru cevap (gate cookie) da gerekir.
-    // Rolü kazara/kötü niyetle ADMIN yapılan stajyer bile gizli rakamı bilmeden panele giremez.
-    // /admin-gate (soru ekranı) muaf — yoksa sonsuz döngü.
-    if (pathname.startsWith('/admin') && !isGatePage && token?.role === 'ADMIN') {
-      const userId = (token.sub || token.id || '') as string;
-      const gateCookie = req.cookies.get('admin_gate')?.value;
-      if (!gateCookieBelongsTo(gateCookie, userId)) {
-        // Gate ekranına yönlendir (dönüş için hedefi sakla). /admin-gate zaten ADMIN'e açık.
+    // ── ADMIN GİZLİ KAPI (P0-01) ── ADMIN rolü yetmez: imzalı, süreli, bu oturuma bağlı ve
+    // güncel sürümlü kapı çerezi gerekir. İmza Web Crypto ile GERÇEKTEN doğrulanır
+    // (eskiden yalnız biçime bakılıyordu; elle yazılan sahte çerez kapıyı geçiyordu).
+    // API tarafı aynı kuralı `requireAuth` içinde DB'deki güncel sürümle uygular.
+    if (token?.role === 'ADMIN' && isGatedAdminPage(pathname)) {
+      const gateCookie = req.cookies.get(ADMIN_GATE_COOKIE)?.value;
+      const check = await checkGateCookieForToken(gateCookie, token);
+      if (!check.ok) {
         const url = new URL('/admin-gate', req.url);
         url.searchParams.set('from', pathname);
-        return NextResponse.redirect(url);
+        const redirect = NextResponse.redirect(url);
+        // Geçersiz/bayat çerezi temizle (sahte değer tarayıcıda kalmasın).
+        if (gateCookie) redirect.cookies.set(ADMIN_GATE_COOKIE, '', { path: '/', maxAge: 0 });
+        return redirect;
       }
     }
 
@@ -91,7 +101,10 @@ const authMiddleware = withAuth(
       return NextResponse.redirect(new URL('/staff', req.url));
     }
 
-    return NextResponse.next();
+    const res = NextResponse.next();
+    // Tarama sayfalarında kamera izni (P0-36); diğer sayfalarda next.config.js başlığı geçerli.
+    res.headers.set('Permissions-Policy', permissionsPolicyFor(pathname));
+    return res;
   },
   {
     callbacks: {
@@ -100,7 +113,35 @@ const authMiddleware = withAuth(
   }
 );
 
-export function proxy(req: NextRequest): ReturnType<typeof authMiddleware> | NextResponse {
+/**
+ * `/api/admin/*` için kapı savunması (derinlemesine savunma): ADMIN oturumunda geçerli
+ * kapı çerezi yoksa route koduna hiç ulaşmadan 403. Asıl (yetkili) kontrol `requireAuth`
+ * içindedir; bu katman `getServerSession`'ı doğrudan kullanan eski uçları da kapsar.
+ * Oturumsuz istekler (cron vb.) ve ADMIN olmayan oturumlar route'un kendi kontrolüne bırakılır.
+ */
+async function adminApiGateBlock(req: NextRequest): Promise<NextResponse | null> {
+  const pathname = req.nextUrl.pathname;
+  if (!pathname.startsWith('/api/admin/') || isGateExemptApiPath(pathname)) return null;
+  let token: GateToken | null = null;
+  try {
+    token = (await getToken({ req, secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET })) as GateToken | null;
+  } catch {
+    token = null;
+  }
+  if (token?.role !== 'ADMIN') return null;
+  const check = await checkGateCookieForToken(req.cookies.get(ADMIN_GATE_COOKIE)?.value, token);
+  if (check.ok) return null;
+  return NextResponse.json(
+    {
+      success: false,
+      code: 'ADMIN_GATE_REQUIRED',
+      error: 'Bu işlem için önce yönetici kapısından geçmelisiniz.',
+    },
+    { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+  );
+}
+
+export async function proxy(req: NextRequest): Promise<NextResponse> {
   const pathname = req.nextUrl.pathname;
   if (pathname.startsWith('/api/')) {
     if (req.method === 'OPTIONS') {
@@ -108,18 +149,20 @@ export function proxy(req: NextRequest): ReturnType<typeof authMiddleware> | Nex
         status: 204,
         headers: { ...PRIVATE_NO_STORE_HEADERS },
       });
-      addSecurityHeaders(res);
+      addSecurityHeaders(res, pathname);
       addCorsHeaders(res, req);
       return res;
     }
-    const res = NextResponse.next();
-    addSecurityHeaders(res);
+    const blocked = await adminApiGateBlock(req);
+    const res = blocked ?? NextResponse.next();
+    addSecurityHeaders(res, pathname);
     addCorsHeaders(res, req);
     return res;
   }
-  return (authMiddleware as (r: NextRequest) => NextResponse | Promise<NextResponse>)(req);
+  const res = await (authMiddleware as unknown as (r: NextRequest) => Promise<NextResponse | Response | undefined>)(req);
+  return (res as NextResponse) ?? NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/admin/:path*', '/admin-gate', '/dealer/:path*', '/customer/:path*'],
+  matcher: ['/api/:path*', '/admin/:path*', '/admin', '/admin-gate', '/dealer/:path*', '/customer/:path*'],
 };

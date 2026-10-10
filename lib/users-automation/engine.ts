@@ -1,7 +1,24 @@
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@/generated-prisma-client';
-import { creditPointsAndXp } from '@/lib/points-wallet';
+import { mintPoints } from '@/lib/economy/mint';
+import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
+import { isEconomyError } from '@/lib/economy/errors';
 import type { AutomationAction, AutomationCondition, AutomationRunResult } from './types';
+import { AUTOMATION_LIMITS, parseAutomation, type ValidatedAction } from './schema';
+
+/**
+ * Otomasyon motoru (P0-19).
+ *
+ * Değişmezler:
+ *  - Puan/XP yalnız `mintPoints` (defter + `points_credited` aynı tx) ve `debitPoints`
+ *    (eksi bakiye imkânsız) ile değişir. Önceden negatif tutar ham `increment` yapıyordu.
+ *  - Her (çalıştırma × aksiyon × kullanıcı) için tek-kez anahtarı: iş yeniden denense de
+ *    kimseye ikinci kez puan basılmaz / düşülmez.
+ *  - Bir kullanıcının bütün aksiyonları tek transaction'da: ya hepsi ya hiçbiri.
+ *  - `set_role` ADMIN üretemez ve ADMIN hesaplara dokunmaz; rol değişince oturum sürümü
+ *    artırılır (eski JWT'ler geçersizleşir).
+ *  - Askıdaki ve anonimleştirilmiş hesaplar hedeflenmez; çalıştıran admin kendine puan basamaz.
+ */
 
 export function buildUserWhere(condition: AutomationCondition): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {};
@@ -38,70 +55,126 @@ export function buildUserWhere(condition: AutomationCondition): Prisma.UserWhere
     afterDate.setDate(afterDate.getDate() - condition.createdAfterDays);
     mergeCreatedAt({ gte: afterDate });
   }
+  // Askıdaki / anonimleştirilmiş hesaplar hiçbir otomasyonun hedefi değildir.
+  where.suspendedAt = null;
+  where.anonymizedAt = null;
   return where;
 }
 
-async function applyAction(userId: string, action: AutomationAction) {
-  switch (action.type) {
-    case 'add_points': {
-      // Pozitif: kanonik creditPointsAndXp (level tutarlılığı) + points_credited event
-      // (anti-fraud görünürlüğü). Negatif (ceza/düzeltme): raw decrement — creditPointsAndXp
-      // yalnızca artırır. İkisi de aynı tx içinde, event ile birlikte.
-      await prisma.$transaction(async (tx) => {
-        if (action.amount > 0) {
-          await creditPointsAndXp(tx, { userId, points: action.amount });
-          await tx.analyticsEvent.create({
-            data: {
-              userId,
-              event: 'points_credited',
-              category: 'automation',
-              data: { points: action.amount, reason: action.reason ?? null },
-            },
-          });
-        } else if (action.amount < 0) {
-          await tx.user.update({
-            where: { id: userId },
-            data: { points: { increment: action.amount } },
-          });
+/** Hedef sorgusu: koşul + çalıştıran admin hariç + kararlı sıra (dry-run ile aynı küme). */
+export function buildTargetQuery(condition: AutomationCondition, opts: { excludeUserId?: string | null; limit?: number }) {
+  const where = buildUserWhere(condition);
+  if (opts.excludeUserId) where.id = { not: opts.excludeUserId };
+  const take = Math.max(1, Math.min(opts.limit ?? AUTOMATION_LIMITS.defaultUsersPerRun, AUTOMATION_LIMITS.maxUsersPerRun));
+  return { where, take, orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }] };
+}
+
+export class AutomationActionError extends Error {}
+
+const fmt = (n: number) => Math.abs(n).toLocaleString('tr-TR');
+
+async function applyUserActions(
+  user: { id: string; role: string },
+  actions: ValidatedAction[],
+  ctx: { runKey: string; actorId: string | null }
+) {
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < actions.length; i += 1) {
+      const action = actions[i];
+      const key = `automation:${ctx.runKey}:${i}:${user.id}`;
+      switch (action.type) {
+        case 'add_points': {
+          if (action.amount > 0) {
+            const r = await mintPoints(tx, {
+              userId: user.id,
+              points: action.amount,
+              source: 'automation',
+              sourceId: ctx.runKey,
+              idempotencyKey: key,
+              actorId: ctx.actorId,
+              reason: action.reason,
+              capCategory: null, // tavan kural düzeyinde (kişi başı + çalıştırma toplamı)
+            });
+            if (!r.duplicate) {
+              await tx.notification.create({
+                data: {
+                  userId: user.id,
+                  title: 'Puan Kazandınız! 🎉',
+                  message: `${fmt(action.amount)} puan hesabınıza eklendi: ${action.reason}`,
+                  type: 'success',
+                },
+              });
+            }
+          } else {
+            try {
+              const r = await debitPoints(tx, {
+                userId: user.id,
+                points: -action.amount,
+                source: 'automation',
+                sourceId: ctx.runKey,
+                idempotencyKey: key,
+                actorId: ctx.actorId,
+                reason: action.reason,
+              });
+              if (!r.duplicate) {
+                await tx.notification.create({
+                  data: {
+                    userId: user.id,
+                    title: 'Puan Düzeltmesi',
+                    message: `${fmt(action.amount)} puan hesabınızdan düşüldü: ${action.reason}`,
+                    type: 'warning',
+                  },
+                });
+              }
+            } catch (e) {
+              if (e instanceof InsufficientPointsError) {
+                throw new AutomationActionError(
+                  `Yetersiz bakiye (mevcut ${fmt(e.currentPoints)}, düşülecek ${fmt(e.requiredPoints)})`
+                );
+              }
+              throw e;
+            }
+          }
+          break;
         }
-        if (action.reason) {
+        case 'add_xp': {
+          await mintPoints(tx, {
+            userId: user.id,
+            points: 0,
+            xp: action.amount,
+            source: 'automation',
+            sourceId: ctx.runKey,
+            idempotencyKey: key,
+            actorId: ctx.actorId,
+            capCategory: null,
+          });
+          break;
+        }
+        case 'set_role': {
+          // ADMIN hesaplar otomasyonla değiştirilemez (yükseltme şemada zaten yok).
+          if (user.role === 'ADMIN' || user.role === action.role) break;
+          await tx.user.updateMany({
+            where: { id: user.id, role: { not: 'ADMIN' } },
+            data: { role: action.role, sessionVersion: { increment: 1 } },
+          });
+          break;
+        }
+        case 'send_notification': {
           await tx.notification.create({
             data: {
-              userId,
-              title: action.amount >= 0 ? 'Puan Kazandınız! 🎉' : 'Puan Degisikligi',
-              message: `${action.amount} puan uygulandi: ${action.reason}`,
-              type: action.amount >= 0 ? 'success' : 'warning',
+              userId: user.id,
+              title: action.title,
+              message: action.message,
+              type: action.notificationType || 'info',
             },
           });
+          break;
         }
-      });
-      return;
+        default:
+          break;
+      }
     }
-    case 'add_xp': {
-      // TEK kaynak: creditPointsAndXp (geometrik calculateLevel). Önceden linear
-      // floor(xp/1000)+1 ile canonical formülle çelişiyordu. Negatif XP desteklenmez
-      // (creditPointsAndXp yalnızca artırır) — automation add_xp pozitif kullanılır.
-      await creditPointsAndXp(prisma, { userId, xp: Math.max(0, action.amount) });
-      return;
-    }
-    case 'set_role': {
-      await prisma.user.update({ where: { id: userId }, data: { role: action.role } });
-      return;
-    }
-    case 'send_notification': {
-      await prisma.notification.create({
-        data: {
-          userId,
-          title: action.title,
-          message: action.message,
-          type: action.notificationType || 'info',
-        },
-      });
-      return;
-    }
-    default:
-      return;
-  }
+  });
 }
 
 export async function runAutomationActions(params: {
@@ -109,15 +182,20 @@ export async function runAutomationActions(params: {
   actions: AutomationAction[];
   dryRun?: boolean;
   limit?: number;
+  /** Tek-kez anahtarlarının kökü (iş id'si). Gerçek çalıştırmada ZORUNLU. */
+  runKey?: string;
+  /** Çalıştıran admin: defterde aktör, hedef kümesinden hariç. */
+  actorId?: string | null;
 }): Promise<AutomationRunResult> {
-  const { condition, actions, dryRun = false, limit = 500 } = params;
-  const where = buildUserWhere(condition);
-  const users = await prisma.user.findMany({
-    where,
-    take: Math.max(1, Math.min(limit, 1000)),
-    select: { id: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const { dryRun = false } = params;
+  const parsed = parseAutomation(params.condition, params.actions);
+  if (!parsed.ok) throw new AutomationActionError(parsed.error);
+  if (!dryRun && !params.runKey) {
+    throw new AutomationActionError('Çalıştırma kimliği olmadan otomasyon yürütülemez.');
+  }
+
+  const q = buildTargetQuery(parsed.condition, { excludeUserId: params.actorId ?? null, limit: params.limit });
+  const users = await prisma.user.findMany({ ...q, select: { id: true, role: true } });
 
   if (dryRun) {
     return {
@@ -135,15 +213,18 @@ export async function runAutomationActions(params: {
 
   for (const user of users) {
     try {
-      for (const action of actions) {
-        await applyAction(user.id, action);
-      }
+      await applyUserActions(user, parsed.actions, { runKey: params.runKey as string, actorId: params.actorId ?? null });
       successCount += 1;
     } catch (error) {
       failedCount += 1;
       failures.push({
         userId: user.id,
-        error: error instanceof Error ? error.message : 'Bilinmeyen hata',
+        error:
+          error instanceof AutomationActionError || isEconomyError(error)
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : 'Bilinmeyen hata',
       });
     }
   }

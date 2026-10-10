@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/password';
+import { mintPoints } from '@/lib/economy';
 
 /**
  * 3 zengin demo kafe seeder'ı — admin bootstrap üzerinden tetiklenir.
@@ -8,6 +9,18 @@ import { hashPassword } from '@/lib/password';
  * Her kafe: DEALER kullanıcı + ürün kategorisi + ürünler + QR kod + müşteri geri
  * bildirimleri + kart/tüketim kayıtları + kampanya. Liderlik/trend tablolarının dolu
  * görünmesi için yeterli çeşitlilik.
+ *
+ * GÜVENLİK (P0-27):
+ *  - Çağıran uç demo kapısından geçer (üretimde ALLOW_DEMO_SEED=true şart).
+ *  - Bütün hesaplar `isDemo=true` SENTETİK hesaplardır; müşteriye dönük sorgular bunları dışlar.
+ *  - Bilinen şifre YOK: önceden hepsi `Demo123!` ile doğrulanmış hesaplardı (canlıda bayi
+ *    paneline girilebiliyordu). Şifre yalnız `DEMO_CAFE_PASSWORD` (≥ 12 karakter) verilirse
+ *    konur; yoksa hesaplar şifresizdir (giriş yapılamaz). Eski sürümün oluşturduğu demo
+ *    hesaplarda yeniden çalıştırınca bilinen şifre kaldırılır.
+ *  - Aynı e-postada GERÇEK (isDemo=false, id'si demo- ile başlamayan) bir hesap varsa o kafe
+ *    ATLANIR: gerçek hesabın işletme adı/kategorisi ezilmez.
+ *  - Başlangıç puanları defter dışı yazılmaz: yeni oluşturulan hesaba `mintPoints`
+ *    (source `demo_seed`, tek-kez anahtarlı) ile basılır.
  *
  * Şema notları (gotcha'lar):
  * - Feedback.text (comment değil), Feedback.userId (opsiyonel).
@@ -98,29 +111,79 @@ const CAFES: CafeSpec[] = [
   },
 ];
 
-export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: number; feedbacks: number; consumptions: number }> {
-  const password = await hashPassword('Demo123!');
+export interface DemoSeedResult {
+  cafes: number;
+  feedbacks: number;
+  consumptions: number;
+  /** Aynı e-postada gerçek hesap bulunduğu için atlanan kafeler/müşteriler. */
+  skipped: string[];
+}
+
+/** Demo hesabı mı (yeni bayrak ya da eski sürümün sabit id öneki)? */
+function isOurDemoRow(row: { id: string; isDemo: boolean }): boolean {
+  return row.isDemo || row.id.startsWith('demo-');
+}
+
+async function demoPasswordHash(): Promise<string | null> {
+  const raw = process.env.DEMO_CAFE_PASSWORD?.trim();
+  if (!raw || raw.length < 12) return null;
+  return hashPassword(raw);
+}
+
+/** Yeni oluşturulan demo hesaba başlangıç puanını DEFTERLİ basar (tek seferlik). */
+async function mintOpeningBalance(userId: string, points: number, xp: number, adminUserId: string) {
+  await mintPoints(prisma, {
+    userId,
+    points,
+    xp,
+    source: 'demo_seed',
+    sourceId: userId,
+    idempotencyKey: `demo_seed:${userId}`,
+    actorId: adminUserId,
+    reason: 'Demo hesabı başlangıç bakiyesi',
+    capCategory: null,
+    fraudGate: false,
+  });
+}
+
+export async function seedDemoCafes(adminUserId: string): Promise<DemoSeedResult> {
+  const password = await demoPasswordHash();
+  const skipped: string[] = [];
 
   // Ortak demo müşterileri (geri bildirim + tüketim için). Sabit id → idempotent.
-  const customers = await Promise.all(
-    [1, 2, 3, 4, 5].map((n) =>
-      prisma.user.upsert({
-        where: { email: `demo-musteri-${n}@qratex.com` },
-        update: {},
-        create: {
-          id: `demo-customer-${n}`,
-          email: `demo-musteri-${n}@qratex.com`,
-          name: `Demo Müşteri ${n}`,
-          password,
-          role: 'CUSTOMER',
-          emailVerified: new Date(),
-          points: 100 + n * 50,
-          level: 1 + (n % 3),
-          xp: 200 + n * 120,
-        },
-      })
-    )
-  );
+  const customers: { id: string }[] = [];
+  for (const n of [1, 2, 3, 4, 5]) {
+    const email = `demo-musteri-${n}@qratex.com`;
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, isDemo: true } });
+    if (existing && !isOurDemoRow(existing)) {
+      skipped.push(email);
+      continue;
+    }
+    if (existing) {
+      // Eski sürümün hesabı: demo işaretle, bilinen şifreyi kaldır.
+      await prisma.user.update({ where: { id: existing.id }, data: { isDemo: true, password } });
+      customers.push({ id: existing.id });
+      continue;
+    }
+    const created = await prisma.user.create({
+      data: {
+        id: `demo-customer-${n}`,
+        email,
+        name: `Demo Müşteri ${n}`,
+        password,
+        role: 'CUSTOMER',
+        isDemo: true,
+        emailVerified: new Date(),
+      },
+      select: { id: true },
+    });
+    await mintOpeningBalance(created.id, 100 + n * 50, 200 + n * 120, adminUserId);
+    customers.push(created);
+  }
+
+  if (customers.length === 0) {
+    return { cafes: 0, feedbacks: 0, consumptions: 0, skipped };
+  }
 
   // Tüketimler için tek bir kart partisi (batch) yeterli.
   const batch = await prisma.cardBatch.upsert({
@@ -129,39 +192,63 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
     create: { id: 'demo-card-batch', name: 'Demo Kart Partisi', quantity: 50, createdById: adminUserId },
   });
 
+  let cafeCount = 0;
   let fbCount = 0;
   let consCount = 0;
 
   for (const cafe of CAFES) {
-    // 1) Dealer kullanıcı
-    const dealer = await prisma.user.upsert({
+    // 1) Dealer kullanıcı — gerçek hesabı EZME.
+    const existingDealer = await prisma.user.findUnique({
       where: { email: cafe.email },
-      update: { businessName: cafe.businessName, businessDesc: cafe.businessDesc, businessCategory: cafe.category },
-      create: {
-        id: `demo-dealer-${cafe.slug}`,
-        email: cafe.email,
-        name: cafe.businessName,
-        password,
-        role: 'DEALER',
-        emailVerified: new Date(),
-        businessName: cafe.businessName,
-        businessDesc: cafe.businessDesc,
-        businessCategory: cafe.category,
-        businessLogo: '/logo/logo.png',
-        address: cafe.address,
-        latitude: cafe.lat,
-        longitude: cafe.lng,
-        points: 300,
-        level: 4,
-        xp: 1800,
-      },
+      select: { id: true, isDemo: true },
     });
+    if (existingDealer && !isOurDemoRow(existingDealer)) {
+      skipped.push(cafe.email);
+      continue;
+    }
+    let dealerId: string;
+    if (existingDealer) {
+      await prisma.user.update({
+        where: { id: existingDealer.id },
+        data: {
+          isDemo: true,
+          password,
+          businessName: cafe.businessName,
+          businessDesc: cafe.businessDesc,
+          businessCategory: cafe.category,
+        },
+      });
+      dealerId = existingDealer.id;
+    } else {
+      const created = await prisma.user.create({
+        data: {
+          id: `demo-dealer-${cafe.slug}`,
+          email: cafe.email,
+          name: cafe.businessName,
+          password,
+          role: 'DEALER',
+          isDemo: true,
+          emailVerified: new Date(),
+          businessName: cafe.businessName,
+          businessDesc: cafe.businessDesc,
+          businessCategory: cafe.category,
+          businessLogo: '/logo/logo.png',
+          address: cafe.address,
+          latitude: cafe.lat,
+          longitude: cafe.lng,
+        },
+        select: { id: true },
+      });
+      dealerId = created.id;
+      await mintOpeningBalance(dealerId, 300, 1800, adminUserId);
+    }
+    cafeCount++;
 
     // 2) Ürün kategorisi (kafeye özel)
     const cat = await prisma.productCategory.upsert({
       where: { id: `demo-cat-${cafe.slug}` },
       update: {},
-      create: { id: `demo-cat-${cafe.slug}`, name: 'Menü', icon: '☕', dealerId: dealer.id },
+      create: { id: `demo-cat-${cafe.slug}`, name: 'Menü', icon: '☕', dealerId },
     });
 
     // 3) Ürünler
@@ -169,7 +256,7 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
       await prisma.product.upsert({
         where: { id: p.id },
         update: { name: p.name, price: p.price },
-        create: { id: p.id, name: p.name, price: p.price, categoryId: cat.id, dealerId: dealer.id },
+        create: { id: p.id, name: p.name, price: p.price, categoryId: cat.id, dealerId },
       });
     }
 
@@ -181,7 +268,7 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
         id: `demo-qr-${cafe.slug}`,
         code: `DEMO-${cafe.slug.toUpperCase()}-001`,
         name: `${cafe.businessName} — Masa QR`,
-        dealerId: dealer.id,
+        dealerId,
         scanCount: 40 + cafe.feedbacks.length * 3,
       },
     });
@@ -235,7 +322,7 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
           id: `demo-cons-${cafe.slug}-${i}`,
           cardId,
           customerId: customer.id,
-          dealerId: dealer.id,
+          dealerId,
           productId: product.id,
           amount: product.price,
           createdAt: new Date(Date.now() - (i + 1) * 36 * 60 * 60 * 1000),
@@ -250,7 +337,7 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
       update: {},
       create: {
         id: `demo-campaign-${cafe.slug}`,
-        dealerId: dealer.id,
+        dealerId,
         title: `${cafe.businessName} — Hafta Sonu Fırsatı`,
         message: 'Bu hafta sonu tüm menüde ikinci ürün %50 indirimli! QR okutup kazanın.',
         targetSegment: 'all',
@@ -261,5 +348,5 @@ export async function seedDemoCafes(adminUserId: string): Promise<{ cafes: numbe
     });
   }
 
-  return { cafes: CAFES.length, feedbacks: fbCount, consumptions: consCount };
+  return { cafes: cafeCount, feedbacks: fbCount, consumptions: consCount, skipped };
 }

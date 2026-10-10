@@ -1,4 +1,5 @@
 import type { LeagueKey } from '@/lib/league-rules';
+import { resolveAvatarImage } from '@/lib/avatar-options';
 
 /**
  * Her lig için gösterilecek avatar görseli.
@@ -14,6 +15,11 @@ export const LEAGUE_AVATARS: Record<LeagueKey, string> = {
   ZENOR: '/images/avatar/EMOJİ1.svg',
 };
 
+/**
+ * Lig görseli URL'si. Liderlikte 14–18 px'lik ikon olarak çiziliyor: eski 3,4 MB'lık SVG yerine
+ * içerik hash'li 512 px WebP döner (next/image ayrıca küçültür, `immutable` önbellek).
+ */
 export function getLeagueAvatarUrl(leagueKey: LeagueKey | string): string {
-  return LEAGUE_AVATARS[leagueKey as LeagueKey] ?? LEAGUE_AVATARS.BASLANGIC;
+  const legacy = LEAGUE_AVATARS[leagueKey as LeagueKey] ?? LEAGUE_AVATARS.BASLANGIC;
+  return resolveAvatarImage(legacy) ?? legacy;
 }

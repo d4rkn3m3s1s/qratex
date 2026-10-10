@@ -7,6 +7,8 @@ import { createQuestSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getPointsMatrix, getQuestReward } from '@/lib/points-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { isAutoRewardQuest } from '@/lib/quests/reward';
+import { resolveSubjectUserId } from '@/lib/auth/subject-user';
 
 
 export const dynamic = 'force-dynamic';
@@ -17,13 +19,15 @@ export async function GET(req: Request) {
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     const { searchParams } = new URL(req.url);
-    const userIdParam = searchParams.get('userId');
-    const userId = userIdParam === 'me' ? session?.user?.id ?? null : userIdParam;
-
-    if (userIdParam === 'me' && !userId) {
+    // P0-09: `?userId=` yalnız `me` (oturumlu) ya da ADMIN için; başkasının görev profili okunamaz.
+    const subject = resolveSubjectUserId(session, searchParams.get('userId'));
+    if (!subject.ok) {
       return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+        { success: false, error: subject.error, code: subject.code },
+        { status: subject.status, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
+    const userId = subject.userId;
 
     const quests = await prisma.quest.findMany({
       where: { isActive: true },
@@ -38,6 +42,7 @@ export async function GET(req: Request) {
               id: true,
               progress: true,
               completedAt: true,
+              rewardedAt: true,
             },
           },
         }),
@@ -79,6 +84,12 @@ export async function GET(req: Request) {
       const target = typeof requirement.count === 'number' && requirement.count > 0 ? requirement.count : 1;
       const progress = userQuest?.progress || 0;
       const completed = !!userQuest?.completedAt || progress >= target;
+      // P0-15: otomatik ödenen görevler (ziyaret, başarım) tamamlandığında zaten ödendi →
+      // "alındı" görünür, claim düğmesi çıkmaz. rewardedAt tek kaynak; eski satırlar için audit.
+      const autoReward = isAutoRewardQuest(quest);
+      const claimed = userQuest
+        ? !!userQuest.rewardedAt || claimedQuestSet.has(userQuest.id) || (autoReward && completed)
+        : false;
 
       return {
         ...quest,
@@ -86,7 +97,8 @@ export async function GET(req: Request) {
         reward: getQuestReward(quest.reward, matrix),
         progress,
         completed,
-        claimed: userQuest ? claimedQuestSet.has(userQuest.id) : false,
+        claimed,
+        autoReward,
         userQuestId: userQuest?.id ?? null,
       };
     });
@@ -116,8 +128,20 @@ export async function POST(req: Request) {
         { success: false, error: 'Yetkisiz erişim' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const body = await req.json();
-    const validatedData = createQuestSchema.parse(body);
+    const body = await req.json().catch(() => null);
+    // P0-39: doğrulama hatası 400 + Türkçe mesaj döner (eskiden ZodError → 500).
+    const parsedQuest = createQuestSchema.safeParse(body);
+    if (!parsedQuest.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: parsedQuest.error.issues[0]?.message || 'Görev bilgileri geçersiz',
+          code: 'VALIDATION_ERROR',
+        },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const validatedData = parsedQuest.data;
 
     const quest = await prisma.quest.create({
       data: {

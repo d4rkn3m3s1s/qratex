@@ -50,6 +50,7 @@ export async function GET(
         isActive: true,
         expiresAt: true,
         revokedAt: true,
+        archivedAt: true,
         segmentConfig: true,
         dealer: {
           select: {
@@ -75,6 +76,11 @@ export async function GET(
     }
 
     const now = new Date();
+    // Arşivlenmiş ("silinmiş") QR yeni tarama ve geri bildirim kabul etmez (P0-24).
+    if (qrCode.archivedAt) {
+      return NextResponse.json(
+        { error: 'Bu QR kod artık kullanılmıyor' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
     if (!qrCode.isActive) {
       return NextResponse.json(
         { error: 'Bu QR kod aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
@@ -110,7 +116,7 @@ export async function GET(
       },
     });
 
-    const { segmentConfig: _sc, ...rest } = qrCode;
+    const { segmentConfig: _sc, archivedAt: _archived, ...rest } = qrCode;
     return NextResponse.json({
       qrCode: {
         ...rest,

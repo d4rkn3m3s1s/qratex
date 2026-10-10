@@ -100,7 +100,6 @@ export function PacmanGame() {
   const [stars, setStars] = useState(0);
   const [score, setScore] = useState(0);
   const [powerLeft, setPowerLeft] = useState(0);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [alreadyPlayed, setAlreadyPlayed] = useState(false);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -118,6 +117,16 @@ export function PacmanGame() {
   const particlesRef = useRef<Particle[]>([]);
   const shakeRef = useRef(0);
   const startTimeRef = useRef(0);
+  // Oturum + imzalı deneme belirteci REF'te: rAF döngüsü ilk render'ın closure'ını
+  // tuttuğu için state (sessionId) orada hep null kalıyordu → complete HİÇ gönderilmiyor,
+  // dürüst oyuncu ödül alamıyordu (P0-17 pacman stale closure).
+  const sessionIdRef = useRef<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
+  // Oyun bitti mi: döngü bir daha planlanmaz, finishGame yalnız BİR kez çalışır
+  // (kayıpta her karede finishGame + ses spam'i + "Yakalandın"→"Kazandın" çakışması).
+  const endedRef = useRef(true);
+  // Kare hızından bağımsız hareket için son kare zamanı (120/144 Hz'de 2× hız hatası).
+  const lastFrameRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const frameRef = useRef(0);
   const warnedRef = useRef(false);
@@ -304,50 +313,57 @@ export function PacmanGame() {
     ctx.restore();
   }, []);
 
-  const finishGame = useCallback(
-    async (won: boolean) => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (won) sfxWin();
-      else sfxHit();
-      setState(won ? 'won' : 'lost');
-      const starsCollected = collectedRef.current.size;
-      setStars(starsCollected);
-      if (!sessionId) return;
-      setSubmitting(true);
-      try {
-        const durationSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
-        const res = await fetch('/api/customer/games/pacman/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, starsCollected, durationSec, won }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Sonuç kaydedilemedi');
-        if (json.rewarded) {
-          setResultMsg(`${json.rewardPoints} puan + ${json.rewardXp} XP kazandın! 🎉`);
-          toast.success('Ödül hesabına eklendi!');
-        } else if (won) {
-          setResultMsg('Kazandın ama ödül koşulları sağlanmadı.');
-        } else {
-          setResultMsg('Bu sefer olmadı. Yarın tekrar dene!');
-        }
-        setState('done');
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Hata');
-        setState('done');
-      } finally {
-        setSubmitting(false);
+  const finishGame = useCallback(async (won: boolean) => {
+    // Tek sefer: döngü bu karede de dursun, ikinci çağrı hiçbir şey yapmasın.
+    if (endedRef.current) return;
+    endedRef.current = true;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    if (won) sfxWin();
+    else sfxHit();
+    setState(won ? 'won' : 'lost');
+    const starsCollected = collectedRef.current.size;
+    setStars(starsCollected);
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
+    setSubmitting(true);
+    try {
+      const durationSec = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const res = await fetch('/api/customer/games/pacman/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, starsCollected, durationSec, won, attemptToken: tokenRef.current }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Sonuç kaydedilemedi');
+      if (json.rewarded) {
+        setResultMsg(`${json.rewardPoints} puan + ${json.rewardXp} XP kazandın! 🎉`);
+        if (!json.alreadyCompleted) toast.success('Ödül hesabına eklendi!');
+      } else if (typeof json.reason === 'string' && json.reason) {
+        setResultMsg(json.reason);
+      } else if (json.won ?? won) {
+        setResultMsg('Kazandın ama ödül koşulları sağlanmadı.');
+      } else {
+        setResultMsg('Bu sefer olmadı. Yarın tekrar dene!');
       }
-    },
-    [sessionId]
-  );
+      setState('done');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Sonuç kaydedilemedi');
+      setState('done');
+    } finally {
+      sessionIdRef.current = null;
+      tokenRef.current = null;
+      setSubmitting(false);
+    }
+  }, []);
 
   // ── Hareket yardımcısı: bir mover'ı yönünde akıcı taşı, hücre merkezine gelince
   // mantıksal hücreyi günceller ve yeni yön uygular. ──
-  const stepMover = useCallback((m: Mover, chooseDir: (m: Mover) => Dir) => {
+  const stepMover = useCallback((m: Mover, chooseDir: (m: Mover) => Dir, scale: number) => {
+    const speed = m.speed * scale;
     const targetX = m.cx * CELL + CELL / 2;
     const targetY = m.cy * CELL + CELL / 2;
-    const atCenter = Math.abs(m.px - targetX) < m.speed && Math.abs(m.py - targetY) < m.speed;
+    const atCenter = Math.abs(m.px - targetX) < speed && Math.abs(m.py - targetY) < speed;
 
     if (atCenter) {
       m.px = targetX;
@@ -364,13 +380,20 @@ export function PacmanGame() {
     // hedefe doğru piksel ilerlet
     const tx = m.cx * CELL + CELL / 2;
     const ty = m.cy * CELL + CELL / 2;
-    m.px += Math.sign(tx - m.px) * Math.min(m.speed, Math.abs(tx - m.px));
-    m.py += Math.sign(ty - m.py) * Math.min(m.speed, Math.abs(ty - m.py));
+    m.px += Math.sign(tx - m.px) * Math.min(speed, Math.abs(tx - m.px));
+    m.py += Math.sign(ty - m.py) * Math.min(speed, Math.abs(ty - m.py));
   }, []);
 
   // ── Oyun döngüsü ──
   const loop = useCallback(() => {
+    if (endedRef.current) return;
     const nowMs = performance.now();
+    // dt ölçeği: 60 Hz kare = 1. 120/144 Hz'de < 1 → hız ekran tazelemesinden bağımsız.
+    // Sekme dönüşü gibi büyük boşluklar 3 kareye kırpılır (hız × 3 = 7,2 px < hücre).
+    const scale = lastFrameRef.current
+      ? Math.min(3, Math.max(0, (nowMs - lastFrameRef.current) / (1000 / 60)))
+      : 1;
+    lastFrameRef.current = nowMs;
     const powered = powerUntilRef.current > nowMs;
     setPowerLeft(powered ? Math.ceil((powerUntilRef.current - nowMs) / 1000) : 0);
     if (powered && !warnedRef.current && powerUntilRef.current - nowMs < 1600) {
@@ -384,7 +407,7 @@ export function PacmanGame() {
       if ((q.dx !== 0 || q.dy !== 0) && !isWall(m.cx + q.dx, m.cy + q.dy)) return q;
       if (!isWall(m.cx + m.dir.dx, m.cy + m.dir.dy)) return m.dir;
       return { dx: 0, dy: 0 };
-    });
+    }, scale);
 
     const pl = playerRef.current;
 
@@ -442,11 +465,13 @@ export function PacmanGame() {
         });
         const greedy = Math.random() < (scared ? 0.6 : 0.78);
         return greedy ? pool[0] : pool[(Math.random() * pool.length) | 0];
-      });
+      }, scale);
     });
 
     // Çarpışma (piksel mesafesi)
+    let caught = false;
     ghostsRef.current.forEach((g, i) => {
+      if (caught) return;
       const dist = Math.hypot(g.px - pl.px, g.py - pl.py);
       if (dist < CELL * 0.6) {
         if (powerUntilRef.current > nowMs && ghostScaredRef.current[i]) {
@@ -465,23 +490,29 @@ export function PacmanGame() {
         } else if (powerUntilRef.current <= nowMs) {
           spawnParticles(pl.px, pl.py, '#ef4444', 26);
           shakeRef.current = 10;
-          void finishGame(false);
+          caught = true;
         }
       }
     });
+    if (caught) {
+      // Kayıp: son kareyi çiz ve döngüyü DURDUR (eskiden return yoktu → sonsuz rAF).
+      draw();
+      void finishGame(false);
+      return;
+    }
 
     // Particle güncelle
     particlesRef.current = particlesRef.current.filter((pt) => {
-      pt.x += pt.vx;
-      pt.y += pt.vy;
+      pt.x += pt.vx * scale;
+      pt.y += pt.vy * scale;
       pt.vx *= 0.92;
       pt.vy *= 0.92;
-      pt.life -= 1 / pt.maxLife;
+      pt.life -= scale / pt.maxLife;
       return pt.life > 0;
     });
 
     draw();
-    rafRef.current = requestAnimationFrame(loop);
+    if (!endedRef.current) rafRef.current = requestAnimationFrame(loop);
   }, [draw, finishGame, spawnParticles, stepMover]);
 
   const startGame = async () => {
@@ -489,7 +520,7 @@ export function PacmanGame() {
     setState('starting');
     try {
       const res = await fetch('/api/customer/games/pacman/start', { method: 'POST' });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (json.alreadyPlayed) {
         setAlreadyPlayed(true);
         setState('done');
@@ -497,7 +528,8 @@ export function PacmanGame() {
         return;
       }
       if (!res.ok || !json.canPlay) throw new Error(json.error || 'Oyun başlatılamadı');
-      setSessionId(json.sessionId);
+      sessionIdRef.current = json.sessionId ?? null;
+      tokenRef.current = typeof json.attemptToken === 'string' ? json.attemptToken : null;
       // Durumu sıfırla
       playerRef.current = makeMover(PLAYER_START, SPEED_PLAYER);
       queuedDirRef.current = { dx: 0, dy: 0 };
@@ -512,6 +544,8 @@ export function PacmanGame() {
       shakeRef.current = 0;
       frameRef.current = 0;
       warnedRef.current = false;
+      lastFrameRef.current = 0;
+      endedRef.current = false;
       startTimeRef.current = Date.now();
       setStars(0);
       setScore(0);
@@ -579,6 +613,7 @@ export function PacmanGame() {
 
   useEffect(() => {
     return () => {
+      endedRef.current = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -624,7 +659,7 @@ export function PacmanGame() {
                 <p className="text-sm text-white/80 max-w-xs">
                   5 yıldızı topla, hayaletlerden kaç! Mavi küreyi yutarsan hayaletleri yiyebilirsin.
                 </p>
-                <p className="text-xs text-white/60">Günde 1 hak · 5 yıldız = 150 puan + 75 XP</p>
+                <p className="text-xs text-white/60">Günde 1 deneme · 5 yıldız = 150 puan + 75 XP</p>
                 <Button onClick={startGame} size="lg" className="mt-1">
                   Oyna ▶
                 </Button>

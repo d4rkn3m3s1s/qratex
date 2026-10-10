@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
-import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
+import { createRemedyOffer, isRemedyOfferError } from '@/lib/remedy-offer-service';
 import { getRemedyOptions } from '@/lib/remedy-options';
 
 
@@ -98,11 +98,10 @@ export async function POST() {
       continue;
     }
 
+    // Bu yoruma DAHA ÖNCE (reddedilmiş/süresi dolmuş dahil) teklif açıldıysa otomasyon
+    // yeniden üretmez: bayinin reddettiği taslak kuyruğa geri dönmez (P0-22).
     const existing = await prisma.remedyOffer.findFirst({
-      where: {
-        feedbackId: fb.id,
-        status: { in: ['pending', 'awaiting_dealer_approval', 'accepted'] },
-      },
+      where: { feedbackId: fb.id },
       select: { id: true },
     });
     if (existing) {
@@ -113,22 +112,27 @@ export async function POST() {
     // Telafi seçenekleri: feedbackin QR kodunun mekanına (yoksa işletmeye) özel.
     const options = await getRemedyOptions(dealerId, fb.qrCode.locationId);
 
-    const offer = await prisma.remedyOffer.create({
-      data: {
-        feedbackId: fb.id,
+    let offer: { id: string };
+    try {
+      const created = await createRemedyOffer({
+        source: { kind: 'feedback', feedbackId: fb.id },
         dealerId,
         userId: fb.userId,
         message: cfg.messageTemplate,
-        status: 'awaiting_dealer_approval',
-        options: options as object,
-      },
-    });
+        mode: 'queue',
+        options,
+        createdLabel: 'Otomasyon ile telafi taslağı oluşturuldu',
+      });
+      offer = { id: created.offerId };
+    } catch (err) {
+      // Eşzamanlı bayi/otomasyon yarışı (409) ya da geçerli seçenek yok → atla.
+      if (isRemedyOfferError(err)) {
+        skipped++;
+        continue;
+      }
+      throw err;
+    }
     createdIds.push(offer.id);
-
-    await appendRemedyTimelineEvent(prisma, offer.id, 'created', 'Otomasyon ile telafi taslağı oluşturuldu', {
-      preview: cfg.messageTemplate.slice(0, 120),
-    });
-    await appendRemedyTimelineEvent(prisma, offer.id, 'queued', 'Onay kuyruğunda');
 
     await prisma.analyticsEvent.create({
       data: {

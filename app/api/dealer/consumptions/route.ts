@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { createConsumptionSchema } from '@/lib/validations';
-import { isHappyHourLive } from '@/lib/happy-hour-live';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -10,21 +8,19 @@ import {
   paginationSkip,
   responseIfDatabaseUnavailable,
 } from '@/lib/api-http';
-import { checkRateLimitDb } from '@/lib/rate-limit';
-
-// Rate limit için basit in-memory cache (production'da Redis kullanılmalı)
-// NOT: in-memory yalnız hızlı ön-kontrol; ASIL sınır DB-backed checkRateLimitDb
-// (çapraz-instance atomik) — puan minting'i burada olduğu için race'e kapalı olmalı.
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { isEconomyError } from '@/lib/economy';
+import {
+  createConsumption,
+  isConsumptionError,
+  runConsumptionSideEffects,
+} from '@/lib/consumption/service';
 
 export const dynamic = 'force-dynamic';
 
-const rateLimitCache = new Map<string, number>();
-const RATE_LIMIT_WINDOW = 60000; // 1 dakika
-const RATE_LIMIT_MAX = 5; // 1 dakikada max 5 tüketim aynı karta
-
 /**
  * GET /api/dealer/consumptions
- * Bayi'nin kaydettiği tüketimleri listele
+ * Bayinin kaydettiği tüketimleri listele.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -43,42 +39,25 @@ export async function GET(request: NextRequest) {
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
-        include: {
-          card: {
-            select: {
-              id: true,
-              token: true,
-            },
-          },
-          customer: {
-            // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
-            select: {
-              name: true,
-              email: true,
-              image: true,
-            },
-          },
+        // Açık select: ham müşteri/bayi kimliği (customerId, dealerId) yanıta sızmaz.
+        select: {
+          id: true,
+          amount: true,
+          note: true,
+          productId: true,
+          createdAt: true,
+          updatedAt: true,
+          card: { select: { id: true, token: true } },
+          customer: { select: { name: true, email: true, image: true } },
           product: {
             select: {
               id: true,
               name: true,
               price: true,
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                  icon: true,
-                },
-              },
+              category: { select: { id: true, name: true, icon: true } },
             },
           },
-          review: {
-            select: {
-              id: true,
-              rating: true,
-              text: true,
-            },
-          },
+          review: { select: { id: true, rating: true, text: true } },
         },
       }),
       prisma.consumption.count({ where: { dealerId: session.user.id } }),
@@ -86,8 +65,7 @@ export async function GET(request: NextRequest) {
 
     const items = consumptions.map((row) => {
       const token = row.card?.token;
-      const tokenPublic =
-        typeof token === 'string' && token.length > 0 ? token.slice(-4) : '';
+      const tokenPublic = typeof token === 'string' && token.length > 0 ? token.slice(-4) : '';
       return {
         ...row,
         card: row.card ? { id: row.card.id, token: tokenPublic } : row.card,
@@ -120,7 +98,11 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/dealer/consumptions
- * Yeni tüketim kaydı oluştur
+ * Yeni tüketim kaydı oluştur. Tüm kurallar (kart durumu, oran sınırı, ürün sahipliği,
+ * çarpan politikası, pasif puan `mintPoints` ile tek transaction) lib/consumption/service.ts'te.
+ *
+ * İdempotency: gövdede `clientOpId` ya da `Idempotency-Key` başlığı (8–100 karakter).
+ * Aynı anahtarla tekrar gönderim yeni kayıt/puan üretmez, ilk kaydı `duplicate: true` döner.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -128,254 +110,76 @@ export async function POST(request: NextRequest) {
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
-    const body = await request.json();
-    const validatedData = createConsumptionSchema.safeParse(body);
-
-    if (!validatedData.success) {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
       return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
+        { error: 'Geçersiz JSON gövdesi' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-
-    const { cardToken, productId, amount, note } = validatedData.data;
-
-    // Kartı bul
-    const card = await prisma.physicalCard.findUnique({
-      where: { token: cardToken },
-      select: {
-        id: true,
-        status: true,
-        customerId: true,
-        customer: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!card) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json(
-        { error: 'Kart bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    if (card.status === 'BLOCKED') {
-      return NextResponse.json(
-        { error: 'Bu kart bloklanmış' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    if (card.status === 'UNUSED' || !card.customerId) {
-      return NextResponse.json(
-        { error: 'Bu kart henüz aktive edilmemiş' },
+        { error: 'Geçersiz istek gövdesi' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const headerKey = request.headers.get('idempotency-key');
+    const input = {
+      ...(body as Record<string, unknown>),
+      clientOpId: (body as { clientOpId?: unknown }).clientOpId ?? (headerKey || undefined),
+    };
 
-    // Rate limit kontrolü — ÇAPRAZ-INSTANCE atomik (DB). Passive puan minting'i
-    // burada olduğu için in-memory Map yetersiz: serverless'te iki eşzamanlı istek
-    // farklı lambda'ya düşüp ikisi de geçebilir → çifte kredi. DB-backed sayaç bu
-    // race'i kapatır (aynı kart+bayi için 1 dk'da max RATE_LIMIT_MAX tüketim).
-    // Hızlı yol: in-memory ön-kontrol (DB roundtrip'i çoğu durumda atlar).
-    const rateLimitKey = `${card.id}_${session.user.id}`;
-    const lastRequest = rateLimitCache.get(rateLimitKey) || 0;
-    const now = Date.now();
-    const minGapMs = RATE_LIMIT_WINDOW / RATE_LIMIT_MAX;
+    const now = new Date();
+    const result = await createConsumption(input, {
+      dealerId: session.user.id,
+      channel: 'live',
+      now,
+      ...getAuditRequestMeta(request),
+    });
 
-    const tooFast = now - lastRequest < minGapMs;
-    const dbRl = await checkRateLimitDb(`consumption:${rateLimitKey}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW);
-    if (tooFast || !dbRl.ok) {
-      const retryAfterSec = dbRl.retryAfterMs
-        ? Math.max(1, Math.ceil(dbRl.retryAfterMs / 1000))
-        : Math.max(1, Math.ceil((lastRequest + minGapMs - now) / 1000));
-      return NextResponse.json(
-        { error: 'Çok hızlı! Lütfen biraz bekleyin.' },
-        {
-          status: 429,
-          headers: {
-            ...PRIVATE_NO_STORE_HEADERS,
-            'Retry-After': String(retryAfterSec),
-          },
-        }
+    if (!result.duplicate) {
+      const revenue = result.consumption.amount ?? 0;
+      after(() =>
+        runConsumptionSideEffects({
+          dealerId: session.user.id,
+          customerId: result.customerId,
+          revenue,
+          at: now,
+        })
       );
-    }
-
-    rateLimitCache.set(rateLimitKey, now);
-
-    // Ürün kontrolü (opsiyonel)
-    let product = null;
-    if (productId) {
-      product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          dealerId: true,
-        },
-      });
-
-      if (!product) {
-        return NextResponse.json(
-          { error: 'Ürün bulunamadı' },
-          { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-
-      // Ürün bu bayiye ait mi veya global mı?
-      if (product.dealerId && product.dealerId !== session.user.id) {
-        return NextResponse.json(
-          { error: 'Bu ürüne erişim yetkiniz yok' },
-          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-    }
-
-    // Tüketim kaydı oluştur
-    const consumption = await prisma.consumption.create({
-      data: {
-        cardId: card.id,
-        customerId: card.customerId,
-        dealerId: session.user.id,
-        productId: productId || null,
-        amount: amount || product?.price || null,
-        note: note || null,
-      },
-      include: {
-        customer: {
-          // Ham müşteri ID'si bayiye sızdırılmaz (gizlilik).
-          select: {
-            name: true,
-            email: true,
-          },
-        },
-        product: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-          },
-        },
-      },
-    });
-
-    // Audit log
-    await prisma.cardAuditLog.create({
-      data: {
-        cardId: card.id,
-        userId: session.user.id,
-        action: 'CONSUMPTION_ADDED',
-        metadata: {
-          consumptionId: consumption.id,
-          productId,
-          amount: consumption.amount,
-        },
-        ipAddress: request.headers.get('x-forwarded-for') || null,
-        userAgent: request.headers.get('user-agent') || null,
-      },
-    });
-
-    // Müşteriye bildirim gönder (opsiyonel)
-    await prisma.notification.create({
-      data: {
-        userId: card.customerId,
-        title: 'Yeni Tüketim Kaydı',
-        message: product
-          ? `${product.name} tüketiminiz kaydedildi. Yorum bırakmayı unutmayın!`
-          : 'Yeni bir tüketim kaydınız oluşturuldu. Yorum bırakmayı unutmayın!',
-        type: 'info',
-        data: {
-          consumptionId: consumption.id,
-          type: 'consumption_added',
-        },
-      },
-    });
-
-    // --- SQUAD PASSIVE POINTS LOGIC ---
-    // Tüketim/taramadan kazanılan pasif puan. `amount` bayi tarafından kontrol
-    // edildiği için, ham `amount * 10` ile sınırsız puan basılmasını engellemek
-    // adına baseXP bir tavana sabitlenir ve kullanıcıya yalnızca PASİF puan
-    // (baseXP'nin %5'i) verilir — squad'a ve kullanıcıya aynı miktar.
-    const BASE_XP_CAP = 1000; // tek tüketimden kazanılabilecek max ham puan
-    const rawBaseXP = amount ? Math.floor(amount * 10) : 50;
-    const baseXP = Math.min(Math.max(0, rawBaseXP), BASE_XP_CAP);
-
-    // Happy Hour çarpanı: önceden müşteriye "2x puan" gösteriliyordu ama puana HİÇ
-    // uygulanmıyordu. Artık bu işletmenin AKTİF happy-hour penceresindeki en yüksek
-    // çarpan pasif puana uygulanır (1x = etki yok).
-    const nowDate = new Date();
-    const dealerHappyHours = await prisma.happyHour.findMany({
-      where: { dealerId: session.user.id, isActive: true },
-      select: { startTime: true, endTime: true, daysOfWeek: true, isActive: true, validFrom: true, validUntil: true, multiplier: true },
-    });
-    const activeMultipliers = dealerHappyHours
-      .filter((hh) => isHappyHourLive(hh, nowDate))
-      .map((hh) => hh.multiplier || 1);
-    const happyHourMultiplier = activeMultipliers.length > 0 ? Math.max(...activeMultipliers) : 1;
-
-    // Sezonsal kampanya çarpanı/bonusu happy-hour'dan SONRA pasif puana uygulanır
-    // (zaman penceresindeki en yüksek çarpanlı aktif kampanya). Kampanya yoksa no-op.
-    const { applySeasonalCampaignMultiplier } = await import('@/lib/seasonal-campaign-live');
-    const basePassivePoints = Math.floor(baseXP * 0.05 * happyHourMultiplier);
-    const seasonal = await applySeasonalCampaignMultiplier(basePassivePoints, nowDate);
-    const passivePoints = seasonal.points;
-
-    if (passivePoints > 0) {
-      const squadMembership = await prisma.squadMember.findFirst({
-        where: { userId: card.customerId },
-        select: { squadId: true },
-      });
-
-      if (squadMembership) {
-        await prisma.$transaction([
-          prisma.squad.update({
-            where: { id: squadMembership.squadId },
-            data: { totalPoints: { increment: passivePoints } },
-          }),
-          prisma.user.update({
-            where: { id: card.customerId },
-            data: { points: { increment: passivePoints } },
-          }),
-        ]);
-      } else {
-        await prisma.user.update({
-          where: { id: card.customerId },
-          data: { points: { increment: passivePoints } },
-        });
-      }
-    }
-    // ----------------------------------
-
-    // Isı haritası kovasını artır (kalıcı HeatmapData; ateşle-unut).
-    import('@/lib/heatmap-track')
-      .then(({ recordHeatmapHit }) =>
-        recordHeatmapHit(session.user.id, nowDate, amount || product?.price || 0)
-      )
-      .catch((err) => console.error('[HEATMAP] consumption track failed:', err));
-
-    // Konum/ziyaret görevlerini ilerlet (ateşle-unut). Müşteri bu işletmeyi
-    // ziyaret etti → eşleşen visit_category görevleri otomatik ilerler/tamamlanır.
-    if (card.customerId) {
-      const visitCustomerId = card.customerId;
-      import('@/lib/visit-missions')
-        .then(({ advanceVisitMissions }) => advanceVisitMissions(visitCustomerId, session.user.id))
-        .catch((err) => console.error('[VISIT_MISSION] advance failed:', err));
     }
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Tüketim kaydı oluşturuldu',
-        consumption,
+        message: result.duplicate ? 'Bu tüketim zaten kaydedilmiş' : 'Tüketim kaydı oluşturuldu',
+        duplicate: result.duplicate,
+        consumption: result.consumption,
+        passivePoints: result.passive.credited,
       },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (error) {
+    if (isConsumptionError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        {
+          status: error.httpStatus,
+          headers: {
+            ...PRIVATE_NO_STORE_HEADERS,
+            ...(error.retryAfterSec ? { 'Retry-After': String(error.retryAfterSec) } : {}),
+          },
+        }
+      );
+    }
+    if (isEconomyError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.httpStatus, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
     console.error('Error creating consumption:', error);
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

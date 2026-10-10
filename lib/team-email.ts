@@ -1,6 +1,10 @@
 import { sendTransactionalEmail } from '@/lib/mail-sender';
 import { buildTransactionalEmailHtml, buildTransactionalPlainText, getTransactionalEmailLogoUrl } from '@/lib/transactional-email';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { escapeEmailText } from '@/lib/security/escape-html';
+
+/** Kullanıcı kaynaklı metni e-posta HTML'ine güvenle gömer (P0-35: kaçış + otomatik bağlantı kırma). */
+const esc = (v: string | null | undefined, opts?: { nl2br?: boolean }) => escapeEmailText(v ?? '', opts);
 
 const from = process.env.EMAIL_FROM || 'QRateX <onboarding@resend.dev>';
 
@@ -36,7 +40,7 @@ export async function sendCharacterReadyEmail(opts: {
     </div>`;
 
     const bodyHtml = [
-      opts.name ? `Merhaba ${opts.name},` : 'Merhaba,',
+      opts.name ? `Merhaba ${esc(opts.name)},` : 'Merhaba,',
       'Harika haber! Yazdığın yorumlar yeni bir <strong>karakter rozetini</strong> açığa çıkardı. ✨',
       teaser,
       'Küreyi aç, karakterinin kim olduğunu gör ve koleksiyonuna ekle.',
@@ -91,7 +95,7 @@ export async function sendTaskAssignedEmail(opts: {
 
     // Görev açıklaması (varsa).
     const descBlock = opts.description?.trim()
-      ? `<div style="margin:14px 0;padding:12px 16px;border-radius:10px;background:#f1f5f9;color:#334155;font-size:14px;line-height:1.5;"><strong style="color:#0f172a;">📝 Açıklama</strong><br>${opts.description.trim().replace(/\n/g, '<br>')}</div>`
+      ? `<div style="margin:14px 0;padding:12px 16px;border-radius:10px;background:#f1f5f9;color:#334155;font-size:14px;line-height:1.5;"><strong style="color:#0f172a;">📝 Açıklama</strong><br>${esc(opts.description.trim(), { nl2br: true })}</div>`
       : '';
 
     // "Nasıl başlarım?" adım adım yönerge.
@@ -105,9 +109,9 @@ export async function sendTaskAssignedEmail(opts: {
       </ol></div>`;
 
     const bodyHtml = [
-      opts.assigneeName ? `Merhaba ${opts.assigneeName},` : 'Merhaba,',
+      opts.assigneeName ? `Merhaba ${esc(opts.assigneeName)},` : 'Merhaba,',
       `Sana yeni bir görev atandı:`,
-      `<strong style="font-size:17px;color:#0f172a;">${opts.taskTitle}</strong>`,
+      `<strong style="font-size:17px;color:#0f172a;">${esc(opts.taskTitle)}</strong>`,
       `<span style="font-size:13px;color:#64748b;">${prioEmoji} Öncelik: ${prio}</span>`,
       descBlock,
       dueLine,
@@ -145,10 +149,10 @@ export async function sendMentionEmail(opts: {
     const link = `${origin}/customer/ekip`;
     const snippet = opts.commentText.length > 240 ? `${opts.commentText.slice(0, 240)}…` : opts.commentText;
     const bodyLines = [
-      opts.mentionName ? `Merhaba ${opts.mentionName},` : 'Merhaba,',
-      `<strong>${opts.byName || 'Bir ekip üyesi'}</strong> seni bir görev yorumunda etiketledi.`,
-      `Görev: <strong>${opts.taskTitle}</strong>`,
-      `“${snippet}”`,
+      opts.mentionName ? `Merhaba ${esc(opts.mentionName)},` : 'Merhaba,',
+      `<strong>${esc(opts.byName || 'Bir ekip üyesi')}</strong> seni bir görev yorumunda etiketledi.`,
+      `Görev: <strong>${esc(opts.taskTitle)}</strong>`,
+      `“${esc(snippet, { nl2br: true })}”`,
     ];
     const html = buildTransactionalEmailHtml({
       ...brandHeader(),
@@ -179,14 +183,14 @@ export async function sendWeeklyReminderEmail(opts: {
 
     // Açık görev listesi + (varsa) bitiş tarihine göre kalan gün rozeti.
     const list = opts.openTasks.slice(0, 10).map((t) => {
-      if (!t.dueAt) return `• ${t.title}`;
+      if (!t.dueAt) return `• ${esc(t.title)}`;
       const dueDate = new Date(t.dueAt);
-      if (Number.isNaN(dueDate.getTime())) return `• ${t.title}`;
+      if (Number.isNaN(dueDate.getTime())) return `• ${esc(t.title)}`;
       const days = Math.ceil((dueDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const remain = days < 0 ? `${Math.abs(days)} gün gecikti` : days === 0 ? 'BUGÜN' : `${days} gün kaldı`;
       const color = days < 0 ? '#dc2626' : days <= 2 ? '#ea580c' : '#0ea5e9';
       const badge = `<span style="margin-left:6px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;color:${color};background:${color}14;">${remain}</span>`;
-      return `• ${t.title}${badge}`;
+      return `• ${esc(t.title)}${badge}`;
     }).join('<br>');
 
     // "Görevi nasıl ilerletirim?" kısa rehber (atama mailindeki howto ile aynı görsel dil).
@@ -202,8 +206,8 @@ export async function sendWeeklyReminderEmail(opts: {
     if (opts.pendingApprovals && opts.pendingApprovals.length > 0) {
       const pend = opts.pendingApprovals;
       const pendList = pend.slice(0, 10).map((p) => {
-        const by = p.submittedByName ? ` <span style="font-size:12px;color:#64748b;">— ${p.submittedByName}</span>` : '';
-        return `• ${p.title}${by}`;
+        const by = p.submittedByName ? ` <span style="font-size:12px;color:#64748b;">— ${esc(p.submittedByName)}</span>` : '';
+        return `• ${esc(p.title)}${by}`;
       }).join('<br>');
       approvalsBlock = `<div style="margin:16px 0;padding:14px 16px;border-radius:10px;background:#f59e0b12;border-left:4px solid #f59e0b;">
         <strong style="color:#b45309;font-size:14px;">⏳ Onayını bekleyenler</strong><br>
@@ -213,7 +217,7 @@ export async function sendWeeklyReminderEmail(opts: {
     }
 
     const bodyLines = [
-      opts.name ? `Merhaba ${opts.name},` : 'Merhaba,',
+      opts.name ? `Merhaba ${esc(opts.name)},` : 'Merhaba,',
       opts.openTasks.length > 0 ? `Bu hafta <strong>${opts.openTasks.length}</strong> açık görevin var:` : '',
       list,
       howto,

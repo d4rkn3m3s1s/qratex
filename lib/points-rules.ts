@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { POINTS_MATRIX_LIMITS as LIMITS, clampMatrixInt } from '@/lib/points-matrix-schema';
 
 export const POINTS_MATRIX_SETTING_KEY = 'points_matrix';
 export const POINTS_MATRIX_SETTING_CATEGORY = 'gamification';
@@ -110,17 +111,16 @@ function toNonNegativeInt(value: unknown, fallback: number): number {
   return Math.max(0, Math.floor(value));
 }
 
-function toPositiveInt(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
-  return Math.max(1, Math.floor(value));
-}
-
-function readRewardGrant(value: unknown, fallback: RewardGrant): RewardGrant {
+/**
+ * Okuma tarafı: alt sınır (≥ 0) + alan bazlı ÜST sınır (P0-21, lib/points-matrix-schema.ts).
+ * Yazma şeması bu sınırların dışını zaten reddeder; burada canlıdaki eski değerler kırpılır.
+ */
+function readRewardGrant(value: unknown, fallback: RewardGrant, max: number): RewardGrant {
   if (!value || typeof value !== 'object') return fallback;
   const payload = value as Record<string, unknown>;
   return {
-    points: toNonNegativeInt(payload.points, fallback.points),
-    xp: toNonNegativeInt(payload.xp, fallback.xp),
+    points: clampMatrixInt(payload.points, fallback.points, 0, max),
+    xp: clampMatrixInt(payload.xp, fallback.xp, 0, max),
   };
 }
 
@@ -130,7 +130,7 @@ function normalizeSpinPrize(value: unknown, fallback: SpinPrizeRule, index: numb
   const type = raw.type;
   const normalizedType: SpinPrizeType =
     type === 'points' || type === 'xp' || type === 'nothing' ? type : fallback.type;
-  const parsedValue = toNonNegativeInt(raw.value, fallback.value);
+  const parsedValue = clampMatrixInt(raw.value, fallback.value, 0, LIMITS.spinPrizeValue.max);
 
   return {
     id:
@@ -143,7 +143,7 @@ function normalizeSpinPrize(value: unknown, fallback: SpinPrizeRule, index: numb
         : fallback.label,
     type: normalizedType,
     value: normalizedType === 'nothing' ? 0 : parsedValue,
-    weight: toPositiveInt(raw.weight, fallback.weight),
+    weight: clampMatrixInt(raw.weight, fallback.weight, LIMITS.spinPrizeWeight.min, LIMITS.spinPrizeWeight.max),
   };
 }
 
@@ -170,12 +170,13 @@ export function normalizePointsMatrix(value: unknown): PointsMatrix {
       if (!entry || typeof entry !== 'object') return null;
       const row = entry as Record<string, unknown>;
       return {
-        days: toPositiveInt(row.days, 1),
-        points: toNonNegativeInt(row.points, 0),
+        days: clampMatrixInt(row.days, 1, 1, LIMITS.streakDays.max),
+        points: clampMatrixInt(row.points, 0, 0, LIMITS.streakPoints.max),
       };
     })
     .filter((entry): entry is { days: number; points: number } => !!entry)
-    .sort((a, b) => a.days - b.days);
+    .sort((a, b) => a.days - b.days)
+    .slice(0, LIMITS.streakMilestones.max);
 
   const spinPrizesInput = Array.isArray(rawSpin?.prizes)
     ? rawSpin.prizes
@@ -190,50 +191,69 @@ export function normalizePointsMatrix(value: unknown): PointsMatrix {
         index
       )
     )
-    .filter((entry) => entry.weight > 0);
+    .filter((entry) => entry.weight > 0)
+    .slice(0, LIMITS.spinPrizes.max);
 
   return {
     feedback: {
-      longTextThreshold: toPositiveInt(
+      longTextThreshold: clampMatrixInt(
         rawFeedback?.longTextThreshold,
-        DEFAULT_POINTS_MATRIX.feedback.longTextThreshold
+        DEFAULT_POINTS_MATRIX.feedback.longTextThreshold,
+        LIMITS.longTextThreshold.min,
+        LIMITS.longTextThreshold.max
       ),
-      base: readRewardGrant(rawFeedback?.base, DEFAULT_POINTS_MATRIX.feedback.base),
-      detailed: readRewardGrant(rawFeedback?.detailed, DEFAULT_POINTS_MATRIX.feedback.detailed),
+      base: readRewardGrant(rawFeedback?.base, DEFAULT_POINTS_MATRIX.feedback.base, LIMITS.reviewReward.max),
+      detailed: readRewardGrant(rawFeedback?.detailed, DEFAULT_POINTS_MATRIX.feedback.detailed, LIMITS.reviewReward.max),
     },
     consumptionReview: {
-      longTextThreshold: toPositiveInt(
+      longTextThreshold: clampMatrixInt(
         rawConsumption?.longTextThreshold,
-        DEFAULT_POINTS_MATRIX.consumptionReview.longTextThreshold
+        DEFAULT_POINTS_MATRIX.consumptionReview.longTextThreshold,
+        LIMITS.longTextThreshold.min,
+        LIMITS.longTextThreshold.max
       ),
-      base: readRewardGrant(rawConsumption?.base, DEFAULT_POINTS_MATRIX.consumptionReview.base),
+      base: readRewardGrant(
+        rawConsumption?.base,
+        DEFAULT_POINTS_MATRIX.consumptionReview.base,
+        LIMITS.reviewReward.max
+      ),
       detailed: readRewardGrant(
         rawConsumption?.detailed,
-        DEFAULT_POINTS_MATRIX.consumptionReview.detailed
+        DEFAULT_POINTS_MATRIX.consumptionReview.detailed,
+        LIMITS.reviewReward.max
       ),
     },
     referral: {
-      referredPoints: toNonNegativeInt(
+      referredPoints: clampMatrixInt(
         rawReferral?.referredPoints,
-        DEFAULT_POINTS_MATRIX.referral.referredPoints
+        DEFAULT_POINTS_MATRIX.referral.referredPoints,
+        0,
+        LIMITS.referral.max
       ),
-      referrerPoints: toNonNegativeInt(
+      referrerPoints: clampMatrixInt(
         rawReferral?.referrerPoints,
-        DEFAULT_POINTS_MATRIX.referral.referrerPoints
+        DEFAULT_POINTS_MATRIX.referral.referrerPoints,
+        0,
+        LIMITS.referral.max
       ),
     },
     birthday: {
-      points: toNonNegativeInt(rawBirthday?.points, DEFAULT_POINTS_MATRIX.birthday.points),
+      points: clampMatrixInt(rawBirthday?.points, DEFAULT_POINTS_MATRIX.birthday.points, 0, LIMITS.birthday.max),
     },
     streak: {
       milestones: milestones.length > 0 ? milestones : DEFAULT_POINTS_MATRIX.streak.milestones,
     },
     quest: {
-      default: readRewardGrant(rawQuest?.default, DEFAULT_POINTS_MATRIX.quest.default),
+      default: readRewardGrant(rawQuest?.default, DEFAULT_POINTS_MATRIX.quest.default, LIMITS.questReward.max),
     },
     spin: {
       enabled: typeof rawSpin?.enabled === 'boolean' ? rawSpin.enabled : DEFAULT_POINTS_MATRIX.spin.enabled,
-      dailyLimit: toPositiveInt(rawSpin?.dailyLimit, DEFAULT_POINTS_MATRIX.spin.dailyLimit),
+      dailyLimit: clampMatrixInt(
+        rawSpin?.dailyLimit,
+        DEFAULT_POINTS_MATRIX.spin.dailyLimit,
+        LIMITS.spinDailyLimit.min,
+        LIMITS.spinDailyLimit.max
+      ),
       prizes: spinPrizes.length > 0 ? spinPrizes : DEFAULT_POINTS_MATRIX.spin.prizes,
     },
   };

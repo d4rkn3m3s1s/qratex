@@ -1,310 +1,376 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSession } from 'next-auth/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { m as Motion, useReducedMotion } from 'framer-motion';
+import { useSession } from 'next-auth/react';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
-  CreditCard,
-  History,
-  Wallet,
-  Star,
-  Calendar,
-  Store,
+  m as Motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from 'framer-motion';
+import {
   ArrowRight,
+  Award,
+  Copy,
+  CreditCard,
+  Download,
+  Expand,
+  History,
   Loader2,
   QrCode,
-  Sparkles,
-  Copy,
-  Share2,
-  Eye,
-  EyeOff,
+  ScanLine,
+  ShieldCheck,
   Smartphone,
-  Download,
-  Shield,
-  Zap,
-  Award,
-  Wifi,
-  Crown,
+  Store,
+  SunMedium,
+  Wallet,
+  WifiOff,
 } from 'lucide-react';
 import { BRAND_CARD_QR_DARK_HEX, HEX_WHITE } from '@/lib/brand-colors';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { DashboardPageHeroChrome } from '@/components/layout/dashboard-page-hero';
-import { toast } from '@/lib/admin-toast';
-import { formatDate, formatRelativeTime, getCardStatusLabel, getCardStatusColor, cn } from '@/lib/utils';
-import { useAppT } from '@/lib/app-locale';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState, InlineError, PageHeader, QueryState, SectionCard, TONE_CALLOUT } from '@/components/states';
+import { useAppLocale } from '@/lib/app-locale';
+import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import {
+  buildCardUrl,
+  buildSnapshot,
+  maskCardToken,
+  parseCardsResponse,
+  readSnapshot,
+  resolveCardOrigin,
+  snapshotKey,
+  spokenCardCode,
+  type CardsSnapshot,
+  type MyCard,
+  type MyCardsData,
+} from './_lib/card-helpers';
 
-const QR_DOMAIN = 'https://demoqratex.vercel.app';
+type Locale = 'tr' | 'en';
 
-/** İnce gürültü — kart yüzeyine derinlik */
+/** Sayfaya özgü metinler (paylaşılan i18n kataloğuna dokunmadan iki dilli). */
+const COPY = {
+  tr: {
+    title: 'Kartım',
+    description: 'Kasada QR kodunu göster; tüketimlerin ve puanların hesabına işlensin.',
+    membership: 'Üyelik kartı',
+    holder: 'Kart sahibi',
+    consumptions: 'Tüketim',
+    activated: 'Aktivasyon',
+    status: { ACTIVATED: 'Aktif', UNUSED: 'Etkinleştirilmedi', BLOCKED: 'Engelli' } as Record<string, string>,
+    presentTitle: 'Kasada göster',
+    presentHint: 'Kasiyer bu kodu okuttuğunda tüketimin ve puanın hesabına işlenir.',
+    fullscreen: 'Tam ekran göster',
+    copyCode: 'Kart numarasını kopyala',
+    copied: 'Kart numarası kopyalandı',
+    copyFailed: 'Kopyalanamadı. Numarayı kasiyere söyleyebilirsin.',
+    spokenCode: 'Kod okunmazsa kasiyere söyle',
+    qrAlt: 'Kart QR kodu',
+    qrLoading: 'QR kodu hazırlanıyor',
+    dialogTitle: 'Kasada göster',
+    dialogDesc: 'Telefonunu kasiyere uzat. Ekran açık kalır; okunmazsa parlaklığı artır.',
+    brightness: 'Okunmazsa ekran parlaklığını artır.',
+    recent: 'Son işlemler',
+    noRecent: 'Bu kartla henüz tüketim kaydı yok.',
+    allConsumptions: 'Tüm tüketimler',
+    spending: 'Harcama özetim',
+    pendingTitle: (n: number) => `${n} tüketimin yorum bekliyor`,
+    pendingBody: 'Deneyimini puanla, yorum başına puan kazan.',
+    pendingCta: 'Yorum yap',
+    wallet: 'Cüzdana ekle',
+    walletFailed: 'Kart cüzdana eklenemedi. Lütfen daha sonra tekrar dene.',
+    safety: 'Kart kodun kasada tüketim kaydı için kullanılır. Ekran görüntüsünü ya da bağlantısını kimseyle paylaşma.',
+    emptyTitle: 'Henüz kartın yok',
+    emptyBody: 'İşletmedeki QRateX kartını telefonunun kamerasıyla okut; kart hesabına bağlansın.',
+    emptyCta: 'Kart nasıl etkinleştirilir?',
+    emptyHelp: 'Kartın üzerindeki QR kodunu telefonunun kamerasıyla okut, açılan sayfada “Kartı etkinleştir”e dokun.',
+    offline: (ago: string) => `Çevrimdışı: son kaydedilen kartın gösteriliyor (${ago}). QR kodu kasada çalışır.`,
+    errorTitle: 'Kartların yüklenemedi',
+    blocked: 'Bu kart engellendi. Kasada kullanılamaz; destek için işletmeyle iletişime geç.',
+  },
+  en: {
+    title: 'My card',
+    description: 'Show your QR code at the counter to collect consumptions and points.',
+    membership: 'Membership card',
+    holder: 'Card holder',
+    consumptions: 'Visits',
+    activated: 'Activated',
+    status: { ACTIVATED: 'Active', UNUSED: 'Not activated', BLOCKED: 'Blocked' } as Record<string, string>,
+    presentTitle: 'Show at counter',
+    presentHint: 'When the cashier scans this code, the purchase and points are added to your account.',
+    fullscreen: 'Show full screen',
+    copyCode: 'Copy card number',
+    copied: 'Card number copied',
+    copyFailed: 'Could not copy. You can tell the number to the cashier.',
+    spokenCode: 'If the code does not scan, tell the cashier',
+    qrAlt: 'Card QR code',
+    qrLoading: 'Preparing QR code',
+    dialogTitle: 'Show at counter',
+    dialogDesc: 'Hand your phone to the cashier. The screen stays on; raise brightness if it does not scan.',
+    brightness: 'Raise screen brightness if it does not scan.',
+    recent: 'Recent activity',
+    noRecent: 'No purchases recorded with this card yet.',
+    allConsumptions: 'All purchases',
+    spending: 'Spending overview',
+    pendingTitle: (n: number) => `${n} purchase${n === 1 ? '' : 's'} awaiting your review`,
+    pendingBody: 'Rate your experience and earn points per review.',
+    pendingCta: 'Write a review',
+    wallet: 'Add to wallet',
+    walletFailed: 'Could not add the card to your wallet. Please try again later.',
+    safety: 'Your card code records purchases at the counter. Do not share screenshots or the link with anyone.',
+    emptyTitle: 'You do not have a card yet',
+    emptyBody: 'Scan the QRateX card at a business with your phone camera to link it to your account.',
+    emptyCta: 'How to activate a card?',
+    emptyHelp: 'Scan the QR code on the card with your phone camera and tap “Activate card” on the page that opens.',
+    offline: (ago: string) => `Offline: showing your last saved card (${ago}). The QR code still works at the counter.`,
+    errorTitle: 'Could not load your cards',
+    blocked: 'This card is blocked and cannot be used at the counter. Contact the business for help.',
+  },
+} as const;
+
+type Copy = (typeof COPY)[Locale];
+
+/** İnce gürültü — kart yüzeyine derinlik. */
 const NOISE_SVG =
   "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E\")";
 
-interface UserCard {
-  id: string;
-  token: string;
-  status: string;
-  activatedAt: string | null;
-  _count: {
-    consumptions: number;
-  };
-  consumptions: {
-    id: string;
-    createdAt: string;
-    dealer: {
-      id: string;
-      businessName: string | null;
+class CardsHttpError extends Error {
+  status: number;
+  constructor(status: number) {
+    super(`cards ${status}`);
+    this.status = status;
+  }
+}
+
+async function fetchCards(): Promise<MyCardsData> {
+  const res = await fetch('/api/customer/cards', { cache: 'no-store' });
+  if (!res.ok) throw new CardsHttpError(res.status);
+  return parseCardsResponse(await res.json());
+}
+
+function cardOrigin(): string {
+  return resolveCardOrigin(process.env.NEXT_PUBLIC_APP_URL, typeof window !== 'undefined' ? window.location.origin : null);
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* izin reddi → yedek yol */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** QR görselleri — `qrcode` yalnız gerektiğinde yüklenir (ilk paket dışı). */
+function useCardQrCodes(cards: MyCard[] | undefined): Record<string, string> {
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const tokens = useMemo(() => (cards ?? []).filter((c) => c.status !== 'BLOCKED').map((c) => c.token), [cards]);
+  const tokensKey = tokens.join('|');
+  useEffect(() => {
+    if (tokens.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const QRCode = (await import('qrcode')).default;
+        const origin = cardOrigin();
+        const entries = await Promise.all(
+          tokens.map(async (token) => {
+            const url = await QRCode.toDataURL(buildCardUrl(token, origin), {
+              width: 480,
+              margin: 2,
+              color: { dark: BRAND_CARD_QR_DARK_HEX, light: HEX_WHITE },
+              errorCorrectionLevel: 'M',
+            });
+            return [token, url] as const;
+          })
+        );
+        if (!cancelled) setCodes(Object.fromEntries(entries));
+      } catch (error) {
+        console.error('[my-card] QR üretilemedi', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    product: {
-      id: string;
-      name: string;
-    } | null;
-  }[];
+    // tokensKey, token listesinin kararlı özeti.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokensKey]);
+  return codes;
 }
 
-function StatTile({
-  label,
-  value,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: number;
-  icon: typeof CreditCard;
-  tone: 'primary' | 'cyan' | 'amber';
-}) {
-  const toneCls =
-    tone === 'primary'
-      ? 'border-primary/20 bg-primary/[0.06]'
-      : tone === 'cyan'
-        ? 'border-cyan-500/20 bg-cyan-500/[0.06]'
-        : 'border-amber-500/25 bg-amber-500/[0.07]';
-  return (
-    <div className={cn('rounded-2xl border px-3 py-3 text-center shadow-sm sm:px-4 sm:py-3.5', toneCls)}>
-      <Icon className="mx-auto mb-1 h-4 w-4 text-muted-foreground sm:mb-1.5 sm:h-5 sm:w-5" aria-hidden />
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">{label}</p>
-      <p className="mt-0.5 font-mono text-xl font-bold tabular-nums sm:text-2xl">{value}</p>
-    </div>
-  );
+/** Ekranı açık tut (kasada QR gösterilirken). Desteklenmiyorsa sessizce geçer. */
+function useWakeLock(active: boolean): void {
+  useEffect(() => {
+    if (!active || typeof navigator === 'undefined') return;
+    type Sentinel = { release: () => Promise<void> };
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<Sentinel> } };
+    if (!nav.wakeLock) return;
+    let sentinel: Sentinel | null = null;
+    let released = false;
+    const acquire = async () => {
+      try {
+        sentinel = await nav.wakeLock!.request('screen');
+        if (released) await sentinel.release();
+      } catch {
+        /* izin/destek yok */
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !released) void acquire();
+    };
+    void acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      void sentinel?.release().catch(() => undefined);
+    };
+  }, [active]);
 }
 
-function EmvChip() {
-  return (
-    <div
-      className="relative h-10 w-[2.65rem] shrink-0 overflow-hidden rounded-md shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_8px_rgba(0,0,0,0.35)] ring-1 ring-amber-950/40 sm:h-11 sm:w-12"
-      aria-hidden
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-amber-100 via-amber-500 to-amber-900" />
-      <div className="absolute inset-[3px] rounded-sm bg-gradient-to-b from-amber-950/25 to-transparent" />
-      <div className="absolute inset-x-1 top-1/2 h-px -translate-y-1/2 bg-amber-950/20" />
-      <div className="absolute inset-y-1 left-1/2 w-px -translate-x-1/2 bg-amber-950/15" />
-    </div>
-  );
+type WalletAvailability = { apple: boolean; google: boolean };
+
+async function fetchWalletAvailability(): Promise<WalletAvailability> {
+  const check = async (kind: 'apple' | 'google') => {
+    try {
+      const res = await fetch(`/api/wallet/${kind}`, { method: 'POST' });
+      if (!res.ok) return false;
+      const body = (await res.json()) as { available?: boolean; configured?: boolean };
+      return body.available === true && body.configured === true;
+    } catch {
+      return false;
+    }
+  };
+  const [apple, google] = await Promise.all([check('apple'), check('google')]);
+  return { apple, google };
 }
 
-type LegendCardProps = {
-  card: UserCard;
-  qrSrc?: string;
-  holderName: string;
-  showFullToken: boolean;
-  onToggleToken: () => void;
-  onOpenQr: () => void;
-  reduceMotion: boolean;
-};
+// ───────────────────────────── Kart yüzü ─────────────────────────────
 
-function LegendDigitalCard({
-  card,
-  qrSrc,
-  holderName,
-  showFullToken,
-  onToggleToken,
-  onOpenQr,
-  reduceMotion,
-}: LegendCardProps) {
-  const t = useAppT();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [glare, setGlare] = useState({ x: 50, y: 40 });
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+/**
+ * Kart yüzü — yalnız kimlik (marka, durum, sahip, maskeli numara, tüketim). QR kart yüzünde
+ * DEĞİL: eskiden `aspect-ratio + overflow-hidden` kutu mobilde dikey yığılan QR'ı kırpıyordu
+ * (P0-39). `overflow-clip` kutuyu kaydırma kabı yapmadığı için aspect-ratio'nun içerik tabanlı
+ * min-yüksekliği korunur: içerik sığmazsa kart uzar, kırpılmaz.
+ */
+function CardFace({ card, holderName, locale, copy }: { card: MyCard; holderName: string; locale: Locale; copy: Copy }) {
+  const reduceMotion = useReducedMotion() === true;
+  const ref = useRef<HTMLDivElement>(null);
+  const px = useMotionValue(0.5);
+  const py = useMotionValue(0.5);
+  const sx = useSpring(px, { stiffness: 220, damping: 24 });
+  const sy = useSpring(py, { stiffness: 220, damping: 24 });
+  const rotateY = useTransform(sx, [0, 1], [5, -5]);
+  const rotateX = useTransform(sy, [0, 1], [-4, 4]);
+  const gx = useTransform(sx, (v) => `${v * 100}%`);
+  const gy = useTransform(sy, (v) => `${v * 100}%`);
+  const glare = useMotionTemplate`radial-gradient(circle at ${gx} ${gy}, rgba(255,255,255,0.22), transparent 45%)`;
 
-  const onMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const el = wrapRef.current;
-      if (!el || reduceMotion) return;
-      const r = el.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * 100;
-      const y = ((e.clientY - r.top) / r.height) * 100;
-      setGlare({ x, y });
-      const ry = ((e.clientX - r.left) / r.width - 0.5) * -6;
-      const rx = ((e.clientY - r.top) / r.height - 0.5) * 6;
-      setTilt({ rx, ry });
-    },
-    [reduceMotion]
-  );
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (reduceMotion || e.pointerType !== 'mouse' || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    px.set((e.clientX - r.left) / r.width);
+    py.set((e.clientY - r.top) / r.height);
+  };
+  const onPointerLeave = () => {
+    px.set(0.5);
+    py.set(0.5);
+  };
 
-  const onLeave = useCallback(() => {
-    setGlare({ x: 50, y: 40 });
-    setTilt({ rx: 0, ry: 0 });
-  }, []);
-
-  const last8 = card.token.slice(-8).toUpperCase();
-  const tokenDisplay = showFullToken ? `${card.token.slice(0, 12)}…` : `•••• •••• ${last8}`;
+  const statusLabel = copy.status[card.status] ?? card.status;
+  const statusTone =
+    card.status === 'ACTIVATED'
+      ? 'bg-emerald-400/15 text-emerald-200 ring-emerald-300/30'
+      : card.status === 'BLOCKED'
+        ? 'bg-red-400/15 text-red-200 ring-red-300/30'
+        : 'bg-white/10 text-white/80 ring-white/20';
 
   return (
-    <div className="mx-auto w-full max-w-lg perspective-[1400px] sm:max-w-xl">
+    <div className="mx-auto w-full max-w-md" style={{ perspective: 1200 }}>
       <Motion.div
-        ref={wrapRef}
-        initial={reduceMotion ? false : { opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-        onMouseMove={onMove}
-        onMouseLeave={onLeave}
-        style={{
-          transform: reduceMotion ? undefined : `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
-          transformStyle: 'preserve-3d',
-        }}
-        className="motion-reduce:transform-none"
+        ref={ref}
+        onPointerMove={onPointerMove}
+        onPointerLeave={onPointerLeave}
+        style={reduceMotion ? undefined : { rotateX, rotateY, transformStyle: 'preserve-3d' }}
+        className="rounded-[1.4rem] bg-gradient-to-br from-white/40 via-primary/50 to-cyan-400/40 p-[1.5px] shadow-[0_28px_60px_-30px_rgba(0,0,0,0.7)]"
       >
-        {/* Dış: metalik gradient çerçeve */}
-        <div className="rounded-[1.45rem] bg-gradient-to-br from-white/35 via-primary/50 to-cyan-400/35 p-[1.5px] shadow-[0_32px_64px_-28px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.06)_inset] dark:shadow-[0_36px_80px_-32px_rgba(0,0,0,0.85)]">
+        <div
+          role="group"
+          aria-label={`${copy.membership}, ${statusLabel}`}
+          className="relative isolate flex aspect-[1.586/1] w-full flex-col justify-between overflow-clip rounded-[1.3rem] bg-[#07070f] p-5 text-white sm:p-6"
+          style={{ backgroundImage: NOISE_SVG }}
+        >
+          <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-br from-violet-950/85 via-[#0a0a14] to-cyan-950/55" />
           <div
-            className="relative aspect-[1.586/1] w-full overflow-hidden rounded-[1.35rem] bg-[#07070f]"
-            style={{ backgroundImage: NOISE_SVG }}
-          >
-            {/* Derinlik katmanları */}
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-950/80 via-[#0a0a14] to-cyan-950/50" />
-            <div
-              className="pointer-events-none absolute inset-0 opacity-90 mix-blend-screen"
-              style={{
-                background:
-                  'radial-gradient(ellipse 90% 70% at 10% -10%, hsl(var(--primary) / 0.45), transparent 52%), radial-gradient(ellipse 70% 60% at 100% 100%, rgba(34,211,238,0.22), transparent 48%), radial-gradient(ellipse 50% 40% at 80% 10%, rgba(167,139,250,0.18), transparent 45%)',
-              }}
-            />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-white/[0.07]" />
-
-            {/* Yavaş ışık bandı */}
-            {!reduceMotion && (
+            aria-hidden
+            className="absolute inset-0 -z-10 opacity-90 mix-blend-screen"
+            style={{
+              background:
+                'radial-gradient(ellipse 90% 70% at 10% -10%, hsl(var(--primary) / 0.45), transparent 52%), radial-gradient(ellipse 70% 60% at 100% 100%, rgba(34,211,238,0.22), transparent 48%)',
+            }}
+          />
+          {!reduceMotion && (
+            <>
+              <Motion.div aria-hidden className="pointer-events-none absolute inset-0 -z-10 mix-blend-overlay" style={{ background: glare }} />
+              {/* Tek seferlik parıltı (sonsuz döngü yok). */}
               <Motion.div
-                className="pointer-events-none absolute -inset-full z-[1] rotate-[18deg] bg-gradient-to-r from-transparent via-white/12 to-transparent"
-                animate={{ x: ['-30%', '130%'] }}
-                transition={{ duration: 7, repeat: Infinity, ease: 'linear' }}
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 -left-1/2 -z-10 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/[0.14] to-transparent"
+                initial={{ x: '0%' }}
+                animate={{ x: '400%' }}
+                transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 0.25 }}
               />
-            )}
+            </>
+          )}
+          <QrCode aria-hidden className="pointer-events-none absolute -bottom-6 -right-4 -z-10 h-36 w-36 text-white/[0.05]" />
 
-            {/* Fare parlaması */}
-            <div
-              className="pointer-events-none absolute inset-0 z-[2] opacity-70 mix-blend-overlay transition-opacity duration-300"
-              style={{
-                background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,0.28), transparent 42%)`,
-              }}
-            />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/70">QRateX</p>
+              <p className="truncate text-lg font-semibold tracking-tight sm:text-xl">{copy.membership}</p>
+            </div>
+            <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset', statusTone)}>{statusLabel}</span>
+          </div>
 
-            {/* Filigran */}
-            <Crown className="pointer-events-none absolute -bottom-6 -right-2 z-[1] h-36 w-36 text-white/[0.06] sm:h-44 sm:w-44" aria-hidden />
-
-            <div className="relative z-[3] flex h-full flex-col p-4 sm:p-6">
-              {/* Üst şerit */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                  <EmvChip />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/45 sm:text-[11px]">QRateX</p>
-                    <p className="truncate bg-gradient-to-r from-white via-white to-white/70 bg-clip-text text-lg font-semibold tracking-tight text-transparent sm:text-xl">
-                      Signature Member
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-                  <Wifi className="h-5 w-5 text-white/35 sm:h-6 sm:w-6" strokeWidth={1.5} aria-hidden />
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'border bg-black/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm sm:text-xs',
-                      getCardStatusColor(card.status)
-                    )}
-                  >
-                    {getCardStatusLabel(card.status)}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Orta: istatistik + QR */}
-              <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 sm:mt-5 sm:flex-row sm:items-stretch sm:gap-5">
-                <div className="flex flex-1 flex-col justify-center gap-3 sm:gap-4">
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/40">Tüketim</p>
-                    <p className="mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight text-white drop-shadow-sm sm:text-4xl">
-                      {card._count.consumptions}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 backdrop-blur-md sm:px-4 sm:py-3">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-white/40">Aktivasyon</p>
-                    <p className="mt-0.5 text-sm font-medium text-white/95 sm:text-base">
-                      {card.activatedAt ? formatDate(card.activatedAt) : '—'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 justify-center sm:items-center sm:justify-end">
-                  <button
-                    type="button"
-                    onClick={onOpenQr}
-                    className="group relative touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-                    aria-label="Büyük QR kodu göster"
-                  >
-                    <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-white/40 via-primary/30 to-cyan-400/40 opacity-70 blur-md transition-opacity group-hover:opacity-100" />
-                    <div className="relative rounded-2xl bg-gradient-to-b from-white to-zinc-100 p-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] ring-2 ring-white/80 sm:p-2.5">
-                      <div className="absolute left-2 top-2 h-3 w-3 rounded-sm border border-zinc-300/80 sm:left-2.5 sm:top-2.5" />
-                      <div className="absolute bottom-2 right-2 h-3 w-3 rounded-sm border border-zinc-300/80 sm:bottom-2.5 sm:right-2.5" />
-                      {qrSrc ? (
-                        <img
-                          src={qrSrc}
-                          alt="QR önizleme"
-                          className="relative z-[1] h-[6.5rem] w-[6.5rem] rounded-lg object-cover sm:h-[7.25rem] sm:w-[7.25rem]"
-                        />
-                      ) : (
-                        <QrCode className="relative z-[1] h-[6.5rem] w-[6.5rem] text-zinc-900 sm:h-[7.25rem] sm:w-[7.25rem]" />
-                      )}
-                    </div>
-                    <p className="mt-2 text-center text-[10px] font-medium uppercase tracking-wider text-white/40 sm:text-xs">
-                      Dokun — büyüt
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Alt: PAN satırı */}
-              <div className="mt-auto border-t border-white/10 pt-3 sm:pt-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/38">Kart sahibi</p>
-                    <p className="mt-0.5 truncate text-base font-semibold tracking-tight text-white sm:text-lg">{holderName}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <code className="font-mono text-sm tracking-[0.12em] text-white/85 sm:text-base">{tokenDisplay}</code>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-10 w-10 shrink-0 touch-manipulation rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleToken();
-                        }}
-                        aria-label={showFullToken ? t('common.hide') : t('common.show')}
-                      >
-                        {showFullToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="hidden items-center gap-1.5 text-white/25 sm:flex" aria-hidden>
-                    <Sparkles className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-widest">Digital</span>
-                  </div>
-                </div>
-              </div>
+          <div className="flex items-end justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/70">{copy.holder}</p>
+              <p className="truncate text-base font-semibold sm:text-lg">{holderName}</p>
+              <p className="mt-1 font-mono text-sm tracking-[0.14em] text-white/90 sm:text-base" aria-label={spokenCardCode(card.token)}>
+                {maskCardToken(card.token)}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/70">{copy.consumptions}</p>
+              <p className="font-mono text-2xl font-bold tabular-nums sm:text-3xl">
+                {new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'tr-TR').format(card.consumptionsCount)}
+              </p>
+              {card.activatedAt && (
+                <p className="text-[11px] text-white/70">
+                  {copy.activated}: {formatDate(card.activatedAt, { day: 'numeric', month: 'short', year: 'numeric' }, locale)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -313,489 +379,349 @@ function LegendDigitalCard({
   );
 }
 
-export default function CustomerMyCardPage() {
-  const t = useAppT();
-  const { data: session } = useSession();
-  const reduceMotion = useReducedMotion() === true;
-  const [cards, setCards] = useState<UserCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalCards: 0,
-    totalConsumptions: 0,
-    reviewPending: 0,
-  });
-  const [qrCodes, setQrCodes] = useState<{ [key: string]: string }>({});
-  const [showToken, setShowToken] = useState<{ [key: string]: boolean }>({});
-  const [selectedCard, setSelectedCard] = useState<UserCard | null>(null);
-  const [showQrDialog, setShowQrDialog] = useState(false);
-  const [walletLoading, setWalletLoading] = useState<string | null>(null);
+// ───────────────────────────── Kasada göster paneli ─────────────────────────────
 
-  useEffect(() => {
-    fetchCards();
-  }, []);
+function QrImage({ src, alt, loadingLabel, className }: { src?: string; alt: string; loadingLabel: string; className?: string }) {
+  return (
+    <div className={cn('relative aspect-square w-full rounded-control bg-white p-2 ring-1 ring-black/5', className)}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element -- data: URL, next/image gereksiz
+        <img src={src} alt={alt} className="h-full w-full [image-rendering:pixelated]" />
+      ) : (
+        <div role="status" className="grid h-full w-full place-items-center text-zinc-500">
+          <Loader2 className="h-6 w-6 motion-safe:animate-spin" aria-hidden />
+          <span className="sr-only">{loadingLabel}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  const fetchCards = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/customer/cards');
-      const data = await res.json();
+function PresentPanel({
+  card,
+  qrSrc,
+  copy,
+  onFullscreen,
+  wallet,
+}: {
+  card: MyCard;
+  qrSrc?: string;
+  copy: Copy;
+  onFullscreen: () => void;
+  wallet: WalletAvailability | undefined;
+}) {
+  const [walletBusy, setWalletBusy] = useState<'apple' | 'google' | null>(null);
 
-      if (data.success) {
-        setCards(data.cards);
-        setStats(data.stats);
-
-        // PERF: qrcode (~25KB) ilk bundle'dan çıkarıldı — QR üretimi zaten mount SONRASI
-        // olduğundan lib'i burada dynamic import ediyoruz (sayfa shell'i daha hızlı boyanır).
-        const QRCode = (await import('qrcode')).default;
-        const qrPromises = data.cards.map(async (card: UserCard) => {
-          const url = `${QR_DOMAIN}/c/${card.token}`;
-          const qrDataUrl = await QRCode.toDataURL(url, {
-            width: 400,
-            margin: 2,
-            color: {
-              dark: BRAND_CARD_QR_DARK_HEX,
-              light: HEX_WHITE,
-            },
-            errorCorrectionLevel: 'H',
-          });
-          return { token: card.token, qrDataUrl };
-        });
-
-        const qrResults = await Promise.all(qrPromises);
-        const qrMap: { [key: string]: string } = {};
-        qrResults.forEach((result) => {
-          qrMap[result.token] = result.qrDataUrl;
-        });
-        setQrCodes(qrMap);
-      }
-    } catch (err) {
-      console.error('Error fetching cards:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyToken = (token: string) => {
-    navigator.clipboard.writeText(token);
-    toast.success('Kart ID kopyalandı!');
-  };
-
-  const copyUrl = (token: string) => {
-    const url = `${QR_DOMAIN}/c/${token}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Kart URL kopyalandı!');
-  };
-
-  const shareCard = async (token: string) => {
-    const url = `${QR_DOMAIN}/c/${token}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'QRateX Kartım',
-          text: 'QRateX dijital kartımı inceleyin!',
-          url,
-        });
-      } catch {
-        copyUrl(token);
-      }
-    } else {
-      copyUrl(token);
-    }
-  };
-
-  const toggleShowToken = (cardId: string) => {
-    setShowToken((prev) => ({
-      ...prev,
-      [cardId]: !prev[cardId],
-    }));
-  };
-
-  const addToAppleWallet = async (cardId: string) => {
-    setWalletLoading('apple');
-    try {
-      const response = await fetch(`/api/wallet/apple?cardId=${cardId}`);
-
-      if (!response.ok) {
-        const data = await response.json();
-        toast.error(data.error || 'Kart oluşturulamadı');
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `qratex-card.pkpass`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast.success("Kart indirildi! Apple Wallet'a ekleyebilirsiniz.");
-    } catch {
-      toast.error('Kart indirilemedi');
-    } finally {
-      setWalletLoading(null);
-    }
-  };
-
-  const addToGoogleWallet = async (cardId: string) => {
-    setWalletLoading('google');
-    try {
-      const response = await fetch(`/api/wallet/google?cardId=${cardId}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast.error(data.error || 'Kart oluşturulamadı');
-        return;
-      }
-
-      if (data.saveUrl) {
-        window.open(data.saveUrl, '_blank');
-        toast.success('Google Wallet sayfası açıldı');
-      } else if (data.fallbackUrl) {
-        toast.info('Google Wallet henüz yapılandırılmamış');
-      }
-    } catch {
-      toast.error('Kart eklenemedi');
-    } finally {
-      setWalletLoading(null);
-    }
-  };
-
-  const openQr = (card: UserCard) => {
-    setSelectedCard(card);
-    setShowQrDialog(true);
-  };
-
-  if (loading) {
+  if (card.status === 'BLOCKED') {
     return (
-      <div className="space-y-6 pb-8">
-        <div className="h-10 w-48 animate-pulse rounded-lg bg-muted md:h-12 md:w-64" />
-        <div className="h-36 animate-pulse rounded-2xl bg-muted sm:h-40" />
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted sm:h-28" />
-          ))}
-        </div>
-        <div className="mx-auto max-w-lg p-[2px]">
-          <div className="aspect-[1.586/1] animate-pulse rounded-[1.35rem] bg-muted" />
-        </div>
-      </div>
+      <InlineError variant="banner" tone="danger">
+        {copy.blocked}
+      </InlineError>
     );
   }
 
+  const onCopy = async () => {
+    const ok = await copyText(card.token);
+    if (ok) toast.success(copy.copied);
+    else toast.error(copy.copyFailed);
+  };
+
+  const addGoogle = async () => {
+    setWalletBusy('google');
+    try {
+      const res = await fetch(`/api/wallet/google?cardId=${encodeURIComponent(card.id)}`);
+      const body = (await res.json()) as { saveUrl?: string };
+      if (res.ok && body.saveUrl) window.location.assign(body.saveUrl);
+      else toast.error(copy.walletFailed);
+    } catch {
+      toast.error(copy.walletFailed);
+    } finally {
+      setWalletBusy(null);
+    }
+  };
+
+  const addApple = () => {
+    setWalletBusy('apple');
+    // iOS Safari pkpass'i yalnız doğrudan gezinmeyle Wallet'a açar (blob + a[download] değil).
+    window.location.assign(`/api/wallet/apple?cardId=${encodeURIComponent(card.id)}`);
+    window.setTimeout(() => setWalletBusy(null), 4000);
+  };
+
   return (
-    <div className="space-y-5 pb-8 md:space-y-6">
-      <DashboardPageHeading
-        title="Dijital Kartlarım"
-        description="Kartını işletmede göster, tüketim ve puanların tek hesapta toplansın."
-      />
-
-      <div className="rounded-2xl border border-border/60 bg-card/40 p-4 shadow-sm backdrop-blur-sm sm:hidden dark:bg-card/30">
-        <h1 className="text-balance text-xl font-bold tracking-tight">Dijital Kartlarım</h1>
-        <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
-          Kartını işletmede göster, tüketim ve puanların tek hesapta toplansın.
-        </p>
-      </div>
-
-      <DashboardPageHeroChrome tone="auto" padded={false}>
-        <div className="space-y-4 p-4 sm:p-6 md:p-8">
-          <div className="flex items-start gap-3 sm:gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/25 to-violet-500/20 ring-1 ring-primary/20">
-              <CreditCard className="h-6 w-6 text-primary" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Üyelik</p>
-              <h2 className="mt-0.5 text-balance text-lg font-semibold tracking-tight sm:text-xl">Tek kart, tüm işletmeler</h2>
-              <p className="mt-1 max-w-2xl text-pretty text-sm text-muted-foreground">
-                QR veya link ile tanın; yorum ve ödüller hesabına işlenir.
-              </p>
-            </div>
+    <SectionCard title={copy.presentTitle} description={copy.presentHint} icon={<ScanLine />} tone="brand">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
+        <button
+          type="button"
+          onClick={onFullscreen}
+          className="w-full max-w-[15rem] shrink-0 rounded-control outline-none transition-transform duration-fast focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 active:scale-[0.99] sm:max-w-[12rem]"
+          aria-label={copy.fullscreen}
+        >
+          <QrImage src={qrSrc} alt={copy.qrAlt} loadingLabel={copy.qrLoading} />
+        </button>
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          <div className="rounded-control border bg-surface-muted px-3 py-2.5">
+            <p className="qx-caption text-fg-muted">{copy.spokenCode}</p>
+            <p className="font-mono text-lg font-semibold tracking-[0.18em] text-fg">{spokenCardCode(card.token)}</p>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <StatTile label="Kart" value={stats.totalCards} icon={CreditCard} tone="primary" />
-            <StatTile label={t('common.consumptions')} value={stats.totalConsumptions} icon={Zap} tone="cyan" />
-            <StatTile label="Yorum" value={stats.reviewPending} icon={Star} tone="amber" />
-          </div>
-        </div>
-      </DashboardPageHeroChrome>
-
-      <Card className="overflow-hidden border-border/70">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-              <Shield className="h-5 w-5 text-muted-foreground" aria-hidden />
-            </div>
-            <div className="min-w-0 space-y-3">
-              <div>
-                <h3 className="font-semibold text-foreground">Paylaşım nasıl çalışır?</h3>
-                <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
-                  Link veya QR kodu işletmede okutulduğunda veya paylaşıldığında hesabınla eşleşir; kişisel parola içermez.
-                </p>
-              </div>
-              <ol className="grid gap-2 text-sm sm:grid-cols-3 sm:gap-3">
-                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                  <span className="font-medium text-foreground">1.</span> Paylaş veya kopyala
-                </li>
-                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                  <span className="font-medium text-foreground">2.</span> İşletmede göster
-                </li>
-                <li className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
-                  <span className="font-medium text-foreground">3.</span> Puan & geçmiş
-                </li>
-              </ol>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {cards.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center px-4 py-12 text-center sm:py-14">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-              <CreditCard className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold">Henüz kartın yok</h3>
-            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-              İşletmedeki QR ile kartını etkinleştirerek başla.
-            </p>
-            <Button asChild className="mt-6 min-h-11 w-full max-w-xs touch-manipulation sm:w-auto">
-              <Link href="/customer/scan" className="gap-2">
-                <QrCode className="h-4 w-4" />
-                QR tara
-              </Link>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button type="button" onClick={onFullscreen}>
+              <Expand className="h-4 w-4" aria-hidden />
+              {copy.fullscreen}
             </Button>
-          </CardContent>
-        </Card>
+            <Button type="button" variant="outline" onClick={onCopy}>
+              <Copy className="h-4 w-4" aria-hidden />
+              {copy.copyCode}
+            </Button>
+          </div>
+          {(wallet?.apple || wallet?.google) && card.status === 'ACTIVATED' && (
+            <div className="space-y-2 border-t pt-3">
+              <p className="qx-caption font-medium text-fg-muted">{copy.wallet}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {wallet.apple && (
+                  <Button type="button" variant="outline" onClick={addApple} loading={walletBusy === 'apple'}>
+                    <Download className="h-4 w-4" aria-hidden />
+                    Apple Wallet
+                  </Button>
+                )}
+                {wallet.google && (
+                  <Button type="button" variant="outline" onClick={addGoogle} loading={walletBusy === 'google'}>
+                    <Smartphone className="h-4 w-4" aria-hidden />
+                    Google Wallet
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function RecentActivity({ card, locale, copy }: { card: MyCard; locale: Locale; copy: Copy }) {
+  return (
+    <SectionCard
+      title={copy.recent}
+      icon={<History />}
+      actions={
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/customer/spending-overview">
+            <Wallet className="h-4 w-4" aria-hidden />
+            {copy.spending}
+          </Link>
+        </Button>
+      }
+      footer={
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/customer/consumptions">
+            {copy.allConsumptions}
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </Button>
+      }
+    >
+      {card.consumptions.length === 0 ? (
+        <p className="qx-small text-fg-muted">{copy.noRecent}</p>
       ) : (
-        <div className="space-y-10">
-          {cards.map((card, index) => (
-            <Motion.article
-              key={card.id}
-              initial={reduceMotion ? false : { opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: reduceMotion ? 0 : index * 0.08, type: 'spring', stiffness: 320, damping: 28 }}
-              className="space-y-5"
-            >
-              <LegendDigitalCard
-                card={card}
-                qrSrc={qrCodes[card.token]}
-                holderName={session?.user?.name || 'Üye'}
-                showFullToken={!!showToken[card.id]}
-                onToggleToken={() => toggleShowToken(card.id)}
-                onOpenQr={() => openQr(card)}
-                reduceMotion={reduceMotion}
-              />
-
-              <div className="mx-auto max-w-lg sm:max-w-xl">
-                <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-3">
-                  <Button type="button" variant="secondary" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => copyToken(card.token)}>
-                    <Copy className="mr-1.5 h-4 w-4" />
-                    ID
-                  </Button>
-                  <Button type="button" variant="secondary" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => copyUrl(card.token)}>
-                    <Copy className="mr-1.5 h-4 w-4" />
-                    URL
-                  </Button>
-                  <Button type="button" className="min-h-11 touch-manipulation sm:min-w-[7.5rem]" onClick={() => shareCard(card.token)}>
-                    <Share2 className="mr-1.5 h-4 w-4" />
-                    Paylaş
-                  </Button>
-                </div>
-                {/* "Büyük QR göster" butonu kaldırıldı — QR koduna dokununca zaten büyüyor (openQr). */}
-              </div>
-
-              {/* Tüketimlerim + Harcama Özetim — kartın altında kısayol (menüden Kartım grubuna taşındı) */}
-              <div className="grid grid-cols-2 gap-3">
-                <Link
-                  href="/customer/consumptions"
-                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition-all hover:border-primary/40 hover:bg-primary/5"
-                >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                    <History className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold group-hover:text-primary">Tüketimlerim</span>
-                    <span className="block text-xs text-muted-foreground">Geçmiş & kayıtlar</span>
-                  </span>
-                </Link>
-                <Link
-                  href="/customer/spending-overview"
-                  className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition-all hover:border-primary/40 hover:bg-primary/5"
-                >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-500">
-                    <Wallet className="h-5 w-5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold group-hover:text-primary">Harcama Özetim</span>
-                    <span className="block text-xs text-muted-foreground">Aylık trend & analiz</span>
-                  </span>
-                </Link>
-              </div>
-
-              <Card className="border-border/70">
-                <CardContent className="space-y-4 p-4 sm:p-5">
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-2">
-                      <History className="h-4 w-4 shrink-0" />
-                      <span className="font-medium text-foreground">{card._count.consumptions}</span> tüketim
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <Calendar className="h-4 w-4 shrink-0" />
-                      {card.activatedAt ? formatDate(card.activatedAt) : '—'}
-                    </span>
-                  </div>
-
-                  {card.consumptions.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Son işlemler</p>
-                      <ul className="space-y-2">
-                        {card.consumptions.slice(0, 4).map((c) => (
-                          <li
-                            key={c.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5"
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              <span className="truncate text-sm font-medium">{c.dealer.businessName || 'İşletme'}</span>
-                            </span>
-                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatRelativeTime(c.createdAt)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button asChild className="min-h-11 flex-1 touch-manipulation">
-                      <Link href="/customer/consumptions" className="gap-2">
-                        Tüm tüketimler
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button type="button" variant="outline" className="min-h-11 touch-manipulation sm:shrink-0" onClick={() => shareCard(card.token)}>
-                      <Share2 className="mr-2 h-4 w-4" />
-                      Paylaş
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </Motion.article>
+        <ul className="divide-y">
+          {card.consumptions.slice(0, 3).map((c) => (
+            <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-control bg-surface-muted text-fg-muted">
+                  <Store className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="qx-small block truncate font-medium text-fg">{c.dealer?.businessName || 'İşletme'}</span>
+                  {c.product?.name && <span className="qx-caption block truncate text-fg-muted">{c.product.name}</span>}
+                </span>
+              </span>
+              <time dateTime={c.createdAt} className="qx-caption shrink-0 tabular-nums text-fg-muted">
+                {formatRelativeTime(c.createdAt, locale)}
+              </time>
+            </li>
           ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+function PendingReviews({ count, copy }: { count: number; copy: Copy }) {
+  if (count <= 0) return null;
+  return (
+    <div className={cn('flex flex-col gap-3 rounded-card border p-4 sm:flex-row sm:items-center', TONE_CALLOUT.warning)}>
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-control bg-warning-subtle text-warning ring-1 ring-inset ring-warning-border">
+          <Award className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="qx-body font-semibold text-fg">{copy.pendingTitle(count)}</p>
+          <p className="qx-small text-fg-muted">{copy.pendingBody}</p>
+        </div>
+      </div>
+      <Button asChild variant="outline" className="w-full sm:w-auto">
+        <Link href="/customer/consumptions?hasReview=false">
+          {copy.pendingCta}
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+function NoCard({ copy }: { copy: Copy }) {
+  const [help, setHelp] = useState(false);
+  return (
+    <SectionCard>
+      <EmptyState
+        variant="first-use"
+        icon={CreditCard}
+        title={copy.emptyTitle}
+        description={copy.emptyBody}
+        action={
+          <Button type="button" variant="outline" onClick={() => setHelp((v) => !v)} aria-expanded={help}>
+            {copy.emptyCta}
+          </Button>
+        }
+      />
+      {help && <p className="qx-small mx-auto max-w-md pb-4 text-center text-fg-muted">{copy.emptyHelp}</p>}
+    </SectionCard>
+  );
+}
+
+// ───────────────────────────── Sayfa ─────────────────────────────
+
+export default function CustomerMyCardPage() {
+  const { data: session } = useSession();
+  const { locale: appLocale } = useAppLocale();
+  const locale: Locale = appLocale === 'en' ? 'en' : 'tr';
+  const copy = COPY[locale];
+  const userId = (session?.user?.id as string | undefined) ?? null;
+  const holderName = session?.user?.name || (locale === 'en' ? 'Member' : 'Üye');
+
+  const query = useQuery({
+    queryKey: ['customer', 'cards'],
+    queryFn: fetchCards,
+    staleTime: 60_000,
+    retry: (count, error) => !(error instanceof CardsHttpError && error.status >= 400 && error.status < 500) && count < 2,
+  });
+
+  // Çevrimdışı anlık görüntü: başarılı yanıtı sakla, hata anında göster.
+  const [snapshot, setSnapshot] = useState<CardsSnapshot | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      setSnapshot(readSnapshot(window.localStorage.getItem(snapshotKey(userId)), Date.now()));
+    } catch {
+      /* depolama kapalı */
+    }
+  }, [userId]);
+  useEffect(() => {
+    if (!userId || !query.data) return;
+    try {
+      const snap = buildSnapshot(query.data, Date.now());
+      if (snap.data.cards.length > 0) window.localStorage.setItem(snapshotKey(userId), JSON.stringify(snap));
+      else window.localStorage.removeItem(snapshotKey(userId));
+    } catch {
+      /* depolama dolu/kapalı */
+    }
+  }, [userId, query.data]);
+
+  // Yalnız ağ/sunucu hatasında (4xx yetki hatasında değil) son kart gösterilir.
+  const isClientError = query.error instanceof CardsHttpError && query.error.status >= 400 && query.error.status < 500;
+  const usingSnapshot = !query.data && query.isError && !isClientError && !!snapshot;
+  const data: MyCardsData | undefined = query.data ?? (usingSnapshot ? snapshot!.data : undefined);
+  const effectiveQuery = usingSnapshot ? { ...query, data, isError: false, error: null } : query;
+
+  const qrCodes = useCardQrCodes(data?.cards);
+  const wallet = useQuery({
+    queryKey: ['customer', 'wallet-availability'],
+    queryFn: fetchWalletAvailability,
+    enabled: !!query.data?.cards.some((c) => c.status === 'ACTIVATED'),
+    staleTime: 10 * 60_000,
+  });
+
+  const [openCard, setOpenCard] = useState<MyCard | null>(null);
+  useWakeLock(!!openCard);
+  const closeDialog = useCallback((open: boolean) => {
+    if (!open) setOpenCard(null);
+  }, []);
+
+  return (
+    <div className="space-y-6 pb-8">
+      <PageHeader title={copy.title} description={copy.description} icon={<CreditCard />} />
+
+      {usingSnapshot && (
+        <div role="status" className={cn('qx-small flex items-start gap-2.5 rounded-card border px-4 py-3', TONE_CALLOUT.warning)}>
+          <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+          <span className="min-w-0 flex-1">{copy.offline(formatRelativeTime(new Date(snapshot!.savedAt), locale))}</span>
         </div>
       )}
 
-      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
-        <DialogContent className="max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-bottom)))] gap-0 overflow-y-auto border-border/80 bg-card p-0 sm:max-w-md">
-          <DialogHeader className="border-b border-border/60 bg-gradient-to-r from-primary/5 to-transparent px-4 pb-4 pt-6 text-left sm:px-6">
-            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-              <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-              Dijital kart
-            </DialogTitle>
-          </DialogHeader>
-          {selectedCard && (
-            <div className="space-y-5 px-4 py-5 sm:px-6 sm:py-6">
-              <Motion.div
-                className="relative mx-auto w-fit"
-                initial={reduceMotion ? false : { opacity: 0, scale: 0.94, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              >
-                {!reduceMotion && (
-                  <Motion.div
-                    className="pointer-events-none absolute -inset-4 rounded-[2rem] bg-gradient-to-tr from-primary/35 via-violet-500/20 to-cyan-500/25 blur-2xl"
-                    animate={{ opacity: [0.4, 0.75, 0.4] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+      <QueryState
+        query={effectiveQuery}
+        skeleton="detail"
+        isEmpty={() => false}
+        error={{ title: copy.errorTitle }}
+      >
+        {(d: MyCardsData) =>
+          d.cards.length === 0 ? (
+            <NoCard copy={copy} />
+          ) : (
+            <div className="space-y-8">
+              {d.cards.map((card) => (
+                <Motion.article
+                  key={card.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+                  className="space-y-4"
+                  aria-label={`${copy.membership} ${maskCardToken(card.token)}`}
+                >
+                  <CardFace card={card} holderName={holderName} locale={locale} copy={copy} />
+                  <PresentPanel
+                    card={card}
+                    qrSrc={qrCodes[card.token]}
+                    copy={copy}
+                    onFullscreen={() => setOpenCard(card)}
+                    wallet={wallet.data}
                   />
-                )}
-                <div className="relative rounded-2xl bg-gradient-to-b from-white to-zinc-100 p-4 shadow-2xl ring-2 ring-white/90 sm:p-5">
-                  <div className="absolute left-3 top-3 h-4 w-4 rounded border border-zinc-300/90 sm:left-4 sm:top-4" />
-                  <div className="absolute bottom-3 right-3 h-4 w-4 rounded border border-zinc-300/90 sm:bottom-4 sm:right-4" />
-                  {qrCodes[selectedCard.token] && (
-                    <img
-                      src={qrCodes[selectedCard.token]}
-                      alt="Kart QR kodu"
-                      className="mx-auto h-52 w-52 rounded-xl sm:h-60 sm:w-60"
-                    />
-                  )}
-                </div>
-              </Motion.div>
+                  {!usingSnapshot && <RecentActivity card={card} locale={locale} copy={copy} />}
+                </Motion.article>
+              ))}
+              {!usingSnapshot && <PendingReviews count={d.stats.reviewPending} copy={copy} />}
+              <p className="qx-caption flex items-start gap-2 text-fg-muted">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                {copy.safety}
+              </p>
+            </div>
+          )
+        }
+      </QueryState>
 
-              <p className="text-center text-sm text-muted-foreground">Bu kodu kasada göstererek tüketim kaydı oluşturabilirsin.</p>
-              <code className="block break-all rounded-xl bg-muted/60 px-3 py-2 text-center text-[11px] text-muted-foreground">
-                {QR_DOMAIN}/c/{selectedCard.token}
-              </code>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button type="button" variant="outline" className="min-h-11 touch-manipulation" onClick={() => copyUrl(selectedCard.token)}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Kopyala
-                </Button>
-                <Button type="button" className="min-h-11 touch-manipulation" onClick={() => shareCard(selectedCard.token)}>
-                  <Share2 className="mr-2 h-4 w-4" />
-                  Paylaş
-                </Button>
-              </div>
-
-              <div className="space-y-2 border-t border-border/60 pt-4">
-                <p className="text-center text-xs font-medium text-muted-foreground">Cüzdana ekle</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 touch-manipulation bg-zinc-950 text-white hover:bg-zinc-900 hover:text-white dark:bg-zinc-900"
-                    onClick={() => addToAppleWallet(selectedCard.id)}
-                    disabled={walletLoading === 'apple'}
-                  >
-                    {walletLoading === 'apple' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                    Apple Wallet
-                  </Button>
-                  <Button
-                    type="button"
-                    className="min-h-11 touch-manipulation bg-blue-600 text-white hover:bg-blue-700"
-                    onClick={() => addToGoogleWallet(selectedCard.id)}
-                    disabled={walletLoading === 'google'}
-                  >
-                    {walletLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="mr-2 h-4 w-4" />}
-                    Google Wallet
-                  </Button>
-                </div>
-              </div>
+      <Dialog open={!!openCard} onOpenChange={closeDialog}>
+        <DialogContent className="max-h-[min(94dvh,calc(100dvh-env(safe-area-inset-bottom)))] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{copy.dialogTitle}</DialogTitle>
+            <DialogDescription>{copy.dialogDesc}</DialogDescription>
+          </DialogHeader>
+          {openCard && (
+            <div className="flex flex-col items-center gap-4 pb-2">
+              <QrImage
+                src={qrCodes[openCard.token]}
+                alt={copy.qrAlt}
+                loadingLabel={copy.qrLoading}
+                className="max-w-[min(80vw,22rem)] p-3"
+              />
+              <p className="font-mono text-xl font-semibold tracking-[0.2em] text-fg">{spokenCardCode(openCard.token)}</p>
+              <p className="qx-caption inline-flex items-center gap-1.5 text-fg-muted">
+                <SunMedium className="h-3.5 w-3.5" aria-hidden />
+                {copy.brightness}
+              </p>
             </div>
           )}
         </DialogContent>
       </Dialog>
-
-      {stats.reviewPending > 0 && (
-        <Motion.div
-          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        >
-          <Card className="border-amber-500/25 bg-gradient-to-br from-amber-500/10 to-orange-500/5">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex flex-1 items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/20">
-                    <Award className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold">Yorum bekleyen tüketimler</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">{stats.reviewPending} kayıt için yorum yazarak puan kazan.</p>
-                  </div>
-                </div>
-                <Button asChild variant="outline" className="w-full min-h-11 shrink-0 touch-manipulation sm:w-auto">
-                  <Link href="/customer/consumptions?hasReview=false" className="gap-2">
-                    Yorum yap
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </Motion.div>
-      )}
     </div>
   );
 }

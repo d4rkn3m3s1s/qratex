@@ -5,6 +5,7 @@
  * - Tekil yüksek aciliyet: son 24 saatte urgency > 0.8 veya isToxic
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 const RATING_DROP_THRESHOLD = 0.5;
@@ -156,18 +157,37 @@ export async function runIncidentDetection(dealerId: string): Promise<{ created:
 }
 
 /**
- * Hiç olay yoksa ve yeterli geri bildirim de yoksa demo amaçlı tek bir "bilgi" olayı oluşturur (sayfa boş kalmasın).
+ * Eskiden sayfa boş kalmasın diye her yeni bayiye yazılan SAHTE "demo olay"ın birebir imzası
+ * (D11 / P0-14). Bu kayıt gerçek `Incident` olarak kalıcı yazılıyor, arayüzde kapatılamıyor ve
+ * Copilot / sabah brifingi / admin sağlık skoru / AI aksiyon bağlamındaki "açık olay"
+ * sayaçlarını kirletiyordu. Artık hiç yazılmıyor; boş durum arayüzde gösterilir.
  */
-export async function ensureDemoIncidentIfEmpty(dealerId: string): Promise<boolean> {
-  const count = await prisma.incident.count({ where: { dealerId } });
-  if (count > 0) return false;
-  await createIncident(
-    dealerId,
-    'other',
-    'low',
-    'Olaylar / Kriz Radarı',
+export const LEGACY_DEMO_INCIDENT = {
+  type: 'other',
+  severity: 'low',
+  title: 'Olaylar / Kriz Radarı',
+  description:
     'Eşik aşımında (puan düşüşü, şikayet artışı, yüksek aciliyet) otomatik olaylar burada listelenir. Manuel olay da ekleyebilirsiniz.',
-    null
-  );
-  return true;
+} as const;
+
+/**
+ * Eski sahte demo olay kayıtlarını siler (kendini onaran tek seferlik temizlik). Yalnız tam
+ * imza eşleşmesi (tip + önem + başlık + açıklama) ve kimseye atanmamış, metadata'sız kayıtlar
+ * silinir → bayinin elle girdiği gerçek bir olay asla etkilenmez. İdempotenttir.
+ * `dealerId` verilmezse platform genelinde çalışır (bakım işi için).
+ */
+export async function purgeLegacyDemoIncidents(dealerId?: string): Promise<number> {
+  const res = await prisma.incident.deleteMany({
+    where: {
+      ...(dealerId ? { dealerId } : {}),
+      type: LEGACY_DEMO_INCIDENT.type,
+      severity: LEGACY_DEMO_INCIDENT.severity,
+      title: LEGACY_DEMO_INCIDENT.title,
+      description: LEGACY_DEMO_INCIDENT.description,
+      assignedToId: null,
+      thresholdValue: null,
+      metadata: { equals: Prisma.DbNull },
+    },
+  });
+  return res.count;
 }

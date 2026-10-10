@@ -271,6 +271,8 @@ export async function POST(
       const uid = session.user.id;
       after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
       after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
+      // Kart tüketimi + yorum da QR olayıdır: bekleyen daveti nitelendirebilir (P0-16).
+      after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
     }
 
     const resBody = {

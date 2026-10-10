@@ -1,173 +1,13 @@
 const { withSentryConfig } = require('@sentry/nextjs');
 
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-  // Ağ yokken ve istenen sayfa cache'te değilken gösterilecek yedek (app/offline).
-  fallbacks: {
-    document: '/offline',
-  },
-  runtimeCaching: [
-    {
-      urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'google-fonts-webfonts',
-        expiration: {
-          maxEntries: 4,
-          maxAgeSeconds: 365 * 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /^https:\/\/fonts\.(?:googleapis)\.com\/.*/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'google-fonts-stylesheets',
-        expiration: {
-          maxEntries: 4,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:eot|otf|ttc|ttf|woff|woff2|font.css)$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'static-font-assets',
-        expiration: {
-          maxEntries: 4,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:jpg|jpeg|gif|png|svg|ico|webp)$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'static-image-assets',
-        expiration: {
-          maxEntries: 64,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\/_next\/image\?url=.+$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'next-image',
-        expiration: {
-          maxEntries: 64,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:mp3|wav|ogg)$/i,
-      handler: 'CacheFirst',
-      options: {
-        rangeRequests: true,
-        cacheName: 'static-audio-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:mp4)$/i,
-      handler: 'CacheFirst',
-      options: {
-        rangeRequests: true,
-        cacheName: 'static-video-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:js)$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'static-js-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:css|less)$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'static-style-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\/_next\/data\/.+\/.+\.json$/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'next-data',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:json|xml|csv)$/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'static-data-assets',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: ({ url }) => {
-        const isSameOrigin = self.origin === url.origin;
-        if (!isSameOrigin) return false;
-        const pathname = url.pathname;
-        if (pathname.startsWith('/api/')) return false;
-        return true;
-      },
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'others',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-        networkTimeoutSeconds: 10,
-      },
-    },
-    {
-      urlPattern: ({ url }) => {
-        const isSameOrigin = self.origin === url.origin;
-        return !isSameOrigin;
-      },
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'cross-origin',
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 60 * 60,
-        },
-        networkTimeoutSeconds: 10,
-      },
-    },
-  ],
-});
+const { buildPwaOptions } = require('./config/pwa');
+const { buildHeaders } = require('./config/security-headers');
+
+// PWA seçenekleri (precache kapsamı, çalışma anı önbellekleri, push entegrasyonu) ve
+// gerekçeleri config/pwa.js içinde; testler: __tests__/config/pwa-options.test.ts
+const withPWA = require('next-pwa')(
+  buildPwaOptions({ isDev: process.env.NODE_ENV === 'development' }),
+);
 
 /**
  * Sunucusuz trace’ten çıkarılacak yollar (Vercel 250MB unzipped).
@@ -244,6 +84,22 @@ const OUTPUT_FILE_TRACING_EXCLUDE_GLOBS = [
   'node_modules/@img/sharp-libvips-linuxmusl*/**/*',
 ];
 
+/**
+ * R2 (nesne depolama) herkese açık host'u: admin rozet/ödül görselleri buraya
+ * yüklenir (P0-39) ve next/image ile gösterilir. Env yoksa/bozuksa desen eklenmez.
+ */
+function r2RemotePatterns() {
+  const raw = (process.env.R2_PUBLIC_URL || '').trim();
+  if (!raw) return [];
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return [];
+    return [{ protocol: u.protocol.replace(':', ''), hostname: u.hostname }];
+  } catch {
+    return [];
+  }
+}
+
 function expandOutputFileTracingExcludes(globs) {
   const out = new Set();
   for (const g of globs) {
@@ -288,6 +144,7 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'images.unsplash.com',
       },
+      ...r2RemotePatterns(),
     ],
   },
   experimental: {
@@ -318,51 +175,10 @@ const nextConfig = {
     ];
     return config;
   },
+  // Güvenlik başlıkları + statik varlık önbellek politikası: config/security-headers.js
+  // (kamera izni, immutable avatarlar, SW betikleri). Testler: __tests__/config/security-headers.test.ts
   async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          // HSTS: HTTPS'i zorla (downgrade/SSL-strip önlemi). 2 yıl + preload.
-          // Tarayıcı yalnızca HTTPS üzerinden uygular; HTTP'de etkisizdir (güvenli).
-          {
-            key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload',
-          },
-          // Cross-origin izolasyon: kaynakların başka origin'lerce gömülmesini sınırla.
-          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-          { key: 'X-DNS-Prefetch-Control', value: 'off' },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(self), payment=(), usb=()',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // blob: + jsdelivr → Tesseract.js OCR worker/wasm (tarayıcı tarafı).
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.vercel-insights.com https://va.vercel-scripts.com https://vercel.live https://cdn.jsdelivr.net",
-              "worker-src 'self' blob:",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https:",
-              "connect-src 'self' https://*.supabase.co https://*.netlify.app https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.ingest.sentry.io https://vercel.live https://cdn.jsdelivr.net https://tile.openstreetmap.org",
-              "frame-src 'self' https://vercel.live",
-              "frame-ancestors 'none'",
-              // base-uri: <base> ile script kaçırma/relative-URL hijack önlemi.
-              "base-uri 'self'",
-              // form-action: form gönderimini yalnızca kendi origin'e sınırla.
-              "form-action 'self'",
-              // object-src: eklenti/Flash vektörlerini kapat.
-              "object-src 'none'",
-            ].join('; '),
-          },
-        ],
-      },
-    ];
+    return buildHeaders();
   },
 };
 

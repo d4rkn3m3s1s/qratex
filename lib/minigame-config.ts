@@ -13,8 +13,12 @@ export const MINIGAME = {
   rewardPoints: 150,
   /** Ödülün XP karşılığı. */
   rewardXp: 75,
-  /** Oyunun gerçekçi en kısa süresi (sn) — bundan hızlı "tamamlandı" şüpheli. */
-  minDurationSec: 5,
+  /**
+   * Oyunun gerçekçi en kısa süresi (sn) — bundan hızlı "tamamlandı" şüpheli. BFS en kısa
+   * rota 45 hücre ≈ 10,6 sn (60 Hz); hareket artık kare hızından bağımsız (dt), 9 sn
+   * köşe hizalaması payıyla güvenli alt sınır (önceden 5: fiziksel sınırın yarısı).
+   */
+  minDurationSec: 9,
 } as const;
 
 /** Toplanan yıldıza göre sunucu ödülünü hesaplar (cap'li). */
@@ -62,7 +66,30 @@ export interface MiniGameDef {
   rewardXp: number;
   /** Gerçekçi en kısa süre (sn) — bundan hızlı "tamamlandı" şüpheli. */
   minDurationSec: number;
+  /**
+   * Makullük üst sınırı: sunucu saatine göre geçen saniye başına en fazla bu kadar skor
+   * (P0-17 → F4.1). `skor > maxScorePerSec × geçenSn` ise deneme kazanılmış sayılmaz.
+   * Değerler bilerek cömert: dürüst en hızlı oyuncuyu değil, betikle gönderilen
+   * "anında tavan skor"u yakalar. Tanımsız → yalnız minDurationSec uygulanır.
+   */
+  maxScorePerSec?: number;
+  /**
+   * Deneme penceresi (sn): start'tan bu kadar sonra complete kabul edilmez ve yarım
+   * kalan `active` deneme `failed` (oynandı, kaybedildi) sayılır. Süreli oyunlarda tur
+   * süresi + 90 sn tolerans; süresiz bulmacalarda daha geniş. Tanımsız → 900 sn.
+   */
+  maxDurationSec?: number;
+  /**
+   * Portföy kararı (yol haritası §7.3): `true` → oyun hub'da, turnuva rotasyonunda ve
+   * sıralı (ödüllü) denemede KAPALI; kod ve geçmiş veri silinmez (geri alınabilir).
+   */
+  hidden?: boolean;
+  /** Gizleme gerekçesi (admin panelinde gösterilir). */
+  hiddenReason?: string;
 }
+
+/** Deneme penceresi tanımsız oyunlar için varsayılan (sn). */
+export const DEFAULT_MAX_DURATION_SEC = 900;
 
 /**
  * Yeni oyun eklemek = buraya bir satır + components/customer/games/<...> bileşeni
@@ -82,6 +109,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 160,
     rewardXp: 80,
     minDurationSec: 8,
+    maxScorePerSec: 2.7,
+    maxDurationSec: 135,
   },
   {
     gameType: 'truth-vs-fake',
@@ -96,6 +125,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 140,
     rewardXp: 70,
     minDurationSec: 8,
+    maxScorePerSec: 1.8,
+    maxDurationSec: 135,
   },
   {
     gameType: 'bot-hunter',
@@ -110,6 +141,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 1,
+    maxDurationSec: 155,
   },
   {
     gameType: 'review-detective',
@@ -124,6 +157,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 1,
+    maxDurationSec: 180,
   },
   {
     gameType: 'spam-defense',
@@ -138,6 +173,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 10,
+    maxScorePerSec: 5,
+    maxDurationSec: 140,
   },
   {
     gameType: 'data-miner',
@@ -152,6 +189,11 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 2,
+    maxDurationSec: 900,
+    hidden: true,
+    hiddenReason:
+      'Saf şans; açıklamadaki beceri yok ve skor tavanına ulaşılamıyor (§7.3 #21 KALDIR).',
   },
   {
     gameType: 'guardian-of-trust',
@@ -166,6 +208,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 160,
     rewardXp: 80,
     minDurationSec: 10,
+    maxScorePerSec: 2,
+    maxDurationSec: 140,
   },
   {
     gameType: 'troll-slayer',
@@ -180,6 +224,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 10,
+    maxScorePerSec: 3,
+    maxDurationSec: 145,
   },
   {
     gameType: 'network-defender',
@@ -194,6 +240,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 1.5,
+    maxDurationSec: 140,
   },
   {
     gameType: 'combo-tap',
@@ -208,6 +256,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 3,
+    maxDurationSec: 120,
   },
   {
     gameType: 'memory-match',
@@ -222,6 +272,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 0.8,
+    maxDurationSec: 900,
   },
   {
     gameType: 'speed-order',
@@ -236,6 +288,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 1.2,
+    maxDurationSec: 135,
   },
   {
     gameType: 'lucky-wheel',
@@ -250,6 +304,11 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 2,
+    maxDurationSec: 135,
+    hidden: true,
+    hiddenReason:
+      'Saf RNG; "doğru anda durdur" mekaniği yok, günlük çarkla çakışıyor (§7.3 #20 KALDIR).',
   },
   {
     gameType: 'word-spot',
@@ -264,6 +323,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 150,
     rewardXp: 75,
     minDurationSec: 8,
+    maxScorePerSec: 1.2,
+    maxDurationSec: 900,
   },
   {
     gameType: 'data-snake',
@@ -278,6 +339,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 160,
     rewardXp: 80,
     minDurationSec: 10,
+    maxScorePerSec: 2,
+    maxDurationSec: 1800,
   },
   {
     gameType: 'review-stack',
@@ -292,6 +355,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 12,
+    maxScorePerSec: 1,
+    maxDurationSec: 3600,
   },
   {
     gameType: 'trust-merge',
@@ -306,6 +371,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 12,
+    maxScorePerSec: 25,
+    maxDurationSec: 3600,
   },
   {
     gameType: 'signal-pipe',
@@ -320,6 +387,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 160,
     rewardXp: 80,
     minDurationSec: 10,
+    maxScorePerSec: 0.5,
+    maxDurationSec: 1800,
   },
   {
     gameType: 'spam-breaker',
@@ -335,6 +404,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 170,
     rewardXp: 85,
     minDurationSec: 12,
+    maxScorePerSec: 3,
+    maxDurationSec: 1800,
   },
   {
     gameType: 'frost-catcher',
@@ -351,12 +422,52 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     rewardPoints: 120,
     rewardXp: 60,
     minDurationSec: 10,
+    maxScorePerSec: 5,
+    maxDurationSec: 130,
   },
 ];
 
 /** gameType → tanım. Bilinmeyen tip için undefined. */
 export function getMiniGame(gameType: string): MiniGameDef | undefined {
   return MINI_GAMES.find((g) => g.gameType === gameType);
+}
+
+/**
+ * Pacman ("Yıldız Avı") registry dışındaki eski oyundur (ayrı route + bileşen). Sunucu
+ * kuralları (ödül, eşik, süre, makullük, admin aç/kapat override'ı) generic oyunlarla
+ * AYNI çekirdekten (`lib/game-session.ts`) geçsin diye burada tanım olarak da durur.
+ * Hub/sidebar listelerine girmesin diye MINI_GAMES'e EKLENMEZ (hub kartı ayrı).
+ * Skor = toplanan yıldız (0..5).
+ */
+export const PACMAN_GAME: MiniGameDef = {
+  gameType: MINIGAME.gameType,
+  labelKey: 'pacman_game',
+  title: 'Yıldız Avı',
+  description: 'QRatex labirentinde yıldızları topla, hayaletlerden kaç! 5 yıldız = ödül.',
+  emoji: '👾',
+  accent: '#fbbf24',
+  maxScore: MINIGAME.totalStars,
+  rewardThreshold: MINIGAME.starsForReward,
+  rewardPoints: MINIGAME.rewardPoints,
+  rewardXp: MINIGAME.rewardXp,
+  minDurationSec: MINIGAME.minDurationSec,
+  // En kısa rota 45 hücre ≈ 10,6 sn (4,24 hücre/sn) → 5 yıldız en erken ~10,6 sn.
+  // 0,5/sn: 5 yıldız ≥ 10 sn (dürüst en hızlı oyuncu geçer, 9 sn'de tavan skor geçmez).
+  maxScorePerSec: 0.5,
+  maxDurationSec: 900,
+};
+
+/** Registry oyunları + pacman: sunucu tarafı tek arama (start/complete/admin/turnuva). */
+export const ALL_GAME_DEFS: readonly MiniGameDef[] = [...MINI_GAMES, PACMAN_GAME];
+
+/** gameType → tanım (pacman dahil). Bilinmeyen tip için undefined. */
+export function getGameDef(gameType: string): MiniGameDef | undefined {
+  return ALL_GAME_DEFS.find((g) => g.gameType === gameType);
+}
+
+/** Portföyde görünür (gizlenmemiş) registry oyunları — hub ve turnuva rotasyonu. */
+export function visibleMiniGames(): MiniGameDef[] {
+  return MINI_GAMES.filter((g) => !g.hidden);
 }
 
 /** Generic: bir oyun tanımı + skora göre sunucu ödülünü hesaplar (cap'li). */

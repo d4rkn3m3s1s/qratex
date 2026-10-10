@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({ planId: z.string().min(1) });
 
 /**
- * POST /api/dealer/billing/checkout — bayi bir plana abone olmak için Stripe
- * Checkout oturumu başlatır. Döner: { url } (istemci yönlendirir).
+ * POST /api/dealer/billing/checkout — aboneliği OLMAYAN bayi bir plana abone olmak için
+ * Stripe Checkout oturumu başlatır. Döner: { url } (istemci yönlendirir). Aboneliği olan
+ * bayi için 409 SUBSCRIPTION_EXISTS → plan değişikliği /api/dealer/billing/change-plan ile.
  */
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['DEALER']);
@@ -41,7 +42,13 @@ export async function POST(request: NextRequest) {
   try {
     const result = await createCheckoutSession(auth.session.user.id, parsed.data.planId);
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+      // Canlı aboneliği olan bayiye yeni Checkout açılmaz (çift abonelik, P0-29) → 409 + kod;
+      // arayüz "Planı değiştir" (subscriptions.update) akışına yönlendirir.
+      const status = result.code === 'SUBSCRIPTION_EXISTS' ? 409 : result.code === 'STRIPE_DISABLED' ? 503 : 400;
+      return NextResponse.json(
+        { error: result.error, code: result.code },
+        { status, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     return NextResponse.json({ success: true, url: result.url }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (e) {

@@ -8,7 +8,9 @@ import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { checkTokenReplay } from '@/lib/token-replay';
+import { checkTokenReplay, type TokenReplayResult } from '@/lib/token-replay';
+import { loadSessionState, evaluateSessionState, type SessionState } from '@/lib/auth/session-state';
+import { checkAdminElevation } from '@/lib/admin-gate';
 import { getClientIp, getUserAgent } from '@/lib/request-metadata';
 import type { Session } from 'next-auth';
 
@@ -45,37 +47,132 @@ export function requireRole(
   return null;
 }
 
+export interface RequireAuthOptions {
+  /**
+   * ADMIN için gizli kapı (elevation) doğrulaması — varsayılan AÇIK (P0-01).
+   * Yalnız kapı ucunun kendisi (`/api/admin/gate`) ve ekip modülü (`requireTeamAccess`)
+   * `false` geçer. Başka bir yerde kapatmak, kapıyı API'de yeniden süse çevirir.
+   */
+  adminGate?: boolean;
+}
+
+export const ADMIN_GATE_REQUIRED_CODE = 'ADMIN_GATE_REQUIRED';
+export const STAFF_INACTIVE_CODE = 'STAFF_INACTIVE';
+
+function authError(status: number, error: string, code: string): NextResponse {
+  return NextResponse.json({ success: false, error, code }, { status, headers: PRIVATE_NO_STORE_HEADERS });
+}
+
 /**
  * Require session and role in one call. Returns { session } or { error: NextResponse }.
- * Token replay: aynı JWT farklı IP/UA ile kullanılırsa 403 + alarm.
+ *
+ * Sıra (hepsi sunucuda, varsayılan reddet):
+ *  1. Oturum (JWT) yoksa 401.
+ *  2. DB oturum durumu (P0-07) + token replay paralel: `sessionVersion` ↔ JWT `sv`,
+ *     askı, anonimleştirme/silinme, GÜNCEL rol ve personel bağı (Redis 60 sn sıcak katman,
+ *     DB kaynak-doğruluk). DB'ye ulaşılamazsa 503 — yetki tahminle verilmez.
+ *     `session.user.role` / `dealerId` DB'deki değerle EZİLİR; sonraki bütün kontroller
+ *     (requireRole, getStaffDealerId, kapsam yardımcıları) güncel veriyle çalışır.
+ *  3. Token replay: aynı JWT farklı IP/UA ile kullanılırsa 403 + alarm.
+ *  4. Rol kontrolü (DB rolüyle).
+ *  5. Pasif personel: STAFF'a açık iş uçlarında (`STAFF` var, `CUSTOMER` yok) 403.
+ *  6. ADMIN gizli kapı: imzalı + süreli + güncel sürümlü kapı çerezi ZORUNLU (P0-01).
  */
 export async function requireAuth(
-  allowedRoles?: AllowedRole[]
+  allowedRoles?: AllowedRole[],
+  options: RequireAuthOptions = {}
 ): Promise<
   | { session: Session }
   | { error: NextResponse }
 > {
   const session = await getSessionOr401();
   if (session instanceof NextResponse) return { error: session };
-  if (allowedRoles?.length) {
-    const forbidden = requireRole(session, allowedRoles);
-    if (forbidden) return { error: forbidden };
-  }
+  const userId = session.user.id;
   const jti = (session as { jti?: string }).jti;
-  if (jti) {
-    const headersList = await headers();
-    const ip = getClientIp({ headers: headersList }) || 'unknown';
-    const ua = getUserAgent({ headers: headersList }) || '';
-    const replay = await checkTokenReplay(jti, ip, ua);
-    if (!replay.ok) {
+
+  let state: SessionState;
+  let replay: TokenReplayResult = { ok: true };
+  try {
+    const replayPromise: Promise<TokenReplayResult> = jti
+      ? headers().then((headersList) =>
+          checkTokenReplay(
+            jti,
+            getClientIp({ headers: headersList }) || 'unknown',
+            getUserAgent({ headers: headersList }) || ''
+          )
+        )
+      : Promise.resolve({ ok: true });
+    [state, replay] = await Promise.all([loadSessionState(userId), replayPromise]);
+  } catch {
+    return {
+      error: authError(503, 'Oturum şu anda doğrulanamıyor. Lütfen birazdan tekrar deneyin.', 'SERVICE_UNAVAILABLE'),
+    };
+  }
+
+  if (!replay.ok) {
+    return {
+      error: NextResponse.json(
+        { error: 'Session güvenlik ihlali tespit edildi. Lütfen tekrar giriş yapın.' },
+        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
+      ),
+    };
+  }
+
+  const tokenSv = (session as { sv?: unknown }).sv;
+  let verdict = evaluateSessionState(state, tokenSv);
+  if (!verdict.ok && verdict.code === 'SESSION_REVOKED') {
+    // Önbellek bayat olabilir (ör. 2FA değişince bu tarayıcıya yeni `sv`'li çerez verildi):
+    // kararı DB'den TAZE okuyarak yeniden ver. Eski token ise güncel sürümle yine reddedilir.
+    try {
+      verdict = evaluateSessionState(await loadSessionState(userId, { bypassCache: true }), tokenSv);
+    } catch {
       return {
-        error: NextResponse.json(
-          { error: 'Session güvenlik ihlali tespit edildi. Lütfen tekrar giriş yapın.' },
-          { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-        ),
+        error: authError(503, 'Oturum şu anda doğrulanamıyor. Lütfen birazdan tekrar deneyin.', 'SERVICE_UNAVAILABLE'),
       };
     }
   }
+  if (!verdict.ok) return { error: authError(verdict.status, verdict.message, verdict.code) };
+
+  // Yetki kararı DB'deki GÜNCEL rol ve personel bağıyla verilir (token bayat olabilir).
+  session.user.role = verdict.role;
+  const mutableUser = session.user as { dealerId?: string; staffActive?: boolean | null };
+  if (verdict.role === 'STAFF' && verdict.dealerId) mutableUser.dealerId = verdict.dealerId;
+  else delete mutableUser.dealerId;
+  mutableUser.staffActive = verdict.staffActive;
+
+  if (allowedRoles?.length) {
+    const forbidden = requireRole(session, allowedRoles);
+    if (forbidden) return { error: forbidden };
+    if (
+      verdict.role === 'STAFF' &&
+      verdict.staffActive === false &&
+      allowedRoles.includes('STAFF') &&
+      !allowedRoles.includes('CUSTOMER')
+    ) {
+      return {
+        error: authError(403, 'Personel hesabınız pasif durumda. İşletme yöneticinizle iletişime geçin.', STAFF_INACTIVE_CODE),
+      };
+    }
+  }
+
+  if (verdict.role === 'ADMIN' && options.adminGate !== false) {
+    const elevation = await checkAdminElevation(userId, jti);
+    if (!elevation.ok) {
+      if (elevation.reason === 'unavailable') {
+        return {
+          error: authError(
+            503,
+            'Yönetici kapısı şu anda doğrulanamıyor. Lütfen birazdan tekrar deneyin.',
+            'SERVICE_UNAVAILABLE'
+          ),
+        };
+      }
+      return {
+        error: authError(403, 'Bu işlem için önce yönetici kapısından geçmelisiniz.', ADMIN_GATE_REQUIRED_CODE),
+      };
+    }
+  }
+
   return { session };
 }
 

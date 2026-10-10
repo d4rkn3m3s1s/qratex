@@ -69,13 +69,27 @@ describe('plan-limits', () => {
     expect(mockQrCount).not.toHaveBeenCalled();
   });
 
-  it('pasif plan ücretsiz kademeye düşürür', async () => {
+  it('pasif/arşivlenmiş plan mevcut aboneyi ücretsiz kademeye DÜŞÜRMEZ (P0-26)', async () => {
+    // Pasifleştirme/arşiv yalnız yeni satışı kapatır; plan limitleri aboneler için geçerli kalır.
     mockUserFindUnique.mockResolvedValue({
       role: 'DEALER',
-      pricingPlan: { name: 'Eski', maxQRCodes: 100, maxBranches: 5, isActive: false },
+      pricingPlan: { name: 'Eski', maxQRCodes: 100, maxBranches: 5, isActive: false, archivedAt: new Date() },
     });
     const limits = await getDealerPlanLimits('d-1');
-    expect(limits.maxQRCodes).toBe(3);
-    expect(limits.planName).toBe('Ücretsiz');
+    expect(limits.maxQRCodes).toBe(100);
+    expect(limits.maxBranches).toBe(5);
+    expect(limits.planName).toBe('Eski');
+  });
+
+  it('kota CANLI kodları sayar (iptal/arşiv hariç; geri alma ayrıca kotadan geçer, P0-24/F12)', async () => {
+    mockUserFindUnique.mockResolvedValue({
+      role: 'DEALER',
+      pricingPlan: { name: 'Başlangıç', maxQRCodes: 3, maxBranches: 1 },
+    });
+    mockQrCount.mockResolvedValue(3);
+    const res = await canCreateQRCode('d-1');
+    expect(res.allowed).toBe(false);
+    // lib/qr-quota.ts#liveQrWhere ile aynı tanım.
+    expect(mockQrCount).toHaveBeenCalledWith({ where: { dealerId: 'd-1', revokedAt: null, archivedAt: null } });
   });
 });

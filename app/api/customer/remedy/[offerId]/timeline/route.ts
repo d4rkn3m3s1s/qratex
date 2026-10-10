@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
-import { buildRemedyTimeline } from '@/lib/remedy-timeline';
+import { buildRemedyTimeline, CUSTOMER_HIDDEN_TIMELINE_KINDS } from '@/lib/remedy-timeline';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 
@@ -48,6 +48,14 @@ export async function GET(
       { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const isAdmin = session.user.role === 'ADMIN';
+  // Onay bekleyen/reddedilen teklif müşteriye görünmez (GET ile aynı kural); varlığı sızdırılmaz.
+  if (!isAdmin && (offer.status === 'awaiting_dealer_approval' || offer.status === 'rejected')) {
+    return NextResponse.json(
+      { error: 'Teklif bulunamadı' },
+      { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
 
   const events = await prisma.remedyTimelineEvent.findMany({
     where: { remedyOfferId: offerId },
@@ -55,7 +63,14 @@ export async function GET(
     take: 200,
   });
 
-  const timeline = buildRemedyTimeline(offer, events);
+  // Bayinin iç süreç adımları (onay kuyruğu vb.) müşteriye gösterilmez.
+  const visibleEvents = isAdmin
+    ? events
+    : events
+        .filter((e) => !CUSTOMER_HIDDEN_TIMELINE_KINDS.has(e.kind))
+        // "Otomasyon ile taslak" gibi iç etiketler yerine müşteriye sade metin.
+        .map((e) => (e.kind === 'created' ? { ...e, label: 'Teklif oluşturuldu', meta: null } : e));
+  const timeline = buildRemedyTimeline(offer, visibleEvents);
 
   return NextResponse.json(
     {

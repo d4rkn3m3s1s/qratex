@@ -112,12 +112,7 @@ export async function POST(req: Request) {
         });
         if (existing) throw new BattleConflictError();
 
-        // Ödül havuzunu meydan okuyandan tahsil et (atomik; bakiye yetersizse atar).
-        if (rewardPool > 0) {
-          await debitPoints(tx, { userId: session.user.id, points: rewardPool });
-        }
-
-        return tx.squadBattle.create({
+        const created = await tx.squadBattle.create({
           data: {
             squad1Id: mySquad.id,
             squad2Id: target.id,
@@ -130,6 +125,21 @@ export async function POST(req: Request) {
           },
           select: { id: true },
         });
+
+        // Ödül havuzunu meydan okuyandan tahsil et (atomik; bakiye yetersizse atar → tx geri
+        // alınır, savaş da oluşmaz). Defterde savaşa bağlı (P0-20): iade/ödeme ile eşleşir.
+        if (rewardPool > 0) {
+          await debitPoints(tx, {
+            userId: session.user.id,
+            points: rewardPool,
+            source: 'squad_escrow',
+            sourceId: created.id,
+            idempotencyKey: `squad-escrow:${created.id}`,
+            reason: 'Klan savaşı ödül havuzu (escrow)',
+          });
+        }
+
+        return created;
       });
     } catch (e) {
       if (e instanceof BattleConflictError) {

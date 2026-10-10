@@ -6,8 +6,14 @@
  * Veri kaynakları: Consumption (totalSpent/visits/avgOrderValue/first-last),
  * Feedback.churnRisk (AI'dan gelen 0-1 olasılık → predictedChurn + LOW/MED/HIGH).
  * Segment, CLV metriklerinden kural tabanlı atanır.
+ *
+ * KAPSAM UYARISI (P0-12): Buradaki CustomerLifetimeValue PLATFORM GENELİDİR (müşterinin bütün
+ * işletmelerdeki harcaması). YALNIZ admin içgörüleri okuyabilir. Bayi/personel uçları kiracı
+ * kapsamlı `DealerCustomerStats`'ı (lib/dealer-customer-stats.ts) okur; aynı cron her iki tabloyu
+ * da yeniler (`recomputeAllCLV` → `recomputeAllDealerCustomerStats`).
  */
 import { prisma } from '@/lib/prisma';
+import { recomputeAllDealerCustomerStats } from '@/lib/dealer-customer-stats';
 
 export const DEFAULT_SEGMENTS = [
   { name: 'VIP', description: 'Yüksek yaşam boyu değeri', criteria: { minTotalSpent: 5000 }, color: '#FFD700' },
@@ -73,7 +79,9 @@ export function pickSegment(
  * Tüm müşteriler için CLV hesaplar ve upsert eder. Segment ataması dahil.
  * Döner: işlenen müşteri sayısı.
  */
-export async function recomputeAllCLV(now: Date = new Date()): Promise<{ processed: number }> {
+export async function recomputeAllCLV(
+  now: Date = new Date()
+): Promise<{ processed: number; dealerStats: { dealers: number; rows: number; failed: number } | null }> {
   const segments = await ensureDefaultSegments();
 
   // Tüketim toplulaştırması: müşteri başına toplam/ziyaret/ortalama/ilk-son.
@@ -93,13 +101,13 @@ export async function recomputeAllCLV(now: Date = new Date()): Promise<{ process
   const [fbChurn, crChurn] = await Promise.all([
     prisma.feedback.groupBy({
       by: ['userId'],
-      where: { userId: { not: null }, churnRisk: { not: null } },
+      where: { userId: { not: null }, churnRisk: { not: null }, deletedAt: null },
       _avg: { churnRisk: true },
       _count: { churnRisk: true },
     }),
     prisma.consumptionReview.groupBy({
       by: ['customerId'],
-      where: { churnRisk: { not: null } },
+      where: { churnRisk: { not: null }, deletedAt: null },
       _avg: { churnRisk: true },
       _count: { churnRisk: true },
     }),
@@ -163,5 +171,13 @@ export async function recomputeAllCLV(now: Date = new Date()): Promise<{ process
     processed++;
   }
 
-  return { processed };
+  // Kiracı kapsamlı bayi istatistikleri (bayi uçlarının tek kaynağı). Hata CLV sonucunu bozmaz.
+  let dealerStats: { dealers: number; rows: number; failed: number } | null = null;
+  try {
+    dealerStats = await recomputeAllDealerCustomerStats(now);
+  } catch (err) {
+    console.error('[CLV] bayi kapsamlı istatistikler yenilenemedi:', err);
+  }
+
+  return { processed, dealerStats };
 }

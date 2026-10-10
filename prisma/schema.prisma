@@ -60,6 +60,21 @@ model User {
   loginStreakLastDay            DateTime? // son sayılan günün tarihi (gün bazlı karşılaştırma)
   loginStreakClaimedMilestones  Json?     // idempotent ödül bayrağı, ör. [3, 7]
   referralMilestonesClaimed     Json?     // referral kademe ödül bayrağı, ör. [3, 5]
+
+  // ── OTURUM / HESAP YAŞAM DÖNGÜSÜ (P0-07, P0-25, P0-27 · şema penceresi #1) ──
+  // sessionVersion: JWT `sv` claim'i ile karşılaştırılır. Şifre sıfırlama, rol
+  // değişikliği, askıya alma, anonimleştirme ve 2FA değişikliğinde artırılır →
+  // eski oturumlar geçersizleşir. JWT'de `sv` yoksa 0 kabul edilir (geçiş dönemi).
+  sessionVersion  Int       @default(0)
+  // Askıya alma (hard delete yerine). Doluysa requireAuth erişimi reddeder.
+  suspendedAt     DateTime?
+  suspendedReason String?
+  // KVKK anonimleştirme anı (lib/gdpr-core.ts#anonymizeUser). Doluysa giriş/PII yazımı yok.
+  anonymizedAt    DateTime?
+  // Demo/bootstrap araçlarının ürettiği sentetik hesap. Müşteriye dönük sorgularda dışlanır;
+  // demo araçları YALNIZ isDemo=true varlıklara yazar (P0-27).
+  isDemo          Boolean   @default(false)
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -218,6 +233,15 @@ model User {
   improvementRequestsAsCustomer ImprovementRequest[] @relation("ImprovementRequestCustomer")
   improvementRequestsForDealer  ImprovementRequest[] @relation("ImprovementRequestDealer")
   dataSubjectRequests           DataSubjectRequest[]
+
+  // Platform overhaul (şema penceresi #1) ilişkileri
+  moments                   CustomerMoment[]
+  pointsLedger              PointsLedger[]            @relation("UserPointsLedger")
+  staffInvitationsAsDealer  StaffInvitation[]         @relation("DealerStaffInvitations")
+  staffInvitationsSent      StaffInvitation[]         @relation("StaffInvitationsSent")
+  dealerCustomerStats       DealerCustomerStats[]     @relation("DealerCustomerStatsDealer")
+  customerDealerStats       DealerCustomerStats[]     @relation("DealerCustomerStatsCustomer")
+  consentRecords            ConsentRecord[]
 
   // Squads Relations (Customer)
   ownedSquad           Squad?                  @relation("SquadOwner")
@@ -458,6 +482,11 @@ model SquadBattle {
   challengedById String?
   /// Rakip klan kabul ettiğinde dolar (status: pending → active).
   acceptedAt     DateTime?
+  /// Kazanana ödeme yapıldı (idempotent payout guard: updateMany where paidOutAt null). P0-20
+  paidOutAt      DateTime?
+  /// Soft-cancel (hard delete yerine). İptalde escrow iadesi rewardRefunded ile tek sefer. P0-20
+  cancelledAt    DateTime?
+  cancelReason   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -495,11 +524,25 @@ model MiniGameSession {
   userId         String
   gameType       String    @default("pacman")
   dayKey         String // "YYYY-MM-DD" (UTC) — günlük tek oturum
-  status         String    @default("active") // active | completed | failed
+  // active | completed | failed | abandoned (P0-17: failed/abandoned = oynandı sayılır;
+  // süresi dolmuş active oturum sunucuda failed/abandoned'a çekilir, tekrar hak vermez)
+  status         String    @default("active")
   starsCollected Int       @default(0)
   rewardPoints   Int       @default(0)
   startedAt      DateTime  @default(now())
   completedAt    DateTime?
+
+  // ── Sunucu otoritesi (P0-17 → F4.1) — hepsi nullable, mevcut satırları etkilemez ──
+  // Son (yeniden) başlatmanın SUNUCU saati; minDuration kontrolü buna göre yapılır.
+  serverStartedAt DateTime?
+  // Deneme tohumu (deterministik içerik/doğrulama) ve tek kullanımlık deneme nonce'u
+  // (HMAC token'ına gömülür; complete'te eşleşmeli).
+  seed            String?
+  nonce           String?
+  // Bu tarihten sonra complete kabul edilmez; active ise failed/abandoned sayılır.
+  expiresAt       DateTime?
+  // İstemcinin bildirdiği ham skor (sıkıştırılmadan); |client − verified| hile sinyali.
+  clientScore     Int?
 
   user User @relation("UserMiniGameSessions", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -510,6 +553,8 @@ model MiniGameSession {
   @@index([gameType, status])
   // Streak / achievement-stats: userId + status filtreler (status='completed').
   @@index([userId, status])
+  // Süresi dolan aktif oturum süpürmesi: where status='active' AND expiresAt < now
+  @@index([status, expiresAt])
 }
 
 /// Admin'in mini oyun registry'sini (lib/minigame-config.ts MINI_GAMES) ezdiği
@@ -575,6 +620,8 @@ model CosmeticItem {
   imageUrl    String?
   rarity      String   @default("common")
   isActive    Boolean  @default(true)
+  /// Arşiv (hard delete yerine). Doluysa mağazada gösterilmez; sahiplikler korunur. P0-26
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
 
   owners UserCosmetic[]
@@ -618,6 +665,8 @@ model Badge {
   // Sürpriz rozet: true ise müşteride KAZANILANA KADAR GİZLİ (dizi karakterleri gibi).
   // Kazanılınca koleksiyonda açılır + "sürpriz rozet!" hissi. Admin toggle'ı. false = normal.
   hiddenUntilEarned Boolean @default(false)
+  /// Arşiv (hard delete yerine). Doluysa yeni kazanım yok; kazanılmış rozetler korunur. P0-26
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -652,6 +701,8 @@ model Quest {
   reward      Json // { points: 100, xp: 50 }
   expiresAt   DateTime?
   isActive    Boolean   @default(true)
+  /// Arşiv (hard delete yerine); kullanıcı ilerlemeleri korunur. P0-26
+  archivedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -667,6 +718,10 @@ model UserQuest {
   questId     String
   progress    Int       @default(0)
   completedAt DateTime?
+  /// Ödül ödendi (tek kaynak). TÜM ödeme yolları (claim, achievement, visit-mission)
+  /// `updateMany({ where: { id, rewardedAt: null }, data: { rewardedAt: now } })` ile
+  /// tek sefer öder; count===0 → ödeme yok. P0-15
+  rewardedAt  DateTime?
   createdAt   DateTime  @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -687,6 +742,8 @@ model Reward {
   stock       Int      @default(-1) // -1 = unlimited
   metadata    Json? // Additional reward data
   isActive    Boolean  @default(true)
+  /// Arşiv (hard delete yerine); müşterinin aldığı ödüller ve kupon kodları korunur. P0-26
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -725,6 +782,8 @@ model QRCode {
   scanCount     Int       @default(0)
   expiresAt     DateTime? // lifecycle: optional expiry; null = no expiry
   revokedAt     DateTime? // lifecycle: revoked (e.g. lost); null = not revoked
+  /// lifecycle: arşivlendi ("silme" artık arşivdir; feedback'ler korunur). P0-24
+  archivedAt    DateTime?
   segmentConfig Json? // madde 45: { "new": { "welcomeText": "..." }, "returning": { "welcomeText": "..." } }
   locationId    String? // bağlı olduğu mekan/şube (null = işletme geneli)
   createdAt     DateTime  @default(now())
@@ -740,6 +799,8 @@ model QRCode {
   @@index([isActive])
   @@index([expiresAt])
   @@index([locationId])
+  // Bayi QR listesi / kota: where dealerId + archivedAt
+  @@index([dealerId, archivedAt])
 }
 
 /// Bayinin fiziksel mekanı/şubesi. Telefon teklifleri ve QR kodlar mekana özel
@@ -801,6 +862,9 @@ model Feedback {
   aiProcessedAt DateTime? // AI analiz zamani
   aiModelUsed   String? // groq/openai + model adi
   aiVersion     String? // AI analiz prompt versiyonu
+  // Kaç kez analiz denendi (cron ai-retry sınırsız tekrar etmesin). P0-32
+  aiAttempts      Int       @default(0)
+  aiLastAttemptAt DateTime?
 
   // -- Karakter Rozeti: yorumun ÜSLUP kategorisi (dram-suc|komedi|fantastik|gizem-gerilim) --
   // Her yorum yazıldığında AI belirler; kullanıcıya GÖSTERİLMEZ. Aynı kategoride
@@ -831,7 +895,9 @@ model Feedback {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  qrCode           QRCode            @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+  // Restrict (P0-24): QR silinirse müşteri yorumları cascade ile YOK OLMAZ. QR "silme"
+  // arşivdir (QRCode.archivedAt / revokedAt). Yorumu olan QR'ı hard delete etmek P2003 verir.
+  qrCode           QRCode            @relation(fields: [qrCodeId], references: [id], onDelete: Restrict)
   user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   staff            DealerStaff?      @relation(fields: [dealerStaffId], references: [id], onDelete: SetNull)
   actionItems      ActionItem[]
@@ -1105,7 +1171,13 @@ model RateLimitCounter {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  userId    String
+  // Nullable + SetNull (P0-25): kullanıcı silinse de denetim izi KALIR; aktörün kim
+  // olduğu actorSnapshot'ta korunur. Sistem/cron aksiyonlarında da null olabilir.
+  userId    String?
+  // user | system | cron (mevcut satırlar = user)
+  actorType String   @default("user")
+  // Yazım anındaki aktör: { email, role, name? } — kullanıcı silinse/anonimleşse de okunur.
+  actorSnapshot Json?
   action    String
   entity    String
   entityId  String?
@@ -1115,7 +1187,7 @@ model AuditLog {
   userAgent String?
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([action])
@@ -1441,6 +1513,8 @@ model PricingPlan {
   stripePriceId  String? // Stripe Price ID (Checkout için); null = Stripe'sız plan
   isPopular      Boolean  @default(false)
   isActive       Boolean  @default(true)
+  /// Arşiv (hard delete yerine): aboneler planda kalır, yeni satış yok. P0-26
+  archivedAt     DateTime?
   order          Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1516,6 +1590,8 @@ model PhysicalCard {
   activatedAt DateTime?
   blockedAt   DateTime?
   blockReason String?
+  /// Arşiv (kart silme yerine): CardAuditLog korunur, kart yeniden bağlanamaz. P0-26
+  archivedAt  DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -1579,6 +1655,9 @@ model Consumption {
   productId  String?
   amount     Float? // Tutar (opsiyonel)
   note       String? // Bayi notu
+  /// İstemci işlem kimliği (offline-sync / canlı uç ortak idempotency). Aynı bayide aynı
+  /// clientOpId ikinci kez yazılamaz (@@unique dealerId+clientOpId; NULL'lar serbest). P0-18
+  clientOpId String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1597,6 +1676,7 @@ model Consumption {
   @@index([dealerId, createdAt])
   // Müşteri zaman aralığı + fraud velocity (write hot-path)
   @@index([customerId, createdAt])
+  @@unique([dealerId, clientOpId])
 }
 
 model ConsumptionReview {
@@ -1616,6 +1696,8 @@ model ConsumptionReview {
   sentiment       String? // positive | neutral | negative
   churnRisk       Float? // 0-1 kayıp olasılığı (AI); null = analiz edilmedi
   analyzedAt      DateTime?
+  /// Soft delete (moderasyon). Hard delete aynı tüketime yeniden puanlı yorum açıyordu. P0-23
+  deletedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1633,6 +1715,7 @@ model ConsumptionReview {
   @@index([customerId, characterCategory])
   // CLV churn agregasyonu: where customerId + churnRisk not null → _avg.
   @@index([customerId, churnRisk])
+  @@index([deletedAt])
 }
 
 model CardAuditLog {
@@ -1686,6 +1769,8 @@ model DonationProject {
   tags        Json? // ["Temel İhtiyaç", "Afrika"]
   isActive    Boolean   @default(true)
   isFeatured  Boolean   @default(false)
+  /// Arşiv (hard delete yerine); bağış geçmişi korunur. P0-26
+  archivedAt  DateTime?
   startDate   DateTime  @default(now())
   endDate     DateTime?
   createdAt   DateTime  @default(now())
@@ -2812,11 +2897,36 @@ model DataSubjectRequest {
   receiptSentAt DateTime?
   createdAt     DateTime  @default(now())
   processedAt   DateTime?
+  /// KVKK m.13 yasal yanıt süresi (başvurudan itibaren 30 gün). Gecikme alarmı için. P0-34
+  dueAt         DateTime?
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user   User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Yürütme kanıtı zinciri: "completed" yalnız bir yürütme olayı varsa verilebilir.
+  events DsrEvent[]
 
   @@index([email])
   @@index([status, createdAt])
+  @@index([status, dueAt])
+}
+
+/// KVKK talep (DSR) yürütme kanıtı (P0-34). Her adım (doğrulama, dışa aktarım üretildi,
+/// anonimleştirme yürütüldü, e-posta gönderildi, reddedildi…) bir satır. Silinmez:
+/// talep satırı da bu olaylar varken silinemez (Restrict).
+model DsrEvent {
+  id        String   @id @default(cuid())
+  requestId String
+  // received | verified | export_generated | erasure_executed | rectified | notified | rejected | completed | note
+  type      String
+  // İşlemi yapan (admin id) — sistem adımlarında null. FK yok: aktör silinse de kanıt kalır.
+  actorId   String?
+  // { summary, counts: { feedbacks: 3, ... }, artifactKey?, reason? } — PII İÇERMEZ.
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  request DataSubjectRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, createdAt])
+  @@index([type, createdAt])
 }
 
 
@@ -3061,4 +3171,172 @@ model TaskAttachment {
   uploadedBy User        @relation("TaskAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
 
   @@index([taskId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PLATFORM OVERHAUL — ŞEMA PENCERESİ #1 (2026-10-08)
+// Yalnız ekleme (expand). Göç: prisma/migrations/20261008000000_platform_overhaul_expand
+// Deploy sırası ve geri dönüş: docs/audit/2026-10-08/DEPLOY-RUNBOOK.md
+// ─────────────────────────────────────────────────────────────
+
+/// An Motoru (docs/superpowers/specs/2026-10-08-moment-engine-design.md).
+/// Müşterinin büyük anları (seviye, lig, rozet): her an tam bir kez oynar.
+/// dedupeKey: `level:<to>` · `badge:<badgeId>` · lig: `league:<seasonKey>:<toKey>`
+/// (sezonlu lig F4.4'te; sezon yokken seasonKey = "all" — ikinci sezonda kutlamalar ölmesin).
+/// Tablo canlıda OLUŞMADAN recordMoments yazan kod deploy EDİLMEZ (transaction iptali riski).
+model CustomerMoment {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String    // 'level_up' | 'league_up' | 'badge'
+  payload   Json
+  dedupeKey String
+  createdAt DateTime  @default(now())
+  seenAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, seenAt])
+  @@index([createdAt])
+}
+
+/// Kalıcı puan defteri (F1.3 · K2). Retention DIŞI. User.points/xp önbellek alanı olarak
+/// kalır; gece mutabakatı SUM(delta) ile sapmayı ölçer.
+/// Tek-kez garantisi: idempotencyKey (@unique). Önerilen biçim
+/// `<source>:<sourceId>[:<periodKey>]:<currency>` (ör. `quest:clx…:POINTS`) — roadmap'teki
+/// @@unique([source, sourceRef, currency]) ile eşdeğer, tek sütunda.
+/// userId nullable + SetNull: kullanıcı hard delete edilse de para arzı geçmişi korunur.
+model PointsLedger {
+  id             String   @id @default(cuid())
+  userId         String?
+  // POINTS (harcanabilir) | SEASON_XP (F4.4). XP hareketi aynı satırda xpDelta ile taşınır.
+  currency       String   @default("POINTS")
+  delta          Int      // + kazanç, - harcama
+  xpDelta        Int      @default(0)
+  balanceAfter   Int?
+  // feedback | review | consumption | dealer_passive | game | tournament | quest | badge |
+  // referral | streak | spin | surprise | squad | remedy | seasonal | shop | reward | gift |
+  // donation | admin_adjust | opening_balance | reversal | ...
+  source         String
+  sourceId       String?
+  idempotencyKey String?  @unique
+  // posted | pending (fraud/velocity bekletme) | void (shadow_ban) | reversed
+  status         String   @default("posted")
+  // Ters kayıt ise tersine çevrilen satırın id'si
+  reversesId     String?
+  // Tetikleyen bayi/admin/personel (kim) — FK yok: aktör silinse de kalır.
+  actorId        String?
+  reason         String?
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  user User? @relation("UserPointsLedger", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([source, createdAt])
+  @@index([status, createdAt])
+  @@index([actorId, createdAt])
+  @@index([sourceId])
+}
+
+/// Stripe webhook idempotency + sıra koruması (P0-29). id = Stripe event id (evt_…).
+/// İşleme öncesi `create` (unique çakışma → zaten işlendi, 200 dön). Sıra: aynı objectId
+/// (abonelik/müşteri) için daha yeni stripeCreatedAt'li işlenmiş olay varsa eski olay planı
+/// geri YAZMAZ.
+model StripeEvent {
+  id              String    @id
+  type            String
+  // İlgili Stripe nesnesi (sub_…, cus_…, cs_…)
+  objectId        String?
+  // Stripe'ın event.created zamanı (sıra koruması)
+  stripeCreatedAt DateTime?
+  // received | processed | ignored | failed
+  status          String    @default("received")
+  error           String?
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([objectId, stripeCreatedAt])
+  @@index([type, createdAt])
+}
+
+/// Personel daveti (P0-04 → F1.2). Var olan hesaba bayi şifre/rol YAZAMAZ; davet edilen kişi
+/// e-postadaki tek kullanımlık bağlantıyla kabul eder. Token yalnız hash olarak saklanır.
+/// ADMIN/DEALER hesapları davetle STAFF'a dönüştürülemez (uygulama kuralı).
+model StaffInvitation {
+  id             String    @id @default(cuid())
+  dealerId       String
+  email          String
+  // Personel yetki rolü (F1.2 izin matrisi): STAFF | cashier | chef | manager …
+  role           String    @default("STAFF")
+  jobTitle       String?
+  tokenHash      String    @unique
+  invitedById    String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  acceptedUserId String?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  dealer    User @relation("DealerStaffInvitations", fields: [dealerId], references: [id], onDelete: Cascade)
+  invitedBy User @relation("StaffInvitationsSent", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([dealerId, email])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+/// Kiracı kapsamlı müşteri istatistiği (P0-12 → F2.3). Bayi YALNIZ kendi işletmesindeki
+/// harcama/ziyaret/yorum sinyalini görür; platform geneli CLV bayiye gösterilmez.
+/// Para: Decimal(14,2) (Float değil — F5.5 yönü).
+model DealerCustomerStats {
+  id            String    @id @default(cuid())
+  dealerId      String
+  customerId    String
+  totalSpend    Decimal   @default(0) @db.Decimal(14, 2)
+  visitCount    Int       @default(0)
+  avgOrderValue Decimal   @default(0) @db.Decimal(14, 2)
+  reviewCount   Int       @default(0)
+  avgRating     Float?
+  firstVisitAt  DateTime?
+  lastVisitAt   DateTime?
+  // 0-1, yalnız bu bayideki sinyallerden
+  churnRisk     Float?
+  segmentKey    String?
+  calculatedAt  DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  dealer   User @relation("DealerCustomerStatsDealer", fields: [dealerId], references: [id], onDelete: Cascade)
+  customer User @relation("DealerCustomerStatsCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([dealerId, customerId])
+  @@index([customerId])
+  @@index([dealerId, segmentKey])
+  @@index([dealerId, churnRisk])
+  @@index([dealerId, lastVisitAt])
+}
+
+/// KVKK çerez/izleme rıza kaydı (P0-31). Her tercih değişikliği yeni satır (ekle-yalnız);
+/// geçerli rıza = kişi/anonId için en yeni satır. version = rıza metni sürümü.
+model ConsentRecord {
+  id        String   @id @default(cuid())
+  userId    String?
+  // Oturumsuz ziyaretçi için istemci üretimli rastgele kimlik (çerezde)
+  anonId    String?
+  version   String
+  analytics Boolean  @default(false)
+  replay    Boolean  @default(false)
+  marketing Boolean  @default(false)
+  // banner | settings | footer | api
+  source    String?
+  // Ham IP tutulmaz — sha256 kısa parmak izi
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([anonId, createdAt])
+  @@index([createdAt])
 }

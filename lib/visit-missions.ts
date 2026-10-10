@@ -11,7 +11,7 @@
  * türetilir; aynı işletmeye tekrar gitmek sayacı artırmaz).
  */
 import { prisma } from '@/lib/prisma';
-import { creditPointsAndXp } from '@/lib/points-wallet';
+import { rewardQuestOnce } from '@/lib/quests/reward';
 
 interface VisitRequirement {
   type: 'visit_category';
@@ -97,36 +97,29 @@ export async function advanceVisitMissions(userId: string, dealerId: string): Pr
 
     const reward = parseReward(quest.reward);
 
-    // ATOMİK tamamlama: ödülü yalnızca completedAt'i null'dan now'a İLK çeviren
-    // çağrı verir. Önceden findUnique-then-upsert idi → iki eşzamanlı ziyaret
-    // ikisi de completedAt=null görüp ödülü ÇİFT kredilendiriyordu (rank 12).
+    // ATOMİK + TEK SEFERLİK ödeme (P0-15): `rewardQuestOnce` satırı `completedAt: null` VE
+    // `rewardedAt: null` iken İLK çeviren çağrıda öder (eşzamanlı iki ziyaret çift kredi
+    // basamaz) ve ödülü mintPoints ile (defter + points_credited) aynı tx'te kredi eder.
+    // Bu görev otomatik ödendiği için claim ucu onu bir daha ÖDEMEZ (isAutoRewardQuest).
     const claimed = await prisma.$transaction(async (tx) => {
-      // Kayıt yoksa önce oluştur (henüz tamamlanmamış olarak), sonra guard'la claim et.
-      await tx.userQuest.upsert({
+      // Kayıt yoksa önce oluştur (henüz tamamlanmamış olarak), sonra guard'la öde.
+      const row = await tx.userQuest.upsert({
         where: { userId_questId: { userId, questId: quest.id } },
-        update: { progress },
+        update: {},
         create: { userId, questId: quest.id, progress },
+        select: { id: true },
       });
-      const claim = await tx.userQuest.updateMany({
-        where: { userId, questId: quest.id, completedAt: null },
-        data: { completedAt: new Date(), progress },
+      const paid = await rewardQuestOnce(tx, {
+        userQuestId: row.id,
+        userId,
+        questId: quest.id,
+        points: reward.points,
+        xp: reward.xp,
+        source: 'visit_mission',
+        requireIncomplete: true,
+        progress,
       });
-      if (claim.count === 0) return false;
-
-      if (reward.points > 0 || reward.xp > 0) {
-        await creditPointsAndXp(tx, { userId, points: reward.points, xp: reward.xp });
-        if (reward.points > 0) {
-          await tx.analyticsEvent.create({
-            data: {
-              userId,
-              event: 'points_credited',
-              category: 'quest',
-              data: { points: reward.points, questId: quest.id },
-            },
-          });
-        }
-      }
-      return true;
+      return paid.rewarded;
     });
 
     if (claimed) {

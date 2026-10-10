@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
 import { canCreateQRCode } from '@/lib/plan-limits';
+import { archivedListFilter } from '@/lib/data-safety/archive';
 import {
   PRIVATE_NO_STORE_HEADERS,
   clampPageParam,
@@ -26,10 +27,12 @@ export async function GET(request: NextRequest) {
     const pageSize = clampPageSizeParam(searchParams.get('pageSize'), 10, 100);
     const skip = paginationSkip(page, pageSize);
 
-    // Filter by dealer if not admin
-    const where = session.user.role === 'ADMIN' 
-      ? {} 
-      : { dealerId: session.user.id };
+    // Filter by dealer if not admin. Arşivlenmiş ("silinmiş") QR'lar varsayılan listede
+    // görünmez; `?archived=only` arşivi, `?archived=include` hepsini döndürür (P0-24).
+    const where = {
+      ...(session.user.role === 'ADMIN' ? {} : { dealerId: session.user.id }),
+      ...archivedListFilter(request),
+    };
 
     const [qrCodes, total] = await Promise.all([
       prisma.qRCode.findMany({

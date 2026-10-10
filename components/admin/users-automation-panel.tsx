@@ -19,6 +19,8 @@ type Rule = {
   isActive: boolean;
   requiresApproval: boolean;
   approvedAt?: string | null;
+  approvedBy?: { id: string; name: string | null; email: string } | null;
+  createdBy?: { id: string; name: string | null; email: string } | null;
   priority: number;
   condition: Record<string, unknown>;
   actions: Array<Record<string, unknown>>;
@@ -42,6 +44,15 @@ type RunMetrics = {
   avgAffectedUsersCompleted: number;
 };
 
+type DryRunResult = {
+  affectedCount: number;
+  totalPointsDelta?: number;
+  totalXp?: number;
+  withinCap?: boolean;
+  sample?: Array<{ id: string; name: string | null; email: string; points: number }>;
+  sampleUserIds?: string[];
+};
+
 const DEFAULT_RULE = {
   name: '',
   description: '',
@@ -61,10 +72,18 @@ export function UsersAutomationPanel() {
   const [saving, setSaving] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string>('');
   const [form, setForm] = useState(DEFAULT_RULE);
-  const [dryRunResult, setDryRunResult] = useState<{ affectedCount: number; sampleUserIds: string[] } | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  // P0-19: "Şimdi çalıştır" iki adımlı — sunucu önizlemesi (kişi sayısı + toplam puan) onaylanmadan
+  // iş kuyruğa girmez. Yalnız kayıtlı ve başka bir yöneticinin onayladığı kural çalışır.
+  const [executePreview, setExecutePreview] = useState<DryRunResult | null>(null);
+  const [executing, setExecuting] = useState(false);
   const [metrics, setMetrics] = useState<RunMetrics | null>(null);
 
   const selectedRule = useMemo(() => rules.find((r) => r.id === selectedRuleId) || null, [rules, selectedRuleId]);
+
+  useEffect(() => {
+    setExecutePreview(null);
+  }, [selectedRuleId]);
 
   const fetchData = async () => {
     try {
@@ -98,7 +117,7 @@ export function UsersAutomationPanel() {
     },
     actions:
       form.actionType === 'add_points'
-        ? [{ type: 'add_points', amount: form.amount, reason: 'Automation rule' }]
+        ? [{ type: 'add_points', amount: form.amount, reason: 'Otomasyon kuralı' }]
         : [{ type: 'add_xp', amount: form.amount }],
     isActive: form.isActive,
     priority: form.priority,
@@ -132,7 +151,7 @@ export function UsersAutomationPanel() {
   const runDry = async () => {
     try {
       const payload = selectedRule
-        ? { condition: selectedRule.condition, actions: selectedRule.actions }
+        ? { ruleId: selectedRule.id }
         : { condition: buildPayload().condition, actions: buildPayload().actions };
       const res = await fetch('/api/admin/users/automation/dry-run', {
         method: 'POST',
@@ -149,21 +168,58 @@ export function UsersAutomationPanel() {
   };
 
   const executeRule = async () => {
+    if (!selectedRuleId) {
+      toast.error('Çalıştırmak için kayıtlı ve onaylı bir kural seçin');
+      return;
+    }
     try {
-      const payload = selectedRuleId
-        ? { ruleId: selectedRuleId, processNow: true }
-        : { ...buildPayload(), processNow: true };
-      const res = await fetch('/api/admin/users/automation/execute', {
+      setExecuting(true);
+      const res = await fetch('/api/admin/users/automation/dry-run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ruleId: selectedRuleId }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Çalıştırılamadı');
+      if (!res.ok || !data?.success) throw new Error(data?.error || 'Önizleme alınamadı');
+      setExecutePreview(data.result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Önizleme alınamadı');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const confirmExecute = async () => {
+    if (!selectedRuleId || !executePreview) return;
+    try {
+      setExecuting(true);
+      const res = await fetch('/api/admin/users/automation/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `auto-${selectedRuleId}-${Date.now().toString(36)}`,
+        },
+        body: JSON.stringify({
+          ruleId: selectedRuleId,
+          processNow: true,
+          confirm: {
+            affectedCount: executePreview.affectedCount,
+            totalPointsDelta: executePreview.totalPointsDelta ?? 0,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        if (data?.code === 'CONFIRMATION_REQUIRED' && data?.preview) setExecutePreview(data.preview);
+        throw new Error(data?.error || 'Çalıştırılamadı');
+      }
       toast.success('Otomasyon çalıştırıldı');
+      setExecutePreview(null);
       fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Çalıştırılamadı');
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -224,14 +280,14 @@ export function UsersAutomationPanel() {
               <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CUSTOMER">Customer</SelectItem>
-                  <SelectItem value="DEALER">Dealer</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="CUSTOMER">Müşteri</SelectItem>
+                  <SelectItem value="DEALER">Bayi</SelectItem>
+                  <SelectItem value="ADMIN">Yönetici</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Min Points</Label>
+              <Label>En az puan</Label>
               <Input type="number" value={form.minPoints} onChange={(e) => setForm((p) => ({ ...p, minPoints: Number(e.target.value) || 0 }))} />
             </div>
             <div className="space-y-2">
@@ -252,30 +308,59 @@ export function UsersAutomationPanel() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
-              <Label>Priority</Label>
+              <Label>Öncelik</Label>
               <Input type="number" value={form.priority} onChange={(e) => setForm((p) => ({ ...p, priority: Number(e.target.value) || 100 }))} />
             </div>
             <div className="flex items-center justify-between border rounded-md p-3">
               <Label>Aktif</Label>
               <Switch checked={form.isActive} onCheckedChange={(v) => setForm((p) => ({ ...p, isActive: v }))} />
             </div>
-            <div className="flex items-center justify-between border rounded-md p-3">
-              <Label>Onay Gereksin</Label>
-              <Switch checked={form.requiresApproval} onCheckedChange={(v) => setForm((p) => ({ ...p, requiresApproval: v }))} />
+            <div className="flex items-center border rounded-md p-3 text-xs text-muted-foreground">
+              Her kural, çalıştırılmadan önce oluşturandan farklı bir yöneticinin onayını ister.
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button onClick={createRule} disabled={saving} className="gap-2"><Save className="h-4 w-4" />Kural Kaydet</Button>
             <Button variant="outline" onClick={runDry} className="gap-2"><FlaskConical className="h-4 w-4" />Dry-run</Button>
-            <Button variant="outline" onClick={executeRule} className="gap-2"><Play className="h-4 w-4" />Execute Now</Button>
+            <Button variant="outline" onClick={executeRule} disabled={executing || !selectedRuleId} className="gap-2"><Play className="h-4 w-4" />Şimdi çalıştır</Button>
             <Button variant="ghost" onClick={fetchData} className="gap-2"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Yenile</Button>
           </div>
 
           {dryRunResult && (
-            <div className="rounded-md border p-3 text-sm">
-              <p><strong>Etkilenecek kullanıcı:</strong> {dryRunResult.affectedCount}</p>
-              <p className="text-muted-foreground">Örnek kullanıcılar: {dryRunResult.sampleUserIds.slice(0, 6).join(', ') || '—'}</p>
+            <div className="rounded-md border p-3 text-sm space-y-1" aria-live="polite">
+              <p><strong>Etkilenecek kullanıcı:</strong> {dryRunResult.affectedCount.toLocaleString('tr-TR')}</p>
+              {typeof dryRunResult.totalPointsDelta === 'number' && (
+                <p><strong>Toplam puan etkisi:</strong> {dryRunResult.totalPointsDelta.toLocaleString('tr-TR')}</p>
+              )}
+              {dryRunResult.withinCap === false && (
+                <p className="text-destructive">Toplam etki çalıştırma tavanını aşıyor; hedefi daraltın.</p>
+              )}
+              <p className="text-muted-foreground">
+                Örnek: {(dryRunResult.sample ?? []).map((u) => u.name || u.email).join(', ') || '—'}
+              </p>
+            </div>
+          )}
+
+          {executePreview && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2" role="region" aria-live="polite" aria-label="Çalıştırma onayı">
+              <p className="font-semibold">Çalıştırmayı onaylayın</p>
+              <p>
+                {executePreview.affectedCount.toLocaleString('tr-TR')} kullanıcı · toplam{' '}
+                {(executePreview.totalPointsDelta ?? 0).toLocaleString('tr-TR')} puan
+                {executePreview.totalXp ? ` · ${executePreview.totalXp.toLocaleString('tr-TR')} XP` : ''}
+              </p>
+              <p className="text-muted-foreground">
+                Örnek: {(executePreview.sample ?? []).map((u) => u.name || u.email).join(', ') || '—'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={confirmExecute} disabled={executing || executePreview.withinCap === false}>
+                  Onayla ve çalıştır
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setExecutePreview(null)} disabled={executing}>
+                  Vazgeç
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -309,9 +394,11 @@ export function UsersAutomationPanel() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={rule.isActive ? 'default' : 'secondary'}>{rule.isActive ? 'Aktif' : 'Pasif'}</Badge>
-                  {rule.requiresApproval && <Badge variant={rule.approvedAt ? 'default' : 'outline'}>{rule.approvedAt ? 'Onayli' : 'Onay Bekliyor'}</Badge>}
+                  <Badge variant={rule.approvedAt ? 'default' : 'outline'}>
+                    {rule.approvedAt ? `Onaylı${rule.approvedBy?.name ? ` · ${rule.approvedBy.name}` : ''}` : 'Onay bekliyor'}
+                  </Badge>
                   <Badge variant="outline">Run: {rule._count?.runs || 0}</Badge>
-                  {rule.requiresApproval && !rule.approvedAt && (
+                  {!rule.approvedAt && (
                     <Button size="sm" variant="outline" onClick={() => approveRule(rule.id)}>
                       Onayla
                     </Button>
@@ -325,11 +412,11 @@ export function UsersAutomationPanel() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Run History</CardTitle>
+          <CardTitle>Çalıştırma Geçmişi</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Henüz run yok.</p>
+            <p className="text-sm text-muted-foreground">Henüz çalıştırma yok.</p>
           ) : (
             runs.map((run) => (
               <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-md p-3 text-sm">

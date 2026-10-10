@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { creditPointsAndXp } from '@/lib/points-wallet';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { startOfDayUTC, startOfWeekUTC } from '@/lib/timezone';
 
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
     if ('error' in auth) return auth.error;
@@ -147,110 +146,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Award badge to user
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['CUSTOMER', 'ADMIN']);
-    if ('error' in auth) return auth.error;
-    const { session } = auth;
-
-    const { badgeId } = await request.json();
-    const userId = session.user.id;
-
-    // Check if badge exists
-    const badge = await prisma.badge.findUnique({
-      where: { id: badgeId },
-    });
-
-    if (!badge) {
-      return NextResponse.json(
-        { success: false, error: 'Badge not found' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Sürpriz rozetler client-talebiyle verilemez — yalnız sunucu-award (surprise-badges)
-    // koşul sağlanınca otomatik verir (badgeId tahminiyle sürpriz atlanamasın).
-    if (badge.hiddenUntilEarned) {
-      return NextResponse.json(
-        { success: false, error: 'Bu rozet yalnızca kazanılarak açılır.' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Check if already earned
-    const existingBadge = await prisma.userBadge.findUnique({
-      where: {
-        userId_badgeId: {
-          userId,
-          badgeId,
-        },
-      },
-    });
-
-    if (existingBadge) {
-      return NextResponse.json(
-        { success: false, error: 'Badge already earned' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Award badge
-    const userBadge = await prisma.userBadge.create({
-      data: {
-        userId,
-        badgeId,
-      },
-      include: {
-        badge: true,
-      },
-    });
-
-    // Award points for badge — creditPointsAndXp ile (level'ı doğru günceller;
-    // önceden raw increment level sınırını geçen XP'de level atlatmıyordu).
-    const badgePoints = (badge.requirement as { value?: number })?.value || 100;
-    await creditPointsAndXp(prisma, {
-      userId,
-      points: badgePoints,
-      xp: Math.floor(badgePoints / 2),
-    });
-
-    // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle.
-    if (badgePoints > 0) {
-      await prisma.analyticsEvent.create({
-        data: { userId, event: 'points_credited', category: 'badge', data: { points: badgePoints, badgeId: badge.id } },
-      });
-    }
-
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        userId,
-        type: 'BADGE_EARNED',
-        title: 'Yeni Rozet Kazandınız!',
-        message: `"${badge.name}" rozetini kazandınız! +${badgePoints} puan`,
-        data: {
-          badgeId: badge.id,
-          badgeName: badge.name,
-          badgeIcon: badge.icon,
-          points: badgePoints,
-        },
-      },
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: userBadge,
-        pointsEarned: badgePoints,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    console.error('Error awarding badge:', error);
-    return NextResponse.json(
-      { success: false, error: 'Rozet verilemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  }
-}
+// POST (rozet verme) KALDIRILDI — P0-14. Gövdeden gelen `badgeId` ile koşulsuz rozet +
+// `requirement.value` kadar puan basıyordu (self-award). İstemci çağıranı yoktu. Rozet artık
+// yalnız sunucu servisinden verilir: `awardBadge` (lib/badges/award.ts). Bu uca gelen POST
+// Next.js tarafından 405 ile reddedilir.

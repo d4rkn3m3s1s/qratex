@@ -33,7 +33,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
-import { triggerConfetti, triggerSuccessBurst } from '@/lib/effects/confetti';
+import { triggerSuccessBurst } from '@/lib/effects/confetti';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -358,13 +358,10 @@ export default function CustomerDashboard() {
     }
   }, [dashboardData, user?.points, user?.level]);
 
-  // --- Level Up Detection ---
-  useEffect(() => {
-    if (stats.level > 1 && stats.level > (user?.level || 1)) {
-      triggerConfetti();
-      toast.success(`${tc('customerDashboard.levelUpTitle')} ${stats.level}! 🎉`);
-    }
-  }, [stats.level, user?.level]);
+  // Seviye atlama kutlaması burada YAPILMAZ: eski blok bayat oturum `user.level` ile
+  // `stats.level`'ı karşılaştırıp her yüklemede tekrar konfeti/toast atıyordu. Seviye
+  // anı artık sunucuda (CustomerMoment, `level:<to>` tek-kez) kaydedilir ve An Motoru
+  // (`/api/customer/moments`) tarafından tam bir kez oynatılır.
 
   // --- Handlers ---
   const toggleFavorite = async (dealerId: string) => {

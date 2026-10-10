@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { campaignUpdateSchema } from '../campaign-schema';
 
 // PATCH — update campaign
 
@@ -27,13 +28,17 @@ export async function PATCH(
             return NextResponse.json({ error: 'Gönderilmiş kampanya düzenlenemez' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        const body = await request.json();
-        const data = {
-            ...(typeof body.title === 'string' && { title: body.title }),
-            ...(typeof body.message === 'string' && { message: body.message }),
-            ...(typeof body.targetSegment === 'string' && { targetSegment: body.targetSegment }),
-            ...(typeof body.channel === 'string' && { channel: body.channel }),
-        };
+        // POST ile aynı kurallar: geçersiz segment ya da (sahte) e-posta kanalı kaydedilemez.
+        const parsed = campaignUpdateSchema.safeParse(await request.json().catch(() => null));
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: parsed.error.errors[0]?.message ?? 'Geçersiz istek' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
+        const data = Object.fromEntries(
+            Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+        ) as Partial<{ title: string; message: string; targetSegment: string; channel: string }>;
 
         if (Object.keys(data).length === 0) {
             const campaign = await prisma.campaign.findUnique({ where: { id } });

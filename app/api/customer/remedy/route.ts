@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { describeRemedyOffer } from '@/lib/remedy-offer-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,19 +49,25 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     {
-      offers: offers.map((o) => ({
-        id: o.id,
-        message: o.message,
-        status: o.status,
-        options: o.options,
-        selectedType: o.selectedType,
-        selectedValue: o.selectedValue,
-        acceptedAt: o.acceptedAt,
-        createdAt: o.createdAt,
-        dealer: o.dealer,
-        feedback: o.feedback,
-        consumptionReview: o.consumptionReview,
-      })),
+      offers: offers.map((o) => {
+        // Normalize seçenekler + seçimin okunur anlık görüntüsü ("%20 İndirim").
+        const { options, selection, selectionLabel } = describeRemedyOffer(o);
+        return {
+          id: o.id,
+          message: o.message,
+          status: o.status,
+          options,
+          selectedType: o.selectedType,
+          selectedValue: o.selectedValue,
+          selection,
+          selectionLabel,
+          acceptedAt: o.acceptedAt,
+          createdAt: o.createdAt,
+          dealer: o.dealer,
+          feedback: o.feedback,
+          consumptionReview: o.consumptionReview,
+        };
+      }),
     },
     { headers: PRIVATE_NO_STORE_HEADERS }
   );

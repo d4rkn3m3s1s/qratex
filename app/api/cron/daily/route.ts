@@ -1,75 +1,150 @@
 import { NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
-
-// Alt görevlerin GET handler'larını doğrudan çağırırız (her biri kendi CRON_SECRET'ını doğrular).
-import { GET as internDeadline } from '@/app/api/cron/intern-deadline/route';
-import { GET as teamTaskDue } from '@/app/api/cron/team-task-due/route';
-import { GET as inboxSync } from '@/app/api/cron/inbox-sync/route';
-import { GET as squadBattles } from '@/app/api/cron/squad-battles/route';
-import { GET as cleanupCounters } from '@/app/api/cron/cleanup-counters/route';
-import { GET as dbCleanup } from '@/app/api/cron/db-cleanup/route';
-import { GET as aiRetry } from '@/app/api/cron/ai-retry/route';
+import { requireCronAuth } from '@/lib/cron-auth';
+import { appendHistory, runCronJobs, summarizeRun, type CronState } from '@/lib/cron-runner';
+import { loadCronState, saveCronState } from '@/lib/cron-state';
+import { finishCronCheckIn, pingHeartbeat, startCronCheckIn } from '@/lib/cron-heartbeat';
+import { captureApiError } from '@/lib/capture-api-error';
+import { DAILY_JOBS } from './jobs';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// Fluid compute ile Hobby'de de 300 sn'ye izin var (iç iş uçları zaten 300 sn kullanıyor).
+export const maxDuration = 300;
 
-function validBearer(authHeader: string | null, secret: string): boolean {
-  const expected = `Bearer ${secret.trim()}`;
-  const got = (authHeader ?? '').trim();
-  if (got.length !== expected.length) return false;
-  try { return timingSafeEqual(Buffer.from(got), Buffer.from(expected)); } catch { return false; }
-}
+/** Global bütçe: maxDuration'dan pay bırak (durum kaydı + heartbeat + yanıt). */
+const GLOBAL_BUDGET_MS = 270_000;
 
 /**
- * GÜNLÜK CRON ORKESTRATÖRÜ — Vercel Hobby planı cron'ları günde 1 kez + sınırlı sayıda çalıştırır.
- * Bu yüzden tüm periyodik işler TEK cron'da toplandı: her biri sırayla, yetkili çağrılır.
- * Bir alt görevin patlaması diğerlerini durdurmaz (her biri ayrı try/catch). CRON_SECRET fail-closed.
+ * GÜNLÜK CRON ORKESTRATÖRÜ — "tek uyanış, bütçeli iş, görünür sonuç" (P0-40, denetim K2/Y1).
  *
- * NOT: Hobby'de daha sık gerekiyorsa (ör. inbox saatlik) harici cron (cron-job.org) ile ilgili
- * alt-endpoint'i ayrıca tetikleyebilirsin; endpoint'ler bağımsız çalışır.
+ * TEK UYANIŞ KURALI — Neon faturası sorgu sayısına değil, compute'un UYANIK KALDIĞI SÜREYE
+ * bakar. Ayrı ayrı tetiklenen her iş uyuyan compute'u ayrı ayrı uyandırır. Bu yüzden DB'ye
+ * dokunan BÜTÜN periyodik işler `./jobs.ts` kayıt defterindedir ve günde bir kez buradan,
+ * öncelik sırasıyla, global son tarih içinde çalışır. Inngest'te periyodik cron yoktur.
+ *
+ * Sözleşme:
+ *  - CRON_SECRET fail-closed (yoksa 503, yanlışsa 401).
+ *  - Herhangi bir alt iş başarısız / zaman aşımı → HTTP 500 (Vercel cron panelinde kırmızı).
+ *    Bütçe yüzünden atlanan iş varsa → HTTP 503. Yalnız hepsi başarılıysa 200.
+ *  - Her işin sonucu `Settings[cron_daily_state]`'e iş bitince yazılır; fonksiyon öldürülse bile
+ *    biten işlerin izi kalır ve "koşu kesildi" sonraki koşuda raporlanır.
+ *  - Sonda dead-man heartbeat (`CRON_HEARTBEAT_URL`, başarısızlıkta `/fail`) + Sentry check-in.
+ *
+ * Manuel kullanım (Bearer CRON_SECRET):
+ *  - `?only=team-task-due,intern-deadline` → yalnız bu işler (kadansa yine uyar).
+ *  - `?force=1` → kadans kontrolünü atla (dikkat: haftalık mailler yeniden gider).
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return NextResponse.json({ error: 'CRON_SECRET ayarlı değil; cron devre dışı.' }, { status: 503 });
-  if (!validBearer(req.headers.get('authorization'), secret)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
+
+  const startedAt = new Date();
+  const deadlineAt = startedAt.getTime() + GLOBAL_BUDGET_MS;
+  const url = new URL(req.url);
+  const force = url.searchParams.get('force') === '1';
+  const only = (url.searchParams.get('only') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const unknown = only.filter((n) => !DAILY_JOBS.some((j) => j.name === n));
+  if (unknown.length) {
+    return NextResponse.json({ error: `Bilinmeyen iş: ${unknown.join(', ')}` }, { status: 400 });
   }
 
-  // Alt görevlere yetkili sentetik istek (her biri kendi bearer kontrolünü geçsin).
-  const authedReq = () => new Request('https://internal/cron', { headers: { authorization: `Bearer ${secret}` } });
+  const checkInId = startCronCheckIn();
 
-  /*
-   * TEK UYANIŞ KURALI — Neon faturası sorgu sayısına değil, compute'un UYANIK
-   * KALDIĞI SÜREYE bakar. Dışarıdan ayrı ayrı tetiklenen her iş, uyuyan compute'u
-   * ayrı ayrı uyandırır ve her uyanış suspend süresi kadar (varsayılan 5 dk) boşa
-   * yanar. Dört ayrı tetikleyici günde 4 × 5 dk = 20 dk fazladan compute demek.
-   *
-   * Bu yüzden DB'ye dokunan bütün periyodik işler BURADA toplanır ve tek çağrıda
-   * sırayla çalışır. Yeni bir cron eklerken: ayrı bir dış tetikleyici kurma,
-   * bu listeye ekle.
-   */
-  const tasks: { name: string; fn: (r: Request) => Promise<Response> }[] = [
-    { name: 'intern-deadline', fn: internDeadline },
-    { name: 'team-task-due', fn: teamTaskDue },
-    { name: 'inbox-sync', fn: inboxSync },
-    { name: 'squad-battles', fn: squadBattles },
-    { name: 'cleanup-counters', fn: cleanupCounters },
-    { name: 'db-cleanup', fn: dbCleanup },
-    { name: 'ai-retry', fn: aiRetry },
-  ];
+  // ── Önceki durum + "kesilen koşu" tespiti ───────────────────────
+  let state: CronState = { jobs: {} };
+  let stateAvailable = true;
+  let previousRunInterrupted: string | null = null;
+  try {
+    state = await loadCronState();
+  } catch (e) {
+    stateAvailable = false;
+    console.error('[CRON daily] durum okunamadı:', e);
+  }
+  if (state.currentRun && !state.currentRun.finishedAt) {
+    previousRunInterrupted = state.currentRun.startedAt;
+    state = appendHistory(state, {
+      startedAt: state.currentRun.startedAt,
+      finishedAt: null,
+      overall: 'interrupted',
+      ms: null,
+      failed: [],
+      skippedBudget: [],
+      ran: 0,
+    });
+  }
+  state = { ...state, currentRun: { startedAt: startedAt.toISOString(), finishedAt: null } };
+  if (stateAvailable) {
+    await saveCronState(state).catch((e) => {
+      stateAvailable = false;
+      console.error('[CRON daily] başlangıç durumu yazılamadı:', e);
+    });
+  }
 
-  const results: Record<string, unknown> = {};
-  for (const t of tasks) {
+  // ── İşler ──────────────────────────────────────────────────────
+  const run = await runCronJobs({
+    jobs: DAILY_JOBS,
+    state,
+    deadlineAt,
+    force,
+    only,
+    onJobDone: async (result, s) => {
+      if (result.status === 'failed' || result.status === 'timeout') {
+        console.error(`[CRON daily] ${result.name} ${result.status}:`, result.error);
+        captureApiError(new Error(`cron ${result.name} ${result.status}: ${result.error ?? ''}`), {
+          route: '/api/cron/daily',
+          job: result.name,
+        });
+      }
+      if (stateAvailable) await saveCronState(s);
+    },
+  });
+
+  const finishedAt = new Date();
+  // Durum deposu yoksa işler çalışmış olsa bile kadans/telafi güvencesi yok → başarılı sayma.
+  const overall = !stateAvailable && run.overall === 'ok' ? 'partial' : run.overall;
+  const summary = summarizeRun(startedAt, finishedAt, overall, run.results);
+  const finalState = appendHistory(
+    { ...run.state, currentRun: { startedAt: startedAt.toISOString(), finishedAt: finishedAt.toISOString() } },
+    summary
+  );
+  let stateSaved = false;
+  if (stateAvailable) {
     try {
-      const res = await t.fn(authedReq());
-      let body: unknown;
-      try { body = await res.json(); } catch { body = { status: res.status }; }
-      results[t.name] = { status: res.status, ...(typeof body === 'object' && body ? body : { body }) };
+      await saveCronState(finalState);
+      stateSaved = true;
     } catch (e) {
-      results[t.name] = { error: e instanceof Error ? e.message : 'task failed' };
-      console.error(`[CRON daily] ${t.name} başarısız:`, e);
+      console.error('[CRON daily] son durum yazılamadı:', e);
     }
   }
 
-  return NextResponse.json({ ok: true, ranAt: new Date().toISOString(), results });
+  // Durum kaydedilemediyse yarın kadans/telafi bilgisi eksik olur → başarılı sayılmaz.
+  const ok = overall === 'ok' && stateSaved;
+  const reported = ok ? 'ok' : overall === 'ok' ? 'partial' : overall;
+  const heartbeat = await pingHeartbeat(ok, {
+    overall: reported,
+    failed: summary.failed,
+    skippedBudget: summary.skippedBudget,
+    ms: summary.ms,
+    previousRunInterrupted,
+  });
+  finishCronCheckIn(checkInId, ok, (summary.ms ?? 0) / 1000);
+
+  const status = ok ? 200 : overall === 'failed' ? 500 : 503;
+  return NextResponse.json(
+    {
+      ok,
+      overall: reported,
+      ranAt: startedAt.toISOString(),
+      tookMs: summary.ms,
+      failed: summary.failed,
+      skippedBudget: summary.skippedBudget,
+      previousRunInterrupted,
+      stateSaved,
+      heartbeat,
+      results: Object.fromEntries(run.results.map((r) => [r.name, r])),
+    },
+    { status }
+  );
 }

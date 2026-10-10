@@ -8,6 +8,7 @@ import { m as Motion } from 'framer-motion';
 import { Twitter, Linkedin, Instagram, Github, Mail, MapPin, Rss } from 'lucide-react';
 import { getRandomSlogan } from '@/lib/slogans';
 import { cn } from '@/lib/utils';
+import { ConsentPreferencesButton } from '@/components/analytics/consent-preferences-button';
 
 const footerLinks = {
   product: [
@@ -182,6 +183,10 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                {/* Rızayı geri çekmek vermek kadar kolay olmalı (P0-31). */}
+                <ConsentPreferencesButton surface="footer" className={cn('text-sm text-muted-foreground', linkFocus)} />
+              </li>
             </ul>
           </div>
         </div>

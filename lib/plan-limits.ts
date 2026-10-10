@@ -33,7 +33,7 @@ export async function getDealerPlanLimits(dealerId: string): Promise<PlanLimits>
     select: {
       role: true,
       pricingPlan: {
-        select: { name: true, maxQRCodes: true, maxBranches: true, isActive: true },
+        select: { name: true, maxQRCodes: true, maxBranches: true },
       },
     },
   });
@@ -43,8 +43,12 @@ export async function getDealerPlanLimits(dealerId: string): Promise<PlanLimits>
     return { maxQRCodes: null, maxBranches: null, planName: 'Admin' };
   }
 
+  // Plan ataması kaynak-doğrudur: planın pasifleştirilmesi ya da arşivlenmesi
+  // (isActive=false / archivedAt) yalnız YENİ SATIŞI kapatır, mevcut aboneyi ücretsiz
+  // kademeye DÜŞÜRMEZ (P0-26). Önceden `!plan.isActive` → ücretsiz kademe idi: "Aktif"
+  // anahtarını kapatmak bütün aboneleri sessizce 3 QR'a indiriyordu.
   const plan = user?.pricingPlan;
-  if (!plan || !plan.isActive) {
+  if (!plan) {
     return defaultFreeLimits();
   }
   return {
@@ -72,7 +76,13 @@ export async function canCreateQRCode(dealerId: string): Promise<QuotaCheck> {
   if (limits.maxQRCodes == null) {
     return { allowed: true, used: 0, limit: null, planName: limits.planName };
   }
-  const used = await prisma.qRCode.count({ where: { dealerId } });
+  // Kota CANLI kodları sayar (iptal edilmemiş + arşivlenmemiş) — lib/qr-quota.ts ile aynı
+  // tanım (`liveQrWhere`; döngüsel import olmasın diye burada açık yazıldı).
+  // P0-24 "arşivle → yeni oluştur → arşivden geri al" döngüsü limiti AŞAMAZ: arşivden geri
+  // alma ve `revoke:false` aynı canlı kotadan bayi kilidi altında geçer (QrQuotaExceededError).
+  // Tüm satırları saymak ise rotate edilen (iptal) ve arşivlenen kodları kalıcı kota
+  // tüketicisine çevirirdi: rotate kota-nötr olmaktan çıkar, "sil" yer açmazdı.
+  const used = await prisma.qRCode.count({ where: { dealerId, revokedAt: null, archivedAt: null } });
   const allowed = used < limits.maxQRCodes;
   return {
     allowed,

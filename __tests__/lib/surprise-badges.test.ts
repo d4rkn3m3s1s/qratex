@@ -40,6 +40,20 @@ jest.mock('@/lib/points-wallet', () => ({
   creditPointsAndXp: jest.fn().mockResolvedValue({ points: 0, xp: 0, leveledUp: false, newLevel: null }),
 }));
 
+// Rozet verme tek servisten (lib/badges/award.ts — kendi testi badge-award.test.ts). Burada
+// atama MANTIĞI test edilir; servis, aldığı istemcinin unique guard'ını (createMany) taklit eder.
+const mockAwardBadge = jest.fn(
+  async (db: typeof mockPrisma, input: { userId: string; badgeId: string; source: string }) => {
+    const r = await db.userBadge.createMany({ data: [{ userId: input.userId, badgeId: input.badgeId }], skipDuplicates: true });
+    return (r as { count: number }).count > 0
+      ? { awarded: true, points: 0, badge: { id: input.badgeId, name: '' }, userBadgeId: 'ub' }
+      : { awarded: false, reason: 'ALREADY_OWNED', badge: null };
+  }
+);
+jest.mock('@/lib/badges/award', () => ({
+  awardBadge: (...a: unknown[]) => (mockAwardBadge as unknown as (...x: unknown[]) => unknown)(...a),
+}));
+
 import { awardEligibleSurpriseBadges, type UserBadgeCounters } from '@/lib/surprise-badges';
 
 const counters: UserBadgeCounters = {
@@ -68,6 +82,9 @@ describe('awardEligibleSurpriseBadges', () => {
     expect(awarded).toEqual(['b1']);
     expect(mockCreateMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
     expect(mockNotifCreate).toHaveBeenCalled();
+    // P0-14: tek servis, kaynak etiketiyle; adaylar arşivlenmiş rozetleri içermez.
+    expect(mockAwardBadge).toHaveBeenCalledWith(mockPrisma, expect.objectContaining({ badgeId: 'b1', source: 'surprise' }));
+    expect(mockBadgeFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isActive: true, archivedAt: null } }));
   });
 
   it('koşulu SAĞLANMAYAN rozeti VERMEZ', async () => {

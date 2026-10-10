@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { creditBadgeRewardInTx } from '@/lib/badge-reward-points';
+import { awardBadge } from '@/lib/badges/award';
 import { EMOJI_BADGE_TEXTS } from '@/lib/emoji-badge-texts';
 
 /**
@@ -18,9 +18,8 @@ import { EMOJI_BADGE_TEXTS } from '@/lib/emoji-badge-texts';
  *  Bunlar için önce ilgili modeller/olaylar eklenmeli.
  *
  * ── EKONOMİ İNVARYANTLARI ([[points-economy-invariants]]) ─────────────
- *  • createMany + skipDuplicates → aynı rozet iki kez verilemez (unique guard).
- *  • Ödül puanı YALNIZ count>0 iken, AYNI tx'te kredilenir (kısmi durum yok).
- *  • Her kredi points_credited analytics olayı yazar (anti-fraud görünürlüğü).
+ *  • Rozet + ödül tek servisten: `awardBadge` (lib/badges/award.ts) — unique guard,
+ *    aktif/arşiv kontrolü, `mintPoints` (defter + points_credited) ve An Motoru anı aynı tx'te.
  *  • Fonksiyon idempotenttir: tekrar çalıştırmak puan çoğaltmaz.
  */
 
@@ -233,45 +232,25 @@ export async function awardActivityBadges(userId: string): Promise<ActivityBadge
     const uniqueFresh = [...new Set(fresh)];
     if (uniqueFresh.length === 0) return awarded;
 
-    // Katalog kontrolü TEK sorguda (rozet başına findUnique = gereksiz N+1 idi).
-    const existing = new Map(
-      (await prisma.badge.findMany({
-        where: { id: { in: uniqueFresh } },
-        select: { id: true, name: true },
-      })).map((b) => [b.id, b])
-    );
-
     for (const badgeId of uniqueFresh) {
-      const exists = existing.get(badgeId); // katalogda yoksa FK hatası verirdi
-      if (!exists) continue;
-
-      // `created`: rozet BU çağrıda mı verildi (yarışta kaybettiysek false).
-      // Puan ayrı tutulur — ödülü 0 olan rozet de "verildi" sayılmalı.
-      const outcome = await prisma.$transaction(async (tx) => {
-        const res = await tx.userBadge.createMany({
-          data: [{ userId, badgeId }],
-          skipDuplicates: true, // unique guard → çift veremez
-        });
-        if (res.count === 0) return { created: false, points: 0 }; // yarış → puan BASILMAZ
-        const p = await creditBadgeRewardInTx(tx as never, { userId, badgeId, justCreated: true });
-        return { created: true, points: p };
-      }).catch((e: unknown) => {
+      // Katalogda yoksa / pasif ya da arşivliyse servis reddeder (FK hatası yok).
+      // Yarışta kaybedersek ALREADY_OWNED döner → puan BASILMAZ.
+      const outcome = await awardBadge(prisma, { userId, badgeId, source: 'activity' }).catch((e: unknown) => {
         // Sessiz yutma yok: tx rollback olduğu için durum tutarlı (rozet de verilmedi),
         // ama sebebi görünür olmalı — aksi halde rozet hiç gelmez ve kimse fark etmez.
         console.error('[ACTIVITY_BADGE] award tx failed:', badgeId, e);
-        return { created: false, points: 0 };
+        return null;
       });
 
-      if (outcome.created) {
-        const points = outcome.points;
-        awarded.push({ badgeId, points });
+      if (outcome?.awarded) {
+        awarded.push({ badgeId, points: outcome.points });
         const text = EMOJI_BADGE_TEXTS[badgeId];
         await prisma.notification.create({
           data: {
             userId,
             type: 'badge',
             title: '🏅 Yeni rozet kazandın!',
-            message: text?.quote ?? `Yeni bir rozet açıldı: ${exists.name}`,
+            message: text?.quote ?? `Yeni bir rozet açıldı: ${outcome.badge.name}`,
             data: { kind: 'activity-badge', badgeId, href: '/customer/badges' } as object,
           },
         }).catch(() => {});

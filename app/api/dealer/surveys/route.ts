@@ -2,24 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { z } from 'zod';
+import {
+    countUnanswerableQuestions,
+    createSurveyInputSchema,
+    describeSurveyIssues,
+    SURVEY_LIMITS,
+    toQuestionCreateData,
+} from '@/lib/survey-schema';
 
 
 export const dynamic = 'force-dynamic';
-
-const questionSchema = z.object({
-    type: z.enum(['multiple_choice', 'single_choice', 'open_text', 'rating']),
-    text: z.string().min(1).max(500),
-    options: z.array(z.string().min(1).max(200)).optional(),
-    required: z.boolean().default(true),
-    order: z.number().int().min(0).default(0),
-});
-
-const createSurveySchema = z.object({
-    title: z.string().min(1).max(200),
-    description: z.string().max(2000).optional(),
-    questions: z.array(questionSchema).min(1).max(20),
-});
 
 // GET — list dealer's surveys
 export async function GET() {
@@ -27,14 +19,22 @@ export async function GET() {
         const auth = await requireAuth(['DEALER', 'ADMIN']);
         if ('error' in auth) return auth.error;
 
-        const surveys = await prisma.survey.findMany({
+        const rows = await prisma.survey.findMany({
             where: { dealerId: auth.session.user.id },
             include: {
                 _count: { select: { responses: true, questions: true } },
+                questions: { select: { type: true, options: true } },
             },
             orderBy: { createdAt: 'desc' },
             take: 200,
         });
+
+        // Eski şemayla kaydedilmiş, müşteriye gösterilemeyen (seçeneksiz seçim) soru sayısı:
+        // bayi listesinde uyarı olarak görünür. Soru gövdeleri yanıta konmaz.
+        const surveys = rows.map(({ questions, ...s }) => ({
+            ...s,
+            unanswerableQuestions: countUnanswerableQuestions(questions),
+        }));
 
         return NextResponse.json({ success: true, surveys }, { headers: PRIVATE_NO_STORE_HEADERS });
     } catch (error) {
@@ -51,15 +51,24 @@ export async function POST(request: NextRequest) {
         const auth = await requireAuth(['DEALER', 'ADMIN']);
         if ('error' in auth) return auth.error;
 
-        const body = await request.json();
-        const parsed = createSurveySchema.safeParse(body);
+        const body = await request.json().catch(() => null);
+        // Ortak sözleşme (lib/survey-schema.ts): seçim sorularında 2-20 dolu ve farklı seçenek
+        // zorunlu — boş seçenekli, yanıtlanamaz anket artık yayına giremez.
+        const parsed = createSurveyInputSchema.safeParse(body);
         if (!parsed.success) {
-            return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+            const { message, issues } = describeSurveyIssues(parsed.error);
+            return NextResponse.json(
+                { success: false, error: message, code: 'VALIDATION', issues },
+                { status: 400 , headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const count = await prisma.survey.count({ where: { dealerId: auth.session.user.id } });
-        if (count >= 50) {
-            return NextResponse.json({ error: 'En fazla 50 anket oluşturabilirsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        if (count >= SURVEY_LIMITS.surveysPerDealer) {
+            return NextResponse.json(
+                { success: false, error: `En fazla ${SURVEY_LIMITS.surveysPerDealer} anket oluşturabilirsiniz`, code: 'SURVEY_QUOTA', limit: SURVEY_LIMITS.surveysPerDealer },
+                { status: 400 , headers: PRIVATE_NO_STORE_HEADERS }
+            );
         }
 
         const survey = await prisma.survey.create({
@@ -68,13 +77,7 @@ export async function POST(request: NextRequest) {
                 title: parsed.data.title,
                 description: parsed.data.description,
                 questions: {
-                    create: parsed.data.questions.map((q, i) => ({
-                        type: q.type,
-                        text: q.text,
-                        options: q.options ?? undefined,
-                        required: q.required,
-                        order: q.order || i,
-                    })),
+                    create: toQuestionCreateData(parsed.data.questions),
                 },
             },
             include: { questions: true },

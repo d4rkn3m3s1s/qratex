@@ -5,10 +5,15 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { nanoid } from 'nanoid';
-import { creditPointsAndXp } from '@/lib/points-wallet';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
-import { getInnovationPlatformConfig } from '@/lib/innovation-config';
+import {
+  createPendingReferral,
+  qualifyReferral,
+  REFERRAL_REJECT_MESSAGES,
+  REFERRAL_REJECT_STATUS,
+} from '@/lib/referral';
+import { mintPoints } from '@/lib/economy';
 import {
   REFERRAL_MILESTONES,
   parseClaimedReferralMilestones,
@@ -27,7 +32,7 @@ export async function GET(req: NextRequest) {
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Get or create referral code
@@ -36,8 +41,11 @@ export async function GET(req: NextRequest) {
     });
 
     if (!referralCode) {
-      referralCode = await prisma.referralCode.create({
-        data: {
+      // upsert: aynı kullanıcının eşzamanlı iki ilk açılışı P2002 ile 500 vermesin.
+      referralCode = await prisma.referralCode.upsert({
+        where: { userId: session.user.id },
+        update: {},
+        create: {
           userId: session.user.id,
           code: nanoid(8).toUpperCase(),
         },
@@ -75,6 +83,8 @@ export async function GET(req: NextRequest) {
     const stats = {
       totalReferrals: await prisma.referral.count({ where: { referrerId: session.user.id } }),
       completedReferrals: completedCount,
+      // Bekleyen: davet edilen henüz e-postasını doğrulayıp ilk QR deneyimini tamamlamadı.
+      pendingReferrals: await prisma.referral.count({ where: { referrerId: session.user.id, status: 'PENDING' } }),
       totalPointsEarned: referrals.reduce((sum, r) => sum + r.pointsEarned, 0),
     };
 
@@ -108,177 +118,71 @@ export async function GET(req: NextRequest) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
     console.error('Error fetching referral info:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ error: 'Davet bilgileri yüklenemedi' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
-const applyReferralSchema = z.object({ code: z.string().min(1).max(32).transform((s) => s.trim().toUpperCase()) });
+const applyReferralSchema = z.object({ code: z.string().min(1).max(32) });
 
-// POST - Apply referral code
+/**
+ * POST - Davet kodu uygula (P0-16). Kod yalnız BEKLEYEN davet olarak kaydedilir; puan,
+ * e-posta doğrulanıp ilk QR olayı gerçekleşince `qualifyReferral` ile tek seferlik verilir.
+ * Kullanıcı bu koşulları zaten sağlıyorsa nitelendirme hemen denenir.
+ * Modül kapısı, limitler, kendi kodu ve karşılıklı davet (A↔B) reddi servis içinde.
+ */
 export async function POST(req: NextRequest) {
   try {
     const gate = await assertModuleEnabled('referrals');
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const raw = await req.json().catch(() => ({}));
     const parsed = applyReferralSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Referral code is required' },
+        { error: REFERRAL_REJECT_MESSAGES.INVALID_CODE, code: 'INVALID_CODE' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-    const code = parsed.data.code;
 
-    // Check if user already has a referral
-    const existingReferral = await prisma.referral.findUnique({
-      where: { referredId: session.user.id },
-    });
-
-    if (existingReferral) {
-      return NextResponse.json({ error: 'You have already used a referral code' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    // Find the referral code
-    const referralCode = await prisma.referralCode.findUnique({
-      where: { code },
-      select: { id: true, userId: true, code: true, isActive: true, maxUsage: true, usageCount: true },
-    });
-
-    if (!referralCode) {
-      return NextResponse.json({ error: 'Invalid referral code' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (!referralCode.isActive) {
-      return NextResponse.json({ error: 'This referral code is no longer active' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (referralCode.userId === session.user.id) {
-      return NextResponse.json({ error: 'You cannot use your own referral code' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const innov = await getInnovationPlatformConfig();
-    const lifetimeAsReferrer = await prisma.referral.count({
-      where: { referrerId: referralCode.userId },
-    });
-    if (lifetimeAsReferrer >= innov.referral.maxInvitesPerReferrerLifetime) {
+    const userId = session.user.id;
+    const created = await createPendingReferral({ referredUserId: userId, code: parsed.data.code });
+    if (!created.ok) {
       return NextResponse.json(
-        { error: 'Bu davet zinciri platform davet limitine ulaştı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        { error: created.message, code: created.code },
+        { status: REFERRAL_REJECT_STATUS[created.code], headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-    const monthlyWithCode = await prisma.referral.count({
-      where: {
-        referralCode: referralCode.code,
-        createdAt: { gte: monthStart },
-      },
+    // Koşullar zaten sağlanıyorsa (doğrulanmış e-posta + daha önce QR geri bildirimi) hemen öde.
+    const qualified = await qualifyReferral(userId).catch((e: unknown) => {
+      console.error('[REFERRAL_QUALIFY]', userId, e);
+      return null;
     });
-    if (monthlyWithCode >= innov.referral.maxRedemptionsPerReferralCodePerMonth) {
-      return NextResponse.json(
-        { error: 'Bu referans kodu için aylık kullanım limiti doldu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
 
-    // Check max usage
-    if (referralCode.maxUsage && referralCode.usageCount >= referralCode.maxUsage) {
-      return NextResponse.json({ error: 'This referral code has reached its usage limit' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const pointsMatrix = await getPointsMatrix();
-    const { referredPoints: REFERRAL_BONUS, referrerPoints: REFERRER_BONUS } =
-      getReferralRewards(pointsMatrix);
-
-    // Create referral and update points in transaction.
-    // `Referral.referredId` UNIQUE olduğundan, iki eşzamanlı istekten yalnızca
-    // biri create'i geçer; diğeri unique violation (P2002) ile tüm tx'i
-    // rollback eder — krediler create'ten SONRA geldiği için çift bonus oluşmaz.
-    try {
-      await prisma.$transaction(async (tx: any) => {
-      // Create referral
-      await tx.referral.create({
-        data: {
-          referrerId: referralCode.userId,
-          referredId: session.user.id,
-          referralCode: referralCode.code,
-          status: 'COMPLETED',
-          bonusGiven: REFERRAL_BONUS,
-          pointsEarned: REFERRER_BONUS,
-          completedAt: new Date(),
-        },
-      });
-
-      // Update referred user's points
-      await creditPointsAndXp(tx, {
-        userId: session.user.id,
-        points: REFERRAL_BONUS,
-      });
-
-      // Update referrer's points
-      await creditPointsAndXp(tx, {
-        userId: referralCode.userId,
-        points: REFERRER_BONUS,
-      });
-
-      // Anti-fraud görünürlüğü: iki referral kredisini de points_credited yaz (aynı tx).
-      await tx.analyticsEvent.createMany({
-        data: [
-          { userId: session.user.id, event: 'points_credited', category: 'referral', data: { points: REFERRAL_BONUS, role: 'referred' } },
-          { userId: referralCode.userId, event: 'points_credited', category: 'referral', data: { points: REFERRER_BONUS, role: 'referrer' } },
-        ],
-      });
-
-      // Update usage count
-      await tx.referralCode.update({
-        where: { id: referralCode.id },
-        data: { usageCount: { increment: 1 } },
-      });
-
-      // Create notifications
-      await tx.notification.createMany({
-        data: [
-          {
-            userId: session.user.id,
-            type: 'REFERRAL_BONUS',
-            title: 'Hoş Geldin Bonusu!',
-            message: `Referans kodu kullanarak ${REFERRAL_BONUS} puan kazandın!`,
-          },
-          {
-            userId: referralCode.userId,
-            type: 'REFERRAL_COMPLETE',
-            title: 'Referans Tamamlandı!',
-            message: `Birisi senin referans kodunu kullandı. ${REFERRER_BONUS} puan kazandın!`,
-          },
-        ],
-      });
-      });
-    } catch (txError) {
-      if (
-        txError instanceof Prisma.PrismaClientKnownRequestError &&
-        txError.code === 'P2002'
-      ) {
-        return NextResponse.json(
-          { error: 'You have already used a referral code' },
-          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-      throw txError;
+    if (qualified?.qualified) {
+      return NextResponse.json({
+        success: true,
+        status: 'COMPLETED',
+        message: `Tebrikler! ${qualified.referredPoints} puan kazandın!`,
+        pointsEarned: qualified.referredPoints,
+      }, { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     return NextResponse.json({
       success: true,
-      message: `Tebrikler! ${REFERRAL_BONUS} puan kazandın!`,
-      pointsEarned: REFERRAL_BONUS,
+      status: 'PENDING',
+      message: 'Davet kodun kaydedildi. E-postanı doğrulayıp ilk QR deneyimini tamamladığında ödülün hesabına işlenecek.',
+      pointsEarned: 0,
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
     console.error('Error applying referral code:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ error: 'Davet kodu uygulanamadı' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
@@ -294,7 +198,7 @@ export async function PUT() {
     if (gate) return gate;
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
     }
     const userId = session.user.id;
 
@@ -325,14 +229,17 @@ export async function PUT() {
 
       let totalPoints = 0;
       for (const m of claimable) {
-        await creditPointsAndXp(tx, { userId, points: m.points });
-        await tx.analyticsEvent.create({
-          data: {
-            userId, event: 'points_credited', category: 'referral_milestone',
-            data: { points: m.points, milestone: m.count },
-          },
+        // mintPoints: kilit + defter + points_credited{referral_milestone} aynı tx'te; kademe
+        // anahtarı ikinci savunma hattı (JSON guard'ının yanında) — aynı kademe iki kez ödenmez.
+        const minted = await mintPoints(tx, {
+          userId,
+          points: m.points,
+          source: 'referral_milestone',
+          sourceId: String(m.count),
+          idempotencyKey: `referral_milestone:${userId}:${m.count}`,
+          meta: { milestone: m.count },
         });
-        totalPoints += m.points;
+        totalPoints += minted.duplicate ? 0 : minted.credited;
       }
       await tx.notification.create({
         data: {
@@ -358,6 +265,6 @@ export async function PUT() {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
     console.error('Error claiming referral milestones:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ error: 'Kademe ödülü alınamadı' }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

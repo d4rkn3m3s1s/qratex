@@ -30,6 +30,9 @@ import {
   Download,
   ChevronRight,
   Sparkles,
+  BadgeCheck,
+  HelpCircle,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,12 +86,22 @@ import { formatDate, getInitials } from '@/lib/utils';
 import { exportToCSV } from '@/lib/export-utils';
 import { UsersAutomationPanel } from '@/components/admin/users-automation-panel';
 import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { TONE_CHIP, TONE_TEXT } from '@/components/states/tone';
+import {
+  ASSIGNABLE_ROLES,
+  resolveRoleKey,
+  roleLabel,
+  roleTone,
+  type KnownRole,
+  type RoleKey,
+} from './role-meta';
 
 interface UserType {
   id: string;
   name: string | null;
   email: string;
-  role: 'ADMIN' | 'DEALER' | 'CUSTOMER';
+  /** Prisma `Role` (ADMIN | DEALER | CUSTOMER | STAFF); API ileride yeni rol dönebilir. */
+  role: KnownRole | (string & {});
   image: string | null;
   points: number;
   level: number;
@@ -141,23 +154,23 @@ interface UserBadgeType {
   badge: BadgeType;
 }
 
-const roleColors = {
-  ADMIN: 'bg-red-500/10 text-red-500 border-red-500/20',
-  DEALER: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  CUSTOMER: 'bg-green-500/10 text-green-500 border-green-500/20',
-};
-
-const roleIcons = {
+// Rol görünümü: tüm Prisma rolleri (STAFF dahil) + bilinmeyen rol için güvenli
+// geri dönüş. Rol anahtarıyla doğrudan sözlük indekslemek YASAK (P0-39: STAFF sayfayı çökertiyordu).
+const ROLE_ICONS: Record<RoleKey, LucideIcon> = {
   ADMIN: Shield,
   DEALER: Store,
   CUSTOMER: User,
+  STAFF: BadgeCheck,
+  UNKNOWN: HelpCircle,
 };
 
-const roleLabels = {
-  ADMIN: 'Admin',
-  DEALER: 'Bayi',
-  CUSTOMER: 'Müşteri',
-};
+function roleIconFor(role: unknown): LucideIcon {
+  return ROLE_ICONS[resolveRoleKey(role)];
+}
+
+function roleBadgeClass(role: unknown): string {
+  return `border-transparent ${TONE_CHIP[roleTone(role)]}`;
+}
 
 const rarityColors = {
   common: 'bg-gray-500/10 text-gray-500',
@@ -206,6 +219,10 @@ export default function AdminUsersPage() {
   // Action form states
   const [pointsAmount, setPointsAmount] = useState<number>(100);
   const [pointsReason, setPointsReason] = useState('');
+  // P0-19: 10.000 üstü düzeltme ikinci yöneticinin onay belirtecini ister; requestId
+  // aynı diyalogdan çift gönderimin ikinci düzeltme üretmesini engeller.
+  const [pointsApprovalToken, setPointsApprovalToken] = useState('');
+  const [pointsRequestId, setPointsRequestId] = useState('');
   const [xpAmount, setXpAmount] = useState<number>(100);
   const [newLevel, setNewLevel] = useState<number>(1);
   const [selectedBadgeId, setSelectedBadgeId] = useState<string>('');
@@ -315,7 +332,7 @@ export default function AdminUsersPage() {
     const rows = users.map((u) => ({
       name: u.name ?? '',
       email: u.email,
-      role: roleLabels[u.role],
+      role: roleLabel(u.role),
       points: u.points,
       level: u.level,
       businessName: u.businessName ?? '',
@@ -524,10 +541,24 @@ export default function AdminUsersPage() {
 
       switch (actionType) {
         case 'add_points':
-          body = { ...body, action: 'add_points', amount: pointsAmount, reason: pointsReason };
+          body = {
+            ...body,
+            action: 'add_points',
+            amount: Math.abs(pointsAmount),
+            reason: pointsReason.trim(),
+            approvalToken: pointsApprovalToken.trim() || null,
+            requestId: pointsRequestId || null,
+          };
           break;
         case 'remove_points':
-          body = { ...body, action: 'add_points', amount: -Math.abs(pointsAmount), reason: pointsReason };
+          body = {
+            ...body,
+            action: 'add_points',
+            amount: -Math.abs(pointsAmount),
+            reason: pointsReason.trim(),
+            approvalToken: pointsApprovalToken.trim() || null,
+            requestId: pointsRequestId || null,
+          };
           break;
         case 'add_xp':
           body = { ...body, action: 'add_xp', amount: xpAmount };
@@ -668,6 +699,12 @@ export default function AdminUsersPage() {
   const resetActionForm = () => {
     setPointsAmount(100);
     setPointsReason('');
+    setPointsApprovalToken('');
+    setPointsRequestId(
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replace(/-/g, '')
+        : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+    );
     setXpAmount(100);
     setSelectedBadgeId('');
     setSelectedRewardId('');
@@ -903,7 +940,7 @@ export default function AdminUsersPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((user, index) => {
-                    const RoleIcon = roleIcons[user.role];
+                    const RoleIcon = roleIconFor(user.role);
                     return (
                       <Motion.tr
                         key={user.id}
@@ -935,9 +972,9 @@ export default function AdminUsersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={roleColors[user.role]}>
-                            <RoleIcon className="h-3 w-3 mr-1" />
-                            {roleLabels[user.role]}
+                          <Badge className={roleBadgeClass(user.role)}>
+                            <RoleIcon className="h-3 w-3 mr-1" aria-hidden />
+                            {roleLabel(user.role)}
                           </Badge>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
@@ -991,14 +1028,14 @@ export default function AdminUsersPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuLabel className="text-xs text-muted-foreground">Rol Değiştir</DropdownMenuLabel>
-                              {(['ADMIN', 'DEALER', 'CUSTOMER'] as const).map((role) => (
+                              {ASSIGNABLE_ROLES.map((role) => (
                                 <DropdownMenuItem
                                   key={role}
                                   onClick={() => handleRoleChange(user.id, role)}
                                   disabled={user.role === role}
                                 >
-                                  {React.createElement(roleIcons[role], { className: `h-4 w-4 mr-2 ${role === 'ADMIN' ? 'text-red-500' : role === 'DEALER' ? 'text-blue-500' : 'text-green-500'}` })}
-                                  {roleLabels[role]}
+                                  {React.createElement(roleIconFor(role), { className: `h-4 w-4 mr-2 ${TONE_TEXT[roleTone(role)]}`, 'aria-hidden': true })}
+                                  {roleLabel(role)}
                                 </DropdownMenuItem>
                               ))}
                               <DropdownMenuSeparator />
@@ -1066,9 +1103,9 @@ export default function AdminUsersPage() {
                   <div className="min-w-0 flex-1">
                     <DialogTitle className="text-lg sm:text-xl break-words">{selectedUser.name || 'İsimsiz'}</DialogTitle>
                     <DialogDescription className="break-all sm:break-words">{selectedUser.email}</DialogDescription>
-                    <Badge className={`mt-2 ${roleColors[selectedUser.role]}`}>
-                      {React.createElement(roleIcons[selectedUser.role], { className: 'h-3 w-3 mr-1' })}
-                      {roleLabels[selectedUser.role]}
+                    <Badge className={`mt-2 ${roleBadgeClass(selectedUser.role)}`}>
+                      {React.createElement(roleIconFor(selectedUser.role), { className: 'h-3 w-3 mr-1', 'aria-hidden': true })}
+                      {roleLabel(selectedUser.role)}
                     </Badge>
                   </div>
                 </div>
@@ -1375,22 +1412,52 @@ export default function AdminUsersPage() {
             {(actionType === 'add_points' || actionType === 'remove_points') && (
               <>
                 <div className="space-y-2">
-                  <Label>Miktar</Label>
+                  <Label htmlFor="points-adjust-amount">Miktar</Label>
                   <Input
+                    id="points-adjust-amount"
                     type="number"
+                    inputMode="numeric"
                     value={pointsAmount}
-                    onChange={(e) => setPointsAmount(parseInt(e.target.value) || 0)}
+                    onChange={(e) => setPointsAmount(Math.abs(parseInt(e.target.value, 10) || 0))}
                     min={1}
+                    max={100000}
+                    step={1}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Mevcut bakiye: {(selectedUser?.points ?? 0).toLocaleString('tr-TR')} puan · Tek işlemde en fazla 100.000 puan.
+                    {actionType === 'remove_points' ? ' Bakiye eksiye düşürülemez.' : ''}
+                  </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Sebep (Opsiyonel)</Label>
+                  <Label htmlFor="points-adjust-reason">Gerekçe (zorunlu)</Label>
                   <Input
+                    id="points-adjust-reason"
                     value={pointsReason}
                     onChange={(e) => setPointsReason(e.target.value)}
-                    placeholder="Örn: Özel kampanya ödülü"
+                    placeholder="Örn: Hatalı tüketim kaydının telafisi"
+                    maxLength={500}
+                    aria-invalid={pointsReason.trim().length > 0 && pointsReason.trim().length < 5}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    En az 5 karakter. Gerekçe müşteriye bildirimde ve denetim kaydında görünür.
+                  </p>
                 </div>
+                {Math.abs(pointsAmount) > 10000 && (
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <Label htmlFor="points-adjust-approval">İkinci yönetici onay belirteci</Label>
+                    <Input
+                      id="points-adjust-approval"
+                      value={pointsApprovalToken}
+                      onChange={(e) => setPointsApprovalToken(e.target.value)}
+                      placeholder="v1.…"
+                      autoComplete="off"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      10.000 puanın üzerindeki düzeltmeler dört göz ilkesine tabidir: başka bir yönetici kendi
+                      oturumuyla bu kullanıcı ve tutar için onay belirteci üretir (15 dakika geçerli, tek kullanımlık).
+                    </p>
+                  </div>
+                )}
               </>
             )}
 

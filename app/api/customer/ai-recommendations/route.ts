@@ -1,174 +1,194 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { askAI } from '@/lib/ai-engine';
-
+import { checkRateLimitDb, type RateLimitResult } from '@/lib/rate-limit';
+import { redisSetJson } from '@/lib/redis';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import {
+  LLM_LIMITS,
+  MIN_FEEDBACKS_FOR_RECOMMENDATIONS,
+  RECOMMENDATION_CACHE_TTL_SECONDS,
+  RECOMMENDATION_MESSAGES,
+  RECOMMENDATION_SAMPLE_SIZE,
+  buildRecommendationQuestion,
+  computeRecommendationStats,
+  corpusFingerprint,
+  hasMeaningfulText,
+  insufficientPayload,
+  normalizeAskAiResult,
+  recommendationCacheKey,
+  redactContactInfo,
+  type RecommendationFeedbackRow,
+  type RecommendationsPayload,
+} from './core';
+import { inFlight, memorySet, readCache, type CachedRecommendation, type GenerationOutcome } from './cache';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+/**
+ * LLM kotası — kullanıcı saatlik + günlük + platform saatlik. Sayaç altyapısı hata verirse
+ * KAPALI başarısız olur (ücretli çağrı yapılmaz).
+ */
+async function consumeLlmQuota(userId: string): Promise<{ ok: true } | { ok: false; retryAfterSec: number }> {
+  const checks: Array<[string, { max: number; windowMs: number }]> = [
+    [`ai_rec_llm:h:${userId}`, LLM_LIMITS.perUserHour],
+    [`ai_rec_llm:d:${userId}`, LLM_LIMITS.perUserDay],
+    ['ai_rec_llm:platform:h', LLM_LIMITS.platformHour],
+  ];
+  for (const [bucket, policy] of checks) {
+    let result: RateLimitResult;
+    try {
+      result = await checkRateLimitDb(bucket, policy.max, policy.windowMs);
+    } catch (error) {
+      console.warn('[ai-recommendations] kota sayacı okunamadı, LLM çağrısı yapılmadı:', error);
+      return { ok: false, retryAfterSec: 60 };
+    }
+    if (!result.ok) {
+      return { ok: false, retryAfterSec: Math.max(1, Math.ceil((result.retryAfterMs ?? policy.windowMs) / 1000)) };
+    }
+  }
+  return { ok: true };
+}
+
+async function generate(
+  rows: RecommendationFeedbackRow[],
+  stats: ReturnType<typeof computeRecommendationStats>
+): Promise<CachedRecommendation | null> {
+  let raw: unknown;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const userId = session.user.id;
-
-    // Müşteri feedbacklarını al
-    const feedbacks = await prisma.feedback.findMany({
-      where: { userId, text: { not: null } },
-      select: {
-        text: true,
-        rating: true,
-        sentiment: true,
-        emotions: true,
-        topics: true,
-        intent: true,
-        urgency: true,
-        effortScore: true,
-        churnRisk: true,
-        createdAt: true,
-        qrCode: {
-          select: {
-            name: true,
-            dealer: { select: { businessName: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-
-    if (feedbacks.length < 2) {
-      return NextResponse.json(
-        {
-          success: true,
-          recommendations: null,
-          message: 'Kişiselleştirilmiş öneriler için en az 2 geri bildirim gerekli.',
-          stats: { totalFeedbacks: feedbacks.length },
-        },
-        { headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // İstatistikleri hesapla
-    const totalFeedbacks = feedbacks.length;
-    const avgRating = feedbacks.reduce((acc, f) => acc + f.rating, 0) / totalFeedbacks;
-
-    // Duygu dağılımı
-    const sentimentCounts = feedbacks.reduce(
-      (acc, f) => {
-        const s = f.sentiment || 'neutral';
-        if (s === 'positive') acc.positive++;
-        else if (s === 'negative') acc.negative++;
-        else acc.neutral++;
-        return acc;
-      },
-      { positive: 0, negative: 0, neutral: 0 }
-    );
-
-    const sentimentDist = {
-      positive: Math.round((sentimentCounts.positive / totalFeedbacks) * 100),
-      negative: Math.round((sentimentCounts.negative / totalFeedbacks) * 100),
-      neutral: Math.round((sentimentCounts.neutral / totalFeedbacks) * 100),
-    };
-
-    // Trend hesaplama (son 10 vs önceki 10)
-    const recent = feedbacks.slice(0, Math.min(10, totalFeedbacks));
-    const older = feedbacks.slice(Math.min(10, totalFeedbacks), Math.min(20, totalFeedbacks));
-    const recentAvg = recent.length > 0 ? recent.reduce((a, f) => a + f.rating, 0) / recent.length : 0;
-    const olderAvg = older.length > 0 ? older.reduce((a, f) => a + f.rating, 0) / older.length : recentAvg;
-    const ratingTrend = recentAvg - olderAvg;
-
-    // Konular
-    const topicCounts: Record<string, number> = {};
-    feedbacks.forEach(f => {
-      const topics = f.topics;
-      if (Array.isArray(topics)) topics.forEach(t => { if (typeof t === 'string') topicCounts[t] = (topicCounts[t] || 0) + 1; });
-    });
-    const topTopics = Object.entries(topicCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([topic, count]) => ({ topic, count }));
-
-    // Ortalama experience signals
-    const urgencyValues = feedbacks.filter(f => f.urgency !== null).map(f => f.urgency!);
-    const effortValues = feedbacks.filter(f => f.effortScore !== null).map(f => f.effortScore!);
-    const churnValues = feedbacks.filter(f => f.churnRisk !== null).map(f => f.churnRisk!);
-
-    const avgUrgency = urgencyValues.length > 0 ? urgencyValues.reduce((a, b) => a + b, 0) / urgencyValues.length : 0;
-    const avgEffort = effortValues.length > 0 ? effortValues.reduce((a, b) => a + b, 0) / effortValues.length : 0;
-    const avgChurnRisk = churnValues.length > 0 ? churnValues.reduce((a, b) => a + b, 0) / churnValues.length : 0;
-
-    // En sık gidilen işletmeler
-    const businessCounts: Record<string, number> = {};
-    feedbacks.forEach(f => {
-      const bname = f.qrCode?.dealer?.businessName || f.qrCode?.name || 'Bilinmeyen';
-      businessCounts[bname] = (businessCounts[bname] || 0) + 1;
-    });
-    const topBusinesses = Object.entries(businessCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
-    // AI'dan kişiselleştirilmiş öneriler al
-    const recommendationQuestion = `Bu müşterinin geri bildirim geçmişine dayalı kişiselleştirilmiş öneriler oluştur:
-
-Müşteri Profili:
-- Toplam ${totalFeedbacks} geri bildirim
-- Ortalama puan: ${avgRating.toFixed(1)}/5
-- Duygu: %${sentimentDist.positive} olumlu, %${sentimentDist.negative} olumsuz
-- Rating trendi: ${ratingTrend > 0 ? 'Yükseliyor' : ratingTrend < 0 ? 'Düşüyor' : 'Stabil'}
-- Ort. aciliyet: ${(avgUrgency * 10).toFixed(1)}/10
-- Ort. efor: ${(avgEffort * 10).toFixed(1)}/10
-- En çok bahsettiği konular: ${topTopics.map(t => t.topic).join(', ')}
-- En çok gittiği işletmeler: ${topBusinesses.map(b => b.name).join(', ')}
-
-5 maddelik kişisel AI önerisi oluştur. Her öneri kısa, actionable ve Türkçe olsun. Müşteriye doğrudan hitap et.`;
-
-    const aiRecommendations = await askAI(recommendationQuestion, {
-      totalFeedbacks,
-      avgRating,
-      sentimentDist,
-      topTopics,
-      recentFeedbacks: feedbacks.slice(0, 10).map(f => ({
-        text: f.text!,
+    raw = await askAI(buildRecommendationQuestion(stats), {
+      totalFeedbacks: stats.totalFeedbacks,
+      avgRating: stats.avgRating,
+      sentimentDist: stats.sentimentDist,
+      topTopics: stats.topTopics,
+      recentFeedbacks: rows.slice(0, 10).map((f) => ({
+        text: redactContactInfo(String(f.text ?? '')).slice(0, 600),
         rating: f.rating,
         sentiment: f.sentiment || 'neutral',
         createdAt: f.createdAt.toISOString(),
       })),
     });
-
-    return NextResponse.json(
-      {
-        success: true,
-        recommendations: aiRecommendations,
-        stats: {
-          totalFeedbacks,
-          avgRating,
-          sentimentDist,
-          ratingTrend: ratingTrend > 0.1 ? 'up' : ratingTrend < -0.1 ? 'down' : 'stable',
-          ratingTrendValue: Number(ratingTrend.toFixed(2)),
-          avgUrgency,
-          avgEffort,
-          avgChurnRisk,
-          topTopics,
-          topBusinesses,
-        },
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
   } catch (error) {
-    console.error('Customer AI recommendations error:', error);
-    return NextResponse.json(
-      { error: 'AI önerileri oluşturulamadı' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    console.error('[ai-recommendations] askAI hata:', error);
+    return null;
   }
+  const result = normalizeAskAiResult(raw);
+  if (!result.ok) return null;
+  return { text: result.text, generatedAt: new Date().toISOString() };
 }
+
+/**
+ * GET /api/customer/ai-recommendations
+ *
+ * Yalnız CUSTOMER; `customer_ai_insights` modülü kapalıysa 403. Yanıt `data` içinde ve geriye
+ * uyum için kökte `RecommendationsPayload` taşır — `stats` HER dalda tam şekillidir.
+ */
+export const GET = defineRoute(
+  {
+    name: 'customer.ai-recommendations.get',
+    roles: ['CUSTOMER'],
+    module: 'customer_ai_insights',
+    // Okuma tavanı (önbellek isabetleri dahil); ücretli LLM kotası ayrıca uygulanır.
+    rateLimit: { max: 30, windowMs: 60_000, by: 'user' },
+  },
+  async ({ user }) => {
+    const feedbacks = await prisma.feedback.findMany({
+      where: { userId: user.id, deletedAt: null, text: { not: null } },
+      select: {
+        id: true,
+        text: true,
+        rating: true,
+        sentiment: true,
+        topics: true,
+        urgency: true,
+        effortScore: true,
+        churnRisk: true,
+        createdAt: true,
+        updatedAt: true,
+        qrCode: { select: { name: true, dealer: { select: { businessName: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: RECOMMENDATION_SAMPLE_SIZE,
+    });
+
+    const rows = (feedbacks as RecommendationFeedbackRow[]).filter(hasMeaningfulText);
+    const stats = computeRecommendationStats(rows);
+
+    if (rows.length < MIN_FEEDBACKS_FOR_RECOMMENDATIONS) {
+      return ok(insufficientPayload(stats), { legacySpread: true });
+    }
+
+    const base: Omit<RecommendationsPayload, 'recommendationsStatus' | 'recommendations' | 'message' | 'cached' | 'generatedAt' | 'retryAfterSec'> = {
+      status: 'ready',
+      required: MIN_FEEDBACKS_FOR_RECOMMENDATIONS,
+      have: rows.length,
+      stats,
+    };
+
+    const cacheKey = recommendationCacheKey(user.id, corpusFingerprint(rows));
+    const cached = await readCache(cacheKey);
+    if (cached) {
+      const payload: RecommendationsPayload = {
+        ...base,
+        recommendationsStatus: 'ready',
+        recommendations: cached.text,
+        message: null,
+        cached: true,
+        generatedAt: cached.generatedAt,
+        retryAfterSec: null,
+      };
+      return ok(payload, { legacySpread: true });
+    }
+
+    // Tek-uçuş: harita okuma ve yazma aynı mikro görevde (araya `await` girmeden) yapılır;
+    // böylece eşzamanlı ıskalar kota ve LLM çağrısını paylaşır.
+    let pending = inFlight.get(cacheKey);
+    if (!pending) {
+      pending = (async (): Promise<GenerationOutcome> => {
+        const quota = await consumeLlmQuota(user.id);
+        if (!quota.ok) return { kind: 'rate_limited', retryAfterSec: quota.retryAfterSec };
+        const fresh = await generate(rows, stats);
+        if (!fresh) return { kind: 'unavailable' };
+        memorySet(cacheKey, fresh);
+        await redisSetJson(cacheKey, fresh, RECOMMENDATION_CACHE_TTL_SECONDS);
+        return { kind: 'ready', value: fresh };
+      })().finally(() => {
+        inFlight.delete(cacheKey);
+      });
+      inFlight.set(cacheKey, pending);
+    }
+
+    const outcome = await pending;
+    const payload: RecommendationsPayload =
+      outcome.kind === 'ready'
+        ? {
+            ...base,
+            recommendationsStatus: 'ready',
+            recommendations: outcome.value.text,
+            message: null,
+            cached: false,
+            generatedAt: outcome.value.generatedAt,
+            retryAfterSec: null,
+          }
+        : outcome.kind === 'rate_limited'
+          ? {
+              ...base,
+              recommendationsStatus: 'rate_limited',
+              recommendations: null,
+              message: RECOMMENDATION_MESSAGES.rateLimited,
+              cached: false,
+              generatedAt: null,
+              retryAfterSec: outcome.retryAfterSec,
+            }
+          : {
+              ...base,
+              recommendationsStatus: 'unavailable',
+              recommendations: null,
+              message: RECOMMENDATION_MESSAGES.unavailable,
+              cached: false,
+              generatedAt: null,
+              retryAfterSec: null,
+            };
+    return ok(payload, { legacySpread: true });
+  }
+);
+

@@ -1,6 +1,5 @@
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
-import { CookieConsentBanner } from '@/components/layout/cookie-consent-banner';
 import { SkipToMainContent } from '@/components/layout/skip-to-main';
 import LandingBackground from '@/components/landing/LandingBackground';
 import { getBackgroundEffect } from '@/lib/get-background-effect';
@@ -28,7 +27,7 @@ export default async function PublicLayout({
         </main>
         <Footer />
       </div>
-      <CookieConsentBanner />
+      {/* Çerez bildirimi kök layout'ta (P0-31) — burada tekrar render edilmez. */}
     </div>
   );
 }

@@ -3,13 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
+import { validateAssignee } from '@/lib/dealer/assignee';
 
 
 export const dynamic = 'force-dynamic';
 
 const updateSchema = z.object({
   status: z.enum(['pending', 'assigned', 'in_progress', 'done', 'cancelled']).optional(),
-  assignedToId: z.string().optional().nullable(),
+  assignedToId: z.string().max(64).optional().nullable(),
   dueAt: z.string().datetime().optional().nullable(),
   completedAt: z.string().datetime().optional().nullable(),
 });
@@ -48,7 +49,14 @@ export async function PATCH(
       completedAt?: Date | null;
     } = {};
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
-    if (parsed.data.assignedToId !== undefined) data.assignedToId = parsed.data.assignedToId;
+    if (parsed.data.assignedToId !== undefined) {
+      // P0-11: yalnız aksiyonun bayisi ya da o bayinin AKTİF personeli atanabilir.
+      const assignee = await validateAssignee(existing.dealerId, parsed.data.assignedToId);
+      if (!assignee.ok) {
+        return NextResponse.json({ error: assignee.error }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+      }
+      data.assignedToId = assignee.value ?? null;
+    }
     if (parsed.data.dueAt !== undefined) data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
     if (parsed.data.completedAt !== undefined) {
       data.completedAt = parsed.data.completedAt ? new Date(parsed.data.completedAt) : null;

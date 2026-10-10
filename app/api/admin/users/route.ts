@@ -4,10 +4,15 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { parseCursor, encodeCursor } from '@/lib/cursor-pagination';
 import { requireAuth } from '@/lib/api-auth';
-import { creditPointsAndXp } from '@/lib/points-wallet';
+import { creditPointsAndXp, InsufficientPointsError } from '@/lib/points-wallet';
+import { adjustPointsByAdmin, isEconomyError, ADMIN_ADJUST_LIMITS } from '@/lib/economy';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 import { adminUsersQuerySchema } from '@/lib/validations-admin';
+import { anonymizeUser } from '@/lib/gdpr-core';
+import { archiveGateResponse, readArchiveIntent } from '@/lib/data-safety/archive';
+import { actorFromSession } from '@/lib/data-safety/audit';
+import { previewUserErasure } from '@/lib/data-safety/user-erasure';
 
 
 export const dynamic = 'force-dynamic';
@@ -16,9 +21,8 @@ const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   email: z.string().email().optional(),
   role: z.enum(['ADMIN', 'DEALER', 'CUSTOMER']).optional(),
-  points: z.number().optional(),
-  level: z.number().positive().optional(),
-  xp: z.number().nonnegative().optional(),
+  // P0-19: `points` / `xp` / `level` burada YOK — bakiyeyi doğrudan ezmek defter dışı
+  // mint'ti. Bakiye yalnız PATCH add_points (adjustPointsByAdmin) ile değişir.
   phone: z.string().max(30).optional().nullable(),
   businessName: z.string().max(100).optional().nullable(),
   businessDesc: z.string().max(500).optional().nullable(),
@@ -40,11 +44,32 @@ const createUserSchema = z.object({
 });
 
 // Action schemas
+// P0-19: admin puan düzeltmesi TEK yoldan (lib/economy#adjustPointsByAdmin). Tam sayı,
+// sıfır olamaz, |miktar| ≤ 100.000, gerekçe zorunlu; 10.000 üstü ikinci yöneticinin imzalı
+// onay belirteci (POST /api/admin/economy/adjust-approvals) ister. Negatif = bakiyeden düş
+// (eksi bakiye imkânsız). `requestId` aynı isteğin tekrarında çift düzeltmeyi önler.
 const addPointsSchema = z.object({
   action: z.literal('add_points'),
-  userId: z.string(),
-  amount: z.number(),
-  reason: z.string().optional(),
+  userId: z.string().min(1).max(64),
+  amount: z
+    .number({ invalid_type_error: 'Puan miktarı sayı olmalı' })
+    .int('Puan miktarı tam sayı olmalı')
+    .refine((n) => n !== 0, 'Puan miktarı sıfır olamaz')
+    .refine(
+      (n) => Math.abs(n) <= ADMIN_ADJUST_LIMITS.perOperation,
+      `Tek işlemde en fazla ${ADMIN_ADJUST_LIMITS.perOperation.toLocaleString('tr-TR')} puan düzeltilebilir`
+    ),
+  reason: z
+    .string({ required_error: 'Puan düzeltmesi için gerekçe yazın' })
+    .trim()
+    .min(ADMIN_ADJUST_LIMITS.reasonMin, `Gerekçe en az ${ADMIN_ADJUST_LIMITS.reasonMin} karakter olmalı`)
+    .max(ADMIN_ADJUST_LIMITS.reasonMax, `Gerekçe en fazla ${ADMIN_ADJUST_LIMITS.reasonMax} karakter olabilir`),
+  approvalToken: z.string().max(4000).optional().nullable(),
+  requestId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,100}$/, 'Geçersiz istek kimliği')
+    .optional()
+    .nullable(),
 });
 
 const addXpSchema = z.object({
@@ -307,6 +332,16 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
+    // Sessizce yok saymak yerine açıkça reddet: istemci bakiyenin değiştiğini sanmasın.
+    if (body && typeof body === 'object' && ('points' in body || 'xp' in body || 'level' in body)) {
+      return NextResponse.json(
+        {
+          error: 'Puan, XP ve seviye bu uçtan değiştirilemez. Puan düzeltmesini gerekçeyle "Puan Ekle/Düş" işleminden yapın.',
+          code: 'USE_POINTS_ADJUSTMENT',
+        },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
     const validatedData = updateUserSchema.safeParse(body);
 
     if (!validatedData.success) {
@@ -398,37 +433,75 @@ export async function PATCH(request: NextRequest) {
     switch (action) {
       case 'add_points': {
         const data = addPointsSchema.parse(body);
-        const user = await prisma.user.update({
-          where: { id: data.userId },
-          data: { points: { increment: data.amount } },
-          select: { id: true, name: true, points: true },
-        });
+        // Tek-kez: istemcinin istek kimliği (gövde ya da Idempotency-Key başlığı) admin'e
+        // bağlanır → çift tıklama / ağ tekrarı ikinci bir düzeltme üretmez.
+        const rawRequestId = data.requestId ?? request.headers.get('idempotency-key');
+        const requestId =
+          rawRequestId && /^[A-Za-z0-9_-]{8,100}$/.test(rawRequestId) ? rawRequestId : null;
 
-        // Create notification
-        await prisma.notification.create({
-          data: {
+        let adjusted;
+        try {
+          adjusted = await adjustPointsByAdmin(prisma, {
+            adminId: session.user.id,
             userId: data.userId,
-            title: data.amount >= 0 ? 'Puan Kazandınız! 🎉' : 'Puan Düşüşü',
-            message: data.amount >= 0 
-              ? `${data.amount} puan hesabınıza eklendi${data.reason ? `: ${data.reason}` : ''}`
-              : `${Math.abs(data.amount)} puan hesabınızdan düşüldü${data.reason ? `: ${data.reason}` : ''}`,
-            type: data.amount >= 0 ? 'success' : 'warning',
-          },
-        });
+            delta: data.amount,
+            reason: data.reason,
+            approvalToken: data.approvalToken ?? null,
+            idempotencyKey: requestId ? `admin-adjust:${session.user.id}:${requestId}` : null,
+            auditMeta,
+          });
+        } catch (err) {
+          if (err instanceof InsufficientPointsError) {
+            return NextResponse.json(
+              {
+                error: `Kullanıcının bakiyesi yetersiz: mevcut ${err.currentPoints.toLocaleString('tr-TR')} puan, düşülmek istenen ${err.requiredPoints.toLocaleString('tr-TR')} puan.`,
+                code: 'INSUFFICIENT_POINTS',
+                currentPoints: err.currentPoints,
+              },
+              { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+          }
+          if (isEconomyError(err)) {
+            return NextResponse.json(
+              { error: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) },
+              { status: err.httpStatus, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+          }
+          throw err;
+        }
 
-        // Audit log
-        await prisma.auditLog.create({
-          data: {
-            userId: session.user.id,
-            action: 'add_points',
-            entity: 'user',
-            entityId: data.userId,
-            newData: { amount: data.amount, reason: data.reason },
-            ...auditMeta,
-          },
-        });
+        // Bildirim yalnız gerçek (yeni) düzeltmede; tekrar oynatılan istek ikinci kez bildirmez.
+        if (!adjusted.duplicate) {
+          const abs = Math.abs(data.amount).toLocaleString('tr-TR');
+          await prisma.notification
+            .create({
+              data: {
+                userId: data.userId,
+                title: data.amount > 0 ? 'Puan Kazandınız! 🎉' : 'Puan Düzeltmesi',
+                message:
+                  data.amount > 0
+                    ? `${abs} puan hesabınıza eklendi: ${data.reason}`
+                    : `${abs} puan hesabınızdan düşüldü: ${data.reason}`,
+                type: data.amount > 0 ? 'success' : 'warning',
+              },
+            })
+            .catch((e: unknown) => console.error('[admin add_points] bildirim yazılamadı', e));
+        }
 
-        return NextResponse.json({ success: true, user }, { headers: PRIVATE_NO_STORE_HEADERS });
+        return NextResponse.json(
+          {
+            success: true,
+            user: { id: data.userId, points: adjusted.points },
+            adjustment: {
+              delta: adjusted.delta,
+              pointsBefore: adjusted.pointsBefore,
+              points: adjusted.points,
+              ledgerId: adjusted.ledgerId,
+              duplicate: adjusted.duplicate,
+            },
+          },
+          { headers: PRIVATE_NO_STORE_HEADERS }
+        );
       }
 
       case 'add_xp': {
@@ -496,51 +569,52 @@ export async function PATCH(request: NextRequest) {
       case 'grant_badge': {
         const data = grantBadgeSchema.parse(body);
         
-        // Check if user already has badge
-        const existing = await prisma.userBadge.findUnique({
-          where: {
-            userId_badgeId: {
-              userId: data.userId,
-              badgeId: data.badgeId,
-            },
-          },
-        });
-
-        if (existing) {
-          return NextResponse.json({ error: 'Kullanıcı bu rozete zaten sahip' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-        }
-
-        const userBadge = await prisma.userBadge.create({
-          data: {
+        // Tek rozet servisi (P0-14 / §5.3): unique guard, An Motoru anı ve audit aynı tx'te.
+        // Admin hediyesi kazanım ödülü basmaz (reward: 'none') — puan düzeltmesi ayrı yoldan.
+        const { awardBadgeInTx, AWARD_BADGE_REJECT_MESSAGES } = await import('@/lib/badges/award');
+        const granted = await prisma.$transaction(async (tx) => {
+          const award = await awardBadgeInTx(tx, {
             userId: data.userId,
             badgeId: data.badgeId,
-          },
-          include: {
-            badge: true,
-          },
+            source: 'admin',
+            reward: 'none',
+            requireActive: false,
+            actorId: session.user.id,
+          });
+          if (!award.awarded) return award;
+          await tx.auditLog.create({
+            data: {
+              userId: session.user.id,
+              action: 'grant_badge',
+              entity: 'user_badge',
+              entityId: award.userBadgeId ?? `${data.userId}:${data.badgeId}`,
+              newData: { userId: data.userId, badgeId: data.badgeId },
+              ...auditMeta,
+            },
+          });
+          return award;
         });
+
+        if (!granted.awarded) {
+          const status = granted.reason === 'ALREADY_OWNED' ? 400 : 404;
+          const error =
+            granted.reason === 'ALREADY_OWNED'
+              ? 'Kullanıcı bu rozete zaten sahip'
+              : AWARD_BADGE_REJECT_MESSAGES[granted.reason];
+          return NextResponse.json({ error }, { status, headers: PRIVATE_NO_STORE_HEADERS });
+        }
 
         await prisma.notification.create({
           data: {
             userId: data.userId,
             title: 'Yeni Rozet Kazandınız! 🏆',
-            message: `"${userBadge.badge.name}" rozetini kazandınız!`,
+            message: `"${granted.badge.name}" rozetini kazandınız!`,
             type: 'success',
             data: { badgeId: data.badgeId },
           },
         });
 
-        await prisma.auditLog.create({
-          data: {
-            userId: session.user.id,
-            action: 'grant_badge',
-            entity: 'user_badge',
-            entityId: userBadge.id,
-            newData: { userId: data.userId, badgeId: data.badgeId },
-            ...auditMeta,
-          },
-        });
-
+        const userBadge = { id: granted.userBadgeId, userId: data.userId, badgeId: data.badgeId, badge: granted.badge };
         return NextResponse.json({ success: true, userBadge }, { headers: PRIVATE_NO_STORE_HEADERS });
       }
 
@@ -645,7 +719,6 @@ export async function PATCH(request: NextRequest) {
 // ─────────────────────────────────────────────────────────────
 export async function DELETE(request: NextRequest) {
   try {
-    const auditMeta = getAuditRequestMeta(request);
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
@@ -658,49 +731,49 @@ export async function DELETE(request: NextRequest) {
         { error: 'User ID parametresi gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    // Prevent self-deletion
-    if (userId === session.user.id) {
-      return NextResponse.json(
-        { error: 'Kendi hesabınızı silemezsiniz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const existing = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!existing) {
+    // P0-25: hard delete YOK. "Silme" = KVKK anonimleştirmesi (lib/gdpr-core.ts#anonymizeUser).
+    // Önceden user.delete → AuditLog/QR/başka müşterilerin yorumları cascade ile gidiyordu.
+    const preview = await previewUserErasure(userId, { actorId: session.user.id, context: 'admin' });
+    if (!preview) {
       return NextResponse.json(
         { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
+    if (preview.alreadyAnonymized) {
+      return NextResponse.json(
+        { success: true, anonymized: true, alreadyAnonymized: true },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
-    await prisma.user.delete({
-      where: { id: userId },
+    const early = archiveGateResponse(
+      preview.impact,
+      readArchiveIntent(request),
+      'Kullanıcı silinmez, geri döndürülemez biçimde anonimleştirilir. Etkiyi inceleyip isteği confirm=anonymize ile tekrarlayın.'
+    );
+    if (early) return early;
+
+    const result = await anonymizeUser(userId, {
+      actor: actorFromSession(session),
+      reason: 'admin_delete',
+      request,
     });
 
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'delete',
-        entity: 'user',
-        entityId: userId,
-        oldData: {
-          name: existing.name,
-          email: existing.email,
-          role: existing.role,
-        },
-        ...auditMeta,
+    return NextResponse.json(
+      {
+        success: true,
+        anonymized: true,
+        alreadyAnonymized: result.alreadyAnonymized,
+        archivedQrCodes: result.archivedQrCodes,
       },
-    });
-
-    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
-    console.error('Error deleting user:', error);
+    if (error instanceof Error && error.message === 'USER_NOT_FOUND') {
+      return NextResponse.json(
+        { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    console.error('Error anonymizing user:', error);
     return NextResponse.json(
       { error: 'Kullanıcı silinemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
-
-
-
-

@@ -763,6 +763,19 @@
         "aiInsightsDescription": "Yapay zeka destekli detaylı analiz ve kişiselleştirilmiş öneriler",
         "viewAiInsights": "AI İçgörüleri Gör"
     },
+    "qrScanner": {
+        "retry": "Tekrar dene",
+        "errors": {
+            "permissionDenied": "Kamera izni verilmedi. Adres çubuğundaki kilit simgesinden bu site için kameraya izin verip tekrar deneyin.",
+            "policyBlocked": "Kamera bu sayfada güvenlik politikası nedeniyle kapalı. Sayfayı yenileyip tekrar deneyin; sorun sürerse kodu elle girin.",
+            "notFound": "Kamera bulunamadı. Cihazınızda çalışan bir kamera olduğundan emin olun.",
+            "inUse": "Kamera başka bir uygulama ya da sekme tarafından kullanılıyor. Onu kapatıp tekrar deneyin.",
+            "insecureContext": "Kamera yalnızca güvenli bağlantıda (HTTPS) açılabilir.",
+            "unsupported": "Bu tarayıcı kamerayla QR taramayı desteklemiyor. Kodu elle girebilirsiniz.",
+            "elementMissing": "Tarama alanı hazırlanamadı. Sayfayı yenileyip tekrar deneyin.",
+            "unknown": "Kamera başlatılamadı. Tekrar deneyin ya da kodu elle girin."
+        }
+    },
     "dealerScan": {
         "eyebrow": "Bayi paneli",
         "title": "Kart tara",
@@ -1060,7 +1073,22 @@
         "toastLinkCopied": "Anket linki kopyalandı",
         "toastDeleted": "Anket silindi",
         "errorToggleFailed": "Güncellenemedi",
-        "errorDeleteFailed": "Silinemedi"
+        "errorDeleteFailed": "Silinemedi",
+        "errorLoad": "Anketler yüklenemedi",
+        "deleteAria": "Anketi sil: {title}",
+        "toggleAria": "Yayın durumu: {title}",
+        "statusLive": "Yayında",
+        "statusPaused": "Durduruldu",
+        "deleteTitle": "Anket kalıcı olarak silinsin mi?",
+        "deleteDescription": "“{title}” anketi, soruları ve topladığı tüm yanıtlar kalıcı olarak silinecek. Yalnızca yanıt toplamayı durdurmak istiyorsanız anketi silmek yerine durdurun.",
+        "deleteConfirm": "Kalıcı olarak sil",
+        "impactResponses": "Silinecek yanıt",
+        "impactQuestions": "Silinecek soru",
+        "impactWarning": "Silinen yanıtlar geri getirilemez.",
+        "unanswerableBadge": "{count} soru yanıtlanamıyor",
+        "unanswerableHint": "Seçeneği olmayan seçim soruları müşterilere gösterilmiyor. Eksiksiz bir anketi yeniden oluşturun.",
+        "toastCopyFailed": "Link kopyalanamadı. Elle kopyalayın: {url}",
+        "pausedCopyWarning": "Bu anket durdurulmuş; link yayına alınana kadar müşteride çalışmaz."
     },
     "dealerSurveyCreate": {
         "title": "Yeni anket oluştur",
@@ -1087,7 +1115,16 @@
         "toastFillQuestions": "Tüm soruları doldurun",
         "toastCreated": "Anket oluşturuldu!",
         "toastCreateFailed": "Oluşturulamadı",
-        "toastGenericError": "Hata oluştu"
+        "toastGenericError": "Hata oluştu",
+        "backAria": "Anketlere dön",
+        "questionLegend": "Soru {n}",
+        "questionTypeAria": "Soru {n} tipi",
+        "removeQuestionAria": "Soruyu sil (Soru {n})",
+        "removeOptionAria": "Seçeneği kaldır (Seçenek {n})",
+        "requiredAria": "Soru {n} zorunlu",
+        "questionLimit": "{count}/{max} soru",
+        "optionsHint": "En az 2 dolu ve birbirinden farklı seçenek girin.",
+        "toastFixErrors": "Kaydetmeden önce işaretli alanları düzeltin"
     },
     "dealerSurveyResults": {
         "loading": "Sonuçlar yükleniyor",
@@ -1961,7 +1998,15 @@
         "error": "Hata",
         "fetchNotFound": "Anket bulunamadı",
         "openTextPlaceholder": "Yanıtınızı yazın...",
-        "submit": "Gönder"
+        "submit": "Gönder",
+        "loadFailed": "Anket şu an yüklenemedi",
+        "retry": "Tekrar dene",
+        "alreadyTitle": "Bu anketi zaten yanıtladınız",
+        "alreadyBody": "Katılımınız için teşekkürler. Her hesap bir anketi yalnızca bir kez yanıtlayabilir.",
+        "ratingAria": "5 üzerinden {n}",
+        "requiredSr": "(zorunlu)",
+        "noQuestions": "Bu anket şu an yanıt kabul etmiyor.",
+        "progress": "{done}/{total} soru yanıtlandı"
     },
     "privacySecurity": {
         "toast2faSetupFailed": "2FA kurulumu başarısız",

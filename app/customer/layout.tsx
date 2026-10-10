@@ -6,6 +6,7 @@ import { OnboardingSheet } from '@/components/onboarding/onboarding-sheet';
 import { CustomerBirthdayBonusHost } from '@/components/customer/customer-birthday-bonus-host';
 import { WelcomeVideoModal } from '@/components/customer/welcome-video-modal';
 import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
+import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
@@ -48,6 +49,8 @@ export default async function CustomerLayout({
       <WelcomeVideoModal />
       <CustomerBirthdayBonusHost />
       <WebVitalsReporter />
+      {/* PWA: SW yalnız panelde kaydedilir; QR hunisinde hiç kurulmaz (P0-37). */}
+      <ServiceWorkerRegistrar />
     </div>
   );
 }

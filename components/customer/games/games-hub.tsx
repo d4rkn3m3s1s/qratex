@@ -72,7 +72,7 @@ export function GamesHub() {
   }, []);
 
   // Server listesi geldiyse onu, gelmediyse registry varsayılanını kullan.
-  const gameList = activeGames ?? MINI_GAMES.map((g) => ({
+  const gameList = activeGames ?? MINI_GAMES.filter((g) => !g.hidden).map((g) => ({
     gameType: g.gameType,
     title: g.title,
     description: g.description,

@@ -37,17 +37,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
     const { feedbackIds } = parsed.data;
+    // P0-23: tüketim yorumları da soft-delete; `type: 'consumption'` ile geri alınır.
+    const isConsumption = (raw as { type?: unknown } | null)?.type === 'consumption';
 
-    const result = await prisma.feedback.updateMany({
-      where: { id: { in: feedbackIds }, deletedAt: { not: null } },
-      data: { deletedAt: null },
-    });
+    const result = isConsumption
+      ? await prisma.consumptionReview.updateMany({
+          where: { id: { in: feedbackIds }, deletedAt: { not: null } },
+          data: { deletedAt: null },
+        })
+      : await prisma.feedback.updateMany({
+          where: { id: { in: feedbackIds }, deletedAt: { not: null } },
+          data: { deletedAt: null },
+        });
 
     await prisma.auditLog.create({
       data: {
         userId: session.user.id,
-        action: 'RESTORE_FEEDBACKS',
-        entity: 'Feedback',
+        action: isConsumption ? 'RESTORE_CONSUMPTION_REVIEWS' : 'RESTORE_FEEDBACKS',
+        entity: isConsumption ? 'ConsumptionReview' : 'Feedback',
         entityId: feedbackIds.join(','),
         newData: { count: result.count },
         ...auditMeta,

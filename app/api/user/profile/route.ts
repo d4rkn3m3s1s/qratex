@@ -4,6 +4,14 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
+import {
+  VersionConflictError,
+  isVersionConflictError,
+  lockResource,
+  readBaseVersion,
+  versionConflictResponse,
+  versionFromContent,
+} from '@/lib/settings-version';
 
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +31,35 @@ const updateProfileSchema = z.object({
   holidayMode: z.boolean().optional(),
 });
 
+/**
+ * Profil sürümü (P0-28): YALNIZ düzenlenebilir alanların içerik özeti. `User.updatedAt` puan,
+ * son giriş vb. her yazımda değiştiği için kullanılmaz (sahte çakışma üretirdi).
+ */
+const PROFILE_VERSION_SELECT = {
+  name: true,
+  image: true,
+  phone: true,
+  businessName: true,
+  businessDesc: true,
+  address: true,
+  latitude: true,
+  longitude: true,
+  businessHours: true,
+  defaultReplyTemplate: true,
+  preferredLanguage: true,
+  holidayMode: true,
+} as const;
+
+type ProfileVersionFields = { [K in keyof typeof PROFILE_VERSION_SELECT]?: unknown };
+
+function profileVersion(user: ProfileVersionFields): string {
+  const picked: Record<string, unknown> = {};
+  for (const key of Object.keys(PROFILE_VERSION_SELECT)) {
+    picked[key] = (user as Record<string, unknown>)[key] ?? null;
+  }
+  return versionFromContent(picked);
+}
+
 export async function PATCH(request: NextRequest) {
   try {
     const auditMeta = getAuditRequestMeta(request);
@@ -39,8 +76,21 @@ export async function PATCH(request: NextRequest) {
       );
     }
     const { name, image, phone, businessName, businessDesc, address, latitude, longitude, businessHours, defaultReplyTemplate, preferredLanguage, holidayMode } = parsed.data;
+    // İsteğe bağlı iyimser kilit: `baseVersion` gönderen istemciler (bayi ayarları) için
+    // kilit altında sürüm karşılaştırılır; uyuşmazlıkta 409. Göndermeyenler (müşteri ayarları,
+    // dil seçici) eski davranışla devam eder.
+    const baseVersion = readBaseVersion(body);
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      if (baseVersion) {
+        await lockResource(tx, `profile:${session.user.id}`);
+        const current = await tx.user.findUnique({ where: { id: session.user.id }, select: PROFILE_VERSION_SELECT });
+        const currentVersion = current ? profileVersion(current) : 'none';
+        if (currentVersion !== baseVersion) {
+          throw new VersionConflictError(currentVersion, [{ key: 'profile', currentVersion }]);
+        }
+      }
+      return tx.user.update({
       where: { id: session.user.id },
       data: {
         ...(name && { name }),
@@ -73,6 +123,7 @@ export async function PATCH(request: NextRequest) {
         preferredLanguage: true,
         holidayMode: true,
       },
+      });
     });
 
     // Log audit
@@ -87,8 +138,12 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, user: updatedUser }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, user: updatedUser, version: profileVersion(updatedUser) },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
+    if (isVersionConflictError(error)) return versionConflictResponse(error);
     console.error('Error updating profile:', error);
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
@@ -153,6 +208,7 @@ export async function GET(request: NextRequest) {
           ...rest,
           hasPassword: Boolean(_pw),
         },
+        version: profileVersion(rest),
       },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );

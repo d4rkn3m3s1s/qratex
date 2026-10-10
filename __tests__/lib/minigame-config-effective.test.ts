@@ -123,3 +123,32 @@ describe('computeEffectiveReward — eşik & cap', () => {
     expect(r).toEqual({ points: 0, xp: 0 });
   });
 });
+
+describe('ekonomi sınırları okuma anında da uygulanır (admin B4, savunma derinliği)', () => {
+  it("DB'de 1.000.000 puan / 0 sn / 0 eşik / geçersiz renk olsa bile kırpılır", async () => {
+    const def = getMiniGame('bot-hunter')!;
+    mockFindMany.mockResolvedValue([
+      { gameType: 'bot-hunter', enabled: true, rewardPoints: 1_000_000, rewardXp: 999_999, rewardThreshold: 0,
+        minDurationSec: 0, maxScore: null, title: null, description: null, emoji: null, accent: '#fff' },
+    ]);
+    const eff = await getEffectiveMiniGame('bot-hunter');
+    expect(eff!.rewardPoints).toBe(1000);
+    expect(eff!.rewardXp).toBe(500);
+    expect(eff!.rewardThreshold).toBe(1);
+    expect(eff!.minDurationSec).toBe(3);
+    expect(eff!.accent).toBe(def.accent);
+  });
+
+  it('pacman da etkin yapılandırmaya sahip (admin aç/kapat geçerli)', async () => {
+    mockFindMany.mockResolvedValue([
+      { gameType: 'pacman', enabled: false, rewardPoints: null, rewardXp: null, rewardThreshold: null,
+        minDurationSec: null, maxScore: null, title: null, description: null, emoji: null, accent: null },
+    ]);
+    const eff = await getEffectiveMiniGame('pacman');
+    expect(eff).not.toBeNull();
+    expect(eff!.enabled).toBe(false);
+    expect(eff!.maxScore).toBe(5);
+    // Hub listesine pacman girmez (kartı ayrı).
+    expect((await getEffectiveMiniGames()).some((g) => g.gameType === 'pacman')).toBe(false);
+  });
+});

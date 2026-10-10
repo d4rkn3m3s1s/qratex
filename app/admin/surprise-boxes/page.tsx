@@ -37,6 +37,15 @@ import { tr } from 'date-fns/locale';
 
 type SendMode = 'email' | 'userId' | 'random';
 
+interface SendPreview {
+  mode: 'single' | 'random';
+  recipientCount: number;
+  pointsPerBox: number;
+  totalPoints: number;
+  remainingToday: number;
+  recipient?: { id: string; name: string | null; email: string | null };
+}
+
 interface SentBox {
   id: string;
   title: string;
@@ -89,49 +98,109 @@ export default function AdminSurpriseBoxesPage() {
     };
   }, [recent]);
 
-  const handleSend = async () => {
+  // P0-19: gönderim iki adımlı — önce sunucu önizlemesi (alıcı sayısı, toplam puan, günlük
+  // bütçe), sonra aynı değerlerle onay. Sunucu onaysız puanlı/toplu gönderimi 409 ile reddeder.
+  const [preview, setPreview] = useState<SendPreview | null>(null);
+  const [requestId, setRequestId] = useState('');
+
+  useEffect(() => {
+    setPreview(null);
+  }, [title, message, couponCode, points, sendMode, email, userId, randomCount]);
+
+  const buildBody = (): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      title: title.trim(),
+      message: message.trim() || undefined,
+      couponCode: couponCode.trim() || undefined,
+      points: Math.max(0, Math.floor(Number(points) || 0)),
+    };
+    if (sendMode === 'email') body.email = email.trim().toLowerCase();
+    if (sendMode === 'userId') body.userId = userId.trim();
+    if (sendMode === 'random') body.randomCount = randomCount;
+    return body;
+  };
+
+  const validateForm = (): boolean => {
     if (!title.trim()) {
       toast.error('Başlık girin');
-      return;
+      return false;
     }
     if (sendMode === 'email' && !email.trim()) {
       toast.error('E-posta girin');
-      return;
+      return false;
     }
     if (sendMode === 'userId' && !userId.trim()) {
       toast.error('Kullanıcı ID girin');
-      return;
+      return false;
     }
     if (sendMode === 'random' && (randomCount < 1 || randomCount > 500)) {
       toast.error('Rastgele sayı 1–500 arası olmalı');
-      return;
+      return false;
     }
+    if (points < 0 || points > 5000) {
+      toast.error('Kutu başına puan 0–5.000 arası olmalı');
+      return false;
+    }
+    return true;
+  };
 
+  const handleSend = async () => {
+    if (!validateForm()) return;
     setSending(true);
     try {
-      const body: Record<string, unknown> = {
-        title: title.trim(),
-        message: message.trim() || undefined,
-        couponCode: couponCode.trim() || undefined,
-        points: Number(points) || 0,
-      };
-      if (sendMode === 'email') body.email = email.trim().toLowerCase();
-      if (sendMode === 'userId') body.userId = userId.trim();
-      if (sendMode === 'random') body.randomCount = randomCount;
-
       const res = await fetch('/api/admin/surprise-box/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...buildBody(), dryRun: true }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.preview) {
+        toast.error(data.error ?? 'Önizleme alınamadı');
+        return;
+      }
+      setPreview(data.preview as SendPreview);
+      setRequestId(
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID().replace(/-/g, '')
+          : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+      );
+    } catch {
+      toast.error('Önizleme alınamadı');
+    } finally {
+      setSending(false);
+    }
+  };
 
-      if (!data.success) {
+  const confirmSend = async () => {
+    if (!preview) return;
+    setSending(true);
+    try {
+      const res = await fetch('/api/admin/surprise-box/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...buildBody(),
+          requestId,
+          confirm: { recipientCount: preview.recipientCount, totalPoints: preview.totalPoints },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        if (data.code === 'CONFIRMATION_REQUIRED' && data.preview) {
+          // Alıcı kümesi değişti (ör. rastgele örneklemde uygun müşteri azaldı): yeni değerleri göster.
+          setPreview(data.preview as SendPreview);
+        }
         toast.error(data.error ?? 'Gönderilemedi');
         return;
       }
 
-      toast.success(`${data.data.count} kullanıcıya sürpriz kutu gönderildi`);
+      toast.success(
+        data.data.duplicate
+          ? 'Bu gönderim zaten yapılmıştı; yeni kutu oluşturulmadı'
+          : `${data.data.count} kullanıcıya sürpriz kutu gönderildi`
+      );
+      setPreview(null);
       setTitle('');
       setMessage('');
       setCouponCode('');
@@ -259,9 +328,11 @@ export default function AdminSurpriseBoxesPage() {
                     id="sb-points"
                     type="number"
                     min={0}
+                    max={5000}
+                    step={1}
                     placeholder="0"
                     value={points || ''}
-                    onChange={(e) => setPoints(Number(e.target.value) || 0)}
+                    onChange={(e) => setPoints(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                   />
                 </div>
               </div>
@@ -324,21 +395,68 @@ export default function AdminSurpriseBoxesPage() {
                 )}
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
-                <Button
-                  size="lg"
-                  className="w-full sm:w-auto bg-gradient-to-r from-sky-700 to-cyan-700 text-white shadow-md hover:opacity-95"
-                  onClick={handleSend}
-                  disabled={sending}
+              {preview ? (
+                <div
+                  className="rounded-xl border border-border bg-muted/30 p-4 space-y-3"
+                  role="region"
+                  aria-live="polite"
+                  aria-label="Gönderim önizlemesi"
                 >
-                  {sending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <Send className="w-4 h-4 mr-2" />
+                  <p className="text-sm font-semibold text-foreground">Gönderimi onaylayın</p>
+                  <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                    <div className="rounded-lg bg-background/80 border border-border/60 px-3 py-2">
+                      <dt className="text-xs text-muted-foreground">Alıcı</dt>
+                      <dd className="font-semibold tabular-nums">{preview.recipientCount.toLocaleString('tr-TR')}</dd>
+                    </div>
+                    <div className="rounded-lg bg-background/80 border border-border/60 px-3 py-2">
+                      <dt className="text-xs text-muted-foreground">Kutu başı puan</dt>
+                      <dd className="font-semibold tabular-nums">{preview.pointsPerBox.toLocaleString('tr-TR')}</dd>
+                    </div>
+                    <div className="rounded-lg bg-background/80 border border-border/60 px-3 py-2">
+                      <dt className="text-xs text-muted-foreground">Toplam puan</dt>
+                      <dd className="font-semibold tabular-nums">{preview.totalPoints.toLocaleString('tr-TR')}</dd>
+                    </div>
+                  </dl>
+                  {preview.recipient && (
+                    <p className="text-sm text-muted-foreground">
+                      Alıcı: <span className="font-medium text-foreground">{preview.recipient.name ?? 'İsimsiz müşteri'}</span>
+                      {preview.recipient.email ? ` · ${preview.recipient.email}` : ''}
+                    </p>
                   )}
-                  Gönder
-                </Button>
-              </div>
+                  <p className="text-xs text-muted-foreground">
+                    Bugün kalan kutu puan bütçeniz: {preview.remainingToday.toLocaleString('tr-TR')}. Gönderim denetim kaydına yazılır ve
+                    alıcılara bildirim gider.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button size="lg" className="w-full sm:w-auto" onClick={confirmSend} disabled={sending}>
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                      Onayla ve gönder
+                    </Button>
+                    <Button size="lg" variant="outline" className="w-full sm:w-auto" onClick={() => setPreview(null)} disabled={sending}>
+                      Vazgeç
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+                  <Button
+                    size="lg"
+                    className="w-full sm:w-auto bg-gradient-to-r from-sky-700 to-cyan-700 text-white shadow-md hover:opacity-95"
+                    onClick={handleSend}
+                    disabled={sending}
+                  >
+                    {sending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
+                    Önizle
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Kutu başına en fazla 5.000, gönderim başına toplam 100.000 puan.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </Motion.div>

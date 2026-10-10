@@ -1,36 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { prisma } from '@/lib/prisma';
 import { CHARACTER_PROFILES, CATEGORY_BADGE_THRESHOLD, classifyFeedbackCategory } from '@/lib/character-badges';
 import { CHARACTER_CATEGORIES, CATEGORY_BY_KEY, charactersInCategory } from '@/lib/character-categories';
 import { runChatCompletion } from '@/lib/ai-engine';
+import { badgeRewardPoints } from '@/lib/badge-reward-points';
+import { debitPoints } from '@/lib/points-wallet';
+import { emailLookupFilter } from '@/lib/auth/normalize-email';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import {
+  characterTestMutationsEnabled,
+  gateCharacterTestMutation,
+  isAllowedCharacterTestTarget,
+  isMutatingCharacterTestAction,
+} from '@/lib/character-test-guard';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * ADMIN-ONLY karakter rozeti TEST aracı. Sadece geliştirme/demo içindir:
- * bir kullanıcının karakter rozetlerini sıfırlar ve/veya yorumlarını belirli bir
- * kategoriye atayarak barı istenen doluluğa getirir — böylece reveal akışı
- * tekrar tekrar test edilebilir (canlı DB değişikliği yapar).
+ * ADMIN-ONLY karakter rozeti TEST aracı.
  *
- * GET  ?userId=me|<id>            → mevcut durum (kategori sayıları + karakter rozetleri).
- * POST { userId?, action, ... }   → aksiyon uygula.
- *   action:'reset'                → tüm karakter rozetlerini sil (reveal tekrar hazır).
- *   action:'fill', category, n    → kullanıcının n yorumunu <category>'ye ata (bar doldur).
- *   action:'clearCategories'      → tüm yorumların characterCategory'sini temizle.
+ * GET  ?userId=me|<id>|<e-posta>  → mevcut durum (kategori sayıları + karakter rozetleri) +
+ *                                   `mutationsEnabled` / `targetAllowed` bayrakları.
+ * POST { userId, action, ... }    → aksiyon uygula.
+ *   Salt-okunur (her ortamda): 'revealPreview', 'classify'.
+ *   Veri değiştiren (P0-23 — üretimde kapalı + yalnız test hesabı allowlist'i, bkz.
+ *   lib/character-test-guard.ts; her biri AuditLog'a yazılır):
+ *   action:'reset'           → karakter rozetlerini sil + o rozetlerle basılmış ödül puanını
+ *                              defterli ters kayıtla geri al (reveal tekrarı puan çoğaltmasın).
+ *   action:'fill', category, n → YALNIZ sentetik yorum üretir (gerçek yorumlara dokunmaz).
+ *   action:'clearCategories' → test hesabının yorum kategorilerini temizle.
+ *   action:'cleanupTest'     → sentetik test verisini sil.
  */
 
 const CHAR_IDS = CHARACTER_PROFILES.map((c) => c.badgeId);
 
-async function resolveUserId(auth: { session: { user: { id: string } } }, param: string | null): Promise<string> {
-  if (!param || param === 'me') return auth.session.user.id;
-  // Email verildiyse kullanıcıyı bul (admin demo customer'ı email ile hedefleyebilsin).
-  if (param.includes('@')) {
-    const u = await prisma.user.findFirst({ where: { email: { equals: param, mode: 'insensitive' } }, select: { id: true } });
-    if (u) return u.id;
-  }
-  return param;
+type TargetUser = { id: string; email: string | null; role: string; isDemo: boolean; name: string | null };
+
+async function findTarget(param: string): Promise<TargetUser | null> {
+  const where: Prisma.UserWhereInput = param.includes('@') ? { email: emailLookupFilter(param) } : { id: param };
+  return prisma.user.findFirst({
+    where,
+    select: { id: true, email: true, role: true, isDemo: true, name: true },
+  });
+}
+
+function json(body: Record<string, unknown>, status = 200) {
+  return NextResponse.json(body, { status, headers: PRIVATE_NO_STORE_HEADERS });
 }
 
 /** Karakter test aracının oluşturduğu sentetik veriyi işaretler (temizlenebilir olsun). */
@@ -39,7 +58,15 @@ const TEST_CONSUMPTION_NOTE = '[KARAKTER-TEST]';
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
-  const userId = await resolveUserId(auth, req.nextUrl.searchParams.get('userId'));
+  const param = req.nextUrl.searchParams.get('userId');
+  let userId = auth.session.user.id;
+  let targetAllowed = false;
+  if (param && param !== 'me') {
+    const target = await findTarget(param);
+    if (!target) return json({ success: false, error: 'Kullanıcı bulunamadı' }, 404);
+    userId = target.id;
+    targetAllowed = isAllowedCharacterTestTarget(target);
+  }
 
   const grouped = await prisma.consumptionReview.groupBy({
     by: ['characterCategory'],
@@ -59,6 +86,8 @@ export async function GET(req: NextRequest) {
       categoryCounts: grouped.map((g) => ({ category: g.characterCategory, count: g._count._all })),
       characterBadges: owned,
       categories: CHARACTER_CATEGORIES.map((c) => ({ key: c.key, name: c.name })),
+      mutationsEnabled: characterTestMutationsEnabled(),
+      targetAllowed,
     },
     { headers: PRIVATE_NO_STORE_HEADERS },
   );
@@ -68,8 +97,34 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(['ADMIN']);
   if ('error' in auth) return auth.error;
   const body = await req.json().catch(() => ({}));
-  const userId = await resolveUserId(auth, body.userId ?? null);
   const action = String(body.action ?? '');
+
+  // ── Veri değiştiren aksiyonlar: ortam kapısı + açık hedef + allowlist (P0-23) ──
+  let userId = auth.session.user.id;
+  let target: TargetUser | null = null;
+  if (isMutatingCharacterTestAction(action)) {
+    const param = typeof body.userId === 'string' ? body.userId.trim() : '';
+    if (!param || param === 'me') {
+      return json({ success: false, error: 'Test hesabının e-postasını ya da kimliğini girin.' }, 400);
+    }
+    target = await findTarget(param);
+    if (!target) return json({ success: false, error: 'Kullanıcı bulunamadı' }, 404);
+    const gate = gateCharacterTestMutation(target);
+    if (!gate.ok) return json({ success: false, error: gate.error, code: gate.code }, gate.status);
+    userId = target.id;
+  }
+  const auditMeta = getAuditRequestMeta(req);
+  const audit = (op: string, data: Record<string, unknown>) =>
+    prisma.auditLog.create({
+      data: {
+        userId: auth.session.user.id,
+        action: `CHARACTER_TEST_${op.toUpperCase()}`,
+        entity: 'User',
+        entityId: userId,
+        newData: { ...data, targetEmail: target?.email ?? null } as Prisma.InputJsonObject,
+        ...auditMeta,
+      },
+    });
 
   if (action === 'revealPreview') {
     // DB'ye DOKUNMADAN: bir kategoriden karakter seçip reveal için hazır obje döndür.
@@ -143,13 +198,37 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'reset') {
-    const del = await prisma.userBadge.deleteMany({ where: { userId, badgeId: { in: CHAR_IDS } } });
-    return NextResponse.json({ success: true, action, deleted: del.count }, { headers: PRIVATE_NO_STORE_HEADERS });
+    // Rozet silinip reveal yeniden açılınca ödül puanı yeniden basılıyordu (B1). Silinen
+    // rozetlerin ödül puanını aynı transaction'da defterli ters kayıtla geri al.
+    const result = await prisma.$transaction(async (tx) => {
+      const owned = await tx.userBadge.findMany({
+        where: { userId, badgeId: { in: CHAR_IDS } },
+        select: { badgeId: true },
+      });
+      const del = await tx.userBadge.deleteMany({ where: { userId, badgeId: { in: CHAR_IDS } } });
+      const rewardTotal = owned.reduce((sum, b) => sum + badgeRewardPoints(b.badgeId), 0);
+      const wallet = await tx.user.findUnique({ where: { id: userId }, select: { points: true } });
+      const reversed = Math.min(rewardTotal, Math.max(0, wallet?.points ?? 0));
+      if (reversed > 0) {
+        await debitPoints(tx, {
+          userId,
+          points: reversed,
+          source: 'character_test_reset',
+          actorId: auth.session.user.id,
+          reason: 'Karakter test aracı: sıfırlanan rozetlerin ödül puanı geri alındı',
+          meta: { badgeIds: owned.map((b) => b.badgeId) },
+        });
+      }
+      return { deleted: del.count, rewardTotal, reversed, badgeIds: owned.map((b) => b.badgeId) };
+    });
+    await audit('reset', result);
+    return json({ success: true, action, deleted: result.deleted, reversedPoints: result.reversed });
   }
 
   if (action === 'clearCategories') {
     const upd = await prisma.consumptionReview.updateMany({ where: { customerId: userId }, data: { characterCategory: null } });
-    return NextResponse.json({ success: true, action, cleared: upd.count }, { headers: PRIVATE_NO_STORE_HEADERS });
+    await audit('clear_categories', { cleared: upd.count });
+    return json({ success: true, action, cleared: upd.count });
   }
 
   if (action === 'fill') {
@@ -161,50 +240,45 @@ export async function POST(req: NextRequest) {
     // Hedef doluluk (varsayılan: eşik = bar tam dolar).
     const n = Math.max(1, Math.min(50, Number(body.n) || CATEGORY_BADGE_THRESHOLD));
 
-    // 1) Önce MEVCUT yorumları bu kategoriye etiketle.
-    const fbs = await prisma.consumptionReview.findMany({
-      where: { customerId: userId, text: { not: null } },
-      select: { id: true }, orderBy: { createdAt: 'asc' }, take: n,
-    });
-    await prisma.consumptionReview.updateMany({
-      where: { id: { in: fbs.map((f) => f.id) } },
-      data: { characterCategory: category },
-    });
-
+    // Gerçek yorumlara DOKUNMA (B4): bu kategoride zaten kaç yorum var, eksik kadar sentetik üret.
+    const existing = await prisma.consumptionReview.count({ where: { customerId: userId, characterCategory: category } });
+    const need = Math.max(0, n - existing);
     let created = 0;
-    // 2) Yetmezse SENTETİK Consumption+Review üret (demo customer'da bar gerçekten dolsun).
-    //    synthetic=false ise sadece mevcutları etiketler (eski davranış).
-    const wantSynthetic = body.synthetic !== false; // varsayılan: sentetik AÇIK
-    const need = n - fbs.length;
-    if (wantSynthetic && need > 0) {
+    let failed = 0;
+    if (need > 0) {
       const dealerId = auth.session.user.id; // admin (geçerli User FK); işaretli test verisi
-      // Tek sentetik test kartı (varsa yeniden kullan).
+      // Tek sentetik test kartı (varsa yeniden kullan). Token tahmin edilemez.
       let card = await prisma.physicalCard.findFirst({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE }, select: { id: true } });
       if (!card) {
         card = await prisma.physicalCard.create({
-          data: { token: `chartest-${userId.slice(0, 8)}-${Math.floor(need)}-${fbs.length}`, customerId: userId, status: 'ACTIVATED', blockReason: TEST_CONSUMPTION_NOTE },
+          data: { token: `chartest-${randomUUID()}`, customerId: userId, status: 'ACTIVATED', blockReason: TEST_CONSUMPTION_NOTE },
           select: { id: true },
-        }).catch(async () => prisma.physicalCard.findFirst({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE }, select: { id: true } }));
+        });
       }
       const cat2 = CATEGORY_BY_KEY[category];
-      // Kategoriye uygun kısa örnek metin (min uzunluk şartlı kategoriler için yeterince uzun).
       const sampleText = `${TEST_CONSUMPTION_NOTE} ${cat2?.name ?? category} üslubunda örnek deneyim yorumu — servis, lezzet ve ortam üzerine gözlemler; bar testini doldurmak için üretildi.`;
-      for (let i = 0; i < need && card; i++) {
-        const consumption = await prisma.consumption.create({
-          data: { cardId: card.id, customerId: userId, dealerId, note: TEST_CONSUMPTION_NOTE },
-          select: { id: true },
-        }).catch(() => null);
-        if (!consumption) continue;
-        await prisma.consumptionReview.create({
-          data: { consumptionId: consumption.id, customerId: userId, rating: 5, text: sampleText, characterCategory: category },
-        }).catch(() => {});
-        created++;
+      for (let i = 0; i < need; i++) {
+        try {
+          await prisma.$transaction(async (tx) => {
+            const consumption = await tx.consumption.create({
+              data: { cardId: card!.id, customerId: userId, dealerId, note: TEST_CONSUMPTION_NOTE },
+              select: { id: true },
+            });
+            await tx.consumptionReview.create({
+              data: { consumptionId: consumption.id, customerId: userId, rating: 5, text: sampleText, characterCategory: category },
+            });
+          });
+          created++;
+        } catch {
+          failed++;
+        }
       }
     }
+    await audit('fill', { category, n, existing, created, failed });
 
-    return NextResponse.json(
-      { success: true, action, category, tagged: fbs.length, created, total: fbs.length + created, threshold: CATEGORY_BADGE_THRESHOLD },
-      { headers: PRIVATE_NO_STORE_HEADERS },
+    return json(
+      { success: failed === 0, action, category, existing, created, failed, total: existing + created, threshold: CATEGORY_BADGE_THRESHOLD, ...(failed > 0 ? { error: `${failed} sentetik yorum oluşturulamadı` } : {}) },
+      failed > 0 && created === 0 ? 500 : 200,
     );
   }
 
@@ -212,7 +286,8 @@ export async function POST(req: NextRequest) {
     // Sentetik test verisini sil (Consumption silinince Review cascade ile gider) + test kartı.
     const del = await prisma.consumption.deleteMany({ where: { customerId: userId, note: TEST_CONSUMPTION_NOTE } });
     const delCard = await prisma.physicalCard.deleteMany({ where: { customerId: userId, blockReason: TEST_CONSUMPTION_NOTE } }).catch(() => ({ count: 0 }));
-    return NextResponse.json({ success: true, action, deletedConsumptions: del.count, deletedCards: delCard.count }, { headers: PRIVATE_NO_STORE_HEADERS });
+    await audit('cleanup', { deletedConsumptions: del.count, deletedCards: delCard.count });
+    return json({ success: true, action, deletedConsumptions: del.count, deletedCards: delCard.count });
   }
 
   return NextResponse.json({ success: false, error: 'Bilinmeyen aksiyon' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

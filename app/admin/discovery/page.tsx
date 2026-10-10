@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,10 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Save, RefreshCw, TestTube2, Download, Upload, MapPinned, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from '@/lib/admin-toast';
+import { QueryState } from '@/components/states';
+import { VersionConflictBanner } from '@/components/settings/version-conflict-banner';
+import { fetchResourceJson, requireVersion, saveVersioned } from '@/lib/versioned-resource';
+import { useVersionedDraft, useVersionedResource } from '@/hooks/use-versioned-resource';
 
 type LocationRow = {
   dealerId: string;
@@ -77,19 +81,17 @@ type DealerApiItem = {
   phone?: string | null;
 };
 
-const EMPTY_CONFIG: DiscoveryConfigForm = {
-  locations: [],
-  sponsored: [],
-  weeklyHighlights: {
-    ambienceLabel: 'En Güzel Ambiyans',
-    foodLabel: 'En Güzel Yemek',
-    serviceLabel: 'En Güzel Hizmet',
-  },
-};
-
-function normalizeConfig(input: unknown): DiscoveryConfigForm {
-  if (!input || typeof input !== 'object') return EMPTY_CONFIG;
+/**
+ * Sunucu/JSON verisini form biçimine çevirir. İstemcide varsayılan config KOPYASI yoktur
+ * (P0-28): eksik başlıklar `fallback`'ten (sunucudan yüklenmiş canlı değer ya da mevcut
+ * taslak) alınır. Sunucu yanıtı zaten tam normalize edilmiş gelir.
+ */
+function normalizeConfig(input: unknown, fallback?: DiscoveryConfigForm): DiscoveryConfigForm {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('Keşif ayarı beklenen biçimde değil');
+  }
   const raw = input as Partial<DiscoveryConfigForm>;
+  const fallbackHighlights = fallback?.weeklyHighlights ?? { ambienceLabel: '', foodLabel: '', serviceLabel: '' };
   return {
     locations: Array.isArray(raw.locations)
       ? raw.locations.map((row) => ({
@@ -118,18 +120,104 @@ function normalizeConfig(input: unknown): DiscoveryConfigForm {
         }))
       : [],
     weeklyHighlights: {
-      ambienceLabel: raw.weeklyHighlights?.ambienceLabel || EMPTY_CONFIG.weeklyHighlights.ambienceLabel,
-      foodLabel: raw.weeklyHighlights?.foodLabel || EMPTY_CONFIG.weeklyHighlights.foodLabel,
-      serviceLabel: raw.weeklyHighlights?.serviceLabel || EMPTY_CONFIG.weeklyHighlights.serviceLabel,
+      ambienceLabel: raw.weeklyHighlights?.ambienceLabel || fallbackHighlights.ambienceLabel,
+      foodLabel: raw.weeklyHighlights?.foodLabel || fallbackHighlights.foodLabel,
+      serviceLabel: raw.weeklyHighlights?.serviceLabel || fallbackHighlights.serviceLabel,
     },
   };
 }
 
+async function loadDiscoveryConfig() {
+  const body = await fetchResourceJson('/api/admin/discovery', 'Keşif ayarları alınamadı');
+  return { data: normalizeConfig(body.config), version: requireVersion(body) };
+}
+
+const PAGE_TITLE = 'Discovery Yönetimi';
+const PAGE_DESCRIPTION = 'Trend mekanlar, haftanın enleri, sponsor duyuruları ve yakın mekan konumlarını yönetin';
+
+/**
+ * P0-28: düzenleyici YALNIZ canlı config + sürüm başarıyla yüklendiğinde açılır. Yükleme
+ * hatası boş config'li, kaydedilebilir bir form olarak görünmez (eskiden tüm konum ve
+ * sponsorlar tek Kaydet ile silinebiliyordu); kaydetme `baseVersion` taşır (çakışmada 409).
+ */
 export default function AdminDiscoveryPage() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [config, setConfig] = useState<DiscoveryConfigForm>(EMPTY_CONFIG);
-  const [initialSignature, setInitialSignature] = useState('');
+  const resource = useVersionedResource(loadDiscoveryConfig);
+
+  if (resource.status === 'ready' && resource.data && resource.version) {
+    return (
+      <DiscoveryEditor
+        key={resource.loadId}
+        initial={resource.data}
+        initialVersion={resource.version}
+        onReload={resource.reload}
+        onCommitted={resource.commit}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={PAGE_TITLE}
+        description={PAGE_DESCRIPTION}
+        actions={
+          <Button variant="outline" onClick={() => void resource.reload()} disabled={resource.status === 'loading'} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${resource.status === 'loading' ? 'animate-spin' : ''}`} />
+            Yenile
+          </Button>
+        }
+      />
+      <QueryState
+        query={resource.query}
+        skeleton="form"
+        isEmpty={() => false}
+        loadingLabel="Keşif ayarları yükleniyor…"
+        error={{
+          title: 'Keşif ayarları yüklenemedi',
+          description: 'Canlı konum ve sponsor ayarları okunamadığı için düzenleme kilitlendi. Kayıtlı ayarlarınız değişmedi; tekrar deneyin.',
+        }}
+      >
+        {null}
+      </QueryState>
+    </div>
+  );
+}
+
+function DiscoveryEditor({
+  initial,
+  initialVersion,
+  onReload,
+  onCommitted,
+}: {
+  initial: DiscoveryConfigForm;
+  initialVersion: string;
+  onReload: () => unknown;
+  onCommitted: (config: DiscoveryConfigForm, version: string) => void;
+}) {
+  const request = useCallback(
+    (draft: DiscoveryConfigForm, baseVersion: string) =>
+      saveVersioned('/api/admin/discovery', 'PUT', { config: draft, baseVersion }, 'Kaydetme başarısız'),
+    []
+  );
+  const parse = useCallback(
+    (body: Record<string, unknown>) => ({ data: normalizeConfig(body.config), version: requireVersion(body) }),
+    []
+  );
+  const onSaved = useCallback(
+    (next: DiscoveryConfigForm, version: string) => {
+      onCommitted(next, version);
+      toast.success('Keşif ayarları güncellendi');
+    },
+    [onCommitted]
+  );
+  const onError = useCallback((e: unknown) => {
+    toast.error(e instanceof Error ? e.message : 'Kaydetme başarısız');
+  }, []);
+  const form = useVersionedDraft<DiscoveryConfigForm>({ initial, initialVersion, request, parse, onSaved, onError });
+  const config = form.draft;
+  const setConfig = form.setDraft;
+  const saving = form.saving;
+  const isDirty = form.dirty;
   const [dealers, setDealers] = useState<DealerOption[]>([]);
   const [previewLat, setPreviewLat] = useState('41.0082');
   const [previewLng, setPreviewLng] = useState('28.9784');
@@ -144,7 +232,6 @@ export default function AdminDiscoveryPage() {
   const [showHelp, setShowHelp] = useState(false);
 
   const signature = useMemo(() => JSON.stringify(config), [config]);
-  const isDirty = signature !== initialSignature;
 
   useEffect(() => {
     if (validationErrors.length > 0) setValidationErrors([]);
@@ -208,26 +295,6 @@ export default function AdminDiscoveryPage() {
     });
   };
 
-  const fetchConfig = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/discovery', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Keşif ayarları alınamadı');
-      const normalized = normalizeConfig(data.config);
-      setConfig(normalized);
-      setInitialSignature(JSON.stringify(normalized));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Keşif ayarları alınamadı');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
   useEffect(() => {
     const fetchDealers = async () => {
       try {
@@ -260,22 +327,9 @@ export default function AdminDiscoveryPage() {
         return;
       }
       setValidationErrors([]);
-      setSaving(true);
-      const res = await fetch('/api/admin/discovery', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Kaydetme başarısız');
-      const normalized = normalizeConfig(data.config);
-      setConfig(normalized);
-      setInitialSignature(JSON.stringify(normalized));
-      toast.success('Discovery ayarları güncellendi');
+      await form.save();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Kaydetme başarısız');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -325,7 +379,7 @@ export default function AdminDiscoveryPage() {
   const importConfigFromJson = () => {
     try {
       const parsed = JSON.parse(importPayload);
-      const normalized = normalizeConfig(parsed);
+      const normalized = normalizeConfig(parsed, config);
       setConfig(normalized);
       toast.success('Discovery JSON içe aktarıldı (kaydetmeyi unutmayın)');
     } catch {
@@ -398,30 +452,38 @@ export default function AdminDiscoveryPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Discovery Yönetimi"
-        description="Trend mekanlar, haftanın enleri, sponsor duyuruları ve yakın mekan konumlarını yönetin"
+        title={PAGE_TITLE}
+        description={PAGE_DESCRIPTION}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={fetchConfig} disabled={loading || saving} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <Button variant="outline" onClick={() => void onReload()} disabled={saving} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
               Yenile
             </Button>
             <Button
               variant="outline"
               onClick={autofillLocationsFromDealers}
-              disabled={loading || saving || dealers.length === 0}
+              disabled={saving || dealers.length === 0}
               className="gap-2"
             >
               <MapPinned className="h-4 w-4" />
               Bayilerden doldur
             </Button>
-            <Button onClick={saveConfig} disabled={loading || saving || !isDirty} className="gap-2">
+            <Button onClick={() => void saveConfig()} disabled={saving || !isDirty} className="gap-2">
               <Save className="h-4 w-4" />
-              Kaydet
+              {saving ? 'Kaydediliyor…' : 'Kaydet'}
             </Button>
           </div>
         }
       />
+
+      {form.conflict && (
+        <VersionConflictBanner
+          message={form.conflict.message}
+          onReload={onReload}
+          onOverwrite={form.conflict.currentVersion ? () => form.save({ overwrite: true }) : undefined}
+        />
+      )}
 
       <Card className="border-primary/20">
         <CardHeader className="py-3">

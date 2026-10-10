@@ -1,9 +1,12 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 export type TimelineRow = { at: string; kind: string; label: string; meta?: Record<string, unknown> };
 
+/** Hem PrismaClient hem interaktif transaction istemcisi (tx) kabul edilir. */
+type TimelineDb = Pick<PrismaClient, 'remedyTimelineEvent'> | Pick<Prisma.TransactionClient, 'remedyTimelineEvent'>;
+
 export async function appendRemedyTimelineEvent(
-  prisma: PrismaClient,
+  prisma: TimelineDb,
   remedyOfferId: string,
   kind: string,
   label: string,
@@ -55,3 +58,6 @@ export function buildRemedyTimeline(
 
   return rows.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
+
+/** Bayinin iç süreç olayları — müşteri zaman çizelgesinde gösterilmez. */
+export const CUSTOMER_HIDDEN_TIMELINE_KINDS: ReadonlySet<string> = new Set(['queued', 'rejected']);

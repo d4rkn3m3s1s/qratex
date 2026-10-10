@@ -164,16 +164,15 @@ export function SquadLeaveButton({ squadId }: { squadId: string }) {
     const [loading, setLoading] = useState(false);
 
     const handleLeave = async () => {
-        if (!confirm("Klandan ayrılmak istediğine emin misin? Tüm pasif puan gelirinden vazgeçeceksin.")) return;
+        if (!confirm("Klandan ayrılmak istediğine emin misin? Kurucuysan liderlik en eski üyeye devredilir; son üyeysen klan kapanır ve açık savaşların ödül havuzu iade edilir.")) return;
         setLoading(true);
-        // Assuming we need a leave endpoint. Let's create it later or handle it if it exists.
         try {
             const res = await fetch(`/api/customer/squads/${squadId}/leave`, {
                 method: "POST",
             });
             const data = await res.json();
             if (data.success) {
-                toast.success("Klandan ayrıldınız.");
+                toast.success(data.message || "Klandan ayrıldınız.");
                 router.refresh();
             } else {
                 toast.error(data.error || "Hata oluştu.");

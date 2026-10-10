@@ -4,9 +4,9 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { registerSchema } from '@/lib/validations';
-import { creditPointsAndXp } from '@/lib/points-wallet';
-import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
 import { checkRateLimitDb, getClientIdentifier } from '@/lib/rate-limit';
+import { normalizeEmail, emailLookupFilter } from '@/lib/auth/normalize-email';
+import { createPendingReferral, normalizeReferralCode } from '@/lib/referral';
 import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
@@ -37,17 +37,20 @@ export async function POST(request: NextRequest) {
         { error: validatedData.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const { name, email, password, role } = validatedData.data;
-    const referralCodeRaw = typeof body.referralCode === 'string' ? body.referralCode.trim().toUpperCase() : null;
+    const { name, password, role } = validatedData.data;
+    // Tek kanonik e-posta (büyük/küçük harf ve görünmez karakterle ikinci hesap açılamasın).
+    const email = normalizeEmail(validatedData.data.email);
+    const referralCode = normalizeReferralCode(body.referralCode);
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    // Check if user exists (geçiş dönemi: normalize edilmemiş eski kayıtlar da bulunur)
+    const existingUser = await prisma.user.findFirst({
+      where: { email: emailLookupFilter(email) },
+      select: { id: true },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Bu email adresi zaten kayıtlı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        { error: 'Bu e-posta adresi zaten kayıtlı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Hash password
@@ -96,52 +99,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Apply referral code if provided (same logic as POST /api/referral)
-    let referralApplied = false;
-    if (referralCodeRaw) {
-      const referralCodeRow = await prisma.referralCode.findUnique({
-        where: { code: referralCodeRaw },
-        include: { user: true },
-      });
-      if (referralCodeRow && referralCodeRow.userId !== user.id && referralCodeRow.isActive !== false) {
-        const limitOk = !referralCodeRow.maxUsage || referralCodeRow.usageCount < referralCodeRow.maxUsage;
-        if (limitOk) {
-          const pointsMatrix = await getPointsMatrix();
-          const { referredPoints: REFERRAL_BONUS, referrerPoints: REFERRER_BONUS } = getReferralRewards(pointsMatrix);
-          await prisma.$transaction(async (tx: any) => {
-            await tx.referral.create({
-              data: {
-                referrerId: referralCodeRow.userId,
-                referredId: user.id,
-                referralCode: referralCodeRow.code,
-                status: 'COMPLETED',
-                bonusGiven: REFERRAL_BONUS,
-                pointsEarned: REFERRER_BONUS,
-                completedAt: new Date(),
-              },
-            });
-            await creditPointsAndXp(tx, { userId: user.id, points: REFERRAL_BONUS });
-            await creditPointsAndXp(tx, { userId: referralCodeRow.userId, points: REFERRER_BONUS });
-            // Anti-fraud görünürlüğü: iki referral kredisini de points_credited yaz (aynı tx).
-            await tx.analyticsEvent.createMany({
-              data: [
-                { userId: user.id, event: 'points_credited', category: 'referral', data: { points: REFERRAL_BONUS, role: 'referred' } },
-                { userId: referralCodeRow.userId, event: 'points_credited', category: 'referral', data: { points: REFERRER_BONUS, role: 'referrer' } },
-              ],
-            });
-            await tx.referralCode.update({
-              where: { id: referralCodeRow.id },
-              data: { usageCount: { increment: 1 } },
-            });
-            await tx.notification.createMany({
-              data: [
-                { userId: user.id, type: 'REFERRAL_BONUS', title: 'Hoş Geldin Bonusu!', message: `Referans kodu ile ${REFERRAL_BONUS} puan kazandın!` },
-                { userId: referralCodeRow.userId, type: 'REFERRAL_COMPLETE', title: 'Referans Tamamlandı!', message: `Birisi senin referans kodunu kullandı. ${REFERRER_BONUS} puan kazandın!` },
-              ],
-            });
-          });
-          referralApplied = true;
-        }
+    // Davet kodu (P0-16): kayıtta yalnız BEKLEYEN davet yazılır, PUAN VERİLMEZ. Ödül, e-posta
+    // doğrulanıp ilk QR olayı gerçekleşince `qualifyReferral` ile tek seferlik verilir. Modül
+    // kapısı, limitler ve karşılıklı davet reddi servis içinde (lib/referral.ts).
+    let referralPending = false;
+    if (referralCode) {
+      try {
+        const ref = await createPendingReferral({ referredUserId: user.id, code: referralCode });
+        referralPending = ref.ok;
+      } catch (e) {
+        // Davet kaydı başarısız olsa da hesap açıldı; kayıt akışını bozma.
+        console.error('[REGISTER_REFERRAL]', e);
       }
     }
 
@@ -151,7 +119,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         event: 'user_registered',
         category: 'auth',
-        data: { role, referralApplied },
+        data: { role, referralPending },
       },
     });
 
@@ -163,11 +131,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user,
-      referralApplied: referralApplied ? true : undefined,
+      // Bonus kayıtta verilmez; davet beklemede (doğrulama + ilk QR sonrası işlenir).
+      referralPending: referralPending ? true : undefined,
       ...(exposeVerifyUrl ? { verifyUrl } : {}),
       emailSent,
       message: emailSent
-        ? 'Kayıt başarılı. E-postanıza gönderilen doğrulama linkine tıklayıp giriş yapın.'
+        ? referralPending
+          ? 'Kayıt başarılı. E-postanı doğrulayıp ilk QR deneyimini tamamladığında davet ödülün hesabına işlenecek.'
+          : 'Kayıt başarılı. E-postanıza gönderilen doğrulama linkine tıklayıp giriş yapın.'
         : 'Kayıt başarılı. E-posta gönderimi yapılandırılmamış; lütfen yöneticinizle iletişime geçin.',
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

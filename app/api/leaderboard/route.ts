@@ -15,6 +15,8 @@ import {
 } from '@/lib/league-rules';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { startOfWeekUTC } from '@/lib/timezone';
+import { createHmac } from 'crypto';
+import { publicDisplayName } from '@/lib/http/dto';
 
 export const dynamic = 'force-dynamic';
 /** Points dışı kategorilerde tek seferde en fazla kaç kullanıcı çekileceği (bellek/DoS önlemi) */
@@ -71,11 +73,80 @@ const getAlltimePointsRanking = unstable_cache(
   { revalidate: 60, tags: [LEADERBOARD_RANKING_TAG] }
 );
 
+/**
+ * "Liderlik tablosunda görün" tercihini KAPATAN kullanıcılar (Settings.preferences.showLeaderboard
+ * === false). Önceden bu tercih kaydediliyor ama sıralamada YOK SAYILIYORDU (P0-09). 60 sn cache.
+ * Hata durumunda boş küme (sayfa kırılmasın) + log.
+ */
+const getLeaderboardOptOutIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const rows = await prisma.settings.findMany({
+      where: {
+        key: { startsWith: USER_SETTINGS_PREFIX },
+        value: { path: ['preferences', 'showLeaderboard'], equals: false },
+      },
+      select: { key: true },
+      take: 50_000,
+    });
+    return rows.map((r) => r.key.slice(USER_SETTINGS_PREFIX.length)).filter(Boolean);
+  },
+  ['leaderboard-optouts'],
+  { revalidate: 60, tags: [LEADERBOARD_RANKING_TAG] }
+);
+
+const USER_SETTINGS_PREFIX = 'user_settings_';
+
+async function loadOptOutSet(): Promise<Set<string>> {
+  try {
+    return new Set(await getLeaderboardOptOutIds());
+  } catch (err) {
+    console.error('[LEADERBOARD] opt-out listesi okunamadı:', err);
+    return new Set();
+  }
+}
+
+/**
+ * Ham kullanıcı id'si yerine OPAK, kararlı kimlik (P0-09 / O1): liderlikten toplanan id'lerle
+ * aksiyon/olay atama uçlarında e-posta toplanıyordu. HMAC → geri çevrilemez, istemci yalnız
+ * liste anahtarı olarak kullanır.
+ */
+function publicLeaderboardId(userId: string): string {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || 'qratex-leaderboard';
+  return 'lb_' + createHmac('sha256', secret).update(`lb:${userId}`).digest('hex').slice(0, 20);
+}
+
+type RawEntry = { id: string; name: string | null; isCurrentUser: boolean; needsReview?: boolean };
+
+/** Yanıt DTO'su: opak id, maskeli ad (kendisi hariç), `needsReview` yalnız ADMIN'e. */
+function toPublicEntry<T extends RawEntry>(entry: T, viewerIsAdmin: boolean) {
+  const { needsReview, ...rest } = entry;
+  return {
+    ...rest,
+    id: publicLeaderboardId(entry.id),
+    name: entry.isCurrentUser ? entry.name : publicDisplayName(entry.name),
+    ...(viewerIsAdmin ? { needsReview: !!needsReview } : {}),
+  };
+}
+
+/** Görünürlüğü kapalı kullanıcılar elendiğinde liste dolsun diye çekilen ek pay. */
+const OPT_OUT_HEADROOM = 50;
+
 export async function GET(request: NextRequest) {
   try {
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
     const session = await getServerSession(authOptions);
+    // P0-09: oturum ZORUNLU (eski kod opsiyoneldi → anonim kazıma).
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Giriş yapmalısınız.', code: 'UNAUTHENTICATED' },
+        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const viewerIsAdmin = session.user.role === 'ADMIN';
+    const optOut = await loadOptOutSet();
+    /** Kullanıcı listede görünebilir mi? (kendisi her zaman kendini görür) */
+    const visible = (userId: string) => !optOut.has(userId) || userId === session.user.id;
     const leagueRules = await getLeagueRules();
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'weekly';
@@ -127,15 +198,23 @@ export async function GET(request: NextRequest) {
         })
         .sort((a, b) => b.score - a.score);
 
-      const topSlice = sortedUsers.slice(0, limit);
-      const suspiciousIds = await getSuspiciousUserIds(topSlice.map((u) => u.id));
+      const visibleUsers = sortedUsers.filter((u) => visible(u.id));
+      const topSlice = visibleUsers.slice(0, limit);
+      const suspiciousIds = viewerIsAdmin
+        ? await getSuspiciousUserIds(topSlice.map((u) => u.id))
+        : new Set<string>();
 
-      const leaderboard = sortedUsers.slice(0, limit).map((user, index) => ({
-        ...user,
-        rank: index + 1,
-        isCurrentUser: session?.user?.id === user.id,
-        needsReview: suspiciousIds.has(user.id),
-      }));
+      const leaderboard = topSlice.map((user, index) =>
+        toPublicEntry(
+          {
+            ...user,
+            rank: index + 1,
+            isCurrentUser: session.user.id === user.id,
+            needsReview: suspiciousIds.has(user.id),
+          },
+          viewerIsAdmin
+        )
+      );
 
       // findIndex -1 döndürür (nullish değil) → eski "?? -1 + 1 || null" 1. sıradaki
       // kullanıcıyı (index 0 → 0 → null) yanlışlıkla "sırasız" gösteriyordu. Düzeltildi.
@@ -187,9 +266,11 @@ export async function GET(request: NextRequest) {
 
     if (period === 'alltime') {
       // All time - kullanıcı-bağımsız top-N puan sıralaması (cache'li 60sn).
-      const users = await getAlltimePointsRanking(limit);
+      const users = (await getAlltimePointsRanking(Math.min(limit + OPT_OUT_HEADROOM, 150)))
+        .filter((u) => visible(u.id))
+        .slice(0, limit);
 
-      const suspiciousIds = await getSuspiciousUserIds(users.map((u) => u.id));
+      const suspiciousIds = viewerIsAdmin ? await getSuspiciousUserIds(users.map((u) => u.id)) : new Set<string>();
 
       leaderboardData = users.map((user, index) => {
         const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -247,10 +328,10 @@ export async function GET(request: NextRequest) {
             },
           },
           orderBy: { points: 'desc' },
-          take: limit,
-        });
+          take: Math.min(limit + OPT_OUT_HEADROOM, 150),
+        }).then((rows) => rows.filter((u) => visible(u.id)).slice(0, limit));
 
-        const fallbackSuspicious = await getSuspiciousUserIds(users.map((u) => u.id));
+        const fallbackSuspicious = viewerIsAdmin ? await getSuspiciousUserIds(users.map((u) => u.id)) : new Set<string>();
 
         leaderboardData = users.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -269,7 +350,7 @@ export async function GET(request: NextRequest) {
             leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
             nextLeague: nextLeague?.name || null,
             pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
-            isCurrentUser: session?.user?.id === user.id,
+            isCurrentUser: session.user.id === user.id,
             needsReview: fallbackSuspicious.has(user.id),
           };
         });
@@ -319,9 +400,12 @@ export async function GET(request: NextRequest) {
             periodPoints: periodPointsMap.get(user.id) || 0,
           }))
           .sort((a, b) => b.periodPoints - a.periodPoints)
+          .filter((u) => visible(u.id))
           .slice(0, limit);
 
-        const suspiciousIdsPeriod = await getSuspiciousUserIds(sortedUsers.map((u) => u.id));
+        const suspiciousIdsPeriod = viewerIsAdmin
+          ? await getSuspiciousUserIds(sortedUsers.map((u) => u.id))
+          : new Set<string>();
 
         leaderboardData = sortedUsers.map((user, index) => {
           const league = getLeagueMetaFromRules(user.points, leagueRules);
@@ -341,7 +425,7 @@ export async function GET(request: NextRequest) {
             leagueProgress: getLeagueProgressFromRules(user.points, leagueRules),
             nextLeague: nextLeague?.name || null,
             pointsToNextLeague: nextLeague ? Math.max(0, nextLeague.minPoints - user.points) : 0,
-            isCurrentUser: session?.user?.id === user.id,
+            isCurrentUser: session.user.id === user.id,
             needsReview: suspiciousIdsPeriod.has(user.id),
           };
         });
@@ -383,6 +467,7 @@ export async function GET(request: NextRequest) {
           const nextLeague = getNextLeagueMetaFromRules(currentUser.points, leagueRules);
           currentUserData = {
             ...currentUser,
+            id: publicLeaderboardId(currentUser.id),
             rank: userRank,
             feedbackCount: currentUser._count.feedbacks,
             badgeCount: currentUser._count.badges,
@@ -404,7 +489,7 @@ export async function GET(request: NextRequest) {
       {
         success: true,
         data: {
-          leaderboard: leaderboardData,
+          leaderboard: leaderboardData.map((entry) => toPublicEntry(entry, viewerIsAdmin)),
           userRank,
           currentUser: currentUserData,
           period,

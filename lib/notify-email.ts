@@ -11,6 +11,10 @@
  *   gönderilmez (güvenlik/KVKK hariç — onlar lib/email içinde, buradan geçmez).
  * - Mail yapılandırılmamışsa sessiz no-op (isMailConfigured).
  * - Ateşle-unut: çağıran isteği bloklamaz; hatalar yutulup loglanır.
+ * - GÜVENLİ VARSAYILAN (P0-35): gövde satırları HAM HTML DEĞİLDİR. Her metin parçası
+ *   `escapeEmailText` ile kaçışlanır ve otomatik bağlantıya dönüşmesin diye kırılır; vurgu
+ *   gerekiyorsa `{ strong: '...' }` parçası kullanılır. Bayi adı / müşteri yorumu / LLM çıktısı
+ *   Qratex markalı e-postaya bağlantı ya da etiket sokamaz.
  */
 import { prisma } from '@/lib/prisma';
 import { isMailConfigured, sendTransactionalEmail } from '@/lib/mail-sender';
@@ -20,6 +24,7 @@ import {
   getTransactionalEmailLogoUrl,
 } from '@/lib/transactional-email';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
+import { escapeEmailText } from '@/lib/security/escape-html';
 
 /** E-posta tercih anahtarı — Settings.notifications içindeki boolean alan. */
 type EmailPrefKey = 'emailReply' | 'emailBadge';
@@ -42,14 +47,76 @@ async function emailPrefEnabled(userId: string, prefKey: EmailPrefKey): Promise<
   }
 }
 
+/**
+ * Satır içi parça: düz metin (kaçışlanır) ya da vurgulu düz metin. HAM HTML KABUL EDİLMEZ —
+ * tip düzeyinde de bir "html" kaçış kapısı bilinçli olarak yok.
+ */
+export type EmailInline = string | { strong: string; maxLength?: number } | { text: string; maxLength?: number };
+/** Bir gövde paragrafı: tek düz metin ya da parçaların dizisi. */
+export type EmailLine = string | EmailInline[];
+
 interface EventEmailInput {
   userId: string;
   prefKey: EmailPrefKey;
+  /** Düz metin; satır sonu / kontrol karakterleri temizlenir (başlık enjeksiyonu yok). */
   subject: string;
+  /** Düz metin; şablonda kaçışlanır. */
   heading: string;
-  bodyLines: string[];
+  bodyLines: EmailLine[];
   ctaLabel?: string;
   ctaPath?: string; // origin'e göre göreli (ör. /customer/feedbacks)
+}
+
+const ZWSP_CHAR = '\u200B';
+
+function inlineRaw(part: EmailInline): string {
+  if (typeof part === 'string') return part;
+  const raw = 'strong' in part ? part.strong : part.text;
+  const max = part.maxLength;
+  if (typeof max === 'number' && max >= 0 && raw.length > max) return `${raw.slice(0, max).trimEnd()}…`;
+  return raw;
+}
+
+function inlineHtml(part: EmailInline): string {
+  if (typeof part === 'string') return escapeEmailText(part);
+  if ('strong' in part) return `<strong>${escapeEmailText(part.strong, { maxLength: part.maxLength })}</strong>`;
+  return escapeEmailText(part.text, { maxLength: part.maxLength });
+}
+
+/** Gövde satırlarını güvenli HTML'e çevirir (her parça kaçışlı). Testler için dışa açık. */
+export function renderEmailLinesHtml(lines: EmailLine[]): string {
+  return lines
+    .map((line) => {
+      const inner = typeof line === 'string' ? escapeEmailText(line) : line.map(inlineHtml).join('');
+      return `<p style="margin:0 0 12px;">${inner}</p>`;
+    })
+    .join('');
+}
+
+/**
+ * Düz metin gövdesi. HTML yok ama düz metin istemcileri de `alan.com` / `a@b.com` desenlerini
+ * bağlantıya çevirir → aynı otomatik bağlantı kırma burada görünmez boşlukla yapılır.
+ */
+export function renderEmailLinesText(lines: EmailLine[]): string[] {
+  return lines.map((line) => {
+    const raw = typeof line === 'string' ? line : line.map(inlineRaw).join('');
+    return sanitizePlain(raw)
+      .replace(/:\/\//g, `:${ZWSP_CHAR}//`)
+      .replace(/([A-Za-z0-9\u00C0-\u024F])\.(?=[A-Za-z0-9\u00C0-\u024F])/g, `$1.${ZWSP_CHAR}`)
+      .replace(/@/g, `@${ZWSP_CHAR}`);
+  });
+}
+
+function sanitizePlain(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+}
+
+/** E-posta konusu: tek satır, kontrol karakteri yok, makul uzunluk. */
+export function sanitizeEmailSubject(subject: string, maxLength = 160): string {
+  // eslint-disable-next-line no-control-regex
+  const flat = subject.replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return flat.length > maxLength ? `${flat.slice(0, maxLength - 1).trimEnd()}…` : flat;
 }
 
 /**
@@ -74,22 +141,23 @@ export async function sendEventEmail(input: EventEmailInput): Promise<boolean> {
         ? { label: input.ctaLabel, href: `${origin}${input.ctaPath}` }
         : undefined;
 
+    const heading = sanitizeEmailSubject(input.heading, 200);
     const html = buildTransactionalEmailHtml({
-      heading: input.heading,
-      bodyHtml: input.bodyLines.map((l) => `<p style="margin:0 0 12px;">${l}</p>`).join(''),
+      heading,
+      bodyHtml: renderEmailLinesHtml(input.bodyLines),
       cta,
       logoUrl,
       brandLinkHref: origin,
     });
     const text = buildTransactionalPlainText({
-      heading: input.heading,
-      bodyLines: input.bodyLines,
+      heading,
+      bodyLines: renderEmailLinesText(input.bodyLines),
       cta,
     });
 
     const res = await sendTransactionalEmail({
       to: user.email,
-      subject: input.subject,
+      subject: sanitizeEmailSubject(input.subject),
       html,
       text,
     });
@@ -109,11 +177,15 @@ export async function emailDealerReply(params: {
   dealerName: string;
   feedbackSnippet?: string | null;
 }): Promise<void> {
-  const bodyLines = [
-    `<strong>${params.dealerName}</strong> geri bildiriminize yanıt verdi.`,
+  // dealerName bayinin serbest metin işletme adı, snippet müşteri metni: ikisi de kaçışlanır
+  // ve otomatik bağlantıya dönüşmez (oltalama bağlantısı sokulamaz).
+  const dealerName = (params.dealerName || '').trim() || 'İşletme';
+  const bodyLines: EmailLine[] = [
+    [{ strong: dealerName, maxLength: 120 }, ' geri bildiriminize yanıt verdi.'],
   ];
-  if (params.feedbackSnippet) {
-    bodyLines.push(`Geri bildiriminiz: "${params.feedbackSnippet.slice(0, 160)}"`);
+  const snippet = params.feedbackSnippet?.trim();
+  if (snippet) {
+    bodyLines.push(['Geri bildiriminiz: “', { text: snippet, maxLength: 160 }, '”']);
   }
   bodyLines.push('Yanıtı görmek için panelinize göz atın.');
 
@@ -141,7 +213,7 @@ export async function emailBadgeEarned(params: {
     subject: `Yeni rozet kazandın: ${params.badgeName} 🏆`,
     heading: 'Tebrikler, yeni bir rozet!',
     bodyLines: [
-      `<strong>${params.badgeName}</strong> rozetini kazandın.`,
+      [{ strong: params.badgeName, maxLength: 120 }, ' rozetini kazandın.'],
       'Koleksiyonunu görmek ve daha fazlasını açmak için devam et.',
     ],
     ctaLabel: 'Rozetlerim',

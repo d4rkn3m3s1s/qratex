@@ -5,24 +5,72 @@ import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { checkRateLimitDb } from '@/lib/rate-limit';
+import { emailLookupFilter, normalizeEmail } from '@/lib/auth/normalize-email';
+import { publicDisplayName } from '@/lib/http/dto';
 
 export const dynamic = 'force-dynamic';
 
-/** GET: aramaya göre eklenebilecek mevcut kullanıcılar (ekipte olmayan). ?q=isim/email */
+const MIN_ADMIN_QUERY = 3;
+const SEARCH_RATE_MAX = 30; // aktör başına / dakika
+
+/**
+ * GET: ekibe eklenebilecek aday (ekipte olmayan). ?q=
+ *
+ * P0-10: Eski kod boş `q` ile BÜTÜN kullanıcıların ad, e-posta ve rolünü (ekip yöneticisi
+ * CUSTOMER bile olsa) listeliyordu; rate limit yoktu → kullanıcı tabanı e-posta listesi çıkarılabiliyordu.
+ * Yeni sözleşme (davet modeli):
+ *  - Boş/kısa sorgu → boş liste.
+ *  - ADMIN olmayan ekip yöneticisi YALNIZ tam e-posta adresiyle birebir arama yapar ("davet":
+ *    kişiyi zaten tanıyorsunuz). Yanıttaki e-posta, yöneticinin yazdığı adrestir — yeni bilgi sızmaz.
+ *  - ADMIN ad/e-posta parçasıyla arayabilir (en fazla 10 sonuç).
+ *  - Rol alanı dönmez; ad herkese açık biçimde kısaltılır (ADMIN hariç). Aktör başına rate limit.
+ */
 export async function GET(req: NextRequest) {
   const auth = await requireTeamAccess({ manager: true });
   if ('error' in auth) return auth.error;
-  const q = (req.nextUrl.searchParams.get('q') || '').trim();
+  const rawQ = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 120);
 
+  const rl = await checkRateLimitDb(`team-member-search:${auth.session.user.id}`, SEARCH_RATE_MAX, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { success: false, error: 'Çok fazla arama yaptınız. Lütfen biraz bekleyin.', users: [] },
+      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
+    );
+  }
+
+  const exactEmail = normalizeEmail(rawQ);
+  const looksLikeEmail = z.string().email().safeParse(exactEmail).success;
+
+  if (!auth.isAdmin) {
+    if (!looksLikeEmail) {
+      return NextResponse.json(
+        { success: true, users: [], hint: 'Eklemek istediğiniz kişinin e-posta adresini tam olarak yazın.' },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const match = await prisma.user.findFirst({
+      where: { email: emailLookupFilter(exactEmail), adminTeamRole: null },
+      select: { id: true, name: true, image: true },
+    });
+    const users = match
+      ? [{ id: match.id, name: publicDisplayName(match.name, ''), email: exactEmail, image: match.image }]
+      : [];
+    return NextResponse.json({ success: true, users }, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  if (rawQ.length < MIN_ADMIN_QUERY) {
+    return NextResponse.json({ success: true, users: [] }, { headers: PRIVATE_NO_STORE_HEADERS });
+  }
   const users = await prisma.user.findMany({
     where: {
-      ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { email: { contains: q, mode: 'insensitive' } }] } : {}),
+      OR: [{ name: { contains: rawQ, mode: 'insensitive' } }, { email: { contains: rawQ, mode: 'insensitive' } }],
       // Ekipte olma ölçütü = ekip rolü (adminTeamRole). Departmansız ama rollü üye de "ekipte" sayılır.
       adminTeamRole: null,
     },
-    select: { id: true, name: true, email: true, image: true, role: true },
+    select: { id: true, name: true, email: true, image: true },
     orderBy: { name: 'asc' },
-    take: 20,
+    take: 10,
   });
 
   return NextResponse.json({ success: true, users }, { headers: PRIVATE_NO_STORE_HEADERS });
@@ -62,7 +110,7 @@ export async function POST(req: NextRequest) {
   }
   const { email, department, departments, teamRole } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true, role: true } });
+  const user = await prisma.user.findFirst({ where: { email: emailLookupFilter(email) }, select: { id: true, role: true } });
   if (!user) {
     return NextResponse.json({ success: false, error: 'Bu e-posta ile kayıtlı kullanıcı yok. Önce kullanıcı oluşturun.', notFound: true }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
   }
@@ -111,6 +159,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
   const { id, department, departments, teamRole } = parsed.data;
+
+  // Yalnız MEVCUT ekip üyeleri güncellenir: id ile (e-posta/onay olmadan) ekip dışındaki birine
+  // rol verilip ekibe sokulamasın.
+  const member = await prisma.user.findFirst({ where: { id, adminTeamRole: { not: null } }, select: { id: true } });
+  if (!member) return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
 
   const data: Prisma.UserUpdateInput = {};
   if (teamRole !== undefined) data.adminTeamRole = teamRole;

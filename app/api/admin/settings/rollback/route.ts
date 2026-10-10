@@ -5,6 +5,8 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+// P0-01: gizli kapı ayarı rollback ile geri yüklenemez (eski düz metin cevap dirilmesin).
+import { isProtectedSettingKey } from '@/lib/admin-gate';
 
 
 export const dynamic = 'force-dynamic';
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const map = oldData as SettingsMap;
-    const keys = Object.keys(map);
+    const keys = Object.keys(map).filter((k) => !isProtectedSettingKey(k));
     if (keys.length === 0) {
       return NextResponse.json({ error: 'Rollback edilecek ayar bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }

@@ -160,23 +160,72 @@ export const createBadgeSchema = z.object({
   }),
 });
 
+/**
+ * Görev türleri. Kanonik biçim küçük harftir (şema varsayılanı `daily`);
+ * eski veride ve başarım tohumlarında büyük harf (`SPECIAL`) de bulunduğu
+ * için girdi büyük/küçük harf duyarsız kabul edilip küçük harfe indirgenir.
+ * P0-39: admin formu `DAILY/WEEKLY/MONTHLY/SPECIAL` gönderiyordu, şema
+ * yalnızca küçük harfli üç değeri kabul ediyordu → her oluşturma 500.
+ */
+export const QUEST_TYPES = ['daily', 'weekly', 'monthly', 'special'] as const;
+export type QuestType = (typeof QUEST_TYPES)[number];
+
+export const questTypeSchema = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v),
+  z.enum(QUEST_TYPES, {
+    errorMap: () => ({ message: 'Geçersiz görev türü (günlük, haftalık, aylık veya özel olmalı)' }),
+  })
+);
+
+/**
+ * Opsiyonel bitiş tarihi. JSON üzerinden `Date` nesnesi gelemez; istemci
+ * `<input type="date">` değerini ("2026-10-20") ya da ISO metni gönderir.
+ * Boş metin/`null`/`undefined` → `null`. Ayrıştırılamayan metin → doğrulama
+ * hatası (500 değil). P0-39: eski `z.date()` her metni reddediyordu.
+ */
+const optionalQuestDateSchema = z.preprocess(
+  (v) => {
+    if (v === undefined || v === null) return null;
+    if (typeof v === 'string') {
+      const s = v.trim();
+      if (!s) return null;
+      // Yalnız tarih ("YYYY-MM-DD") → o günün sonu (Türkiye saati, UTC+3).
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T23:59:59.999+03:00`);
+      return new Date(s);
+    }
+    return v;
+  },
+  z
+    .date({ errorMap: () => ({ message: 'Geçersiz bitiş tarihi' }) })
+    .nullable()
+);
+
 export const createQuestSchema = z.object({
-  name: z.string().min(1, 'İsim gerekli').max(50),
-  description: z.string().min(1, 'Açıklama gerekli').max(200),
-  icon: z.string().min(1, 'İkon gerekli'),
-  type: z.enum(['daily', 'weekly', 'special']),
+  name: z.string().trim().min(1, 'İsim gerekli').max(50, 'İsim en fazla 50 karakter olabilir'),
+  description: z
+    .string()
+    .trim()
+    .min(1, 'Açıklama gerekli')
+    .max(200, 'Açıklama en fazla 200 karakter olabilir'),
+  icon: z.string().trim().min(1, 'İkon gerekli').max(16),
+  type: questTypeSchema,
   requirement: z.object({
-    type: z.string(),
-    count: z.number().positive(),
+    type: z.string().trim().min(1).max(40),
+    count: z.number().int('Hedef tam sayı olmalı').positive('Hedef en az 1 olmalı').max(10_000),
     // visit_category görevleri için opsiyonel kategori (boş = herhangi işletme).
-    category: z.string().max(60).optional(),
+    category: z.string().trim().max(60).optional(),
   }),
   reward: z.object({
-    points: z.number().nonnegative(),
-    xp: z.number().nonnegative(),
+    points: z.number().int('Puan tam sayı olmalı').nonnegative('Puan negatif olamaz').max(100_000),
+    xp: z.number().int().nonnegative().max(1_000_000),
   }),
-  expiresAt: z.date().optional().nullable(),
+  expiresAt: optionalQuestDateSchema.optional(),
 });
+
+/** PATCH için: yalnız gönderilen alanlar doğrulanır; `isActive` da güncellenebilir. */
+export const updateQuestSchema = createQuestSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
 
 export const createRewardSchema = z.object({
   name: z.string().min(1, 'İsim gerekli').max(50),

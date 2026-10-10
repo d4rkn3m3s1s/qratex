@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
+import { checkAssign } from '@/lib/cards/lifecycle';
 
 
 export const dynamic = 'force-dynamic';
@@ -45,14 +46,11 @@ export async function POST(
         { error: 'Kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    if (card.status !== 'UNUSED') {
+    // Durum makinesi: yalnız UNUSED + bağsız + arşivlenmemiş kart atanabilir (P0-26).
+    const assignable = checkAssign(card);
+    if (!assignable.ok) {
       return NextResponse.json(
-        { error: 'Sadece aktive edilmemiş kartlar atanabilir' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (card.customerId) {
-      return NextResponse.json(
-        { error: 'Bu kart zaten bir müşteriye atanmış' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        { error: assignable.message, code: assignable.code }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     // Müşteriyi kontrol et
@@ -83,43 +81,52 @@ export async function POST(
         { error: 'Bu müşterinin zaten aktif bir kartı var' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    // Kartı müşteriye ata
-    const updatedCard = await prisma.physicalCard.update({
-      where: { id },
-      data: {
-        customerId,
-        status: 'ACTIVATED',
-        activatedAt: new Date(),
-      },
-    });
-
-    // Audit log
-    await prisma.cardAuditLog.create({
-      data: {
-        cardId: id,
-        userId: session.user.id,
-        action: 'ADMIN_ASSIGNED',
-        metadata: {
+    // Kartı müşteriye ata — koşullu yazım (arada aktive/bloklandı/arşivlendiyse 409) ve
+    // denetim izi + bildirim aynı transaction'da.
+    const updatedCard = await prisma.$transaction(async (tx) => {
+      const w = await tx.physicalCard.updateMany({
+        where: { id, status: 'UNUSED', customerId: null, archivedAt: null },
+        data: {
           customerId,
-          customerName: customer.name,
-          customerEmail: customer.email,
-          assignedBy: session.user.name,
+          status: 'ACTIVATED',
+          activatedAt: new Date(),
         },
-        ipAddress: request.headers.get('x-forwarded-for') || null,
-        userAgent: request.headers.get('user-agent') || null,
-      },
+      });
+      if (w.count === 0) return null;
+
+      await tx.cardAuditLog.create({
+        data: {
+          cardId: id,
+          userId: session.user.id,
+          action: 'ADMIN_ASSIGNED',
+          metadata: {
+            customerId,
+            assignedBy: session.user.id,
+          },
+          ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+          userAgent: request.headers.get('user-agent') || null,
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: customerId,
+          title: 'QRateX Kartınız Aktive Edildi!',
+          message: `Yönetici tarafından size bir QRateX kartı atandı. Artık tüketim kaydı oluşturabilirsiniz.`,
+          type: 'SYSTEM',
+          data: { actionUrl: '/customer/my-card' },
+        },
+      });
+
+      return tx.physicalCard.findUnique({ where: { id } });
     });
 
-    // Müşteriye bildirim gönder
-    await prisma.notification.create({
-      data: {
-        userId: customerId,
-        title: 'QRateX Kartınız Aktive Edildi!',
-        message: `Admin tarafından size bir QRateX kartı atandı. Artık tüketim kaydı oluşturabilirsiniz.`,
-        type: 'SYSTEM',
-        data: { actionUrl: '/customer/my-card' },
-      },
-    });
+    if (!updatedCard) {
+      return NextResponse.json(
+        { error: 'Kart bu sırada başka bir işlemle değişti. Sayfayı yenileyip tekrar deneyin.', code: 'CONFLICT' },
+        { status: 409 , headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
 
     return NextResponse.json({
       success: true,

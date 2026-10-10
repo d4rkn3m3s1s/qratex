@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { creditPointsAndXp } from '@/lib/points-wallet';
+import { cancelSquadBattle } from '@/lib/squad-battle-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,55 +71,24 @@ export async function PATCH(
     }
 
     if (parsed.data.action === 'reject') {
-      // Atomik iptal + escrow iadesi: yalnızca hâlâ 'pending' ise iptal et
-      // (eşzamanlı kabul/ret yarışında tek biri geçer) ve fonlanmış havuzu
-      // meydan okuyana geri öde (idempotent: rewardRefunded guard).
-      const cancelled = await prisma.$transaction(async (tx) => {
-        const claim = await tx.squadBattle.updateMany({
-          where: { id, status: 'pending' },
-          data: { status: 'cancelled' },
-        });
-        if (claim.count === 0) return false;
-
-        if (battle.rewardFunded && !battle.rewardRefunded && battle.rewardPool > 0 && battle.challengedById) {
-          await creditPointsAndXp(tx, {
-            userId: battle.challengedById,
-            points: battle.rewardPool,
-          });
-          await tx.squadBattle.update({
-            where: { id },
-            data: { rewardRefunded: true },
-          });
-          await tx.analyticsEvent.create({
-            data: {
-              userId: battle.challengedById,
-              event: 'points_credited',
-              category: 'squad_battle_refund',
-              data: { points: battle.rewardPool, battleId: id },
-            },
-          });
-        }
-        return true;
+      // P0-20: tek servis — atomik claim (yalnız hâlâ 'pending' ise) + soft-cancel +
+      // defterli escrow iadesi (tek-kez) + bildirim + audit. Silme yok.
+      const r = await cancelSquadBattle(prisma, id, {
+        actorId: session.user.id,
+        actorRole: 'owner',
+        reason: 'Rakip klan meydan okumayı reddetti',
+        fromStatuses: ['pending'],
       });
-
-      if (!cancelled) {
+      if (r.status === 'noop') {
         return NextResponse.json(
           { error: 'Bu meydan okuma artık beklemede değil' },
           { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
-
-      if (battle.challengedById) {
-        await prisma.notification.create({
-          data: {
-            userId: battle.challengedById,
-            title: 'Meydan okuma reddedildi',
-            message: `${battle.squad2.name}, klan savaşı davetinizi reddetti. Ödül havuzunuz iade edildi.`,
-            type: 'warning',
-          },
-        });
-      }
-      return NextResponse.json({ success: true, status: 'cancelled' }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json(
+        { success: true, status: 'cancelled', refunded: r.refunded },
+        { headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
 
     // Kabul: savaşı başlat + katılımcıları oluştur.

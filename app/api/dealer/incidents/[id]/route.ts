@@ -3,13 +3,24 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
+
+/** Olay yanıtı: atanan kişi açık DTO (P0-11 — e-posta maskeli). */
+function incidentDto<T extends { assignedTo?: { id: string; name: string | null; email: string | null } | null }>(row: T) {
+  return { ...row, assignedTo: assigneeDto(row.assignedTo) };
+}
+
+const INCIDENT_INCLUDE = {
+  assignedTo: { select: ASSIGNEE_SELECT },
+  dealer: { select: { id: true, name: true, businessName: true } },
+} as const;
 
 
 export const dynamic = 'force-dynamic';
 
 const updateSchema = z.object({
   status: z.enum(['open', 'assigned', 'in_progress', 'resolved']).optional(),
-  assignedToId: z.string().optional().nullable(),
+  assignedToId: z.string().max(64).optional().nullable(),
   dueAt: z.string().datetime().optional().nullable(),
   resolvedAt: z.string().datetime().optional().nullable(),
 });
@@ -27,8 +38,7 @@ export async function GET(
     const incident = await prisma.incident.findUnique({
       where: { id },
       include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
-        dealer: { select: { id: true, name: true, businessName: true } },
+        ...INCIDENT_INCLUDE,
       },
     });
     if (!incident) {
@@ -43,7 +53,7 @@ export async function GET(
         { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-    return NextResponse.json(incident, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(incidentDto(incident), { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;
@@ -93,7 +103,14 @@ export async function PATCH(
 
     const data: { status?: string; assignedToId?: string | null; dueAt?: Date | null; resolvedAt?: Date | null } = {};
     if (parsed.data.status !== undefined) data.status = parsed.data.status;
-    if (parsed.data.assignedToId !== undefined) data.assignedToId = parsed.data.assignedToId;
+    if (parsed.data.assignedToId !== undefined) {
+      // P0-11: yalnız olayın bayisi ya da o bayinin AKTİF personeli atanabilir.
+      const assignee = await validateAssignee(existing.dealerId, parsed.data.assignedToId);
+      if (!assignee.ok) {
+        return NextResponse.json({ error: assignee.error }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+      }
+      data.assignedToId = assignee.value ?? null;
+    }
     if (parsed.data.dueAt !== undefined) data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
     if (parsed.data.resolvedAt !== undefined) {
       data.resolvedAt = parsed.data.resolvedAt ? new Date(parsed.data.resolvedAt) : null;
@@ -103,8 +120,7 @@ export async function PATCH(
       const row = await prisma.incident.findUnique({
         where: { id },
         include: {
-          assignedTo: { select: { id: true, name: true, email: true } },
-          dealer: { select: { id: true, name: true, businessName: true } },
+          ...INCIDENT_INCLUDE,
         },
       });
       if (!row) {
@@ -113,7 +129,7 @@ export async function PATCH(
           { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
         );
       }
-      return NextResponse.json(row, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json(incidentDto(row), { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     if (session.user.role === 'ADMIN') {
@@ -121,11 +137,10 @@ export async function PATCH(
         where: { id },
         data,
         include: {
-          assignedTo: { select: { id: true, name: true, email: true } },
-          dealer: { select: { id: true, name: true, businessName: true } },
+          ...INCIDENT_INCLUDE,
         },
       });
-      return NextResponse.json(updated, { headers: PRIVATE_NO_STORE_HEADERS });
+      return NextResponse.json(incidentDto(updated), { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const n = await prisma.incident.updateMany({
@@ -141,8 +156,7 @@ export async function PATCH(
     const updated = await prisma.incident.findUnique({
       where: { id },
       include: {
-        assignedTo: { select: { id: true, name: true, email: true } },
-        dealer: { select: { id: true, name: true, businessName: true } },
+        ...INCIDENT_INCLUDE,
       },
     });
     if (!updated) {
@@ -151,7 +165,7 @@ export async function PATCH(
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
-    return NextResponse.json(updated, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(incidentDto(updated), { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

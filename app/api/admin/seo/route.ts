@@ -16,6 +16,7 @@ import {
 } from '@/lib/seo-settings';
 import { adminSeoPutSchema } from '@/lib/validations-admin';
 import { Prisma } from '@prisma/client';
+import { validateSeoGlobalUrls } from '@/lib/seo-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,15 +42,6 @@ const VALID_KEYS: (keyof SeoGlobalSettings)[] = [
   'canonicalBase',
   'extraSitemapUrls',
 ];
-
-function isValidUrl(s: string): boolean {
-  try {
-    new URL(s);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function sanitizeGlobal(body: Record<string, unknown>): SeoGlobalSettings {
   const out: Record<string, unknown> = {};
@@ -80,18 +72,17 @@ function sanitizeGlobal(body: Record<string, unknown>): SeoGlobalSettings {
       if (!Number.isNaN(n) && n > 0) out[key] = n;
       continue;
     }
+    if ((key === 'siteUrl' || key === 'canonicalBase' || key === 'ogImageUrl') && typeof v === 'string') {
+      // URL alanları kırpılır; siteUrl/canonicalBase sondaki "/" olmadan saklanır.
+      const trimmed = v.trim();
+      out[key] = key === 'ogImageUrl' ? trimmed : trimmed.replace(/\/+$/, '');
+      continue;
+    }
     if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number') {
       out[key] = v;
     }
   }
   return out as unknown as SeoGlobalSettings;
-}
-
-function validateGlobalUrls(g: SeoGlobalSettings): string | null {
-  if (g.siteUrl && !isValidUrl(g.siteUrl)) return 'Geçersiz Site URL';
-  if (g.ogImageUrl && !isValidUrl(g.ogImageUrl)) return 'Geçersiz OG görsel URL';
-  if (g.canonicalBase && g.canonicalBase.trim() !== '' && !isValidUrl(g.canonicalBase)) return 'Geçersiz Canonical base URL';
-  return null;
 }
 
 export async function GET() {
@@ -147,7 +138,7 @@ export async function PUT(request: NextRequest) {
     const pageOverrides = body.pageOverrides as SeoPageOverride[] | undefined;
     const current = await getSeoSettingsFull();
     const nextGlobal = global ? { ...current.global, ...global } : current.global;
-    const urlErr = validateGlobalUrls(nextGlobal);
+    const urlErr = validateSeoGlobalUrls(nextGlobal);
     if (urlErr) return NextResponse.json({ error: urlErr }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     const nextOverrides =
       pageOverrides && Array.isArray(pageOverrides)

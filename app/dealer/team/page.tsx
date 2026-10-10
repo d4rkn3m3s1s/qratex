@@ -105,7 +105,8 @@ export default function DealerTeamPage() {
   }, []);
 
   const handleAddStaff = async () => {
-    if (!addForm.name.trim() || !addForm.email.trim() || !addForm.password || addForm.password.length < 8) {
+    // P0-04: personel ekleme bir DAVETTİR — bayi şifre belirlemez, var olan hesaba dokunulmaz.
+    if (!addForm.email.trim()) {
       toast.error(t('dealerTeam.toastAddValidation'));
       return;
     }
@@ -115,16 +116,14 @@ export default function DealerTeamPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: addForm.name.trim(),
           email: addForm.email.trim(),
-          password: addForm.password,
           jobTitle: addForm.jobTitle.trim() || undefined,
-          pinCode: addForm.pinCode.trim() || undefined,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(t('dealerTeam.toastAdded'));
+        if (json.emailSent === false) toast.warning(json.message ?? t('dealerTeam.toastAdded'));
+        else toast.success(json.message ?? t('dealerTeam.toastAdded'));
         setAddOpen(false);
         setAddForm({ name: '', email: '', password: '', jobTitle: '', pinCode: '' });
         fetchStaff();
@@ -394,14 +393,10 @@ export default function DealerTeamPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{t('dealerTeam.labelName')}</Label>
-              <Input
-                value={addForm.name}
-                onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder={t('dealerTeam.placeholderName')}
-              />
-            </div>
+            <p className="qx-small text-fg-muted">
+              Kişiye bir davet e-postası gönderilir. Hesabını kendi şifresiyle açar ya da mevcut hesabıyla giriş yapıp
+              daveti kendisi onaylar. PIN kodunu kişi ekibe katıldıktan sonra düzenleyebilirsiniz.
+            </p>
             <div className="space-y-2">
               <Label>{t('dealerTeam.labelEmail')}</Label>
               <Input
@@ -412,29 +407,11 @@ export default function DealerTeamPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{t('dealerTeam.labelPassword')}</Label>
-              <Input
-                type="password"
-                value={addForm.password}
-                onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))}
-                placeholder="••••••••"
-              />
-            </div>
-            <div className="space-y-2">
               <Label>{t('dealerTeam.labelJobTitle')}</Label>
               <Input
                 value={addForm.jobTitle}
                 onChange={(e) => setAddForm((p) => ({ ...p, jobTitle: e.target.value }))}
                 placeholder={t('dealerTeam.placeholderJobTitle')}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('dealerTeam.labelPin')}</Label>
-              <Input
-                value={addForm.pinCode}
-                onChange={(e) => setAddForm((p) => ({ ...p, pinCode: e.target.value }))}
-                placeholder={t('dealerTeam.placeholderPin')}
-                maxLength={6}
               />
             </div>
           </div>

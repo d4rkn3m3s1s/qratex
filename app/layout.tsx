@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
-import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
+import { VercelAnalytics } from '@/components/analytics/vercel-analytics';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
+import { CookieConsentBanner } from '@/components/layout/cookie-consent-banner';
 import './globals.css';
 import '@/components/ui/profile-backgrounds.css';
 import { Providers } from '@/components/providers';
@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ChatbotLazy } from '@/components/chat/chatbot-lazy';
 import { siteUrl } from '@/lib/site-config';
 import { getSeoSettings } from '@/lib/seo-settings';
+import { resolveSeoBaseUrl } from '@/lib/seo-url';
 import { VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/brand-colors';
 import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
 import { PageTransition } from '@/components/layout/page-transition';
@@ -46,7 +47,9 @@ const spaceGrotesk = Space_Grotesk({
 
 export async function generateMetadata(): Promise<Metadata> {
   const seo = await getSeoSettings();
-  const base = seo.canonicalBase || seo.siteUrl;
+  // P0-39: boş/bozuk Site URL `new URL('')` ile bütün siteyi çökertiyordu;
+  // taban her zaman ayrıştırılabilir (canonicalBase → siteUrl → ortam varsayılanı).
+  const base = resolveSeoBaseUrl(seo, siteUrl);
   return {
     title: {
       default: seo.defaultTitle,
@@ -165,9 +168,11 @@ export default async function RootLayout({
           </PageTransition>
           <Toaster />
           <ChatbotLazy />
-          <Analytics />
-          <SpeedInsights />
+          {/* Ölçüm: Vercel çerezsiz + URL redaksiyonlu; PostHog yalnız rızayla (P0-31). */}
+          <VercelAnalytics />
           <PostHogProvider />
+          {/* Rıza bildirimi + tercih merkezi tüm yüzeylerde (panele doğrudan girişte de). */}
+          <CookieConsentBanner />
         </Providers>
       </body>
     </html>

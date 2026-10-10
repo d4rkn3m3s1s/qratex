@@ -3,7 +3,7 @@
 /**
  * Premium sayfa kabı (ortak tasarım dili). Aynı bileşen tüm panellerde kullanılır;
  * nötr isim: `DashboardPageHero` / `DashboardPageHeroChrome` → `@/components/layout/dashboard-page-hero`.
- * Giriş: yalnızca CSS `animate-in` (globals) — bu dosyada Framer yok; tüketen sayfada LazyMotion ile çakışmaz.
+ * Giriş: yalnızca CSS `qx-enter` (globals; eski adı `animate-in` Radix overlay animasyonlarını eziyordu) — bu dosyada Framer yok; tüketen sayfada LazyMotion ile çakışmaz.
  */
 
 import { useReducedMotion } from 'framer-motion';
@@ -123,7 +123,7 @@ export function AdminPremiumHeroChrome({
       className={cn(
         'group relative rounded-2xl sm:rounded-3xl',
         'ring-1 ring-black/[0.04] dark:ring-white/[0.06]',
-        animate && !reducedMotion && 'animate-in',
+        animate && !reducedMotion && 'qx-enter',
         className
       )}
     >

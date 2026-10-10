@@ -68,23 +68,22 @@ export async function POST(
         throw new Error('ALREADY_ACTIVATED');
       }
 
-      // Kartı aktive et
-      const activatedCard = await tx.physicalCard.update({
-        where: { id: card.id },
+      // Kartı aktive et — KOŞULLU yazma: aynı anda iki aktivasyon gelirse yalnız biri kazanır
+      // (eski `update({ where: { id } })` ikinci isteğin kartı kendine geçirmesine izin veriyordu).
+      const claimed = await tx.physicalCard.updateMany({
+        where: { id: card.id, status: card.status, customerId: card.customerId, archivedAt: null },
         data: {
           status: 'ACTIVATED',
           customerId: session.user.id,
           activatedAt: new Date(),
         },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
+      });
+      if (claimed.count !== 1) {
+        throw new Error('ALREADY_ACTIVATED');
+      }
+      const activatedCard = await tx.physicalCard.findUniqueOrThrow({
+        where: { id: card.id },
+        select: { id: true, status: true, activatedAt: true },
       });
 
       // Audit log
@@ -93,9 +92,8 @@ export async function POST(
           cardId: card.id,
           userId: session.user.id,
           action: 'ACTIVATED',
-          metadata: {
-            customerEmail: session.user.email,
-          },
+          // KVKK: denetim kaydında e-posta değil kullanıcı id'si (userId alanı) yeterli.
+          metadata: { via: 'self_activation' },
           ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
           userAgent: request.headers.get('user-agent') || null,
         },

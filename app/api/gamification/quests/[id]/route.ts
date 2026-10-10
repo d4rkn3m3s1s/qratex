@@ -65,6 +65,8 @@ export async function PATCH(
         reward: body.reward,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
         isActive: body.isActive ?? true,
+        // Yeniden aktifleştirilen görev arşivden çıkar (aksi hâlde claim/ilerleme onu yok sayar).
+        ...((body.isActive ?? true) ? { archivedAt: null } : {}),
       },
     });
 
@@ -108,20 +110,29 @@ export async function DELETE(
         { success: false, error: 'Görev bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    await prisma.quest.delete({ where: { id } });
+    // Hard delete YOK: UserQuest cascade ile kullanıcıların ilerlemesi ve ödeme kaydı
+    // (rewardedAt — P0-15'in tek-sefer guard'ı) kalıcı olarak silinirdi. Görev arşivlenir:
+    // listelerden düşer (isActive=false), yeni ilerleme/ödeme almaz, geçmiş korunur.
+    const archivedAt = quest.archivedAt ?? new Date();
+    await prisma.$transaction([
+      prisma.quest.update({ where: { id }, data: { isActive: false, archivedAt } }),
+      prisma.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: 'DELETE_QUEST',
+          entity: 'Quest',
+          entityId: id,
+          oldData: quest as object,
+          newData: { archived: true, archivedAt: archivedAt.toISOString() },
+          ...auditMeta,
+        },
+      }),
+    ]);
 
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'DELETE_QUEST',
-        entity: 'Quest',
-        entityId: id,
-        oldData: quest as object,
-        ...auditMeta,
-      },
-    });
-
-    return NextResponse.json({ success: true, message: 'Görev silindi' }, { headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json(
+      { success: true, archived: true, message: 'Görev arşivlendi' },
+      { headers: PRIVATE_NO_STORE_HEADERS }
+    );
   } catch (error) {
     console.error('Error deleting quest:', error);
     return NextResponse.json(

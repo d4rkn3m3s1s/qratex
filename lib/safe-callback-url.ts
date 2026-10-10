@@ -1,28 +1,17 @@
-function trimTrailingSlash(s: string): string {
-  return s.replace(/\/$/, '');
-}
+import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
 
 /**
- * Limits open redirects: same-origin relative paths (`/…`) or absolute URLs whose origin matches `allowedOrigin`.
+ * Açık yönlendirme süzgeci (geriye uyumlu imza).
+ *
+ * Eski sürüm yalnız `startsWith('/') && !startsWith('//')` kontrol ediyordu: `/\evil.com`,
+ * `/\t/evil.com` ve `/%5Cevil.com` tarayıcıda `//evil.com` olarak çözülüp resmi şifre
+ * sıfırlama / magic link e-postalarını oltalama aracına çeviriyordu (P0-02). Artık TEK
+ * KAYNAK `lib/auth/post-login-target.ts#sanitizeCallbackPath` kullanılır: girdi
+ * `new URL(raw, origin)` ile çözülür, köken karşılaştırılır; ters bölü, kontrol karakteri,
+ * `javascript:` gibi http(s) dışı şemalar ve protokol-göreli yollar reddedilir.
+ *
+ * Dönüş: güvenliyse aynı kökenli YOL (`/a?b#c`), değilse `undefined`.
  */
 export function safePostLoginRedirect(raw: string | null | undefined, allowedOrigin: string): string | undefined {
-  if (raw == null) return undefined;
-  const s = raw.trim();
-  if (!s) return undefined;
-  if (s.length > 2048) return undefined;
-  if (s.startsWith('/') && !s.startsWith('//')) return s;
-
-  const base = trimTrailingSlash(allowedOrigin.trim());
-  if (!base || !base.startsWith('http')) return undefined;
-
-  try {
-    const u = new URL(s);
-    const b = new URL(base);
-    if (u.origin !== b.origin) return undefined;
-    const out = `${u.pathname}${u.search}${u.hash}`;
-    if (!out.startsWith('/') || out.length > 2048) return undefined;
-    return out || '/';
-  } catch {
-    return undefined;
-  }
+  return sanitizeCallbackPath(raw, allowedOrigin) ?? undefined;
 }

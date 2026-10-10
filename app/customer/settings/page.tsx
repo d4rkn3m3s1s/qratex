@@ -16,13 +16,13 @@ import {
   Check,
   Camera,
   Database,
-  FileDown,
   Trash2,
   Cake,
   Sparkles,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { DashboardPageHeading } from '@/components/dashboard/page-heading';
+import { PrivacyCenter } from './_components/privacy-center';
 import { TwoFactorSettings } from '@/components/auth/two-factor-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -141,7 +141,16 @@ export default function CustomerSettingsPage() {
     colorblindMode: false,
   });
 
-  const [exportingData, setExportingData] = useState(false);
+  // E-postadaki bağlantılar (ör. KVKK "veri paketiniz hazır") doğrudan sekmeyi açar: ?tab=privacy
+  const [activeTab, setActiveTab] = useState('profile');
+  useEffect(() => {
+    try {
+      const tab = new URLSearchParams(window.location.search).get('tab');
+      if (tab && /^[a-z-]{2,32}$/.test(tab)) setActiveTab(tab);
+    } catch {
+      /* yut */
+    }
+  }, []);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -448,34 +457,6 @@ export default function CustomerSettingsPage() {
   // Use client-side translation hook; server-side t() cannot be used in client components
   const tp = tClient;
 
-  const handleExportPersonalData = async () => {
-    setExportingData(true);
-    try {
-      const res = await fetch('/api/user/data-export', { credentials: 'same-origin' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(typeof err.error === 'string' ? err.error : tp('common.error'));
-        return;
-      }
-      const blob = await res.blob();
-      const dispo = res.headers.get('Content-Disposition');
-      let filename = 'qratex-data-export.json';
-      const match = dispo?.match(/filename="([^"]+)"/);
-      if (match?.[1]) filename = match[1];
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(uiLocale === 'en' ? 'Download started' : 'İndirme başladı');
-    } catch {
-      toast.error(tp('common.error'));
-    } finally {
-      setExportingData(false);
-    }
-  };
-
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
     try {
@@ -512,7 +493,7 @@ export default function CustomerSettingsPage() {
         <p className="text-sm text-muted-foreground mt-1 text-pretty leading-relaxed">Hesap ayarlarınızı yönetin</p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="flex flex-wrap gap-1 w-full lg:w-auto">
           <TabsTrigger value="profile" className="gap-2">
             <User className="h-4 w-4 shrink-0" />
@@ -1058,32 +1039,14 @@ export default function CustomerSettingsPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
+            {/* KVKK: rıza tercihi, kanıtlı veri indirme, başvuru ve başvuru takibi (P0-31, P0-34). */}
+            <PrivacyCenter />
             <Card glass>
               <CardHeader>
                 <CardTitle>{tp('customerPrivacy.title')}</CardTitle>
                 <CardDescription>{tp('customerPrivacy.description')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <FileDown className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-medium">{tp('customerPrivacy.exportTitle')}</p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{tp('customerPrivacy.exportDesc')}</p>
-                    </div>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="gap-2 w-full touch-manipulation sm:w-auto min-h-10"
-                    disabled={exportingData}
-                    onClick={handleExportPersonalData}
-                  >
-                    <FileDown className="h-4 w-4" />
-                    {exportingData ? tp('customerPrivacy.exporting') : tp('customerPrivacy.exportBtn')}
-                  </Button>
-                </div>
-
                 <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-3">
                   <div className="flex items-start gap-3">
                     <Trash2 className="h-5 w-5 text-destructive shrink-0 mt-0.5" />

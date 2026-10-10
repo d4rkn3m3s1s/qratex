@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { coarseLocationBucket, haversineKm } from '@/lib/innovation-geo';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { EXCLUDE_LEGACY_CHURN_FLASH } from '@/lib/churn-intervention-core';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +83,8 @@ export async function GET(request: NextRequest) {
         isActive: true,
         validFrom: { lte: now },
         validTo: { gte: now },
+        // Kişiye özel churn taslakları (eski sürüm) herkese açık listeye ASLA girmez (P0-22).
+        ...EXCLUDE_LEGACY_CHURN_FLASH,
       },
       select: { title: true },
       take: 80,

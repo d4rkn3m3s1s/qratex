@@ -12,6 +12,7 @@
  * sayaca bağlar; ölçülemeyenler feedback_count'a yaklaşık eşlenir; hiç izlenemeyenler -1.
  */
 import { prisma } from '@/lib/prisma';
+import { awardBadge } from '@/lib/badges/award';
 import { Prisma } from '@prisma/client';
 
 /** Bir kullanıcının requirement değerlendirmesi için sayaçları (tek okuma). */
@@ -210,7 +211,8 @@ export async function awardEligibleSurpriseBadges(
     const charIds = new Set(CHARACTER_PROFILES.map((p) => p.badgeId));
     const [candidates, owned] = await Promise.all([
       prisma.badge.findMany({
-        where: { isActive: true },
+        // Arşivlenmiş rozet yeni kazanım almaz (P0-26); awardBadge de aynı kontrolü yapar.
+        where: { isActive: true, archivedAt: null },
         select: { id: true, name: true, requirement: true },
       }),
       prisma.userBadge.findMany({ where: { userId }, select: { badgeId: true } }),
@@ -228,26 +230,18 @@ export async function awardEligibleSurpriseBadges(
       if (have < 0 || target <= 0) continue; // izlenemez/custom → otomatik verilemez
       if (have < target) continue; // koşul sağlanmadı
 
-      // Rozet ekleme + ödül kredisi AYNI TRANSACTION'da ([[points-economy-invariants]]):
-      // ayrı tx'lerde yapılırsa kredi hatasında rozet kalıcı verilmiş ama puan yatmamış
-      // olur ve sonraki çağrıda count=0 döneceği için kredi BİR DAHA denenmez (puan kaybı).
-      // Tek tx: kredi patlarsa rozet de rollback → tutarsız durum yok, sonraki koşuda tekrar denenir.
-      const { creditBadgeRewardInTx } = await import('@/lib/badge-reward-points');
-      const outcome = await prisma.$transaction(async (tx) => {
-        const res = await tx.userBadge.createMany({
-          data: [{ userId, badgeId: badge.id }],
-          skipDuplicates: true, // unique guard → çift verilmez
-        });
-        if (res.count === 0) return { created: false, points: 0 }; // yarış: başka istek verdi
-        const p = await creditBadgeRewardInTx(tx as never, {
-          userId, badgeId: badge.id, badgeName: badge.name, justCreated: true,
-        });
-        return { created: true, points: p };
-      }).catch((e: unknown) => {
-        // Sessiz yutma yok: rozet verilemediyse görünür olsun (rollback ile durum tutarlı).
-        console.error('[SURPRISE_BADGE] award tx failed:', badge.id, e);
-        return { created: false, points: 0 };
-      });
+      // Rozet + ödül TEK servisten (lib/badges/award.ts): unique guard, aktiflik, mintPoints
+      // (defter + points_credited) ve An Motoru anı AYNI transaction'da
+      // ([[points-economy-invariants]]). Kredi patlarsa rozet de rollback → sonraki koşuda
+      // tekrar denenir; yarışta kaybeden çağrı ALREADY_OWNED alır, puan basılmaz.
+      const result = await awardBadge(prisma, { userId, badgeId: badge.id, source: 'surprise' }).catch(
+        (e: unknown) => {
+          // Sessiz yutma yok: rozet verilemediyse görünür olsun (rollback ile durum tutarlı).
+          console.error('[SURPRISE_BADGE] award tx failed:', badge.id, e);
+          return null;
+        }
+      );
+      const outcome = { created: result?.awarded === true, points: result?.awarded ? result.points : 0 };
 
       if (!outcome.created) continue;
       awarded.push(badge.id);

@@ -158,11 +158,17 @@ async function awardCollectionBadge(userId: string, def: CollectionAchievementDe
     .catch(() => null);
   if (existing) return false;
 
-  // Yarış koşulunda create P2002 verirse sessizce yut (idempotent kalır).
-  const created = await prisma.userBadge
-    .create({ data: { userId, badgeId: def.badgeId } })
-    .then(() => true)
-    .catch(() => false);
+  // Tek rozet servisi (P0-14 / §5.3): unique guard (yarışta ALREADY_OWNED, P2002 yok) +
+  // An Motoru anı aynı tx'te. Koleksiyon rozeti satın alınamaz; aktiflik şartı aranmaz.
+  const created = await import('@/lib/badges/award')
+    .then(({ awardBadge }) =>
+      awardBadge(prisma, { userId, badgeId: def.badgeId, source: 'collection', requireActive: false })
+    )
+    .then((r) => r.awarded)
+    .catch((e: unknown) => {
+      console.error('[COLLECTION_BADGE] award failed:', def.badgeId, e);
+      return false;
+    });
   if (!created) return false;
 
   // Bildirim (fire-and-forget; hata rozet atamayı bozmasın).

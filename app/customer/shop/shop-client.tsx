@@ -12,6 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+type GiftRecipient = {
+    recipientUserId: string;
+    displayName: string;
+    maskedEmail: string | null;
+    image: string | null;
+};
+
 type ShopItem = {
     id: string;
     name: string;
@@ -46,6 +53,39 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
     const [recipient, setRecipient] = useState('');
     const [giftMessage, setGiftMessage] = useState('');
     const [isGifting, setIsGifting] = useState(false);
+    // P0-23: hediye yalnız önizlemede doğrulanan alıcı kimliğine gider (isimle rastgele eşleşme yok).
+    const [resolvedRecipient, setResolvedRecipient] = useState<GiftRecipient | null>(null);
+    const [lookingUp, setLookingUp] = useState(false);
+    const [giftRequestId, setGiftRequestId] = useState('');
+
+    const newRequestId = () =>
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID().replace(/-/g, '')
+            : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+
+    const lookupRecipient = async () => {
+        const q = recipient.trim();
+        if (q.length < 3) {
+            toast.error("Alıcının e-posta adresini ya da tam adını girin.");
+            return;
+        }
+        setLookingUp(true);
+        setResolvedRecipient(null);
+        try {
+            const res = await fetch(`/api/customer/shop/gift?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success || !data.recipient) {
+                toast.error(data.error || "Alıcı bulunamadı.");
+                return;
+            }
+            setResolvedRecipient(data.recipient as GiftRecipient);
+            setGiftRequestId(newRequestId());
+        } catch {
+            toast.error("Bağlantı hatası oluştu.");
+        } finally {
+            setLookingUp(false);
+        }
+    };
 
     const filteredItems = items.filter(item => {
         if (activeCategory === 'all') return true;
@@ -54,8 +94,8 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
 
     const handleSendGift = async () => {
         if (!giftItem) return;
-        if (!recipient.trim()) {
-            toast.error("Lütfen alıcı e-posta adresini veya kullanıcı adını girin.");
+        if (!resolvedRecipient) {
+            toast.error("Önce alıcıyı bulup doğrulayın.");
             return;
         }
 
@@ -66,7 +106,8 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     cosmeticId: giftItem.id,
-                    recipientIdentifier: recipient.trim(),
+                    recipientUserId: resolvedRecipient.recipientUserId,
+                    requestId: giftRequestId || newRequestId(),
                     message: giftMessage.trim()
                 })
             });
@@ -76,6 +117,7 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
                 toast.success(data.message || "Hediye başarıyla gönderildi!");
                 setGiftItem(null);
                 setRecipient('');
+                setResolvedRecipient(null);
                 setGiftMessage('');
                 router.refresh();
             } else {
@@ -306,17 +348,41 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
                         </div>
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Alıcı Kullanıcı</label>
-                            <div className="relative">
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Kullanıcı adı veya e-posta girin..."
-                                    value={recipient}
-                                    onChange={(e) => setRecipient(e.target.value)}
-                                    className="w-full h-11 bg-slate-900 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/50"
-                                />
+                            <label htmlFor="gift-recipient" className="text-xs font-bold uppercase tracking-wider text-slate-400">Alıcı Kullanıcı</label>
+                            <div className="flex gap-2">
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <input
+                                        id="gift-recipient"
+                                        type="text"
+                                        placeholder="E-posta ya da tam ad..."
+                                        value={recipient}
+                                        onChange={(e) => { setRecipient(e.target.value); setResolvedRecipient(null); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookupRecipient(); } }}
+                                        className="w-full h-11 bg-slate-900 border border-white/10 rounded-xl pl-10 pr-4 text-sm text-white focus:outline-none focus:border-purple-500/50"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-11 rounded-xl border-white/10 bg-white/[0.03] text-white hover:bg-white/10"
+                                    onClick={lookupRecipient}
+                                    disabled={lookingUp || isGifting}
+                                >
+                                    {lookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Bul'}
+                                </Button>
                             </div>
+                            {resolvedRecipient ? (
+                                <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm" aria-live="polite">
+                                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                                    <span className="min-w-0 truncate">
+                                        Alıcı: <strong>{resolvedRecipient.displayName}</strong>
+                                        {resolvedRecipient.maskedEmail ? <span className="text-slate-400"> · {resolvedRecipient.maskedEmail}</span> : null}
+                                    </span>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-400">Hediye geri alınamaz; göndermeden önce alıcıyı bulup doğrulayın.</p>
+                            )}
                         </div>
 
                         <div className="space-y-1.5">
@@ -343,7 +409,7 @@ export function ShopClient({ items, userPoints, userImage, userName, locale }: S
                         <Button 
                             className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-lg shadow-purple-600/20"
                             onClick={handleSendGift}
-                            disabled={isGifting}
+                            disabled={isGifting || !resolvedRecipient}
                         >
                             {isGifting ? (
                                 <>

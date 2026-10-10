@@ -1,30 +1,73 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { sanitizeCallbackPath } from '@/lib/auth/post-login-target';
+
+/** Başarılı geçişten sonra gidilecek yer: yalnız aynı kökenli `/admin…` yolu (kapı ekranı hariç). */
+function resolveGateReturn(raw: string | null): string {
+  const safe = sanitizeCallbackPath(raw, window.location.origin, { allowNonLandingPaths: true });
+  if (!safe) return '/admin';
+  const path = safe.split(/[?#]/)[0];
+  if (path === '/admin-gate' || path.startsWith('/admin-gate/')) return '/admin';
+  return path === '/admin' || path.startsWith('/admin/') ? safe : '/admin';
+}
+
+function formatUntil(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('tr-TR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' });
+}
 
 /**
  * ADMIN GİZLİ KAPI — havalı/uzay temalı erişim ekranı. ADMIN rolü olan ama gizli soruyu
- * henüz cevaplamamış kullanıcıya çıkar. Doğru tek-rakam cevap → sunucu gate cookie set eder
- * → /admin'e geçilir. Yanlış → portal reddeder (shake + kırmızı flaş). Cevap istemciye gelmez;
- * sunucuda doğrulanır (/api/admin/gate).
+ * henüz cevaplamamış kullanıcıya çıkar. Doğru tek-rakam cevap → sunucu imzalı, 12 saatlik
+ * kapı çerezi set eder → /admin'e geçilir. Yanlış → portal reddeder (shake + kırmızı flaş).
+ * Art arda yanlışlar geçidi kilitler (sunucu kararı; ekran yalnız gösterir). Cevap istemciye
+ * gelmez; sunucuda doğrulanır (/api/admin/gate).
  */
 export default function AdminGatePage() {
   const [question, setQuestion] = useState<string>('');
   const [digit, setDigit] = useState<string>('');
-  const [status, setStatus] = useState<'idle' | 'checking' | 'wrong' | 'ok'>('idle');
+  const [status, setStatus] = useState<'idle' | 'checking' | 'wrong' | 'ok' | 'locked'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [lockedUntil, setLockedUntil] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Soruyu getir.
+  // Soruyu + kilit durumunu getir.
   useEffect(() => {
-    fetch('/api/admin/gate')
-      .then((r) => r.json())
-      .then((d) => { if (d?.question) setQuestion(d.question); })
+    fetch('/api/admin/gate', { cache: 'no-store' })
+      .then(async (r) => {
+        if (r.status === 401) {
+          window.location.href = '/auth/login';
+          return;
+        }
+        const d = await r.json().catch(() => ({}));
+        if (d?.question) setQuestion(d.question);
+        if (d?.locked) {
+          setStatus('locked');
+          setLockedUntil(d.lockedUntil ?? null);
+        }
+        if (r.status === 503) setErrorMsg(d?.error || 'Geçit şu anda doğrulanamıyor.');
+      })
       .catch(() => setQuestion('Evrenin sırrını çöz.'));
     inputRef.current?.focus();
   }, []);
+
+  // Kilit süresi dolunca ekranı kendiliğinden aç.
+  useEffect(() => {
+    if (status !== 'locked' || !lockedUntil) return;
+    const ms = new Date(lockedUntil).getTime() - Date.now();
+    if (!Number.isFinite(ms)) return;
+    const t = setTimeout(() => {
+      setStatus('idle');
+      setLockedUntil(null);
+      setErrorMsg('');
+    }, Math.max(1000, Math.min(ms + 1000, 2_147_000_000)));
+    return () => clearTimeout(t);
+  }, [status, lockedUntil]);
 
   // ── Yıldız alanı + nebula (canvas) — hafif, sonsuz kayan derin uzay ──
   useEffect(() => {
@@ -51,6 +94,8 @@ export default function AdminGatePage() {
     };
     resize();
     window.addEventListener('resize', resize);
+    // Azaltılmış hareket tercihinde yıldızlar kaymaz, nebula nefes almaz (tek kare çizilir).
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
     let t = 0;
     const draw = () => {
@@ -75,14 +120,14 @@ export default function AdminGatePage() {
         ctx.fillStyle = `rgba(255,255,255,${alpha * s.z})`;
         ctx.fill();
       }
-      raf = requestAnimationFrame(draw);
+      if (!reduceMotion) raf = requestAnimationFrame(draw);
     };
     draw();
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }, []);
 
   const submit = useCallback(async (value: string) => {
-    if (status === 'checking' || status === 'ok') return;
+    if (status === 'checking' || status === 'ok' || status === 'locked') return;
     setStatus('checking');
     setErrorMsg('');
     try {
@@ -94,9 +139,18 @@ export default function AdminGatePage() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data?.success) {
         setStatus('ok');
-        // Kısa "portal açılıyor" animasyonu sonrası hedefe git.
-        const from = new URLSearchParams(window.location.search).get('from') || '/admin';
-        setTimeout(() => { window.location.href = from.startsWith('/admin') ? from : '/admin'; }, 900);
+        // Kısa "portal açılıyor" animasyonu sonrası hedefe git (yalnız güvenli /admin yolu).
+        const target = resolveGateReturn(new URLSearchParams(window.location.search).get('from'));
+        setTimeout(() => { window.location.href = target; }, 900);
+      } else if (res.status === 401) {
+        window.location.href = '/auth/login';
+      } else if (res.status === 423) {
+        setDigit('');
+        setStatus('locked');
+        setLockedUntil(data?.lockedUntil ?? null);
+        setErrorMsg(data?.error || 'Geçit kilitlendi.');
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
       } else {
         setStatus('wrong');
         setErrorMsg(data?.error || 'Yanlış frekans.');
@@ -130,7 +184,7 @@ export default function AdminGatePage() {
   };
 
   const ringColor =
-    status === 'ok' ? '#10b981' : status === 'wrong' ? '#ef4444' : '#a855f7';
+    status === 'ok' ? '#10b981' : status === 'wrong' || status === 'locked' ? '#ef4444' : '#a855f7';
 
   return (
     <div
@@ -157,7 +211,7 @@ export default function AdminGatePage() {
           />
           <div className="absolute grid h-28 w-28 place-items-center rounded-full bg-black/40 backdrop-blur-sm">
             <span className="text-5xl transition-transform duration-500" style={{ filter: `drop-shadow(0 0 12px ${ringColor})` }}>
-              {status === 'ok' ? '🌌' : status === 'wrong' ? '🚫' : '🛸'}
+              {status === 'ok' ? '🌌' : status === 'locked' ? '🔒' : status === 'wrong' ? '🚫' : '🛸'}
             </span>
           </div>
         </div>
@@ -167,7 +221,7 @@ export default function AdminGatePage() {
           Boyutlar Arası Geçit
         </p>
         <h1 className="mb-1 text-2xl font-black sm:text-3xl">
-          {status === 'ok' ? 'Geçit açılıyor…' : 'Erişim Doğrulaması'}
+          {status === 'ok' ? 'Geçit açılıyor…' : status === 'locked' ? 'Geçit Kilitli' : 'Erişim Doğrulaması'}
         </h1>
 
         {/* Soru */}
@@ -178,7 +232,18 @@ export default function AdminGatePage() {
         </p>
 
         {/* Kamuflaj input — ne yazdığın ve KAÇ karakter yazdığın görünmez (hep sabit nokta) */}
-        {status !== 'ok' && (
+        {status === 'locked' && (
+          <div role="alert" className="max-w-md rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-4 text-sm text-red-100">
+            <p className="font-semibold">Çok fazla yanlış frekans denendi.</p>
+            <p className="mt-1 text-red-100/80">
+              {lockedUntil
+                ? `Geçit ${formatUntil(lockedUntil)} saatine kadar kapalı. Diğer yöneticiler bilgilendirildi.`
+                : 'Geçit geçici olarak kapalı. Diğer yöneticiler bilgilendirildi.'}
+            </p>
+          </div>
+        )}
+
+        {status !== 'ok' && status !== 'locked' && (
           <>
             <div className="relative">
               {/* Görünür katman: HEP 9 sabit nokta (uzunluk sızmaz). Yazılan metin bunun altında görünmez. */}
@@ -235,8 +300,8 @@ export default function AdminGatePage() {
               Frekansı Gönder →
             </button>
             <p className="mt-4 text-xs text-white/40">İstediğini yaz — frekansı yalnızca içeri ait olanlar bilir</p>
-            {status === 'wrong' && errorMsg && (
-              <p className="mt-3 text-sm font-semibold text-red-400">{errorMsg}</p>
+            {(status === 'wrong' || status === 'idle') && errorMsg && (
+              <p role="alert" className="mt-3 text-sm font-semibold text-red-400">{errorMsg}</p>
             )}
           </>
         )}
@@ -249,6 +314,9 @@ export default function AdminGatePage() {
 
       <style jsx global>{`
         @keyframes gateSpin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) {
+          [style*='gateSpin'] { animation: none !important; }
+        }
         @keyframes gateShake {
           0%, 100% { transform: translateX(0); }
           20% { transform: translateX(-10px); }

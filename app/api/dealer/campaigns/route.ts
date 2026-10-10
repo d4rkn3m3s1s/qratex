@@ -2,18 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { z } from 'zod';
 import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
+import { campaignCreateSchema } from './campaign-schema';
 
 
 export const dynamic = 'force-dynamic';
 
-const createSchema = z.object({
-    title: z.string().min(1).max(200),
-    message: z.string().min(1).max(5000),
-    targetSegment: z.enum(['vip', 'loyal', 'active', 'risk', 'all']),
-    channel: z.enum(['notification', 'email']).default('notification'),
-});
+// Şema: ./campaign-schema.ts (POST ve PATCH aynı kuralları paylaşır; sahte e-posta kanalı yok).
+const createSchema = campaignCreateSchema;
 
 // GET — list dealer's campaigns
 export async function GET() {
@@ -66,7 +62,7 @@ export async function POST(request: NextRequest) {
         });
         if (gate) return gate;
 
-        const body = await request.json();
+        const body = await request.json().catch(() => null);
         const parsed = createSchema.safeParse(body);
         if (!parsed.success) {
             return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });

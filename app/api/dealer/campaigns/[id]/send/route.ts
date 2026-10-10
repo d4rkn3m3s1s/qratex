@@ -2,10 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { sendPushNotification } from '@/lib/push';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import {
+    EMAIL_CHANNEL_UNAVAILABLE_MESSAGE,
+    buildMarketingNotificationRows,
+    isSupportedCampaignChannel,
+    resolveMarketingAudience,
+    sendMarketingPush,
+} from '@/lib/marketing-delivery';
 
-// POST — send campaign to target segment via notifications
+/**
+ * POST — kampanyayı hedef segmente gönderir.
+ *
+ * P0-35:
+ *  - Alıcılar müşterinin "Kampanya & Sürprizler" bildirim tercihine göre süzülür (uygulama içi
+ *    ve push ayrı ayrı); iki kanalı da kapatan müşteriye hiçbir şey gitmez.
+ *  - Her bildirim `data.kind='campaign'` taşır.
+ *  - Sahte "e-posta" kanalı: hiçbir e-posta gönderilmiyordu ve push da atlanıyordu → artık
+ *    e-posta kanallı kampanya gönderilmez, bayiye açık bir hata gösterilir.
+ *  - "Gönderildi" işareti ile uygulama içi bildirimler AYNI transaction'da yazılır: teslim
+ *    başarısız olursa kampanya taslak kalır, yeniden denenebilir.
+ */
 
 export const dynamic = 'force-dynamic';
 
@@ -33,13 +50,20 @@ export async function POST(
         if (campaign.status === 'sent') {
             return NextResponse.json({ error: 'Bu kampanya zaten gönderildi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
+        if (!isSupportedCampaignChannel(campaign.channel)) {
+            return NextResponse.json(
+                { error: EMAIL_CHANNEL_UNAVAILABLE_MESSAGE, code: 'CHANNEL_UNSUPPORTED' },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
 
         const dealerId = campaign.dealerId;
         let customerIds: string[] = [];
+        const activeFeedback = { qrCode: { dealerId }, deletedAt: null };
 
         if (campaign.targetSegment === 'all') {
             const feedbacks = await prisma.feedback.findMany({
-                where: { qrCode: { dealerId } },
+                where: { ...activeFeedback, userId: { not: null } },
                 select: { userId: true },
                 distinct: ['userId'],
                 take: MAX_CAMPAIGN_RECIPIENTS,
@@ -48,7 +72,7 @@ export async function POST(
         } else if (campaign.targetSegment === 'vip') {
             const feedbacks = await prisma.feedback.findMany({
                 where: {
-                    qrCode: { dealerId },
+                    ...activeFeedback,
                     userId: { not: null },
                     user: { vipStatus: { isNot: null } },
                 },
@@ -61,7 +85,7 @@ export async function POST(
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             const risky = await prisma.feedback.groupBy({
                 by: ['userId'],
-                where: { qrCode: { dealerId }, createdAt: { gte: thirtyDaysAgo }, userId: { not: null } },
+                where: { ...activeFeedback, createdAt: { gte: thirtyDaysAgo }, userId: { not: null } },
                 _avg: { rating: true },
                 having: { rating: { _avg: { lte: 2 } } },
             });
@@ -72,7 +96,7 @@ export async function POST(
         } else {
             const active = await prisma.feedback.groupBy({
                 by: ['userId'],
-                where: { qrCode: { dealerId }, userId: { not: null } },
+                where: { ...activeFeedback, userId: { not: null } },
                 _count: true,
                 having: { userId: { _count: { gte: 3 } } },
             });
@@ -88,45 +112,69 @@ export async function POST(
             return NextResponse.json({ error: 'Hedef segmentte müşteri bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
+        // Bildirim tercihine saygı (fail-closed: tercih okunamazsa hiçbir şey gönderilmez).
+        const audience = await resolveMarketingAudience(customerIds);
+        if (audience.reachCount === 0) {
+            return NextResponse.json(
+                {
+                    error: 'Hedef segmentteki müşterilerin tümü kampanya bildirimlerini kapatmış; gönderilecek kimse yok.',
+                    code: 'NO_CONSENTING_RECIPIENTS',
+                    candidateCount: audience.candidateCount,
+                    optedOutCount: audience.optedOutCount,
+                },
+                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+            );
+        }
+
         const markSentWhere =
             session.user.role === 'ADMIN'
                 ? { id, status: { not: 'sent' as const } }
                 : { id, dealerId: session.user.id, status: { not: 'sent' as const } };
 
-        const claimed = await prisma.campaign.updateMany({
-            where: markSentWhere,
-            data: { status: 'sent', sentAt: new Date(), sentCount: customerIds.length },
+        // Claim + uygulama içi bildirimler tek transaction: biri başarısızsa ikisi de geri alınır.
+        const claimed = await prisma.$transaction(async (tx) => {
+            const claim = await tx.campaign.updateMany({
+                where: markSentWhere,
+                data: { status: 'sent', sentAt: new Date(), sentCount: audience.reachCount },
+            });
+            if (claim.count === 0) return false;
+            if (audience.appUserIds.length > 0) {
+                await tx.notification.createMany({
+                    data: buildMarketingNotificationRows(audience.appUserIds, {
+                        title: campaign.title,
+                        message: campaign.message,
+                        type: 'campaign',
+                        data: { campaignId: campaign.id, dealerId },
+                    }),
+                });
+            }
+            return true;
         });
-        if (claimed.count === 0) {
+        if (!claimed) {
             return NextResponse.json(
                 { error: 'Kampanya durumu değişti veya gönderilemedi' },
                 { status: 409 , headers: PRIVATE_NO_STORE_HEADERS }
             );
         }
 
-        await prisma.notification.createMany({
-            data: customerIds.map((userId) => ({
-                userId,
-                title: campaign.title,
-                message: campaign.message,
-                type: 'campaign',
-            })),
+        const pushDelivered = await sendMarketingPush(audience.pushUserIds, {
+            title: campaign.title,
+            message: campaign.message,
+            url: '/customer',
         });
 
-        if (campaign.channel === 'notification') {
-            const pushPromises = customerIds.map((userId) =>
-                sendPushNotification(
-                    userId,
-                    campaign.title,
-                    campaign.message,
-                    '/customer/feedbacks',
-                    '/icon512_rounded.png'
-                )
-            );
-            await Promise.allSettled(pushPromises);
-        }
-
-        return NextResponse.json({ success: true, sentCount: customerIds.length }, { headers: PRIVATE_NO_STORE_HEADERS });
+        return NextResponse.json(
+            {
+                success: true,
+                sentCount: audience.reachCount,
+                inAppCount: audience.appUserIds.length,
+                pushDelivered,
+                candidateCount: audience.candidateCount,
+                optedOutCount: audience.optedOutCount,
+                ineligibleCount: audience.ineligibleCount,
+            },
+            { headers: PRIVATE_NO_STORE_HEADERS }
+        );
     } catch (error) {
         console.error('Error sending campaign:', error);
         const db = responseIfDatabaseUnavailable(error);

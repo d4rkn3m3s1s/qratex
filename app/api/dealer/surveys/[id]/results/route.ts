@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { aggregateSurveyResults } from '@/lib/survey-results';
 
 // GET — survey results with aggregated answers
 
@@ -20,7 +21,7 @@ export async function GET(
             where: { id },
             include: {
                 questions: { orderBy: { order: 'asc' } },
-                responses: { orderBy: { createdAt: 'desc' } },
+                responses: { orderBy: { createdAt: 'desc' }, select: { answers: true } },
             },
         });
 
@@ -28,41 +29,9 @@ export async function GET(
             return NextResponse.json({ error: 'Anket bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
         }
 
-        // Aggregate answers per question
-        const questionResults = survey.questions.map((q) => {
-            const answers = survey.responses
-                .map((r) => {
-                    const arr = r.answers as { questionId: string; value: unknown }[];
-                    return arr.find((a) => a.questionId === q.id);
-                })
-                .filter(Boolean);
-
-            if (q.type === 'multiple_choice' || q.type === 'single_choice') {
-                const optionCounts: Record<string, number> = {};
-                const opts = (q.options as string[]) ?? [];
-                opts.forEach((o) => (optionCounts[o] = 0));
-                answers.forEach((a) => {
-                    if (Array.isArray(a!.value)) {
-                        (a!.value as string[]).forEach((v) => { optionCounts[v] = (optionCounts[v] || 0) + 1; });
-                    } else if (typeof a!.value === 'string') {
-                        optionCounts[a!.value] = (optionCounts[a!.value] || 0) + 1;
-                    }
-                });
-                return { questionId: q.id, text: q.text, type: q.type, totalAnswers: answers.length, optionCounts };
-            }
-
-            if (q.type === 'rating') {
-                const values = answers.map((a) => Number(a!.value)).filter((v) => !isNaN(v));
-                const avg = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
-                const dist: Record<number, number> = {};
-                values.forEach((v) => { dist[v] = (dist[v] || 0) + 1; });
-                return { questionId: q.id, text: q.text, type: q.type, totalAnswers: values.length, avg: Math.round(avg * 10) / 10, distribution: dist };
-            }
-
-            // open_text
-            const texts = answers.map((a) => String(a!.value)).filter(Boolean);
-            return { questionId: q.id, text: q.text, type: q.type, totalAnswers: texts.length, recentTexts: texts.slice(0, 20) };
-        });
+        // Savunmacı toplama: yalnız tanımlı seçenekler, 1-5 tamsayı puanlar ve dolu metinler
+        // sayılır; eski kirli cevaplar `ignoredAnswers` olarak görünür (lib/survey-results.ts).
+        const questionResults = aggregateSurveyResults(survey.questions, survey.responses);
 
         return NextResponse.json({
             success: true,

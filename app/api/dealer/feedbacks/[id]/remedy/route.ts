@@ -1,144 +1,124 @@
-
 export const dynamic = 'force-dynamic';
 
 /**
- * 1-tık telafi: RemedyOffer oluşturur, müşteriye bildirim gider; müşteri tür/miktar seçip kabul eder.
+ * 1-tık telafi (QR geri bildirimi): RemedyOffer oluşturur.
+ *
+ * P0-22 / D7: Geçersiz gövde artık 400 döner — eskiden 500+ karakterlik mesajda zod başarısız
+ * olunca `queueForApproval=false, sendNotification=true` varsayılanına düşülüp ONAYSIZ teklif
+ * müşteriye gidiyordu. Belirsizlikte güvenli yön: kuyruğa al, bildirim gönderme.
+ * Açık/kabul edilmiş teklif varken 409; anonim geri bildirimde 422 (sahte başarı yok).
+ * Seçenekler bayinin şablon allowlist'inin alt kümesi olmak zorunda.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { requireAuth } from '@/lib/api-auth';
-import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
 import { z } from 'zod';
-import { assertModuleEnabled } from '@/lib/module-gate';
-import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
-import { getRemedyOptions } from '@/lib/remedy-options';
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { getRemedyOptions, restrictRemedyOptionsToAllowlist } from '@/lib/remedy-options';
+import {
+  createRemedyOffer,
+  isRemedyOfferError,
+  parseRemedyCreateBody,
+  DEFAULT_REMEDY_MESSAGE,
+  resolveRemedyMode,
+} from '@/lib/remedy-offer-service';
 
-const remedyOptionSchema = z.object({
-  type: z.string(),
-  label: z.string(),
-  unit: z.string().optional(),
-  values: z.array(z.union([z.number(), z.string()])),
-});
-const bodySchema = z.object({
-  message: z.string().max(500).optional(),
-  sendNotification: z.boolean().default(true),
-  options: z.array(remedyOptionSchema).optional(),
-  /** true: müşteriye bildirim yok, onay kuyruğuna düşer (awaiting_dealer_approval) */
-  queueForApproval: z.boolean().optional(),
-});
+const paramsSchema = z.object({ id: z.string().min(1).max(64) });
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const gate = await assertModuleEnabled('remedy_offers');
-  if (gate) return gate;
-  const auth = await requireAuth(['DEALER', 'ADMIN']);
-  if ('error' in auth) return auth.error;
-  const { session } = auth;
-
-  const { id: feedbackId } = await params;
-  const idemCheck = await checkIdempotency(request, 'remedy-feedback');
-  if ('error' in idemCheck) return idemCheck.error;
-  if (idemCheck.cached) return idemCheck.response;
-  const idemKey = idemCheck.key;
-
-  const feedback = await prisma.feedback.findUnique({
-    where: { id: feedbackId },
-    include: { qrCode: { select: { dealerId: true, locationId: true } }, user: { select: { id: true } } },
-  });
-
-  if (!feedback) {
-    return NextResponse.json({ error: 'Geri bildirim bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  if (session.user.role === 'DEALER' && feedback.qrCode.dealerId !== session.user.id) {
-    return NextResponse.json({ error: 'Bu geri bildirime telafi başlatma yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const body = await request.json().catch(() => ({}));
-  const parsed = bodySchema.safeParse(body);
-  const message =
-    parsed.success && parsed.data.message
-      ? parsed.data.message
-      : 'Deneyiminiz için özür dileriz. Aşağıdan telafi türü ve miktarınızı seçin.';
-  const queueForApproval = !!(parsed.success && parsed.data.queueForApproval);
-  const sendNotification = queueForApproval
-    ? false
-    : parsed.success
-      ? parsed.data.sendNotification
-      : true;
-  const options =
-    parsed.success && parsed.data.options?.length
-      ? parsed.data.options
-      : await getRemedyOptions(feedback.qrCode.dealerId, feedback.qrCode.locationId);
-
-  let remedyOfferId: string | null = null;
-
-  if (feedback.userId && (queueForApproval || sendNotification)) {
-    const offer = await prisma.remedyOffer.create({
-      data: {
-        feedbackId: feedbackId,
-        dealerId: feedback.qrCode.dealerId,
-        userId: feedback.userId,
-        message,
-        status: queueForApproval ? 'awaiting_dealer_approval' : 'pending',
-        options: options as object,
-      },
+export const POST = defineRoute(
+  {
+    name: 'dealer.feedbacks.remedy.create',
+    roles: ['DEALER', 'ADMIN'],
+    module: 'remedy_offers',
+    rateLimit: 'mutation',
+    idempotent: true,
+    params: paramsSchema,
+    // Gövde servis içinde doğrulanır: hata mesajı Türkçe ve alana özel döner (sessiz varsayılan yok).
+    schema: z.unknown(),
+  },
+  async ({ body: rawBody, params, user }) => {
+    const parsedBody = parseRemedyCreateBody(rawBody);
+    if (!parsedBody.ok) throw new ApiError('VALIDATION', parsedBody.message, { details: parsedBody.details });
+    const body = parsedBody.body;
+    const feedbackId = params.id;
+    const feedback = await prisma.feedback.findUnique({
+      where: { id: feedbackId },
+      select: { id: true, userId: true, qrCode: { select: { dealerId: true, locationId: true } } },
     });
-    remedyOfferId = offer.id;
-
-    await appendRemedyTimelineEvent(prisma, offer.id, 'created', 'Teklif oluşturuldu', {
-      preview: message.slice(0, 120),
-    });
-    if (queueForApproval) {
-      await appendRemedyTimelineEvent(prisma, offer.id, 'queued', 'Onay kuyruğunda');
-    } else if (sendNotification) {
-      await appendRemedyTimelineEvent(prisma, offer.id, 'notified', 'Müşteriye bildirim gönderildi');
+    if (!feedback) throw new ApiError('NOT_FOUND', 'Geri bildirim bulunamadı.');
+    if (user.role === 'DEALER' && feedback.qrCode.dealerId !== user.id) {
+      throw new ApiError('FORBIDDEN', 'Bu geri bildirime telafi başlatma yetkiniz yok.');
+    }
+    if (!feedback.userId) {
+      throw new ApiError(
+        'NO_CUSTOMER',
+        'Bu geri bildirim anonim bırakıldığı için telafi teklifi gönderilemez.',
+        { status: 422 }
+      );
     }
 
-    if (!queueForApproval && sendNotification) {
-      await prisma.notification.create({
+    const dealerId = feedback.qrCode.dealerId;
+    const allowed = await getRemedyOptions(dealerId, feedback.qrCode.locationId);
+    let options = allowed;
+    if (body.options !== undefined) {
+      const restricted = restrictRemedyOptionsToAllowlist(body.options, allowed);
+      if (!restricted.ok) throw new ApiError('VALIDATION', restricted.reason);
+      options = restricted.options;
+    }
+
+    const mode = resolveRemedyMode(body);
+    const message = body.message || DEFAULT_REMEDY_MESSAGE;
+
+    let result;
+    try {
+      result = await createRemedyOffer({
+        source: { kind: 'feedback', feedbackId },
+        dealerId,
+        userId: feedback.userId,
+        message,
+        mode,
+        options,
+      });
+    } catch (err) {
+      if (isRemedyOfferError(err)) {
+        throw new ApiError(err.code, err.message, {
+          status: err.status,
+          details: err.existingOfferId ? { existingOfferId: err.existingOfferId } : undefined,
+        });
+      }
+      throw err;
+    }
+
+    try {
+      await prisma.analyticsEvent.create({
         data: {
-          userId: feedback.userId,
-          title: 'Telafi Fırsatı',
-          message: 'Size özel bir telafi hazır. Tür ve miktar seçmek için tıklayın.',
-          type: 'info',
+          userId: user.id,
+          event: 'remedy_campaign_triggered',
+          category: 'campaign',
           data: {
             feedbackId,
-            type: 'remedy_campaign',
-            remedyOfferId: offer.id,
+            customerId: feedback.userId,
+            remedyOfferId: result.offerId,
+            queuedForApproval: result.status === 'awaiting_dealer_approval',
           },
         },
       });
+    } catch (e) {
+      console.warn('[remedy] analytics yazılamadı:', e);
     }
-  }
 
-  await prisma.analyticsEvent.create({
-    data: {
-      userId: session.user.id,
-      event: 'remedy_campaign_triggered',
-      category: 'campaign',
-      data: {
+    const queued = result.status === 'awaiting_dealer_approval';
+    return ok(
+      {
         feedbackId,
-        customerId: feedback.userId ?? null,
-        remedyOfferId,
-        queuedForApproval: !!queueForApproval,
+        remedyOfferId: result.offerId,
+        status: result.status,
+        notificationSent: result.notificationSent,
+        queuedForApproval: queued,
+        message: queued
+          ? 'Telafi taslağı onay kuyruğuna alındı. Yayınlamadan müşteri görmez.'
+          : 'Telafi teklifi gönderildi. Müşteri tür ve miktar seçecek.',
       },
-    },
-  });
-
-  const resBody = {
-    success: true,
-    feedbackId,
-    remedyOfferId,
-    notificationSent: !!(feedback.userId && !queueForApproval && sendNotification),
-    queuedForApproval: !!queueForApproval,
-    message: queueForApproval
-      ? 'Telafi taslağı onay kuyruğuna alındı. Yayınlamadan müşteri görmez.'
-      : 'Telafi teklifi gönderildi. Müşteri tür ve miktar seçecek.',
-  };
-  if (idemKey) await storeIdempotency(idemKey, 'remedy-feedback', 200, resBody);
-  return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+      { legacySpread: true }
+    );
+  }
+);

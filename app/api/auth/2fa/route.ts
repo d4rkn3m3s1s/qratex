@@ -5,6 +5,19 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
 import { generateBase32Secret, verifyTOTP, buildOtpauthUri } from '@/lib/totp';
 import { regenerateRecoveryCodes, countUnusedRecoveryCodes } from '@/lib/two-factor';
+import { bumpSessionVersion, reissueSessionCookie } from '@/lib/auth/session-version';
+import { SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
+
+/**
+ * 2FA durumu değişti (aç / kapat / kurtarma kodu yenile) → `sessionVersion` artar (P0-07):
+ * diğer cihazlardaki oturumlar düşer. İşlemi yapan tarayıcının çerezi yeni `sv` ile yeniden
+ * imzalanır, böylece kullanıcı bu ekranda oturumunu kaybetmez.
+ */
+async function withSessionRotation(request: NextRequest, userId: string, res: NextResponse): Promise<NextResponse> {
+  const sv = await bumpSessionVersion(userId);
+  await reissueSessionCookie(request, res, { sv }, { maxAge: SESSION_MAX_AGE_SECONDS });
+  return res;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -69,9 +82,10 @@ export async function POST(request: NextRequest) {
       });
       // Kurtarma kodlarını üret ve TEK SEFER döndür (cihaz kaybı için).
       const recoveryCodes = await regenerateRecoveryCodes(userId);
-      return NextResponse.json(
-        { success: true, message: '2FA etkinleştirildi', recoveryCodes },
-        { headers: PRIVATE_NO_STORE_HEADERS }
+      return withSessionRotation(
+        request,
+        userId,
+        NextResponse.json({ success: true, message: '2FA etkinleştirildi', recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
       );
     }
 
@@ -97,7 +111,11 @@ export async function POST(request: NextRequest) {
         }),
         prisma.twoFactorRecoveryCode.deleteMany({ where: { userId } }),
       ]);
-      return NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return withSessionRotation(
+        request,
+        userId,
+        NextResponse.json({ success: true, message: '2FA devre dışı bırakıldı' }, { headers: PRIVATE_NO_STORE_HEADERS })
+      );
     }
 
     if (body.action === 'recovery-codes') {
@@ -114,7 +132,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Yanlış kod' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
       }
       const recoveryCodes = await regenerateRecoveryCodes(userId);
-      return NextResponse.json({ success: true, recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS });
+      return withSessionRotation(
+        request,
+        userId,
+        NextResponse.json({ success: true, recoveryCodes }, { headers: PRIVATE_NO_STORE_HEADERS })
+      );
     }
 
     return NextResponse.json({ error: 'Geçersiz action' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });

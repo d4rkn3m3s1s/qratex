@@ -1,118 +1,197 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, Clock, Link2Off, Loader2, WifiOff, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAppT } from '@/lib/app-locale';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { TONE_CHIP } from '@/components/states';
+import { useAuthCopy } from '../_components/auth-copy';
+import { AuthNotice } from '../_components/auth-notice';
+import { VerifyPending } from '../_components/verify-pending';
+import { useResendVerification } from '../_components/use-resend-verification';
 
-function VerifyEmailLoadingFallback() {
-  const t = useAppT();
+type View =
+  | { status: 'loading' }
+  | { status: 'verified' | 'already_verified' }
+  | { status: 'expired'; maskedEmail: string }
+  | { status: 'invalid' }
+  | { status: 'network' };
+
+/**
+ * E-posta doğrulama sonucu (P0-39).
+ * - Sunucu durum kodu döndürür; metin burada TR/EN çizilir.
+ * - İdempotent: ikinci tıklama "zaten doğrulanmış" (başarı) olarak gösterilir.
+ * - Süresi dolmuşsa tek dokunuşla yeni bağlantı (token ile, e-posta yazdırmadan).
+ * - Token adres çubuğundan hemen silinir (geçmiş/analitik sızıntısı yok).
+ */
+function VerifyEmailContent() {
+  const searchParams = useSearchParams();
+  const copy = useAuthCopy();
+  const tokenRef = useRef<string>(searchParams.get('token') || '');
+  const startedRef = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [view, setView] = useState<View>({ status: 'loading' });
+  const resend = useResendVerification();
+
+  const run = useCallback(async () => {
+    const token = tokenRef.current;
+    if (!token) {
+      setView({ status: 'invalid' });
+      return;
+    }
+    setView({ status: 'loading' });
+    try {
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { status?: string; maskedEmail?: string };
+      if (data.status === 'verified' || data.status === 'already_verified') setView({ status: data.status });
+      else if (data.status === 'expired') setView({ status: 'expired', maskedEmail: data.maskedEmail || '***' });
+      else if (data.status === 'invalid') setView({ status: 'invalid' });
+      else setView({ status: 'network' });
+    } catch {
+      setView({ status: 'network' });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    if (tokenRef.current) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    void run();
+  }, [run]);
+
+  useEffect(() => {
+    if (view.status !== 'loading') headingRef.current?.focus();
+  }, [view.status]);
+
+  if (view.status === 'invalid') {
+    return (
+      <div className="w-full max-w-md">
+        <Card glass>
+          <CardContent className="space-y-4 pt-6">
+            <AuthNotice tone="danger" title={copy.verifyInvalidTitle}>
+              {copy.verifyInvalidBody}
+            </AuthNotice>
+            <VerifyPending />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const icon =
+    view.status === 'loading' ? (
+      <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+    ) : view.status === 'verified' || view.status === 'already_verified' ? (
+      <CheckCircle2 className="h-7 w-7" aria-hidden />
+    ) : view.status === 'expired' ? (
+      <Clock className="h-7 w-7" aria-hidden />
+    ) : view.status === 'network' ? (
+      <WifiOff className="h-7 w-7" aria-hidden />
+    ) : (
+      <Link2Off className="h-7 w-7" aria-hidden />
+    );
+  const tone =
+    view.status === 'verified' || view.status === 'already_verified'
+      ? 'success'
+      : view.status === 'expired' || view.status === 'network'
+        ? 'warning'
+        : 'brand';
+
+  const title =
+    view.status === 'loading'
+      ? copy.verifyWorking
+      : view.status === 'verified'
+        ? copy.verifySuccessTitle
+        : view.status === 'already_verified'
+          ? copy.verifyAlreadyTitle
+          : view.status === 'expired'
+            ? copy.verifyExpiredTitle
+            : copy.verifyNetworkTitle;
+  const body =
+    view.status === 'verified'
+      ? copy.verifySuccessBody
+      : view.status === 'already_verified'
+        ? copy.verifyAlreadyBody
+        : view.status === 'expired'
+          ? copy.verifyExpiredBody(view.maskedEmail)
+          : view.status === 'network'
+            ? copy.verifyNetworkBody
+            : null;
+
   return (
-    <div
-      className="flex min-h-dvh flex-col items-center justify-center gap-3"
-      role="status"
-      aria-live="polite"
-    >
-      <Loader2 className="h-12 w-12 animate-spin text-primary" aria-hidden />
-      <span className="sr-only">{t('auth.verifyPageLoadingSr')}</span>
+    <div className="w-full max-w-md">
+      <Card glass>
+        <CardContent className="space-y-5 pt-6 text-center">
+          <div role="status" aria-live="polite" aria-busy={view.status === 'loading'} className="flex flex-col items-center gap-3">
+            <div className={cn('grid h-14 w-14 place-items-center rounded-full', TONE_CHIP[tone])}>{icon}</div>
+            <h1 ref={headingRef} tabIndex={-1} className="qx-h2 text-fg outline-none">
+              {title}
+            </h1>
+            {body ? <p className="qx-body text-fg-muted text-pretty">{body}</p> : null}
+          </div>
+
+          {view.status === 'verified' || view.status === 'already_verified' ? (
+            <Button asChild className="w-full" variant="gradient">
+              <Link href="/auth/login?verified=1">{copy.continueToLogin}</Link>
+            </Button>
+          ) : null}
+
+          {view.status === 'expired' ? (
+            <div className="space-y-3">
+              <Button
+                type="button"
+                className="w-full gap-2"
+                loading={resend.state === 'sending'}
+                disabled={resend.cooldown > 0}
+                onClick={() => void resend.send({ token: tokenRef.current })}
+              >
+                <RotateCw className="h-4 w-4" aria-hidden />
+                {resend.cooldown > 0 ? copy.resendIn(resend.cooldown) : copy.resend}
+              </Button>
+              {resend.state === 'sent' ? <AuthNotice tone="success">{copy.resendSent}</AuthNotice> : null}
+              {resend.state === 'mail_unavailable' ? <AuthNotice tone="warning">{copy.mailUnavailable}</AuthNotice> : null}
+              {resend.state === 'error' || resend.state === 'rate_limited' ? (
+                <AuthNotice tone="warning">{copy.resendFailed}</AuthNotice>
+              ) : null}
+            </div>
+          ) : null}
+
+          {view.status === 'network' ? (
+            <Button type="button" className="w-full gap-2" onClick={() => void run()}>
+              <RotateCw className="h-4 w-4" aria-hidden />
+              {copy.tryAgain}
+            </Button>
+          ) : null}
+
+          {view.status !== 'verified' && view.status !== 'already_verified' && view.status !== 'loading' ? (
+            <Link
+              href="/auth/login"
+              className="qx-small inline-block rounded-sm font-medium text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {copy.backToLogin}
+            </Link>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function VerifyEmailContent() {
-  const searchParams = useSearchParams();
-  const t = useAppT();
-  const token = searchParams.get('token');
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    if (!token) {
-      setStatus('error');
-      setMessage(t('auth.verifyInvalidToken'));
-      return;
-    }
-    fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setStatus('success');
-          setMessage(typeof data.message === 'string' && data.message ? data.message : t('auth.verifySuccessDefault'));
-        } else {
-          setStatus('error');
-          setMessage(typeof data.error === 'string' && data.error ? data.error : t('auth.verifyFailedDefault'));
-        }
-      })
-      .catch(() => {
-        setStatus('error');
-        setMessage(t('auth.verifyConnectionError'));
-      });
-  }, [token, t]);
-
+function VerifyEmailLoadingFallback() {
   return (
-    <div className="flex min-h-dvh items-center justify-center p-4 sm:p-6">
-      <Card glass className="w-full max-w-md border-border/60 shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-center text-balance tracking-tight">{t('auth.verifyPageTitle')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-center">
-          <div
-            role="status"
-            aria-live="polite"
-            aria-busy={status === 'loading'}
-            aria-atomic="true"
-            className="space-y-4"
-          >
-            {status === 'loading' && (
-              <>
-                <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" aria-hidden />
-                <p className="text-muted-foreground">{t('auth.verifyPageLoading')}</p>
-              </>
-            )}
-            {status === 'success' && (
-              <>
-                <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" aria-hidden />
-                <p className="font-medium">{message}</p>
-                <Button asChild className="w-full">
-                  <Link
-                    href="/auth/login"
-                    className="min-h-11 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    {t('auth.verifyLoginButton')}
-                  </Link>
-                </Button>
-              </>
-            )}
-            {status === 'error' && (
-              <>
-                <XCircle className="mx-auto h-12 w-12 text-destructive" aria-hidden />
-                <p className="text-destructive/90">{message}</p>
-                <div className="flex justify-center gap-2">
-                  <Button asChild variant="outline">
-                    <Link
-                      href="/auth/register"
-                      className="min-h-11 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      {t('auth.verifyRetryRegister')}
-                    </Link>
-                  </Button>
-                  <Button asChild>
-                    <Link
-                      href="/auth/login"
-                      className="min-h-11 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      {t('auth.verifyLoginButton')}
-                    </Link>
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col items-center justify-center gap-3 py-16" role="status" aria-live="polite">
+      <Loader2 className="h-10 w-10 animate-spin text-brand" aria-hidden />
     </div>
   );
 }

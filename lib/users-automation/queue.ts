@@ -1,12 +1,30 @@
 import { prisma } from '@/lib/prisma';
-import { runAutomationActions } from './engine';
+import { AutomationActionError, runAutomationActions } from './engine';
+import { automationFingerprint, executionBlocker } from './schema';
 import type { AutomationAction, AutomationCondition } from './types';
+
+/**
+ * Otomasyon iş kuyruğu (P0-19).
+ *
+ * İşlenirken kural YENİDEN doğrulanır: kayıtlı kural yoksa, pasifse, onayı kaldırıldıysa ya da
+ * kuyruğa alındıktan sonra içeriği değiştiyse iş çalışmaz ('cancelled'). Kuralsız (ad-hoc)
+ * işler artık çalıştırılmaz. Tek-kez anahtarlarının kökü iş id'sidir → yeniden denemede çift
+ * kredi yok.
+ */
+
+export type AutomationJobPayload = {
+  condition: AutomationCondition;
+  actions: AutomationAction[];
+  limit?: number;
+  /** Çalıştırmayı başlatan admin (defter aktörü, hedeften hariç). */
+  actorId?: string | null;
+};
 
 export async function enqueueAutomationJob(input: {
   ruleId?: string | null;
   runId?: string | null;
   idempotencyKey?: string;
-  payload: { condition: AutomationCondition; actions: AutomationAction[]; limit?: number };
+  payload: AutomationJobPayload;
 }) {
   const existing = input.idempotencyKey
     ? await prisma.automationJob.findFirst({
@@ -27,6 +45,20 @@ export async function enqueueAutomationJob(input: {
   });
 }
 
+async function cancelJob(job: { id: string; runId: string | null }, reason: string) {
+  await prisma.automationJob.update({
+    where: { id: job.id },
+    data: { status: 'cancelled', lastError: reason },
+  });
+  if (job.runId) {
+    await prisma.userAutomationRun.update({
+      where: { id: job.runId },
+      data: { status: 'cancelled', completedAt: new Date(), error: reason },
+    });
+  }
+  return { jobId: job.id, status: 'cancelled' as const, error: reason };
+}
+
 export async function processNextAutomationJob(worker = 'api') {
   const now = new Date();
   const job = await prisma.automationJob.findFirst({
@@ -42,9 +74,21 @@ export async function processNextAutomationJob(worker = 'api') {
   });
   if (locked.count === 0) return null;
 
-  const payload = (job.payload || {}) as { condition?: AutomationCondition; actions?: AutomationAction[]; limit?: number };
+  const payload = (job.payload || {}) as Partial<AutomationJobPayload>;
   const condition = payload.condition || {};
   const actions = payload.actions || [];
+
+  // ── Yalnız kayıtlı + onaylı + içeriği değişmemiş kural ──
+  if (!job.ruleId) {
+    return cancelJob(job, 'Kayıtlı kurala bağlı olmayan otomasyon işi çalıştırılmaz.');
+  }
+  const rule = await prisma.userAutomationRule.findUnique({ where: { id: job.ruleId } });
+  if (!rule) return cancelJob(job, 'Kural silinmiş; iş iptal edildi.');
+  const blocker = executionBlocker(rule);
+  if (blocker) return cancelJob(job, blocker);
+  if (automationFingerprint(rule.condition, rule.actions) !== automationFingerprint(condition, actions)) {
+    return cancelJob(job, 'Kural kuyruğa alındıktan sonra değişti; yeniden onay ve çalıştırma gerekli.');
+  }
 
   try {
     const result = await runAutomationActions({
@@ -52,6 +96,8 @@ export async function processNextAutomationJob(worker = 'api') {
       actions,
       dryRun: false,
       limit: payload.limit || 500,
+      runKey: job.id,
+      actorId: payload.actorId ?? null,
     });
 
     await prisma.automationJob.update({
@@ -77,8 +123,10 @@ export async function processNextAutomationJob(worker = 'api') {
     }
     return { jobId: job.id, status: 'completed', result };
   } catch (error) {
+    // Doğrulama hatası tekrar denenmez (aynı veriyle yine düşer).
+    const permanent = error instanceof AutomationActionError;
     const attempts = (job.attempts || 0) + 1;
-    const willRetry = attempts < (job.maxAttempts || 3);
+    const willRetry = !permanent && attempts < (job.maxAttempts || 3);
     const nextRunAt = new Date(Date.now() + attempts * 60_000);
 
     await prisma.automationJob.update({

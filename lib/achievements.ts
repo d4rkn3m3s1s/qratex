@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { creditPointsAndXp } from './points-wallet';
+import { rewardQuestOnce } from './quests/reward';
 
 /**
  * Seed specific special achievements if they don't exist
@@ -70,7 +70,13 @@ export async function seedAchievements() {
 }
 
 /**
- * Increment or set progress for a specific achievement
+ * Başarım ilerlemesini artırır ya da ayarlar; hedefe ulaşınca ödülü OTOMATİK öder.
+ *
+ * Yarış güvenliği (P0-15): ilerleme okuması ve yazımı satır kilidi (`FOR UPDATE`) altında
+ * yapılır — eşzamanlı iki çağrı aynı ilerlemeyi okuyup birbirinin artışını ezemez ve ikisi de
+ * "tamamlandı" görüp çift ödeme yapamaz. Ödeme `rewardQuestOnce` ile tek seferlik
+ * (`completedAt: null` + `rewardedAt: null` guard'ı, mintPoints defteri). Bu görevler otomatik
+ * ödendiği için claim ucu onları ödemez (lib/quests/reward.ts → ACHIEVEMENT_QUEST_IDS).
  */
 export async function advanceAchievementProgress(
   userId: string,
@@ -83,12 +89,13 @@ export async function advanceAchievementProgress(
       where: { id: questId, isActive: true },
     });
 
-    if (!quest) return;
+    if (!quest || quest.archivedAt) return;
 
     const requirement = (quest.requirement || {}) as { count?: number };
     const target = typeof requirement.count === 'number' && requirement.count > 0 ? requirement.count : 1;
+    const step = Number.isFinite(amount) ? Math.floor(amount) : 0;
 
-    // Get current progress or create
+    // Satır yoksa oluştur (idempotent; yarışta unique guard).
     const userQuest = await prisma.userQuest.upsert({
       where: {
         userId_questId: { userId, questId },
@@ -99,79 +106,73 @@ export async function advanceAchievementProgress(
         questId,
         progress: 0,
       },
+      select: { id: true, completedAt: true },
     });
 
     if (userQuest.completedAt) {
-      // Already completed
+      // Zaten tamamlandı (ve ödendi).
       return;
     }
 
-    let newProgress = mode === 'increment' ? userQuest.progress + amount : amount;
-    if (newProgress < 0) newProgress = 0;
-
-    const isNowCompleted = newProgress >= target;
-
     await prisma.$transaction(async (tx) => {
-      // Update progress
-      await tx.userQuest.update({
+      // Satır kilidi: bundan sonraki okuma eşzamanlı çağrıların commit'lenmiş sonucunu görür.
+      await tx.$queryRaw`SELECT id FROM "UserQuest" WHERE id = ${userQuest.id} FOR UPDATE`;
+      const fresh = await tx.userQuest.findUnique({
         where: { id: userQuest.id },
+        select: { progress: true, completedAt: true },
+      });
+      if (!fresh || fresh.completedAt) return;
+
+      let newProgress = mode === 'increment' ? fresh.progress + step : step;
+      if (newProgress < 0) newProgress = 0;
+
+      if (newProgress < target) {
+        await tx.userQuest.update({
+          where: { id: userQuest.id },
+          data: { progress: newProgress },
+        });
+        return;
+      }
+
+      const rewards = (quest.reward || {}) as { points?: number; xp?: number };
+      const rewardPoints = Math.max(0, Math.floor(Number(rewards.points) || 0));
+      const rewardXp = Math.max(0, Math.floor(Number(rewards.xp) || 0));
+
+      const paid = await rewardQuestOnce(tx, {
+        userQuestId: userQuest.id,
+        userId,
+        questId,
+        points: rewardPoints,
+        xp: rewardXp,
+        source: 'achievement',
+        requireIncomplete: true,
+        progress: newProgress,
+      });
+      if (!paid.rewarded) return;
+
+      await tx.notification.create({
         data: {
-          progress: newProgress,
-          ...(isNowCompleted && { completedAt: new Date() }),
+          userId,
+          title: `🏆 Başarım Kazanıldı: ${quest.name}!`,
+          message: `"${quest.description}" başarımını tamamladınız! +${rewardPoints} Puan ve +${rewardXp} XP kazandınız.`,
+          type: 'success',
         },
       });
 
-      if (isNowCompleted) {
-        // Parse rewards
-        const rewards = (quest.reward || {}) as { points?: number; xp?: number };
-        const rewardPoints = Number(rewards.points) || 0;
-        const rewardXp = Number(rewards.xp) || 0;
-
-        // Credit points & XP
-        await creditPointsAndXp(tx, {
+      await tx.auditLog.create({
+        data: {
           userId,
-          points: rewardPoints,
-          xp: rewardXp,
-        });
-
-        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
-        if (rewardPoints > 0) {
-          await tx.analyticsEvent.create({
-            data: {
-              userId,
-              event: 'points_credited',
-              category: 'achievement',
-              data: { points: rewardPoints, questId: quest.id },
-            },
-          });
-        }
-
-        // Add notification
-        await tx.notification.create({
-          data: {
-            userId,
-            title: `🏆 Başarım Kazanıldı: ${quest.name}!`,
-            message: `"${quest.description}" başarımını tamamladınız! +${rewardPoints} Puan ve +${rewardXp} XP kazandınız.`,
-            type: 'success',
+          action: 'COMPLETED_ACHIEVEMENT',
+          entity: 'UserQuest',
+          entityId: userQuest.id,
+          newData: {
+            questId,
+            questName: quest.name,
+            points: rewardPoints,
+            xp: rewardXp,
           },
-        });
-
-        // Log audit
-        await tx.auditLog.create({
-          data: {
-            userId,
-            action: 'COMPLETED_ACHIEVEMENT',
-            entity: 'UserQuest',
-            entityId: userQuest.id,
-            newData: {
-              questId,
-              questName: quest.name,
-              points: rewardPoints,
-              xp: rewardXp,
-            },
-          },
-        });
-      }
+        },
+      });
     });
   } catch (error) {
     console.error(`Error advancing achievement progress (${questId}) for user (${userId}):`, error);
