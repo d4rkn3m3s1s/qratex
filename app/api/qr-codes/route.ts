@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { createQRCodeSchema } from '@/lib/validations';
 import { generateQRCode } from '@/lib/utils';
-import { canCreateQRCode } from '@/lib/plan-limits';
+import { checkLiveQrQuota, lockDealerQrQuota, QrQuotaExceededError } from '@/lib/qr-quota';
 import { archivedListFilter } from '@/lib/data-safety/archive';
 import {
   PRIVATE_NO_STORE_HEADERS,
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
     const validatedData = createQRCodeSchema.safeParse(body);
 
     if (!validatedData.success) {
@@ -98,22 +98,6 @@ export async function POST(request: NextRequest) {
 
     const { name, description } = validatedData.data;
 
-    // Plan kotası: bayinin etkin planındaki QR limiti dolduysa engelle (ADMIN hariç,
-    // canCreateQRCode içinde limitsiz). 402 Payment Required + upsell mesajı.
-    if (session.user.role === 'DEALER') {
-      const quota = await canCreateQRCode(session.user.id);
-      if (!quota.allowed) {
-        return NextResponse.json(
-          {
-            error: quota.reason,
-            code: 'PLAN_LIMIT_REACHED',
-            quota: { used: quota.used, limit: quota.limit, planName: quota.planName },
-          },
-          { status: 402, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-    }
-
     // Generate unique QR code
     let code = generateQRCode();
     let exists = await prisma.qRCode.findUnique({ where: { code } });
@@ -122,13 +106,24 @@ export async function POST(request: NextRequest) {
       exists = await prisma.qRCode.findUnique({ where: { code } });
     }
 
-    const qrCode = await prisma.qRCode.create({
-      data: {
-        code,
-        name,
-        description,
-        dealerId: session.user.id,
-      },
+    // Plan kotası (P0-24 / F12): kontrol + oluşturma AYNI transaction'da, bayi başına
+    // advisory kilit altında. Eskiden önce `count` sonra `create` yapılıyordu: paralel N istek
+    // aynı "2/3" sayısını görüp limiti birlikte aşabiliyordu. Kota CANLI kodları sayar
+    // (iptal/arşiv hariç); arşivden geri alma da aynı kilitten geçer. ADMIN limitsiz.
+    const qrCode = await prisma.$transaction(async (tx) => {
+      if (session.user.role === 'DEALER') {
+        await lockDealerQrQuota(tx, session.user.id);
+        const verdict = await checkLiveQrQuota(tx, session.user.id, 1);
+        if (!verdict.allowed) throw new QrQuotaExceededError(verdict);
+      }
+      return tx.qRCode.create({
+        data: {
+          code,
+          name,
+          description,
+          dealerId: session.user.id,
+        },
+      });
     });
 
     // Log analytics
@@ -143,6 +138,17 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, qrCode }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
+    if (error instanceof QrQuotaExceededError) {
+      const v = error.verdict;
+      return NextResponse.json(
+        {
+          error: `"${v.planName}" planınızın QR kodu limitine ulaştınız (${v.live}/${v.limit}). Yeni kod için kullanılmayan bir kodu arşivleyin ya da planınızı yükseltin.`,
+          code: 'PLAN_LIMIT_REACHED',
+          quota: { used: v.live, limit: v.limit, planName: v.planName },
+        },
+        { status: 402, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
     console.error('Error creating QR code:', error);
     const db = responseIfDatabaseUnavailable(error);
     if (db) return db;

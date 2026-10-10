@@ -7,7 +7,7 @@
  * Ham IP tutulmaz (sha256 kısa parmak izi). Oturumsuz ziyaretçi istemcide üretilmiş rastgele
  * `anonId` ile kaydedilir. Kayıt silinmez/güncellenmez; her karar yeni satırdır.
  */
-import { createHash } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -38,9 +38,16 @@ async function optionalUserId(): Promise<string | null> {
   }
 }
 
-function ipFingerprint(ip: string | null): string | null {
+/**
+ * IP'nin geri çevrilemeyen parmak izi. Tuzsuz sha256 IPv4 uzayında kaba kuvvetle çözülebilir;
+ * bu yüzden sunucu sırrıyla HMAC (sır yoksa tuzlu sha256) kullanılır.
+ */
+function ipFingerprint(ip: string | null, secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET || ''): string | null {
   if (!ip) return null;
-  return createHash('sha256').update(`consent:${ip}`).digest('hex').slice(0, 32);
+  const digest = secret
+    ? createHmac('sha256', secret).update(`consent:${ip}`).digest('hex')
+    : createHash('sha256').update(`qratex-consent:${ip}`).digest('hex');
+  return digest.slice(0, 32);
 }
 
 export const POST = defineRoute(

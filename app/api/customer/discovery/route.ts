@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
         take: DISCOVERY_FEEDBACK_CAP,
       }),
       prisma.consumptionReview.findMany({
-        where: { createdAt: { gte: sevenDaysAgo } },
+        where: { createdAt: { gte: sevenDaysAgo }, deletedAt: null },
         select: {
           rating: true,
           dimensions: true,

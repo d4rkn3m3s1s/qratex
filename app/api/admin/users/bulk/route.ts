@@ -9,6 +9,7 @@ import { anonymizeUser } from '@/lib/gdpr-core';
 import type { DeletionImpact } from '@/lib/data-safety/archive';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
 import { previewUserErasure } from '@/lib/data-safety/user-erasure';
+import { invalidateSessionState } from '@/lib/auth/session-state';
 
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,22 @@ const bulkDeleteSchema = z.object({
   confirm: z.boolean().optional(),
   /** Yalnız etki önizlemesi. */
   dryRun: z.boolean().optional(),
+});
+
+/**
+ * Askıya alma (P0-25): kalıcı ve geri döndürülemez anonimleştirmenin GERİ ALINABİLİR
+ * alternatifi. Hesap silinmez/maskelenmez; giriş ve API erişimi kapanır (requireAuth +
+ * authorize `suspendedAt` kontrolü), açık oturumlar `sessionVersion` ile düşer.
+ */
+const bulkSuspendSchema = z.object({
+  action: z.literal('suspend'),
+  userIds: z.array(z.string().cuid()).min(1).max(100),
+  reason: z.string().trim().min(3, 'Askıya alma gerekçesi en az 3 karakter olmalı').max(500),
+});
+
+const bulkUnsuspendSchema = z.object({
+  action: z.literal('unsuspend'),
+  userIds: z.array(z.string().cuid()).min(1).max(100),
 });
 
 export async function POST(request: NextRequest) {
@@ -46,7 +63,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    // Bozuk JSON → 400 (500 değil).
+    const body = (await request.json().catch(() => null)) as { action?: unknown } | null;
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Geçersiz istek' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    }
+    if (body.action === 'suspend' || body.action === 'unsuspend') {
+      return handleSuspension(request, auth.session, body);
+    }
     if (body.action === 'update_role') {
       const parsed = bulkRoleSchema.safeParse(body);
       if (!parsed.success) {
@@ -177,4 +201,90 @@ export async function POST(request: NextRequest) {
     console.error('Bulk users error:', e);
     return NextResponse.json({ error: 'Toplu işlem başarısız' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
+}
+
+type AdminSession = Parameters<typeof actorFromSession>[0];
+
+/** Toplu askıya alma / askıdan çıkarma — yönetici hedefler ve kendi hesap atlanır. */
+async function handleSuspension(request: NextRequest, session: AdminSession, body: unknown) {
+  const suspend = (body as { action?: unknown }).action === 'suspend';
+  const parsed = suspend ? bulkSuspendSchema.safeParse(body) : bulkUnsuspendSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.errors[0]?.message ?? 'Geçersiz istek' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+  const reason = suspend ? (parsed.data as z.infer<typeof bulkSuspendSchema>).reason : null;
+  const currentUser = session.user.id;
+  const requested = Array.from(new Set(parsed.data.userIds));
+  const ids = requested.filter((id) => id !== currentUser);
+  if (ids.length === 0) {
+    return NextResponse.json({ error: 'Kendi hesabınızı askıya alamazsınız' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+  }
+
+  const targets = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, role: true, suspendedAt: true, anonymizedAt: true },
+  });
+  const byId = new Map(targets.map((t) => [t.id, t]));
+  const skipped: Array<{ id: string; reason: string }> = [];
+  if (requested.length !== ids.length) skipped.push({ id: currentUser, reason: 'Kendi hesabınız' });
+  const eligible: string[] = [];
+  for (const id of ids) {
+    const t = byId.get(id);
+    if (!t) skipped.push({ id, reason: 'Kullanıcı bulunamadı' });
+    else if (t.anonymizedAt) skipped.push({ id, reason: 'Hesap anonimleştirilmiş' });
+    else if (suspend && String(t.role) === 'ADMIN') skipped.push({ id, reason: 'Yönetici hesapları askıya alınamaz; önce rolü değiştirin' });
+    else if (suspend && t.suspendedAt) skipped.push({ id, reason: 'Zaten askıda' });
+    else if (!suspend && !t.suspendedAt) skipped.push({ id, reason: 'Askıda değil' });
+    else eligible.push(id);
+  }
+
+  const actor = actorFromSession(session);
+  const now = new Date();
+  const changed = eligible.length
+    ? await prisma.$transaction(async (tx) => {
+        const done: string[] = [];
+        for (const id of eligible) {
+          // Koşullu yazım: arada durum değiştiyse (yarış) dokunulmaz.
+          const w = suspend
+            ? await tx.user.updateMany({
+                where: { id, suspendedAt: null, anonymizedAt: null, role: { not: 'ADMIN' } },
+                data: { suspendedAt: now, suspendedReason: reason, sessionVersion: { increment: 1 } },
+              })
+            : await tx.user.updateMany({
+                where: { id, suspendedAt: { not: null }, anonymizedAt: null },
+                data: { suspendedAt: null, suspendedReason: null },
+              });
+          if (w.count > 0) done.push(id);
+        }
+        await tx.auditLog.create({
+          data: auditEntry(
+            actor,
+            {
+              action: suspend ? 'BULK_SUSPEND_USERS' : 'BULK_UNSUSPEND_USERS',
+              entity: 'User',
+              entityId: `${done.length} kullanıcı`,
+              newData: { userIds: done, reason, skipped },
+            },
+            request
+          ),
+        });
+        return done;
+      })
+    : [];
+
+  // Commit SONRASI: oturum durumu sıcak önbelleği bayatlatılır → erişim hemen kapanır/açılır.
+  await Promise.all(changed.map((id) => invalidateSessionState(id).catch(() => undefined)));
+
+  return NextResponse.json(
+    {
+      ok: true,
+      success: true,
+      ...(suspend ? { suspended: changed.length } : { unsuspended: changed.length }),
+      skipped,
+    },
+    { headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }

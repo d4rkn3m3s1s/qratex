@@ -22,13 +22,16 @@ export async function GET(request: NextRequest) {
     const ratingFilter = searchParams.get('rating');
     const limit = clampTakeParam(searchParams.get('limit'), REVIEW_LIST_DEFAULT, REVIEW_LIST_MAX);
 
+    // Moderasyonla kaldırılmış (soft-delete, P0-23) yorumlar bayiye gösterilmez/sayılmaz.
     const where: {
       consumption: { dealerId: string };
+      deletedAt: null;
       rating?: number;
     } = {
       consumption: {
         dealerId: session.user.id,
       },
+      deletedAt: null,
     };
 
     if (ratingFilter && ratingFilter !== 'all') {
@@ -40,6 +43,7 @@ export async function GET(request: NextRequest) {
 
     const statsWhere = {
       consumption: { dealerId: session.user.id },
+      deletedAt: null,
     };
 
     const [reviews, groupedRatings, avgRow] = await Promise.all([

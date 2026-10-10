@@ -352,7 +352,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const raw = await request.json();
+    // Bozuk JSON → 400 (500 değil).
+    const raw = await request.json().catch(() => null);
     const parsed = adminFeedbacksDeleteSchema.safeParse(raw);
     if (!parsed.success) {
       const msg = parsed.error.errors[0]?.message ?? 'Geçersiz istek';
