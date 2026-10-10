@@ -24,6 +24,7 @@ import { mintPoints } from '@/lib/economy';
 import { getModuleControls } from '@/lib/module-gate';
 import { getInnovationPlatformConfig } from '@/lib/innovation-config';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
+import { REFERRAL_MILESTONES } from '@/lib/referral-milestones';
 
 export const REFERRAL_PENDING_TTL_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -103,8 +104,21 @@ export function startOfMonthUTC(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
+/** İstanbul 2016'dan beri sabit UTC+3 (yaz saati yok). */
+const ISTANBUL_OFFSET_MS = 3 * 3_600_000;
+
+/**
+ * İstanbul takvim ayının başladığı an (UTC `Date`). Aylık davet limiti bu sınırla sayılır
+ * (yol haritası §4.4/10: zaman Europe/Istanbul) — sunucu saat diliminden bağımsız.
+ * `monthOffset: 1` → bir sonraki ayın başı (limitin sıfırlanacağı an).
+ */
+export function startOfMonthIstanbul(now: Date, monthOffset = 0): Date {
+  const local = new Date(now.getTime() + ISTANBUL_OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + monthOffset, 1) - ISTANBUL_OFFSET_MS);
+}
+
 /** Limitlere sayılan davetler: tamamlanmış + süresi dolmamış bekleyenler. */
-function liveReferralFilter(now: Date): Prisma.ReferralWhereInput {
+export function liveReferralFilter(now: Date): Prisma.ReferralWhereInput {
   return {
     OR: [{ status: 'COMPLETED' }, { status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
   };
@@ -165,7 +179,7 @@ export async function createPendingReferral(
       const live = liveReferralFilter(now);
       const [lifetime, monthly, byCode] = await Promise.all([
         tx.referral.count({ where: { referrerId, ...live } }),
-        tx.referral.count({ where: { referralCode: codeRow.code, createdAt: { gte: startOfMonthUTC(now) } } }),
+        tx.referral.count({ where: { referralCode: codeRow.code, createdAt: { gte: startOfMonthIstanbul(now) } } }),
         codeRow.maxUsage ? tx.referral.count({ where: { referralCode: codeRow.code, ...live } }) : Promise.resolve(0),
       ]);
       if (lifetime >= innov.referral.maxInvitesPerReferrerLifetime) return reject('LIFETIME_LIMIT');
@@ -311,6 +325,10 @@ export async function qualifyReferral(
       data: { usageCount: { increment: 1 } },
     });
 
+    // Bu tamamlanma bir kademe eşiğine ulaştırdıysa davet edene haber ver (ödül kullanıcı
+    // eylemiyle, /customer/me/invite'ta talep edilir — kutlama anı orada).
+    const reachedMilestone = REFERRAL_MILESTONES.find((m) => m.count === completedCount + 1);
+
     await tx.notification.createMany({
       data: [
         {
@@ -325,6 +343,17 @@ export async function qualifyReferral(
           title: 'Davetin tamamlandı!',
           message: `Davet ettiğin arkadaşın ilk QR deneyimini tamamladı. +${referrerPoints} puan kazandın!`,
         },
+        ...(reachedMilestone
+          ? [
+              {
+                userId: ref.referrerId,
+                type: 'REFERRAL_MILESTONE_READY',
+                title: 'Davet kademesi açıldı!',
+                message: `${reachedMilestone.count} başarılı davete ulaştın. Kademe ödülün hazır: +${reachedMilestone.points} puan.`,
+                data: { ctaPath: '/customer/me/invite', points: reachedMilestone.points },
+              },
+            ]
+          : []),
       ],
     });
 

@@ -206,3 +206,73 @@
 - **Yeniden üretim:** 21+ davet yapmış kullanıcıda kart (`page.tsx:272`, etiket "Kazanılan Puan" — `messages/tr.json:3396`) en eski davetlerin puanını göstermez; ör. 25 davette 25.000 yerine 20.000.
 - Kademe bonuslarının hariç olması etiket tanımına bağlı bir ürün kararıdır (kademe kredileri `analyticsEvent` `category: 'referral_milestone'` olarak ayrı tutuluyor — `route.ts:329-334`); hata sayılmaz ama etiket "Davetlerden kazanılan" diye netleştirilmeli ya da `points_credited` (referral + referral_milestone, role=referrer) toplamı gösterilmeli.
 - Etki yalnız görüntüleme; veri/puan bütünlüğünü bozmaz. Düzeltme: `prisma.referral.aggregate({ where: { referrerId }, _sum: { pointsEarned: true } })`.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/me/invite` (Ben → Davet). Eski `/customer/referral` artık sorgu parametrelerini koruyan kalıcı yönlendirme (`permanentRedirect`).
+
+**Yeni dosyalar:** `app/customer/me/invite/{page,loading}.tsx` (sunucu bileşeni: oturum + müşteri rolü + modül kapısı + tüm okuma modeli sunucuda), `components/customer/m-davet/**` (tek istemci adası `invite-experience.tsx`; hero, özet, kademe yolu, liste, yan sütun, QR, iskelet, metinler TR/EN), `lib/referral-invite.ts` (okuma modeli + eylemler), BFF uçları `app/api/customer/me/invite/{route, code, referrals, referrals/[id]/nudge, apply, milestones/claim}` (hepsi `defineRoute`, yalnız `CUSTOMER`, zod, rate limit, modül kapısı müşteri rolüyle). `app/api/referral/route.ts` geriye uyumlu ince sarmalayıcıya indi (`/auth/complete` POST'u için alanlar korunur). Testler: `__tests__/lib/referral-invite.test.ts` (21), `__tests__/api/customer-invite.test.ts` (11), `__tests__/customer/invite-share.test.ts` (7), `__tests__/customer/invite-render.test.ts` (4, SSR dumanı), `__tests__/lib/referral-milestone-notify.test.ts` (2).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | ÇALIŞIYOR | `generateMetadata` aynı `layoutMetadata.customerReferral*` anahtarlarıyla. |
+| 2 | Yetki | ÇALIŞIYOR | Sayfa: oturum + `role === 'CUSTOMER'` (değilse "yetkisiz" durumu). Uçlar: `defineRoute` → `requireAuth(['CUSTOMER'])` (DB'den rol/oturum sürümü). |
+| 3 | Modül kapısı | ÇALIŞIYOR | `assertModuleEnabled('referrals', { role: 'customer' })` hem sayfada hem tüm uçlarda; kapalıyken `ErrorState kind="moduleDisabled"` çizilir, sıfırlı içerik çizilmez. |
+| 4 | Yükleniyor durumu | ÇALIŞIYOR | `loading.tsx` + `QueryState` için gerçek yerleşimle aynı ızgarada statik iskelet (tam ekran spinner yok, düzen kayması yok). |
+| 5 | Hata durumu | ÇALIŞIYOR | Sunucu okuması başarısızsa ada istemcide yeniden dener; 401/403/503/ağ hataları `QueryState` ile türüne göre (yeniden dene dahil). Zarf v2; "200 + sıfırlar" yok. |
+| 6 | Başlık | ÇALIŞIYOR | QDL `PageHeader` (compact, tek h1) + `PanelPage register="play"`. |
+| 7 | Kişisel kod gösterimi | ÇALIŞIYOR | Büyük mono kod, `aria-label` harf harf ("7 K Q 2 …"), `select-all`. |
+| 8 | Kod üretimi | ÇALIŞIYOR | GET yazmaz; kod yoksa ada `POST …/invite/code` çağırır. `ensureReferralCode` idempotent (userId P2002 → mevcut okunur, kod çakışması → yeniden dener). Yeni kod alfabesi `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (0/O, 1/I/L, `-`/`_` yok), `crypto.randomInt`. |
+| 9 | Kopyala | ÇALIŞIYOR | Ayrı "Bağlantıyı kopyala" ve "Kodu kopyala"; sonuç beklenir, başarısızsa `execCommand` yedeği, o da olmazsa bağlantı seçili alanda gösterilir. Yerinde 1,5 sn "Kopyalandı" + ekran okuyucu duyurusu. |
+| 10 | Paylaş (Web Share) | ÇALIŞIYOR | Birincil eylem "Bağlantıyı paylaş"; `AbortError` sessiz; Web Share yoksa BAĞLANTI kopyalanır. Ek: WhatsApp kısayolu. Marka adı `seo.siteName`'den. |
+| 11 | Ödül kutucukları | ÇALIŞIYOR | Puan matrisinden canlı ("Sana +1.000 · Arkadaşına +500"). |
+| 12 | Kod uygulama kartı | ÇALIŞIYOR | Yalnız kayıttan sonraki 7 günlük pencerede ve davet edilmemişken görünür; sunucu da pencereyi uygular (`WINDOW_EXPIRED`). A↔B, kendi kodu, limitler `lib/referral.ts` servisinde (P0-16). |
+| 13 | Büyük harfe çevirme + etiket | ÇALIŞIYOR | Görünür `<label>`, `aria-invalid` + `aria-describedby` hata bağlantısı, boşluk temizleme. |
+| 14 | Hata/başarı mesajları | ÇALIŞIYOR | Sunucu makine-okunur `code` döndürür; istemci TR/EN metne çevirir. |
+| 15 | "Seni X davet etti" | ÇALIŞIYOR | Maskeli ad + kendi hoş geldin bonusumun adımları (E-posta → İlk QR) + son gün + "QR okut" CTA. Hitap tek tip "sen". |
+| 16 | İstatistik: Davet edilen | ÇALIŞIYOR | `groupBy(status)` toplamı. |
+| 17 | İstatistik: Tamamlanan | ÇALIŞIYOR | Artık anlamlı: Tamamlanan ve Bekleyen ayrı; süresi dolanlar ayrıca not edilir. |
+| 18 | İstatistik: Kazanılan puan | ÇALIŞIYOR | `aggregate(_sum.pointsEarned)` (tüm tamamlananlar) + alınan kademe puanları; kırılım gösterilir. |
+| 19 | Kademeler kartı | ÇALIŞIYOR | TR/EN metin; eşit aralıklı kademe yolu (3 → 5 → 10 → 25). |
+| 20 | Kademe talebi | ÇALIŞIYOR | `claimReferralMilestones` (JSON guard + tek-kez anahtar, `mintPoints`); kutlama: An Motoru puan kapsülü (`moments.points`, Host yoksa toast) + talep edilen durağın ≤ 1,2 sn yaylı vurgusu (azaltılmış harekette yok) + duyuru. |
+| 21 | İlerleme çubuğu | ÇALIŞIYOR | `role="progressbar"`, `aria-valuemin/max/now`, `aria-valuetext`. |
+| 22 | Kademe durumları | ÇALIŞIYOR | İkon + metin ("Alındı / Hazır / 2 davet kaldı"), yalnız rol token'ları (koyu tema kontrastı). |
+| 23 | Davet listesi | ÇALIŞIYOR | İmleç sayfalama (`useInfiniteQuery`, "Daha fazla göster"); ad maskeli (`Ayşe K.`), fotoğraf/e-posta yok. |
+| 24 | "Bekliyor" rozeti | ÇALIŞIYOR | Gerçek PENDING/COMPLETED/EXPIRED; satırda adım göstergesi (Kaydoldu → E-postasını doğruladı → İlk QR deneyimi) + son gün. |
+| 25 | Boş durum + CTA | ÇALIŞIYOR | `EmptyState`; CTA birincil paylaş butonuna odak taşır (hata durumu ayrı). |
+| 26 | Tarih yerelleştirme | ÇALIŞIYOR | `Europe/Istanbul` saat dilimiyle TR/EN. |
+| 27 | Hareket + azaltma | ÇALIŞIYOR | `lib/motion` token'ları, bütçeli liste girişi (ilk 12), `useMotionPolicy`; sonsuz döngü yok. |
+| 28 | Mobil yerleşim | ÇALIŞIYOR | Mobilde tek sütun, masaüstünde içerik + yapışık yan sütun; özet 2+1 düzeni; tüm dokunma hedefleri ≥ 44px. |
+| 29 | `?ref=` ile kayıt | ÇALIŞIYOR | P0-16 ile kayıt yalnız PENDING yazar; puan doğrulanmış e-posta + ilk QR olayında. |
+| 30 | OAuth sonrası davet | ÇALIŞIYOR | `/auth/complete` sonucu dürüstçe gösteriyor (`referral-outcome.ts`); eski `POST /api/referral` alanları korunarak yeni servise bağlandı (pencere kuralı dahil). |
+| 31 | Davet bildirimleri | ÇALIŞIYOR | Metinler TR saklanıyor; bildirim i18n'i bildirim merkezinin işi (aşağıda "Kalanlar"). |
+| 32 | Kötüye kullanım limitleri | ÇALIŞIYOR | Servis içinde, tx + advisory lock; aylık sayaç artık İstanbul ay başından. Sayfada şeffaf: aylık kullanım/üst sınır + sıfırlanma tarihi, ömür boyu kullanım, kod kullanım sınırı (varsa), pencere, hatırlatma sıklığı, adil kullanım kuralları. |
+| 33 | Kademe bildirimi | ÇALIŞIYOR | `qualifyReferral` tamamlanma kademe eşiğine ulaştırınca davet edene `REFERRAL_MILESTONE_READY` bildirimi (`ctaPath: /customer/me/invite`). |
+| 34 | Bağlantı kopyala / QR kartı | ÇALIŞIYOR | Bağlantı kopyalama + yüz yüze davet QR'ı (`qrcode` yalnız panel açılınca lazy; PNG indirme). |
+| 35 | Nitelikli davet | ÇALIŞIYOR | P0-16 servisi + bu sayfada adım takibi; "Hatırlat" (doğrulanmış ama QR'sız arkadaşa 72 saatte bir uygulama içi bildirim, yalnız kendi davetin) ve "Ödülü kontrol et" (koşullar sağlanmış ama nitelendirme kaçmışsa `qualifyReferral` yeniden denenir). |
+| 36 | Davet sıralaması / sosyal kanıt | KALDIRILDI | Kapsam dışı bırakıldı: davet sayısına sıralama, P0-16'nın kapattığı davet çiftliğini yeniden ödüllendirir ve davet edilenlerin adlarını başkalarına açar. Rekabet ekseni Oyna → Lig'in işi. |
+
+### Kapanan bulgular (10/10)
+
+1. Kayıt yolu doğrulamasız puan (P0-16 ile kapanmıştı): sayfa artık PENDING → COMPLETED akışını adım adım gösteriyor.
+2. A↔B ve eski hesapların kod uygulaması: servis reddi + 7 günlük uygulama penceresi (sunucu + arayüz).
+3. "Kazanılan puan" yanlış: aggregate + kademe toplamı, kırılımlı.
+4. Hata ve "modül kapalı" görünmüyordu: `QueryState`/`ErrorState`, müşteri rolü kapısı.
+5. TR/EN karışıklığı: tüm yüzey metinleri TR/EN, hatalar kodla çevriliyor, hitap "sen", marka `siteName`'den.
+6. Yanıltıcı paylaş/kopyala: iptal sessiz, bağlantı kopyalanır, gerçek sonuç bildirilir, yedek ve elle kopyalama alanı.
+7. Ölü "Bekliyor" / anlamsız "Tamamlanan": gerçek durumlar + adım göstergesi + hatırlat.
+8. GET'te yazma, ardışık sorgular, P2002 500'ü, kod alfabesi: GET yazmaz, okuma modeli `Promise.all` (durum sayımları tek `groupBy`), idempotent kod üretimi, yeni alfabe, `tx: any` kalmadı.
+9. 20 kayıt sınırı + tam ad/fotoğraf: imleç sayfalama, maskeli ad, fotoğraf yok.
+10. Erişilebilirlik/mobil: etiketler, progressbar/meter ARIA, durum ikon + metin, ≥ 44px hedefler, mobil 2+1 özet.
+
+### Kalanlar
+
+- **Bildirim metinleri TR saklanıyor** (`lib/referral.ts`, kademe/hatırlatma bildirimleri): bildirim i18n'i (anahtar + parametre saklayıp okumada çevirme) bildirim merkezinin ortak işi.
+- **Rozet bağlantısı** (eksik özellik 6): davet koşullu rozetler admin tarafından DB'de tanımlanıyor; sabit "3 davette X rozeti" metni yazmak sahte veri olurdu. Rozet kataloğundan `referral` koşullu rozetleri okuyan uç, rozet yüzeyiyle birlikte eklenmeli.
+- **Kayıt formunda "Davet kodun var mı?" alanı** (Bulgu 6 önerisi): `/auth/register` auth yüzeyinin sahipliğinde; bu sayfadaki 7 günlük uygulama penceresi o gelene kadar yolu açık tutuyor.
+- **Çakışmalar:** `/customer/campaigns` kartındaki gerçek ödül değerleri ve `/customer/squads` "davet kodu" adlandırması o yüzeylerin işi; eski `/customer/referral` bağlantıları yönlendirmeyle çalışıyor.
+- Görsel doğrulama yalnız SSR render dumanıyla yapıldı (dev sunucu ve derleme bu dalgada yasak); headless Chrome ekran görüntüsü sonraki doğrulama turunda alınmalı.
