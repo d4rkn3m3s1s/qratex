@@ -457,7 +457,7 @@ function SurveyRow({
               <span className="hidden sm:inline">{copy.results}</span>
             </Link>
           </Button>
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" aria-label={copy.moreActions(s.title)}>
                 <MoreHorizontal aria-hidden className="size-5" />

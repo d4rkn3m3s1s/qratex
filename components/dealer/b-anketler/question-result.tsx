@@ -144,6 +144,7 @@ function ChoiceOptions({ q, order, onOrder }: { q: SurveyQuestionSummary; order:
   const { copy, tag } = useSurveyCopy();
   const rows = order === 'count' ? [...q.options!].sort((a, b) => b.count - a.count) : q.options!;
   const max = Math.max(0, ...q.options!.map((o) => o.count));
+  if (q.options!.length === 0) return <p className="qx-small text-fg-muted">{copy.hiddenQuestion}</p>;
   return (
     <div className="space-y-3">
       {q.options!.length > 2 && (

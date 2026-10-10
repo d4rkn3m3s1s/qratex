@@ -73,6 +73,7 @@ export function SurveyResultsScreen({
     initialData: range === initialRange && initial ? initial : undefined,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
     retry: (count, err) => (err as { status?: number }).status !== 404 && count < 1,
   });
 

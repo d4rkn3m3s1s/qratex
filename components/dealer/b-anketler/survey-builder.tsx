@@ -340,7 +340,7 @@ export function SurveyBuilder(props: SurveyBuilderProps) {
   }
 
   const title = isEdit ? copy.editTitle : copy.createTitle;
-  const showGallery = !isEdit && !started;
+  const showGallery = !isEdit && !started && !dirty;
 
   return (
     <PanelPage
@@ -428,7 +428,7 @@ export function SurveyBuilder(props: SurveyBuilderProps) {
         {/* Mobil: düzenle / önizle geçişi (masaüstünde iki panel yan yana) */}
         <div className="lg:hidden">
           <ChoiceChips
-            aria-label={copy.previewHeading}
+            aria-label={`${copy.editTab} / ${copy.previewTab}`}
             value={mobileView}
             onChange={(v) => v && setMobileView(v as 'edit' | 'preview')}
             options={[

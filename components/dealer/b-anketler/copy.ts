@@ -217,6 +217,7 @@ const TR = {
   emptyResultsPaused: 'Anket durdurulmuş. Yayına alıp paylaştığınızda yanıt toplamaya başlar.',
   unanswerableResults: (n: number) => `${n} soru müşteriye gösterilemiyor (seçeneksiz). Düzenleyip seçenek ekleyin.`,
   resultsLoadFailed: 'Sonuçlar yüklenemedi.',
+  hiddenQuestion: 'Bu sorunun seçeneği yok; müşteriye gösterilmiyor. Düzenleyip en az iki seçenek ekleyin.',
   csvTruncatedNote: 'CSV en çok 10.000 yanıt içerir.',
 
   // durumlar
@@ -439,6 +440,7 @@ const EN: SurveyCopy = {
   emptyResultsPaused: 'This survey is paused. Publish and share it to start collecting responses.',
   unanswerableResults: (n) => `${n} ${n === 1 ? 'question is' : 'questions are'} hidden from customers (no options). Edit and add options.`,
   resultsLoadFailed: 'Could not load results.',
+  hiddenQuestion: 'This question has no options and is hidden from customers. Edit it and add at least two options.',
   csvTruncatedNote: 'The CSV includes at most 10,000 responses.',
   moduleDisabledTitle: 'Surveys are currently off',
   moduleDisabledBody: 'An administrator has temporarily turned this feature off. Your surveys and responses are kept.',

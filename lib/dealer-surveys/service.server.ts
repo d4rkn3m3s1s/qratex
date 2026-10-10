@@ -142,28 +142,37 @@ export async function listDealerSurveys(dealerId: string, now: Date = new Date()
 
 // ───────────────────────────── Oluşturma / düzenleme ─────────────────────────────
 
-async function assertQuota(dealerId: string): Promise<void> {
-  const count = await prisma.survey.count({ where: { dealerId } });
-  if (count >= SURVEY_LIMITS.surveysPerDealer) {
-    throw new ApiError('SURVEY_QUOTA', `En fazla ${SURVEY_LIMITS.surveysPerDealer} anket oluşturabilirsiniz. Kullanmadığınız yanıtsız bir anketi silin.`, {
-      status: 409,
-      details: { limit: SURVEY_LIMITS.surveysPerDealer, used: count },
-    });
-  }
+/**
+ * Kota denetimi + oluşturma TEK işlemde, bayi başına danışma kilidiyle: eşzamanlı iki oluşturma
+ * isteği kotayı aşamaz (denetim create #27: `count` + `create` atomik değildi).
+ */
+async function createWithinQuota<T>(dealerId: string, create: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`survey-quota:${dealerId}`}))`;
+    const count = await tx.survey.count({ where: { dealerId } });
+    if (count >= SURVEY_LIMITS.surveysPerDealer) {
+      throw new ApiError('SURVEY_QUOTA', `En fazla ${SURVEY_LIMITS.surveysPerDealer} anket oluşturabilirsiniz. Kullanmadığınız yanıtsız bir anketi silin.`, {
+        status: 409,
+        details: { limit: SURVEY_LIMITS.surveysPerDealer, used: count },
+      });
+    }
+    return create(tx);
+  });
 }
 
 export async function createDealerSurvey(dealerId: string, input: CreateSurveyInput, publish: boolean) {
-  await assertQuota(dealerId);
-  const survey = await prisma.survey.create({
-    data: {
-      dealerId,
-      title: input.title,
-      description: input.description,
-      isActive: publish,
-      questions: { create: toQuestionCreateData(input.questions) },
-    },
-    select: { id: true, title: true, isActive: true, createdAt: true },
-  });
+  const survey = await createWithinQuota(dealerId, (tx) =>
+    tx.survey.create({
+      data: {
+        dealerId,
+        title: input.title,
+        description: input.description,
+        isActive: publish,
+        questions: { create: toQuestionCreateData(input.questions) },
+      },
+      select: { id: true, title: true, isActive: true, createdAt: true },
+    })
+  );
   return { ...survey, createdAt: iso(survey.createdAt)! };
 }
 
@@ -303,7 +312,6 @@ export async function duplicateDealerSurvey(dealerId: string, id: string) {
     },
   });
   if (!s) throw surveyNotFound();
-  await assertQuota(dealerId);
   const suffix = ' (kopya)';
   const title = s.title.length + suffix.length > SURVEY_LIMITS.titleMax ? `${s.title.slice(0, SURVEY_LIMITS.titleMax - suffix.length)}${suffix}` : `${s.title}${suffix}`;
   // Eski şemadan kalan yanıtlanamaz sorular kopyaya taşınmaz; seçenekler normalize edilir.
@@ -316,10 +324,12 @@ export async function duplicateDealerSurvey(dealerId: string, id: string) {
       required: q.required,
       order: i,
     }));
-  const created = await prisma.survey.create({
-    data: { dealerId, title, description: s.description, isActive: false, questions: { create: questions } },
-    select: { id: true, title: true, isActive: true },
-  });
+  const created = await createWithinQuota(dealerId, (tx) =>
+    tx.survey.create({
+      data: { dealerId, title, description: s.description, isActive: false, questions: { create: questions } },
+      select: { id: true, title: true, isActive: true },
+    })
+  );
   return created;
 }
 
@@ -405,7 +415,7 @@ export async function getSurveyResults(
                    left(btrim(a->>'value'), ${OPEN_TEXT_MAX_SQL}) AS text,
                    r."createdAt" AS "createdAt",
                    row_number() OVER (PARTITION BY a->>'questionId' ORDER BY r."createdAt" DESC, r.id DESC) AS rn,
-                   count(*) OVER (PARTITION BY a->>'questionId')::int AS total
+                   (count(*) OVER (PARTITION BY a->>'questionId'))::int AS total
             FROM "SurveyResponse" r ${ANSWER_ELEMENTS}
             WHERE r."surveyId" = ${id} ${rangeSql(range.from)}
               AND a->>'questionId' IN (${Prisma.join(textIds)})

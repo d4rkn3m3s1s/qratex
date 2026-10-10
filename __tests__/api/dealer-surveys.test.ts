@@ -32,7 +32,13 @@ const raw: { calls: RawCall[]; handler: (sql: string, values: unknown[]) => unkn
 
 const tx = {
   $executeRaw: jest.fn(async () => 1),
-  survey: { findFirst: jest.fn(), update: jest.fn(async () => ({ id: 'sv1', updatedAt: new Date('2026-10-10T10:00:00Z') })) },
+  survey: {
+    findFirst: jest.fn(),
+    update: jest.fn(async () => ({ id: 'sv1', updatedAt: new Date('2026-10-10T10:00:00Z') })),
+    // Kota + oluşturma işlem içinde: aynı sahte tablolara yönlenir.
+    count: (...a: unknown[]) => (db.survey.count as (...x: unknown[]) => unknown)(...a),
+    create: (...a: unknown[]) => (db.survey.create as (...x: unknown[]) => unknown)(...a),
+  },
   surveyQuestion: { deleteMany: jest.fn(async () => ({ count: 1 })), update: jest.fn(async () => ({})), createMany: jest.fn(async () => ({ count: 1 })) },
 };
 
@@ -189,6 +195,8 @@ describe('POST /api/dealer/surveys', () => {
     expect(status).toBe(409);
     expect(body.code).toBe('SURVEY_QUOTA');
     expect(db.survey.create).not.toHaveBeenCalled();
+    // Kota denetimi bayi başına danışma kilidi altında (eşzamanlı oluşturma kotayı aşamaz).
+    expect(tx.$executeRaw).toHaveBeenCalled();
   });
 
   it('bozuk JSON → 400 (500 değil)', async () => {

@@ -42,15 +42,19 @@ export function blankQuestion(type: SurveyQuestionType = 'single_choice'): Build
 
 export const EMPTY_DRAFT: BuilderDraft = { title: '', description: '', questions: [] };
 
+/**
+ * İlk çizimde (SSR + hidrasyon) kimlikler DETERMİNİSTİK olmalı: `id`/`htmlFor` öznitelikleri
+ * sunucu ile istemcide aynı kalsın. Rastgele `uid()` yalnız kullanıcı etkileşiminde kullanılır.
+ */
 export function draftFromTemplate(tpl: SurveyTemplate): BuilderDraft {
   return {
     title: tpl.title,
     description: tpl.description,
-    questions: tpl.questions.map((q) => ({
-      id: uid('q'),
+    questions: tpl.questions.map((q, i) => ({
+      id: `tpl-${tpl.key}-${i}`,
       type: q.type,
       text: q.text,
-      options: (q.options ?? []).map((o) => blankOption(o)),
+      options: (q.options ?? []).map((o, j) => ({ id: `tpl-${tpl.key}-${i}-o${j}`, value: o })),
       required: q.required,
       serverId: null,
       locked: false,
@@ -68,12 +72,12 @@ export function draftFromEditor(data: SurveyEditorData): BuilderDraft {
       const type = (known ? q.type : 'open_text') as SurveyQuestionType;
       const options = isChoiceType(type)
         ? [
-            ...q.options.map((o) => ({ id: uid('o'), value: o, locked: lock })),
+            ...q.options.map((o, j) => ({ id: `srv-${q.id}-o${j}`, value: o, locked: lock })),
             // Eski bozuk (seçeneksiz) soru: en az iki boş satır hazır olsun.
-            ...Array.from({ length: Math.max(0, SURVEY_LIMITS.optionsMin - q.options.length) }, () => blankOption()),
+            ...Array.from({ length: Math.max(0, SURVEY_LIMITS.optionsMin - q.options.length) }, (_, k) => ({ id: `srv-${q.id}-pad${k}`, value: '' })),
           ]
         : [];
-      return { id: uid('q'), type, text: q.text, options, required: q.required, serverId: q.id, locked: lock };
+      return { id: `srv-${q.id}`, type, text: q.text, options, required: q.required, serverId: q.id, locked: lock };
     }),
   };
 }
