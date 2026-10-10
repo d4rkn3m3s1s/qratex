@@ -29,6 +29,18 @@ import type {
 
 const SQUADS_HREF = '/customer/squads';
 
+type Tx = Prisma.TransactionClient;
+
+/**
+ * Klan satırlarını kimlik sırasıyla kilitler (kilitlenme olmaz). Liderlik devri, ayrılış ve
+ * üye çıkarma da aynı satırı kilitler: yetki kararı kilit altında verilirse onlarla yarışamaz.
+ */
+async function lockSquadsForUpdate(tx: Tx, ids: readonly string[]): Promise<void> {
+  for (const id of Array.from(new Set(ids)).sort()) {
+    await tx.$queryRaw`SELECT "id" FROM "Squad" WHERE "id" = ${id} FOR UPDATE`;
+  }
+}
+
 /**
  * Süresi dolmuş açık savaşları kapatır (okumada çağrılır; idempotent, claim'li).
  * Hata yutulur ve loglanır: okuma yolu düşmez, cron yine yedek olarak çalışır.
@@ -97,9 +109,23 @@ export async function createChallenge(
   try {
     battleId = await prisma.$transaction(async (tx) => {
       // Kilit sırası kimliğe göre: iki lider aynı anda birbirine meydan okursa kilitlenme olmaz.
-      for (const id of [mySquad.id, target.id].sort()) {
-        await tx.$queryRaw`SELECT "id" FROM "Squad" WHERE "id" = ${id} FOR UPDATE`;
-      }
+      await lockSquadsForUpdate(tx, [mySquad.id, target.id]);
+      // Yetki ve donmuşluk KİLİT ALTINDA yeniden doğrulanır: liderlik devri / ayrılış (aynı
+      // satırı kilitler) ile yarışta eski lider klan adına meydan okuyup havuz bağlayamaz.
+      const mine = await tx.squad.findFirst({
+        where: { id: mySquad.id, ownerId: userId },
+        select: { isFrozen: true },
+      });
+      if (!mine) throw squadError('NOT_SQUAD_OWNER', 'Meydan okumak için bir klanın lideri olmalısın.');
+      if (mine.isFrozen) throw squadError('SQUAD_FROZEN');
+      const rival = await tx.squad.findUnique({
+        where: { id: target.id },
+        select: { ownerId: true, isFrozen: true },
+      });
+      if (!rival) throw new ApiError('NOT_FOUND', 'Rakip klan bulunamadı.');
+      if (rival.ownerId === userId) throw squadError('BATTLE_SELF');
+      if (rival.isFrozen) throw squadError('SQUAD_FROZEN', 'Rakip klan şu anda askıya alınmış.');
+
       const existing = await tx.squadBattle.findFirst({
         where: {
           status: { in: [...OPEN_BATTLE_STATUSES] },
@@ -140,7 +166,7 @@ export async function createChallenge(
       }
       await tx.notification.create({
         data: {
-          userId: target.ownerId,
+          userId: rival.ownerId,
           title: 'Klan savaşı daveti',
           message:
             `${mySquad.name} klanı, ${target.name} klanınıza meydan okudu` +
@@ -182,15 +208,26 @@ export async function respondChallenge(
     },
   });
   if (!battle) throw squadError('BATTLE_NOT_FOUND');
-  if (battle.squad2.ownerId !== userId) throw squadError('NOT_SQUAD_OWNER', 'Bu meydan okumaya yalnız rakip klanın lideri yanıt verebilir.');
+  // Kilitsiz ön kontrol (hızlı ret); KESİN yetki kararı aşağıda kilit altında yeniden verilir.
+  const notOwner = () =>
+    squadError('NOT_SQUAD_OWNER', 'Bu meydan okumaya yalnız rakip klanın lideri yanıt verebilir.');
+  if (battle.squad2.ownerId !== userId) throw notOwner();
   if (battle.status !== 'pending') throw squadError('BATTLE_NOT_PENDING');
 
   if (action === 'reject') {
-    const r = await cancelSquadBattle(prisma, battleId, {
-      actorId: userId,
-      actorRole: 'owner',
-      reason: 'Rakip klan meydan okumayı reddetti',
-      fromStatuses: ['pending'],
+    const r = await prisma.$transaction(async (tx) => {
+      await lockSquadsForUpdate(tx, [battle.squad2.id]);
+      const target = await tx.squad.findFirst({
+        where: { id: battle.squad2.id, ownerId: userId },
+        select: { id: true },
+      });
+      if (!target) throw notOwner();
+      return cancelSquadBattle(tx, battleId, {
+        actorId: userId,
+        actorRole: 'owner',
+        reason: 'Rakip klan meydan okumayı reddetti',
+        fromStatuses: ['pending'],
+      });
     });
     if (r.status === 'noop') throw squadError('BATTLE_NOT_PENDING');
     return { status: 'cancelled', refunded: r.refunded };
@@ -207,8 +244,20 @@ export async function respondChallenge(
   const newEnd = new Date(now.getTime() + durationMs);
 
   const memberIds = await prisma.$transaction(async (tx) => {
+    // Yetki + donmuşluk kilit altında: liderliği devreden / klandan ayrılan eski lider, devirle
+    // yarışarak klanı savaşa sokamaz; kabul anında askıya alınmış taraf savaşa giremez.
+    await lockSquadsForUpdate(tx, [battle.squad1.id, battle.squad2.id]);
+    const sides = await tx.squad.findMany({
+      where: { id: { in: [battle.squad1.id, battle.squad2.id] } },
+      select: { id: true, ownerId: true, isFrozen: true },
+    });
+    const target = sides.find((s) => s.id === battle.squad2.id);
+    if (!target || target.ownerId !== userId) throw notOwner();
+    if (sides.length !== 2 || sides.some((s) => s.isFrozen)) throw squadError('SQUAD_FROZEN');
+
     const claim = await tx.squadBattle.updateMany({
-      where: { id: battleId, status: 'pending' },
+      // Süresi dolmuş davet yarışta da kabul edilemez (endTime koşulu claim'in içinde).
+      where: { id: battleId, status: 'pending', endTime: { gt: now } },
       data: { status: 'active', startTime: now, endTime: newEnd, acceptedAt: now },
     });
     if (claim.count === 0) return null;
@@ -243,21 +292,45 @@ export async function respondChallenge(
   return { status: 'active', endTime: newEnd.toISOString() };
 }
 
+/**
+ * Bekleyen meydan okumayı geri çeker. Yetki (kilit altında, DB'den):
+ *  - gönderen klanın (squad1) ŞU ANKİ lideri, ya da
+ *  - havuzu ödeyen kişi (`challengedById`) — yalnız hâlâ gönderen klanın ÜYESİYSE.
+ * Önceden `challengedById` tek başına yetiyordu: klandan ayrılan / çıkarılan eski lider, artık
+ * üyesi olmadığı klanın meydan okumasını iptal edebiliyordu. İade her durumda ödeyene gider
+ * (`cancelSquadBattle` → `challengedById`), net-sıfır korunur.
+ */
 export async function withdrawChallenge(userId: string, battleId: string): Promise<{ refunded: number }> {
   const battle = await prisma.squadBattle.findUnique({
     where: { id: battleId },
-    select: { id: true, status: true, challengedById: true, squad1: { select: { ownerId: true } } },
+    select: { id: true, status: true, challengedById: true, squad1Id: true },
   });
   if (!battle) throw squadError('BATTLE_NOT_FOUND');
-  if (battle.challengedById !== userId && battle.squad1.ownerId !== userId) {
-    throw squadError('NOT_SQUAD_OWNER', 'Meydan okumayı yalnız gönderen klanın lideri geri çekebilir.');
-  }
-  if (battle.status !== 'pending') throw squadError('BATTLE_NOT_PENDING');
-  const r = await cancelSquadBattle(prisma, battleId, {
-    actorId: userId,
-    actorRole: 'owner',
-    reason: 'Meydan okuyan klan geri çekti',
-    fromStatuses: ['pending'],
+  const notAllowed = () =>
+    squadError('NOT_SQUAD_OWNER', 'Meydan okumayı yalnız gönderen klanın lideri geri çekebilir.');
+
+  const r = await prisma.$transaction(async (tx) => {
+    await lockSquadsForUpdate(tx, [battle.squad1Id]);
+    const challenger = await tx.squad.findUnique({
+      where: { id: battle.squad1Id },
+      select: { ownerId: true },
+    });
+    let allowed = !!challenger && challenger.ownerId === userId;
+    if (!allowed && challenger && battle.challengedById === userId) {
+      const stillMember = await tx.squadMember.findFirst({
+        where: { userId, squadId: battle.squad1Id },
+        select: { id: true },
+      });
+      allowed = !!stillMember;
+    }
+    if (!allowed) throw notAllowed();
+    if (battle.status !== 'pending') throw squadError('BATTLE_NOT_PENDING');
+    return cancelSquadBattle(tx, battleId, {
+      actorId: userId,
+      actorRole: 'owner',
+      reason: 'Meydan okuyan klan geri çekti',
+      fromStatuses: ['pending'],
+    });
   });
   if (r.status === 'noop') throw squadError('BATTLE_NOT_PENDING');
   return { refunded: r.refunded };

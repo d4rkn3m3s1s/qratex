@@ -39,7 +39,13 @@ jest.mock('@/lib/points-wallet', () => ({
 type Fn = jest.Mock;
 const db = {
   $queryRaw: jest.fn() as Fn,
-  squad: { findUnique: jest.fn() as Fn, findFirst: jest.fn() as Fn, create: jest.fn() as Fn, update: jest.fn() as Fn },
+  squad: {
+    findUnique: jest.fn() as Fn,
+    findFirst: jest.fn() as Fn,
+    findMany: jest.fn() as Fn,
+    create: jest.fn() as Fn,
+    update: jest.fn() as Fn,
+  },
   squadMember: {
     findFirst: jest.fn() as Fn,
     findMany: jest.fn() as Fn,
@@ -367,7 +373,8 @@ describe('savaş', () => {
   });
 
   it('geri çekme yalnız gönderen lider; iadeli iptal servisine gider', async () => {
-    db.squadBattle.findUnique.mockResolvedValue({ id: 'b1', status: 'pending', challengedById: 'o1', squad1: { ownerId: 'o1' } });
+    db.squadBattle.findUnique.mockResolvedValue({ id: 'b1', status: 'pending', challengedById: 'o1', squad1Id: 's1' });
+    db.squad.findUnique.mockResolvedValue({ ownerId: 'o1' });
     expect(await codeOf(withdrawChallenge('u2', 'b1'))).toBe('NOT_SQUAD_OWNER');
     mockCancel.mockResolvedValue({ status: 'cancelled', previousStatus: 'pending', refunded: 500 });
     expect(await withdrawChallenge('o1', 'b1')).toEqual({ refunded: 500 });
@@ -403,6 +410,10 @@ describe('savaş', () => {
       squad1: { id: 's1', name: 'A', ownerId: 'o1', isFrozen: false },
       squad2: { id: 's2', name: 'B', ownerId: 'o2', isFrozen: false },
     });
+    db.squad.findMany.mockResolvedValue([
+      { id: 's1', ownerId: 'o1', isFrozen: false },
+      { id: 's2', ownerId: 'o2', isFrozen: false },
+    ]);
     db.squadBattle.updateMany.mockResolvedValue({ count: 1 });
     db.squadMember.findMany.mockResolvedValue([
       { userId: 'o1', squadId: 's1' },
