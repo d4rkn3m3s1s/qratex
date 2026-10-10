@@ -253,3 +253,89 @@ Her iddia, çağıran/çağrılan taraflar, `proxy.ts`, `lib/api-auth.ts`, `lib/
 - `app/api/qr-codes/bulk/route.ts:12` doğrudan `getServerSession`; jti→IP/UA bağlama kontrolü yalnızca `lib/api-auth.ts:63-77` içinde (`checkTokenReplay`). Tekli DELETE `qr_code_deleted` olayı yazıyor (`app/api/qr-codes/[id]/route.ts:136`), bulk hiçbir iz bırakmıyor. `dealerId` filtresi doğru (`bulk/route.ts:35-38`), IDOR yok.
 - Somut senaryo (ön koşul: çalınmış oturum çerezi): Saldırgan çerezi farklı IP/UA'dan kullanır. `GET /api/qr-codes` ve tekli DELETE replay kontrolüne takılıp 403 döner. QR id'leri ise public uçtan alınabilir: `app/api/qr-codes/public/[code]/route.ts` yanıtında `id` dönüyor ve kod masadaki QR'ın üstünde basılı. Saldırgan `POST /api/qr-codes/bulk {action:"delete", ids:[...]}` ile kodları siler; Bulgu 1 nedeniyle tüm yorumlar da gider ve iz kalmaz.
 - Not: Bu tek bir uçla sınırlı değil. `app/api` altında 80 route `getServerSession`'ı doğrudan kullanıyor (replay korumasız); bulk, bunlar arasında en yıkıcı olanı. Ön koşul (çerez hırsızlığı) nedeniyle "kritik" yerine "yüksek/orta" daha doğru bir sınıflandırma.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/dealer/qr-codes` — "QR kodlar ve şubeler" (Kodlar + Şubeler sekmeleri, QR Stüdyosu çekmecesi).
+
+**Mimari:** Sunucu bileşeni önce (`app/dealer/qr-codes/page.tsx`): özet + ilk liste + şubeler BFF ile aynı yükleyicilerden (`lib/dealer/qr-codes/load.server.ts`) SSR'de React Query önbelleğine gömülür; bir parça düşerse istemci aynı ucu çağırıp `QueryState` ile hata/tekrar dene gösterir. Yeni BFF uçları `defineRoute` ile (rol `DEALER`, `tenant: 'dealer'`, zod, rate limit, idempotency): `GET/POST /api/dealer/qr-codes`, `GET /summary`, `GET/PATCH /[id]`, `POST /[id]/lifecycle`, `POST /bulk`, `GET /print`, `GET/POST /locations`, `PATCH /locations/[id]`. Yazma kuralları `lib/dealer/qr-codes/actions.server.ts`; saf kurallar `rules.ts`; baskı motoru `print-layout.ts` (+ bağımlılıksız vektörel PDF `pdf.ts`, `matrix.ts`). İstemci adası `components/dealer/b-qr-kodlar/**`; oluşturma ve stüdyo çekmeceleri `next/dynamic` ile yalnız açılınca yüklenir; `jszip` ve `qrcode` artık istemci paketinde yok (QR'ı sunucu üretir).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | ÇALIŞIYOR | Değişmedi (layout). |
+| 2 | Rol kapısı | ÇALIŞIYOR | Sayfa `requireAuth(['DEALER'])`; uçlar `defineRoute` + kiracı kapsamı. STAFF erişimi rol/navigasyon kararı, bu yüzeyin dışında. |
+| 3 | Hero | ÇALIŞIYOR | QDL v2 `PageHeader` (compact, ops kaydı). |
+| 4 | Yeni QR butonu + diyalog | ÇALIŞIYOR | `EntityEditorSheet` (sağ çekmece; mobilde tam genişlik). |
+| 5 | Ad alanı | ÇALIŞIYOR | Zod tek kaynak (2–100), `maxLength`, sunucu alan hatası alanın altında. |
+| 6 | Açıklama | ÇALIŞIYOR | 500 sınırı + sayaç. |
+| 7 | `isActive` form alanı (sahte) | KALDIRILDI → ÇALIŞIYOR | Oluşturmada gönderilmiyor; aktiflik kartta ve Ayarlar'da gerçek `Switch` (PATCH `isActive`). |
+| 8 | Çift tık koruması | ÇALIŞIYOR | Gönderim kilitli + `Idempotency-Key`; Enter ile gönderim. |
+| 9 | Kota uyarısı | ÇALIŞIYOR | Özet kartında kota çubuğu (x/y, plan); oluşturmada kalan hak + aşımda yükseltme bağlantısı; sunucu 402 `PLAN_LIMIT_REACHED`. |
+| 10 | Toplam QR | ÇALIŞIYOR | Sunucu sayımı (sekme rozeti + durum çipleri). |
+| 11 | Aktif sayısı | ÇALIŞIYOR | `deriveQrStatus`/`statusWhere` tek tanım; iptal/süresi dolmuş/arşiv aktif sayılmaz; sayfadan bağımsız. |
+| 12 | Toplam tarama | ÇALIŞIYOR | Tarama = tekilleştirilmiş `qr_scanned` olayı (`scanCount` değil); 7 gün + önceki 7 güne göre değişim + 14 gün çizgisi. |
+| 13 | Sayı animasyonu | ÇALIŞIYOR | Özel sayaç kaldırıldı; `MetricTile` (azaltılmış harekete uyar). |
+| 14 | Arama | ÇALIŞIYOR | Sunucuda (ad/kod/not/şube, büyük-küçük harf duyarsız), 300 ms bekleme, URL'de `?q=`. |
+| 15 | `?search=` derin link | ÇALIŞIYOR | `normalizeQrFilters` `search`→`q`; SSR'de de uygulanır. |
+| 16 | Filtre ve sıralama | ÇALIŞIYOR | Durum çipleri (sayılı), şube (şubesiz dahil), sıralama (yeni/eski/ad/son kullanma); URL senkron. |
+| 17 | Tekli seçim | ÇALIŞIYOR | `aria-label`'lı, 44 px hedef. |
+| 18 | Sayfadakileri seç | ÇALIŞIYOR | Yalnız bu sayfanınkileri ekler/kaldırır; diğer sayfadaki seçimler korunur; kısmi durum `indeterminate`. |
+| 19 | Toplu aktif/pasif | ÇALIŞIYOR | İşlem başına yükleniyor durumu; iptal/arşiv kodlar atlanır ve sayısı söylenir; denetim kaydı. |
+| 20 | Toplu sil | KALDIRILDI | Silme yok (C1); kodlar arşivlenir, yorumlar korunur. |
+| 21 | Toplu ZIP | KALDIRILDI → toplu PDF | Sayfalar arası seçimin tamamı (en çok 50) tek PDF'te masa kartı; iptal/arşiv seçimler hariç. ZIP'in tek amacı toplu baskıydı. |
+| 22 | Seçimi temizle | ÇALIŞIYOR | Toplu çubukta. |
+| 23 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState` iskeletleri. |
+| 24 | Boş durum | ÇALIŞIYOR | Üç ayrı durum: hiç kod yok (ilk kullanım CTA) / süzgece uyan yok ("Süzgeçleri temizle") / hata. |
+| 25 | Hata durumu | ÇALIŞIYOR | `QueryState` hata + "Tekrar dene"; veri varken gelen hata veriyi silmez. |
+| 26 | Kart önizleme | ÇALIŞIYOR | Sunucunun ürettiği gerçek QR (lazy SVG), `<button aria-label>`. |
+| 27 | Durum rozeti | ÇALIŞIYOR | Sunucu saatine göre; statik nokta (nabız kaldırıldı); "sona eriyor" rozeti. |
+| 28 | Ad, kod, tarama | ÇALIŞIYOR | "312 tarama · 41 yorum · %13 dönüşüm · ★ 4,2" (30 gün) + 14 günlük çizgi + şube. |
+| 29 | Menü: Önizle | ÇALIŞIYOR | "Yazdır ve indir" → Stüdyo; tetikleyici `aria-label`'lı. |
+| 30 | Menü: Sayfayı aç | ÇALIŞIYOR | Stüdyo'da `rel="noopener noreferrer"`. |
+| 31 | Kodu yenile | ÇALIŞIYOR | Kota-nötr (1 iptal + 1 oluşturma, kilit altında); son kullanma/karşılama/şube taşınır; zincir "Geçmiş" sekmesinde. |
+| 32 | İptal et | ÇALIŞIYOR | Onay diyaloğu + "İptali geri al" (kota denetimli). |
+| 33 | Sil | KALDIRILDI → Arşivle | Arşiv/arşivden geri alma; onay metni sonucu ve korunan yorum sayısını söyler. |
+| 34 | Link kopyala | ÇALIŞIYOR | try/catch + görünür hata; kanonik adres. |
+| 35 | Kart PNG indir | ÇALIŞIYOR | Stüdyo'dan; QR başına renk durumu (sızma yok), ASCII güvenli dosya adı, iptal/arşiv kod basılamaz (sunucu 409). |
+| 36 | Tekli aktif/pasif | ÇALIŞIYOR | Kartta `Switch`. |
+| 37 | Ad/açıklama düzenleme | ÇALIŞIYOR | Stüdyo › Ayarlar (yalnız değişen alanlar gönderilir). |
+| 38 | Son kullanma tarihi | ÇALIŞIYOR | Oluşturma ve Ayarlar'da; İstanbul gününün sonunda biter; geçmiş tarih reddedilir. |
+| 39 | Segment karşılama | ÇALIŞIYOR | "Karşılama bağlantıları" (en çok 8) ↔ `segmentConfig`; bağlantıya özel baskı ve bağlantıya göre tarama kırılımı. |
+| 40 | Şube atama | ÇALIŞIYOR | Oluşturma/Ayarlar'da; arşivli ya da başka bayinin şubesi sunucuda reddedilir. Şubeler sekmesi: ekle, düzenle, arşivle/geri al (silme yok), plan şube kotası. |
+| 41 | Sayfalama | ÇALIŞIYOR | Sunucu sayfayı sıkıştırır, URL düzelir; `keepPreviousData` + otomatik iptal (yarış yok). |
+| 42 | Önizleme modalı | ÇALIŞIYOR | Radix tabanlı `DetailSheet` (odak tuzağı, Esc, kaydırma), `?qr=&qrtab=` derin linkli. |
+| 43 | Renk seçici | ÇALIŞIYOR | `label htmlFor`; kontrast denetimi (< 4,5:1 ya da ters → indirme kapalı, sunucu da reddeder). Renk kalıcı değil (ŞEMA İSTEĞİ 1). |
+| 44 | Hazır paletler | ÇALIŞIYOR | 5 okunur palet; "Ters" palet kaldırıldı. |
+| 45 | QR içerik URL'si | ÇALIŞIYOR | Tek kaynak `buildQrTargetUrl` → `siteUrl`; sunucu üretir. |
+| 46 | Çerçeve şablonları (sahte) | KALDIRILDI → gerçek şablonlar | Masa kartı (A6), katlanır masa standı (A4, iki yüz), sticker (90 mm), yalnız QR; önizleme = SVG = PNG = PDF. |
+| 47 | PNG indir | ÇALIŞIYOR | Sunucu SVG'sinden ~300 dpi. |
+| 48 | SVG indir | ÇALIŞIYOR | mm ölçülü; `revokeObjectURL` gecikmeli. |
+| 49 | Modal tarama/tarih | ÇALIŞIYOR | Stüdyo › İstatistik ve Geçmiş. |
+| 50 | Link kopyala / aç | ÇALIŞIYOR | |
+| 51 | Baskıya hazır şablon, PDF | ÇALIŞIYOR | Sunucu PDF (`GET /api/dealer/qr-codes/print`), toplu çok sayfalı. |
+| 52 | Gerçek tarama analitiği | ÇALIŞIYOR | Kart (30 gün + çizgi), özet (7/14/30 gün, dönüşüm, en düşük puanlı nokta), Stüdyo (günlük tarama/yorum, tablo, bağlantı kırılımı). |
+| 53 | UTM/kampanya linki | ÇALIŞIYOR | Stüdyo › Yazdır › "Kampanya bağlantısı (UTM)". |
+| 54 | Toast dili | ÇALIŞIYOR | Bu yüzey doğrudan `sonner` kullanır (öneksiz, Türkçe karakterli). |
+| 55 | Azaltılmış hareket | ÇALIŞIYOR | `Reveal` (bütçeli kademe, azaltılmışta düz), geçişler `motion-reduce`, nabız yok. |
+| 56 | `layout` animasyonu | KALDIRILDI | Etkisizdi; gerek yok. |
+
+### Kapanan bulgular (15/15)
+1 Cascade silme → arşiv (silme ucu ve toplu silme yok) · 2 Tarama metriği → `qr_scanned` · 3 Origin → kanonik `siteUrl`, sunucu üretimi · 4 Rotate kotası/ayar taşıma/zincir · 5 Sayfa bazlı istatistik → sunucu özeti · 6 Arama/derin link/boş durumlar · 7 Hata/yarış/geçersiz sayfa · 8 Sahte çerçeve + renk sızıntısı → tek yerleşim motoru · 9 Toplu uç → `defineRoute` (token-replay, zod, denetim kaydı) · 10 Erişilebilir modal/etiketler · 11 Oluşturma akışı (kilit, düzenleme, şube, son kullanma, karşılama, numaralı seri) · 12 Toast/hata dili · 13 Ağır kütüphaneler istemciden çıktı, `select` daraltıldı · 14 Motion · 15 918 satırlık bileşen bölündü.
+
+Eksik özelliklerden uygulananlar: 1 (baskı stüdyosu; logo hariç), 2 (tarama analitiği; cihaz/dil hariç), 3 (şube), 4 (numaralı seri + tek PDF), 5 (UTM; dinamik hedef hariç), 6 (son kullanma, iptali geri alma, rotate geçmişi, kota göstergesi).
+
+### Testler
+`__tests__/lib/dealer/qr-codes-actions.test.ts` ve `__tests__/lib/dealer/qr-codes-print.test.ts` — 26/26 geçti.
+
+### Kalanlar (gerekçeli)
+- QR başına kalıcı stil (renk/şablon/CTA) ve işletme logosu: şemada alan yok → ŞEMA İSTEĞİ 1 (`QRCode.style Json`).
+- `kind` (masa/kasa/paket) etiketi ve `rotatedFromId` ilişkisi: ŞEMA İSTEĞİ 2; zincir şimdilik `qr_code_rotated` olayından okunuyor.
+- Kalıcı kısa yol `/q/[code]` ve dinamik hedef: yeni herkese açık rota + proxy kararı bu yüzeyin sahipliği dışında.
+- Eski `/api/qr-codes/**` uçları başka yüzeylerce kullanıldığı için dokunulmadı; bu sayfa artık onları çağırmıyor.
+- `QRCode.scanCount`'u okuyan admin/analitik panoları başka yüzeylerin işi.
+- Cihaz/dil dağılımı: tarama olayı bu boyutları taşımıyor.
