@@ -282,3 +282,115 @@ Her iddia kod okunarak çürütülmeye çalışıldı. DB, build, test çalışt
 ### 5. Davet liderliği tamamlanmamış/sahte davetlerle şişirilebilir: **ÇÜRÜTÜLDÜ**
 - `Referral` kaydı oluşturan yalnızca iki yol var ve ikisi de kaydı doğrudan `status: 'COMPLETED'` ile yazıyor: `app/api/auth/register/route.ts:112-121` ve `app/api/referral/route.ts:203-212`. Depoda `PENDING` veya `EXPIRED` yazan hiçbir kod yok (grep). Dolayısıyla `_count.referralsMade` (`route.ts:29,45`) bugün fiilen yalnızca COMPLETED kayıtları sayıyor; status filtresinin eksikliği kullanıcıyı etkileyen bir senaryo üretmiyor. Filtre yine de ileride PENDING akışı eklenirse diye savunmacı olarak eklenebilir.
 - Yan not (iddianın kendisi değil, ayrıca ele alınmalı): kayıt yolu (`register/route.ts:101-107`) yalnızca `isActive` ve `maxUsage` kontrol ediyor; `app/api/referral/route.ts:164-183` içindeki ömür boyu / aylık davet limitlerini uygulamıyor ve referans, e-posta doğrulanmadan COMPLETED sayılıyor. Yani davet sayısını şişirme riski status filtresinden değil, kayıt akışındaki bu farklılıktan kaynaklanıyor; bu, puan ekonomisi denetiminde ayrı bir bulgu olarak doğrulanmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/customer/leaderboard` (Oyna → Lig). Sayfa baştan yazıldı: sunucu bileşeni (`app/customer/leaderboard/page.tsx`) kimliği ve rolü DB'den doğrular (`requireAuth(['CUSTOMER'])`), `rewards` modül kapısını ve `leaderboard` menü görünürlüğünü sunucuda uygular, ilk sıralamayı sunucuda hesaplayıp istemci adasına (`components/customer/m-lig/**`) verir. Sonraki dönem/tür/sayfa değişimleri yeni BFF ucu `GET /api/customer/league` (`defineRoute`: yalnız CUSTOMER, `rewards` modülü, `read` rate limit, zod sorgu, zarf v2) üzerinden TanStack Query ile gelir. Hesap tek modülde: `lib/league-board/` (`periods.ts` İstanbul dönemleri, `ranking.ts` saf sıralama çekirdeği, `server.ts` SQL + önbellek + DTO, `types.ts` sözleşme). Sayfa artık eski `/api/leaderboard` ucunu kullanmıyor.
+
+**Dönemler:** Bu hafta (İstanbul Pazartesi 00:00 → Pazartesi), Sezon N (8 haftalık, çapa 2026-01-05; yol haritası F4.4 ile uyumlu), Tüm zamanlar. "Aylık" sekmesi sezona dönüştü; eski `?period=monthly` bağlantısı sezona, `weekly`/`alltime` yeni değerlere eşlenir.
+
+**Skor kaynakları (tek metrik, döneme uyar):** Puan → `points_credited` defteri (iade `squad_escrow_refund`, `admin_adjust`, `opening_balance`, `demo_seed`, `reversal` sayılmaz); tüm zamanlarda güncel bakiye. Yorum → `deletedAt IS NULL AND trustFlagged = false`. Rozet → `UserBadge.earnedAt`. Davet → yalnız `COMPLETED`, `completedAt`. Başkalarının listesine yalnız `role=CUSTOMER`, `fraudStatus='clean'`, demo olmayan, anonimleştirilmemiş ve askıda olmayan hesaplar girer. Tie-break: skor ↓, skora önce ulaşan (son katkı anı; tüm zamanlarda hesap açılışı) ↑, id ↑.
+
+**Gizlilik:** "Sıralamada görün" kapalıysa oyuncu başkalarının listesinde yoktur; tercih sayfadan da değiştirilebilir (aynı `preferences.showLeaderboard` alanı, `PATCH /api/customer/settings`). İzleyici kendi tercihini önbelleksiz okur, kendini her zaman görür ("Gizli" rozeti). Tercihler okunamazsa liste verilmez (fail-closed). Yanıtta ham id yok (HMAC anahtar), başkalarının adı maskeli ("Ayşe K."), `needsReview`/fraud sinyali yok. İnceleme/gölge hesabı kendi görünümünde normal sırasıyla yer alır.
+
+**Doğrulama:** `__tests__/lib/league-board.test.ts` (23 test: İstanbul dönemleri, tie-break, gizli oyuncu, izleyici ekleme, sınır dışı, SQL filtreleri, sızıntı yok, fail-closed, sayfalama), `__tests__/api/customer-league.test.ts` (6 test: 401, rol, varsayılanlar, zod 400, modül/menü 403, görünür 500), `__tests__/customer/league-board-render.test.ts` (3 SSR testi: tek h1, podyum DOM sırası 1-2-3, "sen" ve gizli rozeti, boş durum CTA'sı, 2 kişilik podyum). Görünüm 390 px'te Playwright ekran görüntüsüyle kontrol edildi (yatay taşma yok).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Segment metadata | ÇALIŞIYOR | Sayfa `generateMetadata` TR/EN ("Lig"), `noindex`. |
+| 2 | Masaüstü başlık | ÇALIŞIYOR | QDL `PageHeader`: her boyutta tek `h1`. |
+| 3 | Mobil başlık kartı | KALDIRILDI | Tek `PageHeader` mobilde de görünüyor; ikinci kart dikey alan harcıyordu (B12). |
+| 4 | Banner: kullanıcı avatarı | KALDIRILDI | Kahraman lig odaklı (amblem); avatarın kendi satırında. Kuşanılmış çerçeveler sonsuz CSS animasyonu olduğundan listede kullanılmadı (motion politikası). |
+| 5 | Banner: ad | KALDIRILDI | Ad kendi satırında ve yapışkan "sen" çubuğunda; kahramanda tekrar gürültüydü. |
+| 6 | Banner: seviye | ÇALIŞIYOR | DB'den (`me.level`), bayat JWT değil. |
+| 7 | Banner: lig rozeti | ÇALIŞIYOR | Sunucu kuralları (`getLeagueRules`), `LeagueEmblem`; son lig açık uçlu (100.000 üstü Başlangıç'a düşmüyor). |
+| 8 | "Sıralaman #N" | ÇALIŞIYOR | Listeyle aynı metrik/dönem/tie-break; sınır dışında "15.000+" (uydurma yok). |
+| 9 | İlk 10 alev animasyonu | KALDIRILDI | Sonsuz döngü; yerine sıra sayacı (değişimde sayar) + son ziyaretten beri ▲/▼ çipi. |
+| 10 | "/ N kişi" | ÇALIŞIYOR | Dönemde skoru olan görünür oyuncu sayısı, i18n ("oyuncu"/"players"). |
+| 11 | Banner: toplam puan | ÇALIŞIYOR | Güncel bakiye DB'den ("Bakiye 4.000 puan"). |
+| 12 | Dönem · kategori etiketi | ÇALIŞIYOR | Etiketler istemcide TR/EN; API yalnız anahtar döndürür. |
+| 13 | Kategori panelini aç/kapa | KALDIRILDI | Kategoriler yatay çip; seçili türün nasıl sayıldığı tek satırda. |
+| 14 | Kategori seçimi | ÇALIŞIYOR | `ChoiceChips` radiogroup (ok tuşları), URL'de `?cat=`, istek iptali. |
+| 15 | Kategori: Puan | ÇALIŞIYOR | Defterden; açıklama metni gerçeği söylüyor. |
+| 16 | Kategori: Geri Bildirim | ÇALIŞIYOR | Dönem filtreli; silinen/bayraklı sayılmaz. |
+| 17 | Kategori: Rozet | ÇALIŞIYOR | Dönem filtreli (`earnedAt`). |
+| 18 | Kategori: Davet | ÇALIŞIYOR | Yalnız COMPLETED, dönem filtreli (artık PENDING akışı var; filtre gerçekten gerekiyordu). |
+| 19 | Dönem sekmeleri | ÇALIŞIYOR | Hafta · Sezon N · Tüm zamanlar; dört türde de etkili. |
+| 20 | Haftalık/aylık puan hesabı | ÇALIŞIYOR | Sahte `length(text)` formülü yok; `points_credited` toplamı. |
+| 21 | Boş dönemde geri dönüş listesi | KALDIRILDI | Tüm zamanlar listesi "Bu hafta" diye sunulmuyor; dürüst boş durum + gerçek CTA. |
+| 22 | Veri çekme ve durum | ÇALIŞIYOR | TanStack Query: iptal, `keepPreviousData`, hata görünür, 5xx'te 2 deneme. |
+| 23 | Yükleniyor iskeleti | ÇALIŞIYOR | Yalnız sunucu verisi yoksa; filtre değişiminde önceki veri korunur (titreme yok), "Güncelleniyor" göstergesi. |
+| 24 | Hata durumu | ÇALIŞIYOR | `QueryState` → `ErrorState` + "Tekrar dene"; veri varken hata bandı. |
+| 25 | Boş durum | ÇALIŞIYOR | Hata, modül kapalı ve yetkisiz durumlarından ayrı. |
+| 26 | Podyum | ÇALIŞIYOR | 1–3 kişide de görünür. |
+| 27 | 1–2 kişilik liste | ÇALIŞIYOR | Boş basamak "Bu basamak boş. İlk sen ol."; liste `rank > 3` ile başlar. |
+| 28 | Podyum mikro-animasyonları | KALDIRILDI | Üç sonsuz döngü kaldırıldı; yalnız kullanıcı seçimi değişince bütçeli giriş (ilk sunucu render'ı opaklık 0 ile gelmez). |
+| 29 | Podyum skor + sayılar | ÇALIŞIYOR | Seçili türün skoru + birimi; tutarsız ikincil sayılar kaldırıldı. |
+| 30 | 1. için lig rozeti | ÇALIŞIYOR | Her basamakta `LeagueEmblem`; sabit "Lv." yok. |
+| 31 | Podyumda "bu sensin" | ÇALIŞIYOR | Halka + "Sen". |
+| 32 | Liste satırları | ÇALIŞIYOR | 25'lik sayfalar. |
+| 33 | 4–10 renk paleti | KALDIRILDI | Anlamsız gradyanlar yerine ilk 10 sıra numarası marka renginde. |
+| 34 | "Sen" rozeti + vurgu | ÇALIŞIYOR | Satır `bg-brand-subtle`; hangi sayfada olursa olsun bulunur. |
+| 35 | Satır seviye | ÇALIŞIYOR | "Sv. N". |
+| 36 | Satır lig adı + ikon | ÇALIŞIYOR | Gerçek DS amblemi (yer tutucu avatar SVG'leri değil), mobilde de görünür, hizalama düzgün. |
+| 37 | Satır lig ilerleme çubuğu | KALDIRILDI | Başkalarının lig ilerlemesi gürültüydü ve iki puan kavramını karıştırıyordu; kendi ilerlemen kahramanda. |
+| 38 | Satır üçlü istatistik | KALDIRILDI | Satır tek metrik gösterir ("davet: 0" yanlışı yapısal olarak kapandı). |
+| 39 | Satır skor + birim | ÇALIŞIYOR | Tür birimi (puan/yorum/rozet/davet). |
+| 40 | "N Oyuncu" sayacı | ÇALIŞIYOR | Gerçek katılımcı toplamı kahramanda ("/ 13 oyuncu"). |
+| 41 | Varsayılan avatar | ÇALIŞIYOR | Baş harfler; halka rengi kişiye bağlı (opak anahtardan), satır sırasına değil. |
+| 42 | Kendi satırın (yapışkan "sen") | ÇALIŞIYOR | Kahraman ve satırın ekranda değilken alt çubuk; "Sırama git" gerekirse sayfayı açar, kaydırır, odaklar. |
+| 43 | Sayfalama | ÇALIŞIYOR | Önceki/Sonraki + "Sayfa X / Y", URL'de `?page=`. |
+| 44 | Satıra tıklayıp profil | KALDIRILDI | Yanlış affordance (hover kalkması) kaldırıldı; başkasının profil önizlemesi gizlilik ilkesiyle çelişir ve herkese açık profil sözleşmesi yok. |
+| 45 | Gizlilik tercihine uyma | ÇALIŞIYOR | Uygulanıyor + sayfadan değiştirilebiliyor; fail-closed. |
+| 46 | Fraud/şüpheli hariç tutma | ÇALIŞIYOR | `fraudStatus='clean'` + demo/anonim/askı filtresi; izleyici kendini normal görür. |
+| 47 | API kimlik doğrulaması | ÇALIŞIYOR | Yalnız CUSTOMER, rol DB'den. |
+| 48 | `needsReview` sızıntısı | ÇALIŞIYOR | Yeni sözleşmede hiç yok (testle doğrulanıyor). |
+| 49 | Modül kapısı | ÇALIŞIYOR | `rewards` + menü görünürlüğü hem sayfada hem uçta; kapalıyken `moduleDisabled` durumu, "veri yok" değil. |
+| 50 | Sıra değişim göstergesi | ÇALIŞIYOR | Kendi sıran için "son ziyaretinden beri ▲/▼" (tarayıcıya özel kolaylık). Başkalarının okları için dönem anlık görüntüsü gerekir (ŞEMA İSTEĞİ 3). |
+| 51 | Dönem sonu geri sayımı / ödül / bölge | ÇALIŞIYOR (geri sayım) · KALDIRILDI (bölge/ödül) | Hafta ve sezon sayacı `CountdownChip` (İstanbul). Terfi/düşme bölgesi ve dönem ödülü gerçek bir ödül/kohort olmadan sahte olurdu (ŞEMA İSTEĞİ 3, F4.4). |
+| 52 | Arkadaş/ekip sıralaması | KALDIRILDI | Klan sıralaması Oyna → Klan'da; AI bilgi tabanı düzeltildi (B15). |
+| 53 | Seçimin URL'de tutulması | ÇALIŞIYOR | `?period=&cat=&page=` (history.replaceState; sunucu bileşeni gereksiz yeniden çalışmaz). |
+| 54 | Periyodik yenileme | ÇALIŞIYOR | Görünürken 2 dk'da bir + odakta; dönem bitince yeniden çeker. |
+| 55 | i18n | ÇALIŞIYOR | Yüzeye özel TR/EN metinler, samimi "sen" hitabı, sayı biçimi dile göre. |
+| 56 | Azaltılmış hareket | ÇALIŞIYOR | Sonsuz döngü yok; sayaç, kaydırma ve girişler `lib/motion` politikasına bağlı (OS + uygulama ayarı). |
+| 57 | Eşit skorda kararlı sıralama | ÇALIŞIYOR | skor ↓, önce ulaşan ↑, id ↑ (SQL ve bellekte aynı). |
+
+**Sonuç:** 57 kalemin 44'ü ÇALIŞIYOR, 12'si gerekçeyle KALDIRILDI. 51. kalem kısmen çalışıyor, kısmen kaldırıldı. BOZUK, SAHTE ve EKSİK kalem kalmadı.
+
+**Eksik özelliklerden eklenenler:** "Ben" odaklı görünüm (yapışkan satır, bir üstteki oyuncuyu geçmek için gereken fark, ilk 10'a kalan fark, tür başına somut CTA), kendi sıra değişimin, geçen haftanın ilk üçü (tamamlanmış hafta, 1 saat önbellek), sezonluk sıralama, sayfadan gizlilik anahtarı.
+
+### Kapanan bulgular (15/15)
+
+- **B1** kapandı: oturum + CUSTOMER rolü zorunlu, gizlilik tercihi uygulanıyor ve okunamazsa fail-closed, maskeli ad, opak anahtar, kendi gizli sıranı görme.
+- **B2** kapandı: fraud sinyali yanıtta yok; `fraudStatus ≠ clean` başkalarının listesinde yok, izleyici kendi görünümünde normal.
+- **B3** bu yüzey için kapandı: puan defterden. Eski `/api/leaderboard` ana sayfa widget'ı için hâlâ duruyor (bkz. Kalanlar).
+- **B4** kapandı: dört türde de dönem filtresi.
+- **B5** kapandı: kendi sıran aynı metrik/dönem/tie-break; sıfır skorda dürüst "henüz sıralamada değilsin" + CTA.
+- **B6** kapandı: 1–2 kişilik podyum ve boş basamak.
+- **B7** kapandı: TanStack Query, iptal, hata durumu, önceki veriyi koruma.
+- **B8** kapandı: COMPLETED davet, silinmemiş/bayraksız yorum, satır tek metrik.
+- **B9** kapandı: puan/seviye/lig sunucunun `me` nesnesinden, admin lig kurallarıyla.
+- **B10** bu yüzey için kapandı: kullanıcıdan bağımsız sıralı liste `(tür, dönem anahtarı)` ile 60 sn önbellekte (tamamlanmış hafta 1 saat), kişisel kısım bellekte; istek başına en fazla 2–3 hafif sorgu. Redis ZSET mimarisine gerek görülmedi.
+- **B11** kapandı: dekoratif avatar `alt=""` + satır `aria-label`, radiogroup çipler, podyum DOM sırası 1-2-3, token renkleri (ham sarı yok), en küçük metin `qx-caption`, dokunma hedefleri ≥ 44px.
+- **B12** kapandı: yapışkan filtre çubuğu, sade satır (sıra · avatar · ad · lig · skor).
+- **B13** kapandı: keyfi palet ve yer tutucu lig ikonları yerine DS `LeagueEmblem`.
+- **B14** kapandı: etiketler istemcide i18n, tek hitap ("sen"), dile göre sayı biçimi.
+- **B15** kapandı: `lib/qra-knowledge-base.ts` girişi gerçeğe göre güncellendi.
+
+### Kalanlar
+
+- **Ana sayfa ilk-5 widget'ı** (`components/customer/dashboard/customer-dashboard.tsx`) hâlâ eski `/api/leaderboard` ucunu çağırıyor. O uçta haftalık "puan" eski formülle hesaplanıyor ve widget 60 sn'de bir yeniden çağırıyor. Uç ve widget ana sayfa yüzeyinin sahipliğinde. Öneri: widget `buildLeagueBoard` ya da `GET /api/customer/league?page=1` ile beslenmeli (`me` + `podium` aynı sözleşmede hazır); ardından `/api/leaderboard` ve `app/api/cron/cache-warm` girdisi emekliye ayrılmalı.
+- **Başkalarının ▲/▼ okları, haftalık kohort ligi, terfi/düşme bölgeleri ve dönem sonu ödülleri** kalıcı anlık görüntü ve kohort tabloları gerektiriyor (ŞEMA İSTEĞİ 3; F4.4 kapsamı).
+- **Lig bakiyeye göre** hesaplanıyor (sistemin geri kalanı ve An Motoru ile tutarlı). F4.4'te sezon XP'ye geçilince `resolveLeague` girdisi değişmeli. Sezon tanımı `lib/league-board/periods.ts → seasonWindow` olarak hazır; An Motoru `currentLeagueSeasonKey()` buradan beslenebilir.
+- **Kozmetik avatar çerçeveleri** listede gösterilmiyor: mevcut çerçeveler sonsuz CSS animasyonu (motion politikası). Statik çerçeve varyantı yapılınca eklenebilir.
+
+### Şema istekleri
+
+1. `User.leaderboardVisible Boolean @default(true)` (+ indeks): tercih bugün `Settings` JSON'unda; sıralama bunu 60 sn önbellekli JSON yol sorgusuyla okuyor. Kolon olunca doğrudan SQL filtresi olur ve başkalarına yansıma gecikmesi kalkar.
+2. `User.displayName String?` (takma ad): bugün ad, soyadın baş harfiyle maskeleniyor; kullanıcının seçtiği görünen ad daha iyi bir gizlilik seçeneği olur.
+3. `LeaderboardSnapshot(periodKey, category, userId, rank, score)` ve F4.4 için `LeagueCohort` / `LeagueCohortMember`: herkes için sıra değişim okları, dönem sonu sonuç ekranı, kohort ligi ve terfi/düşme ödülleri (ödüller `mintPoints` ile, tek-kez anahtarlı).

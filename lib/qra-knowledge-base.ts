@@ -28,7 +28,7 @@ export const QRA_CUSTOMER_SITEMAP: QraSiteMapEntry[] = [
   { path: '/customer/badges', label: 'Rozetlerim', purpose: 'Kazanılan rozetler ve ilerleme' },
   { path: '/customer/quests', label: 'Görevler', purpose: 'Aktif görevleri tamamlayıp ödül kazanma' },
   { path: '/customer/shop', label: 'Çerçeve Dükkanı', purpose: 'Puan/XP ile çerçeve, rozet ve arka plan satın alma' },
-  { path: '/customer/leaderboard', label: 'Liderlik Tablosu', purpose: 'Genel ve klan sıralaması' },
+  { path: '/customer/leaderboard', label: 'Lig', purpose: 'Haftalık, sezonluk ve tüm zamanlar sıralaması (puan, yorum, rozet, davet); ligin ve bir üst lige kalan puan. Klan sıralaması Klan sayfasında.' },
   { path: '/customer/squads', label: 'Klanlar', purpose: 'Klana katılma/kurma, klan savaşları' },
   { path: '/customer/surprise-boxes', label: 'Sürpriz Kutularım', purpose: 'Günlük giriş kutusu ve hediye kutularını açma' },
   { path: '/customer/donations', label: 'Sosyal Sorumluluk', purpose: 'Puanla bağış yapma' },
