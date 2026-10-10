@@ -245,3 +245,16 @@ export function formatCurrencyTRY(amount: number, locale: 'tr' | 'en'): string {
 export function formatPercent(v: number, locale: 'tr' | 'en'): string {
   return new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'tr-TR', { style: 'percent', maximumFractionDigits: 0 }).format(v);
 }
+
+export type SemanticResult = {
+  key: string;
+  score: number;
+  rating: number;
+  textPreview: string | null;
+  createdAt: string;
+  sentiment: 'positive' | 'neutral' | 'negative' | 'pending';
+};
+
+export function postSemantic(query: string) {
+  return postJson<{ results: SemanticResult[] }>('/api/dealer/inbox/semantic', { query });
+}

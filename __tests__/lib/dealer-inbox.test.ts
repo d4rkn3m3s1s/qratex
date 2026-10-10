@@ -562,3 +562,38 @@ describe('getInboxSummary', () => {
     expect(s.distribution['4']).toBe(3);
   });
 });
+
+describe('kabuk sekmeleri', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { resolveInboxTabs, activeInboxTab } = require('@/lib/dealer-inbox/tabs') as typeof import('@/lib/dealer-inbox/tabs');
+  const shell = {
+    nodes: [
+      {
+        kind: 'item' as const,
+        item: {
+          id: 'dealer.inbox',
+          href: '/dealer/inbox',
+          label: { tr: 'Gelen Kutusu', en: 'Inbox' },
+          icon: 'Inbox' as const,
+          children: [
+            { id: 'dealer.inbox.remedy', href: '/dealer/inbox/remedy', label: { tr: 'Telafi onayı', en: 'R' }, icon: 'ClipboardCheck' as const, children: [] },
+            { id: 'dealer.inbox.assigned', href: '/dealer/inbox/assigned', label: { tr: 'Bana atananlar', en: 'A' }, icon: 'ListChecks' as const, children: [] },
+          ],
+        },
+      },
+    ],
+  };
+
+  it('"Tümü" her zaman ilk; gizlenen (modülü kapalı) çocuk sekme kabukta yok', () => {
+    const tabs = resolveInboxTabs(shell as never);
+    expect(tabs.map((t) => t.href)).toEqual(['/dealer/inbox', '/dealer/inbox/remedy', '/dealer/inbox/assigned']);
+    expect(resolveInboxTabs(null).map((t) => t.href)).toEqual(['/dealer/inbox']);
+  });
+
+  it('kök yalnız tam eşleşmede etkin; alt rota kendi sekmesini etkinleştirir', () => {
+    const tabs = resolveInboxTabs(shell as never);
+    expect(activeInboxTab(tabs, '/dealer/inbox')).toBe('dealer.inbox');
+    expect(activeInboxTab(tabs, '/dealer/inbox/remedy/x')).toBe('dealer.inbox.remedy');
+    expect(activeInboxTab(tabs, '/dealer/inbox/unknown')).toBeNull();
+  });
+});

@@ -32,6 +32,7 @@ import { InboxList } from './inbox-list';
 import { KpiStrip } from './kpi-strip';
 import { NativeSelect } from './parts';
 import { countActive, InboxToolbar } from './toolbar';
+import { SemanticSearch } from './semantic-search';
 
 // Çekmece gövdesi ağır (editör, AI, telafi, geçmiş) → yalnız açılınca yüklenir.
 const InboxDetailBody = dynamic(() => import('./detail-body').then((m) => m.InboxDetailBody), {
@@ -110,7 +111,8 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
 
   /* ───── Seçim ───── */
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  useEffect(() => setSelected(new Set()), [filters]);
+  const filtersSig = JSON.stringify(filters);
+  useEffect(() => setSelected(new Set()), [filtersSig]);
   const toggle = useCallback((key: string, checked: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -170,18 +172,19 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
 
   /* ───── Sonsuz kaydırma ───── */
   const sentinel = useRef<HTMLDivElement | null>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || !list.hasNextPage) return;
+    if (!el || !hasNextPage || isFetchingNextPage) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting) && !list.isFetchingNextPage) void list.fetchNextPage();
+        if (entries.some((e) => e.isIntersecting)) void fetchNextPage();
       },
       { rootMargin: '400px 0px' }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [list.hasNextPage, list.isFetchingNextPage, list.fetchNextPage, list]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   /* ───── Toplu işlem ───── */
   const [bulkAssignee, setBulkAssignee] = useState('');
@@ -196,8 +199,9 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
     onError: (err) => toast.error(err instanceof Error ? err.message : copy.actionFailed),
   });
 
-  const counts = summary.data?.statusCounts ?? null;
   const activeFilters = countActive(filters);
+  // Durum sayaçları tüm zamanlar içindir; filtre açıkken yanıltmasın diye gizlenir.
+  const counts = activeFilters === 0 ? summary.data?.statusCounts ?? null : null;
   const readOnly = initial.readOnly;
 
   const empty =
@@ -274,6 +278,9 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
           {copy.listLabel}
         </h2>
         <InboxToolbar filters={filters} counts={counts} meta={meta.data ?? null} onChange={change} onClear={clear} />
+        {filters.q.length >= 2 && meta.data?.aiEnabled && filters.source !== 'consumption' ? (
+          <SemanticSearch key={filters.q} query={filters.q} onOpen={open} />
+        ) : null}
 
         {!readOnly && keys.length > 0 ? (
           <div className="flex min-h-11 flex-wrap items-center gap-3 px-1">

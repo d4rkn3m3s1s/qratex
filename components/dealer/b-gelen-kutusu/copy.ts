@@ -202,6 +202,11 @@ const tr = {
     already_remedied: 'Müşteri bu kayıt için bir telafiyi zaten kabul etti.',
     module_off: 'Telafi modülü yönetici tarafından kapatıldı.',
   } as Record<string, string>,
+  semanticRun: (q: string) => `“${q}” için anlamca benzerleri bul (AI)`,
+  semanticHint: 'Kelime eşleşmesi değil, anlam benzerliği: yalnız QR geri bildirimlerinde.',
+  semanticEmpty: 'Anlamca benzer QR geri bildirimi bulunamadı.',
+  semanticResults: 'Anlamca benzer geri bildirimler',
+  semanticScore: 'benzerlik',
   close: 'Kapat',
 };
 
@@ -394,6 +399,11 @@ const en: Copy = {
     already_remedied: 'The customer already accepted a remedy for this record.',
     module_off: 'The remedy module is turned off by the administrator.',
   },
+  semanticRun: (q: string) => `Find semantically similar to “${q}” (AI)`,
+  semanticHint: 'Meaning, not keyword match: QR feedback only.',
+  semanticEmpty: 'No semantically similar QR feedback found.',
+  semanticResults: 'Semantically similar feedback',
+  semanticScore: 'similarity',
   close: 'Close',
 };
 

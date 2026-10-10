@@ -88,6 +88,7 @@ const InboxRow = forwardRef<HTMLLIElement, RowProps>(function InboxRow(
               </span>
             ) : null}
             <time
+              suppressHydrationWarning
               dateTime={item.createdAt}
               title={formatDateTime(item.createdAt, locale)}
               className="qx-caption ml-auto shrink-0 text-fg-muted"
