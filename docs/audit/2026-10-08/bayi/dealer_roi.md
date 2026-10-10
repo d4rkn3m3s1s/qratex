@@ -229,3 +229,66 @@
 - **Düzeltme yaklaşımı:** Haftalık sorguyu `"completedAt"` üzerinden filtrele ve kovala (`status='done' AND "completedAt" IS NOT NULL`); eski kayıtlar için `completedAt IS NULL AND status='done'` olanlara `updatedAt` geri dönüşü (COALESCE) uygulanabilir. KPI'yı ikiye ayır: "Bu ay kapatılan aksiyon" (completedAt ∈ dönem) ve "Açık iş yükü"; oran gösterilecekse paydadan `cancelled` çıkarılmalı ve tanım kart alt metninde açıkça yazılmalı. Performans için `ActionItem @@index([dealerId, completedAt])` eklenmeli (vizyon bölümündeki öneriyle uyumlu).
 
 **Genel not:** İki bulgu da gerçek ve kullanıcıya yanlış karar sinyali veriyor; ancak veri sızıntısı/yetki sorunu içermedikleri için "KRİTİK" değil, "YÜKSEK/ORTA" veri doğruluğu hatası olarak sınıflanmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni rota:** `/dealer/analytics/impact` (Analitik › Etki). ROI ve İş sonuçları tek ekranda birleşti. `/dealer/roi` sorgu parametrelerini koruyarak kalıcı olarak yönlendiriliyor; `layout.tsx`, `/api/dealer/roi` ve `components/dealer/roi-charts.tsx` silindi. BFF: `GET /api/dealer/analytics/impact` (`defineRoute`; DEALER + ADMIN salt-okunur, modül `roi`, zod dönem şeması) ve `PUT /api/dealer/analytics/impact/settings` (varsayımlar + hedefler, sıkı zod). Hesap: `lib/dealer-impact/{core,load,types}.ts`; testi `__tests__/lib/b-kiyas-etki/impact-core.test.ts`.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1–2 | Erişim + API yetkisi | ÇALIŞIYOR | `requireAuth` + `tenant: 'dealer'`. |
+| 3 | Modül kapısı | ÇALIŞIYOR | API'de `module: 'roi'`, sayfada `moduleDisabled` ekranı. |
+| 4 | Metadata | ÇALIŞIYOR | Etki ekranı vaadini karşılıyor; getiri ve dışa aktarma gerçek. |
+| 5 | Hero | ÇALIŞIYOR | Başlık "Etki". Kahraman metrik kapanan döngünün tahmini ek cirosu ("Tahmini" rozetli). |
+| 6–7 | Hero linkleri | KALDIRILDI | "Şimdi ne yapmalı?" kartı gerçek iş yüküne derin link veriyor. |
+| 8 | Yükleniyor | ÇALIŞIYOR | SSR + iskelet; CLS yok. |
+| 9 | Hata durumu | ÇALIŞIYOR | `QueryState` + tekrar dene. |
+| 10 | Boş durum | ÇALIŞIYOR | `hasAnyData=false` → kurulum boş durumu; sıfırlarla dolu kart yok. |
+| 11 | Geri bildirim sayısı KPI | ÇALIŞIYOR | Eğilim grafiğinde ve CSV'de; İstanbul günü, `[from, to)`. |
+| 12 | "{count} yanıtlandı" | ÇALIŞIYOR | Yanıt oranı kartı ve n. |
+| 13 | Değişim rozeti (kısmi ay) | ÇALIŞIYOR | Eşit uzunlukta önceki dönem ya da geçen yıl; yarım ay kıyası yok (Bulgu 1). |
+| 14 | Yanıt oranı | ÇALIŞIYOR | Hedef satırıyla birlikte. |
+| 15 | Yanıt oranı değişimi | ÇALIŞIYOR | Yüzde puanı (`points`); iki dönemde de en az 10 kayıt gerekiyor. |
+| 16–18 | Aksiyon tamamlama | ÇALIŞIYOR | "Kapanan aksiyon" tamamlanma tarihine göre; açık iş yükü ve gecikmiş sayısı da gösteriliyor. |
+| 19 | Ortalama puan | ÇALIŞIYOR | Eğilimde "Puan" sekmesi. |
+| 20 | Tekrarlayan alt metin | KALDIRILDI | Bilgi katmıyordu. |
+| 21 | Puan değişimi | ÇALIŞIYOR | |
+| 22 | AnimatedNumber | KALDIRILDI | Yerine `MetricTile` (hareket politikasına uyan tek seferlik sayaç). |
+| 23 | Kart animasyonları | ÇALIŞIYOR | Kapanan döngü çubukları bir kez doluyor; azaltılmış harekette anında. |
+| 24 | Haftalık hacim/yanıt | ÇALIŞIYOR | İstanbul saatine göre Pazartesi kovaları. |
+| 25 | Aksiyon serisi | ÇALIŞIYOR | `completedAt`'e göre kovalanıyor (Bulgu 2). |
+| 26 | Ortalama puan çizgisi | ÇALIŞIYOR | Boş hafta boşluk olarak kalıyor. |
+| 27 | Hafta etiketleri | ÇALIŞIYOR | Mutlak tarih ("Hafta: 6 Eki 2026"). |
+| 28 | Grafik dili | ÇALIŞIYOR | TR/EN kopya; API metin üretmiyor. |
+| 29 | 7 gün bar grafiği | KALDIRILDI | Dönem seçici ve haftalık eğilim aynı soruyu doğru saat dilimiyle cevaplıyor. |
+| 30 | Koşullu gösterim | ÇALIŞIYOR | Boş durum gerçek veriye bağlı. |
+| 31 | Code-split | ÇALIŞIYOR | `lazyChart`. |
+| 32 | "ROI nasıl artar?" | KALDIRILDI | Yerini veriden türetilen sonraki adımlar ve gerçek hedefler aldı. |
+| 33 | İç içe CTA | ÇALIŞIYOR | `asChild`. |
+| 34 | Redis cache | ÇALIŞIYOR | 120 sn. Anahtar ayar sürümünü içeriyor; ayar kaydedilince tazeleniyor. |
+| 35 | ADMIN `?dealerId` | ÇALIŞIYOR | BFF'te salt-okunur; ayarları yalnız DEALER yazabiliyor. |
+| 36 | Parasal ROI | ÇALIŞIYOR | Kapanan döngü: yanıtlanan ve yanıtlanmayan şikâyetçilerin geri dönüş farkı × ortalama sepet. Yöntem açık, "deney değil" uyarısı var. |
+| 37 | Dönem seçimi | ÇALIŞIYOR | 7/30/90 gün, bu ay, geçen ay, bu yıl, özel. Karşılaştırma: önceki dönem / geçen yıl / yok. |
+| 38 | Dışa aktarım | ÇALIŞIYOR | CSV (KPI + kapanan döngü + haftalık seri). |
+| 39 | Şube kırılımı | ÇALIŞIYOR | En az 2 şubede tablo. Personel kırılımı yok: şemada yanıtlayan kişi kaydı tutulmuyor. |
+| 40 | Yenile / son güncelleme | ÇALIŞIYOR | `fresh=1` + "Hesaplandı". |
+| 41 | Hata toast metni | ÇALIŞIYOR | `admin-toast` kullanılmıyor; hata satır içinde. |
+| 42 | Mobil | ÇALIŞIYOR | Tek kolon, ≥ 44px dokunma hedefleri, yatay kaydırılabilir tablolar. |
+| 43 | Grafik alternatifi | ÇALIŞIYOR | `ChartFrame` tablo görünümü. |
+| 44 | Otomatik test | ÇALIŞIYOR | Saf çekirdeğin jest testi var (dönem, kohort, KPI, hedef, trend). |
+
+**Kapanan bulgular:** 1–13 (13/13). Tek açık nokta: Bulgu 11'deki `ActionItem` bileşik indeksi, şema dondurulduğu için eklenemedi (ŞEMA İSTEĞİ: `@@index([dealerId, completedAt])`).
+
+**Eksik özelliklerden uygulananlar:**
+- gerçek getiri atfı (kapanan döngü)
+- dönem seçici ve eş-dönem karşılaştırma
+- şube kırılımı
+- medyan yanıt süresi
+- hedefler (kayıtlı; kartlarda tuttu/tutmadı)
+- CSV
+
+**Kalanlar:**
+- **Eşik altı bildirim / e-posta özeti:** bildirim altyapısı başka bir yüzeyde.
+- **Personel kırılımı:** şemada yanıtlayan kişi tutulmuyor.

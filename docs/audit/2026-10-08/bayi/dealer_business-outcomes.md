@@ -263,3 +263,49 @@ Yöntem: `app/api/dealer/business-outcomes/route.ts`, `app/dealer/business-outco
 | 3 | Tekrar ziyaret tüm zamanlı, hata yutuluyor | Doğrulandı | Orta; "yanlış tanım" kısmı abartılı, sorun yorumlanabilirlik |
 
 Üç bulgunun hiçbiri yetki, IDOR ya da veri sızıntısı içermiyor. Tüm sorgular `dealerId = session.user.id` ile kapsanmış (`route.ts:13-15`). Önerilen tek servis yaklaşımı (`lib/dealer-outcomes.ts`: dönem çözümleme Europe/Istanbul, `MIN_SAMPLE`, gönderilmiş-teklif paydası, dönemli geri dönen müşteri oranı, null ile boş/hata ayrımı) üç sorunu birlikte kapatıyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni rota:** `/dealer/analytics/impact` (ROI ile birleşik "Etki"). `/dealer/business-outcomes` sorgu parametrelerini koruyarak kalıcı olarak yönlendiriliyor; `layout.tsx` ve `/api/dealer/business-outcomes` silindi. Ayrıntı için bkz. `dealer_roi.md` › Uygulama (Dalga 2).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1–2 | Rol + API kapsamı | ÇALIŞIYOR | `defineRoute` `tenant: 'dealer'`. |
+| 3 | Metadata ("hedefe yaklaşma") | ÇALIŞIYOR | Hedefler gerçek: ayarlarda kayıtlı, kartta tuttu/tutmadı gösteriliyor. |
+| 4 | Navigasyon | ÇALIŞIYOR | Analitik › Etki sekmesi (navigasyon kaydı navigasyon ajanında). |
+| 5 | Modül kapısı | ÇALIŞIYOR | Etki `roi` modülüne bağlı; kapı hem sayfada hem API'de. |
+| 6 | Veri çekme | ÇALIŞIYOR | Zarf v2, iptal, SSR ön-yükleme. |
+| 7 | Yükleniyor | ÇALIŞIYOR | İskelet. |
+| 8 | Hata toast'ı | ÇALIŞIYOR | Hata satır içinde `QueryState` ile; "Dikkat:" öneki yok. |
+| 9 | Boş durum | ÇALIŞIYOR | Gerçek veri yokluğu ile hata ayrı gösteriliyor. |
+| 10 | Başlık | ÇALIŞIYOR | `PageHeader`. |
+| 11 | Tekrar ziyaret | ÇALIŞIYOR | "Geri dönen müşteri %": dönemli, n'li, tanımı açık. |
+| 12 | Formül açıklaması | ÇALIŞIYOR | Sade dil + "Nasıl hesaplanır?". |
+| 13 | Şikâyet düşüşü | ÇALIŞIYOR | "Olumsuz yorum oranı": eşit dönem kıyası, en az 10 örneklem, QR + tüketim yorumu, İstanbul günü. |
+| 14 | Renk kodlaması | ÇALIŞIYOR | `DeltaBadge`'de iyi yön aşağı; birim "yüzde puanı". |
+| 15 | Bu ay negatif satırı | ÇALIŞIYOR | KPI değeri, `Intl` biçimi. |
+| 16 | Telafi kabul oranı | ÇALIŞIYOR | Payda yalnız müşteriye ulaşan teklifler (onay kuyruğu ve reddedilenler hariç), dönemli. |
+| 17 | "Gelir etkisi" iddiası | ÇALIŞIYOR | Gerçek kayıtlı ciro ve kapanan döngünün tahmini ek cirosu; yöntem ve varsayım açık. |
+| 18 | Sayı biçimi | ÇALIŞIYOR | `Intl.NumberFormat`. |
+| 19 | Mobil | ÇALIŞIYOR | |
+| 20 | Başlık hiyerarşisi / ikonlar | ÇALIŞIYOR | h1 → h2; dekoratif ikonlar `aria-hidden`. |
+| 21 | Hata yutma | KALDIRILDI | try/catch → 0 yok; hata görünür. |
+| 22 | Önbellek | ÇALIŞIYOR | Redis 120 sn. |
+| 23 | Dönem seçici | ÇALIŞIYOR | |
+| 24 | Trend / sparkline | ÇALIŞIYOR | Haftalık eğilim + KPI sparkline'ları (olumsuz oran, yanıt, ciro, aksiyon). |
+| 25 | Hedef | ÇALIŞIYOR | 5 hedef anahtarı; her biri doğru yönde değerlendiriliyor. |
+| 26 | Drill-down | ÇALIŞIYOR | Kartlar ilgili listeye gidiyor. |
+| 27 | Yenile | ÇALIŞIYOR | |
+| 28 | Şube filtresi | ÇALIŞIYOR | Filtre yerine şube kırılım tablosu (şube yalnız QR geri bildirimine bağlı). |
+| 29 | Dışa aktarma | ÇALIŞIYOR | CSV. E-posta özeti kapsam dışı. |
+| 30 | Kıyas bağlamı | ÇALIŞIYOR | Önceki döneme göre değişim; sektör kıyası Kıyas sekmesinde. |
+| 31 | n / tanım | ÇALIŞIYOR | `n`, düşük örneklem uyarısı ve yöntem listesi. |
+
+**Kapanan bulgular:** 1–10 (10/10).
+
+**Kalanlar:**
+- **"Neden?" konu katkısı bölümü:** Kıyas › Konu kıyası'na bırakıldı.
+- **`RemedyOffer.redeemedAt` (kullanım takibi):** şema dondurulduğu için eklenemedi (ŞEMA İSTEĞİ).
+- **Haftalık e-posta özeti:** yapılmadı.

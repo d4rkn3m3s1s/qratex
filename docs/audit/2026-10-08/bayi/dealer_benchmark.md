@@ -310,3 +310,69 @@
 - **Öneri:**
   - Yüzdelik Node belleğinde değil, tek bir SQL `GROUP BY` + `percent_rank()` / mid-rank ile tüm veri üzerinde hesaplansın. Tercihen gece snapshot'ı olarak tutulsun.
   - Hata durumunda `rank: null, status: 'unavailable'` dönsün. UI kartı "şu an hesaplanamadı" durumuna geçsin. Hata loglansın ve hatalı yanıt önbelleğe yazılmasın.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni rota:** `/dealer/analytics/benchmark` (Analitik kabuğu › Kıyas sekmesi). `/dealer/benchmark` sorgu parametrelerini koruyarak kalıcı yönlendirme (`permanentRedirect`); eski `layout.tsx` silindi. BFF: `GET /api/dealer/analytics/benchmark` (`defineRoute`: DEALER + ADMIN `?dealerId` salt-okunur, modül kapısı `benchmark`, zod sorgu, hız sınırı; `fresh=1` için ayrı 6/dk sınır), `PATCH /api/dealer/analytics/benchmark/segment` (bayinin sektör seçimi, kontrollü sözlük, 15 dakikada 5). Hesap: `lib/dealer-benchmark/{core,load,params,city,types}.ts`; saf çekirdeğin testi `__tests__/lib/b-kiyas-etki/benchmark-core.test.ts`. UI: `components/dealer/b-kiyas-etki/*` (sunucu ön-yükleme, küçük istemci adası, recharts lazy). Eski `/api/dealer/benchmark` yalnız eski ısı haritası kartı için boş segment döndüren uyumluluk koçanı; akran verisi sızdırmaz.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | Analitik kabuğu metadata'sı. "Lider açığı" artık gerçekten var (#38). |
+| 2 | Veri çekme | ÇALIŞIYOR | Zarf v2 okunuyor, hata fırlatılıyor; React Query iptal + `keepPreviousData`. |
+| 3 | Yükleniyor | ÇALIŞIYOR | SSR ön-yükleme. İstemci geçişlerinde iskelet ve soluk eski veri; spinner yok. |
+| 4 | Hata durumu | ÇALIŞIYOR | `QueryState` (429/403/modül kapalı ayrımı + tekrar dene). "Yenile" hatası banner olarak çıkıyor. |
+| 5 | Boş durum | ÇALIŞIYOR | `self.status=insufficient_data` → "N değerlendirme daha" ilerleme kartı. Sahte 0.00 yok. |
+| 6 | Boş durum CTA | ÇALIŞIYOR | `Button asChild` (iç içe etkileşimli öğe yok). |
+| 7 | Hero | ÇALIŞIYOR | `PageHeader` (QDL v2). |
+| 8–9 | Hero CTA'ları | KALDIRILDI | Statik iki linkin yerini kişisel öneri kartlarının derin linkleri aldı (#26/#43). |
+| 10 | Komşu segment kartı | ÇALIŞIYOR | "Akran grubunuz" kartı: okunur kategori/şehir adı, katkı veren sayısı, k ≥ 5. |
+| 11 | Yüzdelik gauge | ÇALIŞIYOR | Doluluk = "akranlardan iyi %", etiket = "Üst %X"; renk aynı yönde (B1). |
+| 12 | Animasyonlu sayı | KALDIRILDI | setInterval sayacı yok. Halka ve ray noktası bir kez kayıyor; azaltılmış harekette anında yerinde. |
+| 13 | İşletme sayısı | ÇALIŞIYOR | Bayi hariç katkı veren işletme sayısı; hata yedeği yok. |
+| 14–16 | Fark kartları | ÇALIŞIYOR | Metrik raylarına taşındı: yönü dikkate alıyor, yüzde puanı doğru birimde, iptaller paydada değil. |
+| 17 | 7 gün alan grafiği | ÇALIŞIYOR | Tek eğilim grafiği: 7/30/90 gün dönem, İstanbul günü, boş kova boşluk, akran bandı. |
+| 18 | Siz vs Platform bar | KALDIRILDI | Farklı ölçekleri aynı eksende göstermek anlamsızdı. Artık her metrik kendi ölçeğindeki bir rayda (B7). |
+| 19 | Ortalama puan | ÇALIŞIYOR | Veri yoksa "—". |
+| 20 | Yanıt oranı | ÇALIŞIYOR | |
+| 21 | Aksiyon tamamlama | ÇALIŞIYOR | Dönemde açık olanlardan kapatılanlar; iptaller hariç. |
+| 22 | Kart altbilgisi | ÇALIŞIYOR | Her rayda `n = …` ve düşük örneklem uyarısı var. |
+| 23 | Platform ortalaması | ÇALIŞIYOR | Akran istatistiği bayi HARİÇ: medyan + orta yarı. |
+| 24 | Platform hacmi altbilgisi | KALDIRILDI | Ticari açıdan hassas hacim artık gösterilmiyor. |
+| 25 | 4 hafta grafiği | ÇALIŞIYOR | 90 günde haftalık kova, mutlak tarih etiketi (`Intl`). |
+| 26 | Statik CTA kartı | ÇALIŞIYOR | "Bu dönem ne yapmalı?": açığa göre sıralı en fazla 3 kişisel öneri. |
+| 27 | Lazy grafik | ÇALIŞIYOR | `lazyChart` + `ChartFrame` (tablo alternatifi). |
+| 28 | Grafik dili | ÇALIŞIYOR | API metin döndürmüyor; TR/EN kopyalar `copy.ts`'te. |
+| 29 | Reduced motion | ÇALIŞIYOR | `useReducedMotionPref` ve `motion-reduce:` sınıfları; recharts animasyonu kapalı. |
+| 30 | Redis cache | ÇALIŞIYOR | Platform anlık görüntüsünü tüm bayiler paylaşıyor (10 dk); şube verisi 2 dk (B6). |
+| 31 | Rate limit | ÇALIŞIYOR | `defineRoute` okuma kovası; `fresh` için ayrı kova. |
+| 32 | Yetki | ÇALIŞIYOR | `tenant: 'dealer'` kapsamı. |
+| 33 | Hata yedeği (sahte %50) | KALDIRILDI | Hata görünür; uydurma sıra yok (B5). |
+| 34 | Modül kapısı | ÇALIŞIYOR | API'de `module: 'benchmark'`, sayfada `moduleDisabled` ekranı. |
+| 35 | Admin görünümü | ÇALIŞIYOR | BFF'te ADMIN `?dealerId` ile salt-okunur erişim (sayfa bayi panelinde). |
+| 36 | Dönem seçici | ÇALIŞIYOR | 7/30/90 gün, URL'de tutuluyor. |
+| 37 | Şube kırılımı | ÇALIŞIYOR | En az 2 şubede iç lig tablosu. |
+| 38 | Lider açığı | ÇALIŞIYOR | Üst %10 eşiği (en az 10 akranla) ve "kalan fark". |
+| 39 | Kategori seçimi | ÇALIŞIYOR | Bayi kendi sektörünü seçiyor (Keşfet kategorisiyle tek kaynak). |
+| 40 | Dışa aktarma | ÇALIŞIYOR | CSV (metrik + akran dağılımı). E-posta özeti kapsam dışı. |
+| 41 | Erişilebilir metin | ÇALIŞIYOR | Gauge ve raylarda `role="img"` + `aria-label`; grafikte tablo görünümü. |
+| 42 | Tazelik | ÇALIŞIYOR | "Hesaplandı: …" ve önbelleği atlayan "Yenile". |
+| 43 | Metrik bazlı öneri | ÇALIŞIYOR | Gelen kutusu / otomatik yanıt / atananlar / QR derin linkleri. |
+
+**Kapanan bulgular (12/12):** B1, B2 (k-anonimlik katkı veren ≥ 5, üst eşik ≥ 10, demo havuzu ayrı), B3, B4, B5, B6, B7, B8, B9, B10, B11, B12 (eski sayfa ve `benchmark-charts.tsx` silindi).
+
+**Eksik özelliklerden uygulananlar:**
+- dönem seçici ve önceki dönem sırası
+- akran grubu (platform/sektör/şehir) ve sektör seçimi
+- şube iç ligi
+- lider açığı
+- konu kıyası (AI konu etiketleri)
+- operasyonel kıyas (medyan yanıt süresi)
+- CSV dışa aktarma
+
+**Kalanlar:**
+- **İlçe/büyüklük segmenti:** şemada ilçe alanı yok; il adresten türetiliyor.
+- **Haftalık e-posta özeti ve "Aksiyon oluştur":** bu özellikler başka yüzeylerin sahipliğinde.
+- **Gece snapshot tablosu:** şema dondurulduğu için eklenemedi. Redis'te paylaşılan anlık görüntü aynı sorunu çözüyor.
+- **Dashboard widget'ının yeni sözleşmeye taşınması:** dashboard yüzeyinin sahipliğinde.
