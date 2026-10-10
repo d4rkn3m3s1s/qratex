@@ -8,7 +8,7 @@ import { CHARACTER_PROFILES, CATEGORY_BADGE_THRESHOLD, classifyFeedbackCategory 
 import { CHARACTER_CATEGORIES, CATEGORY_BY_KEY, charactersInCategory } from '@/lib/character-categories';
 import { runChatCompletion } from '@/lib/ai-engine';
 import { badgeRewardPoints } from '@/lib/badge-reward-points';
-import { debitPoints } from '@/lib/points-wallet';
+import { mintPoints } from '@/lib/economy';
 import { emailLookupFilter } from '@/lib/auth/normalize-email';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import {
@@ -29,8 +29,9 @@ export const dynamic = 'force-dynamic';
  *   Salt-okunur (her ortamda): 'revealPreview', 'classify'.
  *   Veri değiştiren (P0-23 — üretimde kapalı + yalnız test hesabı allowlist'i, bkz.
  *   lib/character-test-guard.ts; her biri AuditLog'a yazılır):
- *   action:'reset'           → karakter rozetlerini sil + o rozetlerle basılmış ödül puanını
- *                              defterli ters kayıtla geri al (reveal tekrarı puan çoğaltmasın).
+ *   action:'reset'           → karakter rozetlerini sil. Ödül puanı geri ALINMAZ; bunun yerine
+ *                              her rozetin ödül anahtarı (`badge:<userId>:<badgeId>`) defterde
+ *                              kilitlenir → reveal tekrarı puan çoğaltamaz, bakiye de erimez.
  *   action:'fill', category, n → YALNIZ sentetik yorum üretir (gerçek yorumlara dokunmaz).
  *   action:'clearCategories' → test hesabının yorum kategorilerini temizle.
  *   action:'cleanupTest'     → sentetik test verisini sil.
@@ -198,31 +199,37 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'reset') {
-    // Rozet silinip reveal yeniden açılınca ödül puanı yeniden basılıyordu (B1). Silinen
-    // rozetlerin ödül puanını aynı transaction'da defterli ters kayıtla geri al.
+    // Kök neden (P0-23): rozet silinip reveal yeniden açılınca ödül puanı yeniden basılıyordu.
+    // awardBadge ödülü `badge:<userId>:<badgeId>` tek-kez anahtarıyla basar; ama bu anahtar
+    // defterden ÖNCE kazanılmış (eski) rozetlerde yok. Reset, silinen her rozet için anahtarı
+    // 0 puanlık bir defter satırıyla kilitler (zaten varsa dokunmaz): yeniden kazanımda
+    // `mintPoints` duplicate döner, ödül ikinci kez basılmaz. Puan geri alınmaz → tekrarlanan
+    // reset döngüsü test hesabının bakiyesini de eritmez (önceki ters kayıt her turda düşüyordu).
     const result = await prisma.$transaction(async (tx) => {
       const owned = await tx.userBadge.findMany({
         where: { userId, badgeId: { in: CHAR_IDS } },
         select: { badgeId: true },
       });
       const del = await tx.userBadge.deleteMany({ where: { userId, badgeId: { in: CHAR_IDS } } });
-      const rewardTotal = owned.reduce((sum, b) => sum + badgeRewardPoints(b.badgeId), 0);
-      const wallet = await tx.user.findUnique({ where: { id: userId }, select: { points: true } });
-      const reversed = Math.min(rewardTotal, Math.max(0, wallet?.points ?? 0));
-      if (reversed > 0) {
-        await debitPoints(tx, {
+      const locked: string[] = [];
+      for (const { badgeId } of owned) {
+        if (badgeRewardPoints(badgeId) <= 0) continue;
+        const r = await mintPoints(tx, {
           userId,
-          points: reversed,
-          source: 'character_test_reset',
+          points: 0,
+          source: 'badge',
+          sourceId: badgeId,
+          idempotencyKey: `badge:${userId}:${badgeId}`,
           actorId: auth.session.user.id,
-          reason: 'Karakter test aracı: sıfırlanan rozetlerin ödül puanı geri alındı',
-          meta: { badgeIds: owned.map((b) => b.badgeId) },
+          reason: 'Karakter test aracı: ödülü önceden ödenmiş rozet sıfırlandı (tekrar ödül kilidi)',
+          meta: { badgeId, via: 'character_test_reset', rewardLock: true },
         });
+        if (!r.duplicate) locked.push(badgeId);
       }
-      return { deleted: del.count, rewardTotal, reversed, badgeIds: owned.map((b) => b.badgeId) };
+      return { deleted: del.count, badgeIds: owned.map((b) => b.badgeId), rewardLocked: locked };
     });
     await audit('reset', result);
-    return json({ success: true, action, deleted: result.deleted, reversedPoints: result.reversed });
+    return json({ success: true, action, deleted: result.deleted, rewardLocked: result.rewardLocked.length });
   }
 
   if (action === 'clearCategories') {

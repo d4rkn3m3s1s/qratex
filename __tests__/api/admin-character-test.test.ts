@@ -1,5 +1,5 @@
 /**
- * P0-23 — karakter test aracı: üretimde kapalı + test hesabı allowlist'i + reset ters kaydı.
+ * P0-23 — karakter test aracı: üretimde kapalı + test hesabı allowlist'i + reset ödül kilidi.
  *
  * Önceden: admin herhangi bir GERÇEK müşteride "Sıfırla → Barı doldur → reveal" döngüsüyle aynı
  * rozetin ödül puanını (2.500–10.000) sınırsız kez bastırabiliyordu; hiçbir ortam kapısı,
@@ -27,8 +27,18 @@ jest.mock('@/lib/badge-reward-points', () => ({
   badgeRewardPoints: (id: string) => (id === 'char-a' ? 5000 : 2500),
 }));
 
-const mockDebit = jest.fn(async () => ({ duplicate: false }));
-jest.mock('@/lib/points-wallet', () => ({ debitPoints: (...a: unknown[]) => mockDebit(...(a as [])) }));
+// Defter simülasyonu: anahtar → satır. mintPoints aynı anahtarla ikinci çağrıda duplicate döner.
+const ledger = new Map<string, number>();
+const mockMint = jest.fn(async (_tx: unknown, input: { idempotencyKey: string; points: number }) => {
+  if (ledger.has(input.idempotencyKey)) return { duplicate: true, credited: ledger.get(input.idempotencyKey) };
+  ledger.set(input.idempotencyKey, input.points);
+  return { duplicate: false, credited: input.points };
+});
+const mockDebit = jest.fn();
+jest.mock('@/lib/economy', () => ({
+  mintPoints: (...a: unknown[]) => mockMint(...(a as [unknown, { idempotencyKey: string; points: number }])),
+  debitPoints: (...a: unknown[]) => mockDebit(...a),
+}));
 
 const tx = {
   userBadge: {
@@ -123,20 +133,37 @@ describe('route', () => {
     expect((await post({ action: 'reset', userId: 'yok@x.com' })).status).toBe(404);
   });
 
-  it('demo hesapta reset: rozet ödül puanları defterli ters kayıtla geri alınır + audit', async () => {
+  it('demo hesapta reset: puan geri alınmaz, ödül anahtarı defterde kilitlenir + audit', async () => {
     (process.env as Record<string, string>).NODE_ENV = 'development';
+    ledger.clear();
+    // char-a ödülü defterle ödenmiş (anahtar var); char-b defter öncesi (eski) kazanım.
+    ledger.set('badge:demo:char-a', 5000);
     db.user.findFirst.mockResolvedValueOnce(demoCustomer);
     const r = await post({ action: 'reset', userId: 'demo@qratex.test' });
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ deleted: 2, reversedPoints: 6000 }); // 5000 + 2500, bakiye 6000 ile sınırlı
-    expect(mockDebit).toHaveBeenCalledTimes(1);
-    expect((mockDebit.mock.calls[0] as unknown as [unknown, Record<string, unknown>])[1]).toMatchObject({
-      userId: 'demo',
-      points: 6000,
-      source: 'character_test_reset',
-      actorId: 'admin1',
-    });
+    expect(r.body).toMatchObject({ deleted: 2, rewardLocked: 1 });
+    expect(mockDebit).not.toHaveBeenCalled();
+    expect(mockMint).toHaveBeenCalledTimes(2);
+    for (const call of mockMint.mock.calls as unknown as Array<[unknown, Record<string, unknown>]>) {
+      expect(call[1]).toMatchObject({ userId: 'demo', points: 0, source: 'badge', actorId: 'admin1' });
+    }
+    expect(ledger.get('badge:demo:char-b')).toBe(0);
     const audit = db.auditLog.create.mock.calls[0] as unknown as [{ data: Record<string, unknown> }];
     expect(audit[0].data).toMatchObject({ action: 'CHARACTER_TEST_RESET', entityId: 'demo', userId: 'admin1' });
+  });
+
+  it('saldırı: reset → yeniden kazanım döngüsü ödülü ikinci kez basamaz', async () => {
+    (process.env as Record<string, string>).NODE_ENV = 'development';
+    ledger.clear();
+    db.user.findFirst.mockResolvedValueOnce(demoCustomer);
+    await post({ action: 'reset', userId: 'demo@qratex.test' });
+    // awardBadge'in ödül çağrısını taklit et: aynı anahtarla 5000 puan.
+    const reAward = await mockMint(null, { idempotencyKey: 'badge:demo:char-a', points: 5000 });
+    expect(reAward).toMatchObject({ duplicate: true, credited: 0 });
+    // İkinci reset de yeni satır yazmaz (idempotent), bakiye düşürmez.
+    db.user.findFirst.mockResolvedValueOnce(demoCustomer);
+    const again = await post({ action: 'reset', userId: 'demo@qratex.test' });
+    expect(again.body).toMatchObject({ rewardLocked: 0 });
+    expect(mockDebit).not.toHaveBeenCalled();
   });
 });

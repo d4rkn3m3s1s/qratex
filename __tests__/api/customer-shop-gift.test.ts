@@ -122,13 +122,26 @@ describe('gönderim', () => {
     expect(tx.notification.create).not.toHaveBeenCalled();
   });
 
-  it('alıcı zaten sahipse 409, puan düşülmez; yetersiz bakiyede 400', async () => {
-    tx.userCosmetic.findFirst.mockResolvedValueOnce({ id: 'x', giftedByUserId: null } as never);
+  it('alıcı zaten sahipse 409 ve düşüm aynı transaction içinde geri alınır; yetersiz bakiyede 400', async () => {
+    tx.userCosmetic.findFirst.mockResolvedValueOnce({ id: 'x' } as never);
     expect((await send({ cosmeticId: 'cos1', recipientUserId: 'rcp' })).status).toBe(409);
-    expect(mockDebit).not.toHaveBeenCalled();
+    // Düşüm yalnız transaction içinde yapıldı ve transaction hatayla bitti → gerçek DB'de rollback.
+    expect(mockDebit.mock.calls[0][0]).toBe(tx);
+    await expect(db.$transaction.mock.results[0].value).rejects.toThrow();
+    expect(tx.userCosmetic.create).not.toHaveBeenCalled();
 
     mockDebit.mockRejectedValueOnce(new InsufficientPointsError(10, 300));
     expect((await send({ cosmeticId: 'cos1', recipientUserId: 'rcp' })).status).toBe(400);
+  });
+
+  it('başarılı hediyenin ağ tekrarı (aynı requestId, alıcı artık sahip) 409 değil duplicate başarı döner', async () => {
+    tx.userCosmetic.findFirst.mockResolvedValue({ id: 'owned' } as never);
+    mockDebit.mockResolvedValueOnce({ duplicate: true });
+    const r = await send({ cosmeticId: 'cos1', recipientUserId: 'rcp', requestId: 'gift_12345678' });
+    expect(r.status).toBe(200);
+    expect(r.body.duplicate).toBe(true);
+    expect(tx.userCosmetic.create).not.toHaveBeenCalled();
+    tx.userCosmetic.findFirst.mockResolvedValue(null as never);
   });
 
   it('askıdaki/anonim ya da müşteri olmayan alıcı 404', async () => {

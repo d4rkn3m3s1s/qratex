@@ -151,13 +151,10 @@ export async function POST(req: NextRequest) {
     let duplicate = false;
     try {
       await prisma.$transaction(async (tx) => {
-        const owned = await tx.userCosmetic.findFirst({
-          where: { userId: recipient.id, cosmeticId },
-          select: { id: true, giftedByUserId: true },
-        });
-        if (owned) throw new AlreadyOwnedError();
-
-        // Atomik, defterli harcama (eksi bakiye imkânsız; requestId ile tek-kez).
+        // Atomik, defterli harcama (eksi bakiye imkânsız; requestId ile tek-kez). Sahiplik
+        // kontrolünden ÖNCE: aynı requestId'nin tekrarı (ağ yeniden denemesi) "zaten sahip" 409'u
+        // yerine başarılı `duplicate` döner. Alıcı zaten sahipse aşağıda atılan hata tx'i geri
+        // alır → düşüm de geri alınır.
         const debit = await debitPoints(tx, {
           userId: senderId,
           points: cosmetic.price,
@@ -171,6 +168,12 @@ export async function POST(req: NextRequest) {
           duplicate = true;
           return;
         }
+
+        const owned = await tx.userCosmetic.findFirst({
+          where: { userId: recipient.id, cosmeticId },
+          select: { id: true },
+        });
+        if (owned) throw new AlreadyOwnedError();
 
         await tx.userCosmetic.create({
           data: {
