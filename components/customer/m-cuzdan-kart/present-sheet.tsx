@@ -4,8 +4,8 @@
  * "Kasada göster" — tam ekran QR (mobilde kırpılmasız). Kart yüzünden paylaşılan öğe
  * geçişiyle (`layoutId`) büyür; azaltılmış harekette geçiş yok, yalnız görünür olur.
  *
- * Radix Dialog ilkelleri doğrudan kullanılır (FullscreenModal'ın CSS kayma/yakınlaşma
- * animasyonu `layoutId` ölçümünü bozardı): odak tuzağı, Esc ile kapanma, açanı geri
+ * Radix Dialog ilkelleri doğrudan ve PORTAL'SIZ kullanılır (FullscreenModal'ın CSS
+ * kayma/yakınlaşma animasyonu ve Portal'ın gecikmeli bağlanması `layoutId` ölçümünü bozardı): odak tuzağı, Esc ile kapanma, açanı geri
  * odaklama, `aria-modal`, başlık/açıklama bağları Radix'ten gelir.
  *
  * QR boyutu `min(100%, 22rem, 52dvh)`: küçük/yatay ekranda da tamamı görünür; içerik yine
@@ -119,6 +119,7 @@ export function PresentSheet({
   league,
   copy,
   locale,
+  returnFocusTo,
 }: {
   card: WalletCard | null;
   open: boolean;
@@ -129,6 +130,8 @@ export function PresentSheet({
   league: WalletLeague | null;
   copy: CardCopy;
   locale: CardLocale;
+  /** Kapanınca odak buraya döner (kart düğümü yeniden bağlandığı için açan öğe DOM'da olmayabilir). */
+  returnFocusTo?: () => HTMLElement | null;
 }) {
   const reduce = useReducedMotionPref();
   const held = useWakeLock(open && !!card);
@@ -142,10 +145,18 @@ export function PresentSheet({
 
   return (
     <DialogPrimitive.Root open={open && !!card} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-modal bg-black/80" />
+      {/* Portal YOK (bilerek): Radix Portal içeriği bir sonraki commit'te bağlar; kart düğümünün
+          anlık görüntüsü o zaman düşmüş olur ve `layoutId` geçişi oynamaz. Kart görünümünün
+          ataları dönüşüm/filtre/z-index taşımadığından `fixed` + `z-modal` doğru katmanda kalır. */}
         <DialogPrimitive.Content
-          className="fixed inset-0 z-modal flex flex-col overflow-y-auto overscroll-contain text-white outline-none"
+          className="fixed inset-0 z-modal flex flex-col overflow-y-auto overscroll-contain bg-[#07060d] text-white outline-none"
+          onCloseAutoFocus={(e) => {
+            const target = returnFocusTo?.();
+            if (target) {
+              e.preventDefault();
+              target.focus();
+            }
+          }}
           onOpenAutoFocus={(e) => {
             // Odak kapatma düğmesine (ilk odaklanabilir); QR görselinin üstünde halka çizilmesin.
             e.preventDefault();
@@ -221,7 +232,6 @@ export function PresentSheet({
             )}
           </div>
         </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
 }

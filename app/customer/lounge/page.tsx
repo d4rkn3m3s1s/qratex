@@ -1,9 +1,7 @@
 import { permanentRedirect } from 'next/navigation';
+import { walletCardHref, type LegacySearchParams } from '@/lib/wallet-card/legacy-redirect';
 
-/** Emekli: /customer/lounge → Cüzdan → Kartım (statü bölümü; sorgu dizesi korunur). */
-export default async function LegacyLounge({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const sp = await searchParams;
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(sp)) (Array.isArray(v) ? v : v === undefined ? [] : [v]).forEach((x) => qs.append(k, x));
-  permanentRedirect(`/customer/wallet/card${qs.size ? `?${qs}` : ''}`);
+// Emekli: /customer/lounge → Cüzdan → Kartım (statü bölümü); sorgu korunur.
+export default async function LegacyLounge({ searchParams }: { searchParams: LegacySearchParams }) {
+  permanentRedirect(await walletCardHref(searchParams));
 }

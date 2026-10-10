@@ -44,7 +44,7 @@ export function CardFace({
   locale,
   copy,
   onPresent,
-  hidden = false,
+  generation = 0,
 }: {
   card: WalletCard;
   holderName: string;
@@ -52,8 +52,11 @@ export function CardFace({
   locale: CardLocale;
   copy: CardCopy;
   onPresent?: () => void;
-  /** Tam ekran açıkken kart yerinde boşluk kalır (paylaşılan öğe tam ekranda). */
-  hidden?: boolean;
+  /**
+   * Paylaşılan öğe nesli: tam ekran kapanınca artırılır → kart yeni düğümle bağlanır ve
+   * tam ekran yüzeyinden yerine döner (eski düğümde kalan çapraz geçiş opaklığı taşınmaz).
+   */
+  generation?: number;
 }) {
   const reduce = useReducedMotionPref();
   const ref = useRef<HTMLDivElement>(null);
@@ -164,8 +167,8 @@ export function CardFace({
     <div className="mx-auto w-full max-w-md">
       {/* Konum/boyut: framer'sız dış kutu (oran sabit; içerik oran içinde tasarlandı, kırpılmaz). */}
       <div className="relative w-full" style={{ aspectRatio: '1.586 / 1', minHeight: '13.5rem' }}>
-        {!hidden && (
-          <Motion.div
+        <Motion.div
+            key={generation}
             layoutId={`wallet-card-${card.id}`}
             className="absolute inset-0 shadow-[0_28px_60px_-30px_rgba(0,0,0,0.7)]"
             style={{ borderRadius: CARD_RADIUS, perspective: 1200 }}
@@ -192,7 +195,6 @@ export function CardFace({
               </div>
             )}
           </Motion.div>
-        )}
       </div>
       {lastUsed && <p className="qx-caption mt-2 text-center text-fg-muted">{lastUsed}</p>}
     </div>

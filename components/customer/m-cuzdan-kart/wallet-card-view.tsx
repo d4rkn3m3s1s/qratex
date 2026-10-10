@@ -9,7 +9,7 @@
  * kart yönetimi. Hata ≠ boş: sunucu/ağ hatasında "kartın yok" DEĞİL hata + yeniden dene,
  * ya da son kaydedilen kart (çevrimdışı rozeti ile) gösterilir.
  */
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -222,7 +222,11 @@ export function WalletCardView({
   }, [userId, data, codesKey]);
 
   const [presentId, setPresentId] = useState<string | null>(null);
+  const [generation, setGeneration] = useState(0);
+  const presentButtons = useRef(new Map<string, HTMLButtonElement>());
+  const lastPresentedId = useRef<string | null>(null);
   const presentCard = cards.find((c) => c.id === presentId && c.status === 'ACTIVATED') ?? null;
+  if (presentCard) lastPresentedId.current = presentCard.id;
   const firstActive = cards.find((c) => c.status === 'ACTIVATED') ?? null;
   const openFirst = useCallback(() => {
     if (!firstActive) return false;
@@ -291,12 +295,16 @@ export function WalletCardView({
                     locale={locale}
                     copy={copy}
                     onPresent={() => setPresentId(card.id)}
-                    hidden={presentCard?.id === card.id}
+                    generation={generation}
                   />
                   <div className="mx-auto w-full max-w-md space-y-3">
                     {card.status === 'ACTIVATED' ? (
                       <>
                         <Button
+                          ref={(el) => {
+                            if (el) presentButtons.current.set(card.id, el);
+                            else presentButtons.current.delete(card.id);
+                          }}
                           type="button"
                           size="lg"
                           className="min-h-12 w-full"
@@ -333,7 +341,10 @@ export function WalletCardView({
           card={presentCard}
           open={!!presentCard}
           onOpenChange={(open) => {
-            if (!open) setPresentId(null);
+            if (!open) {
+              setPresentId(null);
+              setGeneration((g) => g + 1);
+            }
           }}
           qrSrc={presentCard ? codes[presentCard.token] : undefined}
           qrFailed={failed && !!presentCard && !codes[presentCard.token]}
@@ -341,6 +352,7 @@ export function WalletCardView({
           league={league}
           copy={copy}
           locale={locale}
+          returnFocusTo={() => (lastPresentedId.current ? presentButtons.current.get(lastPresentedId.current) ?? null : null)}
         />
       </LayoutGroup>
     </LazyMotion>
