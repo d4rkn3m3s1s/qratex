@@ -67,11 +67,11 @@ export function RewardsView({
     <div className="flex min-w-0 flex-col gap-section">
       <h2 className="sr-only">{copy.rewardsTitle}</h2>
       {localBalance !== null && (
-      <BalanceHero
-        balance={localBalance}
-        goal={goal}
-        onOpenGoal={goal ? (id) => url.set({ tab: null, reward: id }, 'push') : undefined}
-      />
+        <BalanceHero
+          balance={localBalance}
+          goal={goal}
+          onOpenGoal={goal ? (id) => url.set({ tab: null, reward: id }, 'push') : undefined}
+        />
       )}
 
       <SectionTabs

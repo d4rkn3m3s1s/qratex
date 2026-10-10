@@ -201,3 +201,50 @@ Sayfa küçük ve temiz yazılmış. Yarış koşulu koruması (atomik `updateMa
 - Kanıt: `page.tsx:58-61` `!r.ok` iken yalnızca toast atıp `return` ediyor, `data` `null` kalıyor; `:67` `finally` ile `loading=false`. `:150` `if (loading || !data)` koşulu `data===null` olduğu için spinner'ı kalıcı gösteriyor. `:156-168`'deki `notFound` dalı yalnızca `data` dolu ama `offer` boşken çalışır; API 200 yanıtlarında `offer` her zaman dolu olduğundan (`route.ts:66-79, 81-97`) bu dal pratikte ölü.
 - Yeniden üretim: (a) Bayinin onay kuyruğundaki ya da reddettiği bir teklifin linki açılır → API 404 "Bu teklif henüz aktif değil" (`route.ts:58-63`) → kısa bir toast, ardından ekranda sonsuza kadar "Teklif yükleniyor" ve geri dönüş butonu yok. (b) Başka bir hesaba ait teklif linki → 403 (`route.ts:52-57`), aynı sonuç. (c) Veritabanı geçici erişilemezse (`responseIfDatabaseUnavailable`) ya da ağ hatasında aynı sonuç; toast kaybolduktan sonra kullanıcı neyin olduğunu bilemez.
 - Öneri: `loadState` (`loading | ready | not_found | forbidden | inactive | error`) tutulsun; API makine-okunur bir `code` döndürsün; her durum için açıklayıcı boş durum + "Telafi tekliflerime dön" ve (hata durumunda) "Tekrar dene" aksiyonu gösterilsin.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**İş bölümü (m-seslerim ile tutarlı):** teklifi görüntüleme, seçim ve KABUL akışı Seslerim'e taşındı (`/customer/me/voices?offer=<id>` — m-seslerim yüzeyi; eski `/customer/remedy/[offerId]` oraya kalıcı yönlenir). Kabul edilmiş **kupon türü** telafilerin (indirim, ücretsiz ürün) cüzdan görünümü Cüzdan → Ödüllerim → Kodlarım → "Telafi kuponların" bölümündedir (`/customer/wallet/owned?pass=remedy:<id>`, m-cuzdan-oduller). Kabul mantığı (seçim allowlist'i, anlık görüntü, tek tx) `lib/remedy-offer-service.ts`'te (P0-22) — bu yüzey yalnız okur (`listRemedyPasses`).
+
+| # | Özellik | Yeni durum | Not / gerekçe |
+|---|---|---|---|
+| 1 | Oturum/rol koruması | ÇALIŞIYOR | Ödüllerim sayfası CUSTOMER; telafi sorgusu `userId` kapsamlı. |
+| 2 | Teklif yükleme (GET) | TAŞINDI → Seslerim | Kabul öncesi görünüm Seslerim çekmecesinde. |
+| 3 | Yükleniyor durumu | ÇALIŞIYOR | Ödüllerim sunucu render + kabuk iskeleti. |
+| 4 | Hata durumu | ÇALIŞIYOR | Ödüllerim yüklenemezse `ErrorState` + tekrar dene (sonsuz spinner yok). |
+| 5 | "Teklif bulunamadı" ekranı | ÇALIŞIYOR | Pass detayında `?pass=remedy:<id>` bulunamazsa açıklamalı boş durum. |
+| 6 | Geri butonu | KALDIRILDI | Detay artık çekmece; Esc/kapat ile listeye döner. |
+| 7 | Başlık + işletme adı | ÇALIŞIYOR | Kuponda her durumda işletme adı (`businessName` → `name`). |
+| 8 | Teklif mesajı | ÇALIŞIYOR | Kupon detayında "İşletmenin mesajı" alıntısı. |
+| 9 | Tür seçimi | TAŞINDI → Seslerim | Kabul akışı. |
+| 10 | Miktar seçimi | TAŞINDI → Seslerim | Kabul akışı. |
+| 11 | Tür değişince sıfırlama | TAŞINDI → Seslerim | |
+| 12 | "Tercihimi kaydet" | TAŞINDI → Seslerim | |
+| 13 | Sunucu seçim doğrulaması | ÇALIŞIYOR | P0-22 (`acceptRemedyOffer` allowlist + anlık görüntü). |
+| 14 | Eşzamanlı kabul koruması | ÇALIŞIYOR | P0-22 (atomik `updateMany`). |
+| 15 | Başarı toast'ı | TAŞINDI → Seslerim | |
+| 16 | "Kabul edildi" kutusu | ÇALIŞIYOR | Okunur etiket ("%20 İndirim", "1 adet Ücretsiz ürün") — ham `discount / 20` yok. |
+| 17 | Telafinin teslimi | ÇALIŞIYOR (kupon türü) | İndirim/ücretsiz ürün kabulü Ödüllerim'de kasada gösterilecek kupon olur: işletme + etiket + başvuru no (`TLF-…`) + "Kasada göster" tam ekranı (Wake Lock). İşletme seçimi bildirimle alır (P0-22). Puan türü kabulde Seslerim'de `mintPoints` ile tek seferlik kredilenir (m-seslerim). Bayinin "kullanıldı" işaretlemesi kalan. |
+| 18 | Süreç zaman çizelgesi | TAŞINDI → Seslerim | |
+| 19 | Zaman çizelgesi bayrağı | TAŞINDI → Seslerim | |
+| 20 | Kabul sonrası yenileme | TAŞINDI → Seslerim | |
+| 21 | Liste önbelleği | ÇALIŞIYOR | Ödüllerim sunucu bileşeni; bayat react-query önbelleği yok. |
+| 22 | İlgili deneyim bağlamı | TAŞINDI → Seslerim | Kupon detayından "Telafi geçmişini Seslerim'de gör" bağlantısı. |
+| 23 | Reddetme | TAŞINDI → Seslerim | |
+| 24 | Son kullanma | UYGULANMADI | `RemedyOffer.expiresAt` yok → ŞEMA İSTEĞİ. |
+| 25 | Onay adımı | TAŞINDI → Seslerim | |
+| 26 | Seçenek yoksa boş durum | TAŞINDI → Seslerim | |
+| 27 | Çok dillilik | ÇALIŞIYOR | Kupon görünümü TR/EN. |
+| 28 | Form etiketleri | TAŞINDI → Seslerim | |
+| 29 | Motion | ÇALIŞIYOR | Kupon çekmecesi/tam ekran CSS geçişleri; azaltılmış harekete saygılı. |
+| 30 | Sayfa metadata | ÇALIŞIYOR | Ödüllerim meta. |
+| 31 | Bildirimden derin link | ÇALIŞIYOR | `/customer/remedy/<id>` → Seslerim çekmecesi (m-seslerim koçanı). |
+| 32 | `expired` gösterimi | ÇALIŞIYOR | Ödüllerim yalnız `accepted` + kupon türünü listeler; `expired` "kabul edildi" gibi görünmez. |
+| 33 | Yerleşim genişliği | ÇALIŞIYOR | Cüzdan kabuğu `max-w-3xl`. |
+
+**Kapanan bulgular (m-cuzdan-oduller payı):** B5 (okunur seçim + işletme adı), B1 kısmen (kupon türü telafi artık cüzdanda kasada gösterilebilir değer); B2 ve kabul akışı bulguları (B3, B4, B6–B11) P0-22 ve m-seslerim kapsamında.
+**Kalanlar:** Seslerim teklif çekmecesi kabul edilmiş kupon türü telafide `/customer/wallet/owned?pass=remedy:<id>` bağlantısını göstermeli (m-seslerim'e iletilmek üzere dönüş raporunda); bayi tarafında telafi kuponunu "kullanıldı" işaretleme (şema).
+**ŞEMA İSTEKLERİ:** `RemedyOffer.redeemCode @unique`, `redeemedAt`, `expiresAt`, `selectedOption Json`, `declinedAt`.

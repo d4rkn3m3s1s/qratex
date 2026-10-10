@@ -348,3 +348,78 @@
 - (b) Sepet yoksa `percentage/fixed` yerine doğrudan puan veya ödül veren bir "promosyon kodu" tipine dönüştürülmeli. Bu durumda puan ekonomisi kurallarına uyulmalı: atomik tek seferlik kredi + `points_credited` izi.
 
 İki durumda da uca `assertModuleEnabled('rewards')` eklenmeli.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/customer/wallet/rewards` (Cüzdan → Ödüller · Ödüller/Kozmetik sekmeleri) ve `/customer/wallet/owned` (Cüzdan → Ödüllerim). `/customer/rewards` kalıcı yönlendirme koçanı (`?tab=myRewards` → Ödüllerim, diğer sorgular korunur).
+**Mimari:** sunucu bileşeni önce (`lib/wallet-rewards/queries.ts` → bakiye + müşteri DTO'lu katalog tek turda, kişi başı sayım tek `groupBy`), küçük istemci adası (`components/customer/m-cuzdan-oduller/**`), sekme/filtre/detay URL'de ama sunucuya gitmeden (`history.replaceState`). Yeni BFF: `POST /api/customer/wallet/rewards/claim` (`defineRoute`, yalnız CUSTOMER, modül kapısı, zod, `Idempotency-Key`, kullanıcı satırı `FOR UPDATE` kilidi altında limit sayımı, defterli `debitPoints`), `POST /api/customer/wallet/passes/used`, `GET/POST /api/dealer/reward-codes` (bayi kasası: doğrula + atomik tek kullanım + audit + müşteriye bildirim). Testler: `__tests__/lib/wallet-rewards.test.ts`, `__tests__/api/wallet-rewards-routes.test.ts`.
+
+| # | Özellik | Yeni durum | Not / gerekçe |
+|---|---|---|---|
+| 1 | Sayfa meta verisi | ÇALIŞIYOR | `generateMetadata` TR/EN (sunucu dili). |
+| 2 | Masaüstü başlık | ÇALIŞIYOR | Cüzdan kabuğunun tek `h1`'i; sayfada erişilebilir `h2`. |
+| 3 | Mobil başlık kartı | KALDIRILDI | Kabuk başlığı mobilde de görünüyor; çift başlık yok. |
+| 4 | Mevcut puan göstergesi | ÇALIŞIYOR | Sunucudan, locale biçimli; açılışta "0" parlaması yok; değişimde sayaçla akar; okunamazsa gizlenir (sahte 0 yok). |
+| 5 | "Toplam Ödül" sayacı | KALDIRILDI | Belirsiz etiket; yerini hedef halkası ve katalog aldı. |
+| 6 | "Kullanılabilir" sayacı | ÇALIŞIYOR | Ödüllerim → Kodlarım sekme sayacı; `claimedAt` artık yazılıyor (bayi kasası + "Kullandım"). |
+| 7 | Kupon kodu kartı (`CouponRedeemCard`) | KALDIRILDI | `Coupon` hiçbir yerde hak doğurmuyordu (çıkmaz sokak). Ürün kararı + şema gerektirir (aşağıda ŞEMA İSTEĞİ). |
+| 8 | Kupon kartında Enter | KALDIRILDI | #7 ile. |
+| 9 | Kupon brute-force / tek kullanım | KALDIRILDI (arayüz) | `/api/customer/redeem-coupon` dokunulmadan duruyor (testli); müşteri arayüzünden çağrılmıyor. |
+| 10 | Mağaza / Ödüllerim sekmeleri | ÇALIŞIYOR | Rota tabanlı cüzdan sekmeleri + `?tab=cosmetics`, `?reward=<id>` derin linkleri. |
+| 11 | Aktif sayaç rozeti | ÇALIŞIYOR | Kodlarım sayacı gerçek (aktif kod + telafi kuponu). |
+| 12 | Mağaza iskeleti | ÇALIŞIYOR | Kabuk `loading.tsx` statik iskelet; veri sunucuda hazır gelir. |
+| 13 | Boş durum | ÇALIŞIYOR | Yalnız gerçekten boş katalogda; hata ve modül kapalı ayrı ekranlar. |
+| 14 | Hata + yeniden dene | ÇALIŞIYOR | `ErrorState` + `router.refresh()`; "200 + boş" yok. |
+| 15 | Ödül kartı ızgarası | ÇALIŞIYOR | 2/3 sütun; kartın tamamı `<button>`. |
+| 16 | Görsel çözümleme | ÇALIŞIYOR | URL → görsel, emoji → glif (admin varsayılanı 🎁 artık görünüyor), yoksa tür ikonu. |
+| 17 | Gradient döngüsü | KALDIRILDI | Sıra rengi anlamsızdı; tür çipi + görsel taşıyor. |
+| 18 | Tür rozeti | ÇALIŞIYOR | Dijital/Fiziksel/Kupon; bilinmeyen "Ödül"; ölü `VIP` yok. |
+| 19 | "Tükendi" kaplaması | ÇALIŞIYOR | İkon + metin; detayda onay hiç açılmaz. |
+| 20 | Fiyat | ÇALIŞIYOR | `Intl` locale. |
+| 21 | Stok rozeti | ÇALIŞIYOR | "Son 3 adet" aciliyet çipi; detayda "Sınırsız stok" / "N adet". |
+| 22 | "Talep Et" / "X eksik" | ÇALIŞIYOR | Her zaman görünen durum satırı + mini ilerleme; bakiye sunucudan. |
+| 23 | Karta tıklayınca onay | ÇALIŞIYOR | Detay açılır; onay yalnız `available` durumunda. |
+| 24 | Giriş/hover animasyonu | ÇALIŞIYOR | ops kaydı: yalnız kenar geçişi; başarı anı `useMotionPolicy` ile. |
+| 25 | Geçerlilik/limit gösterimi | ÇALIŞIYOR | "… sonra bitiyor", "… tarihinde açılır", "Sende 1/1". |
+| 26 | Arama/filtre/sıralama | ÇALIŞIYOR | Tür çipleri, "Alabileceklerim", sıralama (önerilen/puan/yeni), arama; URL'de. |
+| 27 | Onay penceresi içeriği | ÇALIŞIYOR | Satır içi onay: bakiye `A → B` + açıklama. |
+| 28 | "Kalan puan" | ÇALIŞIYOR | Yalnız alınabilirde; negatif değer yok. |
+| 29 | Stok satırı | ÇALIŞIYOR | Ölü dal yok; "Sınırsız" görünüyor. |
+| 30 | "Onayla" butonu | ÇALIŞIYOR | Durum `available` değilse pasif. |
+| 31 | Talep API'si | ÇALIŞIYOR | Yeni uç; limit kilit altında (Bulgu 4 kapandı), stok koşullu, defterli borç, audit, bildirim. |
+| 32 | Idempotency | ÇALIŞIYOR | İstemci `Idempotency-Key` gönderir; yanıt tekrarı rota+kullanıcı kapsamlı; defterde `reward:<kullanıcı>:<anahtar>`. |
+| 33 | Talep sonrası toast | ÇALIŞIYOR | Admin önekli toast kaldırıldı; başarı sheet içinde + `aria-live`. |
+| 34 | Yerel bakiye güncelleme | ÇALIŞIYOR | Sunucunun `newBalance`'ı; ardından `router.refresh()`. |
+| 35 | JWT puan güncelleme | KALDIRILDI | İstemcinin yazabildiği puan alanına artık yazılmıyor. |
+| 36 | Ödüllerim'e geçiş | ÇALIŞIYOR | "Kodumu göster" → `/customer/wallet/owned?pass=reward:<id>`. |
+| 37 | Kutlama modalı | KALDIRILDI | Sürpriz-kutu dili satın almada yanıltıcıydı; ölçülü "Ödülün hazır" anı geldi. |
+| 38 | Ödüllerim iskeleti | ÇALIŞIYOR | Sunucu render + kabuk iskeleti. |
+| 39 | Ödüllerim boş durumu | ÇALIŞIYOR | "Ödüllere göz at" CTA. |
+| 40 | Ödüllerim kartı | ÇALIŞIYOR | Aktif/Kullanıldı gerçek; görsel geliyor. |
+| 41 | Kupon kodu gösterimi | ÇALIŞIYOR | + QR (lazy `qrcode`, yüksek kontrast). |
+| 42 | Kopyala (kart) | ÇALIŞIYOR | `await` + hata yakalama; başarısızlıkta elle kopyalama yönergesi; `aria-label`. |
+| 43 | Göreli tarih | ÇALIŞIYOR | Tarihler İstanbul saat dilimi + uygulama dili. |
+| 44 | Kupon detay penceresi | ÇALIŞIYOR | Klavyeyle açılır (`button`), `?pass=` derin linki, Radix odak tuzağı. |
+| 45 | "Kodu Kopyala" (detay) | ÇALIŞIYOR | #42 ile aynı kanca. |
+| 46 | Kullanım talimatı | ÇALIŞIYOR | Sahte "ilgili işletme" metni kaldırıldı; türe göre dürüst talimat. |
+| 47 | "Kullanıldı" durumu | ÇALIŞIYOR | Bayi kasası ucu (atomik) ya da müşteri "Kullandım" (onaylı, tek yön). |
+| 48 | İşletmede doğrulama (QR) | ÇALIŞIYOR | Müşteri tarafı QR + "Kasada göster" (Wake Lock); bayi tarafı `GET/POST /api/dealer/reward-codes`. Bayi ekranına bağlanması kalan (aşağıda). |
+| 49 | Kod son kullanma | UYGULANMADI | `UserReward.expiresAt` yok → ŞEMA İSTEĞİ. |
+| 50 | Fiziksel ödül teslimat | UYGULANMADI | Adres/kargo alanı yok → ŞEMA İSTEĞİ. |
+| 51 | i18n | ÇALIŞIYOR | Tüm metinler `copy.ts` TR/EN; sunucu hata kodları istemcide çevrilir. |
+| 52 | Modül kapalı durumu | ÇALIŞIYOR | Ayrı "kapalı" ekranı; kozmetik ve kodlar etkilenmez; API 403 `MODULE_DISABLED`. |
+| 53 | Azaltılmış hareket | ÇALIŞIYOR | Sonsuz döngü yok; başarı animasyonu politikaya bağlı. |
+| 54 | Ödüllerim filtresi | ÇALIŞIYOR | "Kullanıma hazır" / "Kullanılanlar" (cursor sayfalı). "Süresi dolmuş" şema ister. |
+| 55 | Puan geçmişi bağlantısı | ÇALIŞIYOR | Hero'da Tara · Oyna · Görevler · Puan geçmişi (Hareketler). |
+
+**Kapanan bulgular (10/10):** B1 (teslim zinciri: kod artık bayi kasasında atomik tükenir + müşteri "kullandım"; `isUsed` gerçek), B2 (karşılıksız kupon kutusu kaldırıldı), B3 (tek durum kaynağı `deriveRewardState`), B4 (limit kilit altında + idempotency), B5 (DTO; `metadata`/`_count` sızmıyor; geçerlilik/limit çipleri), B6 (TR/EN, öneksiz toast, `Intl`), B7 (sunucu önce; stats ucu çağrısı yok; hata ≠ boş), B8 (yanlış hikâyeli modal kaldırıldı; erişilebilir sheet), B9 (kopyalama + klavye), B10 (yeni uç 401/403 doğru; `updateSession(points)` yok; boş `AnimatePresence` yok).
+**Eksik özelliklerden uygulananlar:** göster-okut pass (QR + Kasada göster + Wake Lock), hedef ilerlemesi (otomatik en yakın ödül), katalog keşfi (filtre/sıralama/arama), kıtlık/zaman sinyalleri, puan geçmişine geçiş, Ödüllerim yaşam döngüsü (aktif/kullanılmış).
+
+**Kalanlar:**
+- Bayi "Tara/Kasa" ekranı `GET/POST /api/dealer/reward-codes` uçlarını çağırmalı (bayi yüzeyi başka ajanın; uç hazır ve testli).
+- Kullanıcının seçtiği hedef ("hedefe kilitle") ve "stoğa girince haber ver" şema ister.
+- `/api/gamification/rewards` (admin + eski pano tüketicileri) ve `/api/customer/redeem-coupon` dokunulmadı (paylaşılan / admin uçları).
+- **ŞEMA İSTEKLERİ:** `UserReward.status` (`ISSUED|REDEEMED|EXPIRED|CANCELLED`), `expiresAt`, `redeemedDealerId`, `redeemedByStaffId`, `shipping Json?`; `Reward.fulfillment`, `category`, `media`; `RewardWatch(userId, rewardId)`, `UserRewardGoal(userId, rewardId)`; promosyon kodu kararı için `Coupon.grantType` (`points|reward`) ya da cüzdan kaydına bağlanma.

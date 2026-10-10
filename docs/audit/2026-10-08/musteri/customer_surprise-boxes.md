@@ -244,3 +244,64 @@ Ek olarak: toplu "Tümünü aç" (5+ birikmiş günlük kutu için, özet kartı
 - **Yeniden üretim:** Admin `/admin` modül kontrollerinden `surprise_boxes`'ı kapatır. Müşteri `/customer/surprise-boxes` adresine doğrudan gider (veya `GET /api/surprise-box` çağırır): günlük kutu 50-250 puanla oluşturulur (`route.ts:22-34`), ardından `POST /api/surprise-box/{id}/open` `creditPointsAndXp` ile puanı kredilendirir (`open/route.ts:54-59`). Admin'in "acil fren" beklentisi karşılanmıyor; ayrıca kapalıyken admin daha önce gönderilmiş hediye kutuları da açılabiliyor.
 - **Önem notu:** Kimlik/yetki atlatma değil (kullanıcı yalnızca kendi kutusunu, sunucunun belirlediği puanla açabiliyor; günde bir kutu `@@unique([userId, dayKey])` ile sınırlı). Etki, puan basan bir yolun yönetici kill-switch'inden kaçması; puan ekonomisi değişmezleri açısından YÜKSEK kabul edilebilir, KRİTİK değil.
 - **Öneri:** Her iki uca `assertModuleEnabled('surprise_boxes', { userId, request, routeKey })` eklenmeli (GET'te upsert'ten ÖNCE). Sayfa 403 + `moduleKey` yanıtını tanıyıp "Bu modül geçici olarak kapalı" boş durumu göstermeli. Kalıcı çözüm olarak müşteri sayfaları için `detailHref` üzerinden modül kapısını `app/customer/layout.tsx` (sunucu bileşeni) veya proxy seviyesinde tek yerde uygulamak, her yeni modülde aynı hatanın tekrarını önler.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/customer/wallet/owned?tab=boxes` (Cüzdan → Ödüllerim → Kutularım). `/customer/surprise-boxes` kalıcı yönlendirme koçanı. Eski `GET /api/surprise-box` (GET'te kutu üreten yan etki) ve `POST /api/surprise-box/[id]/open` silindi; yerlerine `POST /api/customer/wallet/boxes/daily` (yalnız "Aç"ta, İstanbul günü, kriptografik rastgele 50–250, modül kapısı), `POST /api/customer/wallet/boxes/[id]/open` (sahiplik `where`'de, atomik `openedAt`, puan `mintPoints` — tek-kez `surprise:<id>`, defter + `points_credited`, fraud kapısı) ve `GET /api/customer/wallet/owned-history?kind=boxes&cursor=` geldi. Açılış: mevcut imza 3B kutu (`signature-gift-box-lazy`, ayrı chunk) yeni erişilebilir `BoxRevealDialog` içinde. `surprise-box-modal.tsx` kaldırıldı. Test: `__tests__/lib/wallet-rewards.test.ts`, `__tests__/api/wallet-rewards-routes.test.ts`.
+
+| # | Özellik | Yeni durum | Not / gerekçe |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | Ödüllerim meta (TR/EN). |
+| 2 | Rol koruması | ÇALIŞIYOR | Sayfa + uçlar (`defineRoute` CUSTOMER, DB'den yetki). |
+| 3 | Modül aç/kapa | ÇALIŞIYOR | Sayfa "Kutular kapalı" durumu; günlük üretim ve açma uçları 403 `MODULE_DISABLED`. |
+| 4 | Masaüstü başlık | ÇALIŞIYOR | Cüzdan kabuğu tek `h1`. |
+| 5 | Mobil başlık kartı | KALDIRILDI | Kabuk + sekmeler yeterli; mobilde ilk ekranı yemiyor. |
+| 6 | Hero ikon + sayaç | ÇALIŞIYOR | Sekme sayacı = BEKLEYEN kutu (toplam değil). |
+| 7 | Hero metinleri | KALDIRILDI | Bölüm başlıkları ve açıklamaları taşıyor. |
+| 8 | 3 istatistik çipi | KALDIRILDI | 100'de tavan yapan yanlış "Toplam" yerine sekme/bölüm sayıları. |
+| 9 | Hero iskeleti | ÇALIŞIYOR | Sunucu render; kabuk iskeleti. |
+| 10 | "Kişisel öneri" cümlesi | KALDIRILDI | Tekrarlı ve sahte mekaniğe bağlıydı. |
+| 11 | "Yorum yazarsan ihtimal artar" | KALDIRILDI | Kod tabanında karşılığı yok (yalan vaat). |
+| 12 | "Ritmini koru" ipucu | KALDIRILDI | Karşılığı yok. |
+| 13 | Toplam tüketim satırı | KALDIRILDI | Hareketler'e ait. |
+| 14 | "Daha fazla kutu" rozeti | KALDIRILDI | Anlamsız süs. |
+| 15 | "Yorum bekleyenler" bağlantısı | KALDIRILDI | Sahte vaadin CTA'sıydı. |
+| 16 | "Geri bildirimlerim" bağlantısı | KALDIRILDI | Seslerim'e ait. |
+| 17 | "Önizlemeyi aç" | KALDIRILDI | Sahte +120 puan / `PREVIEW-2026` kuponu gösteriyordu. |
+| 18 | Genel boş durum | ÇALIŞIYOR | Gerçek boşlar ("Bekleyen hediye kutun yok", "Henüz kutu açmadın"); hata ayrı `ErrorState`. |
+| 19 | Liste iskeleti | ÇALIŞIYOR | Sunucu render + kabuk iskeleti. |
+| 20 | Sekmeler | ÇALIŞIYOR | Kodlarım · Kutularım (Radix, URL'de). |
+| 21 | "Açılacak kutu yok" | ÇALIŞIYOR | Sahte CTA yok. |
+| 22 | Açılmamış kutu kartları | ÇALIŞIYOR | Ayrı sorgu (`openedAt: null`, yeniden eskiye) — 100 sınırı/NULLS LAST hatası kapandı. |
+| 23 | Sonsuz nabız | KALDIRILDI | ops kaydında döngü yok. |
+| 24 | "+X puan potansiyeli" | KALDIRILDI | Yerine nadirlik KADEMESİ (içerik açılmadan sızmıyor). |
+| 25 | Göreli zaman | ÇALIŞIYOR | İstanbul saat dilimi + uygulama dili. |
+| 26 | "Kutuyu aç" butonu | ÇALIŞIYOR | Açılış sürerken TÜM aç butonları kilitli (Bulgu 12). |
+| 27 | Açma API'si | ÇALIŞIYOR | `mintPoints` (kilit, tek-kez, defter, `points_credited`, fraud kapısı). |
+| 28 | "Zaten açılmış" yanıtı | ÇALIŞIYOR | `alreadyOpened: true` → kutlama yok, "+X kazandın" yalanı yok. |
+| 29 | Ses efekti | KALDIRILDI | Yalnız destekleniyorsa ve politika izin verirse kısa titreşim (destansı/efsanevi). |
+| 30 | Açılış sonrası yeniden çekme | ÇALIŞIYOR | Yalnız sunucu sayfası tazelenir; 10 sorgulu stats ucu yok. |
+| 31 | Günlük kutu üretimi | ÇALIŞIYOR | GET yan etkisi yok; İstanbul günü; `crypto.randomInt`. |
+| 32 | Faz animasyonu + 3B kutu | ÇALIŞIYOR | ≤ 1,8 sn, "Atla"; azaltılmış harekette 3B kurulmaz, statik kutu + anında sonuç. |
+| 33 | Ödül yuvası | ÇALIŞIYOR | Sunucunun `RevealPayload`'ından. |
+| 34 | "Durum/Tür/Seviye: Premium" çipleri | KALDIRILDI | Yerine gerçek kademe + kaynak. |
+| 35 | "Günlük giriş ödülü" etiketi | ÇALIŞIYOR | Kaynaktan türer: "Günlük kutu" / "Qratex'ten hediye". |
+| 36 | "Kayıtlandı" kartı | KALDIRILDI | Yerine gerçek yeni bakiye ("Yeni bakiyen N puan"). |
+| 37 | Kupon kodu + kopyala | ÇALIŞIYOR | `await` + hata yakalama; sabit "Aktif" yok. |
+| 38 | Modal kapatma | ÇALIŞIYOR | Esc, X, Tamam; açılış isteği sürerken kilitli. |
+| 39 | Modal klavye/odak/ARIA | ÇALIŞIYOR | Radix Dialog (odak tuzağı, kaydırma kilidi), sonuç `aria-live` + "Tamam"a odak. |
+| 40 | Geçmiş listesi | ÇALIŞIYOR | Yeniden eskiye, kupon kodu görünür, satır detay açar (`?pass=box:<id>`, QR). |
+| 41 | Geçmiş boş durumu | ÇALIŞIYOR | |
+| 42 | Hata yönetimi | ÇALIŞIYOR | Kodlu, çevrilmiş hata; ham anahtar yok; yeniden dene. |
+| 43 | i18n | ÇALIŞIYOR | `copy.ts` TR/EN. |
+| 44 | Açılmış kutunun kuponu | ÇALIŞIYOR | Geçmişte + detayda (QR + kopyala). |
+| 45 | Yeni kutu bildirimi / menü rozeti | UYGULANMADI | Admin gönderim ucu ve menü rozetleri başka ajanların; sekme sayacı var. |
+| 46 | Son kullanma / aciliyet | UYGULANMADI | `expiresAt` yok → ŞEMA İSTEĞİ. Bugünün kutusu için gece yarısı geri sayımı var. |
+| 47 | Sayfalama | ÇALIŞIYOR | Cursor (20'şer). |
+
+**Kapanan bulgular (13/14):** B1, B2 (B seçeneği: sahte vaatler kaldırıldı), B3, B4, B5, B6, B7, B8, B10, B11, B12, B13, B14; B9 kısmen (GET yan etkisi, UTC günü ve `Math.random` kapandı; login streak ile birleşme ve lig aralıkları — ekonomi ayarı — kalan).
+**Eksik özelliklerden uygulananlar:** nadirlik kademesi, kupon cüzdanı/detayı (QR, kasada göster), günlük geri sayım, tam geçmiş.
+**ŞEMA İSTEKLERİ:** `UserSurpriseBox.source` (enum), `tier`, `expiresAt`, `sourceKey` (`@@unique([userId, sourceKey])`), `dealerId?`, `@@index([userId, openedAt, createdAt])`.

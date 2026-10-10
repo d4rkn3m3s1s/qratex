@@ -245,3 +245,67 @@
 - **Yeniden üretim:** `quest-cosmetic-collector` ilerlemesi 2/3 olan kullanıcı iki FARKLI ürünü aynı anda satın alır (aynı ürün `@@unique([userId, cosmeticId])` — `schema.prisma:599` — ile engellenir). Her iki istek de satın alma tx'ini tamamlar, ardından ikisi de `progress=2` okur → ikisi de `newProgress=3`, `isNowCompleted=true` → 75 puan + 150 XP iki kez kredilenir, iki `points_credited` olayı ve iki bildirim yazılır. Daha da kolayı `quest-gift-master` (hedef 1): ilk iki eşzamanlı hediye 0→1'i iki kez görür, 100 puan + 200 XP iki kez basılır.
 - Ekonomik istismar zayıf: her tekrar için 1500+ puanlık gerçek bir harcama gerekir ve başarım tek seferliktir (bir kez tamamlandıktan sonra `:104` erken döner), yani kullanıcı başına en fazla birkaç yüz fazladan puan. Ancak "her puan basan yol atomik tek seferlik" proje invariantını açıkça ihlal ediyor ve aynı yardımcı diğer başarımlarda da (`quest-color-wizard`, `quest-showcase-master`) kullanılıyor.
 - **Öneri:** İlerlemeyi atomik `increment` ile yaz, tamamlanmayı koşullu geçişle tek sefere bağla: tx içinde `updateMany({ where: { id, completedAt: null, progress: { gte: target - amount } }, data: { completedAt: now } })` → `count === 1` ise kredi ver; aksi halde hiçbir şey basma. `set` modu için de aynı `completedAt: null` koruması.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yer:** `/customer/wallet/rewards?tab=cosmetics` (Cüzdan → Ödüller → Kozmetik). `/customer/shop` kalıcı yönlendirme koçanı (`tab=cosmetics`, diğer sorgular korunur). `shop-client.tsx`, `shop-interactive.tsx`, ölü `GET/POST /api/customer/shop`, `PATCH /api/customer/shop/[id]/equip` ve `GET /api/customer/equipped-cosmetics` kaldırıldı; yerlerine `POST /api/customer/wallet/cosmetics/purchase` (zod, `isActive`+arşiv kontrolü, `expectedPrice`, idempotent, P2002 → 409) ve `POST /api/customer/wallet/cosmetics/state` (kuşan/çıkar `updateMany` + kullanıcı kilidi, vitrin 4 slot) geldi. Hediye P0-23 sözleşmesini (`/api/customer/shop/gift`) kullanır. Mantık: `lib/wallet-rewards/{queries,mutations}.ts`; test: `__tests__/lib/wallet-rewards.test.ts`.
+
+| # | Özellik | Yeni durum | Not / gerekçe |
+|---|---|---|---|
+| 1 | Rol kontrolü | ÇALIŞIYOR | CUSTOMER değilse `callbackUrl`'li girişe. |
+| 2 | Metadata | ÇALIŞIYOR | Cüzdan → Ödüller meta (TR/EN). |
+| 3 | Başlık/açıklama | ÇALIŞIYOR | "XP" vaadi yok; yalnız puan. |
+| 4 | Bakiye | ÇALIŞIYOR | Ortak bakiye kartı (sunucudan). |
+| 5 | Paralel veri yükleme | ÇALIŞIYOR | `select` + `take: 150`; vitrin sayımı aynı turda. |
+| 6 | Sahiplik/kuşanma eşleme | ÇALIŞIYOR | `Map` ile O(n). |
+| 7 | Nadirlik sıralaması | ÇALIŞIYOR | Kademe sırası (efsanevi → yaygın), alfabetik değil. |
+| 8 | "Tümü" sekmesi | ÇALIŞIYOR | Ham i18n anahtarı yok; sayılı. |
+| 9 | Kategori filtreleri | ÇALIŞIYOR | Çoğul etiket + sayı; `ChoiceChips` (radiogroup). |
+| 10 | "Arka planlar" içeriği | ÇALIŞIYOR | Boş kategori sekmede gösterilmez. |
+| 11 | Izgara | ÇALIŞIYOR | 2/3 sütun. |
+| 12 | Tür çipi | ÇALIŞIYOR | Metinle tür. |
+| 13 | Nadirlik gösterimi | ÇALIŞIYOR | `RarityBadge` (ikon + metin) + kart üst şeridi. |
+| 14 | "Kuşanıldı" işareti | ÇALIŞIYOR | Görünür metin ("Kuşanıldı", "Vitrinde"). |
+| 15 | Çerçeve önizlemesi | ÇALIŞIYOR | Kendi avatarın + kendi `customFrameColor` tonun. |
+| 16 | Arka plan önizlemesi | ÇALIŞIYOR | Sabit "Kart Teması" kaldırıldı; değer panodaki ile aynı yorumlanır (URL → görsel, aksi sınıf). |
+| 17 | Rozet önizlemesi | ÇALIŞIYOR | Bilinmeyen anahtar ham metin olarak basılmaz (genel rozet ikonu). |
+| 18 | "Animasyonlu" sezgisi | KALDIRILDI | İsimden tahmin sahteydi. |
+| 19 | Yetersiz bakiye örtüsü | ÇALIŞIYOR | Her zaman görünen "N puan eksik" satırı (dokunmatikte de). |
+| 20 | Ad/açıklama | ÇALIŞIYOR | ≥12px; detayda tam açıklama. |
+| 21 | Fiyat | ÇALIŞIYOR | `Intl` locale (hidrasyon riski yok). |
+| 22 | "Sahipsin" | ÇALIŞIYOR | Ham anahtar yok. |
+| 23 | Satın Al | ÇALIŞIYOR | Onay adımı (bakiye `A → B`, iade yok uyarısı), kodlu Türkçe/İngilizce hata. |
+| 24 | Atomiklik | ÇALIŞIYOR | Defterli `debitPoints` + doğal tek-kez anahtarı `shop:<kullanıcı>:<ürün>`; yarış 409. |
+| 25 | Pasif ürün koruması | ÇALIŞIYOR | `findFirst({ id, isActive: true, archivedAt: null })`. |
+| 26 | Koleksiyoncu başarımı | ÇALIŞIYOR | `lib/achievements` satır kilitli (P0); hata satın almayı bozmaz. |
+| 27 | Kuşan/Çıkar — çerçeve | ÇALIŞIYOR | Sahiplik kontrolü + JWT anında güncellenir. |
+| 28 | Kuşan/Çıkar — rozet | ÇALIŞIYOR | "Kuşan" yerine gerçek etkili "Vitrine sabitle/kaldır" (rozetlerle ortak 4 slot). |
+| 29 | Kuşan/Çıkar — arka plan | ÇALIŞIYOR | JWT `equippedBackground`; ana sayfa yüzeyi tüketir. |
+| 30 | Kuşanma API'si | ÇALIŞIYOR | `updateMany` + kullanıcı kilidi (çift aktif çerçeve yok); kodlu hatalar. |
+| 31 | Hediye butonu | ÇALIŞIYOR | TR/EN; bakiye yetmezse gönder pasif. |
+| 32 | Alıcı alanı | ÇALIŞIYOR | Önizleme (tek eşleşme, maskeli) + bağlı `label`. |
+| 33 | Kişisel mesaj | ÇALIŞIYOR | 280 karakter + sayaç; alıcının kartında "X hediye etti" + mesaj. |
+| 34 | Hediye API'si | ÇALIŞIYOR | P0-23: `recipientUserId`, rate limit, `requestId` tek-kez. |
+| 35 | Alıcıya bildirim | ÇALIŞIYOR | (Metin tek dilde — kalan.) |
+| 36 | "Hediye Ustası" | ÇALIŞIYOR | Kilitli başarım. |
+| 37 | Hediye modalı görünümü | ÇALIŞIYOR | Tema token'ları; zorla koyu yok; TR/EN. |
+| 38 | Boş durum | ÇALIŞIYOR | Filtre boşsa "Filtreleri temizle"; katalog boşsa dürüst metin. |
+| 39 | Yükleniyor | ÇALIŞIYOR | Kabuk iskeleti; işlem butonlarında `loading`. |
+| 40 | Hata durumu | ÇALIŞIYOR | Sekme içi `ErrorState` + tekrar dene. |
+| 41 | İşlem sonrası tazeleme | ÇALIŞIYOR | İyimser bakiye + `router.refresh()`. |
+| 42 | Azaltılmış hareket | ÇALIŞIYOR | Izgarada çerçeve animasyonları duraklatılmış (hover/odakta oynar); Glitch çerçeve ≥ 1,2 sn döngü (WCAG 2.3.1). |
+| 43 | `GET /api/customer/shop` | KALDIRILDI | Ölü uç silindi. |
+| 44 | Dolabım | ÇALIŞIYOR | "Sahipsin" filtresi + vitrin sayacı; renk tonu Ayarlar'da kalır. |
+| 45 | Harcama geçmişi | ÇALIŞIYOR | `PointsLedger` (`source: shop`) → Cüzdan → Hareketler. |
+| 46 | Sıralama / alabileceklerim | ÇALIŞIYOR | Nadirlik/puan/yeni + "Alabileceklerim" (arama yok: katalog küçük). |
+| 47 | Ürün detayı / üzerimde dene | ÇALIŞIYOR | Detay sheet'inde büyük, animasyonlu önizleme kendi avatarınla. |
+| 48 | Kozmetiklerin başkalarına görünmesi | UYGULANMADI | Liderlik/klan yüzeyleri başka ajanların; liste uçlarına kuşanılmış çerçeve eklenmeli. |
+| 49 | Hediye alındı işareti | ÇALIŞIYOR | Kartta ve detayda gönderen + mesaj. |
+| 50 | Kutlama / kuşanma kısayolu | ÇALIŞIYOR | Satın alma sonrası "Koleksiyonuna eklendi" + Kuşan/Vitrine sabitle aynı sheet'te. |
+
+**Kapanan bulgular (12/15):** B1, B2 (P0 + yeni arayüz), B3, B4, B5, B7 (sıralama + gösterim), B9 (arayüz + kodlu hatalar), B10 (P0), B11, B12, B13, B14, B15.
+**Kalanlar:** B6 (`renderKind/assetKey` tek renderer — ŞEMA), B8 (sosyal görünürlük — başka yüzeyler), içerik çevirisi (ürün adı/açıklaması tek dil — ŞEMA), alıcının dilinde hediye bildirimi.
+**ŞEMA İSTEKLERİ:** `CosmeticItem.rarityRank Int` (ya da enum), `renderKind`, `assetKey/assetUrl/style Json`, `nameI18n/descriptionI18n Json`, `availableFrom/Until`, `stockLimit`.
