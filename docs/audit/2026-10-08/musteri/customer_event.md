@@ -199,3 +199,50 @@ Okunan kaynaklar: `app/customer/event/page.tsx`, `app/api/customer/seasonal-even
 | 4 | Hata yanıtı boş durum olarak gösteriliyor | **DOĞRULANDI (derece abartılı)** | `page.tsx:47-54` `r.ok` kontrol etmiyor; 503 gövdesi `{error, code, retryable}` (`lib/api-http.ts:20-27`) `setData`'ya yazılıyor, `data.active` `undefined` → `page.tsx:92` boş durum "Şu an aktif etkinlik yok". 401/500'de de aynı; JSON olmayan gövdede `.catch(() => {})` → `data=null` → yine boş durum. **Ek nüans:** yalnız istemci düzeltmesi yetmez — `getActiveSeasonalCampaign` tüm hataları yutup `null` döndürüyor (`lib/seasonal-campaign-live.ts:65-67`), dolayısıyla DB ilk sorguda erişilemezse GET **200 `{active:false}`** döner; 503 yalnız sonraki `findUnique`/`count` adımında oluşursa görülür. Doğru çözüm: route içinde ayrı, hata fırlatan bir okuma (veya helper'a `throwOnError` seçeneği) + istemcide `loading/error/empty/active` durum makinesi ve "Tekrar dene". Etki yanlış bilgi gösterimi; para/veri kaybı yok → YÜKSEK değil ORTA. |
 
 **Özet:** Dört iddianın dördü de kod düzeyinde doğru. Ancak #2 ve #3 bugün canlıda tetiklenemiyor, çünkü #1 nedeniyle challenge verisi uygulama üzerinden oluşturulamıyor. Bu iki bulgu #1'in düzeltmesinin **ön koşulu** olarak ele alınmalı: admin challenge alanları, rozet FK + varlık doğrulaması ve `campaignId` hedefli, bitiş sonrası grace süreli (tercihen otomatik) talep tek bir değişiklik setinde gelmeli. #4, sunucu tarafındaki hata yutmayla birlikte düzeltilmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/customer/event` emekli → **Keşfet → Fırsatlar → Etkinlikler** (`/customer/places?tab=deals`). Etkinlik kartı `components/customer/m-kesfet/event-card.tsx`; veri `lib/places/deals.server.ts#loadSeasonalEvents` (Fırsatlar BFF'i ve `GET /api/customer/seasonal-event` aynı fonksiyon). `GET/POST /api/customer/seasonal-event` defineRoute'a taşındı (CUSTOMER, oran sınırı, Keşfet + `customer_campaigns` kapısı, zarf v2 + eski alanlar `legacySpread` ile korunur — Görevler panosu gövdesiz POST'u kullanmaya devam edebilir).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Menü girişi | ÇALIŞIYOR | Keşfet sekmesi (kayıt `legacyIds: event_center`). |
+| 2 | Görünürlük kataloğu | ÇALIŞIYOR | API kapısı artık uygulanıyor (Keşfet menüsü + `customer_campaigns`); doğrudan URL/POST da kapalı. |
+| 3 | Metadata | ÇALIŞIYOR | |
+| 4 | Hero | ÇALIŞIYOR | Etkinlik kartı başlığı + görsel. |
+| 5 | Yükleniyor | ÇALIŞIYOR | `QueryState` iskeleti; talep sonrası içerik yerinde kalır (iskelet flaşı yok). |
+| 6 | Hata durumu | ÇALIŞIYOR | Hata ≠ "etkinlik yok"; tekrar dene. |
+| 7 | Boş durum | ÇALIŞIYOR | Veriden bağımsız "yakında" sözü yok; yaklaşan etkinlik varsa tarihiyle listelenir. |
+| 8 | Etkinlik kartı | ÇALIŞIYOR | |
+| 9 | Geri sayım | ÇALIŞIYOR | `endDate`'ten (arka planda kaymaz); son saatte vurgulu; bitince veri tazelenir. |
+| 10 | Çarpan rozeti | ÇALIŞIYOR | + "QR geri bildirim ve kartla harcama puanlarında geçerli · günlük tavan uygulanır" (`SEASONAL_APPLIES_TO`, çağrı yerleriyle aynı kaynak). |
+| 11 | Bonus rozeti | ÇALIŞIYOR | "İşlem başına +N bonus". |
+| 12 | Görsel (`imageUrl`) | ÇALIŞIYOR | Yalnız http(s)/göreli URL. |
+| 13 | Etkinlik türü / uygunluk | ÇALIŞIYOR | `isCampaignEligible`: BIRTHDAY/ANNIVERSARY/minLevel kişiye göre; herkese gösterilmez (test). |
+| 14 | `discount` alanı | KALDIRILDI | Hiçbir yerde uygulanmayan indirim gösterilmez (sahte vaat olurdu). |
+| 15 | Etkinlik görevi kartı | KISMİ | Müşteri tarafı tam (ilerleme, eylem, talep, kutlama). Admin yazma yolu (`/api/admin/seasonal-campaigns` challenge alanları) admin yüzeyinin işi → sahibine bildirildi. |
+| 16 | Görev cümlesi | ÇALIŞIYOR | "5 oyunu tamamla"; ödül puan/rozet koşullu ("+300 puan ve 'X' rozeti"). |
+| 17 | İlerleme çubuğu | ÇALIŞIYOR | `role="progressbar"` + aria değerleri; odakta yeniden çekme. |
+| 18 | "Kaldı" metni | ÇALIŞIYOR | "Tamamlamak için 2 oyun daha". |
+| 19 | "Ödülü al" | ÇALIŞIYOR | Kampanya kimliğiyle talep. |
+| 20 | Talep sunucusu | ÇALIŞIYOR | Sunucu ilerlemeyi yeniden sayar; `SeasonalChallengeClaim @@unique` + `mintPoints` (`idempotencyKey: seasonal_challenge:<kampanya>:<kullanıcı>`, defter + points_credited + gölge-ban kapısı) aynı tx. |
+| 21 | Özel rozet ödülü | ÇALIŞIYOR | Silinmiş/geçersiz rozet ödülü düşürmez (`awardBadgeInTx` → atlanır, test); rozet adı ödül satırında. FK → ŞEMA İSTEĞİ. |
+| 22 | Bildirim kaydı | ÇALIŞIYOR | Emoji'siz, Türkçe. |
+| 23 | Toast | ÇALIŞIYOR | 409'da veri tazelenir (buton kaybolur). |
+| 24 | "Ödülünü aldın" | ÇALIŞIYOR | popIn (azaltılmış harekette statik). |
+| 25 | Görev XP'si | ÇALIŞIYOR | XP = ödül puanı (mintPoints). |
+| 26 | Bitiş sonrası talep | ÇALIŞIYOR | 3 gün ek süre; bitmiş ama tamamlanmış/alınmamış etkinlik "Ödülünü … tarihine kadar alabilirsin" ile görünür. |
+| 27 | Eşzamanlı etkinlikler | ÇALIŞIYOR | Uygun tüm etkinlikler ayrı kartlarda; talep edilebilir olan önce. |
+| 28 | Giriş animasyonu / azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`. |
+| 29 | Kimlik doğrulama | ÇALIŞIYOR | CUSTOMER rolü zorunlu (önceden her oturum). |
+| 30 | i18n | ÇALIŞIYOR | TR/EN. |
+| 31 | Göreve yönlendiren CTA | ÇALIŞIYOR | "Oyunlara git" / "Yorum bekleyenlere git". |
+| 32 | Ödül kutlaması | ÇALIŞIYOR | An Motoru puan kapsülü (`moments.points`) + `moments.refresh()` (rozet anı); kapsül yoksa toast. |
+| 33 | Yaklaşan / geçmiş | ÇALIŞIYOR (yaklaşan) | 30 gün içindeki genel etkinlikler tarihleriyle; geçmiş etkinlik özeti kalanlarda. |
+| 34 | Bakiye güncellemesi | ÇALIŞIYOR | Puan kapsülü başlıktaki puan çipini nabızlar. |
+
+**Kapanan bulgular (12 → 11 tam, 1 kısmi):** 2 ödülün kaybolması · 3 hata = boş · 4 FK'siz rozetin talebi kırması (zarif atlama; FK şema isteği) · 5 çarpan neye uygulanır · 6 bozuk Türkçe · 7 `isEligible` + tek etkinlik · 8 geri sayım kayması · 9 menü kapısı · 10 XP · 11 gereksiz sorgu (tek findMany + toplu claim/rozet okuması) · 12 a11y/metadata/i18n. **Kısmi:** 1 görev yapılandırılamıyor — müşteri tarafı hazır, admin yazma yolu admin yüzeyinde.
+
+**Kalanlar:** (a) Admin `seasonal-campaigns` şemasına challenge alt nesnesi + başladıktan sonra kilit (admin yüzeyi). (b) **ŞEMA İSTEĞİ** `SeasonalCampaign.rewardBadge Badge? @relation(fields: [challengeRewardBadgeId], references: [id], onDelete: SetNull)`. (c) Otomatik ödül (oyun/yorum anında) ve kademeli görevler yapılmadı; geçmiş etkinlik özeti yapılmadı.

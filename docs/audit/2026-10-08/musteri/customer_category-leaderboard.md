@@ -257,3 +257,52 @@ Dört KRİTİK/YÜKSEK iddiayı çürütmeye çalıştım. Bunun için sayfayı,
 - Senaryo: Oturum süresi dolmuş ya da Neon geçici olarak erişilemez durumda. İlk istekte çip listesi boş geliyor, `selected` null kalıyor ve ekranda kategori yokken bile "Bu kategoride yeterli yoruma sahip işletme yok" yazıyor (`page.tsx:73-78`). İkinci istekte hata olursa önceki kategori listesi siliniyor ve aynı yanlış mesaj görünüyor. `retryable: true` bilgisi kullanılmıyor ve yeniden deneme düğmesi yok.
 
 **Özet:** Dört iddianın dördü de kodda gerçek. 1 ve 2 ürün ve güvenlik açısından YÜKSEK önemde. 2'nin "Ayın İşletmesi" ayağı kategori verisinden bağımsız olarak da sömürülebilir. 3 ve 4 gerçek ama istemci tarafında kalan orta önemli doğruluk/UX hataları. Bunlar KRİTİK değil, düzeltmeleri de ucuz (AbortController/SWR ve `res.ok` + hata/yeniden dene durumu). Üretimdeki gerçek `businessCategory` değerleri canlı DB okunmadığı için doğrulanmadı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/customer/category-leaderboard` emekli → **Keşfet → En iyiler** (`/customer/places?tab=top`, `?category=` korunur). Veri: `GET /api/customer/places/top` (defineRoute, CUSTOMER, Keşfet kapısı) → `lib/places/data.server.ts#getTopPlaces`; eski `/api/customer/category-leaderboard` silindi (tek tüketicisi bu sayfaydı). Sıralama mantığı `lib/places/ranking.ts` (saf, Jest).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero | ÇALIŞIYOR | Keşfet başlığı + sekme. |
+| 2 | Kategori listesi | ÇALIŞIYOR | Kontrollü sözlük: `businessCategory` eşanlamlısı ya da bayinin ürün kategorilerinden türetim; `demo-*`/ham slug sızmaz. |
+| 3 | Çip seçimi | ÇALIŞIYOR | `ChoiceChips` radiogroup, URL `?category=`, yarış yok (React Query anahtarı + iptal). |
+| 4 | Çip sayısı | ÇALIŞIYOR | Sıralamaya GİREN işletme sayısı. |
+| 5 | Varsayılan kategori | ÇALIŞIYOR | "Tümü" (tüm kategorilerin sıralaması). Kişinin en çok gittiği kategoriyle açılış kalanlarda. |
+| 6 | Tablo yükleme | ÇALIŞIYOR | `res.ok`/zarf kontrolü, iptal. |
+| 7 | Sıralama algoritması | ÇALIŞIYOR | Bayes (m = 10, temkinli önsel ≤ 4), kararlı kırılım, yoğun sıra. 3 oyluk 5,00 → 300 oyluk 4,93'ün önüne geçemez (test). |
+| 8 | Eşik | ÇALIŞIYOR | En az 3 FARKLI güvenilir değerlendirici. |
+| 9 | Zaman penceresi | ÇALIŞIYOR | 30 / 90 gün seçilebilir (URL `?window=30`). |
+| 10 | Güven filtreleri | ÇALIŞIYOR | Kişi başı tek (son) oy; anonim, `trustFlagged`, `isToxic`, `fraudScore ≥ 0,7`, gölge-ban ve demo yazar hariç; QR + tüketim yorumu birlikte (SQL test). |
+| 11 | En fazla 50 | ÇALIŞIYOR | + "Gittin" etiketi. |
+| 12 | İlk 3 madalya a11y | ÇALIŞIYOR | Podyum (2-1-3 görsel, DOM 1-2-3), sıra numarası metin + `sr-only`. |
+| 13 | 4+ sıra numarası | ÇALIŞIYOR | `<ol start>` + `value`. |
+| 14 | İlk 3 vurgusu | ÇALIŞIYOR | Podyum; 1. halkalı. |
+| 15 | İşletme adı | ÇALIŞIYOR | Yalnız `businessName` (kişisel ad sızmaz) + logo. |
+| 16 | Favori göstergesi | ÇALIŞIYOR | Aç/kapa düğmesi (erişilebilir ad). |
+| 17 | Yorum sayısı | ÇALIŞIYOR | |
+| 18 | Ortalama puan | ÇALIŞIYOR | "5 üzerinden 4,8 puan, 37 değerlendirme" aria. |
+| 19 | Yükleniyor | ÇALIŞIYOR | İskelet; ilk veri sekme açıkken sunucuda. |
+| 20 | Boş durum | ÇALIŞIYOR | Yetersiz değerlendirme → "İlk değerlendiren sen ol" + QR okut; hata ayrı. |
+| 21 | Hata durumu | ÇALIŞIYOR | `QueryState` + tekrar dene; admin toast yok. |
+| 22 | Sayfa yetkisi | ÇALIŞIYOR | |
+| 23 | API yetkisi | ÇALIŞIYOR | Yalnız CUSTOMER + menü/modül kapısı (bayi rakip listesi çekemez). |
+| 24 | Satırdan detaya | ÇALIŞIYOR | Satır/podyum → mekân detayı. |
+| 25 | Favoriye ekle/çıkar | ÇALIŞIYOR | İyimser + geri al. |
+| 26 | Arama/alt filtre/sıralama | KISMİ | Kategori + dönem var; yakınlık ve "en çok değerlendirilen" kalanlarda (Yakınımda'da puan sıralaması mevcut). |
+| 27 | Etiket yerelleştirme | ÇALIŞIYOR | TR/EN etiket. |
+| 28 | i18n | ÇALIŞIYOR | |
+| 29 | Metadata | ÇALIŞIYOR | |
+| 30 | URL'de durum | ÇALIŞIYOR | `?tab=top&category=…&window=…`. |
+| 31 | Ayın İşletmesi | ÇALIŞIYOR | Taç rozeti (aynı listedeyse). |
+| 32 | Podyum/hareket | ÇALIŞIYOR | Sütunlar 80 ms kademeyle yükselir (konum CSS'te, animasyon içte); azaltılmış harekette statik. |
+| 33 | Sunucu önbelleği | ÇALIŞIYOR | Kullanıcıdan bağımsız kısım Redis'te 10 dk (`places:top:v1:<pencere>`); kişisel alanlar istek başına. |
+| 34 | Mobil yerleşim | ÇALIŞIYOR | Çift dolgu yok; çipler yatay kayar. |
+| 35 | Yeniden dene | ÇALIŞIYOR | |
+| 36 | Şeffaflık | ÇALIŞIYOR | "Sıralama nasıl hesaplanır?" açılır açıklama. |
+
+**Kapanan bulgular (13 → 12 tam, 1 kısmi):** 2 manipülasyon · 3 ham ortalama/eşitlik · 4 yarış · 5 hata = boş · 6 tek loading · 7 üç formül (Keşfet'in iki yüzeyi aynı güvenilir-oy kaynağı; Ayın İşletmesi cron'u hâlâ kendi formülünde — kalanlarda) · 8 a11y · 9 kişisel ad + rol · 10 yanıltıcı sayı/ham slug · 11 i18n/metadata/toast · 12 mobil · 13 önbellek. **Kısmi:** 1 `businessCategory` boş — ürün kategorilerinden türetimle gerçek bayiler de sıralanıyor; bayinin kategori seçmesi bayi ayarlarının işi.
+
+**Kalanlar:** (a) Bayi ayarlarına kontrollü kategori seçici (`lib/places/categories.ts` `PLACE_CATEGORY_SLUGS` ile) — bayi yüzeyi. (b) `lib/business-of-month.ts` ham ortalama + anonim yorum kullanıyor → `loadTrustedRatings` + `rankDealers`'a geçmeli (cron sahibi). (c) Yakınlığa göre sıralama ve kişiselleştirilmiş açılış yapılmadı.

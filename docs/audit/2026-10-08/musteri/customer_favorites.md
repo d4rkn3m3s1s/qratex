@@ -217,3 +217,48 @@
 **Yeniden üretim:** İstanbul'daki bir müşteri, Ankara'daki bir mekanı favorilemiş olsun → Favoriler'de "Profili Gör" → `/customer/nearby?dealerId=X` açılır → konum izni modalı ya da 5 km'lik yakın liste gelir, X mekanı listede yoktur. Yarıçap içindeyse de kullanıcı onu listede kendisi aramak zorunda kalır.
 
 **Öneri:** Müşteri tarafı bir mekan profil rotası (`/customer/venues/[dealerId]`) ve `GET /api/customer/venues/[dealerId]` eklenmeli: ad, logo, adres, harita, açık/kapalı durumu, aktif kampanya/happy hour, kullanıcının bu mekandaki ziyaret/XP özeti ve favori düğmesi. Favoriler, dashboard, ayın işletmesi ve öneriler linklerinin tamamı bu rotaya bağlanmalı. Kısa vadeli ara çözüm olarak `nearby` sayfası `useSearchParams` ile `focus`/`dealerId` okuyup, hedef sonuç listedeyse kaydırıp vurgulamalı; listede değilse "Bu mekan seçili yarıçapın dışında" bildirimiyle yarıçapı genişletme seçeneği sunmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/customer/favorites` emekli → **Keşfet → Kaydettiklerim** (`/customer/places?tab=saved`). Eski sayfa 308 koçanı; `?dealerId=` → mekân detayı (`/customer/places/[dealerId]`). Veri aynı tablo (`CustomerFavoriteDealer`), yeni uçlar: `GET /api/customer/places/saved` (canlı durum + kişisel bağlam + mesafe + öneriler) ve `PUT/DELETE /api/customer/places/saved/:dealerId` (defineRoute, CUSTOMER, oran sınırı, kullanıcı başı 200 sınırı, yalnız herkese açık işletme). Ana sayfa şeridinin kullandığı `/api/customer/favorites` geriye uyum için değişmedi.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Rota rol koruması | ÇALIŞIYOR | Sayfa sunucuda CUSTOMER; uçlar `roles: ['CUSTOMER']`. |
+| 2 | Metadata | ÇALIŞIYOR | Gerçek içerikle uyumlu ("Keşfet"); "ürünler/kısayollar" vaadi yok. |
+| 3 | Navigasyonda giriş | ÇALIŞIYOR | Keşfet birincil sekme (kayıt: `customer.places`), Kaydettiklerim sekmesi. |
+| 4 | Ana sayfa şeridinden "Tümünü gör" | KISMİ | Şerit ana sayfa yüzeyinin; bağlantı `/customer/nearby` → Keşfet'e düşüyor, `?tab=saved` için sahibine bildirildi. |
+| 5 | Başlık + sayaç | ÇALIŞIYOR | "Kaydettiğin N mekân" + "N/200 kayıt". |
+| 6 | Liste çekme | ÇALIŞIYOR | İlk veri sunucuda (sekme açıkken), sonra BFF. |
+| 7 | Yükleniyor | ÇALIŞIYOR | Kart iskeleti (statik). |
+| 8 | Hata durumu | ÇALIŞIYOR | `QueryState`: hata asla "favorin yok" görünmez; tekrar dene. |
+| 9 | Boş durum + CTA | ÇALIŞIYOR | "Yakınımdakileri keşfet" (artık orada kalp var) + "Son gittiğin mekânlar" tek dokunuşla kaydet. |
+| 10 | Logo | ÇALIŞIYOR | Hata yedeği. |
+| 11 | Kalp rozeti | ÇALIŞIYOR | Dekor değil: `aria-pressed` aç/kapa düğmesi. |
+| 12 | Ad (+ tıklanabilir kart) | ÇALIŞIYOR | Kartın tamamı mekân detayına gider. |
+| 13 | Adres | ÇALIŞIYOR | + koordinatla yol tarifi, telefon. |
+| 14 | "Profili Gör" | ÇALIŞIYOR | Mekân detayı (`/customer/places/[dealerId]`). |
+| 15 | Favoriden kaldır | ÇALIŞIYOR | İyimser, hata olursa geri alınır, "Geri al" eylemli bildirim, yalnız ilgili kart kilitlenir, erişilebilir ad. |
+| 16 | Toast | ÇALIŞIYOR | Müşteri tonu (`sonner`), tam Türkçe, sunucu mesajı gösterilir; admin önekli toast yok. |
+| 17 | Giriş animasyonu | ÇALIŞIYOR | Bütçeli stagger (`listItem`). |
+| 18 | Silinen kartın çıkışı | ÇALIŞIYOR | Yükseklik çökmesi (`layout`/domMax gerekmez); azaltılmış harekette anında. |
+| 19 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 20 | Eklenme tarihi | ÇALIŞIYOR | "… tarihinden beri kayıtlı". |
+| 21 | Konum/mesafe | ÇALIŞIYOR | Konum varsa mesafe + "Yakın" sıralaması (harita Yakınımda'da). |
+| 22 | Ekleme yolu | ÇALIŞIYOR | Yakınımda kartları, En iyiler (podyum + liste), boş durum önerileri, mekân detayı. |
+| 23 | Önbellek senkronu | ÇALIŞIYOR | Tek mutasyon tüm Keşfet önbelleklerini iyimser günceller; `['customer','favorites']` ve `['customer','dashboard']` da tazelenir. |
+| 24 | Arama/filtre/sıralama | ÇALIŞIYOR | Sıralama: Son eklenen · Yakın · En çok ziyaret · Şu an açık (URL `?ssort=`). Ad araması Yakınımda'da (≤ 200 kayıtta gerek görülmedi). |
+| 25 | Sınır bildirimi | ÇALIŞIYOR | Kullanıcı başı 200; dolunca 409 + açıklayıcı mesaj. |
+| 26 | i18n | ÇALIŞIYOR | TR/EN. |
+| 27 | Canlı mekân durumu | ÇALIŞIYOR | Açık/kapalı/tatil, canlı çarpan, teklif sayısı; "Kaydettiklerinden şu an fırsatı olan" vurgu kartı. |
+| 28 | Kişisel bağlam | ÇALIŞIYOR | Ziyaret sayısı (kartlı harcama + QR); ayrıntı mekân detayında. |
+| 29 | Mobil yerleşim | ÇALIŞIYOR | ≥ 44 px hedefler. |
+| 30 | Başlık hiyerarşisi | ÇALIŞIYOR | h1 (sayfa) → h2 (liste) → h3 (kart). |
+| 31 | API yetki/IDOR | ÇALIŞIYOR | Tüm işlemler oturum kullanıcısına kapsamlı (test). |
+| 32 | POST doğrulama | ÇALIŞIYOR | zod parametre + yalnız herkese açık bayi + oran sınırı + üst sınır. |
+
+**Kapanan bulgular (13/13):** 1 yetim sayfa · 2 "Profili Gör" · 3 hata = boş · 4 ekleme yolu yok · 5 iki ayrı önbellek · 6 silme a11y/geri al · 7 admin toast · 8 `layout` animasyonu · 9 i18n · 10 kullanılmayan bağlam · 11 ölü import/yanıltıcı hover · 12 başlık hiyerarşisi · 13 oran sınırı/üst sınır.
+
+**Kalanlar:** Ana sayfa şeridinin "Tümünü gör"/"Sayfasına Git" bağlantıları ana sayfa yüzeyinde (sahibine bildirildi). Favori mekân bildirimleri ve koleksiyonlar (eksik özellik 3, 5) yapılmadı — mekân bazlı bildirim tercihi için **ŞEMA İSTEĞİ**: `CustomerFavoriteDealer.notify Boolean @default(true)`.

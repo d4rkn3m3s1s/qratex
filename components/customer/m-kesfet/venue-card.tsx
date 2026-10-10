@@ -3,9 +3,10 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { m as Motion } from 'framer-motion';
-import { ChevronRight, History } from 'lucide-react';
+import { ChevronRight, History, Navigation, Phone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DURATION, EASE, listItem, useMotionPolicy } from '@/lib/motion';
+import { directionsLinks } from '@/lib/places/geo';
 import type { VenueSummaryDto } from '@/lib/places/types';
 import { venueHref } from './api';
 import { usePlacesCopy } from './copy';
@@ -28,7 +29,6 @@ export function VenueCard({
   headingLevel?: 'h2' | 'h3';
 }) {
   const { copy } = usePlacesCopy();
-  void copy;
   const policy = useMotionPolicy();
   const Heading = headingLevel;
   return (
@@ -61,6 +61,7 @@ export function VenueCard({
             <DistanceInline km={venue.distanceKm} />
           </div>
           <CategoryLine categories={venue.categories} />
+          {venue.address && <span className="qx-caption line-clamp-1 break-words text-fg-subtle">{venue.address}</span>}
           {(venue.liveBoost || venue.flashCount > 0 || venue.myVisits > 0) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {venue.liveBoost && <BoostChip boost={venue.liveBoost} />}
@@ -74,6 +75,7 @@ export function VenueCard({
             </div>
           )}
           {footer}
+          <VenueQuickActions venue={venue} />
         </div>
         <div className="flex shrink-0 flex-col items-end justify-between">
           <SaveButton dealerId={venue.dealerId} name={venue.name} saved={venue.isSaved} />
@@ -98,5 +100,30 @@ export function VenueListSkeleton({ count = 4 }: { count?: number }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Yol tarifi (koordinatla, adres metniyle değil) + ara — kartın gerilmiş bağlantısının üstünde. */
+function VenueQuickActions({ venue }: { venue: VenueSummaryDto }) {
+  const { copy } = usePlacesCopy();
+  const links = venue.latitude != null && venue.longitude != null ? directionsLinks(venue.latitude, venue.longitude) : null;
+  if (!links && !venue.phone) return null;
+  const cls =
+    'qx-small relative z-raised inline-flex min-h-11 items-center gap-1.5 rounded-control px-2 font-medium text-brand hover:bg-brand-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9';
+  return (
+    <div className="-ml-2 flex flex-wrap items-center gap-1">
+      {links && (
+        <a href={links.google} target="_blank" rel="noopener noreferrer" className={cls} aria-label={`${copy.directions}: ${venue.name}`}>
+          <Navigation aria-hidden className="h-4 w-4" />
+          {copy.directions}
+        </a>
+      )}
+      {venue.phone && (
+        <a href={`tel:${venue.phone.replace(/[^\d+]/g, '')}`} className={cls} aria-label={`${copy.call}: ${venue.name}`}>
+          <Phone aria-hidden className="h-4 w-4" />
+          {copy.call}
+        </a>
+      )}
+    </div>
   );
 }

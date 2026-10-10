@@ -296,3 +296,64 @@ Her iddia çağıran/çağrılan taraflar, `proxy.ts`, Prisma şeması ve ilgili
 - Kanıt: `app/api/admin/innovation/demo-scenario/route.ts:58-80` `runSeed: true` ile admin'in girdiği herhangi bir gerçek bayi için `isActive: true`, 30 dk geçerli "Senaryo: Mutlu saat %15" teklifi oluşturuyor. Model ayırıcı alan içermiyor (`prisma/schema.prisma:2693-2714`). Müşteri sorgusu yalnız `isActive` + tarih aralığı filtreliyor (`innovation/nearby/route.ts:35-40`). Aynı desen `app/api/admin/innovation/demo-package/route.ts:53-65` ("Demo: Mutlu saat %15") içinde de var. Tetikleyici UI: `app/admin/innovation/page.tsx:134-151` ("Plan + veri yaz", `:373`).
 - Yeniden üretim: Admin, İnovasyon sayfasında gerçek bir bayinin ID'siyle "Plan + veri yaz"a basar → 30 dakika boyunca o bayinin 50 km çevresindeki müşteriler `/customer/nearby` flash bölümünde bu bayinin adıyla "%15" teklif görür; başlık ayrıca radar `experienceHints` listesine de düşer (`radar/route.ts:79-88`, `:139`). Ayrıca o bayinin `DealerWeeklyBrief` kaydı ve `SegmentCampaignProposal` listesi demo verisiyle değişir (`demo-scenario/route.ts:85-107`).
 - Düzeltme notu: Etki, admin'in gerçek bir bayi üzerinde bilinçli olarak çalıştırmasına bağlı; üretimde ne sıklıkla kullanıldığı doğrulanmadı. Başlık "Senaryo:"/"Demo:" önekiyle kendini kısmen belli ediyor ve kodda flash teklif kullanma (redeem) akışı bulunmadığı için (`redemptionCount` yalnız `app/api/internal/inngest/dealer-flash-offer-expiry/route.ts:30`'da okunuyor) puan/ekonomi etkisi yok; zarar, müşterinin gerçek bayiden olmayan bir indirimi talep etmesi ve bayinin bilgisi dışında içeriğinin değişmesiyle sınırlı. Çözüm: `DealerFlashOffer.isDemo` (ve diğer seed modellerinde aynı bayrak) + müşteri sorgularında `isDemo: false` filtresi, ya da demo seed'i yalnız `isDemoTenant` olarak işaretli bayilerle sınırlamak.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/customer/nearby` emekli; içerik **Keşfet → Yakınımda** sekmesine taşındı (`/customer/places`, varsayılan sekme). Eski sayfa `legacyPlacesHref('nearby')` ile 308 yönlendiren sunucu koçanı. Ölü derin linkler (`?focus=`, `?dealerId=`) mekân detayına (`/customer/places/[dealerId]`, ayrı yüzey) gider; `?promo=` sponsorlu duyurunun mekânına, mekânı yoksa Fırsatlar sekmesine.
+
+**Yeni yapı:** sunucu bileşeni `app/customer/places/page.tsx` (yetki + modül/menü kapısı sunucuda, etkin sekmenin verisi sunucuda) → istemci adası `components/customer/m-kesfet/*`. Veri: `GET /api/customer/places/nearby` (defineRoute: yalnız CUSTOMER, zod, oran sınırı, Keşfet kapısı) → `lib/places/data.server.ts#getNearbyPlaces`. Saf modüller: `lib/places/{business-hours,categories,geo,ranking,query-schemas}.ts` (Jest: `__tests__/places/*`).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | ÇALIŞIYOR | `generateMetadata` (TR/EN "Keşfet"). |
+| 2 | "Konumu Güncelle" aksiyonu | ÇALIŞIYOR | Konum yokken "Konumumu kullan", varken konum yaşı + "Konumu güncelle" + "Konumu unut" (`location-panel.tsx`). |
+| 3 | Mobil başlık kartı | ÇALIŞIYOR | Tek `PageHeader` (mobilde de görünür); konum paneli başlığın altında. |
+| 4 | Mobil üst konum CTA'sı | ÇALIŞIYOR | Konum paneli tüm genişliklerde aynı, ≥ 44 px. |
+| 5 | İzin açıklama modalı | KALDIRILDI | Yerine satır içi açıklama kartı; düğme doğrudan izin ister (kullanıcı jesti korunur, ek modal sürtünmesi yok). |
+| 6 | Geolocation ile konum | ÇALIŞIYOR | Durum makinesi `idle/locating/ready/denied/unavailable/unsupported` (`use-coarse-location.ts`); izin önceden verilmişse sormadan tazeler. |
+| 7 | localStorage'da konum | ÇALIŞIYOR | ~110 m'ye yuvarlanmış, 24 saat; yaş göstergesi; eski 7 günlük ham GPS anahtarı silinir. |
+| 8 | "Konumu paylaşın" kartı | ÇALIŞIYOR | Açıklamalı kart (masaüstü + mobil aynı). |
+| 9 | Mesafe filtresi | ÇALIŞIYOR | 1/3/5/10/25 km çipleri (URL `?r=`); sunucu 0,5–50 km'ye kırpar (zod). Tuş başına istek yok. |
+| 10 | Kategori filtresi | ÇALIŞIYOR | Kontrollü sözlük (`lib/places/categories.ts`); çipler sonuçta gerçekten bulunan kategorilerden (URL `?cat=`). |
+| 11 | "Listeyi Yenile" | KALDIRILDI | React Query + `QueryState` "Tekrar dene" bunu karşılıyor; sonsuz iskelet kapandığı için kaçış düğmesine gerek kalmadı. |
+| 12 | Veri çekme | ÇALIŞIYOR | Yeni BFF; iptal (signal), önceki veriyi tutma, hata `QueryState` ile görünür. |
+| 13 | Flash teklifler | ÇALIŞIYOR (gösterim) | Fırsatlar sekmesinde: değer, tarihli geri sayım, mekân, "kasada belirt". Kişiye özel talep kodu → ŞEMA İSTEĞİ (aşağıda). |
+| 14 | Bölge temaları (ham ağırlık) | KALDIRILDI | Anlamsız ham sayı + bayi haftalık özetinden ticari istihbarat. Uç (`innovation/radar`) artık yalnız oturumlu müşteriye ve Keşfet kapısıyla açık. |
+| 15 | Deneyim ipuçları | KALDIRILDI | Flash başlıklarının kopyasıydı (SAHTE). |
+| 16 | "Öne çıkan 3 lezzet" | KALDIRILDI | Yanlış etiketli yedek; k-anonim "bölgende popüler" kalanlara yazıldı. |
+| 17 | Radar açıklama metni | ÇALIŞIYOR | Yazım düzeltildi ("özettir"); yüzeyde gösterilmiyor. |
+| 18 | AI Keşif Önerileri | KALDIRILDI | Konumla ilgisizdi, her filtrede LLM çağırıyordu; ilke "GET'te LLM yok". Kişisel öneriler `/customer/ai-insights`'ta. |
+| 19 | AI istatistik şeridi | KALDIRILDI | "Aciliyet" iç metrik, NaN hatası. |
+| 20 | Canlı happy hour şeridi | ÇALIŞIYOR | Mekâna özel çarpan kartta çip ("1,5× puan · 18:00'e kadar"); platform geneli ayrı bant ("Tüm Qratex mekânlarında"), hiçbir mekâna atfedilmez; "Puan fırsatı" filtresi. |
+| 21 | Ham koordinat | KALDIRILDI | Gizlilik; yerine konum yaşı. |
+| 22 | Yükleniyor iskeleti | ÇALIŞIYOR | Yalnız istek uçuşurken; konum kararı beklenirken gereksiz istek atılmaz. |
+| 23 | Konum hatası kartı | ÇALIŞIYOR | Reddedildi (iOS/Android rehberi), alınamadı, desteklenmiyor ayrı. |
+| 24 | Boş durum | ÇALIŞIYOR | Hata ≠ boş: filtreli boş ("Filtreleri temizle"), sonuçsuz ("Mesafeyi artır"), hata ayrı (`QueryState`). |
+| 25 | Leaflet/OSM harita | ÇALIŞIYOR | Lazy (`next/dynamic`, ssr:false); Liste/Harita görünümü (URL `?view=map`). |
+| 26 | Kullanıcı noktası | ÇALIŞIYOR | |
+| 27 | Pin + popup | ÇALIŞIYOR | Popup yerine pin → mekân detayı; pinlerin erişilebilir adı var, klavye Enter; canlı çarpanlı pin vurgulu + "×" rozeti. Emoji yok. |
+| 28 | Pin → liste | ÇALIŞIYOR | Pin doğrudan mekân detayını açar (kaydırma + vurgu yerine). |
+| 29 | Harita koyu tema | ÇALIŞIYOR | Koyu temada döşeme CSS filtresi. |
+| 30 | Logo/avatar | ÇALIŞIYOR | `VenueAvatar`: optimizasyonsuz + hata yedeği (baş harfler); kırık görsel yok. |
+| 31 | Ad + adres | ÇALIŞIYOR | |
+| 32 | Mesafe rozeti | ÇALIŞIYOR | Tek biçim (`formatDistance`) + yürüme süresi. |
+| 33 | Açık/Kapalı | ÇALIŞIYOR | Bayi saatleri + tatil modu, İstanbul saati; bilinmiyorsa rozet yok; "23:00'te kapanıyor", "Yarın 09:00'da açılıyor". |
+| 34 | Puan + yorum sayısı | ÇALIŞIYOR | Ekrandaki her mekân için güvenilir oy (kişi başı tek oy; işaretli/anonim/gölge-ban/demo hariç; QR + tüketim yorumu); eşik altı "Yeni". |
+| 35 | "Trend N" rozeti | KALDIRILDI | Ham skor kullanıcıya bilgi taşımıyordu. |
+| 36 | Kategori rozetleri | ÇALIŞIYOR | Yerelleştirilmiş satır. |
+| 37 | Yol tarifi | ÇALIŞIYOR | Koordinatla (adres metni değil); kartta ve mekân detayında. |
+| 38 | Hemen Ara | ÇALIŞIYOR | Telefon varsa kartta `tel:`. |
+| 39 | Detay / favori | ÇALIŞIYOR | Kalp her kartta (iyimser, geri al); kart → `/customer/places/[dealerId]`. Menü detay yüzeyinin işi. |
+| 40 | Derin linkler | ÇALIŞIYOR | `?focus=`/`?dealerId=` → mekân detayı; `?promo=` → sponsorun mekânı ya da Fırsatlar. |
+| 41 | Sıralama | ÇALIŞIYOR | Yakınlık / Puan (Bayes); konumsuzda puana göre. |
+| 42 | Arama | ÇALIŞIYOR | Ad araması, gecikmeli, URL `?q=`. |
+| 43 | Sayfalama | ÇALIŞIYOR | 20'şer, "Daha fazla göster", toplam sayı `aria-live`. |
+| 44 | Modül/menü kapısı | ÇALIŞIYOR | Sayfa ve tüm BFF uçları (menü `nearby` + `discovery`, rol bazlı); kapalıysa açıklayıcı ekran. |
+| 45 | i18n | ÇALIŞIYOR | TR/EN `copy.ts`; harita etiketleri dahil. |
+| 46 | Azaltılmış hareket | ÇALIŞIYOR | Sonsuz nabız yok, `motion-safe:animate-spin`, `useMotionPolicy`. |
+
+**Kapanan bulgular (19/19):** 1 sonsuz iskelet · 2 ölü derin linkler · 3 puan yalnız ilk 8 · 4 sahte açık/kapalı + saat dilimi · 5 her filtrede LLM (kart kaldırıldı) · 6 debounce/yarış (çip + React Query iptali) · 7 discovery tam tarama (yeni uç yalnız yarıçap kutusu + ekrandaki mekânlar; global sıralama Redis'li En iyiler'de) · 8 innovation uçları anonim (oturum + kapı + oran sınırı) · 9 radar rastgele 400 (enlem kutusu + demo/askıda hariç) · 10 global happy hour yanlış atıf · 11 flash: kişisel churn taslağı + demo/askıdaki bayi hariç (talep akışı → şema isteği) · 12 hata yutma · 13 bilgi mimarisi · 14 çıkmaz kartlar · 15 konum gizliliği · 16 mesafe sınırı · 17 görsel host · 18 dil/tip/yazım · 19 erişilebilirlik.
+
+**Kalanlar:** (a) Flash teklif "teklifi al" tek seferlik kod/QR + atomik kullanım sayacı: kullanıcı başı talep kaydı yok → **ŞEMA İSTEĞİ** `DealerFlashOfferClaim(id, offerId, userId, code, createdAt, usedAt?; @@unique([offerId, userId]))`. (b) Konumsuz modda şehir/semt seçimi yok (konumsuz göz atma puana göre listeler). (c) "Bölgende popüler" (k-anonim ürün listesi) yapılmadı. (d) Görsel doğrulama: dev server ve derleme bu dalgada yasak olduğundan headless Chrome ekran görüntüsüyle doğrulanmadı.

@@ -24,7 +24,7 @@ import { computeOpenState, parseBusinessHours } from './business-hours';
 import { categorizeDealer, type PlaceCategory, PLACE_CATEGORY_SLUGS } from './categories';
 import { boundingBox, distanceKm, isValidLatLng } from './geo';
 import { currentOrNextWindow, parseOffer } from './happy-hour-schedule';
-import { BAYES_PRIOR_WEIGHT, RANKING_MIN_REVIEWERS, bayesScore, displayRating, priorMean, rankDealers, type RatingAggregate } from './ranking';
+import { BAYES_PRIOR_WEIGHT, RANKING_MIN_REVIEWERS, bayesScore, conservativePrior, displayRating, rankDealers, type RatingAggregate } from './ranking';
 import type {
   FlashOfferDto,
   HappyHourDto,
@@ -62,6 +62,7 @@ const DEALER_SELECT = {
   image: true,
   businessLogo: true,
   address: true,
+  phone: true,
   latitude: true,
   longitude: true,
   businessHours: true,
@@ -362,6 +363,7 @@ async function buildSummaries(
       name: row.businessName as string,
       image: dealerImage(row),
       address: row.address ?? null,
+      phone: row.phone?.trim() || null,
       categories,
       latitude: row.latitude ?? null,
       longitude: row.longitude ?? null,
@@ -455,7 +457,7 @@ export async function getNearbyPlaces(
   if (sort === 'distance') {
     bases.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
   } else {
-    const prior = priorMean([...ratings.values()]);
+    const prior = conservativePrior([...ratings.values()]);
     const key = (id: string) => {
       const r = ratings.get(id);
       return r && r.n >= RANKING_MIN_REVIEWERS ? bayesScore(r.avg, r.n, prior) : -1;
@@ -617,7 +619,7 @@ export async function getTopPlaces(
   const categories = PLACE_CATEGORY_SLUGS.filter((s) => (counts.get(s) ?? 0) > 0).map((slug) => ({ slug, rankedCount: counts.get(slug) ?? 0 }));
   const category = opts.category && counts.has(opts.category) ? opts.category : null;
   const pool = category ? board.dealers.filter((d) => d.categories.includes(category)) : board.dealers;
-  const prior = priorMean(pool.map((d) => ({ dealerId: d.dealerId, n: d.n, avg: d.avg })));
+  const prior = conservativePrior(pool.map((d) => ({ dealerId: d.dealerId, n: d.n, avg: d.avg })));
   const ranked = rankDealers(pool.map((d) => ({ dealerId: d.dealerId, n: d.n, avg: d.avg })), { prior }).slice(0, TOP_LIMIT);
   const ids = ranked.map((r) => r.dealerId);
   const byId = new Map(pool.map((d) => [d.dealerId, d]));

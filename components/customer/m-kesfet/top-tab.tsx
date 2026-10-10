@@ -70,7 +70,7 @@ export function TopTab({ initial }: { initial: TopResponse | null }) {
             <Info aria-hidden className="h-4 w-4 text-brand" />
             {copy.topHow}
           </summary>
-          <p className="qx-small pb-2 text-fg-muted">{copy.topHowBody(data?.meta.minReviewers ?? 3, data?.meta.priorWeight ?? 5)}</p>
+          <p className="qx-small pb-2 text-fg-muted">{copy.topHowBody(data?.meta.minReviewers ?? 3, data?.meta.priorWeight ?? 10)}</p>
         </details>
       </div>
 

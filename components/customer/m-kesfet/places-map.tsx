@@ -68,10 +68,11 @@ export default function PlacesMap({ center, venues, onSelect, labels }: PlacesMa
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           maxZoom={19}
         />
+        {/* Kullanıcı noktası: SVG sunum özniteliği var() çözmez → sabit renk (iki temada da okunur). */}
         <CircleMarker
           center={[center.lat, center.lng]}
           radius={8}
-          pathOptions={{ color: 'hsl(var(--info))', fillColor: 'hsl(var(--info))', fillOpacity: 0.9, weight: 2 }}
+          pathOptions={{ color: '#ffffff', fillColor: '#2563eb', fillOpacity: 0.95, weight: 3 }}
         />
         {pins.map(({ v, icon }) => (
           <Marker

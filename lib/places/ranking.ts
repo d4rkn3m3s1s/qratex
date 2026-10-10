@@ -3,15 +3,16 @@
  *
  * Eski kategori liderliği ham ortalamaya göre sıralıyordu (3 yorumla 5,00 alan, 300 yorumla
  * 4,93 alanın önünde) ve eşitlikte sıra belirsizdi. Burada:
- *  - Bayes ortalaması (IMDb): skor = (n·R + m·C) / (n + m); C = aday kümesinin ağırlıklı
- *    ortalaması (yoksa 4), m = BAYES_PRIOR_WEIGHT.
+ *  - Bayes ortalaması (IMDb): skor = (n·R + m·C) / (n + m); m = BAYES_PRIOR_WEIGHT,
+ *    C = aday kümesinin ağırlıklı ortalaması ama EN FAZLA 4 (temkinli önsel): küçük bir kümede
+ *    C büyük mekânın puanına yaklaşınca 3 oyluk 5,00 yine öne geçerdi; tavan bunu engeller.
  *  - Girdi "güvenilir oy"dur: kişi başı tek oy (son puanı), anonim/işaretli/fraud/gölge-ban
- *    yorumlar sayılmaz (bkz. ratings.server.ts). Eşik: en az RANKING_MIN_REVIEWERS farklı kişi.
+ *    yorumlar sayılmaz (bkz. data.server.ts#loadTrustedRatings). Eşik: en az RANKING_MIN_REVIEWERS farklı kişi.
  *  - Eşitlik: n DESC, sonra dealerId ASC (kararlı). Aynı skora aynı sıra (yoğun sıralama).
  */
 
 export const RANKING_MIN_REVIEWERS = 3;
-export const BAYES_PRIOR_WEIGHT = 5;
+export const BAYES_PRIOR_WEIGHT = 10;
 export const DEFAULT_PRIOR = 4;
 
 export interface RatingAggregate {
@@ -39,6 +40,11 @@ export function priorMean(rows: readonly RatingAggregate[]): number {
   return count > 0 ? sum / count : DEFAULT_PRIOR;
 }
 
+/** Temkinli önsel: kümenin ortalaması, en fazla DEFAULT_PRIOR. */
+export function conservativePrior(rows: readonly RatingAggregate[]): number {
+  return Math.min(priorMean(rows), DEFAULT_PRIOR);
+}
+
 export function bayesScore(avg: number, n: number, prior: number, m: number = BAYES_PRIOR_WEIGHT): number {
   if (!(n > 0) || !Number.isFinite(avg)) return prior;
   return (n * avg + m * prior) / (n + m);
@@ -54,7 +60,7 @@ export function rankDealers(
 ): RankedDealer[] {
   const min = opts.minReviewers ?? RANKING_MIN_REVIEWERS;
   const eligible = rows.filter((r) => r.n >= min && Number.isFinite(r.avg));
-  const prior = opts.prior ?? priorMean(eligible);
+  const prior = opts.prior ?? conservativePrior(eligible);
   const scored = eligible.map((r) => ({
     ...r,
     score: Math.round(bayesScore(r.avg, r.n, prior, opts.m) * 1000) / 1000,

@@ -200,3 +200,46 @@ Yöntem: Kod salt okunur olarak baştan okundu (`page.tsx`, `app/api/happy-hour/
 | 2 | Doğrulanmamış çarpanla sınırsız puan | Doğrulandı (negatif çarpanla puan düşürme kısmı çürütüldü) |
 | 3 | Global kampanya puana uygulanmıyor | Doğrulandı |
 | 4 | Saat dilimi kayması | Doğrulandı (iki hesabın canlıda farklı sonuç vermesi kısmı çürütüldü) |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/customer/campaigns` emekli → **Keşfet → Fırsatlar** (`/customer/places?tab=deals`); `?proposal=` korunur ve "Sana özel" listesinde vurgulanır. Fırsatlar tek akış: mutlu saatler (canlı / bugün / bu hafta) + sezonluk etkinlikler (görev + ödül) + kısa süreli teklifler + kullanıcıya gelen kampanya mesajları. Veri: `GET /api/customer/places/deals` (defineRoute, CUSTOMER, Keşfet + `customer_campaigns` kapısı) → `lib/places/deals.server.ts`. Zamanlama adaptörü `lib/places/happy-hour-schedule.ts`'e taşındı (puanlamayla aynı `isHappyHourLive`, İstanbul duvar saati; mevcut Jest testi yeni yolda geçiyor). P0 dalgasının `POST /api/happy-hour` doğrulaması ve global çarpanın tüketime uygulanması (lib/consumption/service) yerinde doğrulandı.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | "Keşfet"; olmayan "katılım durumu" vaadi yok. |
+| 2 | Kampanya verisi | ÇALIŞIYOR | Paylaşılan tip (`lib/places/types.ts` `DealsResponse`); istemci yanıtın gerçekten döndürdüğü alanı okur. |
+| 3 | Yükleniyor | ÇALIŞIYOR | `QueryState` kart iskeleti, `aria-busy`. |
+| 4 | Hata durumu | ÇALIŞIYOR | HTTP hatası boş durum değil; tekrar dene. |
+| 5 | Hata metni | ÇALIŞIYOR | Admin önekli toast yok; sunucu mesajı. |
+| 6 | Hero | ÇALIŞIYOR | "Şimdi" kartı: en yüksek canlı çarpan büyük tipografiyle, kalan süre, mekân ya da "Tüm Qratex mekânlarında"; canlı yoksa sıradaki fırsat. |
+| 7 | Bilgi şeridi | ÇALIŞIYOR | "Yaklaşık" uyarısı kaldırıldı (saat hatası düzeldi); yerine çarpanın NEYE uygulandığı. |
+| 8 | "Şu an aktif" | ÇALIŞIYOR | Durum sunucu verisinden istemci saatinde hesaplanır (dakikalık tik, görünmezken durur). |
+| 9 | Aktif kart | ÇALIŞIYOR | Ad, çarpan, mekân (görsel + mekân detayına bağlantı), saat aralığı, tekrar günleri, kalan süre. |
+| 10 | Yaklaşan liste | ÇALIŞIYOR | "Bugün daha sonra" / "Bu hafta", başlangıç anına göre sıralı; canlı olan iki bölümde görünmez. |
+| 11 | Gün kısaltmaları | ÇALIŞIYOR | `Intl` ile kullanıcı dili ve saat dilimi; dizi olmayan değer çökertmez. |
+| 12 | Boş durum | ÇALIŞIYOR | Gerçekten hiçbir fırsat yoksa; kapsam filtresinde ayrı "bu kapsamda fırsat yok". |
+| 13 | Davet kartı | KALDIRILDI | Statik bağlantıydı; Davet ayrı yüzey (Ben → Davet, kayıtta mevcut). |
+| 14 | Giriş animasyonları | ÇALIŞIYOR | `QueryState` geçişi; ops yüzeyinde kart başına stagger yok (§4.2 kural 3). |
+| 15 | Sonsuz `animate-pulse` | KALDIRILDI | Sonsuz döngü yok; canlılık metin + renkle. |
+| 16 | Geri sayım | ÇALIŞIYOR | "Bitmesine 42 dk" / "Başlamasına …"; teklif ve etkinlikte `CountdownChip`. |
+| 17 | İşletmeye geçiş | ÇALIŞIYOR | Mekân detayına bağlantı + "Kartını göster". |
+| 18 | Sezonluk kampanya | ÇALIŞIYOR | Aynı akışta "Etkinlikler" (bkz. customer_event eki). |
+| 19 | Flaş teklifler | ÇALIŞIYOR | Yakın (15 km) + kaydedilen mekânlar; churn taslağı/demo/askıda/dolmuş hariç. |
+| 20 | Segment kampanya derin bağlantısı | KISMİ | "Sana özel" bölümü kullanıcının `Notification(type='campaign')` kayıtlarını listeler, `?proposal=` vurgular. Gönderim ucu hâlâ `/customer/campaigns` (proposal'sız) yolluyor ve nav yönlendirmesi sekmeyi düşürüyor → sahiplerine bildirildi. |
+| 21 | Filtre | ÇALIŞIYOR | Tümü · Yakınımda (≤ 10 km) · Kaydettiklerim (URL `?deal=`); platform geneli fırsat her kapsamda görünür. |
+| 22 | "Katılım durumu" | KALDIRILDI | Vaat metadata'dan çıktı; kampanya kazanç özeti kalanlarda. |
+| 23 | Otomatik yenileme | ÇALIŞIYOR | Dakikalık tik + odakta yeniden çekme. |
+| 24 | Saat dilimi | ÇALIŞIYOR | Puanlama ve gösterim aynı fonksiyon/saat dilimi. |
+| 25 | Global kampanyanın puana uygulanması | ÇALIŞIYOR | Tüketim servisi `OR [{dealerId}, {dealerId: null}]` (P0); kartta neye uygulandığı yazar. |
+| 26 | Modül kapatma | ÇALIŞIYOR | API (`customer_campaigns` rol bazlı) + sekmede açıklayıcı durum. |
+| 27 | Yetki | ÇALIŞIYOR | Yeni uç yalnız CUSTOMER. |
+| 28 | i18n | ÇALIŞIYOR | TR/EN, gün adları `Intl`. |
+| 29 | Kişiselleştirme | ÇALIŞIYOR | Kaydettiklerim filtresi + "Sana özel" mesajlar. |
+| 30 | Hatırlatıcı | KALDIRILDI (bu dalgada) | Abonelik tablosu yok → kalanlarda ŞEMA İSTEĞİ. |
+
+**Kapanan bulgular (10/10):** 1 veri sözleşmesi · 2 çarpan doğrulaması (P0, yerinde doğrulandı) · 3 global kampanya (P0, yerinde doğrulandı) · 4 saat dilimi · 5 push → boş sayfa (Sana özel listesi; bağlantının sekme/proposal taşıması sahiplerine bildirildi) · 6 hata yutma · 7 yaklaşan mantığı · 8 modül kapısı · 9 sonsuz pulse/aria · 10 `any`/sabit gün dizisi.
+
+**Kalanlar:** (a) `app/api/dealer/innovation/segment-proposals/[id]/send/route.ts` push `url`'i `/customer/places?tab=deals&proposal=<id>` olmalı (bayi yüzeyi). (b) `lib/navigation/registry.ts` `redirectFrom` sekme sorgusu taşımıyor: `/customer/campaigns` → `/customer/places` (Yakınımda) — nav sahibine bildirildi. (c) "Başlayınca haber ver" → **ŞEMA İSTEĞİ** `OfferReminder(userId, kind: 'happy_hour'|'seasonal', refId, remindAt, sentAt?; @@unique([userId, kind, refId]))`. (d) Kampanya kazanç özeti ("bu ay mutlu saatlerden +X puan") yapılmadı (defter `meta.happyHourId` ile mümkün; ayrı iş).

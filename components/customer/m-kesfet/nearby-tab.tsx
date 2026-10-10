@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
 import { List, Map as MapIcon, Search, Zap } from 'lucide-react';
@@ -56,16 +56,25 @@ export function NearbyTab({
   const view: 'list' | 'map' = url.get('view') === 'map' && coords ? 'map' : 'list';
   const qUrl = url.get('q') ?? '';
   const [qInput, setQInput] = useState(qUrl);
+  const writtenQ = useRef(qUrl);
 
+  // URL dışarıdan değişirse (filtreleri temizle, geri tuşu) kutuyu eşitle; kendi yazdığımızı geri yazma.
   useEffect(() => {
-    setQInput(qUrl);
+    if (qUrl !== writtenQ.current) {
+      writtenQ.current = qUrl;
+      setQInput(qUrl);
+    }
   }, [qUrl]);
   useEffect(() => {
     const id = window.setTimeout(() => {
-      if (qInput.trim() !== qUrl) url.set({ q: qInput.trim() || null });
+      const next = qInput.trim();
+      if (next !== writtenQ.current) {
+        writtenQ.current = next;
+        url.set({ q: next || null });
+      }
     }, 350);
     return () => window.clearTimeout(id);
-  }, [qInput, qUrl, url]);
+  }, [qInput, url]);
 
   const params: NearbyParams = useMemo(
     () => ({ coords, radius, category, q: qUrl.trim(), open: flags.includes('open'), boost: flags.includes('boost'), sort }),

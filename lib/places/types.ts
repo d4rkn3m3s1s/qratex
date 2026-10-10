@@ -24,6 +24,7 @@ export interface VenueSummaryDto {
   name: string;
   image: string | null;
   address: string | null;
+  phone: string | null;
   categories: PlaceCategory[];
   latitude: number | null;
   longitude: number | null;
