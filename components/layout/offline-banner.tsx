@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { usePWA } from '@/hooks/use-pwa';
+import { useBareChrome } from '@/lib/pwa/bare-chrome';
 
 /**
  * Çevrimdışı olunduğunda ekranın altında sabit bir uyarı şeridi gösterir.
@@ -15,8 +16,11 @@ export function OfflineBanner() {
   // Hidrasyon uyumsuzluğunu önlemek için yalnızca mount sonrası göster.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // Çevrimdışı yedek sayfası kendi durumunu gösterir (aynı mesaj iki kez çıkmasın); masa
+  // sinyali sayfası kendi kuyruk/bağlantı durumunu gösterir.
+  const bare = useBareChrome();
 
-  if (!mounted || isOnline) return null;
+  if (!mounted || isOnline || bare !== false) return null;
 
   return (
     <div

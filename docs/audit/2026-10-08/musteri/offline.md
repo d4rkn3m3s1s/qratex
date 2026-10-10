@@ -201,3 +201,44 @@ Her iki iddia da `public/sw.js`'in tarayıcıda **aktif** olduğunu varsayıyor.
 ### Yeni öneri: SW kaydını bilinçli olarak ya düzeltin ya da kaldırın
 - **Seçenek A (önerilen, çevrimdışı deneyim isteniyorsa):** `next-pwa@5.6.0` App Router'ı desteklemiyor. App Router uyumlu bir halefe geçin (`@ducanh2912/next-pwa` ya da Serwist). Kayıt `main-app` tarafında yapılır. Push dinleyicileri ana SW'ye taşınmalı (`customWorkerDir` / `importScripts("/push-sw.js")`) ve `use-push-notifications.ts:21` artık ayrı bir script kaydetmemeli, `navigator.serviceWorker.ready` kullanmalı. Aynı `scope: "/"` için iki farklı script kaydedilirse her kayıt öncekinin yerine geçer: push aboneliği ya da önbellek/fallback rastgele devre dışı kalır. Yayına almadan önce yukarıdaki İddia 1 ve İddia 2 düzeltmeleri bitmiş olmalı.
 - **Seçenek B (çevrimdışı deneyim öncelikli değilse):** `withPWA` sarmalayıcısını kaldırın ya da `disable: true` yapın. Bu ekran ve onu "çalışıyor" gibi gösteren dokümantasyon bir yanılgı kaynağı olmaktan çıkar. Build'de üretilen ama hiç kullanılmayan 126 KB'lık `sw.js` ile precache listesi de ortadan kalkar.
+
+---
+
+## Uygulama (Dalga 2)
+
+> Yüzey sahibi: `p-kart-masa-offline`. **Önemli tasarım kararı:** SW kaydı artık panel kabuklarında yapılıyor (P0-37) ama `config/pwa.js` rota chunk'larını ön belleğe ALMIYOR (yalnız uygulama kabuğu). Kullanıcı `/offline`'ı hiç açmadıysa sayfanın JS'i cihazda yoktur → bir React adası çevrimdışıyken hidrasyona giremez. Bu yüzden sayfa statik (`force-static`) işaretleme + HTML'e gömülü küçük bir betikle çalışır (`components/customer/p-kart-masa-offline/offline/offline-document.ts`); içerik `dangerouslySetInnerHTML` kabında olduğu için hidrasyon betiğin değişikliklerine dokunmaz. Tüm metin/sabitler sunucuda üretilir; kullanıcı verisi (kart sahibi adı) yalnız `textContent` ile yazılır. Testler: `__tests__/customer/offline-fallback.test.ts` (9 test; betik DOM taklidiyle çalıştırılır). Görsel doğrulama: Tailwind CLI + headless Chrome, 375 px, açık/koyu.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | SW belge fallback'i | ÇALIŞIYOR | Kayıt panel kabuklarında (P0-37); fallback `/offline` ön bellekte. |
+| 2 | Tamamen statik render | ÇALIŞIYOR | `force-static`, veri çekmez. |
+| 3 | Sayfa başlığı | ÇALIŞIYOR | `title: 'Çevrimdışısınız'` — marka şablondan, tekrar yok. |
+| 4 | noindex | ÇALIŞIYOR | |
+| 5 | İkon rozeti | ÇALIŞIYOR | Satır içi SVG "sinyal aranıyor" görseli (ağ gerektirmez). |
+| 6 | Başlık (h1) | ÇALIŞIYOR | |
+| 7 | Açıklama metni | ÇALIŞIYOR | Bağlama göre (kart / masa QR'ı / masa sinyali / cüzdan / genel); söz tutulur (otomatik açılış). |
+| 8 | "Yeniden dene" | ÇALIŞIYOR | Bağlantı yoklaması (HEAD `/manifest.json`, 4 sn) → ASIL adres yeniden yüklenir (QR/kart adresi kaybolmaz); doğrudan `/offline` açıldıysa ana sayfa. Ayrı "Ana sayfa" bağlantısı. |
+| 9 | Tema uyumu | ÇALIŞIYOR | Rol token'ları; koyu temada doğrulandı. |
+| 10 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun, ≥ 44 px hedefler. |
+| 11 | Global çevrimdışı şeridi çakışması | ÇALIŞIYOR | `<html data-qx-bare>` → şerit gizlenir (`lib/pwa/bare-chrome`). |
+| 12 | Kurulum bandı | ÇALIŞIYOR | Gizlenir. |
+| 13 | Sohbet balonu | ÇALIŞIYOR | Yüklenmez (chunk isteği de yok). |
+| 14 | Oturum/analitik arka plan istekleri | ÇALIŞIYOR | Kök sağlayıcı zinciri (çoklu kök layout gerektirir) değişmedi; hidrasyon olursa istekler sessizce başarısız olur, zararsız. Chunk yoksa hiç çalışmaz. |
+| 15 | Bağlantı gelince otomatik yenileme | ÇALIŞIYOR | `online` + görünürlük + artan aralıklı yoklama (5→10→20→30 sn), görsel geri sayım. |
+| 16 | Önbellekteki sayfalar | ÇALIŞIYOR | SW `others` önbelleğindeki bilinen sayfalar (en çok 8) bağlantı olarak. |
+| 17 | Çevrimdışı sadakat kartı | ÇALIŞIYOR | Yalnız son doğrulanmış oturum sahibinin Kartım anlık görüntüsü (≤ 30 gün): QR (hazır görsel), ad, maskeli numara, "… itibarıyla"; "Kasada göster" tam ekranı (Esc, odak, Wake Lock). |
+| 18 | Çevrimdışı geri bildirim kuyruğu | ÇALIŞIYOR | Masa sinyali kuyruğu (bkz. table-signal) + bu sayfada bekleyen sayısı. QR geri bildirim formunun kuyruğu `/feedback` yüzeyinin işi. |
+| 19 | Marka kimliği | ÇALIŞIYOR | Logo işareti + Qratex sözcüğü + marka tonları (ağ gerektirmeyen). |
+| 20 | Motion / azaltılmış hareket | ÇALIŞIYOR | Halkalar yalnız yoklama sırasında 2 tur (durum anlatır, sonsuz döngü yok); `prefers-reduced-motion` ve `html.reduce-animations`'ta kapalı. |
+| 21 | Bağlantı durumu duyurusu | ÇALIŞIYOR | `role=status` canlı bölge yalnız durum değişiminde; saniye sayacı `aria-hidden`. |
+| 22 | Çok dillilik | ÇALIŞIYOR | Cihazdaki dil tercihi (`qratex-locale`) TR/EN. |
+| 23 | Çevrimdışı olay telemetrisi | ÇALIŞIYOR | Gösterim günlüğü cihazda; bağlantı gelince `SessionDeviceGuard` rızaya bağlı `offline_fallback_shown` gönderir (kart/QR kodları maskeli). |
+
+### Kapanan bulgular (10/10)
+1 (yeniden dene = yoklama + asıl adres) · **2 (paylaşılan cihaz):** `SessionDeviceGuard` (providers) — oturum açan kullanıcı değişince kişisel SW önbellekleri (`others`, `start-url`, `next-data`, `static-data-assets`) ve diğer kullanıcıların kart görüntüleri silinir; çevrimiçiyken sunucu kesin "oturum yok" derse (çıkış) hepsi silinir; çevrimdışı sayfa yalnız son oturum sahibinin kartını gösterir · 3 (otomatik toparlanma + canlı bölge) · 4 (çift mesaj / yersiz global öğeler) · 5 (marka + hafif görsel, 3B yok) · 6 (son kart, önbellekteki sayfalar, bekleyen sinyaller) · 7 (başlık) · 8 (eylemler odak halkalı, Button görünümünde) · 9 (telemetri) · 10 (yalnız tema token'ları — kabul, dokümante).
+
+### Kalanlar
+- `config/pwa.js` `others` kuralı oturumlu panel HTML'ini hâlâ 24 sa önbelleğe alıyor (PWA/perf sahibinin dosyası); risk kullanıcı değişimi/çıkış temizliğiyle azaltıldı, kural daraltılmadı.
+- Eksik özellik 4 (çevrimdışı ödülsüz mini oyun) KALDIRILDI: ek chunk'ların ön belleğe alınmasını gerektirir; yedek sayfanın "en hafif sayfa" ilkesine aykırı.

@@ -8,6 +8,7 @@ import { MotionPolicyConfig } from '@/lib/motion/motion-policy-config';
 import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
 import { OfflineBanner } from '@/components/layout/offline-banner';
+import { SessionDeviceGuard } from '@/components/customer/p-kart-masa-offline/offline/session-device-guard';
 import { applyRuntimeThemeToRoot, type RuntimeThemeHex } from '@/lib/apply-runtime-theme';
 import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, type ThemePresetId } from '@/lib/theme-presets';
 import {
@@ -244,6 +245,9 @@ export function Providers({ children, initialThemeSettings }: ProvidersProps) {
                     {children}
                     <InstallBanner />
                     <OfflineBanner />
+                    {/* Paylaşılan cihaz: kullanıcı değişince/çıkışta kişisel SW önbellekleri ve
+                        çevrimdışı kart görüntüleri silinir (çevrimdışı rapor bulgu 2). */}
+                    <SessionDeviceGuard />
                   </LazyMotion>
                 </ConfettiProvider>
               </ThemeColorsProvider>

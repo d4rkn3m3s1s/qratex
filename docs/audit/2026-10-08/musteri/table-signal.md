@@ -213,3 +213,66 @@ Her iddia, çağıran ve çağrılan taraflar baştan okunarak çürütülmeye �
 - Kod: `route.ts:56-58,67` oturum açık `CUSTOMER` için `customerId`'yi her zaman, sessizce yazıyor; istemcide (`table-signal-client.tsx:33-40`) bunu kapatacak bir seçenek yok. Serbest metin `note` (400 karakter) kişisel veri içerebilir ve kişisel veri yazmama uyarısı yok. Dolayısıyla "toplanmaz" cümlesi oturum açık kullanıcı için yanlış, "isteğe bağlı" ifadesi de gerçek bir seçim olmadığı için yanıltıcı.
 - Etkiyi sınırlayan gerçekler (çürütme denemesinden): `customerId` hiçbir okuma yolunda bayiye dönmüyor (`table-pulses/route.ts:38-45` select'inde yok; `table-performance` da seçmiyor); hesap silinince `onDelete: SetNull` (`prisma/schema.prisma:2686`). Yani bugün bayiye kimlik sızıntısı yok; sorun aydınlatma metninin kodla çelişmesi ve rıza/vazgeçme kontrolünün olmaması. Hukuki risk değerlendirmesi kod okumasının dışında.
 - **Öneri:** Varsayılan anonim gönderim; oturum açıksa açıkça işaretlenen "Hesabımla ilişkilendir" anahtarı (varsayılan kapalı) ve yalnızca işaretliyse `customerId` yazılması; not alanına "Kişisel bilgi yazmayın" ipucu; beyan metninin gerçek davranışa göre yeniden yazılması ve gizlilik politikasına bağlantı.
+
+---
+
+## Uygulama (Dalga 2)
+
+> Yüzey sahibi: `p-kart-masa-offline`. Sayfa sunucu bileşeni (`app/table-signal/page.tsx`): işletme, QR yaşam döngüsü, özellik bayrağı ve vaka kuyruğunun açıklığı ilk render'da çözülür. Etkileşim tek istemci adası: `components/customer/p-kart-masa-offline/table/table-signal-experience.tsx` (+ `signal-client.ts` gönderim/kuyruk, `copy.ts` TR/EN, `venue-badge.tsx`). Sunucu: `lib/table-signal/{kinds,venue,service,status-key}.ts`, `POST /api/innovation/table-pulse` (defineRoute, public) ve yeni `GET /api/innovation/table-pulse/status`. Masa sinyali artık bayinin **Gelen Kutusu › Vakalar** kuyruğuna (`Incident`) düşer. Testler: `__tests__/api/table-signal-route.test.ts` (17 test).
+
+**Sinyal türleri:** `OK` (yalnız `TablePulse`), `CONCERN` (neden çipleri + not → `TablePulse` + `Incident(type=table_signal)`), `REQUEST` (garson / hesap → yalnız `Incident(type=table_request)`; duygu kaydı olmadığı için sağlık skoru 2.0'daki CONCERN oranını bozmaz). Puan yok (bilinçli).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | ÇALIŞIYOR | `robots: noindex`, canonical kök mirası kaldırıldı. |
+| 2 | Yükleniyor durumu | ÇALIŞIYOR | `loading.tsx` statik iskelet + `role=status`. |
+| 3 | URL parametreleri | ÇALIŞIYOR | `qr`/`code` (önerilen), eski `dealerId`+`qrCodeId`, `table`, `kiosk=1`. |
+| 4 | Bağlantı eksik kartı | ÇALIŞIYOR | Durum ekranı + "QR okut" / "Ana sayfa". |
+| 5 | Geçersiz işletme | ÇALIŞIYOR | İlk render'da "İşletme bulunamadı"; askıya alınmış/anonim bayi de reddedilir. |
+| 6 | Başlık bloğu | ÇALIŞIYOR | Gizlilik beyanı gerçek davranışla uyumlu. |
+| 7 | İşletme kimliği | ÇALIŞIYOR | Logo/baş harf + ad + şube/QR etiketi. |
+| 8 | Masa alanı | ÇALIŞIYOR | `maxLength=32`, QR'dan gelirse çip + "Değiştir"; sunucuda normalize. |
+| 9 | Kısa not | ÇALIŞIYOR | `Textarea` + sayaç + "kişisel bilgi yazmayın"; sunucu telefon/e-postayı maskeler; bayi vakasında görünür. |
+| 10 | "Her şey yolunda" | ÇALIŞIYOR | |
+| 11 | "Bir şey var" | ÇALIŞIYOR | İki adımlı: alttan açılan sayfa, neden çipleri (çoklu), not, isteğe bağlı hesap. |
+| 12 | Gönderim kilidi | ÇALIŞIYOR | |
+| 13 | Başarı geri bildirimi | ÇALIŞIYOR | Kalıcı durum kartı (toast değil), odak başlığa. |
+| 14 | API hata mesajları | ÇALIŞIYOR | Makine-okur kodlar (`QR_INACTIVE`, `RATE_LIMITED`, …) istemcide TR/EN çevrilir. |
+| 15 | Ağ/sunucu hatası | ÇALIŞIYOR | Merkezi catch (503 retryable); ağ düşerse sinyal kuyruğa alınır. |
+| 16 | İstemci `dealerId` boş kontrolü | KALDIRILDI | Ölü kod; giriş sunucuda çözülüyor. |
+| 17 | Alt bilgi metni | ÇALIŞIYOR | Doğru beyan, en az 12 px. |
+| 18 | `customerId` eşlemesi | ÇALIŞIYOR | Varsayılan ANONİM; yalnız açık "Hesabımla ilişkilendir" anahtarı + doğrulanmış müşteri oturumu. |
+| 19 | Özellik bayrağı | ÇALIŞIYOR | Sayfa bilir ("Masa sinyali kapalı" + QR verilmişse geri bildirime köprü). |
+| 20 | QR sahiplik + yaşam döngüsü | ÇALIŞIYOR | Pasif/süresi dolmuş/iptal/arşivli QR reddedilir (sayfa ve uç aynı çözücü). |
+| 21 | Bayi doğrulaması | ÇALIŞIYOR | |
+| 22 | Kötüye kullanım / rate limit | ÇALIŞIYOR | IP 8/10 dk + IP×işletme 4/10 dk + aynı masa+tür 3 dk tekilleştirme + `Idempotency-Key`. |
+| 23 | Ekibe anlık bildirim | ÇALIŞIYOR | Vaka + bayi ve aktif personele `Notification` + web push (`after()`). |
+| 24 | Misafir notunun bayiye ulaşması | ÇALIŞIYOR | Vaka açıklamasında (Gelen Kutusu › Vakalar). |
+| 25 | Kapanış döngüsü | ÇALIŞIYOR | Vaka "çözüldü" olunca bağlı `TablePulse.resolvedAt` dolar (`PATCH /api/dealer/incidents/[id]` + durum ucu, idempotent) → sağlık skoru kapanış bonusu artık gerçek. |
+| 26 | Misafire geri dönüş | ÇALIŞIYOR | İletildi → Ekip ilgileniyor → Çözüldü (imzalı, 6 sa geçerli anahtar; 15 sn'de bir, yalnız görünürken). |
+| 27 | Neden çipleri | ÇALIŞIYOR | `Incident.metadata.reasons` + başlıkta okunur metin. |
+| 28 | Tam geri bildirime köprü | ÇALIŞIYOR | OK sonrası ve çözülen sorundan sonra `/feedback/<kod>` + puan matrisindeki gerçek taban puan. |
+| 29 | Tekrar gönderim engeli | ÇALIŞIYOR | Bkz. #22; yinelenen istek "Az önce bildirdiniz; ekip haberdar" ve mevcut takip. |
+| 30 | Açık/koyu tema | ÇALIŞIYOR | Rol token'ları. |
+| 31 | Mobil yerleşim | ÇALIŞIYOR | Başparmak bölgesinde büyük kartlar, ≥ 44 px. |
+| 32 | Kontrast / tipografi | ÇALIŞIYOR | `success/warning-subtle` + `text-fg`; en küçük metin 12 px. |
+| 33 | Ekran okuyucu sonucu | ÇALIŞIYOR | `announce`, `role=status/alert`, adım çubuğu `aria-current`. |
+| 34 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`: yalnız opaklık; konfeti/3B yok. |
+| 35 | Çevrimdışı dayanıklılık | ÇALIŞIYOR | `localStorage` kuyruğu (≤ 5, 30 dk), `online` olayında ve sayfa yeniden açılınca aynı anahtarla gönderim; "iletildi" denmez, "bu cihazda bekliyor" denir. |
+| 36 | Telemetri | ÇALIŞIYOR | `table_signal_viewed/sent/bridge_clicked` (rızaya bağlı `track`). |
+| 37 | Global sohbet balonu | ÇALIŞIYOR | Bu sayfada yüklenmez (`lib/pwa/bare-chrome`); kurulum bandı da gizli. |
+| 38 | Dil seçimi | ÇALIŞIYOR | Sayfada TR/EN anahtarı (uygulama dil tercihine yazılır). |
+| 39 | Oyunlaştırma | ÇALIŞIYOR (bilinçli yokluk) | Sinyal ödüllendirilmez; puan yalnız köprülenen geri bildirimde. |
+
+Eksik özellikler: 1 canlı durum takibi ✓ · 2 neden çipleri + iki adım ✓ · 3 işletme kimliği ✓ ("ortalama yanıt süresi" rozeti yapılmadı — vaka yanıt süresi verisi birikince) · 4 geri bildirime köprü ✓ · 5 çevrimdışı kuyruk ✓ · 6 kiosk modu (`?kiosk=1`: 8 sn'de kendini sıfırlar, takip/hesap/köprü yok) ✓.
+
+### Kapanan bulgular (11/11)
+1 (rate limit, QR'a bağlı giriş, tekilleştirme) · 2 (kapalı döngü: vaka + bildirim + kapanış + misafir durumu) · 3 (hata yönetimi + kuyruk + idempotency) · 4 (varsayılan anonim + açık rıza + doğru beyan + not maskesi) · 5 (işletme kimliği, durum kartı, tekrar engeli) · 6 (iki adımlı CONCERN + neden çipleri) · 7 (kodlu hatalar, TR/EN, `maxLength`) · 8 (bayrak + QR yaşam döngüsü ilk render'da) · 9 (kontrast + 12 px + canlı bölge) · 10 (noindex + sohbet balonu yok) · 11 (telemetri).
+
+### Kalanlar (sahiplik dışı)
+- `/dealer/innovation` bağlantı üreteci hâlâ `?dealerId=` veriyor (eski giriş çalışıyor); `?qr=<QR kodu>&table=` üretmeli (bayi yüzeyi).
+- Bayi Vakalar sayfasının tür etiketi haritasında `table_signal` / `table_request` yok (başlık okunur, tür ham görünür) → bayi Gelen Kutusu ajanı. `/staff` için canlı "açık masa sinyalleri" kuyruğu personel yüzeyinin işi (bildirim gidiyor).
+- Sağlık skoru 2.0'da tekilleştirme/en az örneklem eşiği (`lib/dealer-health-v2.ts`) ve `TablePulse` 90 günlük saklama (db-cleanup cron) yapılmadı.
+- **ŞEMA İSTEĞİ:** `TablePulse.reason String[]` (şimdi `Incident.metadata.reasons`), `acknowledgedAt`, `ipHash` (denetim), `@@index([dealerId, resolvedAt])`.

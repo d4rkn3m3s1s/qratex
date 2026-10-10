@@ -1,136 +1,72 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+/**
+ * POST /api/cards/[token]/activate — kartı oturumdaki müşteriye bağla (tek seferlik).
+ *
+ * Eski uç (rapor B3, B10): çıplak `getServerSession` (token-replay/oturum sürümü denetimi yok),
+ * rate limit yok, ham `x-forwarded-for` denetim kaydında, yetim kartta sonsuz "başkasına bağlı".
+ * Şimdi: `defineRoute` + `requireAuth(['CUSTOMER'])` + kullanıcı başına 10/dk; mantık
+ * lib/cards/claim.ts'de (koşullu yazma, yetim kartın serbest bırakılması, denetim kaydı).
+ *
+ * Hata kodları geriye uyumlu (Tara yüzeyi components/customer/m-tara/resolve-client.ts okur):
+ * CARD_NOT_FOUND 404 · CARD_BLOCKED 403 · ALREADY_YOURS 400 · ALREADY_ACTIVATED 409.
+ */
+import { z } from 'zod';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
+import { getUserAgent } from '@/lib/request-metadata';
+import { CARD_TOKEN_PATTERN } from '@/lib/qr-resolve';
+import { CardClaimError, claimCard, type ClaimErrorCode } from '@/lib/cards/claim';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * POST /api/cards/[token]/activate
- * Kartı mevcut kullanıcıya bağla (tek seferlik aktivasyon)
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Giriş yapmanız gerekiyor', code: 'UNAUTHORIZED' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+const CLAIM_ERRORS: Record<ClaimErrorCode, { message: string; status: number }> = {
+  CARD_NOT_FOUND: { message: 'Kart bulunamadı.', status: 404 },
+  CARD_BLOCKED: { message: 'Bu kart kullanıma kapalı.', status: 403 },
+  ALREADY_YOURS: { message: 'Bu kart zaten sana bağlı.', status: 400 },
+  ALREADY_ACTIVATED: { message: 'Bu kart başka bir üyeye bağlı.', status: 409 },
+};
 
-    // Sadece CUSTOMER rolü kart aktive edebilir
-    if (session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Sadece müşteriler kart aktive edebilir', code: 'FORBIDDEN' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+export const POST = defineRoute(
+  {
+    name: 'cards.activate',
+    roles: ['CUSTOMER'],
+    params: z.object({ token: z.string().regex(CARD_TOKEN_PATTERN) }),
+    rateLimit: { max: 10, windowMs: 60_000, by: 'user' },
+  },
+  async ({ params, user, ip, request }) => {
+    try {
+      const result = await prisma.$transaction((tx) =>
+        claimCard(tx, {
+          token: params.token,
+          userId: user.id,
+          ipAddress: ip,
+          userAgent: getUserAgent(request) || null,
+        })
+      );
 
-    const { token } = await params;
+      await prisma.analyticsEvent
+        .create({
+          data: {
+            userId: user.id,
+            event: 'card_activated',
+            category: 'card',
+            data: { cardId: result.id, released: result.released },
+          },
+        })
+        .catch(() => undefined);
 
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Token gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    // Transaction ile atomik işlem
-    const result = await prisma.$transaction(async (tx) => {
-      // Kartı bul
-      const card = await tx.physicalCard.findUnique({
-        where: { token },
-        select: {
-          id: true,
-          status: true,
-          customerId: true,
-          blockedAt: true,
-          blockReason: true,
+      return ok(
+        {
+          message: 'Kart başarıyla aktive edildi!',
+          card: { id: result.id, status: result.status, activatedAt: result.activatedAt },
         },
-      });
-
-      if (!card) {
-        throw new Error('CARD_NOT_FOUND');
+        { legacySpread: true }
+      );
+    } catch (err) {
+      if (err instanceof CardClaimError) {
+        const e = CLAIM_ERRORS[err.code];
+        throw new ApiError(err.code, e.message, { status: e.status });
       }
-
-      // Bloklu kart kontrolü
-      if (card.status === 'BLOCKED') {
-        throw new Error('CARD_BLOCKED');
-      }
-
-      // Zaten aktive edilmiş mi?
-      if (card.status === 'ACTIVATED') {
-        // Aynı kullanıcıya mı bağlı?
-        if (card.customerId === session.user.id) {
-          throw new Error('ALREADY_YOURS');
-        }
-        throw new Error('ALREADY_ACTIVATED');
-      }
-
-      // Kartı aktive et — KOŞULLU yazma: aynı anda iki aktivasyon gelirse yalnız biri kazanır
-      // (eski `update({ where: { id } })` ikinci isteğin kartı kendine geçirmesine izin veriyordu).
-      const claimed = await tx.physicalCard.updateMany({
-        where: { id: card.id, status: card.status, customerId: card.customerId, archivedAt: null },
-        data: {
-          status: 'ACTIVATED',
-          customerId: session.user.id,
-          activatedAt: new Date(),
-        },
-      });
-      if (claimed.count !== 1) {
-        throw new Error('ALREADY_ACTIVATED');
-      }
-      const activatedCard = await tx.physicalCard.findUniqueOrThrow({
-        where: { id: card.id },
-        select: { id: true, status: true, activatedAt: true },
-      });
-
-      // Audit log
-      await tx.cardAuditLog.create({
-        data: {
-          cardId: card.id,
-          userId: session.user.id,
-          action: 'ACTIVATED',
-          // KVKK: denetim kaydında e-posta değil kullanıcı id'si (userId alanı) yeterli.
-          metadata: { via: 'self_activation' },
-          ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
-          userAgent: request.headers.get('user-agent') || null,
-        },
-      });
-
-      return activatedCard;
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Kart başarıyla aktive edildi!',
-      card: {
-        id: result.id,
-        status: result.status,
-        activatedAt: result.activatedAt,
-      },
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Error activating card:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    // Özel hata mesajları
-    const errorResponses: Record<string, { message: string; status: number }> = {
-      CARD_NOT_FOUND: { message: 'Kart bulunamadı', status: 404 },
-      CARD_BLOCKED: { message: 'Bu kart bloklanmış', status: 403 },
-      ALREADY_YOURS: { message: 'Bu kart zaten size bağlı', status: 400 },
-      ALREADY_ACTIVATED: { message: 'Bu kart başka bir kullanıcıya bağlı', status: 409 },
-    };
-
-    const errorResponse = errorResponses[errorMessage];
-    if (errorResponse) {
-      return NextResponse.json(
-        { error: errorResponse.message, code: errorMessage }, { status: errorResponse.status , headers: PRIVATE_NO_STORE_HEADERS });
+      throw err;
     }
-
-    return NextResponse.json(
-      { error: 'Kart aktive edilemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
-}
+);

@@ -228,3 +228,68 @@ Her iddia kod baştan okunarak çürütülmeye çalışıldı (sayfa, çağrıla
 - **Yeniden üretim:** Kayıp ya da fotoğraflanmış fiziksel kart veya kasada gösterilen Wallet QR'ı → herhangi bir telefonla okutulur → oturumsuz `GET /api/cards/<token>` sahibin tam adını, profil fotoğrafı URL'sini (OAuth'ta gerçek yüz fotoğrafı) ve iç kullanıcı kimliğini döner. Token döndürülmediği için erişim kalıcı.
 - **Çürütmeye karşı notlar:** Token nanoid olduğundan tahmin edilemez; sızıntı yalnızca QR'ı/linki görenle sınırlı. Ad zaten Wallet kartının başlığında görünüyor (`lib/wallet.ts:299-301`), bu yüzden asıl fazlalık **fotoğraf + `customer.id`**. `blockReason` kısmı zayıf: admin arayüzü sabit metin gönderiyor (`cards-client.tsx:308`, `[id]/route.ts:119`) ve sayfa bunu göstermiyor; serbest metin yalnızca doğrudan API çağrısıyla girilebiliyor.
 - **Öneri:** Uç, oturuma duyarlı bir görünüm modeli dönmeli. Sahibe tam veri, diğerlerine `isMine: false` ve maskeli ad ("F*** U.") verilmeli; `id`, `image` ve `blockReason` ise yalnız sahip/admin için olmalı. `isOwnCard` karşılaştırması sunucuya taşınmalı (`isMine` bayrağı) ki istemci `customer.id`'ye ihtiyaç duymasın.
+
+---
+
+## Uygulama (Dalga 2)
+
+> Yüzey sahibi: `p-kart-masa-offline`. Sayfa sunucu bileşeni olarak yeniden yazıldı (`app/c/[token]/page.tsx` + `_server/card-page.ts`); etkileşim üç küçük istemci adasında (`components/customer/p-kart-masa-offline/card/`: `card-claim.tsx`, `found-report.tsx`, `switch-account.tsx`); kart ikizi `card-twin.tsx` (hook'suz, sunucuda çizilir). Sahiplenme mantığı tek yerde: `lib/cards/claim.ts`. Testler: `__tests__/api/card-claim.test.ts` (13 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | URL'den token okuma | ÇALIŞIYOR | Sunucuda güvenli `decodeURIComponent` + `CARD_TOKEN_PATTERN`; bozuk biçimde DB'ye gidilmez. |
+| 2 | Kart bilgisini getirme | ÇALIŞIYOR | Sunucuda `loadCardPage` (oturuma göre görünüm modeli); spinner şelalesi yok. `GET /api/cards/[token]` (A3 sürümü) dış uyumluluk için korunur, sayfa artık çağırmaz. |
+| 3 | Yükleniyor durumu | ÇALIŞIYOR | `loading.tsx` statik iskelet; başarıda yeniden yükleme yok (spinner yanıp sönmesi bitti). |
+| 4 | Hata: kart bulunamadı | ÇALIŞIYOR | Arşivli kart da bulunamadı görünür. |
+| 5 | Hata: bloklu kart | ÇALIŞIYOR | Sahibine "dondurdun → Kartım'da çöz" / "yönetim engeli → Kartım"; başkasına nötr mesaj. Blok gerekçesi hiç dışarı çıkmaz. |
+| 6 | Hata: genel / ağ / 500 | ÇALIŞIYOR | Hata paneli + "Tekrar dene"; aktivasyonda kodlu, eyleme dönük metin; çevrimdışıyken istek atılmaz. |
+| 7 | "Ana Sayfaya Dön" | ÇALIŞIYOR | Tüm durum panellerinde + logo bağlantısı. |
+| 8 | Sahip adı ve avatarı | ÇALIŞIYOR | Ad yalnız sahibine (kart ikizinde); avatar kaldırıldı; başkasına yalnız "Qratex üyesi". |
+| 9 | "Kendi kartım" ayrımı | ÇALIŞIYOR | Sunucuda (`deriveCardViewState`); `customer.id` istemciye gitmez. |
+| 10 | "Kartımı Görüntüle" | ÇALIŞIYOR | `/customer/wallet/card` (my-card emekli). |
+| 11 | "Tüketim Geçmişim" | KALDIRILDI | Sahip özeti artık kullanım sayısı + son kullanım (yalnız sahibin tüketimleri) gösterir; ayrıntılı geçmiş Cüzdan › Hareketler'de. |
+| 12 | Başkasının kartı, oturumsuz: Giriş/Kayıt | KALDIRILDI | Amaçsız CTA; yerine "Kartı buldum, sahibine haber ver" + "Kendi kartını edin". |
+| 13 | Başkasının kartı, oturumlu: "Panelime Git" | KALDIRILDI | Aynı gerekçe; müşteriye "Kartıma git". |
+| 14 | Aktivasyon kahraman ikonu (sonsuz nabız) | KALDIRILDI | Sonsuz JS animasyonu; yerine kartın dijital ikizi (tek giriş animasyonu). |
+| 15 | Fayda listesi | ÇALIŞIYOR | Kişisel değer: tüketim yorumu puanları sunucudaki puan matrisinden (`consumptionReview`), sabit kodlu değil. |
+| 16 | Oturumsuz: "Giriş yap" (callbackUrl) | ÇALIŞIYOR | `/auth/login?callbackUrl=` kodlanmış. |
+| 17 | Oturumsuz: "Kayıt ol" (callbackUrl) | ÇALIŞIYOR | Kayıt sayfası artık `callbackUrl`'ı okuyor (auth yüzeyi); bu sayfa kodlanmış dönüş adresi gönderir. |
+| 18 | Yanlış rol uyarısı | ÇALIŞIYOR | Personel → personel paneli, yönetici → Kartlar; sahiplenilebilir kartta "Farklı hesapla giriş yap" (çıkış + bu karta dönüş). |
+| 19 | "Merhaba, {ad}!" | ÇALIŞIYOR | |
+| 20 | "Kartı Aktive Et" + yükleniyor | ÇALIŞIYOR | "Kartı benim yap"; çift tıklama `loading` ile kilitli. |
+| 21 | İstemci oturum/rol ön kontrolü | ÇALIŞIYOR | Sunucuda; istemci kural tekrar etmez. |
+| 22 | Aktivasyonun atomikliği | ÇALIŞIYOR | Koşullu `updateMany` (önceki durum yazmadan önce yakalanır) + yarış testi. |
+| 23 | Aktivasyon audit log'u | ÇALIŞIYOR | `getClientIp` (ilk IP) + UA; yetim kart için ayrıca `RELEASED_ORPHAN`. |
+| 24 | `ALREADY_ACTIVATED` | ÇALIŞIYOR | Açıklayıcı metin, düğme devre dışı; yeniden yükleme döngüsü yok. |
+| 25 | `ALREADY_YOURS` | ÇALIŞIYOR | Başarı gibi ele alınır (başka sekmede bağlanmışsa bayat ekran kalmaz). |
+| 26 | Başarı akışı | ÇALIŞIYOR | Kart yerinde döner (CSS 3D), sahibin adı belirir, tek seferlik ışıma (≤ 1,2 sn); otomatik yönlendirme yok; sonraki adımlar. |
+| 27 | Yetim kart | ÇALIŞIYOR | Bağsız ACTIVATED ya da sahibi anonimleştirilmiş kart "sahiplenilebilir" görünür ve bağlanır. |
+| 28 | Alt bilgi | ÇALIŞIYOR | Tüm durumlarda tek alt bilgi. |
+| 29 | Metadata / noindex | ÇALIŞIYOR | `title`, `robots: noindex`, canonical yok. |
+| 30 | Çoklu dil | ÇALIŞIYOR | TR/EN (`copy.ts`, `getServerLocale`). |
+| 31 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`; azaltılmışta dönüş yerine çapraz geçiş, ışıma yok, sonsuz döngü yok. |
+| 32 | Rate limit | ÇALIŞIYOR | Sayfa IP 60/dk, aktivasyon kullanıcı 10/dk, kayıp bildirimi IP 3/10 dk (+ kart başına 6 sa). |
+| 33 | Token-replay / `requireAuth` | ÇALIŞIYOR | Aktivasyon `defineRoute` + `requireAuth(['CUSTOMER'])`. |
+| 34 | Hoş geldin ödülü | KALDIRILDI | Yönetilebilir ekonomi ayarı yok; sabit kodlu puan basılmaz (ilke: ayar varsayılanı sunucudan, puan yalnız defterden). Kazanç yolu (tüketim yorumu puanı) gerçek matristen gösterilir. Ürün kararı verilirse `lib/economy` + Ekonomi Stüdyosu ayarıyla eklenmeli. |
+| 35 | Aktivasyon sonrası Wallet'a ekleme | ÇALIŞIYOR | Başarı ekranında platforma göre (iOS → Apple, diğer → Google), yalnız yapılandırılmışsa. |
+| 36 | Kayıp/bulunan kart bildirimi | ÇALIŞIYOR | `POST /api/cards/[token]/found` → sahibe bildirim + push; kimlikler paylaşılmaz. |
+| 37 | Uygulama içi tarayıcıdan ulaşma | ÇALIŞIYOR | Tara yüzeyi `lib/qr-resolve` ile kart QR'ını tanıyor (customer_scan Dalga 2). |
+| 38 | Kart görseli (dijital ikiz) | ÇALIŞIYOR | `CardTwin` (Kartım ile aynı malzeme dili). |
+| 39 | Ekran okuyucu duyurusu | ÇALIŞIYOR | `announce` + `role=status/alert`, başarıda odak başlığa. |
+| 40 | Mobil yerleşim | ÇALIŞIYOR | Tek sütun, dokunma hedefleri ≥ 44 px. |
+| 41 | Açık tema kontrastı | ÇALIŞIYOR | Yalnız rol token'ları (`TONE_CALLOUT`, `text-fg*`); `*-400` sabitleri yok. |
+| 42 | Bayi kamerayla okutunca rol yönlendirme | ÇALIŞIYOR | İşletme hesabı → `/dealer/scan?token=…` ve kart otomatik sorgulanır. |
+| 43 | Boş `CardFooter` | KALDIRILDI | Yapı yeniden yazıldı. |
+
+### Kapanan bulgular (13/14)
+- **B1** (kayıt hunisi): dönüş adresi kodlanmış; kayıt sayfası `callbackUrl` taşıyor. *Kalan:* imzalı `pending_card` çerezi (OAuth/e-posta doğrulama sonrası farklı cihaz) yapılmadı.
+- **B2** (yetim kart): sahiplenme tarafında kapandı (bağsız ya da anonim sahipli kart bağlanır + `RELEASED_ORPHAN`).
+- **B3** (TOCTOU), **B4** (kimlik sızıntısı — A3 + sunucu görünüm modeli), **B6** (kutlama/sonraki adımlar), **B7** (kontrast), **B8** (rol yönlendirme), **B10** (`requireAuth` + rate limit + `getClientIp`), **B11** (yeniden dene, `ALREADY_YOURS`, bloklu kart yolu), **B12** (RSC + metadata + i18n), **B13** (sonsuz animasyon), **B14** (kayıp kart akışı).
+- **B5**: Tara yüzeyi tarafından kapatıldı (lib/qr-resolve).
+
+### Kalanlar
+- **B9** (kalan): `app/admin/cards/cards-client.tsx:82` hâlâ `QR_DOMAIN = 'https://demoqratex.vercel.app'` (admin yüzeyi; basım QR'ı `lib/wallet-card/snapshot#resolveCardOrigin` ile tek kaynağa bağlanmalı).
+- Hesap anonimleştirme (`lib/gdpr-core`) kartı serbest bırakmıyor; kart sahiplenme anında serbest bırakılıyor. Kartım'ın `consumptionsCount` sayımı karta göre (müşteriye göre değil); yeniden sahiplenilen kartta önceki sahibin kullanım sayısını gösterebilir (cüzdan yüzeyine iletildi). Bu sayfa yalnız sahibin tüketimlerini sayar.
+- Tek ekranda magic link (eksik özellik 4) yapılmadı.

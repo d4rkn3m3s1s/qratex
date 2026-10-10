@@ -8,10 +8,13 @@ import { usePWA } from '@/hooks/use-pwa';
 import { cn } from '@/lib/utils';
 import { floatingZTw } from '@/lib/ui-z';
 import { useAppT } from '@/lib/app-locale';
+import { useBareChrome } from '@/lib/pwa/bare-chrome';
 
 export function InstallBanner() {
   const t = useAppT();
   const { isInstallable, isInstalled, isIOS, promptInstall, isStandalone } = usePWA();
+  // Çevrimdışı yedek sayfasında ve masa sinyalinde (QR/kiosk) kurulum teşviki yersiz.
+  const bare = useBareChrome();
   const [isDismissed, setIsDismissed] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const iosGuideDialogRef = useRef<HTMLDivElement>(null);
@@ -112,7 +115,7 @@ export function InstallBanner() {
   };
 
   // Don't show if already installed or dismissed
-  if (isInstalled || isStandalone || isDismissed) {
+  if (isInstalled || isStandalone || isDismissed || bare !== false) {
     return null;
   }
 

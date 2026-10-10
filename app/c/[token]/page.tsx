@@ -1,445 +1,406 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useSession, signIn } from 'next-auth/react';
-import { useRouter, useParams } from 'next/navigation';
+/**
+ * /c/[token] — fiziksel Qratex kartının (ve Wallet kartının) giriş noktası: rol farkındalığı olan
+ * kart deep-link'i (rapor: docs/audit/2026-10-08/musteri/c_token.md).
+ *
+ * Sunucu bileşeni: kart durumu oturuma göre İLK RENDER'da çözülür (eski sayfa istemcide
+ * hidrasyon → oturum → kart şelalesiyle spinner gösteriyordu). Etkileşim küçük adalarda:
+ * sahiplenme + kutlama (CardClaim), kayıp kart bildirimi (FoundReport), hesap değiştirme.
+ *
+ *  - İşletme hesabı okutursa → /dealer/scan?token=… (kasada tüketim ekleme ekranı, otomatik sorgu).
+ *  - Müşteri: sahiplenilebilir kart → "Kartı benim yap"; kendi kartı → özet + Kartım.
+ *  - Oturumsuz: giriş/kayıt `callbackUrl` ile bu sayfaya döner (kayıt sayfası artık taşıyor).
+ *  - Başkasının kartı: sahibin kimliği YOK; "Kartı buldum" + "Kendi kartını edin".
+ */
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { m as Motion, AnimatePresence } from 'framer-motion';
-import {
-  CreditCard,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  User,
-  LogIn,
-  UserPlus,
-  AlertTriangle,
-  Sparkles,
-  ShieldCheck,
-  ArrowRight,
-  Gift,
-  Star,
-  History,
-} from 'lucide-react';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { AlertTriangle, ArrowRight, Ban, CalendarCheck, CreditCard, History, Hourglass, LogIn, ScanLine, ServerCrash, Snowflake, Star, UserPlus } from 'lucide-react';
+import { authOptions } from '@/lib/auth';
+import { getServerLocale } from '@/lib/server-locale';
+import { checkRateLimitDb } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/request-metadata';
+import { isAppleWalletConfigured, isGoogleWalletConfigured } from '@/lib/wallet';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { TONE_CALLOUT } from '@/components/states';
+import { cn } from '@/lib/utils';
+import { CardTwin } from '@/components/customer/p-kart-masa-offline/card/card-twin';
+import { CardClaim } from '@/components/customer/p-kart-masa-offline/card/card-claim';
+import { FoundReport } from '@/components/customer/p-kart-masa-offline/card/found-report';
+import { SwitchAccountButton } from '@/components/customer/p-kart-masa-offline/card/switch-account';
+import { fill, getCardCopy, type CardCopy, type CardLocale } from '@/components/customer/p-kart-masa-offline/card/copy';
+import { loadCardPage, viewerKindOf, type CardPageModel, type CardPageViewer } from './_server/card-page';
 
-interface CardInfo {
-  id: string;
-  token: string;
-  status: 'UNUSED' | 'ACTIVATED' | 'BLOCKED';
-  isActivated: boolean;
-  activatedAt: string | null;
-  customer: {
-    id: string;
-    name: string;
-    image: string | null;
-  } | null;
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Qratex kartı',
+  description: 'Qratex sadakat kartını hesabına bağla.',
+  robots: { index: false, follow: false },
+  alternates: { canonical: null },
+};
+
+type PageProps = { params: Promise<{ token: string }> };
+
+function formatDate(iso: string | null, locale: CardLocale): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'tr-TR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/Istanbul',
+  }).format(new Date(iso));
 }
 
-export default function CardActivationPage() {
-  // Get token from URL params using useParams hook (Next.js 14 compatible)
-  const params = useParams();
-  const token = params.token as string;
-  
-  const { data: session, status: sessionStatus } = useSession();
-  const router = useRouter();
-  const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activating, setActivating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+function safeDecode(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
 
-  useEffect(() => {
-    if (token) {
-      fetchCardInfo();
-    }
-  }, [token]);
+async function rateLimited(): Promise<boolean> {
+  try {
+    const ip = getClientIp({ headers: await headers() }) ?? 'unknown';
+    const rl = await checkRateLimitDb(`card-page:${ip}`, 60, 60_000);
+    return !rl.ok;
+  } catch {
+    return false;
+  }
+}
 
-  const fetchCardInfo = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const res = await fetch(`/api/cards/${token}`);
-      const data = await res.json();
+export default async function CardPage({ params }: PageProps) {
+  const [{ token: rawToken }, rawLocale, session] = await Promise.all([
+    params,
+    getServerLocale(),
+    getServerSession(authOptions).catch(() => null),
+  ]);
+  const token = safeDecode(rawToken ?? '').trim();
+  const locale: CardLocale = rawLocale === 'en' ? 'en' : 'tr';
+  const copy = getCardCopy(locale);
 
-      if (!res.ok) {
-        setError(data.error || 'Kart bulunamadı');
-        setErrorCode(data.code || null);
-        return;
-      }
-
-      setCardInfo(data.card);
-    } catch (err) {
-      setError('Kart bilgisi alınamadı');
-    } finally {
-      setLoading(false);
-    }
+  const viewer: CardPageViewer = {
+    kind: viewerKindOf(session?.user?.role),
+    id: session?.user?.id ?? null,
+    name: session?.user?.name ?? null,
   };
 
-  const handleActivate = async () => {
-    if (!session?.user) {
-      toast.error('Lütfen önce giriş yapın');
-      return;
-    }
+  // İşletme kasası telefonun kamerasıyla okuttuysa: doğrudan tüketim ekleme ekranı (rapor B8).
+  if (viewer.kind === 'dealer') {
+    redirect(`/dealer/scan?token=${encodeURIComponent(token)}`);
+  }
 
-    if (session.user.role !== 'CUSTOMER') {
-      toast.error('Sadece müşteriler kart aktive edebilir');
-      return;
-    }
-
-    setActivating(true);
-    try {
-      const res = await fetch(`/api/cards/${token}/activate`, {
-        method: 'POST',
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || 'Kart aktive edilemedi');
-        if (data.code === 'ALREADY_ACTIVATED') {
-          fetchCardInfo(); // Kartı yeniden yükle
-        }
-        return;
-      }
-
-      toast.success('Kart başarıyla aktive edildi! 🎉');
-      
-      // Kartı yeniden yükle
-      await fetchCardInfo();
-      
-      // Müşteri paneline yönlendir
-      setTimeout(() => {
-        router.push('/customer/my-card');
-      }, 1500);
-    } catch (err) {
-      toast.error('Bir hata oluştu');
-    } finally {
-      setActivating(false);
-    }
-  };
-
-  // Loading state
-  if (loading || sessionStatus === 'loading') {
+  if (await rateLimited()) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Kart bilgisi yükleniyor...</p>
-        </Motion.div>
-      </div>
+      <Shell copy={copy}>
+        <StatePanel icon={<Hourglass className="h-7 w-7" aria-hidden />} title={copy.rateLimitedTitle} body={copy.rateLimitedBody} copy={copy} retry />
+      </Shell>
     );
   }
 
-  // Error state
-  if (error) {
+  let model: CardPageModel | null = null;
+  try {
+    model = await loadCardPage(token, viewer);
+  } catch (err) {
+    console.error('[c/token] kart yüklenemedi', err);
+  }
+
+  if (!model) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
-        >
-          <Card className="border-border/60 bg-card/80 backdrop-blur-xl">
-            <CardHeader className="px-4 text-center sm:px-6">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/15 sm:h-20 sm:w-20">
-                {errorCode === 'CARD_BLOCKED' ? (
-                  <AlertTriangle className="h-8 w-8 text-red-500 sm:h-10 sm:w-10" />
-                ) : (
-                  <XCircle className="h-8 w-8 text-red-500 sm:h-10 sm:w-10" />
-                )}
-              </div>
-              <CardTitle className="text-xl sm:text-2xl">
-                {errorCode === 'CARD_NOT_FOUND' && 'Kart Bulunamadı'}
-                {errorCode === 'CARD_BLOCKED' && 'Kart Bloklanmış'}
-                {!errorCode && 'Hata'}
-              </CardTitle>
-              <CardDescription className="text-sm sm:text-base">
-                {error}
-              </CardDescription>
-            </CardHeader>
-            <CardFooter className="justify-center px-4 sm:px-6 pb-6">
-              <Button variant="outline" asChild className="w-full sm:w-auto">
-                <Link href="/">Ana Sayfaya Dön</Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        </Motion.div>
-      </div>
+      <Shell copy={copy}>
+        <StatePanel icon={<ServerCrash className="h-7 w-7" aria-hidden />} title={copy.errorTitle} body={copy.errorBody} copy={copy} retry />
+      </Shell>
     );
   }
 
-  // Card already activated - show info
-  if (cardInfo?.isActivated && cardInfo.customer) {
-    const isOwnCard = session?.user?.id === cardInfo.customer.id;
-
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
-        >
-          <Card className="relative overflow-hidden border-border/60 bg-card/80 backdrop-blur-xl">
-            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-              <div className="absolute -right-1/2 -top-1/2 h-full w-full rounded-full bg-primary/[0.06] blur-3xl" />
-              <div className="absolute -bottom-1/2 -left-1/2 h-full w-full rounded-full bg-primary/[0.05] blur-3xl" />
-            </div>
-
-            <CardHeader className="relative px-4 text-center sm:px-6">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/15 sm:h-20 sm:w-20">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600 sm:h-10 sm:w-10 dark:text-emerald-500" />
-              </div>
-              <CardTitle className="text-xl sm:text-2xl">Kart Aktif</CardTitle>
-              <CardDescription className="text-sm sm:text-base">Bu kart zaten aktive edilmiş</CardDescription>
-            </CardHeader>
-
-            <CardContent className="relative space-y-4 px-4 sm:px-6">
-              {/* Card owner info */}
-              <div className="rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
-                    {cardInfo.customer.image ? (
-                      <img 
-                        src={cardInfo.customer.image} 
-                        alt={cardInfo.customer.name || ''} 
-                        className="h-full w-full rounded-full object-cover"
-                      />
-                    ) : (
-                      <User className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-foreground">{cardInfo.customer.name}</p>
-                    <p className="text-xs text-muted-foreground sm:text-sm">
-                      {isOwnCard ? 'Bu sizin kartınız' : 'Kart sahibi'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {isOwnCard && (
-                <div className="p-3 sm:p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <p className="text-emerald-400 text-xs sm:text-sm text-center">
-                    🎉 Bu kart size bağlı! Tüketim geçmişinizi görüntüleyebilirsiniz.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-
-            <CardFooter className="relative flex-col gap-2 px-4 pb-6 sm:px-6">
-              {isOwnCard ? (
-                <>
-                  <Button className="w-full" asChild>
-                    <Link href="/customer/my-card">
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Kartımı Görüntüle
-                    </Link>
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    className="w-full"
-                    asChild
-                  >
-                    <Link href="/customer/consumptions">
-                      <History className="w-4 h-4 mr-2" />
-                      Tüketim Geçmişim
-                    </Link>
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {!session?.user ? (
-                    <>
-                      <Button className="w-full" onClick={() => signIn(undefined, { callbackUrl: `/c/${token}` })}>
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Giriş Yap
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        className="w-full"
-                        asChild
-                      >
-                        <Link href={`/auth/register?callbackUrl=/c/${token}`}>
-                          <UserPlus className="w-4 h-4 mr-2" />
-                          Kayıt Ol
-                        </Link>
-                      </Button>
-                    </>
-                  ) : (
-                    <Button variant="outline" asChild className="w-full">
-                      <Link href="/customer">Panelime Git</Link>
-                    </Button>
-                  )}
-                </>
-              )}
-            </CardFooter>
-          </Card>
-        </Motion.div>
-      </div>
-    );
-  }
-
-  // Card not activated - show activation flow
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <Card className="relative overflow-hidden border-border/60 bg-card/80 backdrop-blur-xl">
-          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-            <div className="absolute -right-1/2 -top-1/2 h-full w-full animate-pulse rounded-full bg-primary/[0.07] blur-3xl" />
-            <div className="absolute -bottom-1/2 -left-1/2 h-full w-full animate-pulse rounded-full bg-primary/[0.05] blur-3xl" />
+    <Shell copy={copy}>
+      <CardBody model={model} viewer={viewer} copy={copy} locale={locale} />
+    </Shell>
+  );
+}
+
+function Shell({ copy, children }: { copy: CardCopy; children: React.ReactNode }) {
+  return (
+    <main className="min-h-dvh bg-background">
+      <div className="mx-auto flex w-full max-w-md flex-col gap-6 px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-5 sm:pt-8">
+        <header>
+          <Link
+            href="/"
+            aria-label={copy.homeAria}
+            className="inline-flex min-h-11 items-center gap-2 rounded-control font-display text-lg font-bold tracking-tight text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <span aria-hidden className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-sm font-black text-brand-fg">
+              Q
+            </span>
+            {copy.brand}
+          </Link>
+        </header>
+        {children}
+        <p className="text-xs text-fg-muted">{copy.footer}</p>
+      </div>
+    </main>
+  );
+}
+
+function StatePanel({
+  icon,
+  title,
+  body,
+  copy,
+  retry,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  copy: CardCopy;
+  retry?: boolean;
+}) {
+  return (
+    <section aria-labelledby="card-state-title" className="rounded-card border border-border bg-surface-1 p-6 text-center qx-elevation-1">
+      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-surface-3 text-fg-muted">{icon}</span>
+      <h1 id="card-state-title" className="qx-h2 mt-4 text-fg">
+        {title}
+      </h1>
+      <p className="mt-2 text-sm text-fg-muted">{body}</p>
+      <div className="mt-6 flex flex-col gap-2">
+        {retry && (
+          <Button asChild className="min-h-11">
+            <a href="">{copy.retry}</a>
+          </Button>
+        )}
+        <Button asChild variant="outline" className="min-h-11">
+          <Link href="/customer/scan">
+            <ScanLine className="h-4 w-4" aria-hidden />
+            {copy.scanCta}
+          </Link>
+        </Button>
+        <Button asChild variant="ghost" className="min-h-11">
+          <Link href="/">{copy.homeCta}</Link>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function Benefits({ copy, reward }: { copy: CardCopy; reward: CardPageModel['reward'] }) {
+  const items = [
+    { icon: <ScanLine className="h-4 w-4" aria-hidden />, text: copy.benefitScan },
+    {
+      icon: <Star className="h-4 w-4" aria-hidden />,
+      text: reward
+        ? fill(copy.benefitReview, { base: reward.base, detailed: reward.detailed, threshold: reward.threshold })
+        : copy.benefitReviewSimple,
+    },
+    { icon: <History className="h-4 w-4" aria-hidden />, text: copy.benefitHistory },
+  ];
+  return (
+    <section aria-labelledby="benefits-title" className="rounded-card border border-border bg-surface-1 p-4">
+      <h2 id="benefits-title" className="text-sm font-semibold text-fg">
+        {copy.benefitsTitle}
+      </h2>
+      <ul className="mt-3 space-y-2.5">
+        {items.map((it) => (
+          <li key={it.text} className="flex items-start gap-2.5 text-sm text-fg">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">{it.icon}</span>
+            {it.text}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function CardBody({ model, viewer, copy, locale }: { model: CardPageModel; viewer: CardPageViewer; copy: CardCopy; locale: CardLocale }) {
+  const twinAria = fill(copy.twinAria, { masked: model.maskedToken });
+  const back = `/c/${encodeURIComponent(model.token)}`;
+
+  if (model.state === 'not_found') {
+    return <StatePanel icon={<AlertTriangle className="h-7 w-7" aria-hidden />} title={copy.notFoundTitle} body={copy.notFoundBody} copy={copy} />;
+  }
+
+  // Personel / yönetici: kart bağlanamaz; doğru yere yönlendir (rapor B8).
+  if (viewer.kind === 'staff' || viewer.kind === 'admin') {
+    return (
+      <>
+        <CardTwin variant="member" holder={copy.twinMember} maskedToken={model.maskedToken} caption={copy.twinCaption} ariaLabel={twinAria} />
+        <section aria-labelledby="role-title" className="space-y-3">
+          <h1 id="role-title" className="qx-h2 text-fg">
+            {copy.wrongRoleTitle}
+          </h1>
+          <p className="text-sm text-fg-muted">{viewer.kind === 'staff' ? copy.wrongRoleStaff : copy.wrongRoleAdmin}</p>
+          <Button asChild className="min-h-12 w-full">
+            <Link href={viewer.kind === 'staff' ? '/staff' : '/admin/cards'}>{viewer.kind === 'staff' ? copy.staffHome : copy.adminCards}</Link>
+          </Button>
+          {model.state === 'claimable' && (
+            <>
+              <p className="text-sm text-fg-muted">{copy.wrongRoleCustomerHint}</p>
+              <SwitchAccountButton token={model.token} label={copy.switchAccount} />
+            </>
+          )}
+        </section>
+      </>
+    );
+  }
+
+  if (model.state === 'claimable') {
+    if (viewer.kind === 'customer') {
+      return (
+        <>
+          <CardClaim
+            token={model.token}
+            copy={copy}
+            maskedToken={model.maskedToken}
+            viewerName={viewer.name}
+            hasOtherCard={model.hasOtherCard}
+            orphan={model.orphan}
+            wallet={{ apple: isAppleWalletConfigured(), google: isGoogleWalletConfigured() }}
+          />
+          <Benefits copy={copy} reward={model.reward} />
+        </>
+      );
+    }
+    return (
+      <>
+        <CardTwin variant="claimable" holder={copy.twinNamePlaceholder} maskedToken={model.maskedToken} caption={copy.twinCaption} ariaLabel={twinAria} />
+        <section aria-labelledby="claim-anon-title" className="space-y-4">
+          <div className="space-y-1.5">
+            <h1 id="claim-anon-title" className="qx-h1 text-fg">
+              {copy.claimSignedOutTitle}
+            </h1>
+            <p className="text-base text-fg-muted">{copy.claimSignedOutBody}</p>
           </div>
+          <div className="flex flex-col gap-2">
+            <Button asChild size="lg" className="min-h-12 w-full">
+              <Link href={`/auth/register?callbackUrl=${encodeURIComponent(back)}`}>
+                <UserPlus className="h-5 w-5" aria-hidden />
+                {copy.register}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg" className="min-h-12 w-full">
+              <Link href={`/auth/login?callbackUrl=${encodeURIComponent(back)}`}>
+                <LogIn className="h-5 w-5" aria-hidden />
+                {copy.signIn}
+              </Link>
+            </Button>
+          </div>
+        </section>
+        <Benefits copy={copy} reward={model.reward} />
+      </>
+    );
+  }
 
-          <CardHeader className="relative px-4 text-center sm:px-6">
-            <Motion.div
-              className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 sm:h-24 sm:w-24"
-              animate={{
-                boxShadow: [
-                  '0 10px 40px hsl(var(--primary) / 0.25)',
-                  '0 14px 44px hsl(var(--primary) / 0.35)',
-                  '0 10px 40px hsl(var(--primary) / 0.25)',
-                ],
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              <CreditCard className="h-10 w-10 sm:h-12 sm:w-12" aria-hidden />
-            </Motion.div>
-            <CardTitle className="text-xl sm:text-2xl">QRateX Kartı</CardTitle>
-            <CardDescription className="text-sm sm:text-base">
-              Bu kartı aktive ederek QRateX ayrıcalıklarına katılın
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="relative space-y-4 px-4 sm:px-6">
-            {/* Benefits */}
-            <div className="space-y-2 sm:space-y-3">
-              {[
-                { icon: Gift, text: 'Puan kazanın ve ödüllere ulaşın', color: 'text-amber-600 dark:text-amber-400' },
-                { icon: History, text: 'Tüketimlerinizi takip edin', color: 'text-blue-600 dark:text-blue-400' },
-                { icon: Star, text: 'Yorum yaparak puan kazanın', color: 'text-primary' },
-              ].map((item, index) => (
-                <Motion.div
-                  key={item.text}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/40 p-2.5 sm:p-3"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/80">
-                    <item.icon className={`h-4 w-4 ${item.color}`} aria-hidden />
-                  </div>
-                  <span className="text-xs text-foreground sm:text-sm">{item.text}</span>
-                </Motion.div>
-              ))}
+  if (model.state === 'mine' && model.owner) {
+    const o = model.owner;
+    return (
+      <>
+        <CardTwin
+          variant="owner"
+          holder={o.holderName || copy.twinMember}
+          maskedToken={model.maskedToken}
+          caption={copy.twinCaption}
+          ariaLabel={twinAria}
+        />
+        <section aria-labelledby="mine-title" className="space-y-4">
+          <div className="space-y-1.5">
+            <h1 id="mine-title" className="qx-h1 text-fg">
+              {copy.mineTitle}
+            </h1>
+            <p className="text-base text-fg-muted">{copy.mineBody}</p>
+          </div>
+          <dl className="grid grid-cols-3 gap-2 rounded-card border border-border bg-surface-1 p-4 text-center">
+            <div>
+              <dt className="text-xs text-fg-muted">{copy.mineActivated}</dt>
+              <dd className="mt-1 flex items-center justify-center gap-1 text-sm font-semibold text-fg">
+                <CalendarCheck className="h-3.5 w-3.5 text-brand" aria-hidden />
+                {formatDate(o.activatedAt, locale) ?? '—'}
+              </dd>
             </div>
+            <div>
+              <dt className="text-xs text-fg-muted">{copy.mineUses}</dt>
+              <dd className="mt-1 text-sm font-semibold tabular-nums text-fg">{o.usesCount}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-fg-muted">{copy.mineLastUse}</dt>
+              <dd className="mt-1 text-sm font-semibold text-fg">{formatDate(o.lastUsedAt, locale) ?? copy.mineNever}</dd>
+            </div>
+          </dl>
+          <Button asChild size="lg" className="min-h-12 w-full justify-between">
+            <Link href="/customer/wallet/card">
+              <span className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" aria-hidden />
+                {copy.mineCta}
+              </span>
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </Button>
+        </section>
+        <Benefits copy={copy} reward={model.reward} />
+      </>
+    );
+  }
 
-            {/* Auth state */}
-            <AnimatePresence mode="wait">
-              {!session?.user ? (
-                <Motion.div
-                  key="not-logged-in"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-3 sm:p-4 rounded-xl bg-amber-500/10 border border-amber-500/20"
-                >
-                  <p className="text-amber-400 text-xs sm:text-sm text-center mb-3">
-                    Kartı aktive etmek için giriş yapın veya kayıt olun
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 h-10 sm:h-9"
-                      onClick={() => signIn(undefined, { callbackUrl: `/c/${token}` })}
-                    >
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Giriş Yap
-                    </Button>
-                    <Button className="h-10 flex-1 sm:h-9" asChild>
-                      <Link href={`/auth/register?callbackUrl=/c/${token}`}>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Kayıt Ol
-                      </Link>
-                    </Button>
-                  </div>
-                </Motion.div>
-              ) : session.user.role !== 'CUSTOMER' ? (
-                <Motion.div
-                  key="wrong-role"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-3 sm:p-4 rounded-xl bg-red-500/10 border border-red-500/20"
-                >
-                  <p className="text-red-400 text-xs sm:text-sm text-center">
-                    ⚠️ Sadece müşteri hesapları kart aktive edebilir. Lütfen müşteri hesabıyla giriş yapın.
-                  </p>
-                </Motion.div>
-              ) : (
-                <Motion.div
-                  key="ready"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-3 sm:p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-emerald-400 text-sm font-medium truncate">
-                        Merhaba, {session.user.name}!
-                      </p>
-                      <p className="text-emerald-400/70 text-xs">
-                        Kartı aktive etmeye hazırsınız
-                      </p>
-                    </div>
-                  </div>
-                </Motion.div>
-              )}
-            </AnimatePresence>
-          </CardContent>
+  if (model.state === 'frozen_mine' || model.state === 'blocked_mine') {
+    const frozen = model.state === 'frozen_mine';
+    return (
+      <>
+        <CardTwin
+          variant={frozen ? 'frozen' : 'blocked'}
+          holder={model.owner?.holderName || copy.twinMember}
+          maskedToken={model.maskedToken}
+          caption={copy.twinCaption}
+          ariaLabel={twinAria}
+          statusLabel={frozen ? copy.twinFrozen : copy.twinBlocked}
+        />
+        <section aria-labelledby="blocked-mine-title" className={cn('space-y-3 rounded-card border p-4', frozen ? TONE_CALLOUT.info : TONE_CALLOUT.warning)}>
+          <h1 id="blocked-mine-title" className="qx-h2 flex items-center gap-2 text-fg">
+            {frozen ? <Snowflake className="h-5 w-5 text-info" aria-hidden /> : <Ban className="h-5 w-5 text-warning" aria-hidden />}
+            {frozen ? copy.frozenTitle : copy.blockedMineTitle}
+          </h1>
+          <p className="text-sm text-fg">{frozen ? copy.frozenBody : copy.blockedMineBody}</p>
+          <Button asChild className="min-h-12 w-full">
+            <Link href="/customer/wallet/card">{frozen ? copy.frozenCta : copy.mineCta}</Link>
+          </Button>
+        </section>
+      </>
+    );
+  }
 
-          <CardFooter className="relative px-4 pb-6 sm:px-6">
-            {session?.user && session.user.role === 'CUSTOMER' && (
-              <Button
-                className="h-11 w-full text-base sm:h-12 sm:text-lg"
-                onClick={handleActivate}
-                disabled={activating}
-              >
-                {activating ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Aktive Ediliyor...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5 mr-2" />
-                    Kartı Aktive Et
-                  </>
-                )}
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
+  if (model.state === 'blocked') {
+    return (
+      <>
+        <CardTwin variant="blocked" holder={copy.twinMember} maskedToken={model.maskedToken} caption={copy.twinCaption} ariaLabel={twinAria} statusLabel={copy.twinBlocked} />
+        <StatePanel icon={<Ban className="h-7 w-7" aria-hidden />} title={copy.blockedTitle} body={copy.blockedBody} copy={copy} />
+      </>
+    );
+  }
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-xs text-muted-foreground sm:text-sm">
-          Powered by <span className="font-medium text-primary">QRateX</span>
-        </p>
-      </Motion.div>
-    </div>
+  // taken: başka bir üyenin kartı — kimlik yok; kayıp kart akışı + kendi kartın.
+  return (
+    <>
+      <CardTwin variant="member" holder={copy.twinMember} maskedToken={model.maskedToken} caption={copy.twinCaption} ariaLabel={twinAria} />
+      <section aria-labelledby="taken-title" className="space-y-4">
+        <div className="space-y-1.5">
+          <h1 id="taken-title" className="qx-h1 text-fg">
+            {copy.takenTitle}
+          </h1>
+          <p className="text-base text-fg-muted">{copy.takenBody}</p>
+        </div>
+        <FoundReport token={model.token} copy={copy} />
+      </section>
+      <section aria-labelledby="own-card-title" className="rounded-card border border-brand-border bg-brand-subtle p-4">
+        <h2 id="own-card-title" className="font-semibold text-fg">
+          {copy.ownCardTitle}
+        </h2>
+        <p className="mt-1 text-sm text-fg-muted">{viewer.kind === 'customer' ? copy.ownCardBodyCustomer : copy.ownCardBodyAnon}</p>
+        <Button asChild variant="outline" className="mt-3 min-h-11 w-full">
+          <Link href={viewer.kind === 'customer' ? '/customer/wallet/card' : `/auth/register`}>
+            {viewer.kind === 'customer' ? copy.ownCardCtaCustomer : copy.ownCardCtaAnon}
+          </Link>
+        </Button>
+      </section>
+    </>
   );
 }

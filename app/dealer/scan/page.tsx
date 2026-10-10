@@ -233,6 +233,18 @@ export default function DealerScanPage() {
     if (scanner.error) toast.error(t(QR_SCANNER_ERROR_KEYS[scanner.error.code]));
   }, [scanner.error, t]);
 
+  // Kart linki (/c/<token>) telefonun kamerasıyla okutulunca işletme hesabı buraya `?token=` ile
+  // yönlendirilir (app/c/[token]); kart otomatik sorgulanır — kasada ikinci kez okutmaya gerek yok.
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    deepLinkHandledRef.current = true;
+    const raw = new URLSearchParams(window.location.search).get('token');
+    const deepToken = raw ? extractCardToken(raw) : null;
+    if (deepToken) void handleScan(deepToken);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleManualScan = () => {
     // URL veya düz token destekle
     const token = extractCardToken(manualToken);

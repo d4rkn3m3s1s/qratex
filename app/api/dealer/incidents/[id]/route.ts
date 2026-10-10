@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { z } from 'zod';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { ASSIGNEE_SELECT, assigneeDto, validateAssignee } from '@/lib/dealer/assignee';
+import { syncPulseFromIncident } from '@/lib/table-signal/service';
 
 /** Olay yanıtı: atanan kişi açık DTO (P0-11 — e-posta maskeli). */
 function incidentDto<T extends { assignedTo?: { id: string; name: string | null; email: string | null } | null }>(row: T) {
@@ -140,6 +141,8 @@ export async function PATCH(
           ...INCIDENT_INCLUDE,
         },
       });
+      // Masa sinyali vakası çözüldüyse bağlı TablePulse da kapanır (sağlık skoru kapanış bonusu).
+      await syncPulseFromIncident(updated).catch(() => false);
       return NextResponse.json(incidentDto(updated), { headers: PRIVATE_NO_STORE_HEADERS });
     }
 
@@ -165,6 +168,7 @@ export async function PATCH(
         { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    await syncPulseFromIncident(updated).catch(() => false);
     return NextResponse.json(incidentDto(updated), { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const db = responseIfDatabaseUnavailable(error);
