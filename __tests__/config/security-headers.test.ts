@@ -60,6 +60,12 @@ describe('Statik varlık önbellek başlıkları', () => {
     expect(headersConfig.IMMUTABLE_CACHE).toMatch(/immutable/);
   });
 
+  it('hash’li rozet küçük resimleri 1 yıl immutable', () => {
+    expect(effectiveHeader('/images/badges/opt/efsane.0123456789.webp', 'Cache-Control')).toBe(
+      headersConfig.IMMUTABLE_CACHE,
+    );
+  });
+
   it('hash’siz görseller uzun süre önbellekte, ama immutable DEĞİL (aynı adla değişebilir)', () => {
     for (const p of ['/images/avatar/CAT.svg', '/images/badges/EFSANE.svg', '/icons/icon-192x192.svg', '/logo/chatbot.png']) {
       const cc = effectiveHeader(p, 'Cache-Control');

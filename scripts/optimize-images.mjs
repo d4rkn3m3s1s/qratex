@@ -25,8 +25,14 @@
  * yeniden kodlama YAPILMAZ (kuşak kaybı olmaz) — gömülü WebP baytları aynen çıkarılıp
  * hash'li dosya ve eşleme tablosu yeniden üretilir.
  *
+ * Ayrıca `THUMB_DIRS` (gerçek vektör rozetler, dosya başına ~0,5–1 MB yoğun yol verisi):
+ * özgün SVG'lere DOKUNULMAZ (detay görünümünde keskin kalsın); ızgara/liste için kaynak
+ * içerik hash'li küçük WebP üretilir (`public/images/badges/opt/<slug>.<hash>.webp`) ve
+ * eşleme `lib/badge-image-map.generated.ts` dosyasına yazılır (lib/badge-images.ts okur).
+ * Hash KAYNAK SVG + boyuttan türetilir: dosya varsa yeniden rasterize edilmez.
+ *
  * Kullanım:  node scripts/optimize-images.mjs [--dry-run]
- * Veritabanına veya ağa DOKUNMAZ; yalnız public/ ve lib/avatar-image-map.generated.ts yazar.
+ * Veritabanına veya ağa DOKUNMAZ; yalnız public/ ve lib/*-image-map.generated.ts yazar.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,6 +55,20 @@ const RASTER_DIRS = [
   { dir: 'images/avatar', emitOptimized: true },
   // Yalnız bir dosyası kodda kullanılıyor (journey-score maskotu); geri kalanı yerinde hafifletilir.
   { dir: 'images/zamanikimizisilerizimizideğil', emitOptimized: false },
+];
+
+/**
+ * Vektör kaynaklı küçük resimler. Rozet ızgarası 140 CSS px çiziyor → 320 px (2×+ retina).
+ * @type {{ dir: string; size: number; mapFile: string; exportName: string; label: string }[]}
+ */
+const THUMB_DIRS = [
+  {
+    dir: 'images/badges',
+    size: 320,
+    mapFile: path.join(ROOT, 'lib', 'badge-image-map.generated.ts'),
+    exportName: 'BADGE_THUMB_MAP',
+    label: 'rozet',
+  },
 ];
 
 const TR_MAP = { İ: 'i', I: 'i', ı: 'i', Ş: 's', ş: 's', Ğ: 'g', ğ: 'g', Ü: 'u', ü: 'u', Ö: 'o', ö: 'o', Ç: 'c', ç: 'c' };
@@ -190,6 +210,74 @@ function writeMap(map) {
   if (!DRY_RUN) fs.writeFileSync(MAP_FILE, content);
 }
 
+/** Gerçek vektör SVG → kare tuvalde (oran korunur, saydam dolgu) size px WebP. */
+async function rasterizeThumb(svgText, vb, size) {
+  const density = Math.min(2400, Math.max(72, (72 * 2 * size) / Math.max(vb.w, vb.h)));
+  return sharp(Buffer.from(svgText), { density, limitInputPixels: false })
+    .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' })
+    .webp(WEBP_OPTIONS)
+    .toBuffer();
+}
+
+async function processThumbDir({ dir, size, mapFile, exportName, label }) {
+  const abs = path.join(PUBLIC_DIR, dir);
+  if (!fs.existsSync(abs)) return { count: 0, before: 0, after: 0 };
+  const optDir = path.join(abs, 'opt');
+  const map = {};
+  const keep = new Set();
+  let before = 0;
+  let after = 0;
+  let count = 0;
+
+  const files = fs.readdirSync(abs).filter((f) => f.toLowerCase().endsWith('.svg')).sort();
+  for (const file of files) {
+    const filePath = path.join(abs, file);
+    const svgBuf = fs.readFileSync(filePath);
+    const svgText = svgBuf.toString('utf8');
+    const vb = parseViewBox(svgText);
+    if (!vb) {
+      console.warn(`  ! ${dir}/${file}: viewBox yok, atlandı`);
+      continue;
+    }
+    const hash = crypto.createHash('sha256').update(svgBuf).update(`|${size}`).digest('hex').slice(0, 10);
+    const outName = `${slugify(file.replace(/\.svg$/i, ''))}.${hash}.webp`;
+    const outPath = path.join(optDir, outName);
+    keep.add(outName);
+    let outSize;
+    if (fs.existsSync(outPath)) {
+      outSize = fs.statSync(outPath).size;
+    } else {
+      const webp = await rasterizeThumb(svgText, vb, size);
+      outSize = webp.length;
+      if (!DRY_RUN) {
+        fs.mkdirSync(optDir, { recursive: true });
+        fs.writeFileSync(outPath, webp);
+      }
+      console.log(`  ✓ ${dir}/${file}: ${fmt(svgBuf.length)} → ${fmt(webp.length)} (${size} px küçük resim)`);
+    }
+    before += svgBuf.length;
+    after += outSize;
+    count += 1;
+    map[`/${dir}/${file}`.normalize('NFC')] = `/${dir}/opt/${outName}`;
+  }
+
+  if (!DRY_RUN && fs.existsSync(optDir)) {
+    for (const f of fs.readdirSync(optDir)) {
+      if (f.endsWith('.webp') && !keep.has(f)) fs.unlinkSync(path.join(optDir, f));
+    }
+  }
+
+  const keys = Object.keys(map).sort((a, b) => a.localeCompare(b, 'tr'));
+  const body = keys.map((k) => `  ${JSON.stringify(k)}: ${JSON.stringify(map[k])},`).join('\n');
+  const content =
+    `// BU DOSYA ÜRETİLİR — elle düzenlemeyin. Kaynak: scripts/optimize-images.mjs\n` +
+    `// Özgün ${label} SVG yolu → içerik hash'li ${size} px WebP küçük resim (özgün SVG yerinde kalır).\n` +
+    `export const ${exportName}: Readonly<Record<string, string>> = {\n${body}\n};\n`;
+  if (!DRY_RUN) fs.writeFileSync(mapFile, content);
+  console.log(`  ${label}: ${count} küçük resim, kaynak ${fmt(before)} → küçük resimler ${fmt(after)}`);
+  return { count, before, after };
+}
+
 async function main() {
   const fullMap = {};
   let totalBefore = 0;
@@ -204,6 +292,10 @@ async function main() {
     totalCount += r.count;
   }
   writeMap(fullMap);
+  for (const target of THUMB_DIRS) {
+    console.log(`→ public/${target.dir} (küçük resim)`);
+    await processThumbDir(target);
+  }
   console.log(
     `\n${DRY_RUN ? '[dry-run] ' : ''}${totalCount} dosya yeniden kodlandı: ${fmt(totalBefore)} → ${fmt(totalAfter)}; ` +
       `eşleme: ${Object.keys(fullMap).length} giriş → ${path.relative(ROOT, MAP_FILE)}`,

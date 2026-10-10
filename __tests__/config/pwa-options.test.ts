@@ -136,6 +136,20 @@ describe('PWA seçenekleri', () => {
     expect(cross.fn({ url: new URL('https://cdn.example.com/x.js') })).toBe(true);
   });
 
+  it('hash’li avatar ve rozet küçük resimleri genel görsel kuralından ÖNCE CacheFirst ile eşleşir', () => {
+    const firstMatch = (pathname: string) =>
+      pwa.RUNTIME_CACHING.find(
+        (r) => r.urlPattern instanceof RegExp && r.urlPattern.test(`https://qratex.app${pathname}`),
+      );
+    for (const p of ['/images/avatar/opt/cat.0123456789.webp', '/images/badges/opt/efsane.0123456789.webp']) {
+      const rule = firstMatch(p)!;
+      expect(rule.options.cacheName).toBe('avatar-images');
+      expect(rule.handler).toBe('CacheFirst');
+    }
+    // Hash'siz özgün SVG değişebilir → CacheFirst DEĞİL.
+    expect(firstMatch('/images/badges/EFSANE.svg')!.handler).toBe('StaleWhileRevalidate');
+  });
+
   it('hash’li Next varlıkları genel .js kuralından ÖNCE CacheFirst ile eşleşir', () => {
     const idxStatic = pwa.RUNTIME_CACHING.findIndex((r) => r.options.cacheName === 'next-static');
     const idxJs = pwa.RUNTIME_CACHING.findIndex((r) => r.options.cacheName === 'static-js-assets');

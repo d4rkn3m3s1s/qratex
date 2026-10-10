@@ -79,7 +79,7 @@ const STATIC_ASSET_SOURCES = [
 const SERVICE_WORKER_SOURCES = ['/sw.js', '/push-sw.js'];
 
 /** Script üretimi hash'li çıktılar (scripts/optimize-images.mjs). */
-const IMMUTABLE_SOURCES = ['/images/avatar/opt/:path*'];
+const IMMUTABLE_SOURCES = ['/images/avatar/opt/:path*', '/images/badges/opt/:path*'];
 
 /**
  * Next.js `headers()` dizisi. Aynı başlık anahtarı birden fazla kurala uyarsa SONRAKİ

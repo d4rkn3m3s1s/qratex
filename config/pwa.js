@@ -94,12 +94,12 @@ const RUNTIME_CACHING = [
     },
   },
   {
-    // Hash'li optimize avatarlar (scripts/optimize-images.mjs) — değişmez.
-    urlPattern: /\/images\/avatar\/opt\/.+\.webp$/i,
+    // Hash'li optimize avatarlar ve rozet küçük resimleri (scripts/optimize-images.mjs) — değişmez.
+    urlPattern: /\/images\/(?:avatar|badges)\/opt\/.+\.webp$/i,
     handler: 'CacheFirst',
     options: {
       cacheName: 'avatar-images',
-      expiration: { maxEntries: 96, maxAgeSeconds: 365 * 24 * 60 * 60 },
+      expiration: { maxEntries: 200, maxAgeSeconds: 365 * 24 * 60 * 60 },
     },
   },
   {
