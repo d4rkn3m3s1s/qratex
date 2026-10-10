@@ -1,410 +1,396 @@
-import { NextRequest, NextResponse, after } from 'next/server';
-import { Prisma } from '@prisma/client';
+import { after } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ApiError } from '@/lib/http/define-route';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
+import {
+  TEAM_ROUTE_ROLES,
+  assertDepartment,
+  assertTeamMember,
+  findVisibleTask,
+  requireTeamViewer,
+  scopedTaskWhere,
+} from '@/lib/team/access';
+import { TASK_PRIORITIES, TASK_RECURRENCES, TASK_STATUSES, hasTag } from '@/lib/team/constants';
+import { canMoveTask } from '@/lib/team/permissions';
+import {
+  TASK_LIST_SELECT,
+  TASK_SORTS,
+  assertNoDependencyCycle,
+  cleanupFiles,
+  fieldActivities,
+  hardDeleteTasks,
+  notifyAssignment,
+  parseDueDay,
+  sortTasks,
+  toTaskDto,
+} from '@/lib/team/tasks';
+import { runEffects, transitionTask } from '@/lib/team/transitions';
+import { isWeekKey, weekKeyOf } from '@/lib/team-week';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = ['todo', 'in_progress', 'review', 'done'] as const;
-const PRIORITIES = ['low', 'medium', 'high'] as const;
-// Üyenin (yönetici olmayan) kendi taşıyabileceği durumlar. "done"a yalnızca
-// yönetici onayıyla geçilir; üye en fazla "review" (Onayda) durumuna gönderebilir.
-const MEMBER_ALLOWED_STATUSES = ['todo', 'in_progress', 'review'] as const;
+const LIST_LIMIT = 500;
 
-const createSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(4000).optional().nullable(),
-  status: z.enum(STATUSES).default('todo'),
-  priority: z.enum(PRIORITIES).default('medium'),
-  department: z.string().max(50).optional().nullable(),
-  weekKey: z.string().max(10).optional().nullable(),
-  tags: z.string().max(200).optional().nullable(),
-  assignedToId: z.string().optional().nullable(),
-  dueAt: z.string().datetime().optional().nullable(),
-  estimateMin: z.number().int().min(0).max(100000).optional().nullable(),
-  spentMin: z.number().int().min(0).max(100000).optional(),
-  blockedById: z.string().optional().nullable(),
-  recurrence: z.enum(['daily', 'weekly', 'monthly']).optional().nullable(),
+const listQuery = z.object({
+  view: z.enum(['board', 'mine', 'archive', 'search']).default('board'),
+  weekKey: z.string().refine(isWeekKey, 'Geçersiz hafta').optional(),
+  department: z.string().max(60).optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+  assignedTo: z.string().max(60).optional(),
+  tag: z.string().max(40).optional(),
+  q: z.string().max(120).optional(),
+  mine: z.enum(['1', '0']).optional(),
+  sort: z.enum(TASK_SORTS).default('default'),
 });
-
-const updateSchema = createSchema.partial().extend({
-  archived: z.boolean().optional(), // true=arşivle, false=arşivden çıkar
-  reviewNote: z.string().max(2000).optional().nullable(), // yönetici onay/red notu
-});
-
-/** GET: görevleri listeler. ?department=, ?weekKey=, ?status=, ?mine=1 filtreleri. */
-export async function GET(req: NextRequest) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const sp = req.nextUrl.searchParams;
-
-  const where: Prisma.CompanyTaskWhereInput = {};
-  const dep = sp.get('department');
-  const week = sp.get('weekKey');
-  const status = sp.get('status');
-  const priority = sp.get('priority');
-  const assignee = sp.get('assignedTo');
-  const tag = sp.get('tag');
-  const q = sp.get('q')?.trim();
-  // Arşiv: varsayılan sadece aktif (archivedAt null); ?archived=1 ile sadece arşivlenenler.
-  where.archivedAt = sp.get('archived') === '1' ? { not: null } : null;
-  if (dep) where.department = dep;
-  if (week) where.weekKey = week;
-  if (status && (STATUSES as readonly string[]).includes(status)) where.status = status;
-  if (priority && (PRIORITIES as readonly string[]).includes(priority)) where.priority = priority;
-  if (sp.get('mine') === '1') where.assignedToId = auth.session.user.id;
-  else if (assignee === 'unassigned') where.assignedToId = null;
-  else if (assignee) where.assignedToId = assignee;
-  if (tag) where.tags = { contains: tag, mode: 'insensitive' };
-  if (q) {
-    where.OR = [
-      { title: { contains: q, mode: 'insensitive' } },
-      { description: { contains: q, mode: 'insensitive' } },
-      { tags: { contains: q, mode: 'insensitive' } },
-    ];
-  }
-
-  // Kullanıcı sıralaması (?sort=). Varsayılan: durum→öncelik→oluşturma.
-  const sort = sp.get('sort');
-  const orderByMap: Record<string, Prisma.CompanyTaskOrderByWithRelationInput[]> = {
-    manual: [{ boardOrder: 'asc' }, { createdAt: 'desc' }],
-    priority: [{ priority: 'desc' }, { createdAt: 'desc' }],
-    due: [{ dueAt: 'asc' }],
-    title: [{ title: 'asc' }],
-    created: [{ createdAt: 'desc' }],
-    updated: [{ updatedAt: 'desc' }],
-    spent: [{ spentMin: 'desc' }],
-  };
-  const orderBy = orderByMap[sort ?? ''] ?? [{ status: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }];
-
-  const tasks = await prisma.companyTask.findMany({
-    where,
-    orderBy,
-    take: 500,
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true, image: true } },
-      createdBy: { select: { id: true, name: true } },
-      blockedBy: { select: { id: true, title: true, status: true } },
-      _count: { select: { comments: true, attachments: true, checklist: true } },
-    },
-  });
-
-  return NextResponse.json({ success: true, tasks }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-/** POST: yeni görev oluşturur. */
-export async function POST(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
-
-  const raw = await req.json().catch(() => ({}));
-  const parsed = createSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz görev verisi' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const d = parsed.data;
-
-  const task = await prisma.companyTask.create({
-    data: {
-      title: d.title,
-      description: d.description ?? null,
-      status: d.status,
-      priority: d.priority,
-      department: d.department ?? null,
-      weekKey: d.weekKey ?? null,
-      tags: d.tags ?? null,
-      assignedToId: d.assignedToId || null,
-      createdById: auth.session.user.id,
-      dueAt: d.dueAt ? new Date(d.dueAt) : null,
-      estimateMin: d.estimateMin ?? null,
-      blockedById: d.blockedById || null,
-      recurrence: d.recurrence ?? null,
-    },
-    include: { assignedTo: { select: { id: true, name: true, email: true, image: true } } },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id,
-      action: 'create',
-      entity: 'company_task',
-      entityId: task.id,
-      newData: d as Prisma.InputJsonValue,
-      ...getAuditRequestMeta(req),
-    },
-  });
-  // Aktivite feed için "created" kaydı.
-  await prisma.taskActivity.create({
-    data: { taskId: task.id, actorId: auth.session.user.id, action: 'created', detail: 'Görevi oluşturdu' },
-  }).catch(() => {});
-
-  // Atama varsa bildirim maili + in-app bildirim (fire-and-forget)
-  if (task.assignedTo?.email && task.assignedToId) {
-    after(() => import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
-      to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
-      taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
-      description: task.description,
-    })).catch(() => {}));
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
-      userId: task.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
-    })).catch(() => {}));
-  }
-
-  return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
 
 /**
- * PUT ?id=: görev günceller (durum/atama/vb.). Kanban sürükle-bırak da bunu kullanır.
- *
- * YETKİ MODELİ (onay akışı):
- *  • Yönetici (isManager): her alanı düzenler; durumu her yöne taşıyabilir.
- *    "review → done" = ONAY, "review → in_progress" = RED (reviewNote ile geri bildirim).
- *  • Üye (non-manager): yalnızca KENDİNE ATANMIŞ görevin DURUMUNU
- *    todo/in_progress/review arasında taşıyabilir. "done"a geçemez (onay yöneticide),
- *    başka alanları (atama/öncelik/başlık/arşiv...) düzenleyemez.
+ * GET — görev listesi (görünürlük kapsamlı).
+ *  - `view=board` (varsayılan): seçili hafta + (içinde bulunulan haftaysa) önceki haftalardan
+ *    DEVREDEN açık görevler (denetim Y2: pazartesi biten olmayan işler kayboluyordu).
+ *  - `view=mine`: bana atanan açık işler (tüm haftalar) + bu hafta onaylananlar.
+ *  - `view=archive`: arşivlenmiş görevler.
+ *  - `view=search&q=`: tüm haftalarda arşivsiz görev arama (bağımlılık seçici; en fazla 20).
  */
-export async function PUT(req: NextRequest) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const id = req.nextUrl.searchParams.get('id');
-  if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+export const GET = defineRoute(
+  { name: 'team.tasks.list', roles: TEAM_ROUTE_ROLES, query: listQuery, rateLimit: 'read' },
+  async ({ user, query }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const current = weekKeyOf();
+    const week = query.weekKey ?? current;
 
-  const raw = await req.json().catch(() => ({}));
-  const parsed = updateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz güncelleme' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const d = parsed.data;
-
-  const existing = await prisma.companyTask.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-
-  const userId = auth.session.user.id;
-  const isManager = auth.isManager;
-
-  // ── Üye (yönetici olmayan) kısıtları ───────────────────────────────
-  if (!isManager) {
-    // Yalnızca kendine atanmış görevi ilerletebilir.
-    if (existing.assignedToId !== userId) {
-      return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevleri ilerletebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    // Üye yalnızca DURUM değiştirebilir; başka alan gönderirse reddet.
-    const allowedKeys = new Set(['status']);
-    const sentKeys = Object.keys(d).filter((k) => (d as Record<string, unknown>)[k] !== undefined);
-    const illegal = sentKeys.filter((k) => !allowedKeys.has(k));
-    if (illegal.length > 0) {
-      return NextResponse.json({ success: false, error: 'Yalnızca görevin durumunu değiştirebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    // Üye "done"a (veya izinsiz duruma) geçemez — en fazla "review" (Onayda).
-    if (d.status !== undefined && !(MEMBER_ALLOWED_STATUSES as readonly string[]).includes(d.status)) {
-      return NextResponse.json({ success: false, error: 'Görevi bitmiş olarak işaretleyemezsiniz; yöneticinin onayına gönderin.', code: 'NEEDS_APPROVAL' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-  }
-
-  const data: Prisma.CompanyTaskUpdateInput = {};
-  if (d.title !== undefined) data.title = d.title;
-  if (d.description !== undefined) data.description = d.description;
-  if (d.priority !== undefined) data.priority = d.priority;
-  if (d.department !== undefined) data.department = d.department;
-  if (d.weekKey !== undefined) data.weekKey = d.weekKey;
-  if (d.tags !== undefined) data.tags = d.tags;
-  if (d.dueAt !== undefined) data.dueAt = d.dueAt ? new Date(d.dueAt) : null;
-  if (d.estimateMin !== undefined) data.estimateMin = d.estimateMin;
-  if (d.spentMin !== undefined) data.spentMin = d.spentMin;
-  if (d.recurrence !== undefined) data.recurrence = d.recurrence;
-  if (d.archived !== undefined) data.archivedAt = d.archived ? new Date() : null;
-  if (d.assignedToId !== undefined) {
-    data.assignedTo = d.assignedToId ? { connect: { id: d.assignedToId } } : { disconnect: true };
-  }
-  // Bağımlılık: kendine bağlanmayı ve basit A↔B döngüsünü engelle.
-  if (d.blockedById !== undefined) {
-    if (!d.blockedById) {
-      data.blockedBy = { disconnect: true };
-    } else if (d.blockedById === id) {
-      return NextResponse.json({ success: false, error: 'Görev kendine bağımlı olamaz' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    const filters: Prisma.CompanyTaskWhereInput[] = [];
+    if (query.view === 'archive') {
+      filters.push({ archivedAt: { not: null } });
     } else {
-      const other = await prisma.companyTask.findUnique({ where: { id: d.blockedById }, select: { blockedById: true } });
-      if (other?.blockedById === id) {
-        return NextResponse.json({ success: false, error: 'Döngüsel bağımlılık oluşturulamaz' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-      }
-      data.blockedBy = { connect: { id: d.blockedById } };
+      filters.push({ archivedAt: null });
     }
-  }
-  const movingToDone = d.status === 'done' && existing.status !== 'done';
-  const movingToReview = d.status === 'review' && existing.status !== 'review';
-  const approving = movingToDone && existing.status === 'review';   // review → done (onay)
-  const rejecting = d.status === 'in_progress' && existing.status === 'review'; // review → devam (red)
-  if (d.status !== undefined) {
-    // Bağlı olduğu görev bitmeden "done"a geçişi engelle (yalnız yönetici done'a geçebilir).
-    if (d.status === 'done' && existing.blockedById) {
-      const blocker = await prisma.companyTask.findUnique({ where: { id: existing.blockedById }, select: { status: true } });
-      if (blocker && blocker.status !== 'done') {
-        return NextResponse.json({ success: false, error: 'Önce bağlı olduğu görev tamamlanmalı' }, { status: 409, headers: PRIVATE_NO_STORE_HEADERS });
-      }
+    if (query.view === 'board') {
+      filters.push(
+        week >= current
+          ? { OR: [{ weekKey: week }, ...(week === current ? [{ weekKey: { lt: week }, status: { not: 'done' } }] : [])] }
+          : { weekKey: week }
+      );
     }
-    // ZORUNLU KANIT: hem "review"e (Onaya) göndermede hem "done"a (Bitti) geçişte
-    // görevde en az bir yorum (not) VEYA dosya eki olmalı. done'da HER ZAMAN
-    // yeniden kontrol edilir (review'e girerken vardı ama sonradan silinmiş olabilir)
-    // → kanıtsız/sahte-kanıtlı done engellenir. Kanıt yoksa 409 + kod (UI modal açar).
-    if (movingToReview || movingToDone) {
-      const counts = await prisma.companyTask.findUnique({
-        where: { id }, select: { _count: { select: { comments: true, attachments: true } } },
+    if (query.view === 'mine') {
+      filters.push({ assignedToId: viewer.userId });
+      filters.push({ OR: [{ status: { not: 'done' } }, { status: 'done', weekKey: current }] });
+    }
+    // Departman filtresi yalnız yöneticide anlamlı; üyenin kapsamı zaten sunucuda.
+    if (query.department && viewer.isManager) filters.push({ department: query.department });
+    if (query.status) filters.push({ status: query.status });
+    if (query.priority) filters.push({ priority: query.priority });
+    if (query.mine === '1') filters.push({ assignedToId: viewer.userId });
+    else if (query.assignedTo === 'unassigned') filters.push({ assignedToId: null });
+    else if (query.assignedTo) filters.push({ assignedToId: query.assignedTo });
+    if (query.tag) filters.push({ tags: { contains: query.tag, mode: 'insensitive' } });
+    const q = query.q?.trim();
+    if (q) {
+      filters.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } },
+          { tags: { contains: q, mode: 'insensitive' } },
+        ],
       });
-      const hasProof = (counts?._count.comments ?? 0) > 0 || (counts?._count.attachments ?? 0) > 0;
-      if (!hasProof) {
-        return NextResponse.json(
-          { success: false, error: movingToDone && !movingToReview
-              ? 'Bitmiş işaretlemek için görevde en az bir not veya belge olmalı.'
-              : 'Onaya göndermek için ne yaptığını not olarak yaz veya bir döküman ekle.',
-            code: 'PROOF_REQUIRED' },
-          { status: 409, headers: PRIVATE_NO_STORE_HEADERS },
-        );
+    }
+
+    const limit = query.view === 'search' ? 20 : LIST_LIMIT;
+    const rows = await prisma.companyTask.findMany({
+      where: scopedTaskWhere(viewer, ...filters),
+      select: TASK_LIST_SELECT,
+      orderBy: query.view === 'archive' ? { archivedAt: 'desc' } : query.view === 'search' ? { updatedAt: 'desc' } : { createdAt: 'desc' },
+      take: limit + 1,
+    });
+    const truncated = rows.length > limit;
+    // Etiket: TAM jeton eşleşmesi (eski `contains` "#tas" ile "tasarım"ı da getiriyordu).
+    const tagged = query.tag ? rows.slice(0, limit).filter((r) => hasTag(r.tags, query.tag!)) : rows.slice(0, limit);
+    const sorted = sortTasks(tagged, query.sort);
+    const now = new Date();
+    const items = sorted.map((r) => toTaskDto(r, { weekKey: query.view === 'board' ? week : undefined, now }));
+    return {
+      items,
+      weekKey: week,
+      currentWeekKey: current,
+      carriedCount: items.filter((t) => t.carriedOver).length,
+      truncated,
+    };
+  }
+);
+
+const createBody = z.object({
+  title: z.string().trim().min(1, 'Başlık gerekli').max(200),
+  description: z.string().max(8000).nullish(),
+  priority: z.enum(TASK_PRIORITIES).default('medium'),
+  department: z.string().max(60).nullish(),
+  assignedToId: z.string().max(60).nullish(),
+  weekKey: z.string().refine(isWeekKey, 'Geçersiz hafta').nullish(),
+  tags: z.string().max(300).nullish(),
+  /** İstanbul günü `YYYY-MM-DD`; sunucu gün sonuna çevirir. */
+  dueDate: z.string().max(10).nullish(),
+  estimateMin: z.number().int().min(0).max(100_000).nullish(),
+  recurrence: z.enum(TASK_RECURRENCES).nullish(),
+  blockedById: z.string().max(60).nullish(),
+  /** Alt görevler tek seferde ve sıralı yazılır (eski kod N paralel istekle sıra çakıştırıyordu). */
+  checklist: z.array(z.string().trim().min(1).max(300)).max(30).optional(),
+});
+
+/** POST — yeni görev (yönetici). */
+export const POST = defineRoute(
+  { name: 'team.tasks.create', roles: TEAM_ROUTE_ROLES, schema: createBody, rateLimit: 'mutation' },
+  async ({ user, body, request }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    await Promise.all([assertTeamMember(body.assignedToId), assertDepartment(body.department)]);
+    if (body.blockedById) await findVisibleTask(viewer, body.blockedById, { id: true });
+    const dueAt = parseDueDay(body.dueDate);
+    const tags = body.tags?.split(',').map((t) => t.trim()).filter(Boolean).join(',') || null;
+
+    const task = await prisma.companyTask.create({
+      data: {
+        title: body.title,
+        description: body.description?.trim() || null,
+        status: 'todo',
+        priority: body.priority,
+        department: body.department || null,
+        weekKey: body.weekKey || weekKeyOf(),
+        tags,
+        assignedToId: body.assignedToId || null,
+        createdById: viewer.userId,
+        dueAt,
+        estimateMin: body.estimateMin ?? null,
+        blockedById: body.blockedById || null,
+        recurrence: body.recurrence ?? null,
+        sourceType: 'manual',
+        checklist: body.checklist?.length ? { create: body.checklist.map((text, i) => ({ text, order: i })) } : undefined,
+        activities: { create: { actorId: viewer.userId, action: 'created', detail: 'Görevi oluşturdu' } },
+      },
+      select: TASK_LIST_SELECT,
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: viewer.userId,
+        action: 'create',
+        entity: 'company_task',
+        entityId: task.id,
+        newData: { title: task.title, assignedToId: task.assignedToId, department: task.department } as Prisma.InputJsonValue,
+        ...getAuditRequestMeta(request),
+      },
+    });
+
+    after(async () => {
+      if (task.assignedToId) {
+        await notifyAssignment({
+          taskId: task.id,
+          assigneeId: task.assignedToId,
+          title: task.title,
+          priority: task.priority,
+          dueAt: task.dueAt,
+          description: task.description,
+        }).catch(() => undefined);
+      }
+      const { runAutomations } = await import('@/lib/team-automation-engine');
+      const t = { id: task.id, title: task.title, department: task.department, assignedToId: task.assignedToId, tags: task.tags };
+      await runAutomations({ trigger: 'created', task: t, actorId: viewer.userId });
+      if (task.assignedToId) await runAutomations({ trigger: 'assigned', triggerValue: task.assignedToId, task: t, actorId: viewer.userId });
+    });
+
+    return { task: toTaskDto(task) };
+  }
+);
+
+const updateBody = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().max(8000).nullish(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+  department: z.string().max(60).nullish(),
+  assignedToId: z.string().max(60).nullish(),
+  weekKey: z.string().refine(isWeekKey, 'Geçersiz hafta').optional(),
+  tags: z.string().max(300).nullish(),
+  dueDate: z.string().max(10).nullish(),
+  estimateMin: z.number().int().min(0).max(100_000).nullish(),
+  recurrence: z.enum(TASK_RECURRENCES).nullish(),
+  blockedById: z.string().max(60).nullish(),
+  archived: z.boolean().optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  /** Red notu / yeniden açma gerekçesi / onay notu. */
+  note: z.string().max(2000).nullish(),
+});
+
+const idQuery = z.object({ id: z.string().min(1).max(60) });
+
+/**
+ * PUT ?id= — görev düzenleme (denetim Bulgu 5: oluşturulan görev hiç düzenlenemiyordu) ve
+ * durum geçişi. Üye yalnız kendine atanmış görevin DURUMUNU değiştirebilir; geçiş kuralları
+ * `lib/team/transitions.ts`.
+ */
+export const PUT = defineRoute(
+  { name: 'team.tasks.update', roles: TEAM_ROUTE_ROLES, schema: updateBody, query: idQuery, rateLimit: 'mutation' },
+  async ({ user, body, query, request }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const existing = await findVisibleTask(viewer, query.id, {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+      department: true,
+      dueAt: true,
+      tags: true,
+      estimateMin: true,
+      recurrence: true,
+      weekKey: true,
+      blockedById: true,
+      archivedAt: true,
+      assignedToId: true,
+      createdById: true,
+      status: true,
+    });
+
+    const fieldKeys = (Object.keys(body) as Array<keyof typeof body>).filter(
+      (k) => body[k] !== undefined && k !== 'status' && k !== 'note'
+    );
+    if (fieldKeys.length > 0 && !viewer.isManager) {
+      throw new ApiError('FORBIDDEN', 'Görevin alanlarını yalnız ekip yöneticisi düzenleyebilir; sen durumunu ilerletebilirsin.');
+    }
+
+    // ── Alan güncellemeleri (yönetici) ──
+    if (fieldKeys.length > 0) {
+      if (body.assignedToId !== undefined) await assertTeamMember(body.assignedToId);
+      if (body.department !== undefined) await assertDepartment(body.department);
+      if (body.blockedById) {
+        await findVisibleTask(viewer, body.blockedById, { id: true });
+        await assertNoDependencyCycle(existing.id, body.blockedById);
+      }
+      const data: Prisma.CompanyTaskUncheckedUpdateInput = {};
+      if (body.title !== undefined) data.title = body.title;
+      if (body.description !== undefined) data.description = body.description?.trim() || null;
+      if (body.priority !== undefined) data.priority = body.priority;
+      if (body.department !== undefined) data.department = body.department || null;
+      if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId || null;
+      if (body.weekKey !== undefined) data.weekKey = body.weekKey;
+      if (body.tags !== undefined) data.tags = body.tags?.split(',').map((t) => t.trim()).filter(Boolean).join(',') || null;
+      if (body.dueDate !== undefined) {
+        data.dueAt = parseDueDay(body.dueDate);
+        data.dueReminderSentAt = null; // tarih değişince hatırlatma yeniden kurulur
+      }
+      if (body.estimateMin !== undefined) data.estimateMin = body.estimateMin ?? null;
+      if (body.recurrence !== undefined) data.recurrence = body.recurrence ?? null;
+      if (body.blockedById !== undefined) data.blockedById = body.blockedById || null;
+      if (body.archived !== undefined) data.archivedAt = body.archived ? new Date() : null;
+
+      const updated = await prisma.companyTask.update({
+        where: { id: existing.id },
+        data,
+        select: {
+          title: true,
+          description: true,
+          priority: true,
+          department: true,
+          dueAt: true,
+          tags: true,
+          estimateMin: true,
+          recurrence: true,
+          weekKey: true,
+          blockedById: true,
+          archivedAt: true,
+          assignedToId: true,
+          assignedTo: { select: { name: true } },
+        },
+      });
+      const departments = new Map(
+        (await prisma.department.findMany({ select: { slug: true, name: true } })).map((d) => [d.slug, d.name])
+      );
+      const rows = fieldActivities(existing, updated, { departments });
+      if (body.assignedToId !== undefined && updated.assignedToId !== existing.assignedToId) {
+        rows.push({
+          action: 'assigned',
+          detail: updated.assignedTo ? `${updated.assignedTo.name || 'Bir üyeye'} atadı` : 'Atamayı kaldırdı',
+        });
+      }
+      if (rows.length > 0) {
+        await prisma.taskActivity
+          .createMany({ data: rows.map((r) => ({ taskId: existing.id, actorId: viewer.userId, action: r.action, detail: r.detail })) })
+          .catch(() => undefined);
+      }
+      await prisma.auditLog.create({
+        data: {
+          userId: viewer.userId,
+          action: 'update',
+          entity: 'company_task',
+          entityId: existing.id,
+          oldData: { title: existing.title, assignedToId: existing.assignedToId, priority: existing.priority } as Prisma.InputJsonValue,
+          newData: Object.fromEntries(fieldKeys.map((k) => [k, body[k] ?? null])) as Prisma.InputJsonValue,
+          ...getAuditRequestMeta(request),
+        },
+      });
+      if (updated.assignedToId && updated.assignedToId !== existing.assignedToId) {
+        const assigneeId = updated.assignedToId;
+        after(async () => {
+          await notifyAssignment({
+            taskId: existing.id,
+            assigneeId,
+            title: updated.title,
+            priority: updated.priority,
+            dueAt: updated.dueAt,
+            description: updated.description,
+          }).catch(() => undefined);
+          const { runAutomations } = await import('@/lib/team-automation-engine');
+          await runAutomations({
+            trigger: 'assigned',
+            triggerValue: assigneeId,
+            task: { id: existing.id, title: updated.title, department: updated.department, assignedToId: assigneeId, tags: updated.tags },
+            actorId: viewer.userId,
+          });
+        });
       }
     }
-    data.status = d.status;
-    // Onaya gönderim damgası (review'e ilk geçiş).
-    if (movingToReview) data.submittedForReviewAt = new Date();
-    // Onay damgası: "done"a geçen HER durumda (review→done onayı VEYA yönetici
-    // doğrudan done yapması) onaylayan + zaman yazılır → "done = onaylanmış"
-    // tutarlılığı korunur (approvedById hep dolu olur).
-    if (movingToDone) {
-      data.approvedBy = { connect: { id: userId } };
-      data.approvedAt = new Date();
+
+    // ── Durum geçişi ──
+    let transition: Awaited<ReturnType<typeof transitionTask>> | null = null;
+    if (body.status !== undefined) {
+      if (!canMoveTask(viewer, existing)) {
+        throw new ApiError('FORBIDDEN', 'Yalnız sana atanmış görevlerin durumunu değiştirebilirsin.');
+      }
+      transition = await transitionTask({
+        taskId: existing.id,
+        to: body.status,
+        actor: { userId: viewer.userId, kind: viewer.isManager ? 'manager' : 'member', name: viewer.name },
+        note: body.note,
+      });
+      const effects = transition.effects;
+      if (effects.length > 0) after(() => runEffects(effects));
     }
-    // "done"dan çıkılıyorsa (geri alma) onay izlerini temizle.
-    if (existing.status === 'done' && d.status !== 'done') {
-      data.approvedBy = { disconnect: true };
-      data.approvedAt = null;
-    }
-    // Red (review → in_progress): onaya gönderim damgasını sıfırla.
-    if (rejecting) data.submittedForReviewAt = null;
-    // "done"a geçince completedAt damgala; done'dan çıkınca temizle.
-    if (d.status === 'done') data.completedAt = new Date();
-    else if (existing.status === 'done') data.completedAt = null;
-  }
-  // Yönetici onay/red notu (varsa) yaz.
-  if (isManager && d.reviewNote !== undefined) data.reviewNote = d.reviewNote || null;
 
-  const task = await prisma.companyTask.update({
-    where: { id },
-    data,
-    include: { assignedTo: { select: { id: true, name: true, email: true, image: true } } },
-  });
+    const fresh = await prisma.companyTask.findUniqueOrThrow({ where: { id: existing.id }, select: TASK_LIST_SELECT });
+    return { task: toTaskDto(fresh, { weekKey: weekKeyOf() }), transition: transition ? { kind: transition.kind } : null };
+  }
+);
 
-  // Yeni birine atandıysa (değişiklik) bildirim + mail gönder (fire-and-forget).
-  if (d.assignedToId && d.assignedToId !== existing.assignedToId && task.assignedTo?.email) {
-    after(() => import('@/lib/team-email').then((m) => m.sendTaskAssignedEmail({
-      to: task.assignedTo!.email, assigneeName: task.assignedTo!.name,
-      taskTitle: task.title, priority: task.priority, dueAt: task.dueAt,
-      description: task.description,
-    })).catch(() => {}));
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskAssigned({
-      userId: d.assignedToId!, taskId: task.id, taskTitle: task.title, priority: task.priority,
-    })).catch(() => {}));
+/**
+ * DELETE ?id= — KALICI silme (yönetici). Yalnız arşivdeki görev silinebilir: "Sil" arayüzde
+ * geri alınabilir arşivdir (denetim Bulgu 2 / D4). Ekleri depodan da kaldırılır.
+ */
+export const DELETE = defineRoute(
+  { name: 'team.tasks.delete', roles: TEAM_ROUTE_ROLES, query: idQuery, rateLimit: 'mutation' },
+  async ({ user, query, request }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    const task = await findVisibleTask(viewer, query.id, { id: true, title: true, archivedAt: true, status: true, assignedToId: true });
+    if (!task.archivedAt) throw new ApiError('CONFLICT', 'Kalıcı silmeden önce görevi arşivleyin.');
+    const { deleted, files } = await hardDeleteTasks([task.id]);
+    if (deleted === 0) throw new ApiError('NOT_FOUND', 'Görev bulunamadı.');
+    await prisma.auditLog.create({
+      data: {
+        userId: viewer.userId,
+        action: 'delete',
+        entity: 'company_task',
+        entityId: task.id,
+        oldData: { title: task.title, status: task.status, assignedToId: task.assignedToId } as Prisma.InputJsonValue,
+        ...getAuditRequestMeta(request),
+      },
+    });
+    if (files.length > 0) after(() => cleanupFiles(files));
+    return { deleted };
   }
-
-  // Onay akışı bildirimleri (fire-and-forget).
-  const actorName = (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null))?.name;
-  // 1) Üye onaya gönderdi (review'e ilk geçiş) → yöneticilere "onay bekliyor".
-  if (movingToReview) {
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskSubmittedForReview({
-      taskId: task.id, taskTitle: task.title,
-      submittedById: userId, submittedByName: actorName,
-      createdById: existing.createdById,
-    })).catch(() => {}));
-  }
-  // 2) Yönetici onayladı (review → done) → gönderen üyeye "onaylandı".
-  if (approving && existing.assignedToId && existing.assignedToId !== userId) {
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
-      userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
-      approved: true, byName: actorName,
-    })).catch(() => {}));
-  }
-  // 3) Yönetici reddetti (review → in_progress) → gönderen üyeye "revizyona döndü".
-  if (rejecting && existing.assignedToId && existing.assignedToId !== userId) {
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskReviewed({
-      userId: existing.assignedToId!, taskId: task.id, taskTitle: task.title,
-      approved: false, byName: actorName, note: d.reviewNote,
-    })).catch(() => {}));
-  }
-  // 4) Görev tamamlandıysa yöneticilere + oluşturana genel bildirim.
-  if (movingToDone) {
-    after(() => import('@/lib/team-notify').then((m) => m.notifyTaskCompleted({
-      taskId: task.id, taskTitle: task.title,
-      completedById: userId, completedByName: actorName,
-      createdById: existing.createdById,
-    })).catch(() => {}));
-  }
-
-  // Aktivite feed için TaskActivity kayıtları (status/atama/öncelik değişimleri).
-  const STATUS_LABEL: Record<string, string> = { todo: 'Yapılacak', in_progress: 'Devam Ediyor', review: 'Onayda', done: 'Bitti' };
-  const PRIO_LABEL: Record<string, string> = { low: 'Düşük', medium: 'Orta', high: 'Yüksek' };
-  const activityRows: { taskId: string; actorId: string; action: string; detail: string }[] = [];
-  if (d.status !== undefined && d.status !== existing.status) {
-    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'status', detail: `Durumu "${STATUS_LABEL[d.status] ?? d.status}" yaptı` });
-  }
-  if (d.assignedToId !== undefined && d.assignedToId !== existing.assignedToId) {
-    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'assigned', detail: task.assignedTo ? `${task.assignedTo.name || task.assignedTo.email} kişisine atadı` : 'Atamayı kaldırdı' });
-  }
-  if (d.priority !== undefined && d.priority !== existing.priority) {
-    activityRows.push({ taskId: id, actorId: auth.session.user.id, action: 'priority', detail: `Önceliği "${PRIO_LABEL[d.priority] ?? d.priority}" yaptı` });
-  }
-  if (activityRows.length > 0) {
-    await prisma.taskActivity.createMany({ data: activityRows }).catch(() => {});
-  }
-
-  // Otomasyon motoru: status/atama değişince kuralları çalıştır (fire-and-forget).
-  if (d.status !== undefined && d.status !== existing.status) {
-    import('@/lib/team-automation-engine').then((m) => m.runAutomations({
-      trigger: 'status_changed', triggerValue: d.status,
-      task: { id: task.id, title: task.title, department: task.department, assignedToId: task.assignedToId, tags: task.tags },
-      actorId: auth.session.user.id,
-    })).catch(() => {});
-  }
-  if (d.assignedToId !== undefined && d.assignedToId !== existing.assignedToId && d.assignedToId) {
-    import('@/lib/team-automation-engine').then((m) => m.runAutomations({
-      trigger: 'assigned', triggerValue: d.assignedToId ?? undefined,
-      task: { id: task.id, title: task.title, department: task.department, assignedToId: task.assignedToId, tags: task.tags },
-      actorId: auth.session.user.id,
-    })).catch(() => {});
-  }
-
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id,
-      action: 'update',
-      entity: 'company_task',
-      entityId: id,
-      oldData: { status: existing.status, assignedToId: existing.assignedToId } as Prisma.InputJsonValue,
-      newData: d as Prisma.InputJsonValue,
-      ...getAuditRequestMeta(req),
-    },
-  });
-
-  return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-/** DELETE ?id=: görev siler. */
-export async function DELETE(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
-  const id = req.nextUrl.searchParams.get('id');
-  if (!id) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-
-  await prisma.companyTask.delete({ where: { id } }).catch(() => null);
-
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id,
-      action: 'delete',
-      entity: 'company_task',
-      entityId: id,
-      ...getAuditRequestMeta(req),
-    },
-  });
-
-  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+);

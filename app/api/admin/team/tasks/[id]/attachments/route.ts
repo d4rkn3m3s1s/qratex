@@ -1,13 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireTeamAccess } from '@/lib/team-access';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { randomUUID } from 'crypto';
 import path from 'path';
-import { isR2Configured, uploadToR2, deleteFromR2, keyFromPublicUrl } from '@/lib/r2-storage';
+import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { defineRoute, ApiError } from '@/lib/http/define-route';
+import { isR2Configured, uploadToR2 } from '@/lib/r2-storage';
+import { TEAM_ROUTE_ROLES, findVisibleTask, requireTeamViewer } from '@/lib/team/access';
+import { canAttach, canDeleteAttachment } from '@/lib/team/permissions';
+import { TEAM_ATTACHMENT_MAX_BYTES, TEAM_ATTACHMENT_MAX_LABEL } from '@/lib/team/constants';
+import { removeStoredTaskFile } from '@/lib/team/files';
 
 export const dynamic = 'force-dynamic';
-
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 // ── Dosya türü doğrulama ────────────────────────────────────────────────
 // Strateji: mümkün olan her yerde MAGIC-BYTE (dosyanın gerçek imzası) ile
@@ -119,103 +121,91 @@ function sanitize(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 }
 
-/** POST: göreve dosya eki yükler (resim/PDF). Magic-byte doğrulamalı. R2 (prod) veya yerel disk (dev). */
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const { id: taskId } = await params;
-  const userId = auth.session.user.id;
+const params = z.object({ id: z.string().min(1).max(60) });
 
-  // ERİŞİM: yönetici her göreve; üye YALNIZ kendine atanmış göreve dosya ekler
-  // (başkasının görevine kanıt enjekte etmesini engeller).
-  const task = await prisma.companyTask.findUnique({ where: { id: taskId }, select: { id: true, assignedToId: true } });
-  if (!task) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-  if (!auth.isManager && task.assignedToId !== userId) {
-    return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevlere dosya ekleyebilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const formData = await req.formData().catch(() => null);
-  const file = formData?.get('file');
-  if (!(file instanceof File)) {
-    return NextResponse.json({ success: false, error: 'Dosya bulunamadı' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ success: false, error: 'Dosya boyutu 8MB altında olmalı' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const kind = detect(bytes, file.name);
-  if (!kind) {
-    return NextResponse.json({ success: false, error: 'İzinli türler: resim (PNG/JPG/WEBP/GIF), PDF, Office (Word/Excel/PowerPoint), metin (TXT/CSV/JSON/MD), arşiv (ZIP/RAR/7z)' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const base = sanitize(path.parse(file.name).name || 'ek') || 'ek';
-  const filename = `${base}-${Date.now()}${kind.ext}`;
-  // iOS/Mac SAFARI 'attachment' disposition'ında boş sayfa/hata verir → tüm türlerde
-  // 'inline' kullan (Safari'de dosyalar görünsün). GÜVENLİ: .html/.svg/.js gibi aktif
-  // içerik türleri zaten üstte BLOKLU; kalan türler (text/ofis/arşiv) inline'da script
-  // çalıştıramaz — text görüntülenir, ofis/arşiv tarayıcıca indirilir.
-  const disposition = `inline; filename="${encodeURIComponent(file.name.slice(0, 100))}"`;
-
-  let storedPath: string;
-  if (isR2Configured()) {
-    // Cloudflare R2 (S3) — Vercel'de kalıcı ve read-only fs sorununu çözer.
-    try {
-      storedPath = await uploadToR2(`tasks/${filename}`, bytes, kind.mime, disposition);
-    } catch {
-      return NextResponse.json({ success: false, error: 'Dosya depolamaya yüklenemedi (R2)' }, { status: 502, headers: PRIVATE_NO_STORE_HEADERS });
+/**
+ * POST — göreve dosya eki (magic-byte doğrulamalı). Sınır tek sabitten: TEAM_ATTACHMENT_MAX_BYTES
+ * (denetim O10/Bulgu 17: arayüz "50 MB", hata metni "8 MB" diyordu; Vercel gövde sınırı ~4,5 MB).
+ * Depolama anahtarı tahmin edilemez (`tasks/<uuid>/<ad>`): eski `ad-zaman damgası` biçimi
+ * herkese açık depoda tahmin edilebiliyordu.
+ */
+export const POST = defineRoute(
+  { name: 'team.task.attachment.upload', roles: TEAM_ROUTE_ROLES, params, rateLimit: 'mutation', maxBodyBytes: TEAM_ATTACHMENT_MAX_BYTES + 64_000 },
+  async ({ user, params: p, request }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const task = await findVisibleTask(viewer, p.id, { id: true, assignedToId: true, createdById: true });
+    if (!canAttach(viewer, task)) {
+      throw new ApiError('FORBIDDEN', 'Bu göreve yalnız atanan kişi, oluşturan ve yönetici dosya ekleyebilir.');
     }
-  } else {
-    // Yerel geliştirme fallback: public/ altına yaz (yalnızca localhost'ta çalışır).
-    const { mkdir, writeFile } = await import('fs/promises');
-    const absoluteDir = path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks');
-    await mkdir(absoluteDir, { recursive: true });
-    await writeFile(path.join(absoluteDir, filename), bytes);
-    storedPath = `/images/uploads/tasks/${filename}`;
+    const declared = Number(request.headers.get('content-length') ?? '');
+    if (Number.isFinite(declared) && declared > TEAM_ATTACHMENT_MAX_BYTES + 64_000) {
+      throw new ApiError('PAYLOAD_TOO_LARGE', `Dosya en fazla ${TEAM_ATTACHMENT_MAX_LABEL} olabilir.`);
+    }
+    const formData = await request.formData().catch(() => null);
+    const file = formData?.get('file');
+    if (!(file instanceof File)) throw new ApiError('VALIDATION', 'Dosya bulunamadı.');
+    if (file.size <= 0) throw new ApiError('VALIDATION', 'Dosya boş.');
+    if (file.size > TEAM_ATTACHMENT_MAX_BYTES) throw new ApiError('PAYLOAD_TOO_LARGE', `Dosya en fazla ${TEAM_ATTACHMENT_MAX_LABEL} olabilir.`);
+
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const kind = detect(bytes, file.name);
+    if (!kind) {
+      throw new ApiError(
+        'VALIDATION',
+        'İzinli türler: görsel (PNG, JPG, WEBP, GIF), PDF, video (MP4, WEBM), Office (Word, Excel, PowerPoint), metin (TXT, CSV, JSON, MD), arşiv (ZIP, RAR, 7z).'
+      );
+    }
+
+    const base = sanitize(path.parse(file.name).name || 'ek') || 'ek';
+    const objectName = `${base}${kind.ext}`;
+    // Safari "attachment" disposition'da boş sayfa gösteriyordu; aktif içerik türleri zaten reddediliyor.
+    const disposition = `inline; filename="${encodeURIComponent(file.name.slice(0, 100))}"`;
+
+    let storedPath: string;
+    if (isR2Configured()) {
+      try {
+        storedPath = await uploadToR2(`tasks/${randomUUID()}/${objectName}`, bytes, kind.mime, disposition);
+      } catch {
+        throw new ApiError('SERVICE_UNAVAILABLE', 'Dosya depolamaya yüklenemedi. Biraz sonra tekrar deneyin.', { retryable: true });
+      }
+    } else {
+      // Yerel geliştirme: public/ altına yaz (yalnız localhost).
+      const { mkdir, writeFile } = await import('fs/promises');
+      const dir = path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks');
+      await mkdir(dir, { recursive: true });
+      const local = `${randomUUID()}-${objectName}`;
+      await writeFile(path.join(dir, local), bytes);
+      storedPath = `/images/uploads/tasks/${local}`;
+    }
+
+    const attachment = await prisma.taskAttachment.create({
+      data: { taskId: task.id, uploadedById: viewer.userId, filename: file.name.slice(0, 200), path: storedPath, mime: kind.mime, size: file.size },
+      select: { id: true, filename: true, path: true, mime: true, size: true, createdAt: true },
+    });
+    await prisma.taskActivity
+      .create({ data: { taskId: task.id, actorId: viewer.userId, action: 'attachment', detail: `Dosya ekledi: ${file.name.slice(0, 60)}` } })
+      .catch(() => undefined);
+
+    return { attachment: { ...attachment, createdAt: attachment.createdAt.toISOString() } };
   }
+);
 
-  const attachment = await prisma.taskAttachment.create({
-    data: { taskId, uploadedById: userId, filename: file.name.slice(0, 200), path: storedPath, mime: kind.mime, size: file.size },
-  });
-  await prisma.taskActivity.create({
-    data: { taskId, actorId: userId, action: 'attachment', detail: `Dosya ekledi: ${file.name.slice(0, 40)}` },
-  });
+const deleteQuery = z.object({ attachmentId: z.string().min(1).max(60) });
 
-  return NextResponse.json({ success: true, attachment }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-/** DELETE ?attachmentId=: eki siler (DB + R2/disk). */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const { id: taskId } = await params;
-  const attachmentId = req.nextUrl.searchParams.get('attachmentId');
-  if (!attachmentId) return NextResponse.json({ success: false, error: 'attachmentId gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-
-  const att = await prisma.taskAttachment.findUnique({ where: { id: attachmentId } });
-  if (!att || att.taskId !== taskId) {
-    return NextResponse.json({ success: false, error: 'Ek bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+/** DELETE ?attachmentId= — eki siler (DB + depo). Yükleyen ya da yönetici. */
+export const DELETE = defineRoute(
+  { name: 'team.task.attachment.delete', roles: TEAM_ROUTE_ROLES, params, query: deleteQuery, rateLimit: 'mutation' },
+  async ({ user, params: p, query }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const task = await findVisibleTask(viewer, p.id, { id: true });
+    const att = await prisma.taskAttachment.findFirst({ where: { id: query.attachmentId, taskId: task.id } });
+    if (!att) throw new ApiError('NOT_FOUND', 'Ek bulunamadı.');
+    if (!canDeleteAttachment(viewer, att)) throw new ApiError('FORBIDDEN', 'Bu eki yalnız yükleyen kişi ya da yönetici silebilir.');
+    await prisma.taskAttachment.delete({ where: { id: att.id } });
+    await removeStoredTaskFile(att.path);
+    await prisma.taskActivity
+      .create({ data: { taskId: task.id, actorId: viewer.userId, action: 'attachment', detail: `Dosya kaldırdı: ${att.filename.slice(0, 60)}` } })
+      .catch(() => undefined);
+    return { deleted: true };
   }
-  // Yalnızca yükleyen kişi veya yönetici silebilir (başkasının kanıtını silmeyi engeller).
-  if (att.uploadedById !== auth.session.user.id && !auth.isManager) {
-    return NextResponse.json({ success: false, error: 'Bu eki silemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  await prisma.taskAttachment.delete({ where: { id: attachmentId } }).catch(() => null);
-
-  // R2'deyse (http URL) R2'den sil; yerel diskteyse dosyayı sil.
-  if (/^https?:\/\//.test(att.path)) {
-    const key = keyFromPublicUrl(att.path);
-    if (key) await deleteFromR2(key);
-  } else {
-    const { unlink } = await import('fs/promises');
-    const safe = path.basename(att.path);
-    await unlink(path.join(process.cwd(), 'public', 'images', 'uploads', 'tasks', safe)).catch(() => {});
-  }
-
-  await prisma.taskActivity.create({
-    data: { taskId, actorId: auth.session.user.id, action: 'attachment', detail: `Dosya kaldırdı: ${att.filename.slice(0, 40)}` },
-  });
-
-  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+);

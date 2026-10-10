@@ -1,135 +1,126 @@
 import { prisma } from '@/lib/prisma';
+import { parseTags, isTaskPriority, PRIORITY_META } from '@/lib/team/constants';
 
 /**
- * Otomasyon tetikleme motoru.
- * Bir görev olayı (durum değişti / atandı / oluşturuldu / gecikti) gerçekleştiğinde
- * eşleşen aktif TeamAutomation kurallarını bulur ve aksiyonlarını uygular.
+ * Otomasyon tetikleme motoru (denetim O4/O5, admin_ekip Bulgu 8/12).
  *
- * NOT: Bu fonksiyon route değildir; başka handler'lardan çağrılan bir helper'dır.
- * Sonsuz döngü güvenliği: aksiyonlar yalnızca DB update yapar, tekrar runAutomations
- * çağrılmaz. Dolayısıyla set_status / add_tag / assign gibi aksiyonlar yeni bir
- * otomasyon zinciri tetiklemez.
+ * Tetikler — hepsi gerçekten çağrılır:
+ *  - `status_changed` → lib/team/transitions.ts (PUT, toplu işlem, cron)
+ *  - `assigned`       → görev atama/yeniden atama (PUT, toplu atama)
+ *  - `created`        → görev oluşturma, şablondan üretim, kopyalama, işletme verisinden üretim
+ *  - `overdue`        → günlük bakım cron'u (görev başına bir kez)
+ *
+ * Aksiyonlar: bildir, etiket ekle, öncelik ata, kişiye ata, durum değiştir. "Durum değiştir"
+ * onay akışını ATLAYAMAZ: geçiş `transitionTask` üzerinden "otomasyon" aktörüyle yapılır;
+ * "Bitti"ye geçirme ve "Bitti"den çıkarma reddedilir, kanıt ve bağımlılık kuralı aynen uygulanır.
+ *
+ * Gözlemlenebilirlik: her çalışma ve hata görevin geçmişine `automation` aktivitesi olarak
+ * yazılır (kural adıyla); otomasyon diyaloğu son çalışmaları buradan gösterir.
+ *
+ * Zincirleme yok: otomasyonun yaptığı değişiklik yeni otomasyon tetiklemez.
+ * Çağıran taraf bu fonksiyonu `after()` içinde çalıştırır (yanıt sonrası kesilmesin).
  */
+
+export type AutomationTrigger = 'status_changed' | 'assigned' | 'created' | 'overdue';
+
+export const AUTOMATION_SET_STATUS_TARGETS = ['todo', 'in_progress', 'review'] as const;
+
 export async function runAutomations(opts: {
-  trigger: 'status_changed' | 'assigned' | 'created' | 'overdue';
+  trigger: AutomationTrigger;
   triggerValue?: string;
-  task: {
-    id: string;
-    title: string;
-    department: string | null;
-    assignedToId: string | null;
-    tags: string | null;
-  };
+  task: { id: string; title: string; department: string | null; assignedToId: string | null; tags: string | null };
   actorId: string;
-}): Promise<void> {
+}): Promise<{ applied: number; failed: number }> {
+  let applied = 0;
+  let failed = 0;
+  let rules: Awaited<ReturnType<typeof prisma.teamAutomation.findMany>> = [];
   try {
-    // 1) Eşleşen aktif kuralları bul: tetik tipi aynı + departman ya null (hepsi) ya da görev departmanı.
-    const rules = await prisma.teamAutomation.findMany({
+    rules = await prisma.teamAutomation.findMany({
       where: {
         enabled: true,
         triggerType: opts.trigger,
-        OR: [{ department: null }, { department: opts.task.department }],
+        OR: [{ department: null }, ...(opts.task.department ? [{ department: opts.task.department }] : [])],
       },
+      orderBy: { createdAt: 'asc' },
     });
-
-    for (const rule of rules) {
-      try {
-        // 2) triggerValue kontrolü: kuralda bir triggerValue tanımlıysa gelen değerle birebir eşleşmeli.
-        //    (ör. status_changed tetiği için yalnızca "done" durumuna geçince çalışsın gibi.)
-        if (rule.triggerValue && rule.triggerValue !== opts.triggerValue) {
-          continue;
-        }
-
-        // 3) actionType'a göre aksiyonu uygula.
-        switch (rule.actionType) {
-          case 'notify': {
-            // Tüm yöneticilere bildirim oluştur (ADMIN rolü veya adminTeamRole='yonetici').
-            const managers = await prisma.user.findMany({
-              where: { OR: [{ role: 'ADMIN' }, { adminTeamRole: 'yonetici' }] },
-              select: { id: true },
-            });
-            await Promise.all(
-              managers.map((m) =>
-                prisma.notification.create({
-                  data: {
-                    userId: m.id,
-                    title: '⚙️ Otomasyon: ' + rule.name,
-                    message: opts.task.title,
-                    type: 'info',
-                    data: {
-                      kind: 'team-automation',
-                      taskId: opts.task.id,
-                      href: '/admin/ekip?task=' + opts.task.id,
-                    },
-                  },
-                }),
-              ),
-            );
-            break;
-          }
-
-          case 'add_tag': {
-            // Mevcut tags CSV'sine actionValue etiketini tekrarsız ekle.
-            if (rule.actionValue) {
-              const existing = (opts.task.tags ?? '')
-                .split(',')
-                .map((t) => t.trim())
-                .filter(Boolean);
-              const set = new Set(existing);
-              set.add(rule.actionValue.trim());
-              await prisma.companyTask.update({
-                where: { id: opts.task.id },
-                data: { tags: Array.from(set).join(',') },
-              });
-            }
-            break;
-          }
-
-          case 'set_priority': {
-            // Öncelik ata (low / medium / high).
-            if (rule.actionValue) {
-              await prisma.companyTask.update({
-                where: { id: opts.task.id },
-                data: { priority: rule.actionValue },
-              });
-            }
-            break;
-          }
-
-          case 'assign': {
-            // Görevi belirtilen kullanıcıya ata.
-            if (rule.actionValue) {
-              await prisma.companyTask.update({
-                where: { id: opts.task.id },
-                data: { assignedToId: rule.actionValue },
-              });
-            }
-            break;
-          }
-
-          case 'set_status': {
-            // Durumu değiştir; 'done' ise completedAt'i işaretle, değilse temizle.
-            if (rule.actionValue) {
-              await prisma.companyTask.update({
-                where: { id: opts.task.id },
-                data: {
-                  status: rule.actionValue,
-                  completedAt: rule.actionValue === 'done' ? new Date() : null,
-                },
-              });
-            }
-            break;
-          }
-
-          default:
-            // Bilinmeyen aksiyon tipi: sessizce atla.
-            break;
-        }
-      } catch {
-        // Tek bir kuralın hatası diğer kuralları ve çağıran akışı bozmasın.
-      }
-    }
-  } catch {
-    // Motorun tümü sessiz: hata çağıran işlemi (görev güncelleme vb.) engellemez.
+  } catch (err) {
+    console.warn('[team-automation] kurallar okunamadı:', err);
+    return { applied, failed };
   }
+
+  let tags = opts.task.tags;
+  for (const rule of rules) {
+    if (rule.triggerValue && rule.triggerValue !== opts.triggerValue) continue;
+    const log = (detail: string) =>
+      prisma.taskActivity
+        .create({ data: { taskId: opts.task.id, actorId: rule.createdById, action: 'automation', detail: `Otomasyon "${rule.name}": ${detail}`.slice(0, 300) } })
+        .catch(() => undefined);
+    try {
+      switch (rule.actionType) {
+        case 'notify': {
+          const { notifyAutomation } = await import('@/lib/team-notify');
+          await notifyAutomation({ ruleName: rule.name, taskId: opts.task.id, taskTitle: opts.task.title });
+          await log('yöneticilere bildirim gönderildi');
+          break;
+        }
+        case 'add_tag': {
+          const tag = (rule.actionValue ?? '').trim();
+          if (!tag) throw new Error('etiket boş');
+          const set = new Set(parseTags(tags));
+          if (![...set].some((t) => t.toLocaleLowerCase('tr') === tag.toLocaleLowerCase('tr'))) {
+            set.add(tag);
+            tags = [...set].join(',');
+            await prisma.companyTask.update({ where: { id: opts.task.id }, data: { tags } });
+          }
+          await log(`#${tag} etiketi eklendi`);
+          break;
+        }
+        case 'set_priority': {
+          const p = rule.actionValue ?? '';
+          if (!isTaskPriority(p)) throw new Error('geçersiz öncelik');
+          await prisma.companyTask.update({ where: { id: opts.task.id }, data: { priority: p } });
+          await log(`öncelik "${PRIORITY_META[p].label}" yapıldı`);
+          break;
+        }
+        case 'assign': {
+          const userId = rule.actionValue ?? '';
+          const member = await prisma.user.findFirst({
+            where: { id: userId, OR: [{ adminTeamRole: { not: null } }, { role: 'ADMIN' }] },
+            select: { id: true, name: true, email: true },
+          });
+          if (!member) throw new Error('atanacak kişi artık ekipte değil');
+          if (opts.task.assignedToId !== member.id) {
+            await prisma.companyTask.update({ where: { id: opts.task.id }, data: { assignedToId: member.id } });
+            const { notifyTaskAssigned } = await import('@/lib/team-notify');
+            await notifyTaskAssigned({ userId: member.id, taskId: opts.task.id, taskTitle: opts.task.title });
+          }
+          await log(`${member.name || member.email} kişisine atandı`);
+          break;
+        }
+        case 'set_status': {
+          const target = rule.actionValue ?? '';
+          if (!(AUTOMATION_SET_STATUS_TARGETS as readonly string[]).includes(target)) {
+            throw new Error('otomasyon görevi "Bitti"ye geçiremez');
+          }
+          const { transitionTask, runEffects } = await import('@/lib/team/transitions');
+          const result = await transitionTask({
+            taskId: opts.task.id,
+            to: target as (typeof AUTOMATION_SET_STATUS_TARGETS)[number],
+            actor: { userId: rule.createdById, kind: 'automation', name: `Otomasyon: ${rule.name}` },
+            triggerAutomations: false,
+          });
+          await runEffects(result.effects);
+          break;
+        }
+        default:
+          throw new Error('bilinmeyen aksiyon');
+      }
+      applied++;
+    } catch (err) {
+      failed++;
+      const reason = err instanceof Error ? err.message : 'bilinmeyen hata';
+      await log(`çalışamadı (${reason})`);
+    }
+  }
+  return { applied, failed };
 }

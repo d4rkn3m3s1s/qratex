@@ -7,6 +7,9 @@ import { sendTransactionalEmail, isMailConfigured } from '@/lib/mail-sender';
 import { renderSimpleBrandedEmail } from '@/lib/intern-task-emails';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
 import { escapeEmailHtml } from '@/lib/security/escape-html';
+import { NOT_INITIATIVE } from '@/lib/team/access';
+import { teamTaskHref } from '@/lib/team/href';
+import { effectiveDue } from '@/lib/team/dates';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,17 +44,23 @@ export async function GET(req: Request) {
 
     const tasks = await prisma.companyTask.findMany({
       where: {
-        dueAt: { gte: from, lte: to },
-        status: { not: 'done' },
-        assignedToId: { not: null },
-        dueReminderSentAt: null,
+        AND: [
+          NOT_INITIATIVE,
+          {
+            dueAt: { gte: from, lte: to },
+            status: { not: 'done' },
+            archivedAt: null,
+            assignedToId: { not: null },
+            dueReminderSentAt: null,
+          },
+        ],
       },
       select: {
         id: true,
         title: true,
         description: true,
         dueAt: true,
-        assignedTo: { select: { email: true, name: true } },
+        assignedTo: { select: { email: true, name: true, role: true } },
       },
       orderBy: { dueAt: 'asc' },
       take: MAX_TASKS_PER_RUN,
@@ -66,8 +75,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const origin = getPublicAppOrigin();
-    const teamUrl = `${origin.replace(/\/$/, '')}/customer/ekip`;
+    const origin = getPublicAppOrigin().replace(/\/$/, '');
 
     let sent = 0;
     let deferred = 0;
@@ -86,7 +94,10 @@ export async function GET(req: Request) {
         continue;
       }
       const name = t.assignedTo?.name ?? '';
-      const due = new Date(t.dueAt);
+      // Alıcının paneline göre görev bağlantısı (ADMIN → /admin/ekip; diğerleri /customer/ekip).
+      const teamUrl = `${origin}${teamTaskHref(t.assignedTo?.role ?? null, t.id)}`;
+      // Gün-yalnız eski kayıtlar (UTC gece yarısı) İstanbul gün sonu kabul edilir.
+      const due = effectiveDue(t.dueAt) ?? new Date(t.dueAt);
       const rel = dueRelativeLabel(due, now);
       const dueLabel = due.toLocaleString('tr-TR', {
         timeZone: 'Europe/Istanbul',

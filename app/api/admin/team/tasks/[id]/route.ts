@@ -1,194 +1,224 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { z } from 'zod';
-import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ApiError } from '@/lib/http/define-route';
+import { TEAM_ROUTE_ROLES, findVisibleTask, requireTeamViewer } from '@/lib/team/access';
+import { canDeleteComment, canEditChecklist, canEditComment, canLogTime } from '@/lib/team/permissions';
+import { loadTaskDetail } from '@/lib/team/detail';
+import { parseDueDay } from '@/lib/team/tasks';
+import { formatMinutes } from '@/lib/team/dates';
 
 export const dynamic = 'force-dynamic';
 
-/** GET: tek görev + checklist + yorumlar + aktivite geçmişi (detay modalı için). */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const { id } = await params;
+const params = z.object({ id: z.string().min(1).max(60) });
 
-  const task = await prisma.companyTask.findUnique({
-    where: { id },
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true, image: true } },
-      createdBy: { select: { id: true, name: true } },
-      blockedBy: { select: { id: true, title: true, status: true } },
-      checklist: { orderBy: { order: 'asc' }, include: { assignedTo: { select: { id: true, name: true, email: true, image: true } } } },
-      comments: {
-        orderBy: { createdAt: 'asc' },
-        include: {
-          author: { select: { id: true, name: true, email: true, image: true } },
-          reactions: { select: { emoji: true, userId: true } },
-        },
-      },
-      activities: {
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-        include: { actor: { select: { id: true, name: true } } },
-      },
-      attachments: {
-        orderBy: { createdAt: 'desc' },
-        include: { uploadedBy: { select: { name: true } } },
-      },
-    },
-  });
-  if (!task) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-  return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+/** GET — görev detayı (kapsam dışı görev 404; yetenek bayraklarıyla). */
+export const GET = defineRoute(
+  { name: 'team.task.detail', roles: TEAM_ROUTE_ROLES, params, rateLimit: 'read' },
+  async ({ user, params: p }) => {
+    const viewer = await requireTeamViewer(user.id);
+    return loadTaskDetail(viewer, p.id);
+  }
+);
 
-const actionSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('add_checklist'), text: z.string().min(1).max(300), assignedToId: z.string().optional().nullable(), dueAt: z.string().datetime().optional().nullable() }),
-  z.object({ op: z.literal('toggle_checklist'), itemId: z.string(), done: z.boolean() }),
-  z.object({ op: z.literal('update_checklist'), itemId: z.string(), assignedToId: z.string().optional().nullable(), dueAt: z.string().datetime().optional().nullable(), text: z.string().max(300).optional() }),
-  z.object({ op: z.literal('delete_checklist'), itemId: z.string() }),
+const REACTIONS = ['👍', '❤️', '🎉', '🚀', '👀'] as const;
+
+const actionBody = z.discriminatedUnion('op', [
   z.object({
-    op: z.literal('add_comment'), text: z.string().min(1).max(2000),
-    mentions: z.array(z.string()).max(20).optional(),
-    parentId: z.string().optional().nullable(), // yanıt (thread)
-    attachmentPath: z.string().max(500).optional().nullable(), // yoruma iliştirilmiş dosya (R2 URL)
-    attachmentName: z.string().max(200).optional().nullable(),
+    op: z.literal('add_checklist'),
+    text: z.string().trim().min(1).max(300),
+    assignedToId: z.string().max(60).nullish(),
+    dueDate: z.string().max(10).nullish(),
   }),
-  z.object({ op: z.literal('edit_comment'), commentId: z.string(), text: z.string().min(1).max(2000) }),
-  z.object({ op: z.literal('delete_comment'), commentId: z.string() }),
-  z.object({ op: z.literal('toggle_reaction'), commentId: z.string(), emoji: z.string().min(1).max(8) }),
+  z.object({ op: z.literal('add_checklist_many'), items: z.array(z.string().trim().min(1).max(300)).min(1).max(20) }),
+  z.object({ op: z.literal('toggle_checklist'), itemId: z.string().max(60), done: z.boolean() }),
+  z.object({
+    op: z.literal('update_checklist'),
+    itemId: z.string().max(60),
+    assignedToId: z.string().max(60).nullish(),
+    dueDate: z.string().max(10).nullish(),
+    text: z.string().trim().min(1).max(300).optional(),
+  }),
+  z.object({ op: z.literal('delete_checklist'), itemId: z.string().max(60) }),
+  z.object({
+    op: z.literal('add_comment'),
+    text: z.string().trim().min(1).max(4000),
+    mentions: z.array(z.string().max(60)).max(20).optional(),
+    parentId: z.string().max(60).nullish(),
+    /** Yalnız BU göreve yüklenmiş bir ekin kimliği (serbest URL kabul edilmez). */
+    attachmentId: z.string().max(60).nullish(),
+  }),
+  z.object({ op: z.literal('edit_comment'), commentId: z.string().max(60), text: z.string().trim().min(1).max(4000) }),
+  z.object({ op: z.literal('delete_comment'), commentId: z.string().max(60) }),
+  z.object({ op: z.literal('toggle_reaction'), commentId: z.string().max(60), emoji: z.enum(REACTIONS) }),
+  /** Süre kaydı — atanan kişi (ya da yönetici); atomik artış (denetim Y1, Bulgu 88). */
+  z.object({ op: z.literal('log_time'), minutes: z.number().int().min(1).max(24 * 60) }),
 ]);
 
-/** POST: detay alt-işlemleri (checklist ekle/işaretle/sil, yorum ekle/sil). Aktivite kaydı yazar. */
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-  const { id: taskId } = await params;
-  const userId = auth.session.user.id;
-  const isManager = auth.isManager;
+/** POST — detay alt işlemleri; yanıt güncel detaydır (istemci ikinci istek atmaz). */
+export const POST = defineRoute(
+  { name: 'team.task.action', roles: TEAM_ROUTE_ROLES, params, schema: actionBody, rateLimit: 'mutation' },
+  async ({ user, params: p, body }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const task = await findVisibleTask(viewer, p.id, { id: true, title: true, assignedToId: true, createdById: true, status: true });
+    const log = (action: string, detail: string) =>
+      prisma.taskActivity.create({ data: { taskId: task.id, actorId: viewer.userId, action, detail } }).catch(() => undefined);
+    const itemOf = async (itemId: string) => {
+      const item = await prisma.taskChecklistItem.findFirst({ where: { id: itemId, taskId: task.id }, select: { id: true, text: true } });
+      if (!item) throw new ApiError('NOT_FOUND', 'Alt görev bulunamadı.');
+      return item;
+    };
+    const commentOf = async (commentId: string) => {
+      const c = await prisma.taskComment.findFirst({ where: { id: commentId, taskId: task.id }, select: { id: true, authorId: true } });
+      if (!c) throw new ApiError('NOT_FOUND', 'Yorum bulunamadı.');
+      return c;
+    };
+    const requireChecklistRight = () => {
+      if (!canEditChecklist(viewer, task)) throw new ApiError('FORBIDDEN', 'Bu görevin alt görevlerini yalnız atanan kişi ve yönetici düzenleyebilir.');
+    };
 
-  // Görev var mı + ERİŞİM: yönetici her göreve; üye YALNIZ kendine atanmış göreve
-  // alt-işlem yapabilir (başkasının görevini yorumlayarak/kanıt enjekte ederek
-  // onay akışını kirletmesini engeller).
-  const task = await prisma.companyTask.findUnique({ where: { id: taskId }, select: { id: true, assignedToId: true } });
-  if (!task) return NextResponse.json({ success: false, error: 'Görev bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-  if (!isManager && task.assignedToId !== userId) {
-    return NextResponse.json({ success: false, error: 'Yalnızca size atanmış görevlerde işlem yapabilirsiniz.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  const raw = await req.json().catch(() => ({}));
-  const parsed = actionSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz işlem' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const d = parsed.data;
-
-  const logActivity = (action: string, detail: string) =>
-    prisma.taskActivity.create({ data: { taskId, actorId: userId, action, detail } });
-
-  // Bir checklist item / yorumun gerçekten BU göreve ait olduğunu doğrula (IDOR koruması).
-  const checklistBelongs = async (itemId: string) =>
-    (await prisma.taskChecklistItem.findUnique({ where: { id: itemId }, select: { taskId: true } }))?.taskId === taskId;
-  const commentBelongs = async (commentId: string) =>
-    (await prisma.taskComment.findUnique({ where: { id: commentId }, select: { taskId: true } }))?.taskId === taskId;
-  const NOT_FOUND = NextResponse.json({ success: false, error: 'Kayıt bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-
-  switch (d.op) {
-    case 'add_checklist': {
-      const count = await prisma.taskChecklistItem.count({ where: { taskId } });
-      await prisma.taskChecklistItem.create({ data: {
-        taskId, text: d.text, order: count,
-        assignedToId: d.assignedToId || null,
-        dueAt: d.dueAt ? new Date(d.dueAt) : null,
-      } });
-      await logActivity('checklist', `Alt görev eklendi: ${d.text.slice(0, 40)}`);
-      break;
-    }
-    case 'toggle_checklist':
-      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
-      await prisma.taskChecklistItem.update({ where: { id: d.itemId }, data: { done: d.done } });
-      break;
-    case 'update_checklist': {
-      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
-      const upd: { assignedToId?: string | null; dueAt?: Date | null; text?: string } = {};
-      if (d.assignedToId !== undefined) upd.assignedToId = d.assignedToId || null;
-      if (d.dueAt !== undefined) upd.dueAt = d.dueAt ? new Date(d.dueAt) : null;
-      if (d.text !== undefined) upd.text = d.text;
-      await prisma.taskChecklistItem.update({ where: { id: d.itemId }, data: upd }).catch(() => null);
-      break;
-    }
-    case 'delete_checklist':
-      if (!(await checklistBelongs(d.itemId))) return NOT_FOUND;
-      await prisma.taskChecklistItem.delete({ where: { id: d.itemId } }).catch(() => null);
-      break;
-    case 'add_comment': {
-      await prisma.taskComment.create({ data: {
-        taskId, authorId: userId, text: d.text,
-        parentId: d.parentId || null,
-        attachmentPath: d.attachmentPath || null,
-        attachmentName: d.attachmentName || null,
-      } });
-      // @bahsedilenlere bildirim (kendini etiketleme sayılmaz).
-      const mentionIds = [...new Set((d.mentions ?? []).filter((m) => m && m !== userId))];
-      if (mentionIds.length > 0) {
-        const [task, mentioned, actor] = await Promise.all([
-          prisma.companyTask.findUnique({ where: { id: taskId }, select: { title: true } }),
-          prisma.user.findMany({ where: { id: { in: mentionIds } }, select: { id: true, name: true, email: true } }),
-          prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
-        ]);
-        const names = mentioned.map((u) => u.name || u.email).join(', ');
-        await logActivity('mentioned', names ? `${names} etiketlendi` : 'Yorum yaptı');
-        if (task) {
-          import('@/lib/team-email').then((m) =>
-            Promise.all(mentioned.map((u) => m.sendMentionEmail({
-              to: u.email, mentionName: u.name, byName: actor?.name, taskTitle: task.title, commentText: d.text,
-            })))
-          ).catch(() => {});
-          import('@/lib/team-notify').then((m) =>
-            Promise.all(mentioned.map((u) => m.notifyMention({
-              userId: u.id, taskId, taskTitle: task.title, byName: actor?.name,
-            })))
-          ).catch(() => {});
+    switch (body.op) {
+      case 'add_checklist': {
+        requireChecklistRight();
+        if (body.assignedToId && !viewer.isManager) throw new ApiError('FORBIDDEN', 'Alt görevi yalnız yönetici birine atayabilir.');
+        const max = await prisma.taskChecklistItem.aggregate({ where: { taskId: task.id }, _max: { order: true } });
+        await prisma.taskChecklistItem.create({
+          data: {
+            taskId: task.id,
+            text: body.text,
+            order: (max._max.order ?? -1) + 1,
+            assignedToId: body.assignedToId || null,
+            dueAt: parseDueDay(body.dueDate),
+          },
+        });
+        await log('checklist', `Alt görev ekledi: ${body.text.slice(0, 60)}`);
+        break;
+      }
+      case 'add_checklist_many': {
+        requireChecklistRight();
+        const max = await prisma.taskChecklistItem.aggregate({ where: { taskId: task.id }, _max: { order: true } });
+        const base = (max._max.order ?? -1) + 1;
+        await prisma.taskChecklistItem.createMany({ data: body.items.map((text, i) => ({ taskId: task.id, text, order: base + i })) });
+        await log('checklist', `${body.items.length} alt görev ekledi`);
+        break;
+      }
+      case 'toggle_checklist': {
+        requireChecklistRight();
+        const item = await itemOf(body.itemId);
+        await prisma.taskChecklistItem.update({ where: { id: item.id }, data: { done: body.done } });
+        await log('checklist', `${body.done ? 'Tamamladı' : 'Yeniden açtı'}: ${item.text.slice(0, 60)}`);
+        break;
+      }
+      case 'update_checklist': {
+        if (!viewer.isManager && (body.assignedToId !== undefined || body.dueDate !== undefined)) {
+          throw new ApiError('FORBIDDEN', 'Alt görev ataması ve tarihi yalnız yöneticidedir.');
         }
-      } else {
-        await logActivity('commented', 'Yorum yaptı');
+        requireChecklistRight();
+        const item = await itemOf(body.itemId);
+        await prisma.taskChecklistItem.update({
+          where: { id: item.id },
+          data: {
+            ...(body.assignedToId !== undefined ? { assignedToId: body.assignedToId || null } : {}),
+            ...(body.dueDate !== undefined ? { dueAt: parseDueDay(body.dueDate) } : {}),
+            ...(body.text !== undefined ? { text: body.text } : {}),
+          },
+        });
+        break;
       }
-      break;
-    }
-    case 'edit_comment': {
-      // Yorum bu göreve ait olmalı + yalnızca yazarı düzenleyebilir.
-      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true, taskId: true } });
-      if (!comment || comment.taskId !== taskId) return NOT_FOUND;
-      if (comment.authorId !== userId) {
-        return NextResponse.json({ success: false, error: 'Bu yorumu düzenleyemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+      case 'delete_checklist': {
+        requireChecklistRight();
+        const item = await itemOf(body.itemId);
+        await prisma.taskChecklistItem.delete({ where: { id: item.id } });
+        await log('checklist', `Alt görevi sildi: ${item.text.slice(0, 60)}`);
+        break;
       }
-      await prisma.taskComment.update({ where: { id: d.commentId }, data: { text: d.text, editedAt: new Date() } });
-      break;
-    }
-    case 'delete_comment': {
-      // Yorum bu göreve ait olmalı + yalnızca YAZARI veya YÖNETİCİ silebilir.
-      const comment = await prisma.taskComment.findUnique({ where: { id: d.commentId }, select: { authorId: true, taskId: true } });
-      if (!comment || comment.taskId !== taskId) return NOT_FOUND;
-      if (comment.authorId !== userId && !isManager) {
-        return NextResponse.json({ success: false, error: 'Bu yorumu silemezsiniz' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
+      case 'add_comment': {
+        if (body.parentId) await commentOf(body.parentId);
+        let attachment: { path: string; filename: string } | null = null;
+        if (body.attachmentId) {
+          attachment = await prisma.taskAttachment.findFirst({
+            where: { id: body.attachmentId, taskId: task.id, uploadedById: viewer.userId },
+            select: { path: true, filename: true },
+          });
+          if (!attachment) throw new ApiError('VALIDATION', 'Ek bu göreve ait değil.');
+        }
+        await prisma.taskComment.create({
+          data: {
+            taskId: task.id,
+            authorId: viewer.userId,
+            text: body.text,
+            parentId: body.parentId || null,
+            attachmentPath: attachment?.path ?? null,
+            attachmentName: attachment?.filename ?? null,
+          },
+        });
+        const mentionIds = [...new Set((body.mentions ?? []).filter((m) => m && m !== viewer.userId))];
+        const mentioned = mentionIds.length
+          ? await prisma.user.findMany({
+              where: { id: { in: mentionIds }, OR: [{ adminTeamRole: { not: null } }, { role: 'ADMIN' }] },
+              select: { id: true, name: true, email: true, role: true },
+            })
+          : [];
+        await log(mentioned.length ? 'mentioned' : 'commented', mentioned.length ? `Yorumda ${mentioned.map((u) => u.name || 'bir üye').join(', ')} kişisini etiketledi` : 'Yorum yaptı');
+        if (mentioned.length > 0) {
+          const text = body.text;
+          after(async () => {
+            const [{ teamTaskHref }, { getPublicAppOrigin }, email, notify] = await Promise.all([
+              import('@/lib/team/href'),
+              import('@/lib/public-app-origin'),
+              import('@/lib/team-email'),
+              import('@/lib/team-notify'),
+            ]);
+            const origin = getPublicAppOrigin().replace(/\/$/, '');
+            await Promise.allSettled(
+              mentioned.flatMap((u) => [
+                email.sendMentionEmail({
+                  to: u.email,
+                  mentionName: u.name,
+                  byName: viewer.name,
+                  taskTitle: task.title,
+                  commentText: text,
+                  link: `${origin}${teamTaskHref(u.role, task.id)}`,
+                }),
+                notify.notifyMention({ userId: u.id, taskId: task.id, taskTitle: task.title, byName: viewer.name }),
+              ])
+            );
+          });
+        }
+        break;
       }
-      await prisma.taskComment.delete({ where: { id: d.commentId } }).catch(() => null);
-      break;
-    }
-    case 'toggle_reaction': {
-      // Yorum bu göreve ait olmalı (IDOR koruması).
-      if (!(await commentBelongs(d.commentId))) return NOT_FOUND;
-      // Aynı (yorum,kullanıcı,emoji) varsa kaldır, yoksa ekle (toggle).
-      const existing = await prisma.taskCommentReaction.findUnique({
-        where: { commentId_userId_emoji: { commentId: d.commentId, userId, emoji: d.emoji } },
-      }).catch(() => null);
-      if (existing) {
-        await prisma.taskCommentReaction.delete({ where: { id: existing.id } }).catch(() => null);
-      } else {
-        await prisma.taskCommentReaction.create({ data: { commentId: d.commentId, userId, emoji: d.emoji } }).catch(() => null);
+      case 'edit_comment': {
+        const c = await commentOf(body.commentId);
+        if (!canEditComment(viewer, c)) throw new ApiError('FORBIDDEN', 'Yalnız kendi yorumunu düzenleyebilirsin.');
+        await prisma.taskComment.update({ where: { id: c.id }, data: { text: body.text, editedAt: new Date() } });
+        break;
       }
-      break;
+      case 'delete_comment': {
+        const c = await commentOf(body.commentId);
+        if (!canDeleteComment(viewer, c)) throw new ApiError('FORBIDDEN', 'Bu yorumu silemezsin.');
+        await prisma.taskComment.delete({ where: { id: c.id } });
+        await log('commented', 'Bir yorumu sildi');
+        break;
+      }
+      case 'toggle_reaction': {
+        const c = await commentOf(body.commentId);
+        const existing = await prisma.taskCommentReaction.findUnique({
+          where: { commentId_userId_emoji: { commentId: c.id, userId: viewer.userId, emoji: body.emoji } },
+          select: { id: true },
+        });
+        if (existing) await prisma.taskCommentReaction.delete({ where: { id: existing.id } });
+        else await prisma.taskCommentReaction.create({ data: { commentId: c.id, userId: viewer.userId, emoji: body.emoji } });
+        break;
+      }
+      case 'log_time': {
+        if (!canLogTime(viewer, task)) throw new ApiError('FORBIDDEN', 'Süreyi yalnız görevi yapan kişi ve yönetici kaydedebilir.');
+        await prisma.companyTask.update({ where: { id: task.id }, data: { spentMin: { increment: body.minutes } } });
+        await log('time', `${formatMinutes(body.minutes)} çalışma süresi ekledi`);
+        break;
+      }
     }
-  }
 
-  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+    return loadTaskDetail(viewer, task.id);
+  }
+);
+

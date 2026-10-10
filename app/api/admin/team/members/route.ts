@@ -1,13 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { requireTeamAccess } from '@/lib/team-access';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { defineRoute, ok, ApiError } from '@/lib/http/define-route';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { checkRateLimitDb } from '@/lib/rate-limit';
 import { emailLookupFilter, normalizeEmail } from '@/lib/auth/normalize-email';
 import { publicDisplayName } from '@/lib/http/dto';
+import { TEAM_ROUTE_ROLES, requireTeamViewer } from '@/lib/team/access';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,213 +14,253 @@ const MIN_ADMIN_QUERY = 3;
 const SEARCH_RATE_MAX = 30; // aktör başına / dakika
 
 /**
- * GET: ekibe eklenebilecek aday (ekipte olmayan). ?q=
- *
- * P0-10: Eski kod boş `q` ile BÜTÜN kullanıcıların ad, e-posta ve rolünü (ekip yöneticisi
- * CUSTOMER bile olsa) listeliyordu; rate limit yoktu → kullanıcı tabanı e-posta listesi çıkarılabiliyordu.
- * Yeni sözleşme (davet modeli):
- *  - Boş/kısa sorgu → boş liste.
- *  - ADMIN olmayan ekip yöneticisi YALNIZ tam e-posta adresiyle birebir arama yapar ("davet":
- *    kişiyi zaten tanıyorsunuz). Yanıttaki e-posta, yöneticinin yazdığı adrestir — yeni bilgi sızmaz.
- *  - ADMIN ad/e-posta parçasıyla arayabilir (en fazla 10 sonuç).
- *  - Rol alanı dönmez; ad herkese açık biçimde kısaltılır (ADMIN hariç). Aktör başına rate limit.
+ * Ekip üyeliği yalnız CUSTOMER (ekip paneli müşteri panelinde) ve ADMIN hesaplarına verilir.
+ * Bayi/personel hesabı eklenirse görev atanabilir ama hiçbir panelden ekip modülüne ulaşamaz
+ * (denetim departmanlar Bulgu 6/9: "ölü üye").
  */
-export async function GET(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
-  const rawQ = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 120);
+const ELIGIBLE_ROLES = ['CUSTOMER', 'ADMIN'] as const;
 
-  const rl = await checkRateLimitDb(`team-member-search:${auth.session.user.id}`, SEARCH_RATE_MAX, 60_000);
+async function searchRateLimit(actorId: string): Promise<void> {
+  const rl = await checkRateLimitDb(`team-member-search:${actorId}`, SEARCH_RATE_MAX, 60_000);
   if (!rl.ok) {
-    return NextResponse.json(
-      { success: false, error: 'Çok fazla arama yaptınız. Lütfen biraz bekleyin.', users: [] },
-      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
-    );
-  }
-
-  const exactEmail = normalizeEmail(rawQ);
-  const looksLikeEmail = z.string().email().safeParse(exactEmail).success;
-
-  if (!auth.isAdmin) {
-    if (!looksLikeEmail) {
-      return NextResponse.json(
-        { success: true, users: [], hint: 'Eklemek istediğiniz kişinin e-posta adresini tam olarak yazın.' },
-        { headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-    const match = await prisma.user.findFirst({
-      where: { email: emailLookupFilter(exactEmail), adminTeamRole: null },
-      select: { id: true, name: true, image: true },
-    });
-    const users = match
-      ? [{ id: match.id, name: publicDisplayName(match.name, ''), email: exactEmail, image: match.image }]
-      : [];
-    return NextResponse.json({ success: true, users }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  if (rawQ.length < MIN_ADMIN_QUERY) {
-    return NextResponse.json({ success: true, users: [] }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const users = await prisma.user.findMany({
-    where: {
-      OR: [{ name: { contains: rawQ, mode: 'insensitive' } }, { email: { contains: rawQ, mode: 'insensitive' } }],
-      // Ekipte olma ölçütü = ekip rolü (adminTeamRole). Departmansız ama rollü üye de "ekipte" sayılır.
-      adminTeamRole: null,
-    },
-    select: { id: true, name: true, email: true, image: true },
-    orderBy: { name: 'asc' },
-    take: 10,
-  });
-
-  return NextResponse.json({ success: true, users }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-const addSchema = z.object({
-  email: z.string().email(),
-  department: z.string().max(50).optional().nullable(), // birincil departman (geriye dönük)
-  departments: z.array(z.string().max(50)).max(20).optional(), // çoklu departman (yeni)
-  teamRole: z.enum(['yonetici', 'uye']).default('uye'),
-});
-
-/** userId için junction departmanları verilen slug listesine eşitle (replace-all). */
-async function syncUserDepartments(userId: string, slugs: string[]): Promise<void> {
-  const unique = [...new Set(slugs.filter(Boolean))];
-  await prisma.userDepartment.deleteMany({ where: { userId } });
-  if (unique.length > 0) {
-    await prisma.userDepartment.createMany({
-      data: unique.map((departmentSlug) => ({ userId, departmentSlug })),
-      skipDuplicates: true,
+    throw new ApiError('RATE_LIMITED', 'Çok fazla arama yaptınız. Lütfen biraz bekleyin.', {
+      retryable: true,
+      headers: { 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) },
     });
   }
 }
+
+const searchQuery = z.object({ q: z.string().max(200).optional() });
 
 /**
- * POST: e-posta ile mevcut kullanıcıyı ekibe ekle. Kullanıcı bulunursa ADMIN yapılır +
- * departman/rol atanır. Bulunamazsa 404 (davet için ayrı akış gerekir).
+ * GET ?q= — ekibe eklenebilecek aday (ekipte olmayan, CUSTOMER ya da ADMIN).
+ *
+ * P0-10 sözleşmesi korunur: boş/kısa sorgu → boş liste; ADMIN olmayan ekip yöneticisi YALNIZ tam
+ * e-posta ile birebir arar (yanıttaki e-posta kendi yazdığıdır); rol alanı dönmez; aktör başına
+ * dakikada 30 arama (ekleme ile aynı kova).
  */
-export async function POST(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
+export const GET = defineRoute(
+  { name: 'team.members.search', roles: TEAM_ROUTE_ROLES, query: searchQuery },
+  async ({ user, query }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    const rawQ = (query.q || '').trim().slice(0, 120);
+    await searchRateLimit(user.id);
 
-  // P0-10: "bu e-posta kayıtlı mı?" sorusunun yanıtı (404) da bir numaralandırma kanalıdır;
-  // aramayla AYNI kova paylaşılır → ekleme + arama toplamı aktör başına dakikada 30.
-  const rl = await checkRateLimitDb(`team-member-search:${auth.session.user.id}`, SEARCH_RATE_MAX, 60_000);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { success: false, error: 'Çok fazla deneme yaptınız. Lütfen biraz bekleyin.' },
-      { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.ceil((rl.retryAfterMs ?? 60_000) / 1000)) } }
-    );
+    const exactEmail = normalizeEmail(rawQ);
+    const looksLikeEmail = z.string().email().safeParse(exactEmail).success;
+
+    if (!viewer.isAdmin) {
+      if (!looksLikeEmail) {
+        return ok({ users: [], hint: 'Eklemek istediğiniz kişinin e-posta adresini tam olarak yazın.' }, { legacySpread: true });
+      }
+      const match = await prisma.user.findFirst({
+        where: { email: emailLookupFilter(exactEmail), adminTeamRole: null, role: 'CUSTOMER' },
+        select: { id: true, name: true, image: true },
+      });
+      const users = match ? [{ id: match.id, name: publicDisplayName(match.name, ''), email: exactEmail, image: match.image }] : [];
+      return ok({ users }, { legacySpread: true });
+    }
+
+    if (rawQ.length < MIN_ADMIN_QUERY) return ok({ users: [] }, { legacySpread: true });
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [{ name: { contains: rawQ, mode: 'insensitive' } }, { email: { contains: rawQ, mode: 'insensitive' } }],
+        adminTeamRole: null,
+        role: { in: [...ELIGIBLE_ROLES] },
+      },
+      select: { id: true, name: true, email: true, image: true },
+      orderBy: { name: 'asc' },
+      take: 10,
+    });
+    return ok({ users }, { legacySpread: true });
   }
+);
 
-  const raw = await req.json().catch(() => ({}));
-  const parsed = addSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz e-posta' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  const { email, department, departments, teamRole } = parsed.data;
-
-  const user = await prisma.user.findFirst({ where: { email: emailLookupFilter(email) }, select: { id: true, role: true } });
-  if (!user) {
-    return NextResponse.json({ success: false, error: 'Bu e-posta ile kayıtlı kullanıcı yok. Önce kullanıcı oluşturun.', notFound: true }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-
-  // Çoklu departman listesi: departments verildiyse onu kullan, yoksa tekil department'tan türet.
-  const depList = departments ?? (department ? [department] : []);
-  const primary = depList[0] ?? null; // birincil = ilk departman (adminDepartment ile uyum)
-
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      // Rol DEĞİŞTİRİLMEZ: üye normal panelinden (müşteri/bayi) girer, ekip kısmına
-      // adminTeamRole ile erişir. ADMIN yapmak /customer/* middleware guard'ıyla çelişirdi.
-      adminDepartment: primary,
-      adminTeamRole: teamRole,
-    },
-    select: { id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true },
-  });
-  await syncUserDepartments(user.id, depList);
-
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id, action: 'add_team_member', entity: 'admin_team_member', entityId: user.id,
-      newData: { email, department, teamRole } as Prisma.InputJsonValue, ...getAuditRequestMeta(req),
-    },
-  });
-
-  return NextResponse.json({ success: true, member: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
+/** Slug listesini doğrular (yalnız mevcut + aktif departmanlar; denetim Bulgu 2/3: FK ihlali 500). */
+async function validateSlugs(slugs: string[]): Promise<string[]> {
+  const unique = [...new Set(slugs.map((s) => s.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+  const found = await prisma.department.findMany({ where: { slug: { in: unique }, isActive: true }, select: { slug: true } });
+  const ok = new Set(found.map((d) => d.slug));
+  const bad = unique.filter((s) => !ok.has(s));
+  if (bad.length) throw new ApiError('VALIDATION', `Departman bulunamadı ya da arşivli: ${bad.join(', ')}`);
+  return unique;
 }
 
-const updateSchema = z.object({
-  id: z.string(),
-  department: z.string().max(50).optional().nullable(),
-  departments: z.array(z.string().max(50)).max(20).optional(), // çoklu departman (verilirse replace-all)
+/** Junction + birincil departmanı TEK işlemde eşitler (yarım güncelleme kalmaz). */
+async function writeDepartments(tx: Prisma.TransactionClient, userId: string, slugs: string[]): Promise<void> {
+  await tx.userDepartment.deleteMany({ where: { userId } });
+  if (slugs.length) await tx.userDepartment.createMany({ data: slugs.map((departmentSlug) => ({ userId, departmentSlug })), skipDuplicates: true });
+}
+
+const addBody = z
+  .object({
+    userId: z.string().min(1).max(60).optional(),
+    email: z.string().email().max(200).optional(),
+    department: z.string().max(60).nullish(),
+    departments: z.array(z.string().max(60)).max(20).optional(),
+    teamRole: z.enum(['yonetici', 'uye']).default('uye'),
+  })
+  .refine((b) => !!b.userId || !!b.email, { message: 'Kişi seçin' });
+
+/**
+ * POST — mevcut kullanıcıyı ekibe ekler (kimlik ya da e-posta; büyük/küçük harf duyarsız —
+ * denetim Bulgu 5/6). Platform rolü DEĞİŞMEZ. Yönetici rolünü yalnız ADMIN verebilir
+ * (yetki zincirinin kendini genişletmesi engellenir).
+ */
+export const POST = defineRoute(
+  { name: 'team.members.add', roles: TEAM_ROUTE_ROLES, schema: addBody },
+  async ({ user, body, request }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    // "Bu e-posta kayıtlı mı?" yanıtı da bir numaralandırma kanalıdır: aramayla aynı kova.
+    await searchRateLimit(user.id);
+    if (body.teamRole === 'yonetici' && !viewer.isAdmin) {
+      throw new ApiError('FORBIDDEN', 'Yönetici rolünü yalnız platform yöneticisi verebilir.');
+    }
+    const target = await prisma.user.findFirst({
+      where: body.userId ? { id: body.userId } : { email: emailLookupFilter(normalizeEmail(body.email!)) },
+      select: { id: true, role: true, adminTeamRole: true, name: true, email: true },
+    });
+    if (!target) throw new ApiError('NOT_FOUND', 'Bu e-posta ile kayıtlı kullanıcı yok. Önce kullanıcı hesabı oluşturulmalı.');
+    if (!(ELIGIBLE_ROLES as readonly string[]).includes(String(target.role))) {
+      throw new ApiError('VALIDATION', 'Bayi ve personel hesapları ekip paneline erişemediği için ekibe eklenemez.');
+    }
+    if (target.adminTeamRole) throw new ApiError('CONFLICT', 'Bu kişi zaten ekipte.');
+    const slugs = await validateSlugs(body.departments ?? (body.department ? [body.department] : []));
+
+    const member = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: target.id },
+        data: { adminTeamRole: body.teamRole, adminDepartment: slugs[0] ?? null },
+        select: { id: true, name: true, image: true, adminDepartment: true, adminTeamRole: true },
+      });
+      await writeDepartments(tx, target.id, slugs);
+      await tx.auditLog.create({
+        data: {
+          userId: viewer.userId,
+          action: 'add_team_member',
+          entity: 'admin_team_member',
+          entityId: target.id,
+          newData: { teamRole: body.teamRole, departments: slugs } as Prisma.InputJsonValue,
+          ...getAuditRequestMeta(request),
+        },
+      });
+      return updated;
+    });
+    return ok({ member: { ...member, departmentSlugs: slugs } }, { legacySpread: true });
+  }
+);
+
+const updateBody = z.object({
+  id: z.string().min(1).max(60),
+  department: z.string().max(60).nullish(),
+  /** Tam liste (ilk eleman birincil). */
+  departments: z.array(z.string().max(60)).max(20).optional(),
+  /** Delta: tek departman ekle / çıkar (yarışsız; denetim Bulgu 12). */
+  addDepartment: z.string().max(60).optional(),
+  removeDepartment: z.string().max(60).optional(),
+  /** Birincil departmanı seç (listenin başına alınır). */
+  primaryDepartment: z.string().max(60).optional(),
   teamRole: z.enum(['yonetici', 'uye']).optional(),
 });
 
-/** PUT: mevcut üyenin departman(lar)/ekip rolünü güncelle. Yönetici (ekip) yetkisiyle. */
-export async function PUT(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
+/**
+ * PUT — üyenin departman(lar)ı / ekip rolü. Kurallar (denetim Bulgu 5/8):
+ *  - yalnız MEVCUT ekip üyesi güncellenir (ekip dışına rol verilemez → 404);
+ *  - ekip rolünü yalnız ADMIN değiştirir; kimse kendi rolünü değiştiremez;
+ *  - departman slug'ları doğrulanır, junction + birincil departman + audit tek işlemde.
+ */
+export const PUT = defineRoute(
+  { name: 'team.members.update', roles: TEAM_ROUTE_ROLES, schema: updateBody, rateLimit: 'mutation' },
+  async ({ user, body, request }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    const member = await prisma.user.findFirst({
+      where: { id: body.id, adminTeamRole: { not: null } },
+      select: { id: true, adminTeamRole: true, adminDepartment: true, teamDepartments: { select: { departmentSlug: true } } },
+    });
+    if (!member) throw new ApiError('NOT_FOUND', 'Üye bulunamadı.');
 
-  const raw = await req.json().catch(() => ({}));
-  const parsed = updateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Geçersiz veri' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
+    if (body.teamRole !== undefined && body.teamRole !== member.adminTeamRole) {
+      if (body.id === viewer.userId) throw new ApiError('FORBIDDEN', 'Kendi ekip rolünü değiştiremezsin.');
+      if (!viewer.isAdmin) throw new ApiError('FORBIDDEN', 'Ekip rolünü yalnız platform yöneticisi değiştirebilir.');
+    }
+
+    const current = (member.teamDepartments ?? []).map((d) => d.departmentSlug);
+    const base = current.length ? current : member.adminDepartment ? [member.adminDepartment] : [];
+    let next: string[] | null = null;
+    if (body.departments !== undefined) next = body.departments;
+    else if (body.department !== undefined) next = body.department ? [body.department] : [];
+    else if (body.addDepartment) next = [...base.filter((s) => s !== body.addDepartment), body.addDepartment];
+    else if (body.removeDepartment) next = base.filter((s) => s !== body.removeDepartment);
+    if (body.primaryDepartment) {
+      const list = next ?? base;
+      if (!list.includes(body.primaryDepartment)) throw new ApiError('VALIDATION', 'Birincil departman, üyenin departmanlarından biri olmalı.');
+      next = [body.primaryDepartment, ...list.filter((s) => s !== body.primaryDepartment)];
+    }
+    // Ekleme/eşitleme sırasında silinmiş (bayat) slug'lar sessizce düşer; yalnız YENİ eklenen doğrulanır.
+    const validNow = next
+      ? (await prisma.department.findMany({ where: { slug: { in: next } }, select: { slug: true, isActive: true } }))
+      : [];
+    if (next && body.addDepartment) await validateSlugs([body.addDepartment]);
+    if (next && body.departments) await validateSlugs(body.departments);
+    if (next && body.department) await validateSlugs([body.department]);
+    const slugs = next ? next.filter((s) => validNow.some((d) => d.slug === s)) : null;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const data: Prisma.UserUpdateInput = {};
+      if (body.teamRole !== undefined) data.adminTeamRole = body.teamRole;
+      if (slugs) {
+        await writeDepartments(tx, body.id, slugs);
+        data.adminDepartment = slugs[0] ?? null;
+      }
+      const u = await tx.user.update({
+        where: { id: body.id },
+        data,
+        select: { id: true, name: true, image: true, adminDepartment: true, adminTeamRole: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: viewer.userId,
+          action: 'update_team_member',
+          entity: 'admin_team_member',
+          entityId: body.id,
+          oldData: { teamRole: member.adminTeamRole, departments: base } as Prisma.InputJsonValue,
+          newData: { teamRole: body.teamRole ?? member.adminTeamRole, departments: slugs ?? base } as Prisma.InputJsonValue,
+          ...getAuditRequestMeta(request),
+        },
+      });
+      return u;
+    });
+    return ok({ member: { ...updated, departmentSlugs: slugs ?? base } }, { legacySpread: true });
   }
-  const { id, department, departments, teamRole } = parsed.data;
+);
 
-  // Yalnız MEVCUT ekip üyeleri güncellenir: id ile (e-posta/onay olmadan) ekip dışındaki birine
-  // rol verilip ekibe sokulamasın.
-  const member = await prisma.user.findFirst({ where: { id, adminTeamRole: { not: null } }, select: { id: true } });
-  if (!member) return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+const deleteQuery = z.object({ id: z.string().min(1).max(191) });
 
-  const data: Prisma.UserUpdateInput = {};
-  if (teamRole !== undefined) data.adminTeamRole = teamRole;
-  // Çoklu departman verildiyse junction'ı eşitle + birincil = ilk. Yoksa tekil department davranışı.
-  if (departments !== undefined) {
-    await syncUserDepartments(id, departments);
-    data.adminDepartment = departments[0] ?? null;
-  } else if (department !== undefined) {
-    data.adminDepartment = department;
-    // tekil güncellemede junction'ı da tut (tek elemanlı)
-    await syncUserDepartments(id, department ? [department] : []);
+/**
+ * DELETE ?id= — kişiyi ekipten çıkarır (görevleri silinmez; atamalar kalır). Kendini çıkaramaz;
+ * başka bir YÖNETİCİYİ yalnız ADMIN çıkarabilir.
+ */
+export const DELETE = defineRoute(
+  { name: 'team.members.remove', roles: TEAM_ROUTE_ROLES, query: deleteQuery, rateLimit: 'mutation' },
+  async ({ user, query, request }) => {
+    const viewer = await requireTeamViewer(user.id, { manager: true });
+    const id = query.id;
+    if (id === viewer.userId) throw new ApiError('FORBIDDEN', 'Kendini ekipten çıkaramazsın; bir yöneticiden iste.');
+    if (!viewer.isAdmin) {
+      const isManagerTarget = await prisma.user.findFirst({ where: { id, adminTeamRole: 'yonetici' }, select: { id: true } });
+      if (isManagerTarget) throw new ApiError('FORBIDDEN', 'Başka bir ekip yöneticisini yalnız platform yöneticisi çıkarabilir.');
+    }
+    // Koşullu güncelleme: ekip dışındaki hesaba yazılmaz, arada çıkarılmışsa 404.
+    const removed = await prisma.user.updateMany({
+      where: { id, adminTeamRole: { not: null } },
+      data: { adminDepartment: null, adminTeamRole: null },
+    });
+    if (removed.count === 0) throw new ApiError('NOT_FOUND', 'Üye bulunamadı.');
+    await prisma.userDepartment.deleteMany({ where: { userId: id } });
+    await prisma.auditLog.create({
+      data: { userId: viewer.userId, action: 'remove_team_member', entity: 'admin_team_member', entityId: id, ...getAuditRequestMeta(request) },
+    });
+    return ok({ removed: true }, { legacySpread: true });
   }
-
-  const updated = await prisma.user.update({
-    where: { id }, data,
-    select: { id: true, name: true, email: true, image: true, adminDepartment: true, adminTeamRole: true },
-  }).catch(() => null);
-  if (!updated) return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: auth.session.user.id, action: 'update_team_member', entity: 'admin_team_member', entityId: id,
-      newData: { department, departments, teamRole } as Prisma.InputJsonValue, ...getAuditRequestMeta(req),
-    },
-  });
-
-  return NextResponse.json({ success: true, member: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-/** DELETE ?id=: kişiyi ekipten çıkar (departman/rol temizlenir). */
-export async function DELETE(req: NextRequest) {
-  const auth = await requireTeamAccess({ manager: true });
-  if ('error' in auth) return auth.error;
-  const id = req.nextUrl.searchParams.get('id');
-  if (!id || id.length > 191) return NextResponse.json({ success: false, error: 'id gerekli' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-
-  // Yalnız MEVCUT ekip üyesi çıkarılır (id ile ekip dışındaki hesaplara yazılmaz, sahte audit
-  // kaydı oluşmaz). Koşullu güncelleme: arada çıkarılmışsa 404.
-  const removed = await prisma.user.updateMany({
-    where: { id, adminTeamRole: { not: null } },
-    data: { adminDepartment: null, adminTeamRole: null },
-  });
-  if (removed.count === 0) {
-    return NextResponse.json({ success: false, error: 'Üye bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
-  }
-  await prisma.userDepartment.deleteMany({ where: { userId: id } }).catch(() => null); // çoklu departman temizle
-  await prisma.auditLog.create({
-    data: { userId: auth.session.user.id, action: 'remove_team_member', entity: 'admin_team_member', entityId: id, ...getAuditRequestMeta(req) },
-  });
-  return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+);

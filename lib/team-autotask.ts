@@ -3,12 +3,12 @@ import { weekKeyOf } from '@/lib/team-week';
 
 /**
  * İşletme verisinden ekip görevi üretimi.
- * Açık Incident (yüksek/kritik) ve bekleyen yüksek-öncelikli ActionItem kayıtlarını
- * CompanyTask'a dönüştürür. İdempotent: (sourceType, sourceRef) benzersiz kabul edilir —
- * aynı kaynak için ikinci kez görev üretilmez.
+ * Açık Incident (yüksek/kritik) ve bekleyen yüksek öncelikli ActionItem kayıtlarını
+ * CompanyTask'a dönüştürür. İdempotent: (sourceType, sourceRef) için ikinci görev üretilmez.
+ * Denetim Bulgu 11: kaynak başına ayrı `findFirst` (N+1) yerine tek sorguda mevcutlar okunur.
  *
- * Departman eşlemesi: incident/churn → satış-pazarlama, action-item → üretim-geliştirme
- * (varsayılan slug'lar; yoksa null/genel kalır).
+ * Departman eşlemesi: olay → satış/pazarlama, aksiyon maddesi → üretim/geliştirme; departman
+ * yoksa ya da arşivliyse görev departmansız (genel) kalır.
  */
 
 const DEP_SALES = 'satis-sponsorluk-ve-pazarlama';
@@ -20,75 +20,93 @@ function sevToPriority(sev: string): 'low' | 'medium' | 'high' {
   return 'medium';
 }
 
-/** Bir kaynak için görev zaten üretilmiş mi? */
-async function alreadyGenerated(sourceType: string, sourceRef: string): Promise<boolean> {
-  const existing = await prisma.companyTask.findFirst({
-    where: { sourceType, sourceRef }, select: { id: true },
+async function loadCandidates() {
+  const [incidents, actionItems] = await Promise.all([
+    prisma.incident.findMany({
+      where: { status: { in: ['open', 'assigned'] }, severity: { in: ['high', 'critical'] } },
+      select: { id: true, title: true, description: true, severity: true, dueAt: true, dealer: { select: { name: true } } },
+      take: 100,
+    }),
+    prisma.actionItem.findMany({
+      where: { status: { in: ['pending', 'assigned'] }, priority: 'high' },
+      select: { id: true, suggestionText: true, dueAt: true, dealer: { select: { name: true } } },
+      take: 100,
+    }),
+  ]);
+  const existing = await prisma.companyTask.findMany({
+    where: {
+      OR: [
+        { sourceType: 'incident', sourceRef: { in: incidents.map((i) => i.id) } },
+        { sourceType: 'action-item', sourceRef: { in: actionItems.map((a) => a.id) } },
+      ],
+    },
+    select: { sourceType: true, sourceRef: true },
   });
-  return !!existing;
+  const done = new Set(existing.map((e) => `${e.sourceType}:${e.sourceRef}`));
+  return {
+    incidents: incidents.filter((i) => !done.has(`incident:${i.id}`)),
+    actionItems: actionItems.filter((a) => !done.has(`action-item:${a.id}`)),
+  };
+}
+
+/** Önizleme: kaç YENİ görev üretilecek (zaten üretilmiş kaynaklar sayılmaz). */
+export async function previewBusinessTasks(): Promise<{ incidents: number; actionItems: number }> {
+  const c = await loadCandidates();
+  return { incidents: c.incidents.length, actionItems: c.actionItems.length };
 }
 
 /**
- * @param createdById Görevleri oluşturan admin kullanıcı id'si.
- * @returns Üretilen görev sayıları (kaynağa göre).
+ * @param createdById Görevleri oluşturan yönetici.
+ * @param weekKey Görevlerin yazılacağı hafta (varsayılan: içinde bulunulan hafta).
  */
-export async function generateTasksFromBusinessData(createdById: string): Promise<{
-  fromIncidents: number; fromActionItems: number; total: number;
-}> {
-  const weekKey = weekKeyOf();
-  let fromIncidents = 0;
-  let fromActionItems = 0;
+export async function generateTasksFromBusinessData(
+  createdById: string,
+  weekKey: string = weekKeyOf()
+): Promise<{ fromIncidents: number; fromActionItems: number; total: number; created: Array<{ id: string; title: string; department: string | null; tags: string | null }> }> {
+  const { incidents, actionItems } = await loadCandidates();
+  const deps = await prisma.department.findMany({ where: { slug: { in: [DEP_SALES, DEP_DEV] }, isActive: true }, select: { slug: true } });
+  const has = new Set(deps.map((d) => d.slug));
+  const created: Array<{ id: string; title: string; department: string | null; tags: string | null }> = [];
 
-  // ── Açık, yüksek/kritik incident'lar ─────────────────────────────
-  const incidents = await prisma.incident.findMany({
-    where: { status: { in: ['open', 'assigned'] }, severity: { in: ['high', 'critical'] } },
-    select: { id: true, title: true, description: true, severity: true, dealerId: true, dueAt: true, dealer: { select: { name: true } } },
-    take: 100,
-  });
   for (const inc of incidents) {
-    if (await alreadyGenerated('incident', inc.id)) continue;
-    await prisma.companyTask.create({
+    const t = await prisma.companyTask.create({
       data: {
-        title: `🚨 ${inc.title}`,
+        title: `Olay: ${inc.title}`.slice(0, 200),
         description: [inc.description, inc.dealer?.name ? `İşletme: ${inc.dealer.name}` : null].filter(Boolean).join('\n\n') || null,
         priority: sevToPriority(inc.severity),
-        department: DEP_SALES,
+        department: has.has(DEP_SALES) ? DEP_SALES : null,
         weekKey,
         dueAt: inc.dueAt,
         createdById,
         sourceType: 'incident',
         sourceRef: inc.id,
-        tags: 'otomatik,incident',
+        tags: 'otomatik,olay',
+        activities: { create: { actorId: createdById, action: 'created', detail: 'İşletme olayından otomatik üretildi' } },
       },
+      select: { id: true, title: true, department: true, tags: true },
     });
-    fromIncidents++;
+    created.push(t);
   }
-
-  // ── Bekleyen, yüksek öncelikli action item'lar ───────────────────
-  const actionItems = await prisma.actionItem.findMany({
-    where: { status: { in: ['pending', 'assigned'] }, priority: 'high' },
-    select: { id: true, suggestionText: true, priority: true, dueAt: true, dealer: { select: { name: true } } },
-    take: 100,
-  });
   for (const ai of actionItems) {
-    if (await alreadyGenerated('action-item', ai.id)) continue;
     const short = ai.suggestionText.length > 120 ? `${ai.suggestionText.slice(0, 120)}…` : ai.suggestionText;
-    await prisma.companyTask.create({
+    const t = await prisma.companyTask.create({
       data: {
-        title: `✅ ${short}`,
+        title: `Aksiyon: ${short}`.slice(0, 200),
         description: [ai.suggestionText, ai.dealer?.name ? `İşletme: ${ai.dealer.name}` : null].filter(Boolean).join('\n\n'),
         priority: 'high',
-        department: DEP_DEV,
+        department: has.has(DEP_DEV) ? DEP_DEV : null,
         weekKey,
         dueAt: ai.dueAt,
         createdById,
         sourceType: 'action-item',
         sourceRef: ai.id,
         tags: 'otomatik,aksiyon',
+        activities: { create: { actorId: createdById, action: 'created', detail: 'Aksiyon maddesinden otomatik üretildi' } },
       },
+      select: { id: true, title: true, department: true, tags: true },
     });
-    fromActionItems++;
+    created.push(t);
   }
 
-  return { fromIncidents, fromActionItems, total: fromIncidents + fromActionItems };
+  return { fromIncidents: incidents.length, fromActionItems: actionItems.length, total: created.length, created };
 }

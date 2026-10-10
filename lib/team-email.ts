@@ -70,10 +70,12 @@ export async function sendCharacterReadyEmail(opts: {
 export async function sendTaskAssignedEmail(opts: {
   to: string; assigneeName?: string | null; taskTitle: string; priority?: string;
   dueAt?: Date | null; description?: string | null;
+  /** Alıcının paneline göre çözülmüş mutlak görev bağlantısı (verilmezse müşteri ekip panosu). */
+  link?: string;
 }): Promise<void> {
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/customer/ekip`;
+    const link = opts.link || `${origin}/customer/ekip`;
     const prio = opts.priority === 'high' ? 'Yüksek' : opts.priority === 'low' ? 'Düşük' : 'Orta';
     const prioEmoji = opts.priority === 'high' ? '🔴' : opts.priority === 'low' ? '⚪' : '🟠';
 
@@ -143,10 +145,12 @@ export async function sendTaskAssignedEmail(opts: {
 /** Yorumda @bahsedilen kişiye bildirim maili. */
 export async function sendMentionEmail(opts: {
   to: string; mentionName?: string | null; byName?: string | null; taskTitle: string; commentText: string;
+  /** Alıcının paneline göre çözülmüş mutlak görev bağlantısı. */
+  link?: string;
 }): Promise<void> {
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/customer/ekip`;
+    const link = opts.link || `${origin}/customer/ekip`;
     const snippet = opts.commentText.length > 240 ? `${opts.commentText.slice(0, 240)}…` : opts.commentText;
     const bodyLines = [
       opts.mentionName ? `Merhaba ${esc(opts.mentionName)},` : 'Merhaba,',
@@ -175,11 +179,13 @@ export async function sendWeeklyReminderEmail(opts: {
   openTasks: { title: string; priority: string; dueAt?: Date | string | null }[];
   /** Yönetici ise: onayında bekleyen (status='review') görevler. Verilmezse blok çıkmaz. */
   pendingApprovals?: { title: string; submittedByName?: string | null }[];
+  /** Alıcının paneline göre çözülmüş mutlak pano bağlantısı. */
+  link?: string;
 }): Promise<void> {
   if (opts.openTasks.length === 0 && !(opts.pendingApprovals && opts.pendingApprovals.length > 0)) return;
   try {
     const origin = getPublicAppOrigin();
-    const link = `${origin}/customer/ekip`;
+    const link = opts.link || `${origin}/customer/ekip`;
 
     // Açık görev listesi + (varsa) bitiş tarihine göre kalan gün rozeti.
     const list = opts.openTasks.slice(0, 10).map((t) => {

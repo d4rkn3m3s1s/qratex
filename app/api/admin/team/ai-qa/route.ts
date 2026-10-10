@@ -1,111 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireTeamAccess } from '@/lib/team-access';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { runChatCompletion, isAIConfigured } from '@/lib/ai-engine';
 import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { defineRoute } from '@/lib/http/define-route';
+import { sanitizeContextLine, wrapUntrusted } from '@/lib/ai-prompt-safety';
+import { TEAM_ROUTE_ROLES, requireTeamViewer, scopedTaskWhere } from '@/lib/team/access';
+import { STATUS_META, isTaskStatus, priorityMeta } from '@/lib/team/constants';
+import { dueDayOf, istanbulDayOf, isOverdue } from '@/lib/team/dates';
+import { teamChat } from '@/lib/team/ai';
 
 export const dynamic = 'force-dynamic';
 
-// AI Q&A — doğal dil ile ekip verisi sorgulama (Notion premium tarzı).
-// Okuma endpoint'i: manager gerektirmez, sadece ekip erişimi yeterli.
-const bodySchema = z.object({
-  question: z.string().min(3).max(500),
+const body = z.object({
+  question: z.string().trim().min(3, 'Soru en az 3 karakter olmalı').max(500),
+  /** Önceki soru-cevaplar (son 4 tur) — takip soruları için bağlam. */
+  history: z
+    .array(z.object({ q: z.string().max(500), a: z.string().max(2000) }))
+    .max(4)
+    .optional(),
 });
 
-export async function POST(req: NextRequest) {
-  // Ekip erişimi (okuma; manager DEĞİL).
-  const auth = await requireTeamAccess();
-  if ('error' in auth) return auth.error;
-
-  // AI yapılandırılmamışsa dürüstçe 503 dön (sahte yanıt üretme).
-  if (!isAIConfigured()) {
-    return NextResponse.json(
-      { success: false, error: 'AI yapılandırılmamış' },
-      { status: 503, headers: PRIVATE_NO_STORE_HEADERS },
-    );
-  }
-
-  // Body doğrula.
-  const raw = await req.json().catch(() => ({}));
-  const parsed = bodySchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: 'Geçersiz istek' },
-      { status: 400, headers: PRIVATE_NO_STORE_HEADERS },
-    );
-  }
-  const { question } = parsed.data;
-
-  // Ekip verisini bağlam olarak topla: aktif (arşivsiz) görevler + ekip üyeleri.
-  const [tasks, members] = await Promise.all([
-    prisma.companyTask.findMany({
-      where: { archivedAt: null },
+/**
+ * POST — ekip verisine doğal dille soru (tüm ekip). Bağlam GÖRÜNÜRLÜK KAPSAMIYLA sınırlı
+ * (denetim Y4/O9: 300 rastgele görev + tüm üyeler LLM'e gidiyordu, hız sınırı yoktu); en son
+ * güncellenen 200 açık görev, kod hesaplı gecikme bilgisiyle. Dakikalık AI sınırı.
+ */
+export const POST = defineRoute(
+  { name: 'team.ai.ask', roles: TEAM_ROUTE_ROLES, schema: body, rateLimit: 'ai' },
+  async ({ user, body: b }) => {
+    const viewer = await requireTeamViewer(user.id);
+    const now = new Date();
+    const tasks = await prisma.companyTask.findMany({
+      where: scopedTaskWhere(viewer, { archivedAt: null }),
       select: {
         title: true,
         status: true,
         priority: true,
         department: true,
         dueAt: true,
-        completedAt: true,
         estimateMin: true,
         spentMin: true,
-        assignedTo: { select: { name: true, email: true } },
+        weekKey: true,
+        assignedTo: { select: { name: true } },
       },
-      take: 300,
-    }),
-    prisma.user.findMany({
-      where: { adminTeamRole: { not: null } },
-      select: { name: true, email: true, adminTeamRole: true, adminDepartment: true },
-    }),
-  ]);
-
-  // Bugünün tarihi — gecikme tespiti için (dueAt < now && status != 'done').
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  // Görevleri kompakt metin satırlarına çevir.
-  const lines = tasks
-    .map((t) => {
-      const who = t.assignedTo?.name || t.assignedTo?.email || 'atanmamış';
-      const due = t.dueAt ? t.dueAt.toISOString().slice(0, 10) : 'yok';
-      const overdue = t.dueAt && t.status !== 'done' && t.dueAt < now ? ' [GECİKMİŞ]' : '';
-      const dep = t.department ? ` #${t.department}` : '';
-      const time =
-        t.estimateMin != null || t.spentMin
-          ? ` (tahmin:${t.estimateMin ?? '?'}dk/harcanan:${t.spentMin}dk)`
-          : '';
-      return `- [${t.status}] (${t.priority}) ${t.title}${dep} → ${who} | bitiş:${due}${overdue}${time}`;
-    })
-    .join('\n');
-
-  // Üye satırları.
-  const memberLines = members
-    .map(
-      (m) =>
-        `- ${m.name || m.email} | rol:${m.adminTeamRole ?? '-'}${m.adminDepartment ? ` | departman:${m.adminDepartment}` : ''}`,
-    )
-    .join('\n');
-
-  // LLM'e sor.
-  const res = await runChatCompletion({
-    system:
-      'Sen bir ekip yönetim asistanısın. Verilen görev listesi ve ekip üyelerine dayanarak SADECE Türkçe, kısa ve net cevap ver. Veriyi say/analiz et. Uydurma. Liste isteniyorsa madde madde.',
-    user: `Soru: ${question}\n\nBugün: ${todayStr}\n\nGörevler:\n${lines || 'yok'}\n\nÜyeler:\n${memberLines || 'yok'}`,
-    temperature: 0.3,
-    maxTokens: 600,
-  });
-
-  // AI yanıtı alınamazsa 502.
-  if (!res) {
-    return NextResponse.json(
-      { success: false, error: 'AI yanıtı alınamadı' },
-      { status: 502, headers: PRIVATE_NO_STORE_HEADERS },
-    );
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+    const lines = tasks.map((t) => {
+      const who = sanitizeContextLine(t.assignedTo?.name ?? '') ?? 'atanmamış';
+      const due = dueDayOf(t.dueAt) ?? 'yok';
+      const late = t.status !== 'done' && isOverdue(t.dueAt, now) ? ' [GECİKMİŞ]' : '';
+      const st = isTaskStatus(t.status) ? STATUS_META[t.status].label : t.status;
+      const time = t.estimateMin != null || t.spentMin ? ` (tahmin ${t.estimateMin ?? '?'} dk / harcanan ${t.spentMin} dk)` : '';
+      return `- [${st}] (${priorityMeta(t.priority).label}) ${sanitizeContextLine(t.title) ?? 'başlıksız'}${t.department ? ` #${t.department}` : ''} → ${who} | hafta ${t.weekKey ?? '-'} | bitiş ${due}${late}${time}`;
+    });
+    const history = (b.history ?? []).map((h) => `S: ${h.q}\nC: ${h.a}`).join('\n\n');
+    const answer = await teamChat({
+      actorId: viewer.userId,
+      system:
+        'Sen bir ekip yönetim asistanısın. YALNIZ verilen görev listesine dayanarak kısa ve net Türkçe cevap ver. Listede olmayan bilgiyi uydurma; bilmiyorsan "Bu veride yok" de. Liste isteniyorsa madde madde yaz.',
+      user: `${history ? `Önceki konuşma:\n${wrapUntrusted('gecmis', history, 4000)}\n\n` : ''}Soru: ${wrapUntrusted('kullanici_mesaji', b.question, 600)}\n\nBugün (İstanbul): ${istanbulDayOf(now)}\n\nGörevler (${tasks.length}):\n${wrapUntrusted('veri', lines.join('\n') || 'yok', 16_000)}`,
+      temperature: 0.2,
+      maxTokens: 600,
+    });
+    return { answer, basedOn: tasks.length };
   }
-
-  return NextResponse.json(
-    { success: true, answer: res.content.trim() },
-    { headers: PRIVATE_NO_STORE_HEADERS },
-  );
-}
+);
