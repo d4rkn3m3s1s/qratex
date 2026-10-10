@@ -80,17 +80,6 @@ async function fill(body: unknown) {
   );
 }
 
-async function createSurvey(body: unknown) {
-  const { POST } = await import('@/app/api/dealer/surveys/route');
-  return POST(
-    new NextRequest('http://localhost/api/dealer/surveys', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-  );
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetServerSession.mockResolvedValue(null);
@@ -102,64 +91,7 @@ beforeEach(() => {
   mockSurveyCreate.mockImplementation(async ({ data }: { data: unknown }) => ({ id: 'new', ...(data as object) }));
 });
 
-describe('POST /api/dealer/surveys — oluşturma', () => {
-  it('HATA SENARYOSU: boş seçenekli seçim sorusu 400 alır, DB yazılmaz', async () => {
-    const res = await createSurvey({
-      title: 'Anket',
-      questions: [{ type: 'single_choice', text: 'Nasıldı?', options: [], required: true, order: 0 }],
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.code).toBe('VALIDATION');
-    expect(body.error).toMatch(/^Soru 1: /);
-    expect(body.issues[0].questionIndex).toBe(0);
-    expect(mockSurveyCreate).not.toHaveBeenCalled();
-  });
-
-  it('geçerli anket 201; seçim dışı soruya options yazılmaz, sıra indeksten', async () => {
-    const res = await createSurvey({
-      title: ' Anket ',
-      questions: [
-        { type: 'single_choice', text: 'Nasıldı?', options: ['İyi', 'Kötü'] },
-        { type: 'rating', text: 'Puan', options: ['x'] },
-      ],
-    });
-    expect(res.status).toBe(201);
-    const data = mockSurveyCreate.mock.calls[0][0].data;
-    expect(data.title).toBe('Anket');
-    expect(data.dealerId).toBe('dealer-1');
-    expect(data.questions.create).toEqual([
-      { type: 'single_choice', text: 'Nasıldı?', options: ['İyi', 'Kötü'], required: true, order: 0 },
-      { type: 'rating', text: 'Puan', options: undefined, required: true, order: 1 },
-    ]);
-  });
-
-  it('kota dolu → 400 SURVEY_QUOTA', async () => {
-    mockSurveyCount.mockResolvedValueOnce(50);
-    const res = await createSurvey({ title: 'A', questions: [{ type: 'open_text', text: 'X' }] });
-    expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('SURVEY_QUOTA');
-  });
-
-  it('bozuk JSON gövde 400 (500 değil)', async () => {
-    const { POST } = await import('@/app/api/dealer/surveys/route');
-    const res = await POST(new NextRequest('http://localhost/api/dealer/surveys', { method: 'POST', body: '{bozuk' }));
-    expect(res.status).toBe(400);
-  });
-});
-
-describe('GET /api/dealer/surveys — liste', () => {
-  it('yanıtlanamaz soru sayısını döner, soru gövdesini sızdırmaz', async () => {
-    mockSurveyFindMany.mockResolvedValueOnce([
-      { id: 'sv1', title: 'A', _count: { responses: 0, questions: 2 }, questions: [{ type: 'single_choice', options: [] }, { type: 'rating', options: null }] },
-    ]);
-    const { GET } = await import('@/app/api/dealer/surveys/route');
-    const res = await GET();
-    const body = await res.json();
-    expect(body.surveys[0].unanswerableQuestions).toBe(1);
-    expect(body.surveys[0]).not.toHaveProperty('questions');
-  });
-});
+// Bayi uçları (oluşturma/liste) → __tests__/api/dealer-surveys.test.ts (defineRoute + kiracı + modül kapısı).
 
 describe('GET /api/surveys/[id]/fill', () => {
   it('eski bozuk (seçeneksiz) soru kamusal görünüme girmez', async () => {

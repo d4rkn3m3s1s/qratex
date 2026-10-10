@@ -1,93 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import {
-    countUnanswerableQuestions,
-    createSurveyInputSchema,
-    describeSurveyIssues,
-    SURVEY_LIMITS,
-    toQuestionCreateData,
-} from '@/lib/survey-schema';
-
+import { z } from 'zod';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { createDealerSurvey, listDealerSurveys } from '@/lib/dealer-surveys/service.server';
+import { parseSurveyWrite } from '@/lib/dealer-surveys/input';
 
 export const dynamic = 'force-dynamic';
 
-// GET — list dealer's surveys
-export async function GET() {
-    try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
+/**
+ * Bayi anketleri — liste + oluşturma (BFF). Kimlik/rol DB'den (`requireAuth`), kiracı kapsamı
+ * `resolveDealerScope` (ADMIN yalnız `?dealerId=` ile ve SALT-OKUNUR), modül kapısı
+ * `dealer_surveys` API düzeyinde (denetim: menüyü gizlemek yetmiyordu).
+ */
+export const GET = defineRoute(
+  { name: 'dealer.surveys.list', roles: ['DEALER', 'ADMIN'], tenant: 'dealer', module: 'dealer_surveys', rateLimit: 'read' },
+  async ({ tenant }) => ok(await listDealerSurveys(tenant.dealerId), { legacySpread: true })
+);
 
-        const rows = await prisma.survey.findMany({
-            where: { dealerId: auth.session.user.id },
-            include: {
-                _count: { select: { responses: true, questions: true } },
-                questions: { select: { type: true, options: true } },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 200,
-        });
+/** Gövde önce nesne olarak alınır; asıl doğrulama ortak sözleşmeyle (soru indeksli hata). */
+const Body = z.record(z.string(), z.unknown());
 
-        // Eski şemayla kaydedilmiş, müşteriye gösterilemeyen (seçeneksiz seçim) soru sayısı:
-        // bayi listesinde uyarı olarak görünür. Soru gövdeleri yanıta konmaz.
-        const surveys = rows.map(({ questions, ...s }) => ({
-            ...s,
-            unanswerableQuestions: countUnanswerableQuestions(questions),
-        }));
-
-        return NextResponse.json({ success: true, surveys }, { headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error fetching surveys:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Anketler yüklenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-}
-
-// POST — create a survey with questions
-export async function POST(request: NextRequest) {
-    try {
-        const auth = await requireAuth(['DEALER', 'ADMIN']);
-        if ('error' in auth) return auth.error;
-
-        const body = await request.json().catch(() => null);
-        // Ortak sözleşme (lib/survey-schema.ts): seçim sorularında 2-20 dolu ve farklı seçenek
-        // zorunlu — boş seçenekli, yanıtlanamaz anket artık yayına giremez.
-        const parsed = createSurveyInputSchema.safeParse(body);
-        if (!parsed.success) {
-            const { message, issues } = describeSurveyIssues(parsed.error);
-            return NextResponse.json(
-                { success: false, error: message, code: 'VALIDATION', issues },
-                { status: 400 , headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const count = await prisma.survey.count({ where: { dealerId: auth.session.user.id } });
-        if (count >= SURVEY_LIMITS.surveysPerDealer) {
-            return NextResponse.json(
-                { success: false, error: `En fazla ${SURVEY_LIMITS.surveysPerDealer} anket oluşturabilirsiniz`, code: 'SURVEY_QUOTA', limit: SURVEY_LIMITS.surveysPerDealer },
-                { status: 400 , headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        const survey = await prisma.survey.create({
-            data: {
-                dealerId: auth.session.user.id,
-                title: parsed.data.title,
-                description: parsed.data.description,
-                questions: {
-                    create: toQuestionCreateData(parsed.data.questions),
-                },
-            },
-            include: { questions: true },
-        });
-
-        return NextResponse.json({ success: true, survey }, { status: 201 , headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (error) {
-        console.error('Error creating survey:', error);
-        const db = responseIfDatabaseUnavailable(error);
-        if (db) return db;
-        return NextResponse.json({ error: 'Anket oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-}
+export const POST = defineRoute(
+  {
+    name: 'dealer.surveys.create',
+    roles: ['DEALER'],
+    tenant: 'dealer',
+    module: 'dealer_surveys',
+    rateLimit: 'mutation',
+    schema: Body,
+    maxBodyBytes: 200_000,
+  },
+  async ({ tenant, body }) => {
+    const parsed = parseSurveyWrite(body);
+    if (!parsed.ok) throw new ApiError('VALIDATION', parsed.message, { status: 400, details: { issues: parsed.issues } });
+    const survey = await createDealerSurvey(tenant.dealerId, parsed.data, parsed.data.publish !== false);
+    return ok({ survey }, { status: 201, legacySpread: true });
+  }
+);
