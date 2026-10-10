@@ -120,6 +120,8 @@ export const PATCH = defineRoute(
             selectedValue: String(result.selection.value),
             selection: result.selection,
             acceptedAt: result.acceptedAt,
+            // Puan türünde hesaba geçen miktar (diğer türlerde null — teslim bayide).
+            creditedPoints: result.creditedPoints,
           },
         },
         { legacySpread: true }

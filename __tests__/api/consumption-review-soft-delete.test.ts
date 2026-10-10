@@ -18,7 +18,12 @@ const mockRequireAuth = jest.fn();
 jest.mock('@/lib/api-auth', () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
 }));
-jest.mock('@/lib/rate-limit', () => ({ checkAdminRateLimit: () => ({ ok: true }) }));
+jest.mock('@/lib/rate-limit', () => ({
+  checkAdminRateLimit: () => ({ ok: true }),
+  checkRateLimitDb: jest.fn(async () => ({ ok: true, remaining: 10 })),
+}));
+const mockMint = jest.fn();
+jest.mock('@/lib/economy', () => ({ mintPoints: (...a: unknown[]) => mockMint(...a) }));
 const mockGetServerSession = jest.fn();
 jest.mock('next-auth', () => ({ getServerSession: (...a: unknown[]) => mockGetServerSession(...a) }));
 jest.mock('@/lib/auth', () => ({ authOptions: {} }));
@@ -64,22 +69,23 @@ describe('P0-23 tekrar kredi döngüsü', () => {
     expect(db.consumptionReview.delete).not.toHaveBeenCalled();
 
     // 2) Müşteri aynı tüketime yeniden yorum yazmayı dener: soft-delete edilmiş satır hâlâ bağlı.
-    mockGetServerSession.mockResolvedValue({ user: { id: 'cust-1', role: 'CUSTOMER' } });
-    db.consumption.findUnique.mockResolvedValue({
+    //    (Seslerim yazma ucu defineRoute + mintPoints: çakışma 409 CONFLICT, kredi yok.)
+    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'cust-1', role: 'CUSTOMER' } } });
+    db.consumption.findFirst.mockResolvedValue({
       id: 'cons-1',
-      customerId: 'cust-1',
       dealerId: 'dealer-1',
-      review: { id: 'rev-1', deletedAt: new Date() },
-      dealer: { id: 'dealer-1', name: 'Kafe', businessName: 'Kafe' },
+      review: { id: 'rev-1' },
       product: null,
     });
     const { POST } = await import('@/app/api/customer/consumptions/[id]/review/route');
     const res = await POST(json('http://localhost/api/customer/consumptions/cons-1/review', { rating: 5, text: 'Yine harikaydı' }), {
       params: Promise.resolve({ id: 'cons-1' }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
+    expect(db.consumption.findFirst.mock.calls[0][0].where).toMatchObject({ id: 'cons-1', customerId: 'cust-1' });
     expect(db.consumptionReview.create).not.toHaveBeenCalled();
     expect(mockCredit).not.toHaveBeenCalled();
+    expect(mockMint).not.toHaveBeenCalled();
   });
 
   it('geri alma bozuk gövdede 400 döner (500 değil) ve yazmaz', async () => {

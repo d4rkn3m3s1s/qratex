@@ -48,6 +48,10 @@ export const GAME_WEEKLY_CAP = 3000;
 export const DEALER_PASSIVE_PER_DEALER_DAILY_CAP = 300;
 export const DEALER_PASSIVE_DAILY_CAP = 600;
 
+/** Telafi teklifinin puan türü (kabulde kredi): kullanıcı × gün 1.000, kullanıcı × hafta 2.000. */
+export const REMEDY_DAILY_CAP = 1000;
+export const REMEDY_WEEKLY_CAP = 2000;
+
 const DEALER_PASSIVE_RULE: CapRule = {
   daily: DEALER_PASSIVE_DAILY_CAP,
   perActorDaily: DEALER_PASSIVE_PER_DEALER_DAILY_CAP,
@@ -72,6 +76,17 @@ export const ECONOMY_CAPS = {
   dealer_passive: DEALER_PASSIVE_RULE,
   // Eşanlamlı: aynı kova (tüketim pasif puanı farklı adlarla çağrılabiliyor).
   consumption: DEALER_PASSIVE_RULE,
+  // Telafi teklifinin "puan" türü (müşteri kabulünde kredilenir). Tek teklif en fazla
+  // REMEDY_VALUE_LIMITS.points.max (1.000); kaynak başına tek kabul (lib/remedy-offer-service).
+  // Bayi ile anlaşmalı bir hesabın "yorum yaz → telafi al" döngüsüyle puan çiftliği kurmaması
+  // için kullanıcı başına gün/hafta tavanı ve bayi (aktör) atfı zorunlu.
+  remedy: {
+    daily: REMEDY_DAILY_CAP,
+    weekly: REMEDY_WEEKLY_CAP,
+    requiresActor: true,
+    countCategories: ['remedy'],
+    description: 'Telafi puanı: kullanıcı başına günde 1.000, haftada 2.000 (bayi atfı zorunlu)',
+  },
 } as const satisfies Record<string, CapRule>;
 
 export type CapCategory = keyof typeof ECONOMY_CAPS;

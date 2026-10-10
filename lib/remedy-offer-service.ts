@@ -21,6 +21,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { isUniqueViolation } from '@/lib/economy/errors';
+import { mintPoints } from '@/lib/economy/mint';
 import { appendRemedyTimelineEvent } from '@/lib/remedy-timeline';
 import {
   findRemedySelection,
@@ -286,12 +287,21 @@ export interface AcceptRemedyOfferResult {
   status: 'accepted';
   acceptedAt: Date;
   selection: RemedySelection;
+  /**
+   * Yalnız "puan" türünde: bu kabulde hesaba geçen puan (tavan kısaltmış olabilir;
+   * gölge banlı hesapta 0). Diğer türlerde null (teslim bayide).
+   */
+  creditedPoints: number | null;
 }
 
 /**
  * Müşteri kabulü: seçim teklifin KENDİ seçeneklerine (allowlist) karşı doğrulanır; durum
  * `pending → accepted` atomik geçer; seçimin anlık görüntüsü (tür/etiket/birim/değer) zaman
  * çizelgesine yazılır ve bayiye "müşteri seçimini yaptı" bildirimi gider. Hepsi tek tx.
+ *
+ * "Puan" türü (eskiden vaat edilip hiç kredilenmiyordu): aynı tx'te `mintPoints` ile
+ * tek seferlik (`remedy:<offerId>` defter anahtarı), `remedy` tavanlı, bayi atıflı kredi +
+ * `completed` zaman çizelgesi olayı (`meta.creditedPoints`). Tx geri alınırsa kredi de yoktur.
  */
 export async function acceptRemedyOffer(
   params: { offerId: string; userId: string; selectedType: unknown; selectedValue: unknown; now?: Date },
@@ -321,6 +331,7 @@ export async function acceptRemedyOffer(
   const acceptedAt = params.now ?? new Date();
   const label = formatRemedySelection(selection);
 
+  let creditedPoints: number | null = null;
   await db.$transaction(async (tx) => {
     const n = await tx.remedyOffer.updateMany({
       // `options` da koşulda değil: seçenekler yalnız oluştururken yazılır, sonradan değişmez.
@@ -338,6 +349,31 @@ export async function acceptRemedyOffer(
       selection: { ...selection },
     });
 
+    if (selection.type === 'points') {
+      const minted = await mintPoints(tx, {
+        userId,
+        points: selection.value,
+        xp: 0,
+        source: 'remedy',
+        sourceId: offerId,
+        idempotencyKey: `remedy:${offerId}`,
+        actorId: offer.dealerId,
+        capCategory: 'remedy',
+        meta: { remedyOfferId: offerId },
+      });
+      // Gölge ban (`void`): mintPoints kullanıcıya başarı gösterecek miktarı döner — aynen yansıt.
+      creditedPoints = minted.credited;
+      await appendRemedyTimelineEvent(
+        tx,
+        offerId,
+        'completed',
+        creditedPoints > 0
+          ? `${creditedPoints} puan hesabınıza eklendi`
+          : 'Puan eklenemedi (telafi puan sınırı doldu)',
+        { creditedPoints, requestedPoints: selection.value, capped: minted.capped }
+      );
+    }
+
     await tx.notification.create({
       data: {
         userId: offer.dealerId,
@@ -349,7 +385,7 @@ export async function acceptRemedyOffer(
     });
   });
 
-  return { offerId, status: 'accepted', acceptedAt, selection };
+  return { offerId, status: 'accepted', acceptedAt, selection, creditedPoints };
 }
 
 /** Müşteriye/bayiye dönen güvenli teklif görünümü için seçenek + seçim çözümü. */

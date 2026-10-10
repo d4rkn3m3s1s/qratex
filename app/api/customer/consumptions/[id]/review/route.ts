@@ -1,220 +1,253 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+/**
+ * Tüketim yorumu — oluştur (POST) ve düzenle (PUT, PATCH semantiği).
+ *
+ * Seslerim (/customer/me/voices) detay çekmecesinin yazma ucu. Değişmezler:
+ *  - Varsayılan reddet: yalnız CUSTOMER; zod gövde; hız sınırı; POST `Idempotency-Key` korumalı.
+ *  - Puan yalnız `mintPoints` ile (lib/economy): tek seferlik defter anahtarı
+ *    `consumption_review:<consumptionId>`, `feedback` tavanı, `points_credited` görünürlüğü.
+ *    `consumptionReview.consumptionId` UNIQUE → yarışan ikinci istek P2002 ile geri alınır,
+ *    kredi asla iki kez yazılmaz.
+ *  - Ödül eşiği ve miktarı sunucudan (admin matrisi); istemcinin vaadine güvenilmez.
+ *  - AI analizi, karakter rozeti ve rozet işleri `after()` içinde (serverless'ta yarıda kesilmez).
+ *  - PUT: yalnız gönderilen alanlar değişir; `text: null` / `dimensions: null` = SİL (KVKK).
+ *    Metin değişmediyse AI yeniden çağrılmaz. Düzenleme yeni puan basmaz.
+ */
+import { after } from 'next/server';
 import { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
-import { createConsumptionReviewSchema } from '@/lib/validations';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { mintPoints } from '@/lib/economy';
 import { getConsumptionReviewReward, getPointsMatrix } from '@/lib/points-rules';
-import { creditPointsAndXp } from '@/lib/points-wallet';
-import { capFeedbackPoints } from '@/lib/points-caps';
 import { analyzeWithFallback } from '@/lib/ai-engine';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
+import { INPUT_LIMITS } from '@/lib/input-limits';
 
 export const dynamic = 'force-dynamic';
 
+const paramsSchema = z.object({ id: z.string().min(1).max(64) });
+
+const dim = z.number({ invalid_type_error: 'Boyut puanı 1-5 arasında olmalı.' }).int().min(1, 'Boyut puanı 1-5 arasında olmalı.').max(5, 'Boyut puanı 1-5 arasında olmalı.');
+const dimensionsSchema = z
+  .object({
+    taste: dim.optional(),
+    service: dim.optional(),
+    ambiance: dim.optional(),
+    value: dim.optional(),
+    cleanliness: dim.optional(),
+  })
+  .strict();
+
+const ratingSchema = z
+  .number({ required_error: 'Lütfen 1-5 arasında bir puan seçin.', invalid_type_error: 'Lütfen 1-5 arasında bir puan seçin.' })
+  .int('Lütfen 1-5 arasında bir puan seçin.')
+  .min(1, 'Lütfen 1-5 arasında bir puan seçin.')
+  .max(5, 'Lütfen 1-5 arasında bir puan seçin.');
+
+const textSchema = z
+  .string({ invalid_type_error: 'Yorum metin olmalı.' })
+  .max(INPUT_LIMITS.feedbackText, `Yorum en fazla ${INPUT_LIMITS.feedbackText} karakter olabilir.`);
+
+const createSchema = z.object({
+  rating: ratingSchema,
+  text: textSchema.optional(),
+  dimensions: dimensionsSchema.optional(),
+});
+
+const updateSchema = z
+  .object({
+    rating: ratingSchema.optional(),
+    /** `null` ya da boş metin = yorumu sil. */
+    text: textSchema.nullable().optional(),
+    /** `null` = tüm boyut puanlarını sil. */
+    dimensions: dimensionsSchema.nullable().optional(),
+  })
+  .refine((v) => v.rating !== undefined || v.text !== undefined || v.dimensions !== undefined, {
+    message: 'Değiştirilecek bir alan gönderin.',
+  });
+
+const cleanText = (t: string | null | undefined): string | null => {
+  const v = typeof t === 'string' ? t.trim() : '';
+  return v ? v : null;
+};
+
+const cleanDims = (d: Record<string, number | undefined> | null | undefined): Prisma.InputJsonValue | null => {
+  if (!d) return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(d)) if (typeof v === 'number') out[k] = v;
+  return Object.keys(out).length ? out : null;
+};
+
+/**
+ * Yorum sinyallerini (duygu, kaybetme riski) yazar. Kısa/boş metinde AI çağrılmaz; puandan
+ * duygu türetilir ve metinden türemiş churn sinyali TEMİZLENİR (metin silindiyse eski
+ * sinyal kalmasın).
+ */
 async function analyzeAndPersistConsumptionReview(params: {
   reviewId: string;
   dealerId: string;
   customerId: string;
   rating: number;
-  text?: string;
+  text: string | null;
 }) {
   const text = params.text?.trim();
   const now = new Date();
 
-  // Kısa/boş metin: puandan sentiment türet (churn sinyali yok, AI çağrısı gereksiz).
   if (!text || text.length < 5) {
     const sentimentFromRating = params.rating >= 4 ? 'positive' : params.rating >= 3 ? 'neutral' : 'negative';
-    await prisma.consumptionReview.update({
+    await prisma.consumptionReview
+      .update({ where: { id: params.reviewId }, data: { sentiment: sentimentFromRating, churnRisk: null, analyzedAt: now } })
+      .catch(() => {});
+    await prisma.analyticsEvent
+      .create({
+        data: {
+          userId: params.customerId,
+          event: 'consumption_review_analyzed',
+          category: 'ai',
+          data: {
+            reviewId: params.reviewId,
+            dealerId: params.dealerId,
+            sentiment: sentimentFromRating,
+            source: 'rating_fallback',
+            textLength: text?.length ?? 0,
+          } as Prisma.InputJsonValue,
+        },
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const analysis = await analyzeWithFallback(text, { dealerId: params.dealerId });
+  await prisma.consumptionReview
+    .update({
       where: { id: params.reviewId },
-      data: { sentiment: sentimentFromRating, analyzedAt: now },
-    }).catch(() => {});
-    await prisma.analyticsEvent.create({
+      data: { sentiment: analysis.sentiment.label, churnRisk: analysis.churnRisk ?? null, analyzedAt: now },
+    })
+    .catch(() => {});
+  await prisma.analyticsEvent
+    .create({
       data: {
         userId: params.customerId,
         event: 'consumption_review_analyzed',
         category: 'ai',
         data: {
-          reviewId: params.reviewId, dealerId: params.dealerId,
-          sentiment: sentimentFromRating, source: 'rating_fallback', textLength: text?.length ?? 0,
+          reviewId: params.reviewId,
+          dealerId: params.dealerId,
+          sentiment: analysis.sentiment.label,
+          intent: analysis.intent?.label ?? null,
+          intentScore: analysis.intent?.score ?? null,
+          urgency: analysis.urgency ?? null,
+          churnRisk: analysis.churnRisk ?? null,
+          topics: analysis.topics ?? [],
+          themes: analysis.themes ?? [],
+          model: analysis.modelUsed ?? null,
+          version: analysis.version ?? null,
+          source: 'ai',
         } as unknown as Prisma.InputJsonValue,
       },
-    });
-    return;
-  }
+    })
+    .catch(() => {});
+}
 
-  const analysis = await analyzeWithFallback(text, { dealerId: params.dealerId });
-  // Sinyalleri ARTIK ConsumptionReview'e yaz (clv-core churn agregasyonu burayı okur —
-  // önceki AnalyticsEvent tek başına ölü sinyaldi). Event'i denetim/detay için koru.
-  await prisma.consumptionReview.update({
-    where: { id: params.reviewId },
-    data: {
-      sentiment: analysis.sentiment.label,
-      churnRisk: analysis.churnRisk ?? null,
-      analyzedAt: now,
-    },
-  }).catch(() => {});
-  await prisma.analyticsEvent.create({
-    data: {
-      userId: params.customerId,
-      event: 'consumption_review_analyzed',
-      category: 'ai',
-      data: {
-        reviewId: params.reviewId,
-        dealerId: params.dealerId,
-        sentiment: analysis.sentiment.label,
-        intent: analysis.intent?.label ?? null,
-        intentScore: analysis.intent?.score ?? null,
-        urgency: analysis.urgency ?? null,
-        churnRisk: analysis.churnRisk ?? null,
-        topics: analysis.topics ?? [],
-        themes: analysis.themes ?? [],
-        model: analysis.modelUsed ?? null,
-        version: analysis.version ?? null,
-        source: 'ai',
-      } as unknown as Prisma.InputJsonValue,
-    },
-  });
+function scheduleAnalysis(input: Parameters<typeof analyzeAndPersistConsumptionReview>[0]) {
+  after(() =>
+    analyzeAndPersistConsumptionReview(input).catch((err) => {
+      console.error('[consumption-review] analiz başarısız:', err);
+    })
+  );
+}
+
+function scheduleCharacterBadge(userId: string, reviewId: string, text: string | null) {
+  if (!text || text.trim().length < 8) return;
+  after(() =>
+    import('@/lib/character-badges')
+      .then((m) => m.processConsumptionReviewForCharacterBadge(userId, reviewId, text))
+      .catch(() => {})
+  );
 }
 
 /**
- * POST /api/customer/consumptions/[id]/review
- * Tüketime yorum/puan ekle
+ * POST — yorum + ödül tek transaction'da. Yanıt: `{ review, rewards: { points, xp, requested,
+ * capped, leveledUp, level } }` (kutlama anı gerçek krediye göre).
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const idemCheck = await checkIdempotency(request, 'consumption-review');
-    if ('error' in idemCheck) return idemCheck.error;
-    if (idemCheck.cached) return idemCheck.response;
-    const idemKey = idemCheck.key;
-
-    const session = await getServerSession(authOptions);
-    const { id } = await params;
-    
-    if (!session?.user || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const body = await request.json().catch(() => null); // bozuk gövde → null → safeParse temiz 400 verir (500 değil)
-    const validatedData = createConsumptionReviewSchema.safeParse(body);
-
-    if (!validatedData.success) {
-      return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const { rating, text, dimensions } = validatedData.data;
-
-    // Tüketim kaydını bul
-    const consumption = await prisma.consumption.findUnique({
-      where: { id },
-      include: {
-        review: true,
-        dealer: {
-          select: {
-            id: true,
-            name: true,
-            businessName: true,
-          },
-        },
-        product: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+export const POST = defineRoute(
+  {
+    name: 'customer.consumption.review.create',
+    roles: ['CUSTOMER'],
+    rateLimit: 'mutation',
+    idempotent: true,
+    params: paramsSchema,
+    schema: createSchema,
+  },
+  async ({ params, body, user }) => {
+    const consumption = await prisma.consumption.findFirst({
+      where: { id: params.id, customerId: user.id },
+      select: {
+        id: true,
+        dealerId: true,
+        product: { select: { name: true } },
+        review: { select: { id: true } },
       },
     });
+    if (!consumption) throw new ApiError('NOT_FOUND', 'Tüketim kaydı bulunamadı.');
+    if (consumption.review) throw new ApiError('CONFLICT', 'Bu tüketim için zaten yorum yapılmış.');
 
-    if (!consumption) {
-      return NextResponse.json(
-        { error: 'Tüketim kaydı bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Sadece kendi tüketimine yorum yapabilir
-    if (consumption.customerId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Bu tüketime yorum yapma yetkiniz yok' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Zaten yorum var mı?
-    if (consumption.review) {
-      return NextResponse.json(
-        { error: 'Bu tüketim için zaten yorum yapılmış' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    // Kullanıcıya verilecek puanı hesapla (gamification)
+    const text = cleanText(body.text);
+    const dimensions = cleanDims(body.dimensions);
     const matrix = await getPointsMatrix();
     const reward = getConsumptionReviewReward(text, matrix);
-    let pointsEarned = reward.points; // tx içinde günlük/haftalık cap'e göre kısaltılır
-    const xpEarned = reward.xp;
 
-    // Yorum oluşturma + puan kredisi + bildirimler TEK transaction içinde.
-    // `consumptionReview.consumptionId` UNIQUE olduğundan, iki eşzamanlı istekten
-    // yalnızca biri create'i geçer; diğeri P2002 ile rollback olur ve ASLA puan
-    // kredisi almaz (önceki kod create ile krediyi ayrı yürütüyordu → çift puan).
-    let review;
+    let result: {
+      review: { id: string; rating: number; text: string | null; createdAt: Date };
+      credited: number;
+      xp: number;
+      capped: boolean;
+      leveledUp: boolean;
+      level: number;
+    };
     try {
-      review = await prisma.$transaction(async (tx) => {
+      result = await prisma.$transaction(async (tx) => {
         const created = await tx.consumptionReview.create({
           data: {
             consumptionId: consumption.id,
-            customerId: session.user.id,
-            rating,
-            text: text || undefined,
-            dimensions: dimensions || undefined,
+            customerId: user.id,
+            rating: body.rating,
+            text,
+            ...(dimensions ? { dimensions } : {}),
           },
+          select: { id: true, rating: true, text: true, createdAt: true },
         });
 
-        // Günlük/haftalık feedback cap'i burada da uygulanır — aksi halde yorum
-        // yolu üzerinden cap görünmez şekilde aşılıyordu (feedback yolu cap'liydi).
-        pointsEarned = await capFeedbackPoints(session.user.id, pointsEarned, tx);
-
-        // Sonucu YAKALA: seviye atladıysa bildirimi kutlama tonuna çevir (feedback akışıyla tutarlı).
-        const credited = await creditPointsAndXp(tx, {
-          userId: session.user.id,
-          points: pointsEarned,
-          xp: xpEarned,
+        const minted = await mintPoints(tx, {
+          userId: user.id,
+          points: reward.points,
+          xp: reward.xp,
+          source: 'review',
+          sourceId: created.id,
+          idempotencyKey: `consumption_review:${consumption.id}`,
+          capCategory: 'feedback',
+          meta: { consumptionId: consumption.id, dealerId: consumption.dealerId, detailed: !!text && text.length >= matrix.consumptionReview.longTextThreshold },
         });
-
-        // Cap hesabının kaynağı olan points_credited event'i (feedback kategorisi)
-        // — feedback yoluyla aynı sayaca yazılır ki çapraz cap tutarlı olsun.
-        if (pointsEarned > 0) {
-          await tx.analyticsEvent.create({
-            data: {
-              userId: session.user.id,
-              event: 'points_credited',
-              category: 'feedback',
-              data: { points: pointsEarned, xp: xpEarned, source: 'consumption_review' },
-            },
-          });
-        }
 
         await tx.notification.create({
           data: {
-            userId: session.user.id,
-            title: credited.isLevelUp ? `Seviye Atladınız! 🚀 Seviye ${credited.level}` : 'Yorum için teşekkürler!',
-            message: credited.isLevelUp
-              ? `${pointsEarned} puan kazandınız ve artık Seviye ${credited.level} oldunuz!`
-              : `${pointsEarned} puan kazandınız!`,
+            userId: user.id,
+            title: minted.isLevelUp ? `Seviye atladın! Seviye ${minted.level}` : 'Yorumun için teşekkürler!',
+            message:
+              minted.credited > 0
+                ? minted.isLevelUp
+                  ? `${minted.credited} puan kazandın ve artık Seviye ${minted.level} oldun.`
+                  : `${minted.credited} puan kazandın.`
+                : 'Yorumun işletmeye ulaştı. Bugünkü yorum puanı sınırına ulaştığın için puan eklenmedi.',
             type: 'success',
-            data: { reviewId: created.id, pointsEarned, xpEarned, leveledUp: credited.isLevelUp, level: credited.level },
+            data: {
+              reviewId: created.id,
+              consumptionId: consumption.id,
+              pointsEarned: minted.credited,
+              xpEarned: minted.xpCredited,
+              leveledUp: minted.isLevelUp,
+              level: minted.level,
+              ctaPath: `/customer/me/voices?id=cs-${consumption.id}`,
+            },
           },
         });
 
@@ -222,163 +255,132 @@ export async function POST(
           data: {
             userId: consumption.dealerId,
             title: 'Yeni Müşteri Yorumu',
-            message: `${consumption.product?.name || 'Bir ürün'} için ${rating} yıldızlı yorum aldınız.`,
+            message: `${consumption.product?.name || 'Bir ürün'} için ${body.rating} yıldızlı yorum aldınız.`,
             type: 'info',
-            data: { reviewId: created.id, consumptionId: consumption.id, rating },
+            data: { reviewId: created.id, consumptionId: consumption.id, rating: body.rating },
           },
         });
 
-        return created;
+        return {
+          review: created,
+          credited: minted.credited,
+          xp: minted.xpCredited,
+          capped: minted.capped,
+          leveledUp: minted.isLevelUp,
+          level: minted.level,
+        };
       });
-    } catch (txError) {
-      if (
-        txError instanceof Prisma.PrismaClientKnownRequestError &&
-        txError.code === 'P2002'
-      ) {
-        return NextResponse.json(
-          { error: 'Bu tüketim için zaten yorum yapılmış' },
-          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-        );
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ApiError('CONFLICT', 'Bu tüketim için zaten yorum yapılmış.');
       }
-      throw txError;
+      throw err;
     }
 
-    // Yorum geldiği anda analiz + segment sinyallerini DB'ye kaydet
-    analyzeAndPersistConsumptionReview({
-      reviewId: review.id,
-      dealerId: consumption.dealerId,
-      customerId: session.user.id,
-      rating,
-      text: text || undefined,
-    }).catch((err) => {
-      console.error('Consumption review analysis failed:', err);
-    });
+    const uid = user.id;
+    const rid = result.review.id;
+    scheduleAnalysis({ reviewId: rid, dealerId: consumption.dealerId, customerId: uid, rating: body.rating, text });
+    scheduleCharacterBadge(uid, rid, text);
+    // Sürpriz + davranışsal rozetler ve davet nitelendirmesi (hepsi idempotent).
+    after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
+    after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
+    after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
 
-    // Karakter rozeti: tüketim yorumunu kategoriye sınıflandır + eşik dolduysa
-    // "karakterin hazır" bildirimi (fire-and-forget; rozet reveal anında atanır).
-    // after(): yanıt sonrası ama fonksiyon canlıyken çalışır → Vercel serverless'ta
-    // await'siz fire-and-forget gibi yarıda kesilmez (rozet/karakter kaybolmaz).
-    if (text && text.trim().length >= 8) {
-      const uid = session.user.id, rid = review.id, rtext = text;
-      after(() => import('@/lib/character-badges')
-        .then((m) => m.processConsumptionReviewForCharacterBadge(uid, rid, rtext))
-        .catch(() => {}));
-    }
-
-    // Sürpriz + davranışsal (aktivite) rozetleri: yorum sayısı/deseni değişti →
-    // koşulu sağlananları otomatik aç. İkisi de idempotent (puan çoğaltmaz).
-    {
-      const uid = session.user.id;
-      after(() => import('@/lib/surprise-badges').then((m) => m.awardEligibleSurpriseBadges(uid)).catch(() => {}));
-      after(() => import('@/lib/activity-badges').then((m) => m.awardActivityBadges(uid)).catch(() => {}));
-      // Kart tüketimi + yorum da QR olayıdır: bekleyen daveti nitelendirebilir (P0-16).
-      after(() => import('@/lib/referral').then((m) => m.maybeQualifyReferral(uid)).catch(() => {}));
-    }
-
-    const resBody = {
-      success: true,
-      message: 'Yorumunuz kaydedildi!',
-      review,
-      rewards: { points: pointsEarned, xp: xpEarned },
-    };
-    if (idemKey) await storeIdempotency(idemKey, 'consumption-review', 200, resBody);
-    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Error creating review:', error);
-    return NextResponse.json(
-      { error: 'Yorum kaydedilemedi' },
-        { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-  }
-}
-
-/**
- * PUT /api/customer/consumptions/[id]/review
- * Yorumu güncelle
- */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    const { id } = await params;
-    
-    if (!session?.user || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const body = await request.json().catch(() => null); // bozuk gövde → null → safeParse temiz 400 verir (500 değil)
-    const validatedData = createConsumptionReviewSchema.safeParse(body);
-
-    if (!validatedData.success) {
-      return NextResponse.json(
-        { error: validatedData.error.errors[0].message },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    const { rating, text, dimensions } = validatedData.data;
-
-    // Mevcut yorumu bul
-    const existingReview = await prisma.consumptionReview.findFirst({
-      where: {
-        consumptionId: id,
-        customerId: session.user.id,
-      },
-      include: {
-        consumption: {
-          select: {
-            dealerId: true,
-          },
+    return ok(
+      {
+        message: 'Yorumun kaydedildi.',
+        review: result.review,
+        rewards: {
+          points: result.credited,
+          xp: result.xp,
+          requested: reward.points,
+          capped: result.capped,
+          leveledUp: result.leveledUp,
+          level: result.level,
         },
       },
+      { status: 201, legacySpread: true }
+    );
+  }
+);
+
+/**
+ * PUT — düzenleme (PATCH semantiği). İşletme yanıtladıktan sonra düzenlenirse işletmeye
+ * "yorum güncellendi" bildirimi gider (yanıt bağlamsız kalmasın).
+ */
+export const PUT = defineRoute(
+  {
+    name: 'customer.consumption.review.update',
+    roles: ['CUSTOMER'],
+    // Her metin değişikliği bir AI analizi tetikleyebilir → kullanıcı başına saatlik sınır.
+    rateLimit: { max: 10, windowMs: 60 * 60_000, by: 'user' },
+    params: paramsSchema,
+    schema: updateSchema,
+  },
+  async ({ params, body, user }) => {
+    const existing = await prisma.consumptionReview.findFirst({
+      where: { consumptionId: params.id, customerId: user.id, deletedAt: null },
+      select: {
+        id: true,
+        rating: true,
+        text: true,
+        characterCategory: true,
+        dealerRepliedAt: true,
+        consumption: { select: { dealerId: true } },
+      },
+    });
+    if (!existing) throw new ApiError('NOT_FOUND', 'Yorum bulunamadı.');
+
+    const data: Prisma.ConsumptionReviewUpdateInput = {};
+    if (body.rating !== undefined) data.rating = body.rating;
+    const nextText = body.text === undefined ? existing.text : cleanText(body.text);
+    const textChanged = body.text !== undefined && nextText !== (existing.text?.trim() || null);
+    if (body.text !== undefined) data.text = nextText;
+    if (body.dimensions !== undefined) {
+      const d = cleanDims(body.dimensions);
+      data.dimensions = d === null ? Prisma.DbNull : d;
+    }
+    // Metin silinirse metinden türemiş üslup kategorisi de silinir (karakter barı yalnız metinli yorumu sayar).
+    if (textChanged && !nextText) data.characterCategory = null;
+
+    const updated = await prisma.consumptionReview.update({
+      where: { id: existing.id },
+      data,
+      select: { id: true, rating: true, text: true, dimensions: true, updatedAt: true, dealerRepliedAt: true },
     });
 
-    if (!existingReview) {
-      return NextResponse.json(
-        { error: 'Yorum bulunamadı' },
-        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    const ratingChanged = body.rating !== undefined && body.rating !== existing.rating;
+    if (textChanged || ratingChanged) {
+      // Metin aynıysa AI çağrılmaz; yalnız puan değiştiyse ve metin kısa/boşsa puandan türetilir.
+      if (textChanged || !nextText || nextText.length < 5) {
+        scheduleAnalysis({
+          reviewId: existing.id,
+          dealerId: existing.consumption.dealerId,
+          customerId: user.id,
+          rating: updated.rating,
+          text: nextText,
+        });
+      }
+    }
+    if (textChanged && nextText && !existing.characterCategory) {
+      // Hatırlatma akışı ("puan verdin ama yorum boş") PUT ile metin ekletiyor → karakter barı saysın.
+      scheduleCharacterBadge(user.id, existing.id, nextText);
     }
 
-    // Güncelle
-    const review = await prisma.consumptionReview.update({
-      where: { id: existingReview.id },
-      data: {
-        rating,
-        text: text || undefined,
-        dimensions: dimensions || undefined,
-      },
-    });
+    if ((textChanged || ratingChanged) && existing.dealerRepliedAt) {
+      await prisma.notification
+        .create({
+          data: {
+            userId: existing.consumption.dealerId,
+            title: 'Müşteri yorumunu güncelledi',
+            message: 'Yanıtladığınız bir tüketim yorumu müşteri tarafından düzenlendi.',
+            type: 'info',
+            data: { reviewId: existing.id, consumptionId: params.id, type: 'review_edited' },
+          },
+        })
+        .catch(() => {});
+    }
 
-    // Güncellemede de anlık analiz sinyalini yenile
-    analyzeAndPersistConsumptionReview({
-      reviewId: review.id,
-      dealerId: existingReview.consumption.dealerId,
-      customerId: session.user.id,
-      rating,
-      text: text || undefined,
-    }).catch((err) => {
-      console.error('Consumption review re-analysis failed:', err);
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Yorumunuz güncellendi',
-        review,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  } catch (error) {
-    console.error('Error updating review:', error);
-    return NextResponse.json(
-      { error: 'Yorum güncellenemedi' },
-        { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-      );
+    return ok({ message: 'Yorumun güncellendi.', review: updated }, { legacySpread: true });
   }
-}
+);
