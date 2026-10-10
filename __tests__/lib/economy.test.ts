@@ -580,6 +580,64 @@ describe('adjustPointsByAdmin', () => {
     expect(tx.user.update).not.toHaveBeenCalled();
   });
 
+  it('dört göz eşiği bölünerek atlatılamaz: günlük toplam 10.000’i aşan pozitif düzeltme onay ister', async () => {
+    // Bugün aynı kullanıcıya 9.500 verilmiş; +600 tek başına eşik altı ama toplam 10.100.
+    const tx = makeTx({ actors: [ADMIN], adminTodaySum: 9_500 });
+    await expectEconomyError(
+      adjustPointsByAdmin(tx as never, { adminId: 'admin1', userId: 'u1', delta: 600, reason: 'Parça parça ödül', now: NOW }),
+      'SECOND_APPROVAL_REQUIRED'
+    );
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.pointsLedger.create).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+
+    // Eşiğe kadar (toplam tam 10.000) onaysız serbest.
+    const under = makeTx({ actors: [ADMIN], adminTodaySum: 9_500 });
+    const r0 = await adjustPointsByAdmin(under as never, { adminId: 'admin1', userId: 'u1', delta: 500, reason: 'Parça parça ödül', now: NOW });
+    expect(r0.points).toBe(1500);
+
+    // İkinci yöneticinin bu talep + tutar için verdiği onayla geçer.
+    const { token } = issueAdjustApproval({ approverId: 'admin2', requesterId: 'admin1', userId: 'u1', delta: 600, now: NOW });
+    const ok = makeTx({ actors: [ADMIN, ADMIN2], adminTodaySum: 9_500 });
+    const r = await adjustPointsByAdmin(ok as never, {
+      adminId: 'admin1', userId: 'u1', delta: 600, reason: 'Parça parça ödül', approvalToken: token, now: NOW,
+    });
+    expect(r.points).toBe(1600);
+    expect(ok.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ newData: expect.objectContaining({ secondApproverId: 'admin2' }) }),
+    });
+  });
+
+  it('onay belirteci talep edene bağlı: başka bir admin aynı belirteci kullanamaz', async () => {
+    const ADMIN3 = { id: 'admin3', role: 'ADMIN', email: 'c@x.com', name: 'Admin 3' };
+    const { token } = issueAdjustApproval({ approverId: 'admin2', requesterId: 'admin3', userId: 'u1', delta: 20_000, now: NOW });
+    const tx = makeTx({ actors: [ADMIN, ADMIN2] });
+    await expectEconomyError(
+      adjustPointsByAdmin(tx as never, {
+        adminId: 'admin1', userId: 'u1', delta: 20_000, reason: 'Büyük etkinlik ödülü', approvalToken: token, now: NOW,
+      }),
+      'SECOND_APPROVAL_REQUIRED'
+    );
+    expect(tx.user.update).not.toHaveBeenCalled();
+
+    const own = makeTx({ actors: [ADMIN3, ADMIN2] });
+    const r = await adjustPointsByAdmin(own as never, {
+      adminId: 'admin3', userId: 'u1', delta: 20_000, reason: 'Büyük etkinlik ödülü', approvalToken: token, now: NOW,
+    });
+    expect(r.points).toBe(21_000);
+  });
+
+  it('eşik altı düzeltmede verilen geçersiz belirteç sessizce yok sayılmaz', async () => {
+    const tx = makeTx({ actors: [ADMIN, ADMIN2] });
+    await expectEconomyError(
+      adjustPointsByAdmin(tx as never, {
+        adminId: 'admin1', userId: 'u1', delta: 100, reason: 'Geçerli gerekçe', approvalToken: 'v1.sahte.imza', now: NOW,
+      }),
+      'SECOND_APPROVAL_REQUIRED'
+    );
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
   it('aynı idempotencyKey ile tekrar gönderim ikinci kez düzeltmez', async () => {
     const tx = makeTx({
       actors: [ADMIN],

@@ -456,8 +456,13 @@ export async function createConsumption(
 }
 
 /**
- * Yanıt sonrası yan etkiler (ısı haritası kovası + ziyaret görevleri). Hata yutulur ve
- * loglanır — tüketim kaydı zaten commit'lendi. Route bunu `after()` içinde çağırmalı.
+ * Yanıt sonrası yan etkiler (ısı haritası kovası + ziyaret görevleri + bekleyen davetin
+ * nitelendirilmesi). Hata yutulur ve loglanır — tüketim kaydı zaten commit'lendi. Route bunu
+ * `after()` içinde çağırmalı.
+ *
+ * Davet (P0-16): kart tüketimi "ilk QR olayı" sayılır; e-postası doğrulanmış ve bekleyen
+ * daveti olan müşteri yalnız tüketim yapıyorsa (yorum/geri bildirim yazmadan) daveti hiç
+ * nitelenmiyordu. `maybeQualifyReferral` atomik + tek seferliktir; koşul yoksa no-op.
  */
 export async function runConsumptionSideEffects(params: {
   dealerId: string;
@@ -472,5 +477,8 @@ export async function runConsumptionSideEffects(params: {
     import('@/lib/visit-missions')
       .then(({ advanceVisitMissions }) => advanceVisitMissions(params.customerId, params.dealerId))
       .catch((err) => console.error('[VISIT_MISSION] advance failed:', err)),
+    import('@/lib/referral')
+      .then(({ maybeQualifyReferral }) => maybeQualifyReferral(params.customerId))
+      .catch((err) => console.error('[REFERRAL_QUALIFY] consumption trigger failed:', err)),
   ]);
 }

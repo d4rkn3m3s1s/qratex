@@ -10,7 +10,9 @@
  *   - |delta| ≤ 100.000 (tek işlem); aynı kullanıcıya günlük pozitif toplam ≤ 200.000.
  *   - |delta| > 10.000 → ikinci, FARKLI bir ADMIN'in onayı zorunlu: onaylayan kimliği
  *     istemciden ALINMAZ; ikinci admin kendi oturumuyla imzalı, tek kullanımlık bir
- *     onay belirteci üretir (admin-approval.ts). Belirteç kullanıcı+miktara bağlıdır.
+ *     onay belirteci üretir (admin-approval.ts). Belirteç talep eden + kullanıcı + miktara bağlıdır.
+ *   - Bölerek atlatma kapalı: aynı kullanıcıya o gün yapılmış pozitif düzeltmelerle BİRLİKTE
+ *     toplam 10.000'i aşan pozitif düzeltme de ikinci onay ister (10 × 10.000 tek başına yok).
  *   - Pozitif → mintPoints (ledger + points_credited{admin_adjust}); negatif → debitPoints
  *     (bakiye eksiye düşemez → InsufficientPointsError).
  *   - AuditLog: aktör snapshot'ı, önceki/sonraki bakiye, gerekçe, defter satırı.
@@ -89,7 +91,9 @@ function validate(input: AdminAdjustInput) {
     Math.abs(input.delta) > ADMIN_ADJUST_LIMITS.secondApprovalAbove ||
     xp > ADMIN_ADJUST_LIMITS.secondApprovalAbove;
   let approval: { approverId: string; nonce: string } | null = null;
-  if (needsSecond) {
+  // Belirteç verildiyse (eşik altı tek işlemde de: günlük toplam eşiği aşabilir) her zaman
+  // doğrulanır; geçersiz/uyumsuz belirteç sessizce yok sayılmaz.
+  if (needsSecond || input.approvalToken) {
     if (!input.approvalToken) {
       throw new EconomyError(
         'SECOND_APPROVAL_REQUIRED',
@@ -127,7 +131,7 @@ async function adjustInTx(
   if (!admin || admin.role !== 'ADMIN') {
     throw new EconomyError('FORBIDDEN', 'Bu işlem için yönetici yetkisi gerekir.');
   }
-  if (v.needsSecond) {
+  if (v.needsSecond || approverId) {
     const approver = actors.find((a) => a.id === approverId);
     if (!approver || approver.role !== 'ADMIN') {
       throw new EconomyError('SECOND_APPROVAL_REQUIRED', 'İkinci onaylayan kişi yönetici olmalı.');
@@ -187,6 +191,15 @@ async function adjustInTx(
         'CAP_EXCEEDED',
         'Bu kullanıcıya bugün verilebilecek manuel puan sınırı (200.000) aşılıyor.',
         { today, max: ADMIN_ADJUST_LIMITS.dailyPerUser }
+      );
+    }
+    // Dört göz eşiği günlük toplam üzerinden: eşiği bölerek (ör. 10 × 10.000) tek başına
+    // atlatmak mümkün olmasın. Kilit altında okunduğu için eşzamanlı istekler de aşamaz.
+    if (!v.approval && today + input.delta > ADMIN_ADJUST_LIMITS.secondApprovalAbove) {
+      throw new EconomyError(
+        'SECOND_APPROVAL_REQUIRED',
+        'Bu kullanıcıya bugün yapılan düzeltmelerle birlikte toplam 10.000 puan aşılıyor; ikinci bir yöneticinin onayı gerekir.',
+        { today, threshold: ADMIN_ADJUST_LIMITS.secondApprovalAbove }
       );
     }
   }

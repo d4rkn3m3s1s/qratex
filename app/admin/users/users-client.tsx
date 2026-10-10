@@ -222,6 +222,9 @@ export default function AdminUsersPage() {
   // P0-19: 10.000 üstü düzeltme ikinci yöneticinin onay belirtecini ister; requestId
   // aynı diyalogdan çift gönderimin ikinci düzeltme üretmesini engeller.
   const [pointsApprovalToken, setPointsApprovalToken] = useState('');
+  // Sunucu günlük toplam üzerinden de dört göz ister (eşiği bölerek atlatma kapalı):
+  // SECOND_APPROVAL_REQUIRED dönerse belirteç alanı tutar eşiğin altında olsa da açılır.
+  const [pointsApprovalRequired, setPointsApprovalRequired] = useState(false);
   const [pointsRequestId, setPointsRequestId] = useState('');
   const [xpAmount, setXpAmount] = useState<number>(100);
   const [newLevel, setNewLevel] = useState<number>(1);
@@ -617,6 +620,7 @@ export default function AdminUsersPage() {
         }
         resetActionForm();
       } else {
+        if (data?.code === 'SECOND_APPROVAL_REQUIRED') setPointsApprovalRequired(true);
         toast.error(data.error || 'İşlem başarısız');
       }
     } catch (error) {
@@ -700,6 +704,7 @@ export default function AdminUsersPage() {
     setPointsAmount(100);
     setPointsReason('');
     setPointsApprovalToken('');
+    setPointsApprovalRequired(false);
     setPointsRequestId(
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID().replace(/-/g, '')
@@ -1442,7 +1447,7 @@ export default function AdminUsersPage() {
                     En az 5 karakter. Gerekçe müşteriye bildirimde ve denetim kaydında görünür.
                   </p>
                 </div>
-                {Math.abs(pointsAmount) > 10000 && (
+                {(Math.abs(pointsAmount) > 10000 || pointsApprovalRequired) && (
                   <div className="space-y-2 rounded-lg border border-border p-3">
                     <Label htmlFor="points-adjust-approval">İkinci yönetici onay belirteci</Label>
                     <Input
@@ -1453,8 +1458,9 @@ export default function AdminUsersPage() {
                       autoComplete="off"
                     />
                     <p className="text-xs text-muted-foreground">
-                      10.000 puanın üzerindeki düzeltmeler dört göz ilkesine tabidir: başka bir yönetici kendi
-                      oturumuyla bu kullanıcı ve tutar için onay belirteci üretir (15 dakika geçerli, tek kullanımlık).
+                      10.000 puanın üzerindeki düzeltmeler (aynı kullanıcıya o gün yapılanlarla birlikte) dört göz
+                      ilkesine tabidir: başka bir yönetici kendi oturumuyla sizin talebiniz, bu kullanıcı ve tutar
+                      için onay belirteci üretir (15 dakika geçerli, tek kullanımlık).
                     </p>
                   </div>
                 )}

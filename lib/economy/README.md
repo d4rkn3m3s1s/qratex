@@ -93,6 +93,9 @@ await adjustPointsByAdmin(prisma, {
 
 - Aktör veritabanında `ADMIN` olmalı (JWT'ye güvenilmez); kendi bakiyesini düzeltemez.
 - Gerekçe 5–500 karakter; `|delta| ≤ 100.000`; kullanıcı başına günlük pozitif toplam ≤ 200.000.
+- Dört göz eşiği günlük toplam üzerinden: aynı kullanıcıya o gün yapılmış pozitif düzeltmelerle
+  birlikte 10.000'i aşan düzeltme de onay belirteci ister (eşiği bölerek atlatma yok). Belirteç
+  talep eden admine bağlıdır (`requesterId`); başka admin kullanamaz.
 - Pozitif → `mintPoints(source: 'admin_adjust')`; negatif → `debitPoints` (eksi bakiye yok).
 - `AuditLog` `ADMIN_POINTS_ADJUST`: aktör snapshot'ı, önceki/sonraki bakiye, gerekçe, defter id.
 

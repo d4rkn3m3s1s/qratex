@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Yalnız yöneticiler arasında onay verilebilir.' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  const { token, expiresAt } = issueAdjustApproval({ approverId, userId, delta, xp });
+  const { token, expiresAt } = issueAdjustApproval({ approverId, requesterId, userId, delta, xp });
   const meta = getAuditRequestMeta(request);
   await prisma.auditLog.create({
     data: {

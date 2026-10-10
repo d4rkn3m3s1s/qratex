@@ -11,12 +11,19 @@ const mockPrisma: Record<string, any> = {};
 jest.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
 const mockRateLimit = jest.fn();
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: (...a: unknown[]) => mockRateLimit(...a) }));
+const mockQualify = jest.fn();
+const mockHeatmap = jest.fn();
+const mockVisit = jest.fn();
+jest.mock('@/lib/referral', () => ({ maybeQualifyReferral: (...a: unknown[]) => mockQualify(...a) }));
+jest.mock('@/lib/heatmap-track', () => ({ recordHeatmapHit: (...a: unknown[]) => mockHeatmap(...a) }));
+jest.mock('@/lib/visit-missions', () => ({ advanceVisitMissions: (...a: unknown[]) => mockVisit(...a) }));
 
 import {
   computePassivePoints,
   createConsumption,
   ConsumptionError,
   PASSIVE_POINTS_MAX_PER_CONSUMPTION,
+  runConsumptionSideEffects,
 } from '@/lib/consumption/service';
 
 // 2026-10-08 Perşembe 09:30 UTC = 12:30 İstanbul
@@ -333,5 +340,30 @@ describe('createConsumption — clientOpId idempotency (P0-18)', () => {
     const r = await createConsumption({ cardToken: 'tok', clientOpId: 'offline:q1abcdef' }, ctx);
     expect(r.duplicate).toBe(true);
     expect(r.consumption.id).toBe('cons_old');
+  });
+});
+
+describe('runConsumptionSideEffects — bekleyen davet (P0-16)', () => {
+  beforeEach(() => {
+    mockQualify.mockReset().mockResolvedValue(undefined);
+    mockHeatmap.mockReset().mockResolvedValue(undefined);
+    mockVisit.mockReset().mockResolvedValue({ completed: 0 });
+  });
+
+  it('kart tüketimi "ilk QR olayı": müşterinin bekleyen daveti nitelendirilmeye çalışılır', async () => {
+    await runConsumptionSideEffects({ dealerId: DEALER, customerId: CUSTOMER, revenue: 120, at: NOW });
+    expect(mockQualify).toHaveBeenCalledWith(CUSTOMER);
+    expect(mockVisit).toHaveBeenCalledWith(CUSTOMER, DEALER);
+    expect(mockHeatmap).toHaveBeenCalledWith(DEALER, NOW, 120);
+  });
+
+  it('davet kancası hata verse de diğer yan etkiler çalışır ve hata yutulur', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockQualify.mockRejectedValue(new Error('db down'));
+    await expect(
+      runConsumptionSideEffects({ dealerId: DEALER, customerId: CUSTOMER, revenue: 0, at: NOW })
+    ).resolves.toBeUndefined();
+    expect(mockVisit).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

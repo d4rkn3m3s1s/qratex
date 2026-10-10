@@ -22,6 +22,11 @@ const VERSION = 'v1';
 
 export interface AdjustApprovalClaims {
   approverId: string;
+  /**
+   * Onayın verildiği talep eden admin. Varsa yalnız o admin kullanabilir (onay başka bir
+   * admine devredilemez). Eski (alan öncesi) belirteçlerde yok; 15 dk TTL ile kendiliğinden biter.
+   */
+  requesterId?: string;
   userId: string;
   delta: number;
   xp: number;
@@ -43,6 +48,8 @@ function sign(body: string): string {
 
 export function issueAdjustApproval(input: {
   approverId: string;
+  /** Talep eden admin; verilirse belirteç yalnız onun düzeltmesinde geçerlidir. */
+  requesterId?: string;
   userId: string;
   delta: number;
   xp?: number;
@@ -51,6 +58,7 @@ export function issueAdjustApproval(input: {
   const now = (input.now ?? new Date()).getTime();
   const claims: AdjustApprovalClaims = {
     approverId: input.approverId,
+    ...(input.requesterId ? { requesterId: input.requesterId } : {}),
     userId: input.userId,
     delta: input.delta,
     xp: input.xp ?? 0,
@@ -87,6 +95,9 @@ export function verifyAdjustApproval(
   }
   if (!c.approverId || c.approverId === expected.requesterId || c.approverId === expected.userId) {
     throw fail('İkinci onay farklı bir yöneticiden gelmeli.');
+  }
+  if (c.requesterId !== undefined && c.requesterId !== expected.requesterId) {
+    throw fail('Bu onay başka bir yöneticinin talebi için verilmiş.');
   }
   if (typeof c.nonce !== 'string' || c.nonce.length < 16) throw fail('Onay belirteci geçersiz.');
   return c;
