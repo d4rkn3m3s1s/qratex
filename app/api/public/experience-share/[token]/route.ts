@@ -1,39 +1,39 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { z } from 'zod';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { getPublicExperience } from '@/lib/experience-share/public';
 
 export const dynamic = 'force-dynamic';
 
-/** Kişisel veri sızdırmadan — işletme adı + anonim paylaşım metni. */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ token: string }> }
-) {
-  const { token } = await params;
-
-  const row = await prisma.experienceShareToken.findUnique({
-    where: { token },
-    include: {
-      dealer: { select: { businessName: true, name: true } },
-    },
-  });
-
-  if (!row || row.expiresAt < new Date()) {
-    return NextResponse.json({ error: 'Link süresi dolmuş veya geçersiz' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+/**
+ * Anonim deneyim kartı — SALT OKUMA (yan etkisiz). Sayfa (`/experience/[token]`) aynı okuma
+ * modelini sunucuda kullanır; görüntülenme sayımı ayrı `POST …/view` ucundadır (denetim B5).
+ * Paylaşanın kimliği ve ham sayaç dönmez.
+ */
+export const GET = defineRoute(
+  {
+    name: 'public.experience-share.read',
+    roles: 'public',
+    params: z.object({ token: z.string().min(1).max(64) }),
+    rateLimit: 'read',
+  },
+  async ({ params }) => {
+    const result = await getPublicExperience(params.token);
+    switch (result.status) {
+      case 'ok': {
+        const { viewCount: _viewCount, ...card } = result.card;
+        return ok({ status: 'ok', card });
+      }
+      case 'expired':
+        throw new ApiError('SHARE_EXPIRED', 'Bu kartın paylaşım süresi sona erdi.', {
+          status: 410,
+          details: { venue: result.venue },
+        });
+      case 'disabled':
+        throw new ApiError('MODULE_DISABLED');
+      case 'not_found':
+        throw new ApiError('NOT_FOUND', 'Kart bulunamadı.');
+      default:
+        throw new ApiError('SERVICE_UNAVAILABLE', undefined, { retryable: true, headers: { 'Retry-After': '8' } });
+    }
   }
-
-  const viewed = await prisma.experienceShareToken.update({
-    where: { id: row.id },
-    data: { viewCount: { increment: 1 } },
-    select: { viewCount: true },
-  });
-
-  return NextResponse.json({
-    dealerLabel: row.dealer.businessName || row.dealer.name || 'İşletme',
-    caption: row.caption,
-    mood: row.mood,
-    viewCount: viewed.viewCount,
-    disclaimer:
-      'Bu kart anonimdir; arkadaşınızın kişisel bilgisi paylaşılmaz.',
-  }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+);

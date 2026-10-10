@@ -24,6 +24,8 @@ jest.mock('@/lib/rate-limit', () => ({
   checkPublicActionRateLimit: jest.fn(async () => ({ ok: true })),
 }));
 jest.mock('@/lib/request-metadata', () => ({ getClientIp: () => '1.2.3.4' }));
+// Doldurma: modül açık (lib/survey-fill.ts → getModuleControls).
+jest.mock('@/lib/module-gate', () => ({ getModuleControls: jest.fn(async () => ({})) }));
 
 const mockSurveyFindUnique = jest.fn();
 const mockSurveyCount = jest.fn();
@@ -31,8 +33,9 @@ const mockSurveyCreate = jest.fn();
 const mockSurveyFindMany = jest.fn();
 const mockResponseFindFirst = jest.fn();
 const mockResponseCreate = jest.fn();
-jest.mock('@/lib/prisma', () => ({
-  prisma: {
+const mockExecuteRaw = jest.fn(async () => 0);
+jest.mock('@/lib/prisma', () => {
+  const prisma: Record<string, unknown> = {
     survey: {
       findUnique: (...a: unknown[]) => mockSurveyFindUnique(...a),
       count: (...a: unknown[]) => mockSurveyCount(...a),
@@ -43,16 +46,19 @@ jest.mock('@/lib/prisma', () => ({
       findFirst: (...a: unknown[]) => mockResponseFindFirst(...a),
       create: (...a: unknown[]) => mockResponseCreate(...a),
     },
-  },
-  isPrismaConnectivityError: () => false,
-}));
+    $executeRaw: (...a: unknown[]) => mockExecuteRaw(...(a as [])),
+  };
+  // Oturumlu yanıt: kullanıcı×anket danışma kilidi işlem içinde (tx = aynı mock).
+  prisma.$transaction = async (fn: (tx: unknown) => unknown) => fn(prisma);
+  return { prisma, isPrismaConnectivityError: () => false };
+});
 
 const SURVEY = {
   id: 'sv1',
   title: 'Memnuniyet',
   description: null,
   isActive: true,
-  dealer: { businessName: 'Kafe', businessLogo: null },
+  dealer: { id: 'dealer-1', role: 'DEALER', businessName: 'Kafe', businessLogo: null, suspendedAt: null, anonymizedAt: null },
   questions: [
     { id: 'q1', type: 'single_choice', text: 'Nasıldı?', options: ['İyi', 'Kötü'], required: true, order: 0 },
     { id: 'q2', type: 'rating', text: 'Puan', options: null, required: true, order: 1 },
@@ -173,7 +179,7 @@ describe('GET /api/surveys/[id]/fill', () => {
     expect((await res.json()).alreadyResponded).toBe(true);
   });
 
-  it('pasif/olmayan anket 404 + SURVEY_NOT_FOUND kodu', async () => {
+  it('olmayan anket 404 + SURVEY_NOT_FOUND kodu', async () => {
     mockSurveyFindUnique.mockResolvedValueOnce(null);
     const { GET } = await import('@/app/api/surveys/[id]/fill/route');
     const res = await GET(new NextRequest('http://localhost/api/surveys/sv1/fill'), params);
@@ -231,6 +237,8 @@ describe('POST /api/surveys/[id]/fill — doldurma', () => {
     const res = await fill({ userId: 'forged', answers: [{ questionId: 'q1', value: 'İyi' }, { questionId: 'q2', value: 3 }] });
     expect(res.status).toBe(201);
     expect(mockResponseCreate.mock.calls[0][0].data.userId).toBe('u1');
+    // Eşzamanlı çift gönderime karşı danışma kilidi alındı.
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
   });
 
   it('bozuk gövde → 400 VALIDATION', async () => {

@@ -209,3 +209,82 @@ Yeniden üretim: Herhangi bir CUSTOMER hesabıyla oturum açıp, bir bayinin ID'
 Yeniden üretim: Neon soğuk başlangıcında/bağlantı kesintisinde geçerli bir `/experience/<token>` linki açılır → API gövdesiz 500 → sayfada "…Unexpected end of JSON input" yazar; link aslında geçerli olduğu hâlde alıcı bunu bozuk link sanar.
 
 Öneri: Okumayı sunucu bileşenine taşıyıp (`getExperienceShare(token)`) `withDbRetry` + try/catch ile sarmak; sonucu `{ status: 'ok' | 'expired' | 'unavailable' }` olarak ayrıştırıp üç ayrı ekran (kart / "süresi doldu" / "geçici sorun, tekrar dene") göstermek; istemci tarafında kalınacaksa `res.json().catch(() => null)` ile ayrıştırmak ve kullanıcıya hiçbir zaman `e.message` göstermemek. `viewCount` artışı okuma yolundan ayrılıp hata toleranslı (fire-and-forget / ayrı `POST …/view`) yapılmalı ki sayaç hatası kartın görüntülenmesini engellemesin.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey sahibi:** p-deneyim-anket · **Tarih:** 2026-10-10 · **Rota:** `/experience/[token]` (URL aynı; dosya `app/(paylasim)/experience/[token]/` hafif rota grubuna taşındı).
+
+**Ne yapıldı (özet):** Sayfa sunucu bileşeni oldu; kart, metadata ve dinamik OG görseli tek okuma modelinden (`lib/experience-share/public.ts → getPublicExperience`) gelir. Okuma yan etkisiz; sayım ayrı `POST …/view` ucunda, cihaz başına 24 saatte bir ve paylaşanın kendisi hariç. Durumlar ayrıştı: kart · paylaşım sona erdi (mekân kurtarma ekranı) · bulunamadı (gerçek 404, `not-found.tsx`) · modül kapalı · geçici hata (yeniden dene). Kart QDL v2 play kaydında: kategori kimlik rengi (`--category-*`), mekân logosu/kategori ikonu, yıldız + ruh hâli, şablon not, tek "Anonim kart" mührü, tek seferlik 3B "flip-in" girişi (azaltılmış harekette yalnız opaklık). Hafif kabuk (`app/(paylasim)/layout.tsx`): logo + içerik + gizlilik/KVKK alt bilgisi; pazarlama header'ı, landing zemini ve `/api/settings/background` isteği yok. Metinler TR/EN (`components/public/p-deneyim-anket/copy.ts`, dil sunucuda çözülür). Görsel doğrulama: sunucu çıktısı headless Chrome'da 390px ve 1280px, açık ve koyu temada ekran görüntüsüyle kontrol edildi (yatay taşma yok). Testler: `__tests__/api/experience-share-public.test.ts` (20 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | URL'den token okuma | ÇALIŞIYOR | Sunucuda `params`; biçim denetimi (`isPlausibleShareToken`): biçimsiz token DB'ye gitmeden 404 olur. |
+| 2 | Boş token → "Geçersiz link" | ÇALIŞIYOR | Biçimsiz ya da olmayan token → `notFound()` → çıkış yolu olan, çevrilmiş 404 ekranı. |
+| 3 | Veri çekme | ÇALIŞIYOR | İstemci fetch'i kaldırıldı; sunucu bileşeni + `cache()` (metadata ile aynı okuma). |
+| 4 | Unmount iptal bayrağı | KALDIRILDI | Gerek kalmadı: veri sunucuda; sayım istemciden tek seferlik (ref korumalı) `keepalive` POST. |
+| 5 | Yanıt ayrıştırma + hata mesajı | ÇALIŞIYOR | Ham `e.message` artık hiçbir yerde gösterilmiyor; DB hatası `unavailable` → "geçici sorun, bağlantın geçerli" + Yeniden dene. |
+| 6 | Hata durumu ekranı | ÇALIŞIYOR | `ErrorState` (role=alert) + `router.refresh()` ile yeniden dene; süresi dolmuş, 404 ve kapalı durumlar için ayrı ekranlar ve CTA'lar. |
+| 7 | Yükleniyor durumu | ÇALIŞIYOR | Kartla aynı yerleşimli statik iskelet (`loading.tsx`, role=status). Landing'in tam ekran yükleyicisi bu rotada yok. |
+| 8 | "Bu hafta şunu denedik" başlığı | KALDIRILDI | Sahte başlığın yerini gerçek veri aldı: "Bir arkadaşın önerdi" + mekân adı (h1). |
+| 9 | Gizlilik uyarısı (API `disclaimer`) | ÇALIŞIYOR | Sunucu sabiti kaldırıldı; tek, çevrilmiş satır + "Anonim kart" mührü. |
+| 10 | İşletme adı | ÇALIŞIYOR | `businessName` yoksa bayinin kişisel adı yerine genel "İşletme" etiketi gösterilir (B10). |
+| 11 | Yinelenen "anonim kart" açıklaması | KALDIRILDI | Tek gizlilik bildirimine indirildi. |
+| 12 | Ruh hâli rozeti | ÇALIŞIYOR | Üretici artık kullanıcının seçtiği ruh hâlini gönderiyor (mekân detayı). Emoji + çevrilmiş etiket; bilinmeyen değer `good`'a normalize edilir. |
+| 13 | Görüntülenme sayacı | ÇALIŞIYOR | Okuma yan etkisiz. `POST /api/public/experience-share/[token]/view`: IP+UA SHA-256 özetiyle 24 saatte tekil; paylaşan ve süresi dolan kart sayılmaz; IP başına 30/dk. Sayı ziyaretçiye değil yalnız paylaşana gösterilir (sahip paneli + mekân detayı). |
+| 14 | Kısa not | ÇALIŞIYOR | Yalnız sunucu şablonu (`lib/venue-detail/share.ts`) gösterilir. Şablona uymayan eski serbest metin GÖSTERİLMEZ (B1, eski kayıtlar dahil). |
+| 15 | Not yoksa yedek metin | KALDIRILDI | Yanıltıcı "davet linki" metni kaldırıldı; not yoksa blok hiç çizilmez. |
+| 16 | 7 günlük süre kontrolü | ÇALIŞIYOR | Kalan gün kartta görünür ("5 gün daha açık"). |
+| 17 | "Süresi dolmuş" / "geçersiz" ayrımı | ÇALIŞIYOR | Süresi dolmuş: mekân logosu + "Mekânı keşfet" kurtarma ekranı. Geçersiz: 404. |
+| 18 | Kişisel veri koruması | ÇALIŞIYOR | `creatorId` hiçbir DTO'da yok; yalnız `isOwner` bayrağı hesaplanır (testle doğrulandı). |
+| 19 | Token entropisi | ÇALIŞIYOR | Değişmedi (18 bayt). |
+| 20 | i18n (TR/EN) | ÇALIŞIYOR | Tüm metinler `copy.ts`'te iki dilde; API metin değil kod döndürür. |
+| 21 | Metadata / OG kartı | ÇALIŞIYOR | `generateMetadata` (başlık "Bir arkadaşın X mekânını önerdi", not + puan açıklaması, kendi canonical'ı) + `opengraph-image.tsx` (mekân, not, puan, ruh hâli, kategori rengi; DB yoksa genel kart). |
+| 22 | noindex | ÇALIŞIYOR | `robots: { index: false, follow: false }` (sayfa meta'sı). `app/robots.ts` paylaşılan dosya olduğu için dokunulmadı; meta yeterli. |
+| 23 | Ziyaretçi CTA'sı | ÇALIŞIYOR | Oturumsuz: "Qratex'e katıl" (kayıt sonrası mekân detayına dönüş) + "Zaten hesabım var". Müşteri: "Mekânı keşfet". Koordinat ya da adres varsa her durumda "Yol tarifi" (yeni sekme). |
+| 24 | Paylaşanın davet kodu ile kayıt | KALDIRILDI (bilinçli) | Davet kodu iliştirilseydi kayıt olan kişi Davet sayfasında davet edenin ADINI görürdü (`lib/referral-invite.ts`). Bu "anonim kart" vaadini bozar ve bağlantı elden ele geçtikçe yabancılara kimlik sızdırır. Kart anonim kalır; davet ödülü `/customer/me/invite` kanalında. |
+| 25 | Paylaşana ödül/bildirim | KISMİ (açık) | Paylaşan kendi kartında tekil görüntülenme sayısını görür (geri bildirim döngüsü). Dönüşüm ölçümü ve ödül şema gerektirir (aşağıda ŞEMA İSTEĞİ). |
+| 26 | Üretimde ziyaret doğrulaması | ÇALIŞIYOR | Mekân detayı ajanı yaptı: kart müşterinin KENDİ 4-5 puanlık deneyim kaydına bağlı (`createExperienceShare`). |
+| 27 | Üretimde oran sınırı / içerik denetimi | ÇALIŞIYOR | Aynı yerden: şablon not + kullanıcı başına 24 saatte 10 kart + route rate limit. |
+| 28 | Okuma ucunda oran sınırı | ÇALIŞIYOR | GET `rateLimit: 'read'`, view POST 30/dk/IP (`defineRoute`). |
+| 29 | Paylaşımı geri alma | ÇALIŞIYOR | Sahip kartı açınca onaylı "Paylaşımı durdur" → `DELETE /api/customer/experience-share/[token]` (yalnız CUSTOMER, sahiplik `where` içinde). Kayıt silinmez, süre şimdiye çekilir (arşiv ilkesi). Bayi tarafı görünürlük açık kaldı. |
+| 30 | Süresi dolmuş kayıt temizliği | AÇIK | `app/api/cron/db-cleanup` bu yüzeyin sahipliğinde değil. Öneri: `expiresAt < now() - 30 gün` silme adımı (cron sahibine). |
+| 31 | Modül kapatma | ÇALIŞIYOR | Sayfada `disabled` ekranı; view ve revoke uçlarında `module: 'experiences'`; okuma modelinde modül kontrolü. |
+| 32 | Public layout | ÇALIŞIYOR | Hafif paylaşım kabuğuyla değiştirildi (logo, SkipLink, içerik, gizlilik/KVKK). Asistan balonu da bu rotada yüklenmez. |
+| 33 | Hata sınırı | ÇALIŞIYOR | Beklenen hatalar sayfa içinde ayrışıyor; beklenmeyenler kök `error.tsx`'e düşer. |
+| 34 | Mobil yerleşim | ÇALIŞIYOR | 390px ve 1280px'te ekran görüntüsüyle doğrulandı; yatay taşma yok; dokunma hedefleri ≥44px. |
+| 35 | Başlık hiyerarşisi | ÇALIŞIYOR | Tek h1 (mekân); CTA ve sahip paneli h2. |
+| 36 | Durum duyuruları | ÇALIŞIYOR | Durum panelleri role=status, hata role=alert, iskelet role=status/aria-busy; kopyalama ve durdurma `announce()` ile duyurulur. |
+| 37 | Giriş animasyonu | ÇALIŞIYOR | `CardReveal` (rotateY 70°→0°, `SPRING.gentle`) + CTA'nın gecikmeli belirmesi. `useMotionPolicy` ile azaltılmış harekette yalnız opaklık; döngü yok. |
+| 38 | Analitik | ÇALIŞIYOR | `exp_card_view`, `exp_card_cta_click` (register/login/venue/directions/expired_recover), `exp_card_reshare`, `exp_card_revoke` (rızaya bağlı `lib/analytics`). |
+
+**Durum dağılımı (yeni):** ÇALIŞIYOR 31 · KALDIRILDI 5 (#4, #8, #11, #15, #24) · AÇIK 2 (#25 kısmi, #30).
+
+### Kapanan bulgular
+- **B1 (keyfi metin):** kapandı. Şablon dışı not hiç gösterilmez (eski kayıtlar dahil); üretim tarafını mekân detayı ajanı şablona bağladı.
+- **B2 (OG yok, canonical ana sayfa):** kapandı. Sunucu bileşeni, `generateMetadata`, kendi canonical'ı, `opengraph-image.tsx`, noindex.
+- **B3 (sabit not/ruh hâli):** kapandı. Üretici mekân detayında; okuyucu şablon anahtarı + puan + ruh hâlini gösteriyor.
+- **B4 (try/catch yok, ham hata):** kapandı. `unavailable` ekranı + `defineRoute` zarfı; ham mesaj sızmıyor.
+- **B5 (yan etkili GET, tekilsiz sayaç):** kapandı. Okuma ve sayım ayrı; sayım tekil, sahip hariç; sayı paylaşana görünür.
+- **B6 (aksiyon yok):** kapandı. Kayıt/giriş (mekân detayına dönüşle), mekânı keşfet, yol tarifi. Davet kodu bilinçli olarak eklenmedi (#24).
+- **B7 (i18n):** kapandı.
+- **B8 (modül/iptal/temizlik):** modül ve iptal kapandı; temizlik cron'u açık (sahiplik dışı).
+- **B9 (a11y):** kapandı.
+- **B10 (kişisel ad, yinelenen bildirim):** kapandı.
+- **B11 (round-trip, ağır kabuk):** kapandı. Kart ilk HTML'de, kabuk hafif, asistan balonu yüklenmiyor; sosyal kanıt Redis'te 10 dk önbellekte.
+
+### Eksik özellikler (kıyas): durum
+1. OG görseli: yapıldı (1200×630). Dikey "hikâyeye paylaş" görseli açık (düşük öncelik).
+2. Tek net birincil eylem: yapıldı. Davet ödülü bilinçli olarak bu karta bağlanmadı (#24).
+3. İşletme bağlamı: yapıldı. Kategori, açık/kapalı (İstanbul saati), yol tarifi, mekânın son 30 günlük geri bildirim sayısı ve ortalaması (en az 5 örneklem; gerçek veri).
+4. Paylaşana geri bildirim: kısmi. Sahip panelinde tekil görüntülenme, kalan gün, yeniden paylaş ve durdur var.
+5. Bayi görünürlüğü/moderasyon: açık (bayi paneli sahiplik dışı). Serbest metin kalmadığı için moderasyon riski düştü.
+6. Süresi dolmuş kart kurtarma ekranı: yapıldı.
+
+### Kalanlar ve ŞEMA İSTEKLERİ
+- **ŞEMA İSTEĞİ:** `ExperienceShareToken` için `revokedAt DateTime?` (bugün iptal `expiresAt = now` ile yapılıyor; "durduruldu" ile "süresi doldu" ayrımı için), `uniqueViewCount` / `conversionCount Int @default(0)`, ayrıca dönüşüm atfı için kayıt akışında `source` / `sourceTokenId`. Paylaşana ödül ancak bundan sonra, ekonomi değişmezlerine uygun verilebilir.
+- Süresi dolmuş satır temizliği (cron sahibi). Bayi panelinde "hakkınızda paylaşılan kartlar" (bayi yüzeyi).
+- `messages/{tr,en}.json` içindeki `publicExperience.*` anahtarları artık kullanılmıyor (paylaşılan dosya olduğu için silinmedi).

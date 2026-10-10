@@ -194,3 +194,78 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (`app/api/surveys/[
 - **Yeniden üretim:** Oturumlu müşteri anketi gönderir, sayfayı yeniler (`submitted` yalnızca bileşen state'i, `page.tsx:40`) ve tekrar gönderir → her seferinde yeni satır; `results/route.ts:70` `totalResponses` ve tüm dağılımlar şişer. Anonimken de aynı; IP başına dakikada 10.
 - **Daraltma:** "Puan basma açığı" kısmı bugün geçerli değil: anket yanıtı hiçbir puan/ödül yoluna bağlı değil (`app/api/surveys` altında ve `lib` içinde anket-puan bağı yok). Bu nedenle etki şu an veri bütünlüğüyle sınırlı (ORTA-YÜKSEK); ödül bağlanırsa KRİTİK olur. Ayrıca yalnız `@@unique([surveyId, userId])` yetmez: Postgres birden fazla `NULL`'a izin verdiği için anonim tekrarları durdurmaz.
 - **Öneri:** Oturumlu kullanıcı için `@@unique([surveyId, userId])` + `create` yerine P2002 yakalanıp "zaten yanıtladınız" (409) dönen akış; sayfa açılışında GET bu durumu da dönsün ve form yerine teşekkür/sonuç görünümü gösterilsin. Anonim için imzalı, tek kullanımlık yanıt belirteci (cookie veya `claimToken @unique`) ve cihaz/IP+anket bazlı günlük sınır. Ödül bağlanacaksa `memory/points-economy-invariants` kuralları: oturum zorunlu, atomik tek seferlik kredi, `pointsCredited` alanı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey sahibi:** p-deneyim-anket · **Tarih:** 2026-10-10 · **Rota:** `/surveys/[id]` (URL aynı; dosya `app/(paylasim)/surveys/[id]/` hafif rota grubuna taşındı).
+
+**Ne yapıldı (özet):** Sunucu kabuğu + tek istemci adası. Anket, işletme kimliği ve "zaten yanıtladın" bilgisi ilk HTML'de geliyor (`lib/survey-fill.ts → loadSurveyForFill`); spinner→fetch şelalesi yok. Akış (`components/public/p-deneyim-anket/survey-flow.tsx`): kapak (logo, işletme, başlık, "4 soru · ~1 dk · 2 zorunlu", gizlilik notu, Başla / Kaldığın yerden devam et) → soru başına bir ekran (ilerleme çubuğu + "Soru 3 / 4", güvenli alanlı yapışkan Geri/İleri çubuğu, masaüstünde yanıt durumunu gösteren soru gezgini) → özet (her cevap düzenlenebilir, eksik zorunlular işaretli) → sonuç. Cevap kuralları D4'ün ORTAK zod sözleşmesinden (`lib/survey-schema.ts`) geliyor: istemci, sunucuyla birebir aynı `surveyAnswerValueSchema` / `validateSurveyAnswers`'ı kullanıyor. API `defineRoute`'a taşındı. Görsel doğrulama: kapak, soru (seçim/puan/hata/metin), özet ve sonuç ekranları headless Chrome'da 390px ve 1280px'te ekran görüntüsüyle kontrol edildi. Testler: `__tests__/lib/survey-fill.test.ts` (21 test) + `__tests__/api/surveys.test.ts` doldurma bölümü (11 test, fikstür güncellendi).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | URL'den anket kimliği | ÇALIŞIYOR | Sunucuda; biçimsiz kimlik DB'ye gitmeden 404 olur. |
+| 2 | Anketi getirme | ÇALIŞIYOR | Sunucu bileşeni (`cache()` ile metadata ile ortak). GET API aynı modeli `defineRoute` ile sunar (public, `read` limiti). |
+| 3 | Yükleniyor durumu | ÇALIŞIYOR | Kapakla aynı yerleşimli statik iskelet (`loading.tsx`). |
+| 4 | Hata / bulunamadı | ÇALIŞIYOR | Üç ayrı ekran: bulunamadı (gerçek 404, `not-found.tsx`), kapandı (410: pasif anket, kapalı modül ya da askıdaki bayi), geçici hata (503 → Yeniden dene). |
+| 5 | Başlık bloğu | ÇALIŞIYOR | İşletme logosu (yoksa ikon karesi) + işletme adı + başlık (h1). |
+| 6 | Anket açıklaması | ÇALIŞIYOR | Yalnız boşluktan oluşan açıklama gösterilmez; satır sonları korunur. |
+| 7 | İşletme adı | ÇALIŞIYOR | Hiyerarşi düzeltildi (başlığın üstünde); bayinin kişisel adı hiçbir zaman dönmez. |
+| 8 | İşletme logosu | ÇALIŞIYOR | Kapakta 64px; OG görselinde baş harf avatarı. |
+| 9 | Soru numaralandırma | ÇALIŞIYOR | "Soru 3 / 8" (görsel; ekran okuyucu için başlığın içinde önek). |
+| 10 | Zorunlu işareti | ÇALIŞIYOR | "Zorunlu / İsteğe bağlı" metin rozeti + sr-only "(zorunlu)" + `aria-required`. |
+| 11 | Tek seçim | ÇALIŞIYOR | Yerel radyo + tam genişlikte 56px seçenek kartları, `fieldset` + başlık bağı. Kimlikler indekse dayanıyor, yinelenen seçenekte çakışma yok. |
+| 12 | Çoklu seçim | ÇALIŞIYOR | Yerel onay kutusu kartları, "Birden fazla seçebilirsin" ipucu (`aria-describedby`); seçenek sırası korunur. |
+| 13 | Açık metin | ÇALIŞIYOR | `maxLength` 2000 + sayaç (son 100 karakterde uyarı rengi, sr-only kalan karakter); sunucu da ≤2000 uygular. |
+| 14 | Yıldız puanlama | ÇALIŞIYOR | QDL `RatingInput`: radiogroup, ok/Home/End/rakam tuşları, 56px hedef, uç etiketleri, "5 üzerinden 3" adları. |
+| 15 | Seçeneksiz seçim sorusu | ÇALIŞIYOR | Ortak sözleşme: kamusal görünümden çıkar, zorunluluk denetimine girmez (oluşturma tarafında D4 zaten engelliyor). |
+| 16 | İstemci zorunlu kontrolü | ÇALIŞIYOR | Her adımda satır içi hata + assertive duyuru; yalnız boşluk içeren metin yanıt sayılmaz. Özette eksikler işaretli; gönderimde ilk eksik soruya gider. |
+| 17 | Yanıt gönderme | ÇALIŞIYOR | `POST`, `defineRoute` ile: public, şema, 256 KB sınır, IP 30/dk + anket×IP 10/dk. |
+| 18 | Gönderiliyor durumu | ÇALIŞIYOR | Düğme "Gönderiliyor…" + `aria-busy`. |
+| 19 | Gönderim hatası | ÇALIŞIYOR | Kod tabanlı: `ALREADY_RESPONDED` → bilgi ekranı; `SURVEY_CLOSED/NOT_FOUND` → kapandı ekranı; `RATE_LIMITED` → bekleme mesajı; soru hatası → `details.questionId` ile o soruya götürür. JSON olmayan yanıt güvenli; ham `e.message` gösterilmez. |
+| 20 | Teşekkür ekranı | ÇALIŞIYOR | Çıkmaz sokak değil. Müşteri: "Mekân sayfasına git" / "Panelime git". Oturumsuz: "Görüşlerin puan kazandırsın" kartı (kayıt sonrası mekân detayına dönüş / giriş). Yenilemede form geri gelmez (çerez + DB → "zaten yanıtladın"). |
+| 21 | Sunucu zorunlu kontrolü | ÇALIŞIYOR | Ortak `validateSurveyAnswers` (boş metin ve boş dizi yanıt sayılmaz). |
+| 22 | Sunucu içerik doğrulaması | ÇALIŞIYOR | Ortak sözleşme (D4); bu rotada kullanımı korundu ve testlendi. |
+| 23 | Hız sınırı | ÇALIŞIYOR | Route düzeyinde IP 30/dk (`defineRoute`) + anket×IP 10/dk. |
+| 24 | Kimlik yalnız oturumdan | ÇALIŞIYOR | `getServerSession` (JWT geri çağrısı oturum durumunu DB'ye karşı doğrular); istemcinin gönderdiği `userId` yok sayılır (test). |
+| 25 | Tekrar yanıt engeli | ÇALIŞIYOR | Oturumlu: DB kontrolü + işlem içi danışma kilidi (`pg_advisory_xact_lock`), eşzamanlı çift gönderimde yalnız biri yazar (test). Anonim: HttpOnly `qx_sv` çerezi (aynı cihazdan 409; sayfa açılışında "zaten yanıtladın"). Kalıcı DB kısıtı ŞEMA İSTEĞİ. |
+| 26 | Puan/XP/rozet ödülü | AÇIK (ŞEMA İSTEĞİ) | Gerçek ödül için `Survey.rewardPoints` + `SurveyResponse @@unique([surveyId,userId])` + `pointsCredited` gerekir (ekonomi değişmezleri: atomik, tek seferlik, DB unique). Sahte "+50 puan" gösterilmedi. |
+| 27 | Taslak saklama | ÇALIŞIYOR | `sessionStorage` (`qx-survey-draft:<id>`). Açılışta "Kaldığın yerden devam et (3/8)" / "Baştan başla". Geri yüklemede değişmiş seçenek ve aralık dışı değer atılır; 24 saat sınırı; gönderimde silinir. |
+| 28 | İlerleme göstergesi / süre | ÇALIŞIYOR | `role=progressbar` (yanıtlanan/toplam), "Soru i / n", kapakta tip bazlı tahmini süre ve zorunlu soru sayısı. |
+| 29 | Giriş animasyonları | ÇALIŞIYOR | Sorular arasında yönlü 24px kaydırma (`DURATION.base`), ilerleme çubuğunda yay, sonuçta `popIn`. `useMotionPolicy` ile azaltılmış harekette yalnız opaklık. İşaretçiyle tek seçim/puan seçilince 320 ms sonra otomatik ilerleme (klavyede yok, WCAG 3.2.2; azaltılmış harekette yok). |
+| 30 | Çok dillilik | ÇALIŞIYOR | Tüm arayüz `copy.ts`'te TR/EN. Sunucu metni yalnız TR arayüzde gösterilir; EN'de koddan çeviri. |
+| 31 | Metadata / OG | ÇALIŞIYOR | `generateMetadata` ("{anket} · {işletme}", açıklama, kendi canonical'ı, noindex) + `opengraph-image.tsx`. |
+| 32 | Marka başlığı / gezinme | ÇALIŞIYOR | Hafif paylaşım kabuğu (logo → ana sayfa, gizlilik/KVKK) + işletme logosu. Yapışkan çubuğu örtmesin diye asistan balonu bu rotada yüklenmez. |
+| 33 | Modül kapatma | ÇALIŞIYOR | `dealer_surveys` kapalı, bayi askıda ya da anket pasifse "artık yanıt kabul etmiyor" (sayfa) ve 410 `SURVEY_CLOSED` (API). |
+| 34 | Gizlilik bildirimi | ÇALIŞIYOR | Kapakta ve özette: oturumlu kullanıcıya "hesabınla ilişkilendirilir, işletme adını ve iletişim bilgini göremez", oturumsuza "anonim". Bayinin yanıt listesinde yalnız üye/anonim ayrımını gördüğü doğrulandı. Oturumlu kullanıcıya "anonim gönder" anahtarı bilinçli olarak eklenmedi: tekillik oturum kimliğine dayanıyor, anonim seçenek tek kişinin sınırsız yanıt vermesini yeniden açardı. |
+
+**Durum dağılımı (yeni):** ÇALIŞIYOR 33 · AÇIK 1 (#26, şema).
+
+### Kapanan bulgular
+- **B1:** ortak sözleşme (D4) bu rotada korunup testlendi.
+- **B2:** kamusal görünüm ve zorunluluk denetimi ortak sözleşmeden geliyor.
+- **B3:** oturumlu DB + danışma kilidi; anonim cihaz çerezi; sayfa açılışında "zaten yanıtladın". Kalıcı kısıt şema isteği.
+- **B4:** üç ayrı ekran, kod tabanlı hata zarfı, JSON olmayan yanıt güvenli.
+- **B5:** fieldset + başlık, RatingInput, aria-required/invalid/describedby, ilk hatalı soruya odak, ≥44px hedefler.
+- **B6:** teşekkür ekranı yönlendiriyor (mekân / panel / kayıt); ödül kısmı şema isteği.
+- **B7:** soru başına bir ekran, ilerleme, yapışkan çubuk, taslak, özet.
+- **B8:** sunucu bileşeni, metadata + OG, logo.
+- **B9:** modül, bayi askısı ve pasif anket → kapalı.
+- **B10:** doğru gizlilik bildirimi.
+- **B11:** ölü import, `locale` sorgu anahtarı ve tip zorlamaları yeniden yazımla gitti.
+
+### Eksik özellikler (kıyas): durum
+1. Yanıt karşılığı ödül: AÇIK (şema).
+2. Soru başına ekran + ilerleme + süre: yapıldı.
+3. Taslak + kaldığı yerden devam: yapıldı.
+4. Oturumsuz kazanım hunisi: kısmi. Kayıt/giriş CTA'sı mekân detayına dönüşle var; yanıtı sonradan hesaba bağlama (`claimToken`) şema ister.
+5. Müşteri panelinde "Bekleyen anketler": AÇIK (müşteri ana sayfası/navigasyon yüzeyi, sahiplik dışı).
+6. NPS/emoji/koşullu mantık: AÇIK (oluşturma sözleşmesi D4'te; `RatingInput` NPS'i zaten destekliyor).
+
+### Kalanlar ve ŞEMA İSTEKLERİ
+- **ŞEMA İSTEĞİ:** `SurveyResponse @@unique([surveyId, userId])` (bugün uygulama düzeyinde danışma kilidiyle), `SurveyResponse.pointsCredited Int @default(0)` + `claimToken String? @unique`, `Survey.rewardPoints Int @default(0)` (bayi emanetinden, net-sıfır), isteğe bağlı `Survey.closesAt DateTime?`.
+- `messages/{tr,en}.json` içindeki `surveyFill.*` anahtarları artık kullanılmıyor (paylaşılan dosya olduğu için silinmedi).
+- Not: `__tests__/api/surveys.test.ts` içindeki BAYİ oluşturma/liste testleri (5), bayi anket rotalarının eşzamanlı yeniden yazımı yüzünden kırık. O bölüm bayi anket yüzeyinin sahibinde; doldurma bölümü (11) yeşil.
