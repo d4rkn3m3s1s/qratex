@@ -11,6 +11,7 @@ import {
   type QraChatTier,
 } from '@/lib/rate-limit';
 import { fingerprintChatIp } from '@/lib/ip-fingerprint';
+import { checkQraDailyCap, isAiGuardError } from '@/lib/ai-cost-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,6 +88,24 @@ export async function POST(request: NextRequest) {
       return res;
     }
 
+    // F0.7: kademe başına GÜNLÜK mesaj tavanı (anonimde IP parmak izi; dakikalık limit tek
+    // başına günde binlerce isteğe izin veriyordu → ortak Groq kotası tükeniyordu).
+    const daily = await checkQraDailyCap(rateKey, tier);
+    if (!daily.ok) {
+      const retryAfterMs = daily.retryAfterMs ?? 60 * 60 * 1000;
+      const res = NextResponse.json(
+        {
+          error:
+            tier === 'anonymous'
+              ? 'Bugünkü ücretsiz mesaj hakkın doldu. Devam etmek için giriş yapabilir ya da yarın tekrar deneyebilirsin.'
+              : 'Bugünkü QRA mesaj hakkın doldu. Yarın tekrar deneyebilirsin.',
+          retryAfterMs,
+          code: 'DAILY_LIMIT',
+        }, { status: 429, headers: PRIVATE_NO_STORE_HEADERS });
+      res.headers.set('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+      return res;
+    }
+
     let userContext:
       | {
           name?: string;
@@ -119,7 +138,20 @@ export async function POST(request: NextRequest) {
     const history = normalizeConversationHistory(conversationHistory);
 
     const started = Date.now();
-    const responseText = await chatWithQRA(message, history, userContext);
+    let responseText: string;
+    try {
+      responseText = await chatWithQRA(message, history, userContext, { actorKey: `${tier}:${rateKey}` });
+    } catch (err) {
+      // Platform günlük QRA token tavanı / dakikalık AI limiti → 429 (500 değil).
+      if (isAiGuardError(err)) {
+        const retryAfterMs = err.retryAfterMs ?? 60 * 60 * 1000;
+        const res = NextResponse.json(
+          { error: err.message, retryAfterMs, code: err.code }, { status: 429, headers: PRIVATE_NO_STORE_HEADERS });
+        res.headers.set('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+        return res;
+      }
+      throw err;
+    }
     const latencyMs = Date.now() - started;
 
     const ipFingerprint = userId ? null : fingerprintChatIp(getClientIdentifier(request));
@@ -145,6 +177,7 @@ export async function POST(request: NextRequest) {
       message: responseText,
       timestamp: new Date().toISOString(),
       remaining: rl.remaining,
+      remainingToday: daily.remaining,
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Chat API error:', error);

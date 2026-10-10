@@ -10,6 +10,11 @@
  *  - Kullanım kaydı başarısız çağrıları da tutar (`success:false`, `error`), kayıt hatası
  *    AI yanıtını asla düşürmez.
  *
+ *  - Kapsamsız (bayisiz, aktörsüz) çağrılar da korumasız kalmaz: görev başına platform
+ *    dakikalık tavanı + platform günlük token tavanı (`unscoped`).
+ *  - QRA sohbeti: kademe başına (anonim/müşteri/bayi/admin) GÜNLÜK mesaj tavanı →
+ *    `checkQraDailyCap` (dakikalık limit `lib/rate-limit` `checkQraChatRateLimit`'te).
+ *
  * Bütün LLM yolları: önce `guardAiCall`, sonra çağrı, sonra `recordAiCostUsage`.
  */
 import { prisma } from '@/lib/prisma';
@@ -35,6 +40,21 @@ export type AiTask =
   | 'system_learning'
   | 'qra_chat';
 
+/** Kapsamsız çağrıda (bayi ve aktör yok) görev başına PLATFORM dakikalık tavanı. */
+export const AI_TASK_GLOBAL_RATE_PER_MINUTE: Partial<Record<AiTask, number>> = {
+  analyze: 60,
+  chat_completion: 60,
+  ask_ai: 60,
+  insights: 20,
+  theme_cluster: 20,
+  suggest_reply: 60,
+  auto_reply: 60,
+  embedding: 120,
+  dealer_learning: 10,
+  system_learning: 2,
+  qra_chat: 120,
+};
+
 /**
  * Kiracı/aktör başına dakikalık çağrı tavanı. `analyze` ve `embedding` burada yok:
  * hacimleri geri bildirim hacmine bağlı ve günlük token tavanıyla korunuyorlar.
@@ -55,6 +75,27 @@ export const AI_GLOBAL_DAILY_TOKEN_LIMITS = {
   qra_chat: parsePositiveIntEnv(process.env.AI_DAILY_TOKEN_LIMIT_QRA, 150_000),
   system_learning: parsePositiveIntEnv(process.env.AI_DAILY_TOKEN_LIMIT_SYSTEM_LEARNING, 60_000),
 } as const;
+
+/** Bayisiz ve QRA/sistem öğrenmesi dışındaki (müşteri sohbeti, admin, konsey…) çağrıların günlük tavanı. */
+export const AI_UNSCOPED_DAILY_TOKEN_LIMIT = parsePositiveIntEnv(
+  process.env.AI_DAILY_TOKEN_LIMIT_UNSCOPED,
+  300_000
+);
+
+/** Platform tavanına sahip görevler (kendi eylem adıyla sayılır). */
+const GLOBAL_BUDGET_TASKS = new Set<string>(Object.keys(AI_GLOBAL_DAILY_TOKEN_LIMITS));
+
+/**
+ * QRA sohbet botu — kademe başına GÜNLÜK mesaj tavanı (denetim Y3: anonim limit dakikada 8
+ * idi; tek IP günde ~11.5K istek atabiliyordu, ücretsiz kotanın 11 katı).
+ */
+export const QRA_DAILY_MESSAGE_CAP = {
+  anonymous: parsePositiveIntEnv(process.env.QRA_DAILY_CAP_ANONYMOUS, 20),
+  customer: parsePositiveIntEnv(process.env.QRA_DAILY_CAP_CUSTOMER, 60),
+  dealer_staff: parsePositiveIntEnv(process.env.QRA_DAILY_CAP_DEALER, 200),
+  admin: parsePositiveIntEnv(process.env.QRA_DAILY_CAP_ADMIN, 500),
+} as const;
+export type QraDailyTier = keyof typeof QRA_DAILY_MESSAGE_CAP;
 
 export class AiCostLimitExceededError extends Error {
   readonly statusCode = 429;
@@ -159,15 +200,81 @@ export async function checkAiRateLimit(scopeKey: string, task: AiTask): Promise<
   if (!rl.ok) throw new AiRateLimitExceededError(rl.retryAfterMs ?? 60_000);
 }
 
+/** Bayisiz, QRA/sistem öğrenmesi dışı çağrıların bugünkü toplam tokenı. */
+export async function getTodayUnscopedUsage(): Promise<number> {
+  const rows = await prisma.aIUsageLog.aggregate({
+    where: {
+      dealerId: null,
+      action: { notIn: Array.from(GLOBAL_BUDGET_TASKS) },
+      createdAt: { gte: startOfTodayUtc() },
+    },
+    _sum: { inputTokens: true, outputTokens: true },
+  });
+  return (rows._sum.inputTokens ?? 0) + (rows._sum.outputTokens ?? 0);
+}
+
+/** Kapsamsız çağrılar için platform günlük tavanı. Aşılırsa 429. */
+export async function checkAiUnscopedBudget(): Promise<void> {
+  const used = await getTodayUnscopedUsage();
+  if (used >= AI_UNSCOPED_DAILY_TOKEN_LIMIT) {
+    throw new AiCostLimitExceededError('Platformun günlük AI kotası doldu. Lütfen yarın tekrar deneyin.');
+  }
+}
+
+/** Platform dakikalık tavanı (kapsamsız çağrılar). Altyapı hatasında açık kalır. */
+async function checkAiGlobalRateLimit(task: AiTask): Promise<void> {
+  const max = AI_TASK_GLOBAL_RATE_PER_MINUTE[task];
+  if (!max) return;
+  let rl: { ok: boolean; retryAfterMs?: number };
+  try {
+    rl = await checkRateLimitDb(`ai:${task}:global`, max, 60_000);
+  } catch (err) {
+    console.error('[AI_GUARD] global rate limit altyapısı hata verdi:', err instanceof Error ? err.message : err);
+    return;
+  }
+  if (!rl.ok) throw new AiRateLimitExceededError(rl.retryAfterMs ?? 60_000);
+}
+
 /**
  * Tek giriş noktası: bir LLM çağrısından ÖNCE çağrılır.
  *  - `dealerId` varsa: kiracı dakikalık limiti + kiracı günlük token tavanı.
  *  - `dealerId` yoksa `actorKey` (kullanıcı id / IP parmak izi) ile dakikalık limit.
+ *  - İkisi de yoksa görev başına PLATFORM dakikalık limiti.
+ *  - Bayisiz her çağrı platform günlük tavanına tabidir: QRA ve sistem öğrenmesi kendi
+ *    eylem tavanına, diğerleri ortak `unscoped` tavanına.
  */
 export async function guardAiCall(params: { task: AiTask; dealerId?: string | null; actorKey?: string | null }): Promise<void> {
-  const scope = params.dealerId || params.actorKey || '';
-  if (scope) await checkAiRateLimit(scope, params.task);
-  if (params.dealerId) await checkAiCostGuard(params.dealerId);
+  if (params.dealerId) {
+    await checkAiRateLimit(params.dealerId, params.task);
+    await checkAiCostGuard(params.dealerId);
+    return;
+  }
+  if (params.actorKey) await checkAiRateLimit(params.actorKey, params.task);
+  else await checkAiGlobalRateLimit(params.task);
+
+  if (GLOBAL_BUDGET_TASKS.has(params.task)) {
+    await checkAiGlobalBudget(params.task as keyof typeof AI_GLOBAL_DAILY_TOKEN_LIMITS);
+  } else {
+    await checkAiUnscopedBudget();
+  }
+}
+
+/**
+ * QRA günlük mesaj tavanı (kademe × kimlik; anonimde IP parmak izi). Altyapı hatasında
+ * anonim kademe KAPALI kalır (fail-closed: herkese açık uç maliyet açığı olmasın), girişli
+ * kademeler açık kalır (dakikalık limit + platform token tavanı yine geçerli).
+ */
+export async function checkQraDailyCap(
+  identifier: string,
+  tier: QraDailyTier
+): Promise<{ ok: boolean; remaining?: number; retryAfterMs?: number }> {
+  const max = QRA_DAILY_MESSAGE_CAP[tier];
+  try {
+    return await checkRateLimitDb(`qra_chat_daily:${tier}:${identifier}`, max, 24 * 60 * 60 * 1000);
+  } catch (err) {
+    console.error('[AI_GUARD] QRA günlük tavan altyapısı hata verdi:', err instanceof Error ? err.message : err);
+    return tier === 'anonymous' ? { ok: false, retryAfterMs: 60 * 60 * 1000 } : { ok: true };
+  }
 }
 
 /**

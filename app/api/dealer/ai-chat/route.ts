@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
             topTopics,
             recentFeedbacks,
             previousMessages,
-        });
+        }, { dealerId: userId }); // P0-32: bayi AI kapalıysa LLM çağrılmaz + kiracı kotası
 
         // askAI, AI sağlayıcı yapılandırılmamışsa null döner → eskiden yeni sohbette
         // boş cevap görünüyordu ("cevap vermiyor"). Her zaman görünür bir yanıt garanti et.

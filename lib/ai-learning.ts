@@ -1,6 +1,16 @@
 import OpenAI from 'openai';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
+import { guardAiCall, recordAiCostUsage } from '@/lib/ai-cost-guard';
+import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
+import {
+  PROMPT_VERSIONS,
+  UNTRUSTED_DATA_RULE,
+  sanitizeContextLine,
+  sanitizeContextText,
+  wrapUntrusted,
+} from '@/lib/ai-prompt-safety';
 import { localEmbed, embedFromFeatures, LOCAL_EMBEDDING_MODEL, cosineSimilarity } from '@/lib/local-embedding';
 
 /** Groq LLM destekli embedding model etiketi (yerel uzayla uyumlu vektör). */
@@ -18,7 +28,7 @@ let learningClient: OpenAI | null = null;
 function getEmbeddingClient(): OpenAI | null {
   if (!process.env.OPENAI_API_KEY) return null;
   if (!embeddingClient) {
-    embeddingClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    embeddingClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 8_000, maxRetries: 1 });
   }
   return embeddingClient;
 }
@@ -29,20 +39,23 @@ function getLearningClient(): OpenAI | null {
       learningClient = new OpenAI({
         apiKey: process.env.GROQ_API_KEY,
         baseURL: 'https://api.groq.com/openai/v1',
+        // Timeout ZORUNLU (SDK varsayılanı 10 dk): arka plan hattını kilitlemesin.
+        timeout: 20_000,
+        maxRetries: 1,
       });
     }
     return learningClient;
   }
   if (process.env.OPENAI_API_KEY) {
     if (!learningClient) {
-      learningClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      learningClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20_000, maxRetries: 1 });
     }
     return learningClient;
   }
   return null;
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
   try {
     return await fn();
   } catch (err) {
@@ -58,7 +71,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
  * türetir. Groq embedding modeli SUNMADIĞI için (canlı doğrulandı), gerçek LLM
  * anlayışını embedding'e dönüştürmenin Groq-yolu budur.
  */
-async function groqFeatureEmbedding(text: string): Promise<number[] | null> {
+async function groqFeatureEmbedding(text: string, dealerId?: string): Promise<number[] | null> {
   if (!process.env.GROQ_API_KEY) return null;
 
   // Dinamik import: ai-engine ↔ ai-learning döngüsel bağımlılığını kırar.
@@ -73,6 +86,9 @@ async function groqFeatureEmbedding(text: string): Promise<number[] | null> {
     temperature: 0,
     maxTokens: 220,
     jsonMode: true,
+    // P0-32: bayi kapsamı → AI kapalıysa null (yerel embedding'e düşülür), limit + kayıt.
+    dealerId,
+    task: 'embedding',
   });
   if (!res) return null;
 
@@ -94,14 +110,20 @@ async function groqFeatureEmbedding(text: string): Promise<number[] | null> {
   }
 }
 
-async function generateEmbedding(text: string): Promise<{ vector: number[]; model: string } | null> {
+async function generateEmbedding(text: string, dealerId?: string): Promise<{ vector: number[]; model: string } | null> {
   if (!text || text.trim().length < 5) return null;
   const safeText = text.trim().slice(0, 4000);
+
+  // P0-32: AI'ı kapalı bayinin metni HİÇBİR sağlayıcıya gitmez → yalnız yerel embedding.
+  if (dealerId && !canUseAi(await getDealerAiPolicy(dealerId))) {
+    return { vector: localEmbed(safeText), model: LOCAL_EMBEDDING_MODEL };
+  }
 
   // 1) Tercih: gerçek OpenAI embedding (en yüksek kalite).
   const client = getEmbeddingClient();
   if (client) {
     try {
+      await guardAiCall({ task: 'embedding', dealerId });
       // Her denemeye 5sn timeout (AbortController): yavaş/asılı sağlayıcı isteği
       // sonsuza dek bloklamasın; süre aşımında aşağıdaki Groq/yerel'e düşeriz.
       const response = await withRetry(() => {
@@ -112,6 +134,7 @@ async function generateEmbedding(text: string): Promise<{ vector: number[]; mode
           .finally(() => clearTimeout(t));
       });
       const vector = response.data?.[0]?.embedding;
+      await recordAiCostUsage(dealerId ?? null, response.usage?.prompt_tokens ?? 0, 0, 'embedding', EMBEDDING_MODEL);
       if (vector) return { vector, model: EMBEDDING_MODEL };
     } catch (err) {
       console.error('OpenAI embedding failed, falling back:', err);
@@ -121,7 +144,7 @@ async function generateEmbedding(text: string): Promise<{ vector: number[]; mode
   // 2) Groq LLM destekli embedding: LLM metni semantik özelliklere indirir,
   //    biz vektörleştiririz (Groq gerçekten kullanılır — embedding modeli yok).
   try {
-    const groqVec = await groqFeatureEmbedding(safeText);
+    const groqVec = await groqFeatureEmbedding(safeText, dealerId);
     if (groqVec) return { vector: groqVec, model: GROQ_EMBED_MODEL };
   } catch (err) {
     console.error('Groq feature embedding failed, falling back:', err);
@@ -137,7 +160,7 @@ export async function storeFeedbackEmbedding(params: {
   text: string;
 }) {
   try {
-    const embedding = await generateEmbedding(params.text);
+    const embedding = await generateEmbedding(params.text, params.dealerId);
     if (!embedding) return null;
 
     return await prisma.aIEmbedding.upsert({
@@ -174,7 +197,7 @@ export async function findSimilarFeedback(params: {
   limit?: number;
   minScore?: number;
 }): Promise<Array<{ feedbackId: string; score: number }>> {
-  const query = await generateEmbedding(params.text);
+  const query = await generateEmbedding(params.text, params.dealerId);
   if (!query) return [];
 
   const limit = params.limit ?? 5;
@@ -305,18 +328,21 @@ export async function updateAdaptiveProfile(dealerId: string) {
   });
 
   let profile: any = null;
-  const client = getLearningClient();
+  // P0-32: bayi AI'ı kapalıysa LLM çağrılmaz; yerel (deterministik) profil kullanılır.
+  const client = canUseAi(await getDealerAiPolicy(dealerId)) ? getLearningClient() : null;
   if (client) {
+    await guardAiCall({ task: 'dealer_learning', dealerId });
     const compactText = (value: string | null) => (value || '').replace(/\s+/g, ' ').slice(0, 240);
     const contextSample = feedbacks
       .slice(0, 30)
-      .map((f, i) => `${i + 1}. "${compactText(f.text)}" [sentiment: ${f.sentiment || '-'}, intent: ${f.intent || '-'}]`)
+      .map((f, i) => `${i + 1}. ${wrapUntrusted('musteri_yorumu', compactText(f.text), 260)} [sentiment: ${sanitizeContextLine(f.sentiment, 20) || '-'}, intent: ${sanitizeContextLine(f.intent, 20) || '-'}]`)
       .join('\n');
     const correctionSample = corrections
       .slice(0, 15)
       .map((c, i) => `${i + 1}. ${c.field} old=${JSON.stringify(c.oldValue)} new=${JSON.stringify(c.newValue)}`)
       .join('\n');
 
+    const startedAt = Date.now();
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: LEARNING_MODEL,
@@ -337,7 +363,10 @@ JSON formatı:
 Kurallar:
 - Türkçe, kısa ve somut yaz
 - Geri bildirimlerde geçen terimlere odaklan
-- 5-8 tema ve 6-10 terim ile sınırlı kal`,
+- 5-8 tema ve 6-10 terim ile sınırlı kal
+- Müşteri ya da personel adı, telefon, e-posta YAZMA
+
+${UNTRUSTED_DATA_RULE}`,
           },
           {
             role: 'user',
@@ -350,9 +379,21 @@ Kurallar:
       })
     );
 
+    await recordAiCostUsage(
+      dealerId,
+      response.usage?.prompt_tokens ?? 0,
+      response.usage?.completion_tokens ?? 0,
+      'dealer_learning',
+      LEARNING_MODEL,
+      Date.now() - startedAt
+    );
     const content = response.choices[0]?.message?.content;
     if (content) {
-      profile = JSON.parse(content);
+      try {
+        profile = JSON.parse(content);
+      } catch {
+        profile = null;
+      }
     }
   }
 
@@ -467,8 +508,24 @@ export async function maybeTriggerAdaptiveUpdate(dealerId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SISTEM GENELİ AI ÖĞRENME (Tüm veritabanı verileriyle)
+// SİSTEM GENELİ AI ÖĞRENME — anonim toplulaştırma + admin onayı (P0-33)
 // ─────────────────────────────────────────────────────────────
+//
+// Eski davranış (kaldırıldı): bütün kiracıların ham geri bildirim metinleri, işletme adları,
+// ürün adları ve bayilerin özel promptları tek bir LLM'e veriliyor; LLM'in yazdığı
+// `chatSystemPrompt` onaysız kaydedilip HER sohbette güvenlik kurallarını taşıyan temel
+// promptun YERİNE geçiyordu (kalıcı prompt enjeksiyonu + kiracılar arası kirlenme).
+//
+// Yeni davranış:
+//  1. LLM'e yalnız ANONİM TOPLULAŞTIRILMIŞ istatistik gider: sayılar, dağılımlar ve en az
+//     `MIN_DEALERS_PER_THEME` farklı işletmede geçen tema/konu ETİKETLERİ. Ham metin, işletme
+//     adı, ürün adı, bayi özel promptu GİTMEZ.
+//  2. Çıktı `profile.pendingProposal` olarak kaydedilir; hiçbir prompta etki etmez.
+//  3. Admin diff'i görüp onaylayınca (`approveSystemLearningProposal`) üst düzey alanlara
+//     kopyalanır ve `profile.approval` damgası basılır. Prompt kurucular (`buildLearnedSystemContext`)
+//     YALNIZ onay damgalı içeriği, sınırlı ek bağlam olarak kullanır.
+//  4. `systemPrompt` / `chatSystemPrompt` sütunları artık yalnız admin'in elle yazdığı notlardır
+//     (`updateSystemLearningPrompts` → `profile.adminPromptsEditedAt`); LLM bunlara yazmaz.
 
 const SYSTEM_LEARNING_MODEL =
   process.env.AI_SYSTEM_LEARNING_MODEL ||
@@ -476,384 +533,493 @@ const SYSTEM_LEARNING_MODEL =
   process.env.OPENAI_LEARNING_MODEL ||
   (process.env.GROQ_API_KEY ? 'openai/gpt-oss-120b' : 'gpt-4o-mini'); // llama-3.3-70b-versatile decommission (2026-08-16)
 
-const MAX_FEEDBACKS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_FEEDBACKS, 0);
-const MAX_CORRECTIONS = parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_CORRECTIONS, 0);
-// 0 = sınırsız (tüm Neon DB verisi), aksi halde belirtilen limit
+/** Toplulaştırma için taranan en fazla geri bildirim (bellek/süre koruması). */
+const MAX_FEEDBACKS = Math.min(
+  parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_FEEDBACKS, 3_000) || 3_000,
+  10_000
+);
+const MAX_CORRECTIONS = Math.min(
+  parseNonNegativeIntEnv(process.env.AI_SYSTEM_LEARNING_MAX_CORRECTIONS, 1_000) || 1_000,
+  5_000
+);
+/** k-anonimlik: bir tema/konu etiketi en az bu kadar FARKLI işletmede geçmeli. */
+export const MIN_DEALERS_PER_THEME = 3;
 
-/** Tüm veritabanı verilerini topla (Neon DB'deki tüm veriler - derin öğrenme için) */
-async function aggregateSystemTrainingData() {
-  const [
-    feedbacks,
-    corrections,
-    userCounts,
-    dealerCount,
-    aiSettings,
-    intentGroups,
-    sentimentGroups,
-    topTopics,
-    topThemes,
-    businessNames,
-    productNames,
-    themeClusters,
-    urgencyChurnStats,
-  ] = await Promise.all([
-    prisma.feedback.findMany({
-      where: { deletedAt: null, text: { not: null } },
-      select: {
-        text: true,
-        rating: true,
-        sentiment: true,
-        intent: true,
-        topics: true,
-        themes: true,
-        entities: true,
-        urgency: true,
-        churnRisk: true,
-        actionSuggestions: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      ...(MAX_FEEDBACKS > 0 && { take: MAX_FEEDBACKS }),
-    }),
-    prisma.aIFeedbackCorrection.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: { field: true, oldValue: true, newValue: true, note: true },
-      ...(MAX_CORRECTIONS > 0 && { take: MAX_CORRECTIONS }),
-    }),
-    prisma.user.groupBy({
-      by: ['role'],
-      _count: true,
-    }),
-    prisma.user.count({ where: { role: 'DEALER' } }),
-    prisma.aISettings.findMany({
-      select: { analysisLanguage: true, sentimentEnabled: true, customPrompt: true },
-    }),
-    prisma.feedback.groupBy({
-      by: ['intent'],
-      where: { deletedAt: null },
-      _count: true,
-    }).then((g) => {
-      const m: Record<string, number> = {};
-      g.forEach((r) => { m[String(r.intent || 'general')] = r._count; });
-      return m;
-    }),
-    prisma.feedback.groupBy({
-      by: ['sentiment'],
-      where: { deletedAt: null },
-      _count: true,
-    }).then((g) => {
-      const m: Record<string, number> = { positive: 0, negative: 0, neutral: 0 };
-      g.forEach((r) => {
-        const k = (r.sentiment || 'neutral').toLowerCase();
-        if (m[k] !== undefined) m[k] = r._count;
-      });
-      return m;
-    }),
-    prisma.feedback
-      .findMany({
-        where: { deletedAt: null },
-        select: { topics: true },
-        ...(MAX_FEEDBACKS > 0 ? { take: Math.min(MAX_FEEDBACKS, 15000) } : {}),
-      })
-      .then((fs) => {
-        const m = new Map<string, number>();
-        fs.forEach((f) => {
-          const t = (f.topics as string[]) || [];
-          t.forEach((x) => m.set(String(x), (m.get(String(x)) || 0) + 1));
-        });
-        return Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, 50);
+export const SYSTEM_LEARNING_SCHEMA_VERSION = 2;
+
+/** Onaylanabilir öğrenme içeriği (temizlenmiş, tavanlı). */
+export interface LearnedPayload {
+  learnedRules: string[];
+  learnedThemes: Array<{ theme: string; priority: 'high' | 'medium' | 'low'; count?: number }>;
+  responseGuidelines: { do: string[]; avoid: string[] };
+  promptAppendix: string | null;
+}
+
+export interface SystemLearningProposal extends LearnedPayload {
+  id: string;
+  createdAt: string;
+  promptVersion: string;
+  model: string;
+  trainingDataStats: Record<string, unknown>;
+}
+
+const PAYLOAD_LIMITS = { rules: 10, themes: 10, guidelines: 6, appendix: 400, line: 200 } as const;
+
+function cleanList(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const v of value) {
+    const line = sanitizeContextLine(v, PAYLOAD_LIMITS.line);
+    if (line && !out.includes(line)) out.push(line);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** LLM ya da DB'den gelen öğrenme içeriğini temizler (injection kalıplı öğe düşer, tavanlı). */
+export function sanitizeLearnedPayload(raw: unknown): LearnedPayload {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const guidelines = (r.responseGuidelines && typeof r.responseGuidelines === 'object'
+    ? r.responseGuidelines
+    : {}) as Record<string, unknown>;
+  const themes: LearnedPayload['learnedThemes'] = [];
+  if (Array.isArray(r.learnedThemes)) {
+    for (const t of r.learnedThemes) {
+      const obj = (t && typeof t === 'object' ? t : { theme: t }) as Record<string, unknown>;
+      const theme = sanitizeContextLine(obj.theme, 80);
+      if (!theme || themes.some((x) => x.theme === theme)) continue;
+      const priority = obj.priority === 'high' || obj.priority === 'low' ? obj.priority : 'medium';
+      const count = Number(obj.count);
+      themes.push({ theme, priority, ...(Number.isFinite(count) && count > 0 ? { count: Math.round(count) } : {}) });
+      if (themes.length >= PAYLOAD_LIMITS.themes) break;
+    }
+  }
+  const appendix = sanitizeContextText(r.promptAppendix ?? r.systemPromptAppendix, PAYLOAD_LIMITS.appendix);
+  return {
+    learnedRules: cleanList(r.learnedRules, PAYLOAD_LIMITS.rules),
+    learnedThemes: themes,
+    responseGuidelines: {
+      do: cleanList(guidelines.do, PAYLOAD_LIMITS.guidelines),
+      avoid: cleanList(guidelines.avoid, PAYLOAD_LIMITS.guidelines),
+    },
+    promptAppendix: appendix || null,
+  };
+}
+
+/** Liste farkı: admin onay ekranı için (eklenen / çıkarılan). */
+function diffList(active: string[], proposed: string[]) {
+  return {
+    added: proposed.filter((x) => !active.includes(x)),
+    removed: active.filter((x) => !proposed.includes(x)),
+    unchanged: proposed.filter((x) => active.includes(x)),
+  };
+}
+
+/** Aktif (onaylı) içerik ile öneri arasındaki fark — saf fonksiyon. */
+export function diffLearnedPayload(active: LearnedPayload | null, proposed: LearnedPayload) {
+  const a = active ?? { learnedRules: [], learnedThemes: [], responseGuidelines: { do: [], avoid: [] }, promptAppendix: null };
+  return {
+    learnedRules: diffList(a.learnedRules, proposed.learnedRules),
+    learnedThemes: diffList(a.learnedThemes.map((t) => t.theme), proposed.learnedThemes.map((t) => t.theme)),
+    guidelinesDo: diffList(a.responseGuidelines.do, proposed.responseGuidelines.do),
+    guidelinesAvoid: diffList(a.responseGuidelines.avoid, proposed.responseGuidelines.avoid),
+    promptAppendix: { before: a.promptAppendix, after: proposed.promptAppendix, changed: a.promptAppendix !== proposed.promptAppendix },
+  };
+}
+
+type ProfileJson = Record<string, unknown> & {
+  schemaVersion?: number;
+  approval?: { approvedAt?: string; approvedBy?: string; proposalId?: string } | null;
+  pendingProposal?: SystemLearningProposal | null;
+  adminPromptsEditedAt?: string | null;
+  history?: unknown[];
+};
+
+function asProfileJson(value: unknown): ProfileJson {
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...(value as ProfileJson) } : {};
+}
+
+/** Profil satırındaki ONAYLI içerik (onay damgası yoksa null — eski/onaysız profil yok sayılır). */
+export function getApprovedLearnedPayload(profile: unknown): LearnedPayload | null {
+  const p = asProfileJson(profile);
+  if (!p.approval || typeof p.approval !== 'object' || !p.approval.approvedAt) return null;
+  return sanitizeLearnedPayload(p);
+}
+
+/** Bounded tema/konu sayımı: etiket → farklı işletme sayısı + toplam geçiş. */
+function countLabels(
+  rows: Array<{ dealerId: string; labels: string[] }>
+): Array<{ label: string; dealers: number; count: number }> {
+  const map = new Map<string, { dealers: Set<string>; count: number }>();
+  for (const r of rows) {
+    for (const raw of r.labels) {
+      const label = sanitizeContextLine(raw, 60);
+      if (!label) continue;
+      const key = label.toLocaleLowerCase('tr-TR');
+      const e = map.get(key) ?? { dealers: new Set<string>(), count: 0 };
+      e.dealers.add(r.dealerId);
+      e.count += 1;
+      map.set(key, e);
+    }
+  }
+  return Array.from(map.entries())
+    .map(([label, e]) => ({ label, dealers: e.dealers.size, count: e.count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function labelsOf(value: unknown, kind: 'topics' | 'themes'): string[] {
+  if (!Array.isArray(value)) return [];
+  if (kind === 'topics') return value.filter((x): x is string => typeof x === 'string');
+  return value
+    .map((x) => {
+      const t = x as { theme?: unknown; subTheme?: unknown } | null;
+      if (!t || typeof t.theme !== 'string') return null;
+      return typeof t.subTheme === 'string' && t.subTheme ? `${t.theme} > ${t.subTheme}` : t.theme;
+    })
+    .filter((x): x is string => !!x);
+}
+
+const LABEL_RE = /^[\p{L}_ -]{2,24}$/u;
+
+/**
+ * ANONİM toplulaştırma (P0-33). Ham metin, işletme/ürün adı, bayi özel promptu TOPLANMAZ.
+ * Tema/konu etiketleri yalnız en az `MIN_DEALERS_PER_THEME` farklı işletmede geçiyorsa
+ * çıkar (tek işletmeye özgü ürün/şube adı sızmasın). Taramalar `take` ile sınırlı.
+ */
+export async function aggregateSystemTrainingData() {
+  const [feedbacks, corrections, dealerCount, intentGroups, sentimentGroups, agg, highUrgency, highChurn] =
+    await Promise.all([
+      prisma.feedback.findMany({
+        where: { deletedAt: null, text: { not: null } },
+        select: { topics: true, themes: true, qrCode: { select: { dealerId: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_FEEDBACKS,
       }),
-    prisma.feedback
-      .findMany({
-        where: { deletedAt: null },
-        select: { themes: true },
-        ...(MAX_FEEDBACKS > 0 ? { take: Math.min(MAX_FEEDBACKS, 15000) } : {}),
-      })
-      .then((fs) => {
-        const m = new Map<string, number>();
-        fs.forEach((f) => {
-          const t = (f.themes as Array<{ theme?: string; subTheme?: string }>) || [];
-          t.forEach((x) => {
-            const k = [x.theme, x.subTheme].filter(Boolean).join(' > ') || 'unknown';
-            m.set(k, (m.get(k) || 0) + 1);
-          });
-        });
-        return Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, 50);
+      prisma.aIFeedbackCorrection.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: { field: true, oldValue: true, newValue: true },
+        take: MAX_CORRECTIONS,
       }),
-    prisma.user
-      .findMany({
-        where: { role: 'DEALER' },
-        select: { businessName: true, name: true },
-      })
-      .then((u) => u.map((x) => x.businessName || x.name).filter(Boolean)),
-    prisma.product
-      .findMany({ select: { name: true }, take: 500 })
-      .then((p) => p.map((x) => x.name).filter(Boolean)),
-    prisma.aIThemeCluster
-      .findMany({
-        orderBy: { count: 'desc' },
-        take: 50,
-        select: { theme: true, subTheme: true, sentiment: true, count: true },
-      })
-      .then((t) => t.map((x) => `${x.theme}${x.subTheme ? ` > ${x.subTheme}` : ''} (${x.sentiment}, ${x.count})`)),
-    Promise.all([
-      prisma.feedback.count({ where: { deletedAt: null, urgency: { gte: 0.7 } } }),
-      prisma.feedback.count({ where: { deletedAt: null, churnRisk: { gte: 0.7 } } }),
+      prisma.user.count({ where: { role: 'DEALER' } }),
+      prisma.feedback.groupBy({ by: ['intent'], where: { deletedAt: null }, _count: true }),
+      prisma.feedback.groupBy({ by: ['sentiment'], where: { deletedAt: null }, _count: true }),
       prisma.feedback.aggregate({
         where: { deletedAt: null },
         _avg: { rating: true, urgency: true, churnRisk: true },
         _count: true,
       }),
-    ]).then(([highUrgency, highChurn, agg]) => ({
-      highUrgencyCount: highUrgency,
-      highChurnCount: highChurn,
-      avgRating: agg._avg.rating,
-      avgUrgency: agg._avg.urgency,
-      avgChurnRisk: agg._avg.churnRisk,
-      totalCount: agg._count,
-    })),
-  ]);
+      prisma.feedback.count({ where: { deletedAt: null, urgency: { gte: 0.7 } } }),
+      prisma.feedback.count({ where: { deletedAt: null, churnRisk: { gte: 0.7 } } }),
+    ]);
 
-  const userByRole = Object.fromEntries(userCounts.map((u) => [u.role, u._count]));
-  const sampleTexts = feedbacks
-    .filter((_, i) => i % Math.max(1, Math.floor(feedbacks.length / 200)) === 0)
-    .slice(0, 200)
-    .map((f) => (f.text || '').slice(0, 180))
-    .filter(Boolean);
-  const correctionSample = corrections
-    .slice(0, 150)
-    .map((c) => `${c.field}: ${JSON.stringify(c.oldValue)} → ${JSON.stringify(c.newValue)}`)
-    .join('\n');
-  const customPrompts = aiSettings
-    .map((s) => s.customPrompt)
-    .filter((p): p is string => !!p && p.length > 5)
-    .slice(0, 30);
+  const topicRows = feedbacks.map((f) => ({ dealerId: f.qrCode?.dealerId ?? '', labels: labelsOf(f.topics, 'topics') }));
+  const themeRows = feedbacks.map((f) => ({ dealerId: f.qrCode?.dealerId ?? '', labels: labelsOf(f.themes, 'themes') }));
+  const topTopics = countLabels(topicRows).filter((x) => x.dealers >= MIN_DEALERS_PER_THEME).slice(0, 30);
+  const topThemes = countLabels(themeRows).filter((x) => x.dealers >= MIN_DEALERS_PER_THEME).slice(0, 30);
+
+  const intentDist: Record<string, number> = {};
+  for (const g of intentGroups) {
+    const k = String(g.intent || 'general');
+    if (LABEL_RE.test(k)) intentDist[k] = g._count;
+  }
+  const sentimentDist: Record<string, number> = { positive: 0, negative: 0, neutral: 0 };
+  for (const g of sentimentGroups) {
+    const k = (g.sentiment || 'neutral').toLowerCase();
+    if (sentimentDist[k] !== undefined) sentimentDist[k] = g._count;
+  }
+
+  // Düzeltmeler: alan başına sayım + yalnız ETİKET değerli geçişler (serbest metin değil).
+  const correctionByField: Record<string, number> = {};
+  const transitions = new Map<string, number>();
+  for (const c of corrections) {
+    const field = LABEL_RE.test(c.field) ? c.field : 'other';
+    correctionByField[field] = (correctionByField[field] ?? 0) + 1;
+    const from = typeof c.oldValue === 'string' && LABEL_RE.test(c.oldValue) ? c.oldValue : null;
+    const to = typeof c.newValue === 'string' && LABEL_RE.test(c.newValue) ? c.newValue : null;
+    if (field !== 'other' && from && to) {
+      const key = `${field}: ${from} → ${to}`;
+      transitions.set(key, (transitions.get(key) ?? 0) + 1);
+    }
+  }
+  const correctionTransitions = Array.from(transitions.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([k, v]) => `${k} (${v})`);
 
   return {
-    feedbackCount: feedbacks.length,
+    sampledFeedbackCount: feedbacks.length,
     correctionCount: corrections.length,
     dealerCount,
-    userByRole,
-    topTopics: topTopics.map(([k, v]) => `${k}(${v})`).join(', '),
-    topThemes: topThemes.map(([k, v]) => `${k}(${v})`).join(', '),
-    intentDist: intentGroups,
-    sentimentDist: sentimentGroups,
-    sampleTexts,
-    correctionSample,
-    customPrompts,
-    businessNames: Array.from(new Set(businessNames)).slice(0, 100),
-    productNames: Array.from(new Set(productNames)).slice(0, 100),
-    themeClusters,
-    urgencyChurnStats,
+    totalFeedbackCount: agg._count,
+    avgRating: agg._avg.rating,
+    avgUrgency: agg._avg.urgency,
+    avgChurnRisk: agg._avg.churnRisk,
+    highUrgencyCount: highUrgency,
+    highChurnCount: highChurn,
+    intentDist,
+    sentimentDist,
+    topTopics,
+    topThemes,
+    correctionByField,
+    correctionTransitions,
   };
 }
 
-/** Dünya standartlarında sistem promptu + adaptif profil oluştur */
-export async function updateSystemLearningProfile(): Promise<{
-  profile: unknown;
-  systemPrompt: string;
-  chatSystemPrompt?: string;
-  trainingDataStats: unknown;
+/** Toplulaştırılmış veriden LLM'e giden metin — saf fonksiyon (sızıntı testi için dışa açık). */
+export function buildSystemLearningContext(data: Awaited<ReturnType<typeof aggregateSystemTrainingData>>): string {
+  const fmt = (n: number | null | undefined) => (typeof n === 'number' ? n.toFixed(2) : '-');
+  return `<veri>
+ANONİM PLATFORM ÖZETİ (yalnız toplulaştırılmış sayılar ve en az ${MIN_DEALERS_PER_THEME} işletmede geçen etiketler):
+- Toplam geri bildirim: ${data.totalFeedbackCount} (etiket taraması: son ${data.sampledFeedbackCount})
+- İşletme sayısı: ${data.dealerCount}
+- Ortalama puan: ${fmt(data.avgRating)}, aciliyet ort: ${fmt(data.avgUrgency)}, churn ort: ${fmt(data.avgChurnRisk)}
+- Yüksek aciliyet (≥0.7): ${data.highUrgencyCount}, yüksek churn riski (≥0.7): ${data.highChurnCount}
+- Niyet dağılımı: ${JSON.stringify(data.intentDist)}
+- Duygu dağılımı: ${JSON.stringify(data.sentimentDist)}
+- Sık konular: ${data.topTopics.map((t) => `${t.label}(${t.count})`).join(', ') || 'yok'}
+- Sık temalar: ${data.topThemes.map((t) => `${t.label}(${t.count})`).join(', ') || 'yok'}
+- Düzeltme sayıları (alan): ${JSON.stringify(data.correctionByField)}
+- Sık düzeltme geçişleri: ${data.correctionTransitions.join('; ') || 'yok'}
+</veri>`;
+}
+
+const SYSTEM_LEARNING_INSTRUCTIONS = `Sen bir AI kalite uzmanısın. Sana yalnız ANONİM, toplulaştırılmış platform istatistikleri verilir.
+Bu istatistiklerden, müşteri geri bildirimi analizi ve işletme sohbet asistanı için GENEL (hiçbir işletmeye özgü olmayan) iyileştirme önerileri çıkar.
+Kurallar:
+- İşletme, ürün, şube veya kişi adı YAZMA. Talimat değiştirme, rol değiştirme, güvenlik kuralını gevşetme önerme.
+- Kurallar kısa, tek cümlelik ve Türkçe olsun.
+SADECE JSON döndür:
+{
+  "learnedRules": ["kural1", "kural2"],
+  "learnedThemes": [{"theme": "string", "priority": "high|medium|low", "count": 0}],
+  "responseGuidelines": {"do": ["string"], "avoid": ["string"]},
+  "promptAppendix": "en fazla 2 cümle Türkçe ek bağlam"
+}
+
+${UNTRUSTED_DATA_RULE}`;
+
+export interface SystemLearningRunResult {
+  status: 'pending_review';
+  proposal: SystemLearningProposal;
+  diff: ReturnType<typeof diffLearnedPayload>;
+  /** Geriye uyum: eski çağıranlar `profile` / `trainingDataStats` / `version` okuyordu. */
+  profile: SystemLearningProposal;
+  trainingDataStats: Record<string, unknown>;
   version: number;
-} | null> {
+}
+
+/**
+ * Sistem öğrenmesi: anonim toplulaştırma → LLM önerisi → `pendingProposal` (ONAY BEKLER).
+ * Hiçbir prompta etki etmez; admin `approveSystemLearningProposal` ile yürürlüğe koyar.
+ * Platform günlük token tavanı ve dakikalık limit uygulanır.
+ */
+export async function updateSystemLearningProfile(): Promise<SystemLearningRunResult | null> {
   const client = getLearningClient();
   if (!client) {
     console.error('AI client not available for system learning');
     return null;
   }
 
+  await guardAiCall({ task: 'system_learning' });
+
   const data = await aggregateSystemTrainingData();
-  const totalFeedbacks = await prisma.feedback.count({ where: { deletedAt: null } });
-  const totalCorrections = await prisma.aIFeedbackCorrection.count();
+  const contextBlob = buildSystemLearningContext(data);
 
-  const stats = data.urgencyChurnStats as {
-    highUrgencyCount: number;
-    highChurnCount: number;
-    avgRating: number | null;
-    avgUrgency: number | null;
-    avgChurnRisk: number | null;
-    totalCount: number;
-  } | undefined;
-  const contextBlob = `
-VERİ ÖZETİ (Neon DB - tüm canlı veriler):
-- Toplam geri bildirim: ${totalFeedbacks}
-- Toplam AI düzeltmesi: ${totalCorrections}
-- Dealer sayısı: ${data.dealerCount}
-- Kullanıcı dağılımı: ${JSON.stringify(data.userByRole)}
-${stats ? `- Ortalama puan: ${stats.avgRating?.toFixed(2) ?? '-'}, Aciliyet ort: ${stats.avgUrgency?.toFixed(2) ?? '-'}, Churn ort: ${stats.avgChurnRisk?.toFixed(2) ?? '-'}` : ''}
-${stats ? `- Yüksek aciliyet (≥0.7): ${stats.highUrgencyCount}, Yüksek churn riski (≥0.7): ${stats.highChurnCount}` : ''}
-
-EN ÇOK GEÇEN KONULAR: ${data.topTopics || 'yok'}
-EN ÇOK GEÇEN TEMALAR: ${data.topThemes || 'yok'}
-NİYET DAĞILIMI: ${JSON.stringify(data.intentDist)}
-DUYGU DAĞILIMI: ${JSON.stringify(data.sentimentDist)}
-${(data.themeClusters as string[])?.length ? `TEMA KÜMELERİ (AIThemeCluster): ${(data.themeClusters as string[]).join('; ')}` : ''}
-${(data.businessNames as string[])?.length ? `İŞLETME ADLARI: ${(data.businessNames as string[]).join(', ')}` : ''}
-${(data.productNames as string[])?.length ? `ÜRÜN ADLARI: ${(data.productNames as string[]).join(', ')}` : ''}
-
-GERİ BİLDİRİM ÖRNEKLERİ (tüm veritabanından örneklenmiş):
-${data.sampleTexts.slice(0, 120).map((t, i) => `${i + 1}. "${t}"`).join('\n')}
-
-KULLANICI DÜZELTMELERİ (AI'ın öğrenmesi gereken - tüm düzeltmeler):
-${data.correctionSample || 'Henüz düzeltme yok'}
-
-İŞLETME ÖZEL PROMPTLARI (örnekler):
-${data.customPrompts.slice(0, 15).join('\n---\n') || 'Yok'}
-`.trim();
-
-  const WORLD_CLASS_SYSTEM_PROMPT_BASE = `Sen QRATEX platformunun merkezi yapay zeka motorusun. Müşteri geri bildirimi analizi, içgörü üretimi ve doğal dil sorgulama için dünya standartlarında performans sergilersin.
-
-ROL VE SORUMLULUKLAR:
-1. Geri bildirim metinlerini Türkçe bağlamda derinlemesine analiz et (duygu, niyet, aciliyet, churn riski, temalar, varlıklar).
-2. Somut, uygulanabilir (actionable) öneriler üret; belirsiz veya genel ifadelerden kaçın.
-3. İşletme verilerine dayalı yanıt ver; veri yoksa "Bu konuda yeterli veri yok" de.
-4. Türkçe dilbilgisi ve tonuna uygun yaz; profesyonel ve saygılı ol.
-
-KALİTE PRENSİPLERİ:
-- Her çıktı veriye dayalı, tekrarlanabilir ve tutarlı olsun.
-- Düzeltmelerden öğren: Kullanıcılar AI sonucunu düzelttiğinde bu kalıpları sonraki analizlere yansıt.
-- İşletme özel terimlerini (ürün adları, lokasyonlar, marka terimleri) koru ve doğru kullan.
-- Toksik, küfür veya uygunsuz içeriği tespit et ve işaretle.`;
-
-  const response = await withRetry(() =>
-    client.chat.completions.create({
-      model: SYSTEM_LEARNING_MODEL,
-      messages: [
-        {
-          role: 'system',
-          content: `Sen bir AI öğrenme ve adaptasyon uzmanısın. Verilen VERİ ÖZETİ'ni analiz edip:
-1) Sisteme eklenecek ÖĞRENILEN KURALLAR (learnedRules) JSON dizisi
-2) ÖĞRENILEN TEMALAR (learnedThemes) - sık geçen temalar ve öncelikleri
-3) VARLIK ALIAS'LARI (entityAliases) - yaygın varlık eşleştirmeleri
-4) YANIT REHBERİ (responseGuidelines) - "yap" ve "kaçın" kuralları
-5) GÜNCELLENMİŞ SİSTEM PROMPT EKİ - mevcut prompta eklenmesi gereken 2-4 cümle
-
-SADECE JSON döndür:
-{
-  "learnedRules": ["kural1", "kural2"],
-  "learnedThemes": [{"theme": "string", "priority": "high|medium|low", "count": number}],
-  "entityAliases": [{"alias": "string", "canonical": "string", "type": "string"}],
-  "responseGuidelines": {"do": ["string"], "avoid": ["string"]},
-  "systemPromptAppendix": "2-4 cümle Türkçe ek"
-}`,
-        },
-        { role: 'user', content: contextBlob },
-      ],
-      temperature: 0.2,
-      max_tokens: 1500,
-      response_format: { type: 'json_object' },
-    })
-  );
-
-  const content = response.choices[0]?.message?.content;
+  const started = Date.now();
+  let content: string | null | undefined;
+  try {
+    const response = await withRetry(() =>
+      client.chat.completions.create({
+        model: SYSTEM_LEARNING_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_LEARNING_INSTRUCTIONS },
+          { role: 'user', content: contextBlob },
+        ],
+        temperature: 0.2,
+        max_tokens: 1200,
+        response_format: { type: 'json_object' },
+      })
+    );
+    content = response.choices[0]?.message?.content;
+    const u = (response as { usage?: { prompt_tokens?: number; completion_tokens?: number } }).usage;
+    await recordAiCostUsage(null, u?.prompt_tokens ?? 0, u?.completion_tokens ?? 0, 'system_learning', SYSTEM_LEARNING_MODEL, Date.now() - started);
+  } catch (err) {
+    await recordAiCostUsage(null, 0, 0, 'system_learning', SYSTEM_LEARNING_MODEL, Date.now() - started, {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
   if (!content) return null;
 
-  let learned: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    learned = JSON.parse(content);
+    parsed = JSON.parse(content);
   } catch {
     return null;
   }
 
-  const systemPromptAppendix = (learned.systemPromptAppendix as string) || '';
-  const fullSystemPrompt = `${WORLD_CLASS_SYSTEM_PROMPT_BASE}\n\n${systemPromptAppendix}`.trim();
-
-  // Sohbet için ayrı prompt üret (chatSystemPrompt)
-  let chatSystemPrompt: string | null = null;
-  try {
-    const chatResponse = await withRetry(() =>
-      client.chat.completions.create({
-        model: SYSTEM_LEARNING_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: `Sen bir sohbet asistanı prompt tasarım uzmanısın. Verilen VERİ ÖZETİ ve ÖĞRENILEN KURALLAR'a göre, QRATEX platformundaki AI sohbet asistanı için ÖZEL bir "Sohbet Sistemi Promptu" yaz. Bu prompt:
-1) Sadece doğal dil sohbeti için kullanılacak (analiz değil)
-2) Kullanıcı sorularına veriye dayalı, kısa, net yanıt vermeyi vurgulasın
-3) Öğrenilmiş kuralları ve rehberleri içersin
-4) Türkçe, profesyonel ama samimi ton
-5) Max 400 kelime
-
-Sadece prompt metnini döndür, JSON veya etiket kullanma.`,
-          },
-          { role: 'user', content: `Öğrenilen kurallar: ${JSON.stringify(learned.learnedRules)}\nRehber: ${JSON.stringify(learned.responseGuidelines)}\n\nVeri özeti: ${contextBlob.slice(0, 1500)}` },
-        ],
-        temperature: 0.3,
-        max_tokens: 600,
-      })
-    );
-    const chatContent = chatResponse.choices[0]?.message?.content;
-    if (chatContent?.trim()) {
-      chatSystemPrompt = chatContent.trim();
-    }
-  } catch (err) {
-    console.warn('Chat system prompt generation failed:', err);
-  }
-
-  const profile = {
-    learnedRules: learned.learnedRules || [],
-    learnedThemes: learned.learnedThemes || [],
-    entityAliases: learned.entityAliases || [],
-    responseGuidelines: learned.responseGuidelines || { do: [], avoid: [] },
-    trainingDataStats: {
-      feedbackCount: totalFeedbacks,
-      correctionCount: totalCorrections,
-      dealerCount: data.dealerCount,
-      userByRole: data.userByRole,
-      businessNamesCount: (data.businessNames as string[])?.length ?? 0,
-      productNamesCount: (data.productNames as string[])?.length ?? 0,
-      themeClustersCount: (data.themeClusters as string[])?.length ?? 0,
-      urgencyChurnStats: data.urgencyChurnStats,
-      trainedAt: new Date().toISOString(),
-    },
+  const payload = sanitizeLearnedPayload(parsed);
+  const trainingDataStats: Record<string, unknown> = {
+    totalFeedbackCount: data.totalFeedbackCount,
+    sampledFeedbackCount: data.sampledFeedbackCount,
+    correctionCount: data.correctionCount,
+    dealerCount: data.dealerCount,
+    themeLabels: data.topThemes.length,
+    topicLabels: data.topTopics.length,
+    minDealersPerLabel: MIN_DEALERS_PER_THEME,
+    trainedAt: new Date().toISOString(),
+  };
+  const proposal: SystemLearningProposal = {
+    ...payload,
+    id: `slp_${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    promptVersion: PROMPT_VERSIONS.systemLearning,
+    model: SYSTEM_LEARNING_MODEL,
+    trainingDataStats,
   };
 
-  const existing = await prisma.aISystemLearningProfile.findFirst().catch(() => null);
-  const nextVersion = existing?.version ? existing.version + 1 : 1;
+  const existing = await prisma.aISystemLearningProfile.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null);
+  const profileJson = asProfileJson(existing?.profile);
+  profileJson.schemaVersion = SYSTEM_LEARNING_SCHEMA_VERSION;
+  profileJson.pendingProposal = proposal;
+  const diff = diffLearnedPayload(getApprovedLearnedPayload(existing?.profile), payload);
 
-  const updateData = {
-    profile,
-    systemPrompt: fullSystemPrompt,
-    chatSystemPrompt: chatSystemPrompt ?? undefined,
-    trainingDataStats: profile.trainingDataStats as object,
-    status: 'ready' as const,
-    lastTrainedAt: new Date(),
-    version: nextVersion,
-  };
-
+  // Yalnız profile JSON'u ve eğitim zamanı güncellenir; systemPrompt/chatSystemPrompt'a DOKUNULMAZ.
   if (existing) {
     await prisma.aISystemLearningProfile.update({
       where: { id: existing.id },
-      data: updateData,
+      data: {
+        profile: profileJson as Prisma.InputJsonValue,
+        trainingDataStats: trainingDataStats as Prisma.InputJsonValue,
+        lastTrainedAt: new Date(),
+      },
     });
   } else {
     await prisma.aISystemLearningProfile.create({
-      data: { ...updateData, chatSystemPrompt: chatSystemPrompt ?? null },
+      data: {
+        profile: profileJson as Prisma.InputJsonValue,
+        trainingDataStats: trainingDataStats as Prisma.InputJsonValue,
+        status: 'idle',
+        lastTrainedAt: new Date(),
+        version: 0,
+      },
     });
   }
 
   return {
-    profile,
-    systemPrompt: fullSystemPrompt,
-    chatSystemPrompt: chatSystemPrompt ?? undefined,
-    trainingDataStats: profile.trainingDataStats,
-    version: nextVersion,
+    status: 'pending_review',
+    proposal,
+    diff,
+    profile: proposal,
+    trainingDataStats,
+    version: existing?.version ?? 0,
   };
 }
 
-/** Sistem/sohbet promptlarını manuel güncelle (admin düzenlemesi) */
+/** Bekleyen öneri + aktif içerikle farkı (admin onay ekranı). */
+export async function getSystemLearningProposal(): Promise<{
+  proposal: SystemLearningProposal | null;
+  active: LearnedPayload | null;
+  diff: ReturnType<typeof diffLearnedPayload> | null;
+  version: number;
+}> {
+  const row = await prisma.aISystemLearningProfile.findFirst({ orderBy: { updatedAt: 'desc' } });
+  const p = asProfileJson(row?.profile);
+  const proposal = p.pendingProposal && typeof p.pendingProposal === 'object' ? (p.pendingProposal as SystemLearningProposal) : null;
+  const active = getApprovedLearnedPayload(row?.profile);
+  return {
+    proposal,
+    active,
+    diff: proposal ? diffLearnedPayload(active, sanitizeLearnedPayload(proposal)) : null,
+    version: row?.version ?? 0,
+  };
+}
+
+/**
+ * Admin onayı: bekleyen öneriyi yürürlüğe koyar. `proposalId` admin'in gördüğü öneriyle
+ * eşleşmeli (arada yeni eğitim koştuysa 'stale'). İyimser kilit: `version` koşullu yazım.
+ * Önceki onaylı içerik `history`'de saklanır (geri alma için, son 5).
+ */
+export async function approveSystemLearningProposal(params: {
+  adminId: string;
+  proposalId: string;
+}): Promise<{ ok: true; version: number } | { ok: false; reason: 'not-found' | 'no-proposal' | 'stale' }> {
+  const row = await prisma.aISystemLearningProfile.findFirst({ orderBy: { updatedAt: 'desc' } });
+  if (!row) return { ok: false, reason: 'not-found' };
+  const p = asProfileJson(row.profile);
+  const proposal = p.pendingProposal as SystemLearningProposal | null | undefined;
+  if (!proposal || typeof proposal !== 'object') return { ok: false, reason: 'no-proposal' };
+  if (proposal.id !== params.proposalId) return { ok: false, reason: 'stale' };
+
+  const approvedPayload = sanitizeLearnedPayload(proposal);
+  const previous = getApprovedLearnedPayload(row.profile);
+  const history = Array.isArray(p.history) ? p.history.slice(-4) : [];
+  if (previous) history.push({ ...previous, approval: p.approval ?? null });
+
+  const next: ProfileJson = {
+    ...p,
+    ...approvedPayload,
+    schemaVersion: SYSTEM_LEARNING_SCHEMA_VERSION,
+    trainingDataStats: proposal.trainingDataStats,
+    approval: { approvedAt: new Date().toISOString(), approvedBy: params.adminId, proposalId: proposal.id },
+    pendingProposal: null,
+    history,
+  };
+  const nextVersion = (row.version ?? 0) + 1;
+  const res = await prisma.aISystemLearningProfile.updateMany({
+    where: { id: row.id, version: row.version },
+    data: { profile: next as Prisma.InputJsonValue, status: 'ready', version: nextVersion },
+  });
+  if (res.count === 0) return { ok: false, reason: 'stale' };
+  return { ok: true, version: nextVersion };
+}
+
+/** Admin reddi: bekleyen öneriyi siler (aktif içerik değişmez). */
+export async function rejectSystemLearningProposal(params: {
+  adminId: string;
+  proposalId: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const row = await prisma.aISystemLearningProfile.findFirst({ orderBy: { updatedAt: 'desc' } });
+  if (!row) return { ok: false, reason: 'not-found' };
+  const p = asProfileJson(row.profile);
+  const proposal = p.pendingProposal as SystemLearningProposal | null | undefined;
+  if (!proposal || proposal.id !== params.proposalId) return { ok: false, reason: 'stale' };
+  const res = await prisma.aISystemLearningProfile.updateMany({
+    where: { id: row.id, version: row.version },
+    data: {
+      profile: {
+        ...p,
+        pendingProposal: null,
+        lastRejected: { proposalId: proposal.id, rejectedAt: new Date().toISOString(), rejectedBy: params.adminId },
+      } as Prisma.InputJsonValue,
+    },
+  });
+  return res.count === 1 ? { ok: true } : { ok: false, reason: 'stale' };
+}
+
+/**
+ * Sistem/sohbet notlarını admin elle günceller. Bu metinler yalnız SINIRLI ek bağlam olarak
+ * kullanılır (temel promptun yerine geçmez); `adminPromptsEditedAt` damgası, notun bir insan
+ * tarafından yazıldığını/onaylandığını gösterir (damgasız eski LLM metinleri yok sayılır).
+ */
 export async function updateSystemLearningPrompts(params: {
   systemPrompt?: string | null;
   chatSystemPrompt?: string | null;
 }): Promise<boolean> {
-  const existing = await prisma.aISystemLearningProfile.findFirst().catch(() => null);
+  const existing = await prisma.aISystemLearningProfile.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null);
   if (!existing) return false;
+
+  const profileJson = asProfileJson(existing.profile);
+  profileJson.adminPromptsEditedAt = new Date().toISOString();
+  const clip = (v: string | null) => (typeof v === 'string' ? v.slice(0, 4_000) : v);
 
   await prisma.aISystemLearningProfile.update({
     where: { id: existing.id },
     data: {
-      ...(params.systemPrompt !== undefined && { systemPrompt: params.systemPrompt }),
-      ...(params.chatSystemPrompt !== undefined && { chatSystemPrompt: params.chatSystemPrompt }),
+      profile: profileJson as Prisma.InputJsonValue,
+      ...(params.systemPrompt !== undefined && { systemPrompt: clip(params.systemPrompt) }),
+      ...(params.chatSystemPrompt !== undefined && { chatSystemPrompt: clip(params.chatSystemPrompt) }),
     },
   });
   return true;
