@@ -225,3 +225,59 @@ Yöntem: Yalnız kod okuması (DB'ye, dev server'a, tarayıcıya dokunulmadı). 
 - NextAuth v4 OAuth hatalarında (kullanıcı Google onayını iptal eder → `callback.js:85-96`, `OAuthAccountNotLinked` → `:165`, `Callback` → `:176/193`) `/api/auth/error?error=...`'a, oradan `core/index.js:215-217` ile `pages.error`'a yönlendiriyor → `/auth/error` 404 (`app/not-found.tsx`). Login sayfası `?error=` parametresini hiç okumuyor.
 - Yeniden üretim: "Google ile giriş" → Google ekranında "İptal" → kullanıcı 404 sayfasında kalır, ne olduğu söylenmez.
 - `verifyRequest` kısmı pratikte etkisiz: projede NextAuth EmailProvider yok (magic link Credentials `magicToken` ile çalışıyor), bu sayfaya hiçbir akış yönlendirmez; yalnız ölü yapılandırma. Gerçek etki `pages.error` kaynaklı. Şiddet KRİTİK/YÜKSEK değil, ORTA olarak ele alınmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. Güvenlik düzeltmeleri (P0-02 `resolvePostLoginTarget`, kodlu `authorize` hataları, `/auth/error`, `/auth/signin`, 2FA ara adımı, resend ucu) A1'de yapılmıştı; bu dalga UX/tasarım + kalan işlevleri kapattı ve A1 davranışını korudu.
+
+**Mimari:** `page.tsx` artık sunucu bileşeni (özellik bayrakları, oturum, QR bağlamı sunucuda → `/api/public/auth-features` fetch'i ve sonradan beliren butonlar yok); form/2FA/demo küçük istemci adası `login-view.tsx`. Ortak kabuk ve primitifler `components/auth/p-auth/**` (AuthCard, PasswordField, TwoFactorStep/OtpField, OAuthButtons, DemoAccounts, SignedInPanel, copy TR/EN). QDL v2 ops kaydı: `surface-1` düz kart, ince kenarlık, tek CSS giriş (`qx-enter`, azaltılmış harekette kapalı), landing gradient zemini kaldırıldı.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Kart giriş animasyonu | ÇALIŞIYOR | framer yerine tek CSS `qx-enter` (ops: tek giriş). |
+| 2 | Logo → ana sayfa | ÇALIŞIYOR | `mounted` beklemesi kaldırıldı; iki tema görseli CSS `dark:` ile, ilk HTML'de (CLS yok). |
+| 3 | Tema değiştirici | ÇALIŞIYOR | İkon CSS ile seçilir; yanına TR/EN dil değiştirici eklendi. |
+| 4 | İçeriğe geç | ÇALIŞIYOR | |
+| 5 | Gradient mesh zemin | KALDIRILDI | Yol haritası §4.2: auth'ta landing zemini yok; `surface-0` sakin zemin. |
+| 6 | Başlık / alt başlık | ÇALIŞIYOR | "Giriş yap · Puanların, ödüllerin ve panelin seni bekliyor"; QR'dan gelince "X geri bildirimine dön". |
+| 7 | Demo hesap kartları | ÇALIŞIYOR | Proje sahibinin kararıyla KALIR; formun altına ikincil bölüm olarak taşındı (tüketicinin ilk gördüğü şey değil). |
+| 8 | Demo tek tık giriş | ÇALIŞIYOR | `callbackUrl` güvenli hedefle uygulanır, 2FA adımı işlenir, 500 ms yapay bekleme yok, başarısızlık kalıcı bantta. |
+| 9 | Google ile giriş | ÇALIŞIYOR | Güvenli `next` yolu; kayıt ekranından kalmış "işletme" niyeti çerezi girişte temizlenir. |
+| 10 | GitHub ile giriş | ÇALIŞIYOR | Yapılandırılmışsa kayıtla tutarlı biçimde gösterilir. |
+| 11 | Ayırıcılar | ÇALIŞIYOR | Tek "veya" ayırıcısı. |
+| 12 | E-posta alanı | ÇALIŞIYOR | `autocomplete=username`, `autocapitalize=none`, normalize, satır içi hata. |
+| 13 | Şifre alanı | ÇALIŞIYOR | `current-password`, girişte yalnız boş kontrolü. |
+| 14 | Göster/gizle | ÇALIŞIYOR | 44×44, `aria-pressed`. |
+| 15 | Alan hataları | ÇALIŞIYOR | `errorId` → `aria-describedby`. |
+| 16 | Şifremi unuttum | ÇALIŞIYOR | callback + yazılan e-posta (sessionStorage, URL'de değil) taşınır; mail kapalıysa hedef sayfa bunu baştan söyler. |
+| 17 | Giriş butonu | ÇALIŞIYOR | |
+| 18 | Kimlik bilgisi hata bildirimi | ÇALIŞIYOR | Kilit/oran sınırı geri sayımı, doğrulanmamış → yeniden gönder, askı, OAuth hataları kalıcı bantta. |
+| 19 | Başarı + rol yönlendirmesi | ÇALIŞIYOR | Toast yerine "Yönlendiriliyorsun…" bandı; STAFF → /staff (A1 tek kaynak). |
+| 20 | callbackUrl yönlendirmesi | ÇALIŞIYOR | A1 `resolvePostLoginTarget`. |
+| 21 | 2FA adımı | ÇALIŞIYOR | 6 hücreli OTP (tek gerçek input, `one-time-code`, yapıştırma, 6. hanede otomatik gönderim) + "kurtarma kodu kullan" modu; bağlantıyla girişle ortak bileşen. |
+| 22 | 2FA "auth.loading" | ÇALIŞIYOR | Buton `loading` prop'u. |
+| 23 | 2FA hataları | ÇALIŞIYOR | TR/EN; kilitte 2FA'dan çıkıp bant. |
+| 24 | 2FA geri | ÇALIŞIYOR | |
+| 25 | Magic link formu | ÇALIŞIYOR | İkinci e-posta alanı kaldırıldı; ana e-posta alanını kullanan "Şifresiz giriş bağlantısı gönder"; yanıt varlıktan bağımsız. |
+| 26 | "Mail yapılandırılmadı" altyapı metni | KALDIRILDI | Mail yoksa bölüm hiç çizilmez (sunucu bayrağı). |
+| 27 | Demo bilgileri kutusu | ÇALIŞIYOR | Sahip kararıyla korunur; açılır `<details>` içinde. |
+| 28 | Kayıt bağlantısı | ÇALIŞIYOR | callback + e-posta taşınır. |
+| 29 | `?registered=true` toast'ı | KALDIRILDI | Hiçbir yer üretmiyordu (ölü kod). |
+| 30 | Özellik bayrakları fetch | ÇALIŞIYOR | Sunucuda okunur (`getAuthFeatures`). |
+| 31 | Suspense yedeği | KALDIRILDI | Sayfa sunucuda çizildiği için gereksiz. |
+| 32 | Segment hata sınırı | ÇALIŞIYOR | Aynı AuthCard diliyle yeniden yazıldı. |
+| 33 | Metadata | ÇALIŞIYOR | |
+| 34 | Oturum açıksa | ÇALIŞIYOR | Sessiz yönlendirme yerine "Zaten giriş yaptın · Devam et / Çıkış yap, başka hesapla gir" kartı. |
+| 35 | NextAuth hata/verify sayfaları | ÇALIŞIYOR | A1; AuthCard diliyle yeniden çizildi. |
+| 36 | Doğrulama e-postasını yeniden gönder | ÇALIŞIYOR | |
+| 37 | Beni hatırla / uzun oturum | KALAN | Rol bazlı oturum süresi `lib/auth.ts` jwt politikası (F1.2, güvenlik sahibi) — UX dalgasında değiştirilmedi. |
+| 38 | Kilit geri sayımı | ÇALIŞIYOR | |
+| 39 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 40 | Passkey / Apple / SMS | KALAN | WebAuthn kimlik tablosu ve SMS sağlayıcısı yok → ŞEMA İSTEĞİ (Authenticator modeli); Apple anahtarları ortam işi. |
+| 41 | Giriş hunisi analitiği | ÇALIŞIYOR | `login_method_selected`, `login_succeeded{method}`, `login_failed{method,code}`, `magic_link_requested` (rızaya bağlı `track`). |
+
+**Kapanan bulgular:** 1 (A1), 3 (A1 + yeni kart), 4, 5 (QR bağlam bandı, demo alta), 6, 7, 8 (A1), 10, 11, 12, 13 → 11/13.
+**Kalanlar:** Bulgu 2 (demo bloğu üretimde) proje sahibinin kararıyla bilinçli olarak açık; Bulgu 9 (beni hatırla) güvenlik/oturum politikası işi. Passkey/Apple/SMS altyapı gerektirir.
+**Doğrulama:** `npx jest __tests__/api/auth-p-auth.test.ts` (22 test) + A1 kimlik paketleri yeşil; kapsamlı tsc 0 hata. Tarayıcıda görsel doğrulama yapılmadı (dev server yasak).

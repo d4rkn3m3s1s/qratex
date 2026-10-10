@@ -184,6 +184,7 @@ export type AuthCopy = {
   resetFailed: string;
   resetRateLimited: string;
   resetUnknownBody: string;
+  resetForAccount: (masked: string, minutes: number) => string;
 
   // ── Magic ──
   magicWorkingTitle: string;
@@ -469,6 +470,7 @@ const TR: AuthCopy = {
   resetFailed: 'Şifre güncellenemedi. Lütfen tekrar dene.',
   resetRateLimited: 'Çok fazla deneme yapıldı. Biraz sonra tekrar dene.',
   resetUnknownBody: 'Bağlantın şu an kontrol edilemedi; yine de yeni şifreni kaydetmeyi deneyebilirsin.',
+  resetForAccount: (masked, minutes) => `${masked} hesabı için · bağlantı ${minutes} dk daha geçerli`,
 
   magicWorkingTitle: 'Giriş yapılıyor',
   magicWorkingBody: 'Bağlantın kontrol ediliyor…',
@@ -713,6 +715,7 @@ const EN: AuthCopy = {
   resetFailed: 'Password could not be updated. Please try again.',
   resetRateLimited: 'Too many attempts. Try again shortly.',
   resetUnknownBody: 'We couldn’t check your link right now; you can still try saving a new password.',
+  resetForAccount: (masked, minutes) => `For ${masked} · link valid for ${minutes} more min`,
 
   magicWorkingTitle: 'Signing you in',
   magicWorkingBody: 'Checking your link…',

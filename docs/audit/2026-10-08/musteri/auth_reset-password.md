@@ -294,3 +294,54 @@ Yöntem: ilgili kod baştan okundu (`page.tsx`, `lib/auth-email-token.ts`, `app/
 - Ancak yarışa girebilmek için token'a sahip olmak gerekir. Token sahibi tek bir istekle zaten şifreyi değiştirebilir, yarış ona ek bir yetki kazandırmaz. Sızıntı kanalı olarak gösterilen PostHog da (iddia 1) canlıda kapalı. Meşru kullanıcının çift tıklaması `disabled={loading}` (`page.tsx:110`) ile engelleniyor, iki istek gitse bile aynı kişinin şifresi yazılır.
 - Somut bir kullanıcı ya da veri etkisi kurulamadı.
 - Yine de `updateMany({where:{id, consumedAt:null}})` + `count === 1` deseni (puan ekonomisindeki atomik tek-seferlik kredi kuralıyla tutarlı) ucuz bir sağlamlaştırma. Aynı desen `consumeMagicLoginToken` (`:113-116`) için de uygulanmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (atomik token tüketimi + `sessionVersion`, ucuz kontrol önce bcrypt sonra, token'ın URL'den silinmesi, analitik redaksiyonu) korundu.
+
+**Mimari:** `page.tsx` sunucu bileşeni — bağlantı YAN ETKİSİZ ön-doğrulanır (token tüketilmez): geçerliyse hesabın maskeli e-postası ve kalan dakika, değilse doğrudan "yeni bağlantı iste" ekranı. `reset-password-view.tsx` üç durumlu: form · geçersiz · başarı (kart içi). Şifre politikası kayıtla aynı (sunucuda da zorunlu).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Logo | ÇALIŞIYOR | `mounted` kapısı kaldırıldı. |
+| 2 | Tema | ÇALIŞIYOR | |
+| 3 | İçeriğe atla | ÇALIŞIYOR | |
+| 4 | Gradient zemin | KALDIRILDI | Ops kaydı. |
+| 5 | Suspense yedeği | KALDIRILDI | Sunucu render. |
+| 6 | Kart animasyonu | ÇALIŞIYOR | Tek CSS girişi. |
+| 7 | Başlık ve açıklama | ÇALIŞIYOR | "Yeni şifreni belirle · kaydettiğinde diğer cihazlardaki oturumların kapatılır". |
+| 8 | Token'ı URL'den okuma | ÇALIŞIYOR | Sunucudan prop; istemci adres çubuğundan siler. |
+| 9 | Token yokken uyarı | ÇALIŞIYOR | Form gösterilmez; "Bağlantı geçersiz ya da süresi dolmuş" + "Yeni bağlantı iste". |
+| 10 | Yeni şifre alanı | ÇALIŞIYOR | Ortak PasswordField. |
+| 11 | Şifre tekrar alanı | ÇALIŞIYOR | Aynı ikon/dil + canlı eşleşme. |
+| 12 | En az 8 karakter | ÇALIŞIYOR | Tam politika (küçük/büyük harf + rakam), sunucuda da. |
+| 13 | Eşleşme kontrolü | ÇALIŞIYOR | Canlı. |
+| 14 | Üst sınır 128 | ÇALIŞIYOR | İstemci `maxLength` + `PASSWORD_TOO_LONG` kodu. |
+| 15 | Gönder butonu | ÇALIŞIYOR | Başarıda form kalkar; tüketilmiş token'la ikinci gönderim mümkün değil. |
+| 16 | API çağrısı | ÇALIŞIYOR | |
+| 17 | Hız sınırı | ÇALIŞIYOR | Kod → TR/EN metin. |
+| 18 | Hata gösterimi | ÇALIŞIYOR | Satır içi / kalıcı bant; `INVALID_LINK` doğrudan geçersiz ekranına geçer. |
+| 19 | Başarı + yönlendirme | ÇALIŞIYOR | Kart içi başarı paneli + "Giriş yap" (`?reset=1` → girişte kalıcı bilgi bandı). |
+| 20 | callbackUrl taşıma | ÇALIŞIYOR | A1 süzgeci. |
+| 21 | "Girişe dön" | ÇALIŞIYOR | 44px. |
+| 22 | Tek kullanımlık token | ÇALIŞIYOR | A1 atomik. |
+| 23 | bcrypt sırası | ÇALIŞIYOR | A1 (ve politika kontrolü bcrypt'ten de önce). |
+| 24 | Oturum iptali | ÇALIŞIYOR | A1 `sessionVersion`. |
+| 25 | "Şifren değiştirildi" e-postası | ÇALIŞIYOR | Yanıttan sonra (`after`), "bu sen değilsen şifreni sıfırla" bağlantısıyla (`lib/email.ts` → `sendPasswordChangedEmail`, eklemeli). |
+| 26 | Denetim kaydı | ÇALIŞIYOR | `PASSWORD_RESET` (IP/UA meta). |
+| 27 | Açılışta token ön doğrulaması | ÇALIŞIYOR | Sunucuda, yan etkisiz. |
+| 28 | "Yeni bağlantı iste" CTA | ÇALIŞIYOR | Callback korunarak şifremi-unuttum'a. |
+| 29 | Göster/gizle | ÇALIŞIYOR | İki alan birlikte. |
+| 30 | Güç göstergesi + kurallar | ÇALIŞIYOR | 4 segment + metin + canlı kural listesi. |
+| 31 | Satır içi hata + aria | ÇALIŞIYOR | |
+| 32 | Segment hata sınırı | ÇALIŞIYOR | |
+| 33 | noindex + başlık | ÇALIŞIYOR | |
+| 34 | Token URL temizliği / analitik | ÇALIŞIYOR | A1. |
+| 35 | Parola yöneticisi kullanıcı adı | ÇALIŞIYOR | Gizli `username` alanı geçerli bağlantının hesabıyla dolu. |
+| 36 | Diğer token'ların iptali | ÇALIŞIYOR | A1. |
+
+**Kapanan bulgular:** 1 (A1), 2 (A1), 3 (A1), 4 (e-posta + denetim), 5 (ön doğrulama + yeni bağlantı), 6 (kodlar), 7 (A1), 8 (PasswordField), 9 (başarı paneli), 10 (A1), 11, 12 (ortak AuthCard) → 12/12.
+**Kalanlar:** Sızmış parola (HIBP) kontrolü ve "yeni şifre eskisiyle aynı" uyarısı uygulanmadı (dış servis çağrısı / ürün kararı); "Bu ben değildim → hesabı kilitle" tek tık akışı yeni token amacı gerektirir (kalıcı çözüm şu an: e-postadaki bağlantıyla hemen yeni sıfırlama).
+**Doğrulama:** `__tests__/api/auth-p-auth.test.ts` (politika → WEAK_PASSWORD) + `__tests__/api/auth-session-rotation.test.ts` yeşil.

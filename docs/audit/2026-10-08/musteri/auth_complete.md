@@ -201,3 +201,47 @@ Yöntem: her iddia çürütülmeye çalışılarak çağıran/çağrılan kod, `
 - **Not:** Hata `/auth/complete`'in kendi kodunda değil, kayıt/OAuth akışında; ama bu sayfa niyetin işlenebileceği tek ara durak olduğu için rapordaki sahiplik makul. Önerilen `intent=dealer` + sunucu doğrulamalı rol ucu yaklaşımı doğru yön; ucuz ara çözüm olarak DEALER seçiliyken OAuth düğmelerini gizlemek veya `/auth/complete`'te "İşletme hesabı e-posta ile oluşturulur" açıklaması gösterilmesi de geçerli.
 
 **Özet:** 3 iddianın 3'ü de doğrulandı; hiçbiri çürütülemedi. 1 numara canlıda acil düzeltilmeli (ortak güvenli yönlendirme yardımcısı + `safePostLoginRedirect` ters bölü düzeltmesi).
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (P0-02 güvenli `next`, dürüst davet sonucu `referral-outcome.ts`, OAuth niyet çerezi, işletme uyuşmazlığı açıklaması) korundu.
+
+**Mimari:** `page.tsx` sunucu bileşeni — oturum, şifre durumu, sağlayıcı ve rol DB'den ilk HTML ile gelir (istemci GET + spinner turu kalktı); oturum yoksa `ref` ve `next` korunarak girişe gönderilir. Adımlar `complete-view.tsx`; kart, şifre alanı ve bantlar ortak `components/auth/p-auth/**`.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Suspense yedeği | KALDIRILDI | Sunucu render. |
+| 2 | Oturum yüklenirken bekleme | KALDIRILDI | Oturum sunucuda okunur. |
+| 3 | Oturumsuz → giriş | ÇALIŞIYOR | `callbackUrl=/auth/complete?ref&next` ile; davet ve hedef kaybolmaz. |
+| 4 | Şifre var mı | ÇALIŞIYOR | Sunucuda (DB hatasında isteğe bağlı adım atlanır). |
+| 5 | Başlık + açıklama | ÇALIŞIYOR | Sağlayıcı adı (Google/GitHub) DB'den. |
+| 6 | Şifre alanı | ÇALIŞIYOR | `<form>`, `new-password`, gizli `username` (hesap e-postası). |
+| 7 | Göster/gizle | ÇALIŞIYOR | 44×44. |
+| 8 | Şifre politikası | ÇALIŞIYOR | Kayıtla AYNI kural (istemci canlı + `/api/auth/set-password` sunucu zorunlu). |
+| 9 | Enter ile gönderme | ÇALIŞIYOR | Gerçek form. |
+| 10 | Kaydet + yükleniyor | ÇALIŞIYOR | |
+| 11 | Hata gösterimi | ÇALIŞIYOR | Kodlu (`WEAK_PASSWORD`, `PASSWORD_TOO_LONG`, `RATE_LIMITED`, `ALREADY_SET`) → TR/EN; `aria-describedby`. |
+| 12 | "Şimdilik atla" | ÇALIŞIYOR | Bu cihazda hatırlanır; hesap bazlı kalıcılık ŞEMA İSTEĞİ (`passwordPromptDismissedAt`). |
+| 13 | Davet uygulama | ÇALIŞIYOR | |
+| 14 | "Bonus eklendi" ekranı | ÇALIŞIYOR | A1: yalnız gerçekten işlenen ödülde, puan miktarıyla. |
+| 15 | "İşleniyor" ara durumu | ÇALIŞIYOR | |
+| 16 | `next` yönlendirmesi | ÇALIŞIYOR | A1 tek kaynak. |
+| 17 | Yönlendirme gecikmesi | ÇALIŞIYOR | Zamanlayıcı temizlenir; davetsiz akışta bekleme yok. |
+| 18 | Canlı bölge | ÇALIŞIYOR | AuthCard `live`. |
+| 19 | Segment hata sınırı | ÇALIŞIYOR | |
+| 20 | Metadata | ÇALIŞIYOR | |
+| 21 | Kabuk | ÇALIŞIYOR | Ortak AuthShell. |
+| 22 | Rol niyeti (DEALER + OAuth) | ÇALIŞIYOR | A1 niyet çerezi + kayıt ekranı niyet yazılamazsa OAuth'u durdurur; girişten başlatılan OAuth eski niyeti temizler; mevcut müşteri hesabına bağlanınca açıklama kartı. |
+| 23 | i18n | ÇALIŞIYOR | Tüm metinler TR/EN, tek hitap ("sen"). |
+| 24 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 25 | Şifre gücü | ÇALIŞIYOR | Ortak PasswordField. |
+| 26 | Davet ödülü miktarı | ÇALIŞIYOR | "+N puan". |
+| 27 | Profil tamamlama | KALDIRILDI | Bu sayfanın kapsamı değil (müşteri karşılama `OnboardingSheet`'in işi); sahte adım eklenmedi. |
+| 28 | Denetim kaydı | ÇALIŞIYOR | `SET_INITIAL_PASSWORD` (Ayarlar'daki eş uçla aynı iz). |
+| 29 | İlk anlamlı aksiyona bağlama | KALDIRILDI | Müşteri ana sayfa/karşılama yüzeyinin işi; burada yönlendirme güvenli hedefe gider. |
+
+**Kapanan bulgular:** 1 (A1), 2 (A1), 3 (A1 + istemci), 5 (iki şifre ucu aynı politikaya + denetim kaydına bağlandı), 6, 7, 8, 9 → 8/10. Bulgu 4 kısmen (cihaz bazlı).
+**Kalanlar:** Bulgu 4'ün hesap bazlı kalıcılığı (ŞEMA İSTEĞİ); Bulgu 10 (mevcut kullanıcının davet kodu) ürün kararı, `/api/referral` sahibinin işi.
+**Doğrulama:** `__tests__/api/auth-p-auth.test.ts` (set-password: 401, WEAK_PASSWORD, atomik yazım + denetim, ALREADY_SET) + `__tests__/lib/auth-pages.test.ts` yeşil.

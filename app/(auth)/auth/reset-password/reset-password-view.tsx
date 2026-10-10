@@ -23,9 +23,12 @@ export function ResetPasswordView({
   token,
   initialStatus,
   rawCallback,
+  account = null,
 }: {
   token: string;
   initialStatus: ResetTokenStatus;
+  /** Geçerli bağlantının hesabı (sunucudan): maskeli gösterim + parola yöneticisi kullanıcı adı. */
+  account?: { email: string; masked: string; minutesLeft: number } | null;
   rawCallback: string | null;
 }) {
   const copy = useAuthCopy();
@@ -147,10 +150,11 @@ export function ResetPasswordView({
       }
     >
       {status === 'unknown' ? <AuthNotice tone="info">{copy.resetUnknownBody}</AuthNotice> : null}
+      {account ? <p className="qx-small text-center text-fg-muted">{copy.resetForAccount(account.masked, account.minutesLeft)}</p> : null}
       {formError ? <AuthNotice tone="danger">{formError}</AuthNotice> : null}
       <form onSubmit={submit} noValidate className="space-y-4">
         {/* Parola yöneticisi yeni şifreyi hesapla eşleştirebilsin diye kullanıcı adı ipucu. */}
-        <input type="text" name="username" autoComplete="username" hidden readOnly value="" />
+        <input type="email" name="username" autoComplete="username" hidden readOnly value={account?.email ?? ''} />
         <PasswordField
           id="reset-password"
           name="new-password"

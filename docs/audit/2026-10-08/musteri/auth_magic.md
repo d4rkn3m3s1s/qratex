@@ -216,3 +216,46 @@ Kod salt okunur incelendi; veritabanına, dev server'a, build'e veya testlere do
   - (a) `localStorage`'da `en` kayıtlı kullanıcıda `AppLocaleProvider` mount efekti (`:24-29`) `tr→en` geçişini yapıyor. Bu geçişin `MagicInner` efektinden önce mi sonra mı işleneceği hidrasyon sırasına bağlı. `MagicInner`, `useSearchParams` nedeniyle bir `Suspense` sınırının içinde ve sınır ayrı bir hidrasyon/istemci-render geçişinde mount olabilir. Öyle olursa `t` zaten `en` kimliğindedir ve yeniden çalışma olmaz.
   - (b) Oturum yolu: `preferredLanguage` değişikliği `signIn` içindeki `await __NEXTAUTH._getSession()` (`next-auth/react/index.js:268-275`) sırasında state'e yazılıyor. Ancak React 18 bu render'ı zamanlayıcıyla sonraya bırakıyor. `await signIn` devamındaki `if (cancelled)` kontrolü bir mikro görevde çalıştığı için büyük olasılıkla temizlikten önce geçiliyor.
 - Somut bir üretim senaryosu tarayıcıda gözlenmeden "doğrulandı" denemez. Veri kaybı veya güvenlik etkisi yok: kullanıcı oturum açmış durumda, yalnızca yanlış bir hata görüyor. Yine de düzeltme ucuz ve doğru: `t`'yi bağımlılıklardan çıkarıp `useRef` ile okumak, tüketimi `useRef` kilidiyle tek seferlik yapmak, `cancelled` durumunda sonucu yok saymak yerine "zaten giriş yapıldı mı" kontrolüne (`getSession`) düşmek.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (ortak güvenli hedef, magic link'te 2FA ara adımı, atomik tüketim, `useRef` kilidi, token'ın URL'den silinmesi, analitik redaksiyonu, e-posta başına sınır) korundu.
+
+**Mimari:** `page.tsx` sunucu bileşeni (token/via/callback, bağlantıyla giriş bayrağı ve açık oturum sunucuda); `magic-view.tsx` durum makinesi: `confirm_switch → working → two_factor | done | error | network`. 2FA adımı girişle ortak `TwoFactorStep` (6 hücreli OTP + kurtarma kodu).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Suspense yedeği | KALDIRILDI | Sunucu render; yükleme durumu aynı kart iskeletinde (`live=polite`). |
+| 2 | URL'den token okuma | ÇALIŞIYOR | Sunucudan prop. |
+| 3 | Token yoksa hata | ÇALIŞIYOR | "Bağlantı geçersiz" + aynı kartta yeni bağlantı isteme formu. |
+| 4 | Otomatik giriş | ÇALIŞIYOR | Tek seferlik kilit (A1). |
+| 5 | Sunucu doğrulama/tüketim | ÇALIŞIYOR | A1 atomik + 2FA. |
+| 6 | Token üretimi | ÇALIŞIYOR | |
+| 7 | Hata toast'ı | KALDIRILDI | Çift mesaj; yerine kalıcı kart. |
+| 8 | Ağ hatası | ÇALIŞIYOR | Ayrı `network` durumu: "Bağlantın henüz kullanılmadı · Tekrar dene" (aynı token ile). |
+| 9 | Başarı durumu | ÇALIŞIYOR | Onay ikonu + "yönlendiriliyorsun". |
+| 10 | callbackUrl koruması | ÇALIŞIYOR | A1. |
+| 11 | Varsayılan hedef | ÇALIŞIYOR | Rol ana sayfası (landing sıçraması yok). |
+| 12 | "Girişe dön" | ÇALIŞIYOR | callback korunur. |
+| 13 | "Yeni bağlantı gönder" | ÇALIŞIYOR | Hata kartında e-posta yazıp aynı yerden yeni bağlantı (bağlantıyla giriş açıksa); yanıt varlıktan bağımsız. |
+| 14 | Hata nedeni ayrımı | KALAN | Sunucu tek `INVALID_LINK` döner; süresi doldu/kullanıldı/yenisi istendi ayrımı `lib/auth.ts` + `AuthEmailToken.supersededAt` (ŞEMA İSTEĞİ) gerektirir. |
+| 15 | Ekran okuyucu duyurusu | ÇALIŞIYOR | Durum kartları `status`/`alert`; hata/ağ durumunda odak başlığa. |
+| 16 | Başlık hiyerarşisi | ÇALIŞIYOR | `h1`. |
+| 17 | Kabuk | ÇALIŞIYOR | |
+| 18 | İçeriğe atla | ÇALIŞIYOR | |
+| 19 | Metadata | ÇALIŞIYOR | |
+| 20 | i18n | ÇALIŞIYOR | Sayfa TR/EN; bağlantı e-postası şablonu TR (ortak `lib/email` — kalan). |
+| 21 | Segment hata sınırı | ÇALIŞIYOR | |
+| 22 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 23 | Mobil yerleşim | ÇALIŞIYOR | |
+| 24 | Token'ı URL'den silme | ÇALIŞIYOR | A1. |
+| 25 | Başka hesapla açık oturum uyarısı | ÇALIŞIYOR | Oturum açıksa bağlantı otomatik TÜKETİLMEZ: "X hesabıyla oturumun açık · Bağlantıyla giriş yap / Açık oturumla devam et". |
+| 26 | Özellik kapatılınca bekleyen token'lar | KALAN | `authorize` magic dalında site ayarı okunması (`lib/auth.ts`, güvenlik sahibi); 15 dk'lık pencere, düşük risk. |
+| 27 | Kod ile giriş (OTP) | KALAN | E-postada kod üretimi + `codeHash` alanı → ŞEMA İSTEĞİ. |
+| 28 | Giriş analitiği | ÇALIŞIYOR | `login_succeeded{method:magic|oauth_2fa}`, `login_failed{code}`, `magic_link_requested`. |
+| 29 | Dönüş anı (hoş geldin) | KALDIRILDI | Bu geçiş ekranında 3B/özet yok (yol haritası §4.2); karşılama müşteri ana sayfası / An Motoru'nun işi. |
+
+**Kapanan bulgular:** 1 (A1), 2 (A1), 3 (A1), 4 (A1), 5 (ağ durumu), 6 (A1), 7 (rol hedefi), 8 (kısmen: yeni bağlantı tek ekranda; neden ayrımı kalan), 9 (A1), 10, 12 → 10/12 tam, 1 kısmi.
+**Kalanlar:** Bulgu 8'in neden ayrımı ve Bulgu 11 (e-posta şablonu dili) — ortak `lib/auth.ts` / `lib/email.ts` + şema işi.

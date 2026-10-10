@@ -237,3 +237,46 @@ Her iddia çürütülmeye çalışıldı. Okunan kaynaklar: `app/api/auth/verify
 - `reactStrictMode: true` (`next.config:258`) yalnız **dev**'de efekti iki kez çalıştırır; üretim için tek başına geçerli değil. Ancak üretimde de somut bir tetikleyici var: efekt bağımlılığı `[token, t]` (`page.tsx:53`) ve `useAppT` `locale`'e göre yeni fonksiyon döndürüyor (`lib/app-locale.tsx:57-60`). `localStorage`'da `en` kayıtlı kullanıcıda `AppLocaleProvider` ilk render'da `tr` ile başlayıp efektte `en`'e geçiyor (`lib/app-locale.tsx:21-29`) → `t` değişir → ikinci fetch atılır; iptal/`cancelled` koruması olmadığından son gelen yanıt durumu belirler. İkinci yanıt (P2025 500 ya da "geçersiz link") sonra gelirse kullanıcı doğrulandığı halde hata ekranı görür.
 - Veri kaybı/güvenlik etkisi yok; etkisi yanıltıcı UX ve gereksiz destek talebi. Bu yüzden KRİTİK/YÜKSEK değil, ORTA.
 - **Yeniden üretim:** Tarayıcıda `localStorage` locale anahtarını `en` yap → doğrulama linkini aç → Network'te iki `GET /api/auth/verify-email` görülür; sıralamaya göre ekran hata ile biter. Ya da başarılı doğrulamadan sonra aynı linke tekrar tıkla.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (POST + idempotent `verifyEmailWithToken`, durum kodları, `expired` + maskeli e-posta, resend ucu, hash'li token, oran sınırı, `qualifyReferral`) korundu.
+
+**Mimari:** `page.tsx` sunucu bileşeni (token prop; GET yan etkisiz). `verify-email-view.tsx` her durumu ortak AuthCard ile çizer; geçersiz bağlantı ortak `VerifyPending` kartına (e-posta yazarak yeniden gönder) düşer. Kayıt artık hash'li `AuthEmailToken` üretir (eski düz metin `VerificationToken` yalnız geçiş için okunur).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Suspense yedeği | KALDIRILDI | Sunucu render; yükleme aynı kart iskeletinde (yerleşim sıçraması yok). |
+| 2 | URL'den token | ÇALIŞIYOR | |
+| 3 | Token yoksa hata | ÇALIŞIYOR | "Bağlantı geçersiz" bandı + yeniden gönder kartı. |
+| 4 | Doğrulama API çağrısı | ÇALIŞIYOR | A1 POST. |
+| 5 | Yükleniyor | ÇALIŞIYOR | `live=polite`. |
+| 6 | Başarı mesajı | ÇALIŞIYOR | TR/EN, sunucu metni kullanılmaz. |
+| 7 | Başarı → "Giriş yap" | ÇALIŞIYOR | `?verified=1` → girişte kalıcı "e-postan doğrulandı" bandı. Otomatik giriş kalan (aşağıda). |
+| 8 | Hata mesajı | ÇALIŞIYOR | Duruma özel kart. |
+| 9 | "Yeniden Kayıt" | KALDIRILDI | Çıkmazdı ("zaten kayıtlı"). |
+| 10 | Hata → "Giriş Yap" | ÇALIŞIYOR | Yalnız anlamlı durumlarda; doğrulanmamış girişte yeniden gönder bandı. |
+| 11 | Süresi dolmuş ayrımı | ÇALIŞIYOR | Tek dokunuşla (e-posta yazdırmadan) yeni bağlantı + geri sayım. |
+| 12 | "Zaten doğrulandı" | ÇALIŞIYOR | Başarı tonu. |
+| 13 | Yeniden gönderme | ÇALIŞIYOR | |
+| 14 | Bağlantı hatası tekrar dene | ÇALIŞIYOR | |
+| 15 | aria-live | ÇALIŞIYOR | Hata `alert`; sonuçta odak başlığa. |
+| 16 | Metadata | ÇALIŞIYOR | |
+| 17 | AuthShell | ÇALIŞIYOR | Logo CLS'siz, dil + tema. |
+| 18 | İçeriğe atla | ÇALIŞIYOR | |
+| 19 | Segment hata sınırı | ÇALIŞIYOR | Aynı kart diliyle. |
+| 20 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 21 | Mobil yerleşim | ÇALIŞIYOR | İç içe `min-h-dvh` yok; mobilde üstten hizalı. |
+| 22 | Başlık hiyerarşisi | ÇALIŞIYOR | `h1`. |
+| 23 | Token'ı URL'den temizleme | ÇALIŞIYOR | |
+| 24 | Doğrulama sonrası otomatik giriş | KALAN | Doğrulama ucunun kısa ömürlü giriş bileti üretmesi bir güvenlik politikası kararıdır (2FA'lı hesaplar, bağlantı tarayıcıları) — `lib/auth-email-token` / F1.2 sahibi. |
+| 25 | Hoş geldin ödülü anı | KALDIRILDI | Ödül doğrulamada değil ilk QR deneyiminde işlenir (A1 P0-16); burada sahte sayaç gösterilmez, bekleyen davet kayıt ekranında dürüstçe anlatılır. |
+| 26 | Analitik (`email_verified`) | ÇALIŞIYOR | `track('email_verified', { outcome })` — tüm sonuçlar ayrı. |
+| 27 | API oran sınırı | ÇALIŞIYOR | A1. |
+| 28 | Token saklama güvenliği | ÇALIŞIYOR | Kayıt artık hash'li token üretir. |
+| 29 | Eşzamanlı istek | ÇALIŞIYOR | A1 atomik. |
+
+**Kapanan bulgular:** B1 (A1 + şifremi-unuttum doğrulama dalı), B2 (A1 + kart), B3 (A1), B4 (A1), B5 (A1), B6, B8, B9, B10, B11 (kayıt hash'li token), B12 (A1 `claimUnverifiedAccount`), B13 (A1) → 12/13.
+**Kalanlar:** B7 (otomatik giriş) güvenlik politikası kararı; `?verified=1` ile kalıcı bant + tek dokunuşla giriş ekranı şimdilik karşılık.

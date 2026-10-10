@@ -212,3 +212,49 @@
 - Şifre sıfırlama: `route.ts:61` `toLowerCase()` → `ahmet@gmail.com` aranır, bulunamaz, satır 84-91 yine "gönderildi" der; mail hiç gelmez. Kullanıcı formu hangi harflerle doldurursa doldursun sonuç aynıdır.
 - **Yeniden üretim:** `Ahmet@Gmail.com` ile kayıt ol → maildeki linkle doğrula → `/auth/forgot-password`'a `Ahmet@Gmail.com` yaz → başarı mesajı gelir, mail gelmez (kilitli kalma; destek talebi gerektirir).
 - **Öneri:** Tek bir `normalizeEmail()` (trim + lowercase) yardımcısını register, credentials authorize, magic-link, forgot/reset, verify-email ve OAuth bağlama yollarında zorunlu kullanın; canlı veride önce `lower(email)` çakışma raporu çıkarıp sonra tek seferlik göç ve `lower(email)` üzerinde benzersiz indeks (veya `citext`) ekleyin. Göç tamamlanana dek geçici olarak forgot-password'da `findFirst({ where: { email: { equals, mode: 'insensitive' } } })` kullanılabilir (çoklu eşleşmede gönderim yapılmamalı).
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (ortak callback süzgeci, `after()` ile varlıktan bağımsız yanıt, e-posta başına sınır, normalize) korundu.
+
+**Mimari:** `page.tsx` sunucu bileşeni — e-posta gönderiminin yapılandırılıp yapılandırılmadığı, bağlantıyla girişin açık olup olmadığı ve oturum durumu ilk HTML ile gelir. İki durumlu kart `forgot-password-view.tsx` (`form` → `sent`), mail kapalıysa üçüncü durum (`unavailable`).
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Logo | ÇALIŞIYOR | `mounted` kapısı kaldırıldı. |
+| 2 | Tema | ÇALIŞIYOR | + TR/EN dil değiştirici. |
+| 3 | İçeriğe geç | ÇALIŞIYOR | |
+| 4 | Gradient zemin | KALDIRILDI | Ops kaydı. |
+| 5 | Sekme başlığı + noindex | ÇALIŞIYOR | |
+| 6 | Suspense yedeği | KALDIRILDI | Sunucu render. |
+| 7 | Kart animasyonu | ÇALIŞIYOR | Tek CSS girişi. |
+| 8 | Başlık ve açıklama | ÇALIŞIYOR | `h1`, "Şifreni sıfırla". |
+| 9 | E-posta alanı | ÇALIŞIYOR | `enterKeyHint=send`, `autocapitalize=none`; girişte yazılan e-posta ön doldurulur. |
+| 10 | Boş e-posta kontrolü | ÇALIŞIYOR | Satır içi mesaj. |
+| 11 | Gönder butonu | ÇALIŞIYOR | |
+| 12 | API çağrısı | ÇALIŞIYOR | İstemci sunucunun Türkçe cümlesini değil `code`'u okur (EN kullanıcıya TR metin yok). |
+| 13 | Karışık harfli e-posta | ÇALIŞIYOR | A1 normalize. |
+| 14 | callbackUrl taşıma | ÇALIŞIYOR | A1 süzgeci + istemci güvenli yol. |
+| 15 | Başarı geri bildirimi | ÇALIŞIYOR | Kalıcı "Gelen kutunu kontrol et" kartı (odak başlığa taşınır, `aria-live`). |
+| 16 | Mail yapılandırılmamış (503) | ÇALIŞIYOR | Sayfa açılışında bilinir; form yerine dürüst "şu an gönderemiyoruz" kartı, yönetici talimatı yok. |
+| 17 | Genel/ağ hatası | ÇALIŞIYOR | Kalıcı bant. |
+| 18 | Hız sınırı | ÇALIŞIYOR | A1 e-posta başına kova; `Retry-After` varsa yeniden gönder geri sayımına yansır. |
+| 19 | Hesap sayımı koruması | ÇALIŞIYOR | A1 `after()`; doğrulanmamış hesap dalı da aynı yanıtı verir. |
+| 20 | Token üretimi | ÇALIŞIYOR | |
+| 21 | Sıfırlama e-postası dili | KALAN | Şablon TR; dile göre şablon ortak `lib/email.ts` + `User.preferredLanguage` işi (birden çok yüzeyi etkiler). |
+| 22 | Doğrulanmamış hesap | ÇALIŞIYOR | Çıkmaz kapandı: sıfırlama yerine yeni doğrulama bağlantısı gönderilir; ekrandaki metin bunu söyler. |
+| 23 | Girişe dön | ÇALIŞIYOR | 44px, callback korunur. |
+| 24 | Kayıttan şifremi unuttum | ÇALIŞIYOR | "Zaten kayıtlı" bandından, callback + e-posta taşınır. |
+| 25 | Girişten e-posta ön doldurma | ÇALIŞIYOR | sessionStorage (URL'de kişisel veri yok, 10 dk). |
+| 26 | Mail yapılandırması ön kontrolü | ÇALIŞIYOR | Sunucuda. |
+| 27 | Kalıcı "gelen kutunu kontrol et" | ÇALIŞIYOR | Gmail/Outlook kısayolları, "1 saat geçerli · en son geleni kullan" ipucu. |
+| 28 | Yeniden gönderme geri sayımı | ÇALIŞIYOR | 60 sn (sunucu `Retry-After` verirse o). |
+| 29 | Satır içi hata + aria | ÇALIŞIYOR | |
+| 30 | Bağlantıyla giriş alternatifi | ÇALIŞIYOR | Açıksa "gönderildi" kartında aynı e-postaya tek dokunuşla giriş bağlantısı. |
+| 31 | Oturumu açık kullanıcı | ÇALIŞIYOR | "X hesabıyla oturumun açık; şifreni ayarlardan değiştirebilirsin" bilgi bandı, başka hesap için form kullanılabilir. |
+
+**Kapanan bulgular:** 1, 2, 3 (A1), 4 (A1), 5 (kalıcı ekran + geri sayım), 6 (kodlar; yönetici metni kaldırıldı), 7 (doğrulanmamış hesap dalı), 8 (A1 oturum iptali; sıfırlama sonrası "şifren değiştirildi" e-postası + denetim kaydı bu dalgada), 9, 10 (ortak AuthCard), 11 → 11/11.
+**Kalanlar:** E-posta şablonlarının kullanıcının diline göre seçilmesi (ortak `lib/email.ts`).
+**Doğrulama:** `__tests__/api/auth-p-auth.test.ts` (doğrulanmamış hesap → doğrulama bağlantısı, yanıt doğrulanmış hesapla aynı; askıdaki hesaba gönderim yok) + `__tests__/api/auth-email-routes.test.ts` yeşil.

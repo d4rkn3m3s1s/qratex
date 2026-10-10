@@ -210,3 +210,62 @@ Salt okunur inceleme; kod çalıştırılmadı, veritabanına dokunulmadı. Okun
 - En sert etki iddiada belirtilenden de ağır: `forgot-password` (`:61`) ve `magic-link` (`:66`) e-postayı küçültüp arıyor → `Ayse@gmail.com` olarak kaydolmuş bir kullanıcı, adresi birebir aynı yazsa bile şifre sıfırlama ve sihirli link alamaz (kullanıcı bulunamaz). Girişte ise yalnız birebir aynı harf düzeniyle girebilir.
 - Yeniden üretim: `Ayse@gmail.com` ile kayıt → doğrula → `ayse@gmail.com` ile giriş "E-posta veya şifre hatalı"; şifre sıfırlama hiçbir zaman e-posta göndermez. `ayse@gmail.com` ile ikinci kayıt da kabul edilir → aynı kişiye iki hesap ve (bulgu 1 ile birleşince) iki davet kredisi.
 - Küçük düzeltme: "mobil klavye otomatik büyük harf" gerekçesi zayıf — `type="email"` alanlarında iOS/Android genelde otomatik büyük harf uygulamaz; ama tarayıcı otomatik doldurma, kopyala-yapıştır ve elle yazılan büyük harf aynı sonucu doğurur. Bulgu gerçek; tetikleyici gerekçe abartılı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sahip: p-auth yüzeyi. A1 (P0-16 davet PENDING, P0-39 doğrulama ekranı + resend ucu, OAuth niyet çerezi, e-posta normalizasyonu) korunarak üstüne kuruldu.
+
+**Mimari:** `page.tsx` sunucu bileşeni — sosyal kayıt bayrakları, oturum ve `?ref=` davet önizlemesi (`getReferralPreview`: modül açık mı, kod etkin mi, kotası dolmuş mu, davet eden askıda mı; yalnız ad + sunucu matrisinden puan) ilk HTML ile gelir. Form `register-view.tsx` (düz durum + paylaşılan `registerSchema`), primitifler `components/auth/p-auth/**`.
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Suspense spinner | KALDIRILDI | Sunucu render; gereksiz. |
+| 2 | Logo | ÇALIŞIYOR | `mounted` kapısı kaldırıldı (CLS yok). |
+| 3 | Tema | ÇALIŞIYOR | + TR/EN dil değiştirici. |
+| 4 | İçeriğe geç | ÇALIŞIYOR | |
+| 5 | Gradient zemin | KALDIRILDI | Ops kaydı: sakin `surface-0`. |
+| 6 | Kart animasyonu | ÇALIŞIYOR | Tek CSS girişi. |
+| 7 | Başlık | ÇALIŞIYOR | Sayfanın tek `h1`'i; "QR okut, geri bildirim ver, puan ve ödül kazan". |
+| 8 | Davet satırı | ÇALIŞIYOR | Geçersiz/pasif/kotası dolmuş kodda hiç gösterilmez; geçerlide "Ayşe seni davet etti · doğrulama + ilk QR sonrası +N puan" (N sunucu matrisinden); işletme seçilince "bonus yalnız müşteri hesabına". |
+| 9 | Hesap türü seçimi | ÇALIŞIYOR | Gerçek radyo grubu (ok tuşları, ekran okuyucuda konum duyurusu); `?role=dealer` ile önseçim. |
+| 10 | OAuth keşfi | ÇALIŞIYOR | Sunucuda. |
+| 11 | Google ile kayıt | ÇALIŞIYOR | Niyet çerezi (A1) + istemci: işletme niyeti yazılamazsa OAuth BAŞLATILMAZ, hata bandı. |
+| 12 | GitHub ile kayıt | ÇALIŞIYOR | Aynı niyet akışı. |
+| 13 | Ayırıcı | ÇALIŞIYOR | |
+| 14 | İsim | ÇALIŞIYOR | `autocomplete=name`, satır içi hata. |
+| 15 | E-posta | ÇALIŞIYOR | İstemci + sunucu normalize; diğer kimlik ekranlarında yazılan e-posta ön doldurulur (URL'de taşınmaz). |
+| 16 | Şifre + kural | ÇALIŞIYOR | Kurallar yazarken canlı işaretlenir (hata ÖNCESİ görünür). |
+| 17 | Göster/gizle | ÇALIŞIYOR | İki alan birlikte. |
+| 18 | Tekrar + eşleşme | ÇALIŞIYOR | Canlı "eşleşiyor / eşleşmiyor". |
+| 19 | Alan hataları | ÇALIŞIYOR | Gönderimde ilk hatalı alana odak. |
+| 20 | Gönder butonu | ÇALIŞIYOR | Oran sınırında geri sayım metni. |
+| 21 | Kayıt API'si | ÇALIŞIYOR | Kodlu yanıt (`EMAIL_TAKEN` 409, `VALIDATION` + alan, `RATE_LIMITED` + `retryAfterSec`); yarışta P2002 → 409; doğrulama token'ı hash'li `AuthEmailToken`; token/e-posta hatası hesabı geri almaz, `emailSent:false` dürüstçe döner. |
+| 22 | Hız sınırı | ÇALIŞIYOR | `Retry-After` istemcide geri sayım. |
+| 23 | Sunucu hata toast'ları | ÇALIŞIYOR | Kalıcı bant; "zaten kayıtlı" → Giriş yap / Şifremi unuttum / Doğrulama bağlantısını yeniden gönder. EN kullanıcıya TR metin yok. |
+| 24 | "E-postanı doğrula" kartı | ÇALIŞIYOR | Ortak `VerifyPending` (gelen kutusu kısayolları, 60 sn geri sayımlı yeniden gönder, "Bilgileri düzenle"). |
+| 25 | `verifySentTemplate` ölü dalı | KALDIRILDI | |
+| 26 | "Başka hesapla kayıt ol" | ÇALIŞIYOR | "Bilgileri düzenle" (form değerleri korunur). |
+| 27 | Kayıt sonrası otomatik giriş | KALDIRILDI | E-posta doğrulaması zorunlu; başarısız arka plan girişi ve kilit sayacı kirletme yok. |
+| 28 | "Giriş yapabilirsiniz" toast'ı | KALDIRILDI | Yanlış bilgiydi. |
+| 29 | Davet bonusu (sunucu) | ÇALIŞIYOR | A1: PENDING; ödül doğrulama + ilk QR'da. |
+| 30 | Doğrulama e-postası | ÇALIŞIYOR | Şablon yalnız TR (ortak `lib/email` — kalan, aşağıda). |
+| 31 | "E-postanı doğrula" bildirimi | ÇALIŞIYOR | `type: info`, kullanıcının dilinde. |
+| 32 | İstemci analitiği | ÇALIŞIYOR | `user_registered{role,method,referral}`, `register_failed{code}`, `register_method_selected`. |
+| 33 | Sunucu analitiği | ÇALIŞIYOR | `emailSent` eklendi. |
+| 34 | Şartlar/Gizlilik bağlantıları | ÇALIŞIYOR | Onayın denetlenebilir kaydı yok → kalan (ŞEMA İSTEĞİ). |
+| 35 | Giriş bağlantısı | ÇALIŞIYOR | callback + e-posta taşınır. |
+| 36 | "Şifrenizi mi unuttunuz?" (altbilgi) | KALDIRILDI | Kayıt altbilgisinde yeri yoktu; "zaten kayıtlı" bandına taşındı. Doğrulanmamış hesaba artık şifremi-unuttum ile doğrulama bağlantısı gider. |
+| 37 | Segment hata sınırı | ÇALIŞIYOR | |
+| 38 | Metadata | ÇALIŞIYOR | |
+| 39 | Oturum açıksa | ÇALIŞIYOR | "Zaten giriş yaptın · Devam et / Çıkış yap, başka hesapla gir" kartı. |
+| 40 | Yeniden gönder | ÇALIŞIYOR | |
+| 41 | Şifre gücü / kural listesi | ÇALIŞIYOR | 4 segment + metin ("Şifre gücü: iyi"), yalnız renge dayanmaz. |
+| 42 | `preferredLanguage` | ÇALIŞIYOR | İstemci dili kayıtla yazılır. |
+| 43 | Bot koruması | KALAN | Turnstile/hCaptcha anahtarı + CSP değişikliği gerektirir (platform kararı); A1 sonrası davet puanı doğrulama + ilk QR'a bağlı olduğundan ekonomik risk düştü. |
+| 44 | KVKK/İYS onay kaydı | KALAN | ŞEMA İSTEĞİ: şartlar/İYS onayı için ayrı kayıt (ör. `ConsentRecord`'a `kind` + `documentVersion`, ya da `TermsAcceptance`). Mevcut `ConsentRecord` çerez rızası semantiğinde ("en yeni satır geçerli") olduğu için kayıt onayıyla karıştırılmadı. |
+
+**Kapanan bulgular:** B1 (A1), B2 (A1 + kart), B3 (A1 resend + şifremi-unuttum doğrulama dalı), B4 (A1), B6 (A1 + istemci koruması), B7, B8 (kodlar, bildirim dili, `preferredLanguage`), B9 → 8/9; B5 kısmen (P2002 → 409; hata sonrası yarım hesap yerine dürüst `emailSent`).
+**Kalanlar:** B5'te SMTP gönderiminin istek yolunda senkron kalması bilinçli (gönderim sonucu ekranda dürüstçe gösteriliyor; `after()`'a alınırsa "gönderilemedi" uyarısı kaybolur). Doğrulama e-postası şablonunun dile göre seçilmesi ortak `lib/email.ts` işi. Bot koruması ve onay kaydı yukarıda.
+**Doğrulama:** `__tests__/api/auth-p-auth.test.ts` (kayıt: başarı/dil/token, EMAIL_TAKEN, P2002, VALIDATION alanı, token hatası) + `__tests__/lib/referral.test.ts` yeşil.
