@@ -1,249 +1,173 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { creditPointsAndXp } from '@/lib/points-wallet';
-import { getBirthdayBonusPoints, getPointsMatrix } from '@/lib/points-rules';
 import { z } from 'zod';
-
-// GET - Get birthday info
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { mintPoints } from '@/lib/economy';
+import { getBirthdayBonusPoints, getPointsMatrix } from '@/lib/points-rules';
+import {
+  BIRTHDAY_CLAIM_MESSAGES,
+  evaluateBirthdayClaim,
+  istanbulDayStart,
+  parseBirthDateInput,
+} from '@/lib/birthday';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  try {
-    const matrix = await getPointsMatrix();
-    const birthdayBonus = getBirthdayBonusPoints(matrix);
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+/**
+ * Doğum günü — kaydet (bir kez) / bonus talep et (yılda bir kez).
+ * Tüketenler: Cüzdan → Kartım statü bölümü, Ayarlar → Profil, global doğum günü popup'ı,
+ * bildirim merkezi. Yanıt alanları geriye uyumlu (`success`, `birthday`, `isBirthdayToday`,
+ * `canClaimBonus`, `bonusAmount`, hata `error` metni) — zarf v2 `legacySpread` ile.
+ *
+ * Lounge raporu B3/B7 düzeltmeleri:
+ *  - `requireAuth(['CUSTOMER'])` (defineRoute): rol + token-replay; çıplak `getServerSession` yok.
+ *  - "Bugün" Europe/Istanbul'a göre; 29 Şubat artık olmayan yılda 28 Şubat (`lib/birthday.ts`).
+ *  - Tarih en az 30 gün önce kaydedilmiş olmalı (bugüne ayarla → anında 500 puan kapandı);
+ *    kural atomik guard'ın içinde de uygulanır.
+ *  - Puan yalnız `mintPoints` ile (defter + tek-kez anahtarı `birthday:<kullanıcı>:<yıl>` +
+ *    `points_credited` aynı tx'te).
+ *  - Hatalar makine okunur `code` + Türkçe metin (`NOT_SET`, `NOT_TODAY`, `ALREADY_CLAIMED`,
+ *    `TOO_RECENT`, `BIRTHDAY_LOCKED`, `INVALID_DATE`).
+ */
+export const GET = defineRoute(
+  { name: 'birthday.get', roles: ['CUSTOMER'], rateLimit: 'read' },
+  async ({ user }) => {
+    const now = new Date();
+    const [matrix, birthday] = await Promise.all([
+      getPointsMatrix(),
+      prisma.userBirthday.findUnique({
+        where: { userId: user.id },
+        select: { birthDate: true, bonusGiven: true, lastBonusAt: true, createdAt: true },
+      }),
+    ]);
+    const bonusAmount = getBirthdayBonusPoints(matrix);
+    const decision = evaluateBirthdayClaim(birthday, now);
 
-    const birthday = await prisma.userBirthday.findUnique({
-      where: { userId: session.user.id },
-    });
-
-    // Check if today is birthday
-    let isBirthdayToday = false;
-    let canClaimBonus = false;
-
-    if (birthday?.birthDate) {
-      const today = new Date();
-      const birthDate = new Date(birthday.birthDate);
-      
-      isBirthdayToday = 
-        today.getMonth() === birthDate.getMonth() &&
-        today.getDate() === birthDate.getDate();
-
-      if (isBirthdayToday) {
-        const thisYear = today.getFullYear();
-        const lastBonus = birthday.lastBonusAt ? new Date(birthday.lastBonusAt) : null;
-        
-        canClaimBonus = !lastBonus || lastBonus.getFullYear() < thisYear;
-      }
-    }
-
-    if (isBirthdayToday && canClaimBonus) {
-      const dayStart = new Date();
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
-
-      const existingReminder = await prisma.notification.findFirst({
-        where: {
-          userId: session.user.id,
-          type: 'BIRTHDAY_CLAIM',
-          createdAt: { gte: dayStart, lt: dayEnd },
-        },
+    // Bildirim merkezi hatırlatması: İstanbul günü başına en fazla bir kez.
+    if (decision.canClaim) {
+      const dayStart = istanbulDayStart(now);
+      const existing = await prisma.notification.findFirst({
+        where: { userId: user.id, type: 'BIRTHDAY_CLAIM', createdAt: { gte: dayStart } },
         select: { id: true },
       });
-
-      if (!existingReminder) {
+      if (!existing) {
         await prisma.notification.create({
           data: {
-            userId: session.user.id,
+            userId: user.id,
             type: 'BIRTHDAY_CLAIM',
             title: '🎂 Doğum günün kutlu olsun!',
-            message: `Bugün +${birthdayBonus} bonus puanını talep edebilirsin. Bildirimler veya Ayarlar → Profil üzerinden de alabilirsin.`,
+            message: `Bugün +${bonusAmount} bonus puanını talep edebilirsin. Cüzdan → Kartım'dan da alabilirsin.`,
             isRead: false,
-            data: { cta: 'birthday_claim', bonusAmount: birthdayBonus } as object,
+            data: { cta: 'birthday_claim', bonusAmount } as object,
           },
         });
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      birthday,
-      isBirthdayToday,
-      canClaimBonus,
-      bonusAmount: birthdayBonus,
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('Error fetching birthday:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return ok(
+      {
+        birthday,
+        isBirthdayToday: decision.isToday,
+        canClaimBonus: decision.canClaim,
+        claimReason: decision.reason,
+        locked: !!birthday,
+        bonusAmount,
+      },
+      { legacySpread: true }
+    );
   }
-}
+);
 
-const birthdayPostSchema = z.discriminatedUnion('action', [
+const PostBody = z.discriminatedUnion('action', [
   z.object({ action: z.literal('set'), birthDate: z.string().min(8).max(32) }),
   z.object({ action: z.literal('claim') }),
 ]);
 
-// POST - Set or claim birthday bonus
-export async function POST(req: NextRequest) {
-  try {
-    const matrix = await getPointsMatrix();
-    const birthdayBonus = getBirthdayBonusPoints(matrix);
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+export const POST = defineRoute(
+  { name: 'birthday.post', roles: ['CUSTOMER'], schema: PostBody, rateLimit: { max: 10, windowMs: 60_000, by: 'user' } },
+  async ({ user, body }) => {
+    const now = new Date();
 
-    const raw = await req.json().catch(() => ({}));
-    const parsed = birthdayPostSchema.safeParse(raw);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Geçersiz istek (action: set|claim)' },
-        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
-    if (parsed.data.action === 'set') {
-      const birthDate = new Date(parsed.data.birthDate);
-      if (Number.isNaN(birthDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Geçersiz doğum tarihi' },
-          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-      }
-
-      // Suistimal önleme: doğum günü BİR KEZ ayarlanır, sonra DEĞİŞTİRİLEMEZ.
-      // Aksi halde kullanıcı doğum günü bonusundan sürekli yararlanmak için tarihi
-      // her seferinde bugüne çekebilir. Değişiklik talebi destek/manuel süreçle yapılır.
-      const existing = await prisma.userBirthday.findUnique({
-        where: { userId: session.user.id },
-        select: { id: true },
-      });
+    if (body.action === 'set') {
+      const birthDate = parseBirthDateInput(body.birthDate, now);
+      if (!birthDate) throw new ApiError('INVALID_DATE', 'Geçersiz doğum tarihi.', { status: 400 });
+      // Suistimal önleme: doğum günü BİR KEZ ayarlanır, sonra DEĞİŞTİRİLEMEZ (destek süreci).
+      const existing = await prisma.userBirthday.findUnique({ where: { userId: user.id }, select: { id: true } });
       if (existing) {
-        return NextResponse.json(
-          {
-            error: 'Doğum günü zaten kayıtlı ve değiştirilemez. Hatalıysa destek ile iletişime geçin.',
-            code: 'BIRTHDAY_LOCKED',
-          },
-          { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        throw new ApiError(
+          'BIRTHDAY_LOCKED',
+          'Doğum günü zaten kayıtlı ve değiştirilemez. Hatalıysa destek ile iletişime geç.',
+          { status: 409 }
         );
       }
-
       const birthday = await prisma.userBirthday.create({
+        data: { userId: user.id, birthDate },
+        select: { birthDate: true, bonusGiven: true, lastBonusAt: true, createdAt: true },
+      });
+      return ok({ message: 'Doğum günü kaydedildi. (Bir daha değiştirilemez.)', birthday }, { legacySpread: true });
+    }
+
+    // claim
+    const [matrix, record] = await Promise.all([
+      getPointsMatrix(),
+      prisma.userBirthday.findUnique({
+        where: { userId: user.id },
+        select: { id: true, birthDate: true, createdAt: true, lastBonusAt: true },
+      }),
+    ]);
+    const bonus = getBirthdayBonusPoints(matrix);
+    const decision = evaluateBirthdayClaim(record, now);
+    if (!decision.canClaim || !record) {
+      const reason = decision.reason === 'OK' ? 'NOT_SET' : decision.reason;
+      throw new ApiError(reason, BIRTHDAY_CLAIM_MESSAGES[reason], { status: reason === 'ALREADY_CLAIMED' ? 409 : 400 });
+    }
+
+    const minCreatedAt = new Date(now.getTime() - 30 * 86_400_000);
+    const credited = await prisma.$transaction(async (tx) => {
+      // Atomik guard: bu (İstanbul) yıl alınmamış VE 30 günden eski kayıt güncellenir.
+      // İki eşzamanlı istekten yalnız biri count=1 alır.
+      const guard = await tx.userBirthday.updateMany({
+        where: {
+          userId: user.id,
+          createdAt: { lte: minCreatedAt },
+          OR: [{ lastBonusAt: null }, { lastBonusAt: { lt: decision.yearStart } }],
+        },
+        data: { bonusGiven: true, lastBonusAt: now },
+      });
+      if (guard.count === 0) return null;
+
+      await tx.notification.deleteMany({ where: { userId: user.id, type: 'BIRTHDAY_CLAIM' } });
+      const mint = await mintPoints(tx, {
+        userId: user.id,
+        points: bonus,
+        source: 'birthday',
+        sourceId: record.id,
+        idempotencyKey: `birthday:${user.id}:${decision.year}`,
+        now,
+      });
+      // Defterde bu yılın anahtarı zaten varsa (ör. kayıt elle sıfırlandı) ikinci kredi yok.
+      if (mint.duplicate) return null;
+      await tx.notification.create({
         data: {
-          userId: session.user.id,
-          birthDate,
+          userId: user.id,
+          type: 'BIRTHDAY_BONUS',
+          title: '🎂 Doğum günün kutlu olsun!',
+          message: `${mint.credited} bonus puan hesabına eklendi!`,
         },
       });
+      return mint;
+    });
 
-      return NextResponse.json({
-        success: true,
-        message: 'Doğum günü kaydedildi! (Bir daha değiştirilemez.)',
-        birthday,
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
+    if (!credited) {
+      throw new ApiError('ALREADY_CLAIMED', BIRTHDAY_CLAIM_MESSAGES.ALREADY_CLAIMED, { status: 409 });
     }
 
-    if (parsed.data.action === 'claim') {
-      // Claim birthday bonus
-      const birthday = await prisma.userBirthday.findUnique({
-        where: { userId: session.user.id },
-      });
-
-      if (!birthday) {
-        return NextResponse.json({ error: 'Birthday not set' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-      }
-
-      const today = new Date();
-      const birth = new Date(birthday.birthDate);
-      
-      const isBirthdayToday = 
-        today.getMonth() === birth.getMonth() &&
-        today.getDate() === birth.getDate();
-
-      if (!isBirthdayToday) {
-        return NextResponse.json({ error: 'Today is not your birthday' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-      }
-
-      // Check if already claimed this year (ön kontrol — asıl guard tx içinde atomik)
-      const thisYear = today.getUTCFullYear();
-      const yearStart = new Date(Date.UTC(thisYear, 0, 1, 0, 0, 0, 0));
-      const lastBonus = birthday.lastBonusAt ? new Date(birthday.lastBonusAt) : null;
-
-      if (lastBonus && lastBonus >= yearStart) {
-        return NextResponse.json({ error: 'Already claimed this year' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-      }
-
-      // Claim bonus — atomik guard: yalnızca bu yıl içinde claim edilmemiş kayıt
-      // güncellenir. İki eşzamanlı istekten yalnızca biri count=1 alır.
-      const claimed = await prisma.$transaction(async (tx) => {
-        const guard = await tx.userBirthday.updateMany({
-          where: {
-            userId: session.user.id,
-            OR: [{ lastBonusAt: null }, { lastBonusAt: { lt: yearStart } }],
-          },
-          data: {
-            bonusGiven: true,
-            lastBonusAt: new Date(),
-          },
-        });
-
-        if (guard.count === 0) {
-          return false; // başka bir istek bu yılki bonusu zaten aldı
-        }
-
-        await tx.notification.deleteMany({
-          where: { userId: session.user.id, type: 'BIRTHDAY_CLAIM' },
-        });
-
-        await creditPointsAndXp(tx, {
-          userId: session.user.id,
-          points: birthdayBonus,
-        });
-
-        // Anti-fraud görünürlüğü: kredilenen puanı points_credited olarak işle (aynı tx).
-        await tx.analyticsEvent.create({
-          data: {
-            userId: session.user.id,
-            event: 'points_credited',
-            category: 'birthday',
-            data: { points: birthdayBonus },
-          },
-        });
-
-        await tx.notification.create({
-          data: {
-            userId: session.user.id,
-            type: 'BIRTHDAY_BONUS',
-            title: '🎂 Doğum Günün Kutlu Olsun!',
-            message: `${birthdayBonus} bonus puan hesabına eklendi!`,
-          },
-        });
-        return true;
-      });
-
-      if (!claimed) {
-        return NextResponse.json({ error: 'Already claimed this year' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: `🎂 Doğum günün kutlu olsun! ${birthdayBonus} puan kazandın!`,
-        pointsEarned: birthdayBonus,
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
-    }
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('Error processing birthday:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return ok(
+      {
+        message: `🎂 Doğum günün kutlu olsun! ${credited.credited} puan kazandın!`,
+        pointsEarned: credited.credited,
+        points: credited.points,
+      },
+      { legacySpread: true }
+    );
   }
-}
+);

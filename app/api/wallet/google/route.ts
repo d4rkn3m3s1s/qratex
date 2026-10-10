@@ -1,183 +1,72 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 import {
   generateGooglePassObject,
   generateGoogleWalletJWT,
+  generateSerialNumber,
   getGoogleWalletSaveUrl,
-  generateSerialNumber
+  isGoogleWalletConfigured,
 } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/wallet/google
- * Generate Google Wallet save URL
+ * GET /api/wallet/google?cardId=…
+ * "Google Cüzdan'a kaydet" bağlantısı üretir → `{ saveUrl, passId }`.
+ *
+ * Eskiden yapılandırma yokken `200 + fallbackUrl` dönüyor, UI "henüz yapılandırılmamış"
+ * bilgisi gösteriyordu (sahte başarı). Artık 503; cüzdan sayfası düğmeyi zaten yalnız
+ * yapılandırma tamken gösterir. Eski `POST` uygunluk ucu kaldırıldı (`wallet.google`).
  */
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Giriş yapmanız gerekiyor' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    
-    if (session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Sadece müşteriler kart ekleyebilir' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
+export const GET = defineRoute(
+  {
+    name: 'wallet.google.save-url',
+    roles: ['CUSTOMER'],
+    query: z.object({ cardId: z.string().min(1).max(64).optional() }),
+    rateLimit: { max: 10, windowMs: 60_000, by: 'user' },
+  },
+  async ({ user, query }) => {
+    if (!isGoogleWalletConfigured()) {
+      throw new ApiError('SERVICE_UNAVAILABLE', 'Google Cüzdan entegrasyonu henüz yapılandırılmamış.');
     }
 
-    const { searchParams } = new URL(request.url);
-    const cardId = searchParams.get('cardId');
-
-    // Get user's card
-    let card;
-    
-    try {
-      if (cardId) {
-        card = await prisma.physicalCard.findFirst({
-          where: {
-            id: cardId,
-            customerId: session.user.id,
-            status: 'ACTIVATED',
-          },
-        });
-      } else {
-        card = await prisma.physicalCard.findFirst({
-          where: {
-            customerId: session.user.id,
-            status: 'ACTIVATED',
-          },
-          orderBy: { activatedAt: 'desc' },
-        });
-      }
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'Kart sistemi kullanılamıyor' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (!card) {
-      return NextResponse.json(
-        { error: 'Aktif kart bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    // Get user details
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        points: true,
-        level: true,
+    const card = await prisma.physicalCard.findFirst({
+      where: {
+        customerId: user.id,
+        status: 'ACTIVATED',
+        archivedAt: null,
+        ...(query.cardId ? { id: query.cardId } : {}),
       },
+      orderBy: { activatedAt: 'desc' },
+      select: { id: true, token: true },
     });
+    if (!card) throw new ApiError('NOT_FOUND', 'Aktif kart bulunamadı.');
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    const owner = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, name: true, points: true, level: true },
+    });
+    if (!owner) throw new ApiError('NOT_FOUND', 'Kullanıcı bulunamadı.');
 
-    // Check if Google Wallet is configured
-    const isConfigured = !!(
-      process.env.GOOGLE_WALLET_ISSUER_ID &&
-      process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL &&
-      process.env.GOOGLE_WALLET_PRIVATE_KEY
-    );
-
-    if (!isConfigured) {
-      // Return a demo URL or redirect to the card page
-      return NextResponse.json({
-        success: true,
-        configured: false,
-        message: 'Google Wallet henüz yapılandırılmamış',
-        // Provide a fallback URL
-        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/customer/my-card`,
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    // Generate pass object
-    const passId = generateSerialNumber(user.id, card.id);
+    const passId = generateSerialNumber(owner.id, card.id);
     const passObject = generateGooglePassObject({
       id: passId,
       classId: 'qratex_membership',
-      customerName: user.name || 'Müşteri',
-      customerId: user.id,
+      customerName: owner.name || 'Üye',
+      customerId: owner.id,
       cardToken: card.token,
-      points: user.points,
-      level: user.level,
-      email: user.email || undefined,
+      points: owner.points,
+      level: owner.level,
     });
 
+    let saveUrl: string;
     try {
-      // Generate JWT and save URL
-      const jwt = await generateGoogleWalletJWT(passObject);
-      const saveUrl = getGoogleWalletSaveUrl(jwt);
-
-      return NextResponse.json({
-        success: true,
-        configured: true,
-        saveUrl,
-        passId,
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
-    } catch (jwtError) {
-      console.error('JWT generation error:', jwtError);
-      return NextResponse.json({
-        success: true,
-        configured: false,
-        message: 'JWT oluşturulamadı',
-        fallbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/customer/my-card`,
-      }, { headers: PRIVATE_NO_STORE_HEADERS });
+      saveUrl = getGoogleWalletSaveUrl(await generateGoogleWalletJWT(passObject));
+    } catch (error) {
+      console.error('[wallet.google] JWT üretilemedi', error);
+      throw new ApiError('SERVICE_UNAVAILABLE', 'Google Cüzdan bağlantısı şu an oluşturulamadı.', { retryable: true });
     }
-  } catch (error) {
-    console.error('Error generating Google Wallet pass:', error);
-    return NextResponse.json(
-      { error: 'Kart oluşturulamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return ok({ saveUrl, passId }, { legacySpread: true });
   }
-}
-
-/**
- * POST /api/wallet/google
- * Check if Google Wallet is available
- */
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json({ available: false, reason: 'unauthorized' }, { headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    // Check if credentials are configured
-    const hasCredentials = !!(
-      process.env.GOOGLE_WALLET_ISSUER_ID &&
-      process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL &&
-      process.env.GOOGLE_WALLET_PRIVATE_KEY
-    );
-
-    // Check if user has an activated card
-    let hasCard = false;
-    try {
-      const card = await prisma.physicalCard.findFirst({
-        where: {
-          customerId: session.user.id,
-          status: 'ACTIVATED',
-        },
-      });
-      hasCard = !!card;
-    } catch (e) {
-      // Card system not available
-    }
-
-    return NextResponse.json({
-      available: hasCard,
-      configured: hasCredentials,
-      reason: !hasCard ? 'no_card' : !hasCredentials ? 'not_configured' : 'ready',
-    }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    return NextResponse.json({ available: false, reason: 'error' }, { headers: PRIVATE_NO_STORE_HEADERS });
-  }
-}
+);

@@ -1,6 +1,26 @@
 import crypto from 'crypto';
+import zlib from 'zlib';
 import type * as forge from 'node-forge';
 import { BRAND_PRIMARY_HEX } from '@/lib/brand-colors';
+
+/**
+ * Apple Wallet yapılandırması TAM mı? Team ID de zorunlu: eksikse pass `'XXXXXXXXXX'` ile
+ * imzalanır ve iOS reddeder (my-card raporu B2). Buton yalnız bu `true` iken gösterilir.
+ */
+export function isAppleWalletConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !!(
+    env.APPLE_PASS_CERT_P12_BASE64 &&
+    env.APPLE_PASS_CERT_PASSWORD &&
+    env.APPLE_PASS_TYPE_IDENTIFIER &&
+    env.APPLE_WWDR_CERT_BASE64 &&
+    env.APPLE_TEAM_IDENTIFIER
+  );
+}
+
+/** Google Wallet yapılandırması TAM mı? */
+export function isGoogleWalletConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !!(env.GOOGLE_WALLET_ISSUER_ID && env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL && env.GOOGLE_WALLET_PRIVATE_KEY);
+}
 
 // ─────────────────────────────────────────────────────────────
 // APPLE WALLET PASS GENERATION
@@ -220,10 +240,10 @@ export async function createPkPass(data: PassData): Promise<Buffer> {
   const files = new Map<string, Buffer>();
   files.set('pass.json', passJsonBuffer);
   
-  // Add icon files (these should exist in public/pass/)
-  // For now, we'll create placeholder entries
-  // In production, you'd read actual image files
-  
+  // PassKit her pass stilinde icon.png'yi ZORUNLU tutar (yoksa iOS "geçersiz pass" der).
+  // Görsel dosya deposuna bağımlı kalmamak için marka renginde düz ikon/logo üretilir.
+  for (const [name, png] of passImageFiles()) files.set(name, png);
+
   // Generate manifest
   const manifest = generateManifest(files);
   const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2));
@@ -320,7 +340,7 @@ export function generateGooglePassObject(data: GooglePassData): object {
     linksModuleData: {
       uris: [
         {
-          uri: `${webServiceURL}/customer/my-card`,
+          uri: `${webServiceURL}/customer/wallet/card`,
           description: 'Kartımı Görüntüle',
           id: 'view-card',
         },
@@ -349,6 +369,8 @@ export async function generateGoogleWalletJWT(passObject: object): Promise<strin
     origins: [process.env.NEXT_PUBLIC_APP_URL || 'https://qratex.com'],
     typ: 'savetowallet',
     payload: {
+      // Sınıf da JWT ile gönderilir: konsolda önceden oluşturulmamışsa "Kaydet" başarısız oluyordu.
+      genericClasses: [{ id: (passObject as { classId?: string }).classId }],
       genericObjects: [passObject],
     },
   };
@@ -376,8 +398,83 @@ export function getGoogleWalletSaveUrl(jwt: string): string {
  * Generate unique serial number for passes
  */
 export function generateSerialNumber(userId: string, cardId: string): string {
-  const data = `${userId}-${cardId}-${Date.now()}`;
+  // DETERMİNİSTİK: aynı kart her indirmede aynı seri numarasını alır; eskiden `Date.now()`
+  // yüzünden her indirme Wallet'ta yinelenen bir kart üretiyordu (my-card raporu B2).
+  const data = `${userId}-${cardId}`;
   return crypto.createHash('sha256').update(data).digest('hex').slice(0, 32);
+}
+
+// ─────────────────────────────────────────────────────────────
+// PASS GÖRSELLERİ (bağımlılıksız, düz renk PNG)
+// ─────────────────────────────────────────────────────────────
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body), 0);
+  return Buffer.concat([len, body, crc]);
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6);
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+/** Düz renk RGB PNG (geçerli IHDR/IDAT/IEND, zlib sıkıştırmalı). */
+export function solidPng(width: number, height: number, hex: string): Buffer {
+  const [r, g, b] = hexToRgb(hex);
+  const row = Buffer.alloc(1 + width * 3);
+  for (let x = 0; x < width; x++) {
+    row[1 + x * 3] = r;
+    row[2 + x * 3] = g;
+    row[3 + x * 3] = b;
+  }
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit derinliği
+  ihdr[9] = 2; // RGB
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** Apple pass görselleri: icon (29pt) ve logo (160×50pt), @1x/@2x/@3x. */
+export function passImageFiles(hex: string = BRAND_PRIMARY_HEX): Array<[string, Buffer]> {
+  return [
+    ['icon.png', solidPng(29, 29, hex)],
+    ['icon@2x.png', solidPng(58, 58, hex)],
+    ['icon@3x.png', solidPng(87, 87, hex)],
+    ['logo.png', solidPng(160, 50, hex)],
+    ['logo@2x.png', solidPng(320, 100, hex)],
+  ];
 }
 
 /**
