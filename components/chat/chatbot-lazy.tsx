@@ -15,7 +15,7 @@ const ChatbotDynamic = dynamic(() => import('./chatbot').then((m) => m.Chatbot),
  * ve anket akışının (`/surveys/…`) yapışkan İleri/Gönder çubuğunu örtmesin, paylaşım kartı
  * (`/experience/…`) tek ekranlık kalsın ve huninin JS bütçesine (≤ 150 KB gzip) girmesin.
  */
-const HIDDEN_PREFIXES = ['/feedback/', '/surveys/', '/experience/'];
+const HIDDEN_PREFIXES = ['/feedback/', '/surveys/', '/experience/', '/wall/'];
 
 export function ChatbotLazy() {
   const pathname = usePathname();

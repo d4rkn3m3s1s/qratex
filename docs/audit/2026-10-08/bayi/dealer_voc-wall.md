@@ -205,3 +205,59 @@
 - **Yeniden üretim:** Son 7 günde farklı sayılarda geri bildirim alan bir bayi kartı açıyor. Cyan çubuk yerine her günde ince bir çizgi görüyor, gün etiketleri farklı yüksekliklerde duruyor. Dil EN'e çevrildiğinde gün adları Türkçe kalıyor.
 
 **Özet:** 3/3 bulgu doğrulandı. Bulgu 1'e "toksiklik asenkron işleniyor, filtre fail-closed olmalı" notu eklendi. Bulgu 3'ün seviyesi YÜKSEK yerine ORTA olarak önerildi.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa iki yüzlü ürüne dönüştürüldü: **yönetim** (`/dealer/voc-wall`: küratörlük + kurallar + önizleme + ekran bağlantıları + mini KPI/temalar) ve **mağaza ekranı** (`/wall/[token]`: oturumsuz, salt-okunur, iptal edilebilir). Şema değişmedi: moderasyon/kurallar/bağlantılar `Settings` anahtar-değer tablosunda bayi başına tek JSON (`voc-wall:config:<dealerId>`), token araması `voc-wall:display:<sha256>` (ham token saklanmaz).
+
+**Dosyalar:** `app/dealer/voc-wall/page.tsx` (sunucu önce, React Query ön-yükleme), `components/dealer/b-voc-duvari/*` (ekran, liste, kurallar, bağlantılar, TV istemcisi, ortak `WallDisplay`), `lib/dealer/voc-wall/{config,server,http}.ts`, BFF: `GET /api/dealer/voc-wall`, `GET …/items`, `PATCH …/items/[id]`, `PUT …/rules`, `GET …/preview`, `GET|POST …/displays`, `DELETE …/displays/[id]`, `GET /api/wall/[token]` (hepsi `defineRoute`; rol + zod + rate limit + `voc_wall` modül kapısı + kiracı kapsamı). Test: `__tests__/api/voc-wall-safety.test.ts` (21 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Metadata | ÇALIŞIYOR | Sayfa artık temaları ve alıntıları gerçekten gösteriyor; i18n metni paylaşılan dosyada, değiştirilmedi. |
+| 2 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState`; yalnız ilk yüklemede, yenilemede eski veri kalır. |
+| 3 | Hata durumu | ÇALIŞIYOR | Zarf v2 + `r.ok` kontrolü; 401/403/4xx/5xx görünür hata + "Tekrar dene". |
+| 4 | Hero | ÇALIŞIYOR | QDL `PageHeader` (compact, ops). |
+| 5 | "Herkese açık" çipi | KALDIRILDI | Anlamsız sayı; yerine "Ekranda yayında" (gerçek yayın koşulu sayımı) + sabit/gizli sayıları. |
+| 6 | TV modu düğmesi | ÇALIŞIYOR | Gerçek signage: `/wall/[token]` tam ekran (Fullscreen API), chrome yok, imleç/kontroller boşta gizli, büyük tipografi. |
+| 7 | TV otomatik yenileme | ÇALIŞIYOR | 30 sn arka plan yenileme, eski veri ekranda kalır, iskelet yok; yeni yorum öne alınır + "Yeni" vurgusu. |
+| 8 | "Yenile" düğmesi | KALDIRILDI | React Query arka plan yenilemesi + mutasyon sonrası geçersiz kılma; ekran önbelleği yapılandırma sürümüyle anahtarlı (moderasyon anında yansır). |
+| 9 | Tüm geri bildirimler bağlantısı | ÇALIŞIYOR | "Ayrıntılı analiz" (Analitik) bağlantısı, `asChild`. |
+| 10 | LiveTicker | KALDIRILDI | Tekrarlanan içerik (Bulgu 4); WCAG 2.2.2 ihlali. |
+| 11 | LiveFeedStrip | KALDIRILDI | Aynı gerekçe. |
+| 12 | Ortalama puan | ÇALIŞIYOR | Dönem (7/30/90) + önceki dönem Δ, İstanbul gün sınırı. |
+| 13 | Toplam geri bildirim | ÇALIŞIYOR | Dönemlik + Δ%. |
+| 14 | Son 24 saat | ÇALIŞIYOR | TV alt bandında. |
+| 15 | Pozitif oran | ÇALIŞIYOR | Tek sunucu hesabı (duygu analizi yapılmış yorumlar paydası) + Δ puan. |
+| 16 | Duygu donut'u | KALDIRILDI | Analitik sayfasının kopyasıydı; olumlu oran KPI'si + tema olumlu/olumsuz ayrımı yeterli. |
+| 17 | Puan dağılımı | KALDIRILDI | Aynı gerekçe (Analitik'te var). |
+| 18 | 7 gün trend | KALDIRILDI | Bozuk + Analitik kopyası; bağlantı verildi. |
+| 19 | Trend ipucu | KALDIRILDI | #18 ile birlikte. |
+| 20 | Duvar başlığı | ÇALIŞIYOR | "Yayın listesi" bölümü. |
+| 21 | Duvar kartları | ÇALIŞIYOR | Maskeli ad (sunucuda), güvenlik süzgeci, AI tema/niyet çipleri, "Yanıtlandı" rozeti, ekran durumu + nedeni. |
+| 22 | "Canlı" iddiası | ÇALIŞIYOR | Nabızlar kaldırıldı; TV'de tek gösterge = gerçek son güncelleme zamanı / bağlantı yok uyarısı. |
+| 23 | Boş durum | ÇALIŞIYOR | `QueryState` boş durumları (süzgeçli/süzgeçsiz); `a > button` yok. |
+| 24 | Kart hover | KALDIRILDI | Yanlış tıklanabilirlik ipucu. |
+| 25 | AI alanları | ÇALIŞIYOR | "En çok konuşulan temalar" (olumlu/olumsuz) + satırda tema/niyet çipleri; TV'ye gönderilmez. |
+| 26 | Moderasyon | ÇALIŞIYOR | Sabitle (≤20) / gizle / otomatik; kurallar (en az ★, yalnız yazılı, ad gösterimi, döngü süresi, varsayılan QR). Sabit güvenliği delmez. |
+| 27 | Şube/QR filtresi | ÇALIŞIYOR | Sayfa süzgeci + kural varsayılanı + ekran başına QR. |
+| 28 | Dönem seçimi | ÇALIŞIYOR | 7/30/90 gün + önceki dönem. |
+| 29 | Yetki DEALER/ADMIN | ÇALIŞIYOR | ADMIN `?dealerId=` ile salt-okunur (`X-Act-As-Dealer`). |
+| 30 | Modül kapısı | ÇALIŞIYOR | Tüm BFF uçlarında `module: 'voc_wall'`, sayfada açıklayıcı boş durum, TV'de "kapalı" ekranı. |
+| 31 | STAFF / kiosk | ÇALIŞIYOR | STAFF görüntüler + moderasyon yapar (kurallar/bağlantılar yalnız sahip); TV için oturumsuz token bağlantısı (365 gün, iptal edilebilir, ≤10 etkin, IP başına 30/dk). |
+| 32 | Çok dilli metinler | ÇALIŞIYOR | API kullanıcı metni üretmez (ad yoksa `null`); TR metinler tutarlı ("Olumlu"); yeni yüzey yalnız TR. |
+| 33 | Azaltılmış hareket | ÇALIŞIYOR | `useMotionPolicy`: geçiş anlık, döngü süresi ×2, ambient statik kare; görünür Duraklat/Sürdür (WCAG 2.2.2); sekme gizliyken döngü durur. |
+| 34 | Sunucu önbelleği | ÇALIŞIYOR | Ekran akışı 20 sn, anahtar = bayi + QR + yapılandırma sürümü (moderasyon anında geçersiz). Yeni yorumda temizleme feedback POST'unda (başka yüzey) — TTL 20 sn ile sınırlı. |
+| 35 | Mobil yerleşim | ÇALIŞIYOR | `PanelPage` + aside mobilde altta, `MetricGrid`, ≥44px dokunma hedefleri. |
+
+### Kapanan bulgular
+1 (maske + süzgeç + moderasyon; onay kutusu hariç), 2, 3 (grafik kaldırıldı; dönem sunucuda İstanbul), 4, 5, 6, 7, 8, 9, 10 — **10/10**.
+
+### Kalanlar
+- **Müşteri onayı (`wallConsent`)**: geri bildirim formu başka yüzeyin; şema değişikliği gerekmeden `isPublic` kullanılabilir ama formda seçenek yok → ŞEMA/form isteği olarak bırakıldı. Bugün ekran yalnız maskeli/ad-gizli gösterim yapar.
+- **SSE itme modeli**: yoklama (30 sn) + 20 sn önbellek; feedback POST'una önbellek temizleme eklemek başka yüzeyin dosyası.
+- TV'de çerez bildirimi ilk açılışta bir kez kapatılmalı (yasal bileşen, dokunulmadı).
