@@ -221,6 +221,28 @@ export function validatePlatformSetting(
  */
 export const RETIRED_SECRET_SETTING_KEYS: ReadonlySet<string> = new Set(['openaiApiKey']);
 
+/** Kendi sahibi uçtan yazılan anahtar önekleri (Güven Merkezi kuralları + tarama özeti). */
+const DEDICATED_SETTING_PREFIXES = ['trust.'] as const;
+/** Yan etkili / onaylı kayıt defteri anahtarları (Redis yayını, tipli onay, etki önizlemesi). */
+const DEDICATED_PLATFORM_KEYS: ReadonlySet<string> = new Set([
+  SETTINGS_KEYS.maintenance,
+  SETTINGS_KEYS.registrationOpen,
+  SETTINGS_KEYS.googleAuth,
+]);
+
+/**
+ * Kendi uçları olan (zod + sürüm + denetim + yan etki) anahtarlar: genel `/api/admin/settings`
+ * PUT/POST ve eski rollback bunları YAZAMAZ. Aksi hâlde bakım modu Redis'e yayınlanmadan DB'de
+ * "açık" görünür, kayıt/Google anahtarları onaysız değişir, `trust.scan.last` sahte "son tarama"
+ * özetiyle doldurulabilir, tespit kuralları gerekçesiz ve 409'suz değişirdi.
+ * (`backgroundEffect` / `enableMagicLink` eski toplu istemcilerle sürüm kilitli yazılmaya devam eder.)
+ */
+export function isDedicatedSettingKey(key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const k = key.trim();
+  return DEDICATED_PLATFORM_KEYS.has(k) || DEDICATED_SETTING_PREFIXES.some((p) => k.startsWith(p));
+}
+
 // ───────────────────────────── API sözleşmesi ─────────────────────────────
 
 export const platformSettingsPatchSchema = z

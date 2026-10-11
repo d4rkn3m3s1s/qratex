@@ -21,11 +21,16 @@ import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 // P0-01: gizli kapı ayarı bu genel uçtan okunamaz/yazılamaz (yalnız kendi uçları).
 import { PROTECTED_SETTING_KEYS, isProtectedSettingKey as isGateProtectedKey } from '@/lib/admin-gate';
 // B4: eski ekranın düz metin yazdığı OpenAI anahtarı vb. listelenmez/yazılmaz.
-import { RETIRED_SECRET_SETTING_KEYS } from '@/lib/platform-settings/registry';
+import { RETIRED_SECRET_SETTING_KEYS, isDedicatedSettingKey } from '@/lib/platform-settings/registry';
 
 const HIDDEN_SETTING_KEYS = [...PROTECTED_SETTING_KEYS, ...RETIRED_SECRET_SETTING_KEYS];
+/** Yazma yasağı: gizli kapı, emekli sır anahtarları ve kendi uçları olan kayıt defteri/güven anahtarları. */
 function isProtectedSettingKey(key: unknown): boolean {
-  return isGateProtectedKey(key) || (typeof key === 'string' && RETIRED_SECRET_SETTING_KEYS.has(key.trim()));
+  return (
+    isGateProtectedKey(key) ||
+    (typeof key === 'string' && RETIRED_SECRET_SETTING_KEYS.has(key.trim())) ||
+    isDedicatedSettingKey(key)
+  );
 }
 import {
   isVersionConflictError,

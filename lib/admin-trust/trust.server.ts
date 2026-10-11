@@ -457,8 +457,12 @@ export async function listCases(p: CaseListParams): Promise<Paged<CaseListItem>>
   return { items: rows.map(toListItem), total, page: p.page, size: p.size };
 }
 
-/** CSV dışa aktarım (en çok 5000 satır, UTF-8 BOM, İstanbul saati). */
-export async function exportCasesCsv(p: CaseListParams): Promise<string> {
+/**
+ * CSV dışa aktarım (en çok 5000 satır, UTF-8 BOM, İstanbul saati). Dosya kişisel veri (e-posta,
+ * IP) taşır → her dışa aktarım kim/hangi filtre/kaç satır olarak denetime yazılır (KVKK 5651
+ * dışa aktarımıyla aynı kural).
+ */
+export async function exportCasesCsv(ctx: ActionCtx, p: CaseListParams): Promise<string> {
   const rows = await prisma.suspiciousActivity.findMany({
     where: buildCaseWhere(p),
     include: ACTIVITY_INCLUDE,
@@ -496,6 +500,21 @@ export async function exportCasesCsv(p: CaseListParams): Promise<string> {
     ]
       .map(esc)
       .join(',');
+  });
+  await prisma.auditLog.create({
+    data: auditEntry(
+      ctx.actor,
+      {
+        action: 'TRUST_CASES_EXPORT',
+        entity: 'SuspiciousActivity',
+        newData: {
+          filters: { status: p.status, severity: p.severity, type: p.type ?? null, window: p.window, q: p.q ?? null },
+          rows: rows.length,
+          truncated: rows.length >= 5000,
+        },
+      },
+      ctx.request,
+    ),
   });
   return `﻿${[header.join(','), ...lines].join('\r\n')}\r\n`;
 }
@@ -763,6 +782,8 @@ export async function reverseLedgerEntry(ctx: ActionCtx, ledgerId: string, input
   if (!row || !row.userId) throw new ApiError('NOT_FOUND', 'Defter satırı bulunamadı.');
   if (row.currency !== 'POINTS' || row.delta <= 0) throw new ApiError('VALIDATION', 'Yalnız puan kazanımı satırları geri alınabilir.');
   if (row.status !== 'posted') throw new ApiError('CONFLICT', 'Bu satır bakiyeye yansımamış (askıda ya da geçersiz); geri alınacak puan yok.', { status: 409 });
+  // UI'daki `reversible` kuralı sunucuda da: iade/geri alma satırı "kazanım" değildir.
+  if (row.source.startsWith('reversal')) throw new ApiError('VALIDATION', 'Geri alma satırı yeniden geri alınamaz.');
   if (row.userId === ctx.actor.id) throw new ApiError('FORBIDDEN', 'Kendi puanınızı geri alamazsınız.');
   const already = await prisma.pointsLedger.findUnique({ where: { idempotencyKey: reverseKey(ledgerId) }, select: { id: true } });
   if (already) throw new ApiError('CONFLICT', 'Bu satır daha önce geri alındı.', { status: 409 });
@@ -786,6 +807,9 @@ export async function reverseLedgerEntry(ctx: ActionCtx, ledgerId: string, input
     if (isEconomyError(e)) throw new ApiError(e.code, e.message, { status: e.httpStatus });
     throw e;
   }
+  // Yarışan ikinci istek (çift tık / iki sekme) tek-kez anahtarına çarpar: puan bir kez düşer,
+  // denetim de bir kez yazılır; ikinci istek dürüstçe 409 alır.
+  if (result.duplicate) throw new ApiError('CONFLICT', 'Bu satır daha önce geri alındı.', { status: 409 });
   await prisma.auditLog.create({
     data: auditEntry(
       ctx.actor,

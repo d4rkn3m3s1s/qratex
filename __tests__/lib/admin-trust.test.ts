@@ -58,6 +58,7 @@ import {
 import {
   buildCaseWhere,
   caseAction,
+  exportCasesCsv,
   reverseLedgerEntry,
   runScan,
   subjectAction,
@@ -243,6 +244,36 @@ describe('puan geri alma (yalnız lib/economy)', () => {
     (adjustPointsByAdmin as jest.Mock).mockRejectedValue(new (InsufficientPointsError as unknown as new () => Error)());
     await expect(reverseLedgerEntry(ctx, 'l1', { reason: 'harcanmış puan' })).rejects.toMatchObject({ status: 409, code: 'INSUFFICIENT_POINTS' });
     expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+  it('kalite turu: yarışan ikinci istek tek-kez anahtarına çarparsa 409 ve İKİNCİ denetim satırı yok', async () => {
+    db.pointsLedger.findUnique
+      .mockResolvedValueOnce({ id: 'l1', userId: 'u1', delta: 300, status: 'posted', source: 'game', currency: 'POINTS' })
+      .mockResolvedValueOnce(null);
+    (adjustPointsByAdmin as jest.Mock).mockResolvedValue({ points: 200, ledgerId: 'l2', duplicate: true });
+    await expect(reverseLedgerEntry(ctx, 'l1', { reason: 'çift tıklama' })).rejects.toMatchObject({ status: 409 });
+    expect(db.auditLog.create).not.toHaveBeenCalled();
+  });
+  it('kalite turu: geri alma (reversal) satırı sunucuda da geri alınamaz', async () => {
+    db.pointsLedger.findUnique.mockResolvedValueOnce({ id: 'l9', userId: 'u1', delta: 50, status: 'posted', source: 'reversal_refund', currency: 'POINTS' });
+    await expect(reverseLedgerEntry(ctx, 'l9', { reason: 'iade satırı' })).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect(adjustPointsByAdmin).not.toHaveBeenCalled();
+  });
+  it('kalite turu: CSV dışa aktarım (e-posta/IP taşır) denetime yazılır', async () => {
+    db.suspiciousActivity.findMany.mockResolvedValueOnce([
+      {
+        id: 'c1', type: 'VELOCITY', severity: 'HIGH', description: '=cmd', userId: 'u1', ipAddress: '1.2.3.4', metadata: null,
+        isResolved: false, resolution: null, resolvedAt: null, createdAt: new Date('2026-10-01T00:00:00Z'),
+        user: { id: 'u1', name: 'A', email: 'a@b.c', role: 'CUSTOMER', fraudStatus: 'clean', suspendedAt: null }, dealer: null,
+      },
+    ]);
+    const csv = await exportCasesCsv(ctx, CaseListQuery.parse({}));
+    expect(csv).toContain("'=cmd");
+    expect(db.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(db.auditLog.create.mock.calls[0][0].data).toMatchObject({
+      action: 'TRUST_CASES_EXPORT',
+      userId: 'admin-1',
+      newData: expect.objectContaining({ rows: 1, truncated: false }),
+    });
   });
 });
 

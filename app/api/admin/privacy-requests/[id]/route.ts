@@ -354,6 +354,16 @@ async function runCommand(
         throw new ApiError('CONFIRMATION_REQUIRED', 'Onay için başvurunun e-posta adresini aynen yazın.', { status: 400 });
       }
       const userId = row.userId!;
+      // Yönetici hesabı DSR kuyruğu üzerinden silinemez: manuel talep herhangi bir e-postayla
+      // açılabildiği için bir yönetici başka bir yöneticiyi (ya da kendini) geri döndürülemez
+      // biçimde anonimleştirebiliyordu. Askıya almadaki kuralla aynı: önce rol değişir.
+      if (userId === ctx.adminId) {
+        throw new ApiError('FORBIDDEN', 'Kendi hesabınızı bu kuyruktan silemezsiniz.', { status: 403 });
+      }
+      const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+      if (target && String(target.role) === 'ADMIN') {
+        throw new ApiError('ADMIN_TARGET', 'Yönetici hesabı silinemez; önce rolünü değiştirin, sonra talebi yürütün.', { status: 409 });
+      }
       const result = await anonymizeUser(userId, {
         actor: { id: ctx.adminId, email: ctx.adminEmail, name: ctx.adminName, role: 'ADMIN', type: 'user' },
         reason: 'dsr_erasure',

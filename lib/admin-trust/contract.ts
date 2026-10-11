@@ -95,6 +95,7 @@ export const SENSITIVE_AUDIT_ACTIONS = [
   'TRUST_RULES_UPDATE',
   'TRUST_SCAN',
   'TRUST_ALERTS_UPDATE',
+  'TRUST_CASES_EXPORT',
 ] as const;
 
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
@@ -116,6 +117,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   TRUST_RULES_UPDATE: 'Tespit kuralları güncellendi',
   TRUST_SCAN: 'Sinyal taraması çalıştı',
   TRUST_ALERTS_UPDATE: 'Güvenlik uyarıları güncellendi',
+  TRUST_CASES_EXPORT: 'Vakalar dışa aktarıldı (CSV)',
 };
 
 // ───────────────────────────── Kurallar ─────────────────────────────

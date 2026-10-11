@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 // P0-01: gizli kapı ayarı rollback ile geri yüklenemez (eski düz metin cevap dirilmesin).
 import { isProtectedSettingKey } from '@/lib/admin-gate';
-import { RETIRED_SECRET_SETTING_KEYS } from '@/lib/platform-settings/registry';
+import { RETIRED_SECRET_SETTING_KEYS, isDedicatedSettingKey } from '@/lib/platform-settings/registry';
 import { revalidateTag } from 'next/cache';
 
 
@@ -51,7 +51,13 @@ export async function POST(request: NextRequest) {
 
     const map = oldData as SettingsMap;
     const candidateKeys = Object.keys(map).filter(
-      (k) => !isProtectedSettingKey(k) && !RETIRED_SECRET_SETTING_KEYS.has(k) && map[k] !== null && map[k] !== undefined
+      // Kayıt defteri anahtarları kendi sürümlü geri almasıyla döner (Ayarlar › Geçmiş); burada atlanır.
+      (k) =>
+        !isProtectedSettingKey(k) &&
+        !RETIRED_SECRET_SETTING_KEYS.has(k) &&
+        !isDedicatedSettingKey(k) &&
+        map[k] !== null &&
+        map[k] !== undefined
     );
     // Yalnız VAR OLAN satırlar geri yüklenir (yeni, okuyucusuz satır açılmaz).
     const present = await prisma.settings.findMany({ where: { key: { in: candidateKeys } }, select: { key: true } });

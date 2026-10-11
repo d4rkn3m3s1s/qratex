@@ -109,6 +109,13 @@ const ACTION_LABELS: Record<string, { label: string; tone: 'success' | 'danger' 
   ADMIN_GATE_REVOKE_ALL: { label: 'Tüm oturumlar sonlandırıldı', tone: 'danger' },
 };
 
+/**
+ * "Tüm kapı kayıtları" denetim merkezinde EYLEM ile süzülür: ayar değişikliği (`UPDATE_ADMIN_GATE`)
+ * `Settings` varlığına yazıldığından `varlik=AdminGate` süzgeci onu (ve listedeki "Ayar değişti"
+ * satırlarını) kaçırıyordu.
+ */
+export const GATE_AUDIT_HREF = `/admin/audit?eylem=${Object.keys(ACTION_LABELS).join(',')}`;
+
 const CHIP: Record<'success' | 'danger' | 'warning' | 'info' | 'neutral', string> = {
   success: 'bg-success-subtle text-success ring-success-border',
   danger: 'bg-danger-subtle text-danger ring-danger-border',
@@ -470,7 +477,7 @@ function GateSettingsBody({ data, onChanged }: { data: GateStatus; onChanged: ()
         title="Son kapı olayları"
         description="Geçişler, yanlış denemeler, kilitler ve ayar değişiklikleri (denetim kaydından, son 25)."
         actions={
-          <Link href="/admin/audit?varlik=AdminGate" className="qx-small inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline">
+          <Link href={GATE_AUDIT_HREF} className="qx-small inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline">
             Tüm kapı kayıtları
           </Link>
         }

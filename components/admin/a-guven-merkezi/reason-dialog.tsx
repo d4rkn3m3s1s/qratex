@@ -47,7 +47,11 @@ export function ReasonDialog<V extends string = string>({
 }) {
   const noteId = useId();
   const [note, setNote] = useState('');
-  const [choice, setChoice] = useState<V | null>(defaultChoice ?? choices?.[0]?.value ?? null);
+  const [rawChoice, setChoice] = useState<V | null>(defaultChoice ?? choices?.[0]?.value ?? null);
+  // Seçenekler değişebilir (ör. durum değişince "mevcut durum" listeden çıkar): listede olmayan
+  // bayat seçim görünmez ama gönderilirdi → sunucu "aynı durum" diye reddederdi. İlk geçerliye düş.
+  const choice: V | null =
+    choices && rawChoice !== null && !choices.some((c) => c.value === rawChoice) ? (choices[0]?.value ?? null) : rawChoice;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const valid = note.trim().length >= minLength && (!choices || choice !== null);

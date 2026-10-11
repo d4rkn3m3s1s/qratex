@@ -139,6 +139,24 @@ describe('Yönetici: "Tamamlandı" yalnız yürütme kanıtıyla', () => {
     expect(mockSendDsrEmail).toHaveBeenCalledWith('ayse@test.local', 'erased', expect.any(Object));
   });
 
+  it('SALDIRI (kalite turu): manuel talep YÖNETİCİ hesabına açılsa da silme yürütülmez (409 ADMIN_TARGET)', async () => {
+    db.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+    const { POST } = await import('@/app/api/admin/privacy-requests/[id]/route');
+    const res = await POST(adminReq('POST', { action: 'erase', confirmEmail: 'ayse@test.local' }), ctx);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('ADMIN_TARGET');
+    expect(mockAnonymize).not.toHaveBeenCalled();
+    expect(mockSendDsrEmail).not.toHaveBeenCalled();
+  });
+
+  it('kalite turu: yönetici kendi hesabını kuyruktan silemez (403)', async () => {
+    primeStore({ ...REQUEST, userId: 'admin-1' });
+    const { POST } = await import('@/app/api/admin/privacy-requests/[id]/route');
+    const res = await POST(adminReq('POST', { action: 'erase', confirmEmail: 'ayse@test.local' }), ctx);
+    expect(res.status).toBe(403);
+    expect(mockAnonymize).not.toHaveBeenCalled();
+  });
+
   it('erişim talebi: bildirim gönderilemezse talep AÇIK kalır (sahibine ulaşmayan paket "tamamlandı" sayılmaz)', async () => {
     primeStore({ ...REQUEST, type: 'access' });
     mockExport.mockResolvedValue({ counts: { qraChatLogs: 2 } });
