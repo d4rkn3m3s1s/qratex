@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { MULTIPLIER_LIMITS, MULTIPLIER_SCOPE, sourceLabel, type CapsSnapshot, type Multipliers } from '@/lib/admin-economy/contract';
 import { Callout, HistoryPanel, NumField, fmtInt, fmtMult } from './parts';
 import type { EditableResource } from './use-editable-resource';
+import { AdminEkonomiStudyosuText } from './copy';
 
 export type MultipliersMeta = { isDefault: boolean; caps: CapsSnapshot };
 
@@ -34,15 +35,15 @@ export function MultipliersTab({ resource }: { resource: EditableResource<Multip
       >
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2" aria-label="Uygulandığı kaynaklar">
-            <span className="qx-caption text-fg-muted">Uygulandığı kaynaklar:</span>
+            <span className="qx-caption text-fg-muted"><AdminEkonomiStudyosuText k="appliesTo" /></span>
             {MULTIPLIER_SCOPE.map((s) => (
               <span key={s} className={cn('qx-caption rounded-chip border px-2 py-0.5', TONE_CHIP.brand)}>
                 {sourceLabel(s)}
               </span>
             ))}
-            <span className="qx-caption text-fg-muted">· oyun, çark, görev, seri, davet ve iade/emanet yolları çarpandan muaftır.</span>
+            <span className="qx-caption text-fg-muted"><AdminEkonomiStudyosuText k="exemptSources" /></span>
           </div>
-          {isDefault && <Callout tone="info">Henüz kayıtlı ayar yok: varsayılan 1× uygulanıyor. İlk kayıtla oluşturulur.</Callout>}
+          {isDefault && <Callout tone="info"><AdminEkonomiStudyosuText k="noSettings" /></Callout>}
           <div className="grid gap-4 sm:grid-cols-2">
             <NumField
               label="Puan çarpanı"
@@ -88,14 +89,14 @@ export function MultipliersTab({ resource }: { resource: EditableResource<Multip
       >
         <div className="overflow-x-auto">
           <table className="w-full min-w-[36rem] text-left">
-            <caption className="sr-only">Kategori tavanları ve son 7 günde tavana takılan kredi sayısı</caption>
+            <caption className="sr-only"><AdminEkonomiStudyosuText k="capsCaption" /></caption>
             <thead>
               <tr className="qx-caption border-b border-subtle text-fg-muted">
                 <th scope="col" className="px-4 py-2 font-medium">Kategori</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Günlük</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Haftalık</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Bayi başına / gün</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Tavana takılan (7 gün)</th>
+                <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="daily" /></th>
+                <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="weekly" /></th>
+                <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="perDealerDay" /></th>
+                <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="capped7d" /></th>
               </tr>
             </thead>
             <tbody>
@@ -103,7 +104,7 @@ export function MultipliersTab({ resource }: { resource: EditableResource<Multip
                 <tr key={r.category} className="qx-small border-b border-subtle last:border-0">
                   <th scope="row" className="px-4 py-2.5 font-medium">
                     {r.label}
-                    {r.requiresActor && <span className="qx-caption block font-normal text-fg-muted">bayi atfı zorunlu</span>}
+                    {r.requiresActor && <span className="qx-caption block font-normal text-fg-muted"><AdminEkonomiStudyosuText k="dealerRequired" /></span>}
                   </th>
                   <td className="qx-num px-4 py-2.5 text-right">{fmtInt(r.daily)}</td>
                   <td className="qx-num px-4 py-2.5 text-right">{fmtInt(r.weekly)}</td>
@@ -123,7 +124,7 @@ export function MultipliersTab({ resource }: { resource: EditableResource<Multip
             Admin düzeltmesi: işlem başı <span className="qx-num">{fmtInt(caps.adminAdjust.perOperation)}</span>, kullanıcı başına günlük{' '}
             <span className="qx-num">{fmtInt(caps.adminAdjust.dailyPerUser)}</span>; <span className="qx-num">{fmtInt(caps.adminAdjust.secondApprovalAbove)}</span> üstü ikinci admin onayı ister.
           </p>
-          <p>&quot;Tavana takılan&quot; = tavan dolu olduğu için 0 puanla deftere yazılan kredi (yalnız tek-kez anahtarlı yollar).</p>
+          <p><AdminEkonomiStudyosuText k="cappedNote" /></p>
         </div>
       </SectionCard>
 

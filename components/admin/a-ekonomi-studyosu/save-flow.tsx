@@ -7,6 +7,7 @@ import { toast } from '@/lib/admin-toast';
 import { diffJson } from '@/lib/admin-economy/contract';
 import { ChangeList } from './parts';
 import type { EditableResource } from './use-editable-resource';
+import { AdminEkonomiStudyosuText } from './copy';
 
 /**
  * "İncele ve yayınla" akışı: kirli çubuk → fark + etki önizlemeli onay diyaloğu → sürümlü
@@ -80,7 +81,7 @@ export function StudioSaveBar<D, M>({
         title={`${title} canlıya alınsın mı?`}
         description={
           <span className="block space-y-2">
-            <span className="block">Aşağıdaki değişiklikler kaydedildiği anda puan kazanımını etkiler. Kayıt denetim günlüğüne yazılır ve geçmişten geri yüklenebilir.</span>
+            <span className="block"><AdminEkonomiStudyosuText k="saveWarning" /></span>
             <span className="block max-h-56 overflow-y-auto rounded-control border border-subtle p-2">
               <ChangeList changes={changes} labelOf={labelOf} max={20} />
             </span>

@@ -13,6 +13,7 @@ import { LEAGUE_MIN_LIMIT, deriveLeagueRanges, leagueRuleErrors, type LeaguePrev
 import { previewLeagues, type LeaguesMeta } from './api';
 import { Callout, HistoryPanel, NumField, fmtInt, fmtPct } from './parts';
 import type { EditableResource } from './use-editable-resource';
+import { AdminEkonomiStudyosuText } from './copy';
 
 export function leaguesPathLabel(path: string): string {
   const m = path.match(/^\[(\w+)\](?:\.(\w+))?$/);
@@ -84,9 +85,9 @@ export function LeaguesTab({ resource }: { resource: EditableResource<LeagueRule
             <p className="qx-caption mt-2 text-fg-muted">Toplam {fmtInt(total)} müşteri.</p>
           </>
         ) : dist ? (
-          <p className="qx-small text-fg-muted">Henüz sınıflandırılacak müşteri yok.</p>
+          <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="noCustomers" /></p>
         ) : (
-          <Callout tone="warning">Dağılım okunamadı; kurallar yine düzenlenebilir.</Callout>
+          <Callout tone="warning"><AdminEkonomiStudyosuText k="distUnreadable" /></Callout>
         )}
         <Callout tone="neutral" className="mt-3">
           Lig, harcanabilir bakiyeden hesaplanır: ödül kullanan müşterinin ligi düşebilir. Kümülatif kazanca geçiş ürün kararı bekliyor.
@@ -107,9 +108,9 @@ export function LeaguesTab({ resource }: { resource: EditableResource<LeagueRule
                 </Field>
                 {i === 0 ? (
                   <div>
-                    <p className="qx-small font-medium">Başlangıç eşiği</p>
+                    <p className="qx-small font-medium"><AdminEkonomiStudyosuText k="startThreshold" /></p>
                     <p className="qx-small qx-num mt-2">0 puan</p>
-                    <p className="qx-caption text-fg-muted">ilk lig her zaman 0&apos;dan başlar</p>
+                    <p className="qx-caption text-fg-muted"><AdminEkonomiStudyosuText k="firstLeagueZero" /></p>
                   </div>
                 ) : (
                   <NumField
@@ -124,13 +125,13 @@ export function LeaguesTab({ resource }: { resource: EditableResource<LeagueRule
                   />
                 )}
                 <div>
-                  <p className="qx-small font-medium">Aralık</p>
+                  <p className="qx-small font-medium"><AdminEkonomiStudyosuText k="range" /></p>
                   <p className="qx-small qx-num mt-2">
                     {fmtInt(r.minPoints)} – {i === rules.length - 1 ? 'sınırsız' : fmtInt(r.maxPoints)}
                   </p>
                 </div>
                 <div className="sm:text-right">
-                  <p className="qx-small font-medium">Müşteri</p>
+                  <p className="qx-small font-medium"><AdminEkonomiStudyosuText k="customers" /></p>
                   <p className="qx-small qx-num mt-2">
                     {users == null ? '—' : fmtInt(users)}
                     {preview.status === 'ready' && after != null && after !== users && (
@@ -145,10 +146,10 @@ export function LeaguesTab({ resource }: { resource: EditableResource<LeagueRule
         </ol>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-subtle px-4 py-3">
           <div className="qx-small" aria-live="polite">
-            {!resource.dirty && <span className="text-fg-muted">Eşikleri değiştirince etki burada görünür.</span>}
-            {resource.dirty && !valid && <span className="text-danger">Önizleme için hataları düzeltin.</span>}
-            {preview.status === 'loading' && <span className="text-fg-muted">Etki hesaplanıyor…</span>}
-            {preview.status === 'error' && <span className="text-danger">Etki önizlemesi alınamadı.</span>}
+            {!resource.dirty && <span className="text-fg-muted"><AdminEkonomiStudyosuText k="impactHint" /></span>}
+            {resource.dirty && !valid && <span className="text-danger"><AdminEkonomiStudyosuText k="fixToPreview" /></span>}
+            {preview.status === 'loading' && <span className="text-fg-muted"><AdminEkonomiStudyosuText k="impactLoading" /></span>}
+            {preview.status === 'error' && <span className="text-danger"><AdminEkonomiStudyosuText k="impactFailed" /></span>}
             {preview.status === 'ready' && preview.data && (
               <span className="inline-flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-1 text-success">

@@ -11,6 +11,7 @@ import type { PointsMatrix } from '@/lib/points-rules';
 import { FLOW_WINDOWS, type EconomyFlow, type FlowKind, type Multipliers, type SimulationResult } from '@/lib/admin-economy/contract';
 import { getFlow, simulate } from './api';
 import { Callout, fmtInt, fmtPct } from './parts';
+import { AdminEkonomiStudyosuText } from './copy';
 
 type Async<T> = { status: 'loading' | 'ready' | 'error'; data?: T; error?: unknown };
 
@@ -84,14 +85,14 @@ export default function SimulationTab({
           value={String(days)}
           onChange={(v) => v && setDays(Number(v))}
         />
-        {f && <p className="qx-caption text-fg-muted">Günler Europe/Istanbul takvimine göre · kaynak: puan defteri</p>}
+        {f && <p className="qx-caption text-fg-muted"><AdminEkonomiStudyosuText k="daysNote" /></p>}
       </div>
 
       {flow.status === 'error' && !f ? (
         <ErrorState kind={classifyError(flow.error)} title="Puan akışı yüklenemedi" onRetry={() => setReloadKey((k) => k + 1)} />
       ) : !f ? (
         <div role="status" aria-busy="true">
-          <span className="sr-only">Puan akışı yükleniyor…</span>
+          <span className="sr-only"><AdminEkonomiStudyosuText k="flowLoading" /></span>
           <SkeletonStats />
         </div>
       ) : (
@@ -137,12 +138,12 @@ export default function SimulationTab({
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[34rem] text-left">
-                  <caption className="sr-only">Kaynak bazında puan akışı</caption>
+                  <caption className="sr-only"><AdminEkonomiStudyosuText k="flowBySource" /></caption>
                   <thead>
                     <tr className="qx-caption border-b border-subtle text-fg-muted">
                       <th scope="col" className="px-4 py-2 font-medium">Kaynak</th>
-                      <th scope="col" className="px-4 py-2 font-medium">Tür</th>
-                      <th scope="col" className="px-4 py-2 text-right font-medium">İşlem</th>
+                      <th scope="col" className="px-4 py-2 font-medium"><AdminEkonomiStudyosuText k="type" /></th>
+                      <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="operation" /></th>
                       <th scope="col" className="px-4 py-2 text-right font-medium">Puan</th>
                       <th scope="col" className="px-4 py-2 text-right font-medium">Pay</th>
                     </tr>
@@ -223,11 +224,11 @@ function SimResult({ result, stale }: { result: SimulationResult; stale: boolean
       </MetricGrid>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[34rem] text-left">
-          <caption className="sr-only">Kaynak bazında gerçekleşen ve tahmini basım</caption>
+          <caption className="sr-only"><AdminEkonomiStudyosuText k="mintBySource" /></caption>
           <thead>
             <tr className="qx-caption border-b border-subtle text-fg-muted">
               <th scope="col" className="py-2 pr-4 font-medium">Kaynak</th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">Gerçekleşen</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium"><AdminEkonomiStudyosuText k="actual" /></th>
               <th scope="col" className="px-4 py-2 text-right font-medium">Tahmin</th>
               <th scope="col" className="py-2 pl-4 font-medium">Dayanak</th>
             </tr>

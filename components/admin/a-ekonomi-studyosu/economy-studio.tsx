@@ -27,13 +27,14 @@ import { StudioSaveBar } from './save-flow';
 import { MatrixTab, matrixPathLabel, type MatrixMeta } from './matrix-tab';
 import { MultipliersTab, multipliersPathLabel, type MultipliersMeta } from './multipliers-tab';
 import { LeaguesTab, leaguesPathLabel } from './leagues-tab';
+import { AdminEkonomiStudyosuText } from './copy';
 
 // Ağır defter sorguları + tablolar yalnız sekme açılınca yüklenir.
 const SimulationTab = dynamic(() => import('./simulation-tab'), {
   ssr: false,
   loading: () => (
     <div role="status" aria-busy="true">
-      <span className="sr-only">Simülasyon yükleniyor…</span>
+      <span className="sr-only"><AdminEkonomiStudyosuText k="simLoading" /></span>
       <SkeletonStats />
     </div>
   ),
@@ -116,7 +117,7 @@ export function EconomyStudio({ initialTab, initial }: { initialTab: EconomyTab;
       {dirty && (
         <>
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-warning" />
-          <span className="sr-only">(kaydedilmemiş değişiklik)</span>
+          <span className="sr-only"><AdminEkonomiStudyosuText k="unsaved" /></span>
         </>
       )}
     </span>

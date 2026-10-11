@@ -9,6 +9,7 @@ import { Field, NumericInput, parseLocaleNumber, formatNumberDisplay, formatNumb
 import type { FieldChange, HistoryEntry, HistoryKind, HistoryPage } from '@/lib/admin-economy/contract';
 import { getHistory } from './api';
 import type { EditableResource } from './use-editable-resource';
+import { AdminEkonomiStudyosuText } from './copy';
 
 const nf = new Intl.NumberFormat('tr-TR');
 export const fmtInt = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? '—' : nf.format(Math.round(n)));
@@ -145,7 +146,7 @@ export function ResourceGate<D, M>({
 
 /** Alan farkları listesi (kaydetmeden önce gözden geçirme ve geçmiş için). */
 export function ChangeList({ changes, labelOf, max = 12 }: { changes: FieldChange[]; labelOf?: (path: string) => string; max?: number }) {
-  if (changes.length === 0) return <p className="qx-small text-fg-muted">Alan değişikliği yok.</p>;
+  if (changes.length === 0) return <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="noFieldChanges" /></p>;
   return (
     <ul className="space-y-1">
       {changes.slice(0, max).map((c) => (
@@ -214,7 +215,7 @@ export function HistoryPanel({
       </button>
       {open && (
         <div id={panelId} className="border-t border-subtle px-4 py-3" aria-live="polite" aria-busy={state.status === 'loading'}>
-          {state.status === 'loading' && !state.data && <p className="qx-small text-fg-muted">Geçmiş yükleniyor…</p>}
+          {state.status === 'loading' && !state.data && <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="historyLoading" /></p>}
           {state.status === 'error' && (
             <ErrorState
               kind={classifyError(state.error)}
@@ -224,7 +225,7 @@ export function HistoryPanel({
             />
           )}
           {state.data && state.data.items.length === 0 && (
-            <p className="qx-small text-fg-muted">Henüz kayıtlı değişiklik yok. İlk kaydınız burada görünecek.</p>
+            <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="noHistory" /></p>
           )}
           {state.data && state.data.items.length > 0 && (
             <ol className={cn('space-y-3', state.status === 'loading' && 'opacity-60')}>
