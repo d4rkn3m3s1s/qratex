@@ -16,6 +16,7 @@ import { actOnExperiment, checkAssignment, errorText, fcKeys, fetchResults } fro
 import { STATUS_TONE, daysBetween, fmtAbs, fmtDay, fmtNum, fmtP, fmtPct, fmtSignedPct, fmtSignedPp } from './format';
 import { ReasonDialog } from './reason-dialog';
 import { ExperimentEditor } from './experiment-editor';
+import { useFeatureLabCopy } from './copy';
 
 type Act = 'start' | 'pause' | 'resume' | 'complete' | 'delete';
 
@@ -35,6 +36,7 @@ const VERDICT: Record<ExperimentResults['comparison']['verdict'], { label: strin
 };
 
 export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; version: string | null }) {
+  const fx = useFeatureLabCopy();
   const qc = useQueryClient();
   const [act, setAct] = useState<Act | null>(null);
   const [winner, setWinner] = useState<'A' | 'B' | 'none'>('none');
@@ -124,7 +126,7 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
           Sonuç
         </h3>
         {e.status === 'draft' ? (
-          <p className="text-sm text-fg-muted">Deney başlatılınca sonuçlar burada görünür.</p>
+          <p className="text-sm text-fg-muted">{fx.resultsAfterStart}</p>
         ) : (
           <QueryState query={results} skeleton="detail" onRetry={() => results.refetch()}>
             {(r) => <ResultsView r={r} />}
@@ -180,7 +182,7 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
                 value={winner}
                 onChange={(v) => v && setWinner(v)}
               />
-              <p className="text-xs text-fg-muted">Kazanan varyant otomatik yayılmaz; ilgili ekranın varsayılanını ayrıca güncelleyin.</p>
+              <p className="text-xs text-fg-muted">{fx.winnerNote}</p>
             </div>
           ) : null}
         </ReasonDialog>
@@ -235,6 +237,7 @@ function CiBar({ ci, rate, max, label }: { ci: [number, number] | null; rate: nu
 }
 
 function ResultsView({ r }: { r: ExperimentResults }) {
+  const fx = useFeatureLabCopy();
   const [a, b] = r.variants;
   const totalImpr = a.impressions + b.impressions;
   const max = Math.max(a.ci?.[1] ?? 0, b.ci?.[1] ?? 0, 1);
@@ -272,7 +275,7 @@ function ResultsView({ r }: { r: ExperimentResults }) {
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[32rem] text-sm">
-          <caption className="sr-only">Varyant sonuçları</caption>
+          <caption className="sr-only">{fx.variantResults}</caption>
           <thead>
             <tr className="border-b border-border text-left text-xs text-fg-muted">
               <th scope="col" className="py-2 pr-3 font-medium">
@@ -328,7 +331,7 @@ function ResultsView({ r }: { r: ExperimentResults }) {
             </div>
           </div>
           <details className="text-sm">
-            <summary className="cursor-pointer text-fg-muted">Günlük tabloyu göster</summary>
+            <summary className="cursor-pointer text-fg-muted">{fx.showDaily}</summary>
             <ChartDataTable
               data={daily}
               caption="Günlük gösterim ve dönüşüm (İstanbul)"
@@ -348,6 +351,7 @@ function ResultsView({ r }: { r: ExperimentResults }) {
 }
 
 function AssignmentChecker({ id }: { id: string }) {
+  const fx = useFeatureLabCopy();
   const inputId = useId();
   const [subject, setSubject] = useState('');
   const [busy, setBusy] = useState(false);
@@ -377,7 +381,7 @@ function AssignmentChecker({ id }: { id: string }) {
         }}
       >
         <div className="flex-1 space-y-1">
-          <Label htmlFor={inputId}>Kullanıcı kimliği ya da e-posta</Label>
+          <Label htmlFor={inputId}>{fx.userIdOrEmail}</Label>
           <Input id={inputId} value={subject} onChange={(e) => setSubject(e.target.value)} autoComplete="off" />
         </div>
         <Button type="submit" variant="outline" className="min-h-11 sm:min-h-10" disabled={busy || subject.trim().length < 3} aria-busy={busy}>

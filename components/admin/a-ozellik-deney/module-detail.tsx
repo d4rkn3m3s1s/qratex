@@ -9,6 +9,7 @@ import { QueryState } from '@/components/states';
 import { ENFORCEMENT_HINT, ENFORCEMENT_LABEL, SCOPE_LABEL, SEVERITY_LABEL, type ModuleRow } from '@/lib/admin-flags/contract';
 import { fcKeys, fetchHistory } from './api';
 import { ENFORCEMENT_TONE, SEVERITY_TONE, fmtAbs, fmtNum } from './format';
+import { useFeatureLabCopy } from './copy';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -26,6 +27,7 @@ const ROLE_ROWS = [
 ] as const;
 
 export function ModuleDetail({ row: m, onToggle }: { row: ModuleRow; onToggle: (next: boolean) => void }) {
+  const fx = useFeatureLabCopy();
   const qs = `kind=all&key=${encodeURIComponent(m.key)}&size=20`;
   const history = useQuery({ queryKey: fcKeys.history(qs), queryFn: ({ signal }) => fetchHistory(qs, signal), staleTime: 30_000 });
   const inertLocked = m.enforcement === 'none' && m.enabled;
@@ -103,7 +105,7 @@ export function ModuleDetail({ row: m, onToggle }: { row: ModuleRow; onToggle: (
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-fg-muted">Bu anahtarı denetleyen API ucu yok.</p>
+          <p className="text-sm text-fg-muted">{fx.noApi}</p>
         )}
         {m.bindings.pages.length || m.bindings.server.length || m.bindings.landing.length || m.bindings.menu.length ? (
           <ul className="space-y-1 text-xs text-fg-muted">
@@ -164,7 +166,7 @@ export function ModuleDetail({ row: m, onToggle }: { row: ModuleRow; onToggle: (
             { label: 'Toplam (oturumlu)', value: fmtNum(b.total) },
           ]}
         />
-        <p className="text-xs text-fg-muted">Oturumsuz engellemeler veritabanına yazılmaz (kötüye kullanım koruması).</p>
+        <p className="text-xs text-fg-muted">{fx.anonBlocks}</p>
       </Section>
 
       <Section title="Değişiklik geçmişi">

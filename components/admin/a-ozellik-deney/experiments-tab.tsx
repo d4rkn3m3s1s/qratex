@@ -15,8 +15,10 @@ import { createExperiment, fcKeys, fetchExperiments } from './api';
 import { STATUS_TONE, daysBetween, fmtAbs, fmtNum } from './format';
 import { ExperimentEditor, emptyExperimentDraft } from './experiment-editor';
 import { ExperimentDetail } from './experiment-detail';
+import { useFeatureLabCopy } from './copy';
 
 export function ExperimentsTab({ initial }: { initial: ExperimentsState | null }) {
+  const fx = useFeatureLabCopy();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: fcKeys.experiments(), queryFn: ({ signal }) => fetchExperiments(signal), initialData: initial ?? undefined, staleTime: 30_000 });
   const sheet = useDetailSheet('deney');
@@ -137,7 +139,7 @@ export function ExperimentsTab({ initial }: { initial: ExperimentsState | null }
       <DetailSheet paramKey="deney" size="xl" title="Deney ayrıntısı" siblings={data?.experiments.map((e) => e.id)}>
         {(id: string) => {
           const row = data?.experiments.find((e) => e.id === id);
-          return row && data ? <ExperimentDetail row={row} version={data.version} /> : <p className="text-sm text-fg-muted">Deney bulunamadı.</p>;
+          return row && data ? <ExperimentDetail row={row} version={data.version} /> : <p className="text-sm text-fg-muted">{fx.experimentNotFound}</p>;
         }}
       </DetailSheet>
 

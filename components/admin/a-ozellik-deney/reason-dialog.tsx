@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { InlineError, TONE_CALLOUT, matchesConfirmPhrase, type ImpactItem } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { errorText } from './api';
+import { useFeatureLabCopy } from './copy';
 
 /**
  * Gerekçe zorunlu değişiklik diyaloğu: etki önizlemesi + (kritikte) anahtarı yazarak onay.
@@ -44,6 +45,7 @@ export function ReasonDialog({
   onConfirm: (reason: string) => Promise<unknown>;
   children?: ReactNode;
 }) {
+  const fx = useFeatureLabCopy();
   const noteId = useId();
   const phraseId = useId();
   const [note, setNote] = useState('');
@@ -114,7 +116,7 @@ export function ReasonDialog({
           {children}
           {requireReason ? (
             <div className="space-y-2">
-              <Label htmlFor={noteId}>Gerekçe</Label>
+              <Label htmlFor={noteId}>{fx.reason}</Label>
               <Textarea
                 id={noteId}
                 value={note}

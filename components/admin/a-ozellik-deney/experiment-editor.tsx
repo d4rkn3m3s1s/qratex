@@ -11,6 +11,7 @@ import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { CreateExperimentBody, DIMENSIONS, DIMENSION_LABEL, type Dimension } from '@/lib/admin-flags/contract';
 import { errorText } from './api';
+import { useFeatureLabCopy } from './copy';
 
 export type ExperimentDraft = {
   id: string;
@@ -79,6 +80,7 @@ export function ExperimentEditor({
   onClose: () => void;
   onSubmit: (v: ExperimentValues) => Promise<void>;
 }) {
+  const fx = useFeatureLabCopy();
   const [d, setD] = useState(initial);
   const [idTouched, setIdTouched] = useState(mode === 'edit');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -160,7 +162,7 @@ export function ExperimentEditor({
             {err('name')}
           </div>
           <div className="space-y-1">
-            <Label htmlFor={f.id}>Deney anahtarı</Label>
+            <Label htmlFor={f.id}>{fx.experimentKey}</Label>
             <Input
               id={f.id}
               value={d.id}
@@ -185,7 +187,7 @@ export function ExperimentEditor({
           <div className="space-y-1">
             <Label htmlFor={f.metric}>Birincil metrik</Label>
             <Input id={f.metric} maxLength={160} value={d.primaryMetric} onChange={(e) => set({ primaryMetric: e.target.value })} />
-            <p className="text-xs text-fg-muted">Ölçülen: varyantı gören tekil kullanıcıların dönüşüm olayı oranı.</p>
+            <p className="text-xs text-fg-muted">{fx.measured}</p>
           </div>
           <div className="space-y-2">
             <p id={f.dim} className="text-sm font-medium text-fg">
@@ -201,7 +203,7 @@ export function ExperimentEditor({
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor={f.a}>A varyantı (kontrol)</Label>
+              <Label htmlFor={f.a}>{fx.variantA}</Label>
               <Input
                 id={f.a}
                 value={d.variantA}
@@ -214,7 +216,7 @@ export function ExperimentEditor({
               {err('variantA')}
             </div>
             <div className="space-y-1">
-              <Label htmlFor={f.b}>B varyantı</Label>
+              <Label htmlFor={f.b}>{fx.variantB}</Label>
               <Input
                 id={f.b}
                 value={d.variantB}

@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { archiveFlag, fcKeys, fetchRollouts, putRollout } from './api';
 import { fmtAbs, fmtNum, fmtRel } from './format';
 import { ReasonDialog } from './reason-dialog';
+import { useFeatureLabCopy } from './copy';
 
 /** Europe/Istanbul sabit UTC+3 (2016'dan beri yaz saati yok). */
 const toLocalInput = (iso: string | null) => {
@@ -58,6 +59,7 @@ function RolloutState({ r }: { r: RolloutRow }) {
 }
 
 export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
+  const fx = useFeatureLabCopy();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: fcKeys.rollouts(), queryFn: ({ signal }) => fetchRollouts(signal), initialData: initial ?? undefined, staleTime: 30_000 });
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -94,21 +96,21 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
                 }}
               >
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor={pickId}>Yeni açılış için modül</Label>
+                  <Label htmlFor={pickId}>{fx.rolloutModule}</Label>
                   <select
                     id={pickId}
                     value={newKey}
                     onChange={(e) => setNewKey(e.target.value)}
                     className="flex h-11 w-full rounded-md border border-border bg-surface-1 px-3 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:h-10"
                   >
-                    <option value="">Modül seçin…</option>
+                    <option value="">{fx.pickModule}</option>
                     {d.candidates.map((c) => (
                       <option key={c.key} value={c.key}>
                         {c.label} ({SCOPE_LABEL[c.scope]})
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-fg-muted">Yalnız kullanıcı başına kapı uygulanan (API ya da sayfa) modüller listelenir.</p>
+                  <p className="text-xs text-fg-muted">{fx.gatedOnly}</p>
                 </div>
                 <Button type="submit" className="min-h-11 sm:min-h-10" disabled={!newKey}>
                   <Plus className="h-4 w-4" aria-hidden />
@@ -214,6 +216,7 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
 }
 
 function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () => void; onSaved: () => Promise<void> }) {
+  const fx = useFeatureLabCopy();
   const [d, setD] = useState(draft);
   const ids = { pct: useId(), allow: useId(), exp: useId(), note: useId(), active: useId() };
   const pct = Number.parseInt(d.percent, 10);
@@ -259,7 +262,7 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor={ids.pct}>Kullanıcı yüzdesi</Label>
+          <Label htmlFor={ids.pct}>{fx.userPercent}</Label>
           <Input
             id={ids.pct}
             inputMode="numeric"
@@ -273,18 +276,18 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
           </p>
         </div>
         <div className="space-y-1">
-          <Label htmlFor={ids.exp}>Bitiş (isteğe bağlı)</Label>
+          <Label htmlFor={ids.exp}>{fx.endsOptional}</Label>
           <Input id={ids.exp} type="datetime-local" value={d.expires} onChange={(e) => setD({ ...d, expires: e.target.value })} />
-          <p className="text-xs text-fg-muted">İstanbul saati.</p>
+          <p className="text-xs text-fg-muted">{fx.istanbulTime}</p>
         </div>
       </div>
       <div className="space-y-1">
-        <Label htmlFor={ids.allow}>Allowlist (kullanıcı kimlikleri)</Label>
+        <Label htmlFor={ids.allow}>{fx.allowlist}</Label>
         <Textarea id={ids.allow} rows={3} value={d.allow} onChange={(e) => setD({ ...d, allow: e.target.value })} className="font-mono text-xs" placeholder="Her satıra bir kullanıcı kimliği" />
         <p className="text-xs text-fg-muted">{fmtNum(allowList.length)} kimlik · en fazla 200. Bu kişiler yüzdeden bağımsız olarak kapsamdadır.</p>
       </div>
       <div className="space-y-1">
-        <Label htmlFor={ids.note}>Not (isteğe bağlı)</Label>
+        <Label htmlFor={ids.note}>{fx.noteOptional}</Label>
         <Input id={ids.note} value={d.note} maxLength={300} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder="Ör. yeni klan akışı önce %10 ile" />
       </div>
     </ReasonDialog>
