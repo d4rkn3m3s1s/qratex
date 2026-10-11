@@ -218,8 +218,8 @@ function MailCard({ state }: { state: PlatformSettingsState }) {
       </div>
       {!mail.configured ? (
         <p className="qx-small mt-3 text-fg-muted">
-          SMTP için <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>; Resend için <code>RESEND_API_KEY</code>{' '}
-          tanımlayın. E-posta yokken bağlantıyla giriş düğmesi de görünmez.
+          <AdminAyarlarKapiText k="smtpFor" /> <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code><AdminAyarlarKapiText k="resendFor" /> <code>RESEND_API_KEY</code>
+          <AdminAyarlarKapiText k="mailSetupTail" />
         </p>
       ) : null}
       <form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" noValidate>

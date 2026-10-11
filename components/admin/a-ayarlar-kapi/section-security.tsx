@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { avatarList, resolveAvatarImage } from '@/lib/avatar-options';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
 import { changePassword, errorText, formatIstanbul, updateProfile } from './api';
+import { AdminAyarlarKapiText } from './copy';
 
 export function SecuritySection({ state }: { state: PlatformSettingsState }) {
   return (
@@ -48,7 +49,7 @@ function GateSummaryCard({ gate }: { gate: PlatformSettingsState['context']['gat
       }
     >
       {gate === null ? (
-        <InlineError variant="banner">Kapı durumu şu anda okunamadı. Kapı ekranında yeniden deneyin.</InlineError>
+        <InlineError variant="banner"><AdminAyarlarKapiText k="gateUnreadable" /></InlineError>
       ) : (
         <>
           {gate.isDefaultAnswer ? (
@@ -133,7 +134,7 @@ function AccountCard() {
               Ad soyad
             </label>
             <Input id={ids.name} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} aria-invalid={nameInvalid} autoComplete="name" />
-            {nameInvalid ? <InlineError>Ad en az 2 karakter olmalıdır.</InlineError> : null}
+            {nameInvalid ? <InlineError><AdminAyarlarKapiText k="nameMin" /></InlineError> : null}
           </div>
           <div className="space-y-1.5">
             <label htmlFor={ids.email} className="qx-small font-medium text-fg">
@@ -151,8 +152,8 @@ function AccountCard() {
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Avatar seç</DialogTitle>
-            <DialogDescription>Seçtiğiniz avatar “Profili kaydet” ile kalıcı olur.</DialogDescription>
+            <DialogTitle><AdminAyarlarKapiText k="pickAvatar" /></DialogTitle>
+            <DialogDescription><AdminAyarlarKapiText k="avatarHint" /></DialogDescription>
           </DialogHeader>
           <div role="tablist" aria-label="Avatar kategorileri" className="flex gap-2 overflow-x-auto pb-1">
             {avatarList.map((c) => (
@@ -290,14 +291,14 @@ function PasswordCard() {
               {next ? `Güç: ${strength.label}` : 'En az 8 karakter; büyük-küçük harf, rakam ve sembol karıştırın.'}
             </p>
           </div>
-          {tooShort ? <InlineError>Şifre en az 8 karakter olmalıdır.</InlineError> : null}
+          {tooShort ? <InlineError><AdminAyarlarKapiText k="passwordMin" /></InlineError> : null}
         </div>
         <div className="space-y-1.5">
           <label htmlFor={ids.confirm} className="qx-small font-medium text-fg">
             Yeni şifre (tekrar)
           </label>
           <Input id={ids.confirm} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-invalid={mismatch} />
-          {mismatch ? <InlineError>Şifreler aynı değil.</InlineError> : null}
+          {mismatch ? <InlineError><AdminAyarlarKapiText k="passwordMismatch" /></InlineError> : null}
         </div>
         {error ? (
           <div className="sm:col-span-3">

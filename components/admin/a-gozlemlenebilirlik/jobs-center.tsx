@@ -17,6 +17,7 @@ import { JOB_HEALTH_META, JOB_STATUS_LABEL, RUN_OVERALL_META } from '@/lib/obser
 import { errorText, fetchJobs, obsKeys, runJob } from './api';
 import { fmtAgo, fmtDateTime, fmtInt, fmtMs } from './format';
 import { DataGrid, HealthBadge, NoteText } from './parts';
+import { AdminGozlemlenebilirlikText } from './copy';
 
 type Filter = 'all' | 'problems';
 
@@ -106,7 +107,7 @@ function JobsBody({ data }: { data: JobsView }) {
         }
         density="flush"
       >
-        {!data.stateReadable && <p className="px-4 pt-3 text-sm text-warning">İş durumu okunamadı; aşağıda yalnız kayıt defteri görünüyor.</p>}
+        {!data.stateReadable && <p className="px-4 pt-3 text-sm text-warning"><AdminGozlemlenebilirlikText k="jobsUnreadable" /></p>}
         {rows.length === 0 ? (
           <EmptyState compact title="Sorunlu iş yok" description="Tüm işler bu dönem için sorunsuz ya da sırasını bekliyor." />
         ) : (
@@ -158,7 +159,7 @@ function JobsBody({ data }: { data: JobsView }) {
         )}
       </SectionCard>
       <NoteText>
-        Sistem sağlığının geri kalanı için <Link className="text-brand underline underline-offset-4" href="/admin/observability">Gözlemlenebilirlik</Link> sayfasına bakın.
+        Sistem sağlığının geri kalanı için <Link className="text-brand underline underline-offset-4" href="/admin/observability"><AdminGozlemlenebilirlikText k="title" /></Link> sayfasına bakın.
       </NoteText>
     </div>
   );

@@ -16,6 +16,7 @@ import { ECONOMY_CAPS } from '@/lib/economy/caps';
 import { spinExpectedPoints, spinExpectedXp } from '@/lib/admin-economy/simulate';
 import { Callout, HistoryPanel, NumField, fmtInt, fmtMult, fmtPct } from './parts';
 import type { EditableResource } from './use-editable-resource';
+import { AdminEkonomiStudyosuText } from './copy';
 
 export type MatrixMeta = { defaults: PointsMatrix };
 
@@ -134,7 +135,7 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
       <div className="min-w-0 space-y-6">
         <Callout tone="info">
           Değişiklikler kaydedilene kadar canlı değildir. Kayıttan sonra sunucu önbelleği nedeniyle en geç ~60 sn içinde tüm sunuculara yayılır.
-          Gerçek kazanç, çarpan ve tavanlarla birlikte hesaplanır (bkz. <em>Çarpan ve tavanlar</em> sekmesi).
+          Gerçek kazanç, çarpan ve tavanlarla birlikte hesaplanır (bkz. <em><AdminEkonomiStudyosuText k="multipliersCaps" /></em> sekmesi).
         </Callout>
 
         <ReviewSection
@@ -167,7 +168,7 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
             title="Davet"
             description={
               <>
-                Kayıtta tek seferlik. Kademe ödülleri ve aylık limit <Link className="underline underline-offset-2" href="/admin/referrals">Davet Programı</Link>&apos;nda.
+                Kayıtta tek seferlik. Kademe ödülleri ve aylık limit <Link className="underline underline-offset-2" href="/admin/referrals"><AdminEkonomiStudyosuText k="referral" /></Link>&apos;nda.
               </>
             }
           >
@@ -186,7 +187,7 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
           title="Görev varsayılanı"
           description={
             <>
-              Yalnız ödülü tanımsız görevlerde kullanılır; görevlerin kendi ödülü <Link className="underline underline-offset-2" href="/admin/quests">Görevler</Link> sayfasında. Ödül nesnesinde XP yoksa XP = puan ÷ 2.
+              Yalnız ödülü tanımsız görevlerde kullanılır; görevlerin kendi ödülü <Link className="underline underline-offset-2" href="/admin/quests"><AdminEkonomiStudyosuText k="quests" /></Link> sayfasında. Ödül nesnesinde XP yoksa XP = puan ÷ 2.
             </>
           }
         >
@@ -365,12 +366,12 @@ function ReviewSection({
             <NumField label="XP" unit="XP" min={0} max={L.reviewReward.max} value={value.base.xp} baseline={baseline.base.xp} onChange={(v) => onChange({ ...value, base: { ...value.base, xp: v } })} />
           </fieldset>
           <fieldset className="space-y-3 rounded-control border border-subtle p-3">
-            <legend className="qx-small px-1 font-medium">Detaylı</legend>
+            <legend className="qx-small px-1 font-medium"><AdminEkonomiStudyosuText k="detailed" /></legend>
             <NumField label="Puan" unit="puan" min={0} max={L.reviewReward.max} value={value.detailed.points} baseline={baseline.detailed.points} onChange={(v) => onChange({ ...value, detailed: { ...value.detailed, points: v } })} />
             <NumField label="XP" unit="XP" min={0} max={L.reviewReward.max} value={value.detailed.xp} baseline={baseline.detailed.xp} onChange={(v) => onChange({ ...value, detailed: { ...value.detailed, xp: v } })} />
           </fieldset>
         </div>
-        {warn && <Callout tone="warning">Detaylı ödül temel ödülden düşük: uzun yorum yazmak cezalandırılmış olur.</Callout>}
+        {warn && <Callout tone="warning"><AdminEkonomiStudyosuText k="detailedLow" /></Callout>}
       </div>
     </SectionCard>
   );
@@ -389,7 +390,7 @@ function FeedbackPreview({ matrix, pointMultiplier }: { matrix: PointsMatrix; po
         {detailed ? 'Detaylı' : 'Temel'} ödül: <strong className="qx-num">{fmtInt(pts)} puan</strong> + {fmtInt(grant.xp)} XP
         {pointMultiplier && pointMultiplier !== 1 ? <span className="text-fg-muted"> (çarpan {fmtMult(pointMultiplier)} dahil)</span> : null}
       </p>
-      <p className="qx-caption mt-1 text-fg-muted">VIP ve sezonsal kampanya çarpanı kullanıcıya göre ayrıca uygulanır; günlük tavan dolduysa kredi kısalır.</p>
+      <p className="qx-caption mt-1 text-fg-muted"><AdminEkonomiStudyosuText k="multiplierNote" /></p>
     </SectionCard>
   );
 }
@@ -412,7 +413,7 @@ function SpinPreview({
   return (
     <SectionCard title="Çark dağılımı" headingLevel="h3" density="compact">
       {!enabled ? (
-        <p className="qx-small text-fg-muted">Çark kapalı — kimse çeviremez.</p>
+        <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="wheelOff" /></p>
       ) : (
         <>
           <p className="qx-small">
@@ -453,7 +454,7 @@ function StreakPreview({ milestones }: { milestones: PointsMatrix['streak']['mil
   return (
     <SectionCard title="Seri zaman çizelgesi" headingLevel="h3" density="compact" description="Kesintisiz seride hangi gün kaç bonus kazanılır.">
       {valid.length === 0 ? (
-        <p className="qx-small text-fg-muted">Geçerli kilometre taşı yok.</p>
+        <p className="qx-small text-fg-muted"><AdminEkonomiStudyosuText k="noMilestones" /></p>
       ) : (
         <ol className="space-y-1">
           {valid.map((x) => {
