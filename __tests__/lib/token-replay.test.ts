@@ -6,6 +6,7 @@
 const mockFindUnique = jest.fn();
 const mockUpsert = jest.fn();
 const mockUpdate = jest.fn();
+const mockUpdateMany = jest.fn();
 const mockRedisGet = jest.fn();
 const mockRedisSet = jest.fn();
 
@@ -13,7 +14,8 @@ jest.mock('@/lib/prisma', () => ({
   prisma: {
     sessionTokenUsage: {
       findUnique: (...a: unknown[]) => mockFindUnique(...a),
-      upsert: (...a: unknown[]) => mockUpsert(...a),
+      create: (...a: unknown[]) => mockUpsert(...a),
+      updateMany: (...a: unknown[]) => mockUpdateMany(...a),
       update: (...a: unknown[]) => mockUpdate(...a),
     },
   },
@@ -37,6 +39,7 @@ beforeEach(() => {
   mockFindUnique.mockReset().mockResolvedValue(null);
   mockUpsert.mockReset().mockResolvedValue({});
   mockUpdate.mockReset().mockResolvedValue({});
+  mockUpdateMany.mockReset().mockResolvedValue({ count: 1 });
   mockRedisGet.mockReset().mockResolvedValue(null);
   mockRedisSet.mockReset().mockResolvedValue(undefined);
   mockRoam.mockReset().mockResolvedValue({ ok: true });
@@ -83,7 +86,7 @@ describe('checkTokenReplay', () => {
     expect(mockRoam).toHaveBeenCalledWith('trp_roam:jti-3', expect.any(Number), expect.any(Number));
     const rebound = mockRedisSet.mock.calls[0][1] as { ipHash: string };
     expect(rebound.ipHash).not.toBe(hotWritten.ipHash);
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { jti: 'jti-3' } }));
+    expect(mockUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ jti: 'jti-3' }) }));
   });
 
   it('DOLAŞIM bütçesi aşıldı → ALARM + jti iptal edilir', async () => {
@@ -130,7 +133,7 @@ describe('checkTokenReplay', () => {
     mockFindUnique.mockResolvedValue({ jti: 'jti-old', ipHash: h(IP), userAgentHash: h(UA) });
     const r = await checkTokenReplay('jti-old', IP, UA);
     expect(r.ok).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledWith(
+    expect(mockUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userAgentHash: expect.any(String) }) })
     );
   });
@@ -156,10 +159,55 @@ describe('checkTokenReplay', () => {
     mockFindUnique.mockResolvedValue({
       jti: 'jti-5', ipHash: hotWritten.ipHash, userAgentHash: hotWritten.uaHash,
     });
-    mockUpdate.mockClear();
+    mockUpdateMany.mockClear();
 
     const r = await checkTokenReplay('jti-5', IP, UA);
     expect(r.ok).toBe(true);
-    expect(mockUpdate).toHaveBeenCalled(); // DB yolunda lastSeen güncellenir
+    expect(mockUpdateMany).toHaveBeenCalled(); // DB yolunda lastSeen güncellenir
+  });
+
+  it('iptal işareti AYRI anahtarda: sıcak kayıt yenilense bile iptal geri alınamaz', async () => {
+    await checkTokenReplay('jti-rv', IP, UA);
+    const hotWritten = mockRedisGet.mock.calls.length; void hotWritten;
+    const entry = mockRedisSet.mock.calls[0][1];
+    mockRedisGet.mockImplementation(async (k: string) => (k === 'trp:rev:jti-rv' ? 1 : { ...entry, dbTouchedAt: Date.now() }));
+    expect((await checkTokenReplay('jti-rv', IP, UA)).ok).toBe(false);
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('TOCTOU: koşullu yazım iptal edilmiş kaydı bulamazsa (count=0) istek REDDEDİLİR ve sıcak kayıt yazılmaz', async () => {
+    mockFindUnique.mockResolvedValue(null);
+    await checkTokenReplay('jti-tc', IP, UA);
+    const entry = mockRedisSet.mock.calls[0][1] as { ipHash: string; uaHash: string };
+    mockRedisGet.mockResolvedValue(null);
+    mockFindUnique.mockResolvedValue({ jti: 'jti-tc', ipHash: entry.ipHash, userAgentHash: entry.uaHash });
+    mockUpdateMany.mockResolvedValue({ count: 0 }); // arada başka istek iptal etti
+    mockRedisSet.mockClear();
+    expect((await checkTokenReplay('jti-tc', IP, UA)).ok).toBe(false);
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ ipHash: { not: 'revoked' } }) })
+    );
+  });
+
+  it('ilk görülme yarışı: create unique ihlali → mevcut (iptal) kayıt ezilmez, REDDEDİLİR', async () => {
+    mockUpsert.mockRejectedValue(new Error('P2002'));
+    mockFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ jti: 'jti-race', ipHash: 'revoked', userAgentHash: 'revoked' });
+    expect((await checkTokenReplay('jti-race', IP, UA)).ok).toBe(false);
+    expect(mockUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('dolaşım sayacı çökerse FAIL-CLOSED (fırlatır → requireAuth 503), oturum iptal edilmez', async () => {
+    await checkTokenReplay('jti-fc', IP, UA);
+    const entry = mockRedisSet.mock.calls[0][1];
+    mockRedisGet.mockImplementation(async (k: string) => (k.startsWith('trp:rev:') ? null : { ...entry, dbTouchedAt: Date.now() }));
+    mockRoam.mockRejectedValue(new Error('db down'));
+    await expect(checkTokenReplay('jti-fc', '9.9.9.9', UA)).rejects.toThrow();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('DB kesintisi (Redis boş) → fırlatır (fail-closed)', async () => {
+    mockFindUnique.mockRejectedValue(new Error('db down'));
+    await expect(checkTokenReplay('jti-db', IP, UA)).rejects.toThrow();
   });
 });

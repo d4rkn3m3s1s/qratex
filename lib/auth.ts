@@ -10,7 +10,6 @@ import {
   checkRateLimitDb,
   getLoginLockoutDb,
   recordFailedLoginAttemptDb,
-  ACCOUNT_LOGIN_LOCKOUT,
   clearFailedLoginAttemptsDb,
 } from '@/lib/rate-limit';
 import {
@@ -178,39 +177,72 @@ function authError(code: (typeof AUTH_ERROR)[keyof typeof AUTH_ERROR], retryAfte
 // "kullanıcı yok" yolu yine ölçülebilir biçimde hızlı kalırdı.
 const DUMMY_BCRYPT_HASH = '$2a$12$b98Jz6zxKFOqLELcUyqkyOVDLwoBK2QIjNrjjCTTDRw1jdKG5LbD6';
 
-/** Hesap bazlı kilit anahtarı (IP'den bağımsız; guvenlik-admin-api B7). */
-function accountLockKey(email: string): string {
-  return `acct:${normalizeEmail(email)}`;
+/** Hesap bazlı hata sayacı anahtarı (IP'den bağımsız; yalnız GECİKME üretir, KİLİT DEĞİL). */
+function accountFailBucket(email: string): string {
+  return `login_acct_fail:${normalizeEmail(email)}`;
+}
+
+/** Hesap başına (tüm IP'ler) 15 dk'da bu sayıya kadar hata gecikmesizdir. */
+const ACCOUNT_SOFT_FAILURES = 10;
+const ACCOUNT_FAIL_WINDOW_MS = 15 * 60_000;
+/** Kademeli gecikme tavanı (ms). */
+const ACCOUNT_BACKOFF_MAX_MS = 4_000;
+/** IP başına genel sınır (hangi e-posta olursa olsun): 15 dk'da 60 şifreli deneme. */
+const IP_LOGIN_MAX = 60;
+const IP_LOGIN_WINDOW_MS = 15 * 60_000;
+
+/** Saf: hesap hata sayısına göre üstel gecikme (eşik altı 0). Test için dışa açık. */
+export function accountBackoffMs(failures: number): number {
+  const over = failures - ACCOUNT_SOFT_FAILURES;
+  if (over <= 0) return 0;
+  return Math.min(ACCOUNT_BACKOFF_MAX_MS, 250 * 2 ** Math.min(over - 1, 10));
 }
 
 /**
- * İki katmanlı kilit: (1) `ip:e-posta` — 15 dk'da 5 hata, (2) HESAP — tüm IP'lerden 15 dk'da
- * 20 hata. Eskiden yalnız (1) vardı; IP değiştiren saldırgan (botnet/konut proxy'si) aynı
- * hesaba her IP'den 5 deneme yapabiliyordu. Hesap kilidi yalnız şifre/2FA girişini durdurur
- * (e-posta bağlantısı ve Google girişi açık kalır → meşru kullanıcı dışarıda kalmaz).
+ * Kilit modeli (güvenlik incelemesi — hesap kilitleme DoS'u):
+ *  (1) SERT KİLİT yalnız `ip:e-posta` bileşiminde (15 dk'da 5 hata → 15 dk). Saldırgan bu kilitle
+ *      yalnız KENDİ IP'sini kilitler; kurbanın kendi ağından girişi etkilenmez.
+ *  (2) HESAP düzeyi (tüm IP'ler) artık KİLİT DEĞİL: eşik üstündeki her hatalı denemenin yanıtı
+ *      üstel gecikir (tarpit). Dağıtık brute-force yavaşlar; doğru şifre hiç gecikmez → başkası
+ *      yanlış şifre yağdırarak meşru sahibi dışarıda bırakamaz. Eskiden "tüm IP'lerden 20 hata →
+ *      hesap 15 dk kilit" vardı ve bu, herkesin herhangi bir hesabı kilitleyebilmesi demekti.
+ *  (3) IP başına genel sınır ayrı (`login_ip:`), bir IP'nin çok hesabı taramasını keser.
+ * Kilit/oran yanıtları hesap var/yok ayrımı yapmaz (olmayan e-postada da aynı sayaçlar işler);
+ * e-posta bağlantısı / Google girişi bu sayaçlardan bağımsızdır.
  */
 async function assertNotLocked(identifier: string, ip: string, email: string): Promise<void> {
-  const [lockout, account] = await Promise.all([
-    getLoginLockoutDb(identifier),
-    getLoginLockoutDb(accountLockKey(email)),
-  ]);
-  const hit = lockout.locked ? lockout : account.locked ? account : null;
-  if (hit) {
-    const sec = hit.retryAfterMs ? Math.ceil(hit.retryAfterMs / 1000) : 900;
+  const lockout = await getLoginLockoutDb(identifier);
+  if (lockout.locked) {
+    const sec = lockout.retryAfterMs ? Math.ceil(lockout.retryAfterMs / 1000) : 900;
     logLockout(ip, email, sec);
     throw authError(AUTH_ERROR.LOCKED, sec);
   }
 }
 
+async function assertIpLoginBudget(ip: string, email: string): Promise<void> {
+  const r = await checkRateLimitDb(`login_ip:${ip}`, IP_LOGIN_MAX, IP_LOGIN_WINDOW_MS);
+  if (!r.ok) {
+    const sec = r.retryAfterMs ? Math.ceil(r.retryAfterMs / 1000) : 60;
+    logRateLimit(ip, email, sec);
+    throw authError(AUTH_ERROR.RATE_LIMITED, sec);
+  }
+}
+
 async function recordLoginFailure(identifier: string, email: string): Promise<void> {
-  await Promise.all([
+  const [, acct] = await Promise.all([
     recordFailedLoginAttemptDb(identifier),
-    recordFailedLoginAttemptDb(accountLockKey(email), ACCOUNT_LOGIN_LOCKOUT),
+    checkRateLimitDb(accountFailBucket(email), Number.MAX_SAFE_INTEGER, ACCOUNT_FAIL_WINDOW_MS).catch(() => null),
   ]);
+  const remaining = typeof acct?.remaining === 'number' ? acct.remaining : Number.MAX_SAFE_INTEGER;
+  const delay = accountBackoffMs(Number.MAX_SAFE_INTEGER - remaining);
+  if (delay > 0) await new Promise((r) => setTimeout(r, delay));
 }
 
 async function clearLoginFailures(identifier: string, email: string): Promise<void> {
-  await Promise.all([clearFailedLoginAttemptsDb(identifier), clearFailedLoginAttemptsDb(accountLockKey(email))]);
+  // Hesap sayacı bilerek SIFIRLANMAZ: saldırgan kendi hesabıyla değil, kurbanınkiyle deniyor;
+  // sayaç pencereyle kendiliğinden düşer ve yalnız hatalı denemeleri geciktirir.
+  void email;
+  await clearFailedLoginAttemptsDb(identifier);
 }
 
 /**
@@ -415,6 +447,7 @@ export const authOptions: NextAuthOptions = {
         if (!email || !password) throw authError(AUTH_ERROR.MISSING_CREDENTIALS);
 
         const identifier = `${ip}:${email}`;
+        await assertIpLoginBudget(ip, email);
         await assertNotLocked(identifier, ip, email);
 
         const limit = await checkRateLimitDb(`login:${identifier}`, 10, 60_000);

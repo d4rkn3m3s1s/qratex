@@ -60,6 +60,13 @@ const ROAM_WINDOW_MS = 24 * 60 * 60 * 1000;
 function keyFor(jti: string): string {
   return `trp:${jti}`;
 }
+/**
+ * İptal işareti AYRI anahtarda tutulur: sıcak kaydı tazeleyen hiçbir yazım (`trp:<jti>`)
+ * bu anahtara dokunmaz → eşzamanlı bir "yenile" iptali geri alamaz (tek yönlü).
+ */
+function revokedKeyFor(jti: string): string {
+  return `trp:rev:${jti}`;
+}
 
 type Verdict = 'same' | 'roam' | 'ua_mismatch' | 'revoked';
 
@@ -87,16 +94,17 @@ async function revoke(jti: string): Promise<void> {
     .update({ where: { jti }, data: { ipHash: REVOKED_MARK, userAgentHash: REVOKED_MARK, lastSeen: new Date() } })
     .catch(() => {});
   await redisSetJson(keyFor(jti), { ipHash: REVOKED_MARK, uaHash: REVOKED_MARK, dbTouchedAt: Date.now() }, HOT_TTL_SECONDS);
+  await redisSetJson(revokedKeyFor(jti), 1, HOT_TTL_SECONDS);
 }
 
-/** Dolaşım bütçesi: false → bu jti 24 saatte çok fazla IP değiştirdi. Sayaç çökerse izin verilir. */
+/**
+ * Dolaşım bütçesi: false → bu jti 24 saatte çok fazla IP değiştirdi.
+ * Sayaç çökerse FAIL-CLOSED: hata yukarı fırlar, requireAuth 503 döner (oturum iptal edilmez,
+ * ama denetlenemeyen IP değişimi de kabul edilmez).
+ */
 async function roamAllowed(jti: string): Promise<boolean> {
-  try {
-    const r = await checkRateLimitDb(`trp_roam:${jti}`, ROAM_MAX, ROAM_WINDOW_MS);
-    return r.ok;
-  } catch {
-    return true;
-  }
+  const r = await checkRateLimitDb(`trp_roam:${jti}`, ROAM_MAX, ROAM_WINDOW_MS);
+  return r.ok;
 }
 
 /**
@@ -133,30 +141,42 @@ export async function checkTokenReplay(
     const needsTouch = touchedAt === null || now - touchedAt > TOUCH_INTERVAL_MS;
     if (rebind || needsTouch) {
       // Bağ yeni IP'ye / yeni UA biçimine taşınır; lastSeen aynı yazımda tazelenir.
-      // Hata yutulur — güvenlik kararı verildi, kayıt bir sonraki istekte tekrar denenir.
-      await prisma.sessionTokenUsage
-        .update({
-          where: { jti },
-          data: rebind ? { ipHash, userAgentHash: uaHash, lastSeen: new Date() } : { lastSeen: new Date() },
-        })
-        .catch(() => {});
+      // KOŞULLU yazım: iptal edilmiş kayıt hiçbir yenilemeyle ezilemez (TOCTOU). Eşzamanlı bir
+      // iptal okuma ile yazım arasına girdiyse count=0 → bu istek de reddedilir.
+      // Yazım hatası (DB kesintisi) yutulmaz → requireAuth 503 (fail-closed).
+      const res = await prisma.sessionTokenUsage.updateMany({
+        where: { jti, ipHash: { not: REVOKED_MARK }, userAgentHash: { not: REVOKED_MARK } },
+        data: rebind ? { ipHash, userAgentHash: uaHash, lastSeen: new Date() } : { lastSeen: new Date() },
+      });
+      if (res.count === 0) return alarm(jti, 'iptal edilmiş oturum yeniden kullanıldı');
     }
     await redisSetJson(key, { ipHash, uaHash, dbTouchedAt: rebind || needsTouch ? now : touchedAt ?? now }, HOT_TTL_SECONDS);
     return { ok: true };
   };
 
   // ── HIZLI YOL: Redis'te kayıt varsa DB'ye hiç gitme ──────────────────
-  const hot = await redisGetJson<HotEntry>(key); // Redis yoksa null → DB yoluna düşer
+  // Redis yoksa/hatalıysa null → DB yoluna düşer (DB de yoksa fırlar → 503, fail-closed).
+  const [revokedFlag, hot] = await Promise.all([
+    redisGetJson<number>(revokedKeyFor(jti)),
+    redisGetJson<HotEntry>(key),
+  ]);
+  if (revokedFlag === 1) return alarm(jti, 'iptal edilmiş oturum yeniden kullanıldı');
   if (hot) return handle({ ipHash: hot.ipHash, uaHash: hot.uaHash }, hot.dbTouchedAt ?? 0);
 
   // ── YETKİLİ YOL: Redis boş/kapalı → DB ──
   const existing = await prisma.sessionTokenUsage.findUnique({ where: { jti } });
   if (!existing) {
-    await prisma.sessionTokenUsage.upsert({
-      where: { jti },
-      create: { jti, ipHash, userAgentHash: uaHash },
-      update: { ipHash, userAgentHash: uaHash, lastSeen: new Date() },
-    });
+    // İlk görülme YALNIZ oluşturur (eskiden upsert'in update dalı eşzamanlı yazılmış bir iptali
+    // ezebiliyordu). Yarışta kayıt zaten varsa (unique ihlali) mevcut kayıt üzerinden karar verilir.
+    const created = await prisma.sessionTokenUsage
+      .create({ data: { jti, ipHash, userAgentHash: uaHash } })
+      .then(() => true)
+      .catch(() => false);
+    if (!created) {
+      const raced = await prisma.sessionTokenUsage.findUnique({ where: { jti } });
+      if (!raced) throw new Error('token-replay: oturum kaydı yazılamadı');
+      return handle({ ipHash: raced.ipHash, uaHash: raced.userAgentHash }, null);
+    }
     await redisSetJson(key, { ipHash, uaHash, dbTouchedAt: now }, HOT_TTL_SECONDS);
     return { ok: true };
   }
