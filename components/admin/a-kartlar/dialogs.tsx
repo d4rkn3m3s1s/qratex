@@ -21,6 +21,7 @@ import {
 } from '@/lib/admin-cards/contract';
 import { CardsApiError, cardsKeys, errorText, exportHref, fetchCustomers, generateCards, printHref } from './api';
 import { fmtNumber } from './format';
+import { AdminKartlarText } from './copy';
 
 function Field({ id, label, hint, error, children }: { id: string; label: ReactNode; hint?: ReactNode; error?: string; children: ReactNode }) {
   return (
@@ -124,8 +125,8 @@ export function GenerateDialog({ open, onOpenChange, onDone }: { open: boolean; 
             }}
           >
             <DialogHeader>
-              <DialogTitle>Yeni üretim partisi</DialogTitle>
-              <DialogDescription>Kartlar “Kullanılmamış” durumunda oluşur; müşteri kartı tarayıp aktive ettiğinde ya da siz atadığınızda aktifleşir.</DialogDescription>
+              <DialogTitle><AdminKartlarText k="newBatch" /></DialogTitle>
+              <DialogDescription><AdminKartlarText k="batchHint" /></DialogDescription>
             </DialogHeader>
             <Field id={`${id}-name`} label="Parti adı" hint="Örn. “Ekim 2026 · Kadıköy dağıtımı”" error={serverFieldError(err, 'batchName') ?? localErr('batchName')}>
               <Input id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoComplete="off" className="min-h-11" />
@@ -239,7 +240,7 @@ export function BlockDialog({
           {canNotify ? (
             <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-subtle px-3">
               <Checkbox checked={notify} onCheckedChange={(v) => setNotify(v === true)} />
-              <span className="text-sm">Kart sahibine bildirim gönder</span>
+              <span className="text-sm"><AdminKartlarText k="notifyOwner" /></span>
             </label>
           ) : null}
           {error ? <InlineError>{error}</InlineError> : null}
@@ -319,13 +320,13 @@ export function AssignDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>Kartı müşteriye ata</DialogTitle>
+            <DialogTitle><AdminKartlarText k="assignCard" /></DialogTitle>
             <DialogDescription>
               <span className="font-mono">{token}</span> kartı seçtiğiniz müşteriye bağlanır ve aktifleşir; müşteriye bildirim gider.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-q`}>Müşteri ara</Label>
+            <Label htmlFor={`${id}-q`}><AdminKartlarText k="searchCustomer" /></Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
               <Input
@@ -345,7 +346,7 @@ export function AssignDialog({
             {customers.isError ? (
               <InlineError>{errorText(customers.error, 'Müşteriler yüklenemedi.')}</InlineError>
             ) : customers.isLoading ? (
-              <p className="p-3 text-sm text-fg-muted">Aranıyor…</p>
+              <p className="p-3 text-sm text-fg-muted"><AdminKartlarText k="searching" /></p>
             ) : items.length === 0 ? (
               <p className="p-3 text-sm text-fg-muted">{debounced ? 'Eşleşen müşteri yok.' : 'Müşteri bulunamadı.'}</p>
             ) : (
@@ -372,7 +373,7 @@ export function AssignDialog({
                       <span className="block truncate font-medium">{c.name?.trim() || c.email}</span>
                       <span className="block truncate text-xs text-fg-muted">{c.email}</span>
                     </span>
-                    {disabled ? <span className="shrink-0 text-xs text-fg-muted">Aktif kartı var</span> : null}
+                    {disabled ? <span className="shrink-0 text-xs text-fg-muted"><AdminKartlarText k="hasActiveCard" /></span> : null}
                   </button>
                 );
               })

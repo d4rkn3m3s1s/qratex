@@ -37,6 +37,7 @@ import { BatchesPanel } from './batches-panel';
 import { CardDetailBody } from './card-detail';
 import { BlockDialog, GenerateDialog } from './dialogs';
 import { CARD_STATUS, copyText, customerLabel, fmtDate, fmtNumber, groupToken, viewStatus } from './format';
+import { AdminKartlarText } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -172,7 +173,7 @@ export function CardsScreen({ initial }: { initial: CardsInitial }) {
               {row.original.customer.name ? <p className="truncate text-xs text-fg-muted">{row.original.customer.email}</p> : null}
             </div>
           ) : (
-            <span className="text-sm text-fg-subtle">Atanmamış</span>
+            <span className="text-sm text-fg-subtle"><AdminKartlarText k="unassigned" /></span>
           ),
       },
       {

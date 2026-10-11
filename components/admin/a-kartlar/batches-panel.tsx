@@ -12,6 +12,7 @@ import type { BatchPage, BatchRow } from '@/lib/admin-cards/contract';
 import { bulkCards, cardsKeys, exportHref, fetchBatches, printHref } from './api';
 import { BlockDialog } from './dialogs';
 import { fmtDate, fmtDateTime, fmtNumber } from './format';
+import { AdminKartlarText } from './copy';
 
 const SEGMENTS: Array<{ key: keyof BatchRow['counts']; label: string; cls: string }> = [
   { key: 'ACTIVATED', label: 'Aktif', cls: 'bg-success' },
@@ -103,12 +104,12 @@ export function BatchesPanel({ initial, onChanged }: { initial: { qs: string; pa
               <p className="text-xs text-fg-muted">{fmtNumber(row.original.exportCount)} kez</p>
             </div>
           ) : (
-            <span className="text-sm text-warning">Henüz dışa aktarılmadı</span>
+            <span className="text-sm text-warning"><AdminKartlarText k="notExported" /></span>
           ),
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">İşlemler</span>,
+        header: () => <span className="sr-only"><AdminKartlarText k="actions" /></span>,
         enableSorting: false,
         meta: { mobile: 'actions', interactive: true, label: 'İşlemler', align: 'end' } satisfies DataTableColumnMeta,
         cell: ({ row }) => {

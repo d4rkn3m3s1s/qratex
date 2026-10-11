@@ -12,6 +12,7 @@ import type { CardDetail } from '@/lib/admin-cards/contract';
 import { archiveCard, assignCard, bulkCards, cardsKeys, errorText, fetchDetail, previewArchive, unassignCard } from './api';
 import { AssignDialog, BlockDialog } from './dialogs';
 import { CARD_STATUS, copyText, customerLabel, fmtDate, fmtDateTime, fmtNumber, groupToken, viewStatus } from './format';
+import { AdminKartlarText } from './copy';
 
 type QrState = { token: string; png: string; svg: string } | { token: string; error: true } | null;
 
@@ -81,7 +82,7 @@ function CardQr({ card }: { card: CardDetail }) {
           <img src={qr.png} alt={`Kart ${card.token} için QR kodu`} className="h-full w-full" />
         ) : qr ? (
           <div className="space-y-2 p-2 text-center">
-            <p className="text-xs text-danger">QR üretilemedi.</p>
+            <p className="text-xs text-danger"><AdminKartlarText k="qrFailed" /></p>
             <Button size="sm" variant="outline" className="min-h-11" onClick={retry}>
               <RefreshCw className="h-4 w-4" aria-hidden />
               Tekrar dene
@@ -162,7 +163,7 @@ export function CardDetailBody({ id, onChanged }: { id: string; onChanged: () =>
           İşlemler
         </h3>
         {card.archived ? (
-          <p className="text-sm text-fg-muted">Arşivlenmiş kart terminaldir: üzerinde işlem yapılamaz, geçmişi korunur.</p>
+          <p className="text-sm text-fg-muted"><AdminKartlarText k="archivedNote" /></p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {card.allowed.assign ? (
@@ -282,7 +283,7 @@ export function CardDetailBody({ id, onChanged }: { id: string; onChanged: () =>
         <h3 id={`card-tl-${card.id}`} className="text-sm font-semibold text-fg">
           Zaman çizelgesi
         </h3>
-        <p className="text-xs text-fg-muted">Son 50 kart olayı ve son 10 tüketim.</p>
+        <p className="text-xs text-fg-muted"><AdminKartlarText k="recentEvents" /></p>
         <Timeline
           ariaLabel="Kart olayları"
           dense
@@ -292,7 +293,7 @@ export function CardDetailBody({ id, onChanged }: { id: string; onChanged: () =>
         />
       </section>
 
-      {q.isRefetching ? <p className="sr-only" role="status">Güncelleniyor</p> : null}
+      {q.isRefetching ? <p className="sr-only" role="status"><AdminKartlarText k="updating" /></p> : null}
 
       <BlockDialog
         open={blockOpen}
