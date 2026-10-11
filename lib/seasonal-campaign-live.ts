@@ -23,17 +23,36 @@ import {
   clampSeasonalMultiplier,
 } from '@/lib/points-multipliers';
 
+import {
+  SEASONAL_BUDGET_MAX,
+  SEASONAL_BUDGET_MIN,
+  TARGETED_CAMPAIGN_TYPES,
+} from '@/lib/seasonal-campaign-constants';
+
 type Db = Prisma.TransactionClient | typeof prisma;
 
-export const SEASONAL_CAMPAIGN_TYPES = ['BIRTHDAY', 'ANNIVERSARY', 'SEASONAL', 'SPECIAL'] as const;
-export type SeasonalCampaignType = (typeof SEASONAL_CAMPAIGN_TYPES)[number];
-
-/** Kullanıcı kimliği gerektiren (kişiye özel) kampanya türleri. */
-export const TARGETED_CAMPAIGN_TYPES: ReadonlySet<string> = new Set(['BIRTHDAY', 'ANNIVERSARY']);
+export {
+  SEASONAL_BUDGET_MAX,
+  SEASONAL_BUDGET_MIN,
+  SEASONAL_CAMPAIGN_TYPES,
+  TARGETED_CAMPAIGN_TYPES,
+  type SeasonalCampaignType,
+} from '@/lib/seasonal-campaign-constants';
 
 /** `SeasonalCampaign.conditions` şeması. Bilinmeyen anahtar reddedilir (strict). */
 export const seasonalCampaignConditionsSchema = z
   .object({
+    /**
+     * Puan bütçesi (yumuşak tavan): kampanyanın uygulandığı kazanımlarda (taban dahil) basılan
+     * toplam puan bu değere ulaşınca kampanya artık seçilmez; sıradaki uygun kampanyaya düşülür.
+     * Eşzamanlı birkaç kazanım kadar aşılabilir (kilitsiz okuma).
+     */
+    budgetPoints: z
+      .number({ invalid_type_error: 'Bütçe sayı olmalı' })
+      .int('Bütçe tam sayı olmalı')
+      .min(SEASONAL_BUDGET_MIN, `Bütçe en az ${SEASONAL_BUDGET_MIN} olmalı`)
+      .max(SEASONAL_BUDGET_MAX, 'Bütçe çok büyük')
+      .optional(),
     minLevel: z
       .number({ invalid_type_error: 'Minimum seviye sayı olmalı' })
       .int('Minimum seviye tam sayı olmalı')
@@ -108,6 +127,28 @@ export function isCampaignEligible(
   return true;
 }
 
+/**
+ * Bütçeli kampanyada şimdiye dek basılan puan: defterde `meta.seasonalCampaignId` bu kampanya
+ * olan, kampanya başlangıcından sonraki `posted` satırların toplamı.
+ */
+export async function getSeasonalCampaignSpent(campaignId: string, since: Date, db: Db = prisma): Promise<number> {
+  const agg = await db.pointsLedger.aggregate({
+    _sum: { delta: true },
+    where: {
+      status: 'posted',
+      createdAt: { gte: since },
+      meta: { path: ['seasonalCampaignId'], equals: campaignId },
+    },
+  });
+  return Math.max(0, agg._sum.delta ?? 0);
+}
+
+function budgetOf(conditions: unknown): number | null {
+  if (!conditions || typeof conditions !== 'object' || Array.isArray(conditions)) return null;
+  const b = (conditions as Record<string, unknown>).budgetPoints;
+  return typeof b === 'number' && Number.isFinite(b) ? b : null;
+}
+
 async function loadUserContext(userId: string, db: Db): Promise<SeasonalUserContext | null> {
   const u = await db.user.findUnique({
     where: { id: userId },
@@ -140,7 +181,7 @@ export async function getActiveSeasonalCampaign(
         startDate: { lte: now },
         endDate: { gte: now },
       },
-      select: { id: true, type: true, multiplier: true, bonusPoints: true, conditions: true },
+      select: { id: true, type: true, multiplier: true, bonusPoints: true, conditions: true, startDate: true },
       orderBy: { multiplier: 'desc' },
       take: 20,
     });
@@ -151,25 +192,34 @@ export async function getActiveSeasonalCampaign(
     );
     const user = userId && needsUser ? await loadUserContext(userId, db) : null;
 
-    let best: ActiveSeasonalCampaign | null = null;
+    const eligible: Array<{ candidate: ActiveSeasonalCampaign; budget: number | null; startDate: Date }> = [];
     for (const c of campaigns) {
       if (!isCampaignEligible(c, user, now)) continue;
-      const candidate: ActiveSeasonalCampaign = {
-        campaignId: c.id,
-        type: c.type,
-        multiplier: clampSeasonalMultiplier(c.multiplier),
-        bonusPoints: clampSeasonalBonus(c.bonusPoints),
-      };
-      // Kırpma sıralamayı değiştirebilir (ör. 10× → 3×): yeniden karşılaştır.
-      if (
-        !best ||
-        candidate.multiplier > best.multiplier ||
-        (candidate.multiplier === best.multiplier && candidate.bonusPoints > best.bonusPoints)
-      ) {
-        best = candidate;
-      }
+      eligible.push({
+        candidate: {
+          campaignId: c.id,
+          type: c.type,
+          multiplier: clampSeasonalMultiplier(c.multiplier),
+          bonusPoints: clampSeasonalBonus(c.bonusPoints),
+        },
+        budget: budgetOf(c.conditions),
+        startDate: c.startDate,
+      });
     }
-    return best;
+    // Kırpma sıralamayı değiştirebilir (ör. 10× → 3×): yeniden sırala (çarpan, sonra bonus).
+    eligible.sort(
+      (a, b) =>
+        b.candidate.multiplier - a.candidate.multiplier || b.candidate.bonusPoints - a.candidate.bonusPoints
+    );
+    for (const e of eligible) {
+      // Bütçesi dolan kampanya seçilmez → sıradaki uygun kampanyaya düşülür.
+      if (e.budget !== null) {
+        const spent = await getSeasonalCampaignSpent(e.candidate.campaignId, e.startDate ?? new Date(0), db);
+        if (spent >= e.budget) continue;
+      }
+      return e.candidate;
+    }
+    return null;
   } catch {
     return null;
   }

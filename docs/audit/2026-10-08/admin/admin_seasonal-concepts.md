@@ -216,3 +216,68 @@ Kısaca: Sayfa temel CRUD işini yapıyor (oluşturma, açıp kapatma, silme). A
   - Inngest çalışmıyorsa sapma, Kış'ın bitişine (28 Şubat) ya da herhangi bir admin kaydına kadar sürer.
 - Mekanizma kod okumasıyla kesin. Şiddet, prod'daki Inngest durumuna bağlı.
 - **Not:** Cache, "tek kazanan + bitiş" yerine "bir sonraki değişim anı" (`min(kazananın endDate'i, bugünden sonra başlayan ilk konseptin startDate'i)`) ile geçersiz kılınmalı. Ayrıca senkron, daily orkestratörüne ya da istek anındaki hesaplamaya bağlanmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/campaigns-calendar` (Görünüm katmanı). `/admin/seasonal-concepts` sorgu parametrelerini koruyarak `?layer=concept` ile kalıcı yönlenir. Eski `app/api/admin/seasonal-concepts` ucu silindi; `defineRoute` BFF'i (`app/api/admin/campaigns-calendar/concepts/**`) geldi: sayfalı liste, detay, oluştur/düzenle (`baseVersion` = `updatedAt`, 409), yayına al/duraklat, arşivle/geri al. Hard delete yok.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR | Açıklama doğru: konsept palet, arka plan ve banner değiştirir, puan vermez. |
+| 2 | Şablonlar | ÇALIŞIYOR | Çekmecede yatay galeri; tarihleri korur. Uyumsuz eşleşmeler düzeltildi (Yaz → Lava, Cadılar Bayramı → Sonbahar efekti + Turuncu). "Bol puan" ve ödül vaatleri metinlerden çıkarıldı. |
+| 3 | Varsayılan tarih | ÇALIŞIYOR | Bir sonraki tam saat + 14 gün (İstanbul). |
+| 4 | Ad | ÇALIŞIYOR | Türkçe mesaj. |
+| 5 | Öncelik | ÇALIŞIYOR | Etkisi alan yardımında yazıyor; Türkçe doğrulama. |
+| 6 | Başlangıç/bitiş | ÇALIŞIYOR | Anında doğrulama, İstanbul saat dilimi etiketi, süre. |
+| 7 | Arka plan efekti | ÇALIŞIYOR | Artık gerçekten görünüyor: applier efekti `lib/seasonal-concept-events` ile yayınlıyor, `DynamicBackground` dinleyip global arka planın üstüne uyguluyor. Değerler zod `enum` ile doğrulanıyor. |
+| 8 | Palet | ÇALIŞIYOR | Palet artık tek sahibi `ThemeColorsProvider` üzerinden uygulanıyor. Açık/koyu varyantı ve background/foreground birlikte geliyor, mod değişince kaybolmuyor, temanın yüzey değişkenleri silinmiyor. |
+| 9 | Banner emoji | ÇALIŞIYOR | |
+| 10 | Banner metni | ÇALIŞIYOR | Puan vaat eden banner için çapraz uyarı: o pencerede herkese açık bir kampanya yoksa formda ve çakışma panelinde görünür. |
+| 11 | Oluştur | ÇALIŞIYOR | Kayıt ve denetim aynı transaction'da. Senkron best-effort (hata kaydı bozmaz, kullanıcıya bildirilir). `Idempotency-Key` mükerrer kaydı önler. |
+| 12 | Açıklama | ÇALIŞIYOR | "İç not" alanı. |
+| 13 | `bonusMultiplier` | KALDIRILDI | Ölü alandı. API, çekirdek ve önbellekten çıkarıldı; puan yalnız ekonomi katmanından gelir. DB kolonu duruyor (ŞEMA İSTEĞİ). |
+| 14 | Liste yükleme | ÇALIŞIYOR | Zarf kontrolü, görünür hata. |
+| 15 | Yükleniyor | ÇALIŞIYOR | Statik iskelet, `aria-busy`. |
+| 16 | "Şu an aktif" | ÇALIŞIYOR | Kazanan, üretim kuralıyla (öncelik, sonra geç başlangıç) hesaplanıyor. Diğerleri "Gölgede". |
+| 17 | Yaklaşan | ÇALIŞIYOR | "Planlı" filtresi en yakından uzağa sıralı; üst şeritte sıradaki konsept. |
+| 18 | Geçmiş | ÇALIŞIYOR | "Bitti" filtresi, sayfalı. |
+| 19 | Pencere içindeki pasif konsept | ÇALIŞIYOR | Durum sunucuda türetiliyor; "Duraklatıldı" ayrı filtre ve rozet. Kayıt kaybolmuyor, yeniden yayına alınabiliyor. |
+| 20 | Aktifleştir/Pasifleştir | ÇALIŞIYOR | Onaylı, bekleme durumlu, sürümlü. |
+| 21 | Sil | ÇALIŞIYOR | Gerekçeli arşive dönüştü (kayıt ve denetim izi korunur, geri alınabilir). |
+| 22 | Düzenleme | ÇALIŞIYOR | Çekmece, birleşik tarih doğrulaması, önce/sonra denetimi. Kopyala: bitmiş konsept gelecek yıla taşınır. |
+| 23 | Satır meta | ÇALIŞIYOR | Tarih + saat, katman özeti; detayda etiketli palet ve efekt. |
+| 24 | Hata bildirimleri | ÇALIŞIYOR | Türkçe, alan bazlı. |
+| 25 | Yetki | ÇALIŞIYOR | |
+| 26 | Denetim | ÇALIŞIYOR | Tam önce/sonra + `changedFields`, transaction içinde; detayda geçmiş. |
+| 27 | Anında yansıtma | ÇALIŞIYOR | `syncActiveSeasonalConcept` artık okuma hatasında önbelleği **yazmıyor**, yani canlı konsept silinmiyor. |
+| 28 | Aktivasyon cron'u | ÇALIŞIYOR | Daily orkestratörde zaten var (`seasonal-concept-activation`). Ayrıca önbellek artık cron'a bağımlı değil (#29). |
+| 29 | Public uç | ÇALIŞIYOR | Önbellek "kazanan + bir sonraki değişim anı" (`nextChangeAt`) saklıyor; o an geçince canlı çözülüyor, böylece sonradan başlayan yüksek öncelikli konsept bekletilmiyor. Konsept yokken de tek okuma yapılıyor. CDN: `public, s-maxage=60, stale-while-revalidate=300`. |
+| 30 | Banner kapatma | ÇALIŞIYOR | |
+| 31 | Mobil | ÇALIŞIYOR | Şablonlar yatay kayar, çekmece alttan açılır, ≥ 44px hedefler. |
+| 32 | Etiket-alan bağı | ÇALIŞIYOR | |
+| 33 | Çakışma tespiti | ÇALIŞIYOR | Kazanan ve görünmeyen konsept yazılır; zaman çizelgesinde çakışma aralığı. Kaydetmeden önce önizlemede de var. |
+| 34 | Canlı önizleme | ÇALIŞIYOR | Banner + palet renkleri + efekt adı. Gerçek `DynamicBackground` mini kutuda render edilmiyor: ops ekranında ağır canvas olur. |
+
+### Kapanan bulgular (12/12)
+1. Arka plan efekti bağlandı.
+2. Pasifleştirilen konsept artık kaybolmuyor.
+3. Palet tek sahipte ve moda dayanıklı.
+4. `bonusMultiplier` kaldırıldı; puan vaat eden banner için uyarı var.
+5. Bayat öncelik önbelleği `nextChangeAt` ile çözüldü.
+6. Konsept yokken tek sorgu + CDN önbelleği.
+7. Düzenleme ve kopyalama.
+8. Transaction + best-effort senkron + idempotency.
+9. Hata görünür.
+10. Onaylı arşiv, bekleme durumu, `oldData`.
+11. Türkçe mesajlar ve bağlı etiketler.
+12. Etiketler, saat gösterimi, sıralama.
+
+### Kalanlar
+- **Panel/segment hedeflemesi:** Yapılmadı (konsept global). `scope` alanı gerekiyor (ŞEMA İSTEĞİ).
+- **Banner tıklama/kapatma ölçümü:** Yapılmadı. Olay altyapısı bu yüzeyin dışında.
+- **Arka plan efekti istemcide uygulanıyor:** İlk boyamada global efekt kısa süre görünebilir. Sunucuda kök layout'ta çözmek kabuk sahibinin işi.
+- **ŞEMA İSTEKLERİ:** `SeasonalConcept.archivedAt DateTime?`, `bonusMultiplier` kolonunun düşürülmesi, isteğe bağlı `campaignId` (konsept ↔ kampanya bağı), `scope String[]`.

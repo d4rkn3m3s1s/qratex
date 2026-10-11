@@ -6,8 +6,8 @@
  *    DEAD, oran sınırı deneme hakkı yakmaz; tüketim ortak servisle `offline:<id>` anahtarıyla.
  *  - POST /api/dealer/offline-sync: yalnız CREATE_CONSUMPTION + şemalı payload.
  *  - POST /api/happy-hour: 1.000.000× çarpan 400.
- *  - POST/PUT /api/admin/seasonal-campaigns: 10× çarpan / 100.000 bonus 400; PUT'ta birleşik
- *    tarih doğrulaması; tam önce/sonra denetim kaydı.
+ *  - (Sezon kampanyası yazım kapıları /admin/campaigns-calendar BFF'ine taşındı:
+ *    __tests__/lib/campaigns-calendar.test.ts)
  *  - POST /api/dealer/consumptions: Idempotency-Key başlığı servise clientOpId olarak gider.
  * Gerçek DB'ye GİDİLMEZ.
  */
@@ -236,81 +236,6 @@ describe('POST /api/happy-hour', () => {
     const { NextResponse } = jest.requireActual('next/server');
     mockRequireAuth.mockResolvedValueOnce({ error: NextResponse.json({ error: 'Yetkisiz' }, { status: 403 }) });
     expect((await post(valid)).status).toBe(403);
-  });
-});
-
-describe('/api/admin/seasonal-campaigns', () => {
-  const tx = {
-    seasonalCampaign: {
-      create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'c1', ...data })),
-      update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ ...existing, ...data })),
-    },
-    auditLog: { create: jest.fn(async () => ({ id: 'a1' })) },
-  };
-  const existing = {
-    id: 'c1',
-    name: 'Yaz',
-    description: 'd',
-    type: 'SEASONAL',
-    multiplier: 1.5,
-    bonusPoints: 0,
-    discount: null,
-    imageUrl: null,
-    conditions: null,
-    isActive: true,
-    startDate: new Date('2026-10-01T00:00:00Z'),
-    endDate: new Date('2026-10-20T00:00:00Z'),
-  };
-  function setupAdmin() {
-    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'admin_1', role: 'ADMIN' } } });
-    resetPrisma({
-      seasonalCampaign: { findUnique: jest.fn(async () => existing) },
-      $transaction: jest.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
-    });
-  }
-  const valid = {
-    name: 'Kış',
-    description: 'Kış kampanyası',
-    type: 'SEASONAL',
-    startDate: '2026-12-01T00:00:00.000Z',
-    endDate: '2026-12-31T00:00:00.000Z',
-  };
-
-  it('saldırı: 10× çarpan ve 100.000 bonus reddedilir', async () => {
-    setupAdmin();
-    const { POST } = await import('@/app/api/admin/seasonal-campaigns/route');
-    let res = await POST(req('/api/admin/seasonal-campaigns', 'POST', { ...valid, multiplier: 10 }));
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe('Çarpan en fazla 3 olabilir');
-    res = await POST(req('/api/admin/seasonal-campaigns', 'POST', { ...valid, bonusPoints: 100_000 }));
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe('Bonus puan en fazla 250 olabilir');
-    expect(tx.seasonalCampaign.create).not.toHaveBeenCalled();
-  });
-
-  it('tanınmayan koşul anahtarı reddedilir; minLevel kabul', async () => {
-    setupAdmin();
-    const { POST } = await import('@/app/api/admin/seasonal-campaigns/route');
-    expect((await POST(req('/api/admin/seasonal-campaigns', 'POST', { ...valid, conditions: { region: 'x' } }))).status).toBe(400);
-    expect((await POST(req('/api/admin/seasonal-campaigns', 'POST', { ...valid, conditions: { minLevel: 3 } }))).status).toBe(200);
-  });
-
-  it('PUT: yalnız bitiş gelse de mevcut başlangıçla birleştirilip doğrulanır', async () => {
-    setupAdmin();
-    const { PUT } = await import('@/app/api/admin/seasonal-campaigns/route');
-    const res = await PUT(req('/api/admin/seasonal-campaigns', 'PUT', { id: 'c1', endDate: '2026-09-01T00:00:00.000Z' }));
-    expect(res.status).toBe(400);
-    expect(tx.seasonalCampaign.update).not.toHaveBeenCalled();
-  });
-
-  it('PUT: denetim kaydı önce/sonra ve değişen alanları içerir', async () => {
-    setupAdmin();
-    const { PUT } = await import('@/app/api/admin/seasonal-campaigns/route');
-    const res = await PUT(req('/api/admin/seasonal-campaigns', 'PUT', { id: 'c1', multiplier: 2 }));
-    expect(res.status).toBe(200);
-    const audit = (tx.auditLog.create as jest.Mock).mock.calls.at(-1)[0].data;
-    expect(audit.oldData).toMatchObject({ multiplier: 1.5 });
-    expect(audit.newData).toMatchObject({ multiplier: 2, changedFields: ['multiplier'] });
   });
 });
 

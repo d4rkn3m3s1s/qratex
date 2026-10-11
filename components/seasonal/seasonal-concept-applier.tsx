@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
-import { applyRuntimeThemeToRoot } from '@/lib/apply-runtime-theme';
-import { THEME_COLOR_PRESETS } from '@/lib/theme-presets';
+import { publishSeasonalOverride } from '@/lib/seasonal-concept-events';
 
 type Concept = {
   id: string;
@@ -16,10 +15,10 @@ type Concept = {
 };
 
 /**
- * Aktif dönemsel konsepti uygular: tema paletini (varsa) <html>'e boyar ve banner
- * gösterir. Arka plan efekti `seasonal-bg` body sınıfı + data-attr olarak işaretlenir
- * (background bileşenleri okuyabilir). Banner kullanıcı tarafından kapatılabilir
- * (sessionStorage; konsept id'sine bağlı, yeni konseptte tekrar görünür).
+ * Aktif dönemsel konsepti uygular: palet ve arka plan efektini kendi sahiplerine yayınlar
+ * (`ThemeColorsProvider` paleti açık/koyu varyantıyla uygular ve mod değişiminde korur;
+ * `DynamicBackground` efekti gösterir) ve banner gösterir. Banner kullanıcı tarafından
+ * kapatılabilir (sessionStorage; konsept id'sine bağlı, yeni konseptte tekrar görünür).
  */
 export function SeasonalConceptApplier() {
   const [concept, setConcept] = useState<Concept | null>(null);
@@ -39,25 +38,10 @@ export function SeasonalConceptApplier() {
     };
   }, []);
 
-  // Tema paleti + arka plan işareti uygula.
+  // Palet + arka plan: tek sahiplerine yayınla.
   useEffect(() => {
     if (!concept) return;
-    const root = document.documentElement;
-
-    if (concept.themePresetId && concept.themePresetId in THEME_COLOR_PRESETS) {
-      const preset = THEME_COLOR_PRESETS[concept.themePresetId as keyof typeof THEME_COLOR_PRESETS];
-      applyRuntimeThemeToRoot({
-        primary: preset.primary,
-        secondary: preset.secondary,
-        accent: preset.accent,
-      });
-    }
-
-    if (concept.backgroundEffect) {
-      root.dataset.seasonalBg = concept.backgroundEffect;
-      document.body.classList.add('seasonal-active');
-    }
-
+    publishSeasonalOverride({ themePresetId: concept.themePresetId, backgroundEffect: concept.backgroundEffect });
     // Banner daha önce kapatıldı mı?
     try {
       const key = `seasonal-banner-dismissed-${concept.id}`;

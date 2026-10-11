@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { parseBackgroundEffectFromDb } from '@/lib/background-effect-shared';
+import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
 import { AuroraBackground } from './aurora';
 import { SparklesBackground } from './sparkles';
 import { BackgroundBeams } from './beams';
@@ -73,6 +74,16 @@ export function DynamicBackground({
 }: DynamicBackgroundProps) {
   const [variant, setVariant] = useState<BackgroundVariant>(() => propVariant ?? 'original');
   const [isLoading, setIsLoading] = useState(() => Boolean(fetchFromApi && !propVariant));
+  // Aktif dönemsel konseptin arka plan efekti (site geneli arka planı geçici olarak ezer).
+  const [seasonalVariant, setSeasonalVariant] = useState<BackgroundVariant | null>(null);
+
+  useEffect(() => {
+    if (propVariant || !fetchFromApi) return;
+    const apply = (effect: string | null) =>
+      setSeasonalVariant(effect ? (parseBackgroundEffectFromDb(effect) as BackgroundVariant) : null);
+    apply(readSeasonalOverride().backgroundEffect);
+    return subscribeSeasonalOverride((o) => apply(o.backgroundEffect));
+  }, [propVariant, fetchFromApi]);
 
   useEffect(() => {
     if (propVariant) {
@@ -111,11 +122,11 @@ export function DynamicBackground({
   }, [propVariant, fetchFromApi]);
 
   // Don't render background during loading to prevent flash
-  if (isLoading) {
+  if (isLoading && !seasonalVariant) {
     return <div className={className}>{children}</div>;
   }
 
-  switch (variant) {
+  switch (seasonalVariant ?? variant) {
     case 'original':
       return <div className={className}>{children}</div>;
 

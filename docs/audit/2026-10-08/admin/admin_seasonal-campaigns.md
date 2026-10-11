@@ -199,3 +199,76 @@ Sayfa ekonomiyi doğrudan etkileyen bir kontrol yüzeyi olmasına rağmen; düze
 - **Yeniden üretim:** Admin bonus alanına yanlışlıkla `5000` (amaçlanan `50`) girer. Kampanya penceresinde bir bayi müşteri kartına tüketim kaydeder → müşteri her kayıtta ≥5000 puan, klanı aynı miktarda `totalPoints` kazanır. Kötü niyetli/işbirlikçi bir bayi aynı karta dakikada 5, saatte 300 kayıt girerek ~1.5M puan basabilir; `points-velocity` (≥500/24s eşiği) hiçbir uyarı üretmez, çünkü olay yazılmamıştır. Bonus 0 olsa bile çarpan yolu yine tavansız ve görünmez (bu kısım sezon özelliğinden bağımsız, önceden var olan bir açık; sezon bonusu yalnızca büyütüyor).
 - **Not:** Admin'in kendisi güvenilir aktör; ancak somut etki (yanlış giriş + bayi tarafı tekrarı ile kontrolsüz mint ve dedektör körlüğü) gerçek. Önem: YÜKSEK.
 - **Doğru düzeltme:** Tüketim kredisini tek bir Serializable transaction'a taşı: `creditPointsAndXp` + `addToSquadTreasury` + `points_credited` (`category: 'consumption'`, `seasonalCampaignId/seasonalBonus` alanlarıyla) + tüketim kaynaklı günlük tavan (`lib/points-caps` içinde kaynak-bazlı tavan). Bonusu "kullanıcı başına kampanya penceresinde bir kez" veya "günde bir kez" olacak şekilde idempotent anahtarla (ör. `SeasonalBonusClaim @@unique([userId, campaignId, dayKey])`) sınırla; API'de `bonusPoints` üst sınırını ekonomiyle uyumlu bir değere (ör. ≤ 500) indir ve arayüzde etki önizlemesi + yüksek değer onayı göster; `page.tsx:115` metnini gerçeğe göre düzelt.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/campaigns-calendar` (Kampanya Takvimi). `/admin/seasonal-campaigns` artık sorgu parametrelerini koruyarak `?layer=campaign` ile kalıcı yönlenir (`permanentRedirect`). Eski `app/api/admin/seasonal-campaigns` ucu silindi; yerine `defineRoute` ile yazılmış BFF geldi (`app/api/admin/campaigns-calendar/**`: takvim, sayfalı liste, detay, oluştur/düzenle, yayına al/duraklat, arşivle/geri al, önizleme, rozet seçenekleri). Tüm uçlar ADMIN, zod, rate limit; düzenleme ve durum değişikliği `baseVersion` taşır, çakışmada 409.
+
+Dosyalar: `lib/campaigns-calendar/{contract,server}.ts`, `components/admin/a-kampanya-takvimi/*`, `app/admin/campaigns-calendar/page.tsx` (sunucu ön yüklemesi), `lib/seasonal-campaign-constants.ts`, `__tests__/lib/campaigns-calendar.test.ts` (30 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Yetki | ÇALIŞIYOR | Sayfa `requireAuth(['ADMIN'])` ile ön yükler; her uç `defineRoute({ roles: ['ADMIN'] })`. |
+| 2 | Başlık | ÇALIŞIYOR | QDL `PageHeader` (compact, ops kaydı). Hero yerine canlı durum şeridi. |
+| 3 | Ad | ÇALIŞIYOR | `maxLength=120`, paylaşılan zod şeması istemcide anında Türkçe alan hatası verir. |
+| 4 | Tür | ÇALIŞIYOR | "Hedef kitle" olarak Türkçe etiketli (Sezonluk, Özel, Doğum günü, Üyelik yıl dönümü) ve her biri için ne yaptığı yazıyor. Seçici P0-21'den beri BIRTHDAY/ANNIVERSARY'yi yalnız ilgili kullanıcıya uyguluyor; takvim hedefli kampanyayı "Canlı · hedefli" diye ayrı gösterir, herkese açık kazananı belirlemez. |
+| 5 | Açıklama | ÇALIŞIYOR | "Müşteriye görünen açıklama" diye etiketli; canlı kart önizlemesinde görünür. |
+| 6 | Çarpan | ÇALIŞIYOR | `1,5` ve `1.5` kabul. Boş/0 artık sessizce 1,5'e dönmüyor, Türkçe hatayla reddediliyor. Aralık (1–3) alan yardımında. |
+| 7 | Bonus | ÇALIŞIYOR | Üst sınır 250 (P0-21) ve alan yardımında yazıyor. Tüketim yolu artık `mintPoints` + `dealer_passive` tavanı + `points_credited` ile çalışıyor (B1 şeridi). 100 ve üstü bonusta tavan uyarısı var. |
+| 8 | Başlangıç | ÇALIŞIYOR | `datetime-local` İstanbul duvar saati olarak yorumlanır (UTC+3). Etikette yazar, süre de gösterilir. |
+| 9 | Bitiş | ÇALIŞIYOR | `min` niteliği var; istemci ve sunucu aynı şemayla bitiş > başlangıç kontrolü yapar. |
+| 10 | Oluştur + kaydediliyor | ÇALIŞIYOR | Geçersiz tarih artık RangeError atmıyor (`istanbulLocalToIso` null döner, şema reddeder). `Idempotency-Key` gönderildiği için çift tıklama mükerrer kayıt üretmez. |
+| 11 | Zorunlu alan kontrolü | ÇALIŞIYOR | Alan bazlı hata, `aria-invalid` + `aria-describedby`. |
+| 12 | Sunucu hata mesajı | ÇALIŞIYOR | Türkçe zod mesajları; zarf v2 `details` alanlara eşlenir. |
+| 13 | Form sıfırlama | ÇALIŞIYOR | Her açılışta çekmece temiz taslakla başlar. Kaydedilmemiş değişiklikte kapanış onay ister. |
+| 14 | Liste | ÇALIŞIYOR | Sunucuda sayfalı (10'ar), arama, durum filtresi. |
+| 15 | Yükleniyor | ÇALIŞIYOR | `QueryState` statik iskelet; yeniden çekimde `aria-busy`. |
+| 16 | Boş durum | ÇALIŞIYOR | Filtreye göre yönlendiren metin + başlıkta "Kampanya" düğmesi. |
+| 17 | Hata durumu | ÇALIŞIYOR | `r.ok` + zarf kontrolü, "Tekrar dene"li hata kartı. Hata artık "kampanya yok" gibi görünmüyor (B4). |
+| 18 | Satır | ÇALIŞIYOR | Tarih + saat (İstanbul), etki özeti, hedef kitle, bütçe kullanımı ve türetilmiş durum rozeti (ikon + metin). |
+| 19 | Aç/kapat | ÇALIŞIYOR | "Yayına al / Duraklat" onaylı (`ConfirmAction`, etki satırı), bekleme durumu var, sürümlü (409). |
+| 20 | Aç/kapat onayı | ÇALIŞIYOR | Bkz. #19. |
+| 21 | Düzenleme | ÇALIŞIYOR | Sağdan açılan çekmece, aynı form. Canlı ekonomiyi etkileyen kayıtta gerçek defter verisiyle etki onayı istenir. |
+| 22 | Silme/arşiv | ÇALIŞIYOR | Gerekçeli arşiv: kampanya pasifleşir ve listeden çıkar, kayıt silinmez, geri alınabilir (duraklatılmış döner). Şemada `archivedAt` olmadığından arşiv kaydı `Settings['campaignsCalendarArchive']` içinde (ŞEMA İSTEĞİ aşağıda). |
+| 23 | Görev (challenge) tanımlama | ÇALIŞIYOR | Tür, hedef, ödül puanı (en fazla 1000, çünkü `seasonal_challenge` kredisi tavansız) ve etkin rozet seçici. Rozet sunucuda doğrulanır. Detayda görev ödülü alan kişi sayısı ve basılan puan gösterilir (B3). |
+| 24 | Görsel | ÇALIŞIYOR | `https://` zorunlu görsel adresi alanı. |
+| 25 | İndirim (`discount`) | KALDIRILDI | Okuyucusu yok. Yeni şemada alan yok; DB kolonu dokunulmadan duruyor (ŞEMA İSTEĞİ: kolonu düşür). |
+| 26 | Koşullar | ÇALIŞIYOR | Tipli: `minLevel` ve yeni `budgetPoints`. Tanınmayan koşulu olan eski kayıt detayda "seçici uygulamıyor" uyarısıyla görünür. |
+| 27 | Durum filtresi | ÇALIŞIYOR | Tümü · Yayında · Planlı · Duraklatıldı · Bitti · Arşiv (URL'de). |
+| 28 | "Şu an canlı" göstergesi | ÇALIŞIYOR | Üst şerit: canlı kazanan, kalan süre, açık hedefli kampanya sayısı, sıradaki kampanya. |
+| 29 | Çakışma uyarısı | ÇALIŞIYOR | Örtüşen herkese açık kampanyalarda kazanan ve kaybolan bonus yazılır; zaman çizelgesinde çakışma aralığı renkli zeminle, gölgede kalan bar taralı. Önizleme, kaydetmeden önce aynı analizi yapar. |
+| 30 | Etki analitiği | ÇALIŞIYOR | Detayda puan defterinden (`meta.seasonalCampaignId`) basılan puan, kazanım sayısı, etkilenen müşteri, kaynak kırılımı. Üst şeritte bugün kampanyalı basılan puan. |
+| 31 | Denetim kaydı | ÇALIŞIYOR | Tam önce/sonra + `changedFields`; detayda "Değişiklik geçmişi" (kim, ne zaman, ne değişti, arşiv gerekçesi). |
+| 32 | Kural metni | ÇALIŞIYOR | "Uygulandığı yollar: geri bildirim ve tüketim pasif puanı, ikisi de günlük tavana tabi" ve tek kampanya kuralı. Tüketim yolu artık gerçekten tavanlı olduğu için doğru. |
+| 33 | i18n | KISMİ | Metinler Türkçe ve tam Türkçe karakterli. Sayfa `t()` anahtarlarına taşınmadı, çünkü admin panelinin geri kalanı da sabit TR. |
+| 34 | Mobil | ÇALIŞIYOR | `PanelPage` (fazladan `p-6` yok). Zaman çizelgesi yatay kayar, liste satırları yığılır, çekmece alttan açılır, dokunma hedefleri ≥ 44px. |
+| 35 | Etiket-alan bağı | ÇALIŞIYOR | Her alanda `htmlFor`/`id`, hata ve yardım `aria-describedby` ile bağlı. |
+| 36 | İkon düğme erişilebilirliği | ÇALIŞIYOR | Metinli düğmeler; durum rozeti ikon + metin; zaman çizelgesi barları tam `aria-label` taşıyan düğmeler. |
+| 37 | Toast | ÇALIŞIYOR | `sonner` + `announce()` (ekran okuyucu). |
+
+### Kapanan bulgular (10/11)
+- **B1:** Hedefli tür artık herkese uygulanmıyor (P0-21 seçicisi); takvim hedefli kampanyayı ayrı gösteriyor.
+- **B2:** Tüketim tavanı ve `points_credited` B1 şeridinde kapandı; arayüz metni artık doğru. Ayrıca kampanya **puan bütçesi** eklendi.
+- **B3:** Görev editörü.
+- **B4:** Hata görünür.
+- **B5:** Canlı/gölgede/planlı durumu, zaman çizelgesi, çakışma.
+- **B6:** Düzenleme, arşiv, onaylı aç/kapat.
+- **B7:** Tam denetim kaydı + geçmiş.
+- **B8:** Erişilebilirlik.
+- **B9:** Türkçe tür ve mesajlar.
+- **B10:** Paylaşılan şema, sessiz varsayılan yok, saat dilimi, tarih + saat.
+
+B11 kapanmadı (bkz. Kalanlar).
+
+**Yeni: bütçe / yumuşak tavan.** `conditions.budgetPoints` (100 – 10.000.000). Seçici (`lib/seasonal-campaign-live`) bütçesi dolan kampanyayı atlar ve sıradaki uygun kampanyaya düşer. Harcanan miktar, defterde o kampanyanın uygulandığı `posted` satırların toplamıdır. Takvimde "Bütçe doldu" durumu, detayda ilerleme çubuğu ve önizlemede tahmini dolma süresi gösterilir.
+
+### Kalanlar
+- **B11 (aktif kampanya önbelleği):** Kapanmadı. Kazanım yolunda her olayda hafif bir sorgu yapılıyor; bütçeli kampanyada buna bir toplama sorgusu ekleniyor. Redis katmanı B şeridinin işi.
+- **Bütçe yumuşak tavandır:** Kilitsiz okunduğu için eşzamanlı birkaç kazanım kadar aşılabilir.
+- **Segment / bölge / bayi hedeflemesi:** Yapılmadı. Hedefleme sözlüğü için seçicide gerçek veri kaynağı gerekiyor.
+- **i18n anahtarları:** Sayfa metinleri `t()` anahtarlarına taşınmadı.
+- **ŞEMA İSTEKLERİ:** `SeasonalCampaign.archivedAt DateTime?` (Settings'teki arşiv haritasının yerine), `SeasonalCampaign.updatedAt` (içerik özeti sürümünün yerine), `discount` kolonunun düşürülmesi, `PointsLedger` üzerinde `(meta->>'seasonalCampaignId')` ifade indeksi (etki ve bütçe sorguları için).

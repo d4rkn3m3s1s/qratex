@@ -20,6 +20,7 @@ import { AppLocaleProvider } from '@/lib/app-locale';
 import { ConfettiProvider } from '@/components/providers/confetti-provider';
 import { AccessibilityClassSync } from '@/components/accessibility-class-sync';
 import { SeasonalConceptApplier } from '@/components/seasonal/seasonal-concept-applier';
+import { readSeasonalOverride, subscribeSeasonalOverride } from '@/lib/seasonal-concept-events';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -81,6 +82,12 @@ function ThemeColorsProvider({
   const [isThemeInitialized, setIsThemeInitialized] = useState(!!initialThemeSettings?.length);
   const [activeThemeId, setActiveThemeId] = useState<string | null>(boot.activeThemeId);
   const [customColors, setCustomColors] = useState<RuntimeThemeHex | null>(boot.customColors);
+  // Aktif dönemsel konseptin paleti: tema hesaplamasında üst katman (aynı yoldan, moda göre).
+  const [seasonalThemeId, setSeasonalThemeId] = useState<string | null>(null);
+  useEffect(() => {
+    setSeasonalThemeId(readSeasonalOverride().themePresetId);
+    return subscribeSeasonalOverride((o) => setSeasonalThemeId(o.themePresetId));
+  }, []);
 
   const loadThemeSettings = async (opts?: { bypassCache?: boolean }) => {
     try {
@@ -141,9 +148,28 @@ function ThemeColorsProvider({
   }, []);
 
   useLayoutEffect(() => {
-    if (!isThemeInitialized) return;
+    const seasonal = seasonalThemeId && seasonalThemeId in themePresets ? seasonalThemeId : null;
+    if (!isThemeInitialized && !seasonal) return;
     const root = document.documentElement;
     const mode = resolveColorMode(root, resolvedTheme);
+
+    if (seasonal) {
+      const effectiveThemeId = resolveThemeIdForMode(seasonal, mode, themePresets);
+      const preset = themePresets[effectiveThemeId as ThemePresetId];
+      const presetRow = themePresetRowMap.get(effectiveThemeId as ThemePresetId);
+      applyRuntimeThemeToRoot(
+        {
+          primary: preset.primary,
+          secondary: preset.secondary,
+          accent: preset.accent,
+          background: presetRow?.colors.background,
+          foreground: presetRow?.colors.foreground,
+          mode,
+        },
+        root
+      );
+      return;
+    }
 
     if (activeThemeId === 'custom' && customColors) {
       applyRuntimeThemeToRoot(
@@ -176,7 +202,7 @@ function ThemeColorsProvider({
         root
       );
     }
-  }, [activeThemeId, customColors, isThemeInitialized, resolvedTheme]);
+  }, [activeThemeId, customColors, isThemeInitialized, resolvedTheme, seasonalThemeId]);
 
   return <>{children}</>;
 }

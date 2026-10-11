@@ -16,6 +16,7 @@ import {
   getActiveSeasonalConcept,
   syncActiveSeasonalConcept,
   parseActiveSeasonalConcept,
+  readValidSeasonalCache,
 } from '@/lib/seasonal-concept-core';
 
 beforeEach(() => {
@@ -37,7 +38,6 @@ describe('getActiveSeasonalConcept', () => {
       themePresetId: 'orange',
       bannerText: 'Yaz geldi',
       bannerEmoji: '☀️',
-      bonusMultiplier: 1.5,
       endDate: new Date('2026-08-01T00:00:00.000Z'),
     });
     const r = await getActiveSeasonalConcept(new Date('2026-07-15'));
@@ -48,7 +48,6 @@ describe('getActiveSeasonalConcept', () => {
       themePresetId: 'orange',
       bannerText: 'Yaz geldi',
       bannerEmoji: '☀️',
-      bonusMultiplier: 1.5,
       endDate: '2026-08-01T00:00:00.000Z',
     });
     // Sorgu pencere + öncelik sıralamasıyla çağrılmalı.
@@ -72,7 +71,6 @@ describe('syncActiveSeasonalConcept', () => {
       themePresetId: 'arctic',
       bannerText: null,
       bannerEmoji: '❄️',
-      bonusMultiplier: 1,
       endDate: new Date('2026-12-31T00:00:00.000Z'),
     });
     const r = await syncActiveSeasonalConcept(new Date('2026-12-01'));
@@ -84,11 +82,26 @@ describe('syncActiveSeasonalConcept', () => {
     );
   });
 
-  it('aktif yoksa null yazar', async () => {
+  it('aktif yoksa "yok + sonraki değişim" yazar', async () => {
     mockConceptFindFirst.mockResolvedValue(null);
     const r = await syncActiveSeasonalConcept();
     expect(r).toBeNull();
-    expect(mockSettingsUpsert).toHaveBeenCalled();
+    expect(mockSettingsUpsert.mock.calls[0][0].update.value).toEqual({ none: true, nextChangeAt: null });
+  });
+
+  it('okuma hatasında önbelleğe YAZMAZ (canlı konsept silinmez)', async () => {
+    mockConceptFindFirst.mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await syncActiveSeasonalConcept()).toBeNull();
+    expect(mockSettingsUpsert).not.toHaveBeenCalled();
+  });
+
+  it('sonraki değişim anı: kazananın bitişi ile sonraki başlangıcın küçüğü', async () => {
+    mockConceptFindFirst
+      .mockResolvedValueOnce({ id: 'k', name: 'Kış', backgroundEffect: null, themePresetId: null, bannerText: null, bannerEmoji: null, endDate: new Date('2027-02-28T00:00:00.000Z') })
+      .mockResolvedValueOnce({ startDate: new Date('2026-12-24T00:00:00.000Z') });
+    await syncActiveSeasonalConcept(new Date('2026-12-10T00:00:00.000Z'));
+    expect(mockSettingsUpsert.mock.calls[0][0].update.value).toMatchObject({ id: 'k', nextChangeAt: '2026-12-24T00:00:00.000Z' });
   });
 });
 
@@ -109,8 +122,22 @@ describe('parseActiveSeasonalConcept', () => {
       themePresetId: null,
       bannerText: null,
       bannerEmoji: null,
-      bonusMultiplier: null,
       endDate: '2026-01-01',
     });
+  });
+});
+
+describe('readValidSeasonalCache', () => {
+  const now = new Date('2026-12-20T00:00:00.000Z');
+  it('nextChangeAt gelecekteyse önbellek geçerli (konsept yok dahil)', () => {
+    expect(readValidSeasonalCache({ none: true, nextChangeAt: '2026-12-24T00:00:00.000Z' }, now)).toEqual({ concept: null });
+    expect(readValidSeasonalCache({ none: true, nextChangeAt: null }, now)).toEqual({ concept: null });
+  });
+  it('değişim anı geçtiyse geçersiz → canlı çözülür (yüksek öncelikli yeni konsept bekletilmez)', () => {
+    expect(readValidSeasonalCache({ id: 'k', name: 'Kış', endDate: '2027-02-28T00:00:00.000Z', nextChangeAt: '2026-12-19T00:00:00.000Z' }, now)).toBeNull();
+  });
+  it('eski biçim: bitiş gelecekteyse geçerli', () => {
+    expect(readValidSeasonalCache({ id: 'k', name: 'Kış', endDate: '2027-02-28T00:00:00.000Z' }, now)?.concept?.id).toBe('k');
+    expect(readValidSeasonalCache(null, now)).toBeNull();
   });
 });
