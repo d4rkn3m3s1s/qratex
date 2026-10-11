@@ -211,3 +211,51 @@ Yöntem: salt okunur kod incelemesi (çalıştırma/DB erişimi yok). Okunan dos
 | 1 | Koşulsuz PATCH → SENT→APPROVED → çift gönderim | Doğrulandı | YÜKSEK |
 | 2 | Admin "SENT" işareti gönderimsiz kilit | Doğrulandı (kısmen abartılı) | ORTA |
 | 3 | Demo seed taslağı işaretsiz kuyruğa düşüyor | Çürütüldü | DÜŞÜK (hijyen) |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef:** `/admin/segments?tab=oneriler`, tek onay kuyruğu. `/admin/innovation/segment-proposals` ve `/admin/innovation` artık sorgu parametrelerini koruyarak kalıcı yönlendiriyor (`permanentRedirect`). Hub'daki kopya kuyruk sayfayla birlikte kalktı. BFF: `GET /api/admin/segments/proposals`, `GET|PATCH /api/admin/segments/proposals/[id]`, `POST /api/admin/segments/proposals/bulk` (hepsi `defineRoute`). Eski `app/api/admin/innovation/segment-proposals/**` uçları silindi. Sunucu mantığı `components/admin/a-segmentler/server/proposals.ts` içinde; jest testleri `__tests__/admin/a-segmentler/server.test.ts`.
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | QDL `PageHeader` |
+| 2 | ÇALIŞIYOR | Sekmede bekleyen sayı rozeti; sidebar girişi navigasyon ajanının |
+| 3 | ÇALIŞIYOR | Durum sekmeleri + sayfalama |
+| 4 | ÇALIŞIYOR | ADMIN + zod + rate limit |
+| 5 | ÇALIŞIYOR | QueryState/DataTable iskeleti, `role=status` |
+| 6 | ÇALIŞIYOR | Boş durum, hata ve süzgeç sonucu ayrı |
+| 7 | ÇALIŞIYOR | Zarf çözülüyor; hata boş liste gibi dönmüyor; tekrar dene var |
+| 8–9 | ÇALIŞIYOR | Başlık + işletme etiketi |
+| 10 | ÇALIŞIYOR | Türkçe segment adı + çekmecede tanım |
+| 11 | ÇALIŞIYOR | Bekleme yaşı; 48 saati aşan uyarı tonunda; "en eski bekleyen" KPI |
+| 12 | ÇALIŞIYOR | Çekmecede tam mesaj (bildirim önizlemesi) |
+| 13 | ÇALIŞIYOR | Koşullu geçiş (409), denetim izi, bayiye bildirim |
+| 14 | ÇALIŞIYOR | Gerekçe zorunlu (5–500), bayiye iletilir, denetime yazılır |
+| 15 | KALDIRILDI | "Gönderildi işaretle" düğmesi ve API'de `SENT` kabulü kaldırıldı; `SENT` yalnız gerçek gönderim ucunda yazılıyor |
+| 16 | ÇALIŞIYOR | Karar başına kilit + spinner; çift tık mümkün değil |
+| 17 | ÇALIŞIYOR | Karardan sonra liste/sayaç tazelenir, sıradaki öneri açılır |
+| 18 | ÇALIŞIYOR | sonner + `announce`; Türkçe karakterli metin |
+| 19 | ÇALIŞIYOR | Odakta + 60 sn'de bir tazeleme |
+| 20 | ÇALIŞIYOR | Arama (başlık/işletme), segment, kaynak (gerçek/demo) |
+| 21 | ÇALIŞIYOR | Bekleyende FIFO, diğerlerinde en yeni karar önce (sabit, anlamlı) |
+| 22 | ÇALIŞIYOR | Bekleyen / Onaylı-gönderilmedi / Gönderildi / Reddedildi / Tümü, sayaçlı |
+| 23 | ÇALIŞIYOR | Sunucu sayfalama + toplam |
+| 24 | ÇALIŞIYOR | Gönderimle aynı hesap (segment çözümü + rıza kapısı): aday, ulaşılabilir, kapatmış, 500 tavan uyarısı, boş kitle uyarısı; 10 dk önbellek |
+| 25 | ÇALIŞIYOR | Bildirim kartı önizlemesi |
+| 26 | AÇIK | Mesajı düzenleyerek onaylama yok (bayinin metnini sessizce değiştirmemek için bilinçli); ret + gerekçe ile düzelttirme akışı var |
+| 27 | ÇALIŞIYOR | Gerekçe `AuditLog.newData.note`'ta tutuluyor (şemasız), listede ve geçmişte gösteriliyor |
+| 28 | ÇALIŞIYOR | `Notification` (onay/ret, `kind: innovation_segment_decision`, `/dealer/innovation` bağlantısı) |
+| 29 | ÇALIŞIYOR | `segment_proposal.approve/reject` denetim satırı |
+| 30 | ÇALIŞIYOR | Çoklu seçim + toplu onay/ret (≤50, satır bazlı sonuç) |
+| 31 | ÇALIŞIYOR | Çekmecede J/K/A/R |
+| 32 | ÇALIŞIYOR | `User.isDemo` rozeti + kaynak süzgeci; demo öneri onaylanamaz |
+| 33 | ÇALIŞIYOR | Modül kapalıysa uyarı bandı ve Modüller sekmesine bağlantı |
+| 34 | ÇALIŞIYOR | Sunucu sayfası `metadata` |
+| 35 | ÇALIŞIYOR | Mobil: tablo karta dönüşür; çekmecede karar alanı altta yapışık (safe-area) |
+
+**Kapanan bulgular:** 1 (koşullu `updateMany` + 409, test), 2 (SENT kısayolu kaldırıldı), 3 (kitle + önizleme + bayi geçmişi + yorgunluk uyarısı), 4 (gerekçe, bildirim, denetim; `decidedBy` adı gösteriliyor), 5 (demo rozeti/süzgeci/onay engeli), 7, 8, 9, 10, 11. **10/11 kapandı.**
+
+**Kalanlar:** Bulgu 6, yani bayi POST'unda `message.max`, tekilleştirme ve hız sınırı; bayi ucunun (`app/api/dealer/innovation/segment-proposals`) sahibinde. Admin tarafı uzun mesajı kırpmadan güvenle gösteriyor. ŞEMA İSTEĞİ: `SegmentCampaignProposal.decisionNote String?`, `decidedBy User? @relation`, `source`, `sentAt`/`sentCount`, `status` enum ve `@@index([status, createdAt])`. Bugün not denetim izinden, gönderim sayısı analitik olayından okunuyor.

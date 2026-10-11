@@ -270,3 +270,43 @@ Sonuç: Sayfa kaldırılmamalı — inovasyon modüllerinin gözlem/onay merkezi
 | 3 | A/B oranı hesaplanamıyor, ab/event korumasız | Doğrulandı (oran: gösterimde 0 %, dönüşümde null) | Orta |
 | 4 | Config PUT şemasız | Doğrulandı | Orta (yalnızca admin girdisi) |
 | 5 | Webhook secret GET'te düz metin | Doğrulandı | Orta |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: sayfa parçalandı.** `/admin/innovation`, sorgu parametrelerini koruyarak `/admin/segments?tab=moduller`'e kalıcı yönlendiriyor. Kalan gerçek ayarlar Segmentler → Modüller sekmesinde (`GET|PATCH /api/admin/segments/modules`, `POST .../modules/rotate-secret`). Segment onayı Segmentler → Öneriler'e taşındı. Okuma uçları `ab-report`, `health-score-v2`, `risk-dashboard`, `flash-offers` ve `segment-proposals/**` silindi (tek istemcileri bu sayfaydı). `config` ucu geriye uyumlu olarak yeniden yazıldı. Demo uçları (`demo-package`, `demo-scenario`) arayüzden kaldırıldı (C1); `ALLOW_DEMO_SEED` + `isDemo` kapısıyla yalnız demo ortamında çalışıyorlar.
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | Yeni uçlar `defineRoute` ADMIN |
+| 2 | KALDIRILDI | Hub başlığı; Segmentler sayfası başlığı |
+| 3–6 | ÇALIŞIYOR | Her sekme kendi sorgusu; QueryState hata/iskelet; yalnız ilgili anahtar tazelenir |
+| 7–9 | KALDIRILDI → Komuta Merkezi | Telafi kuyruğu/SLA sayaçları Komuta kuyruklarında |
+| 10–12 | KALDIRILDI | Düşük puanlı QR/öncelik ipuçları: Bayi Sağlığı erken uyarıları ve Komuta bunu gerçek veriyle karşılıyor |
+| 13 | KALDIRILDI | Saklama süresi hiçbir silme işinde kullanılmıyordu (yanıltıcı) |
+| 14 | KALDIRILDI | KVKK iletişim e-postası artık hiçbir uçta okunmuyor (privacy-request ucu kullanmıyor; grep ile doğrulandı) |
+| 15–17 | KALDIRILDI | Bağlantılar; Modüller → "Taşınan bölümler" kartı KVKK ve diğer hedeflere gidiyor |
+| 18 | KALDIRILDI | Kullanılmayan denetim sorgusu |
+| 19 | ÇALIŞIYOR | 8 anahtar: Türkçe etiket + açıklama, `Label htmlFor` ↔ `Switch id`, kapatmada etki onayı, iyimser kilit (409), önce/sonra farkıyla AuditLog |
+| 20–23 | KALDIRILDI → Bayi Sağlığı | Tek skor, artan sıralama, yetersiz veri, erken uyarı (`/admin/dealers-health`) |
+| 24–26 | ÇALIŞIYOR → Segmentler/Öneriler | Tam mesaj, kilit, gerekçe, durum makinesi |
+| 27–30 | KALDIRILDI (C1) | "Paket aç" / "Sadece plan" üretim arayüzünden çıkarıldı |
+| 31–33 | KALDIRILDI → Özellik ve Deney | Bozuk A/B raporu silindi; `campaignAb` verisi korunuyor, eski `config` PUT'u katı şemayla kabul ediyor |
+| 34–36 | ÇALIŞIYOR | Webhook: açık "Kaydet" + kirli durum, yalnız herkese açık https (iç IP/localhost reddi), gizli değer GET'te dönmüyor; sunucuda üretilip bir kez gösteriliyor, denetime düz metin yazılmıyor |
+| 37 | AÇIK | Test gönderimi ve teslim günlüğü Entegrasyonlar (`/admin/webhooks`) sahipliğinde |
+| 38 | KALDIRILDI | Statik metin kartı; bağlantılar "Taşınan bölümler"de |
+| 39 | KALDIRILDI | Flash listesi bayi Teklifler alanında |
+| 40 | ÇALIŞIYOR | Davet limitleri düzenlenebilir (0–10.000 tam sayı, kirli durum, denetim) |
+| 41 | KALDIRILDI → Özellik ve Deney | A/B varsayılan bölünme |
+| 42 | ÇALIŞIYOR | Blur'da toast spam'i yok; yalnız gerçek kayıtta |
+| 43 | KISMİ | TR/EN sözlüğü; Modüller EN metni henüz TR |
+| 44 | ÇALIŞIYOR | Mobil-uyumlu kartlar, ≥44px hedefler |
+| 45 | ÇALIŞIYOR | Tüm form etiketleri bağlı |
+| 46 | ÇALIŞIYOR | `motion-safe:animate-spin`, `useMotionPolicy` |
+| 47 | ÇALIŞIYOR | Segment kararı ve config değişiklikleri AuditLog'da |
+
+**Kapanan bulgular:** 1 (demo arayüzü kaldırıldı; uçlar zaten kapılı), 2 (Bayi Sağlığı'na devredildi, v2 tablosu kaldırıldı), 4 (katı zod `.strict()`, sayı sınırları, https/iç IP engeli, iyimser kilit, AuditLog), 5 (gizli değer yalnız sunucuda üretiliyor, write-only), 6, 7 (1000+ sorgu yapan uçlar silindi; her sekme ayrı sorgu), 8 (sahte plan kaldırıldı), 9 (yanıltıcı alanlar kaldırıldı), 11, 12 (operatör dili; uç ve cron ifadeleri kaldırıldı), 13, 14 (tipli sözleşme `domain.ts`). **12/14 kapandı.**
+
+**Kalanlar:** Bulgu 3, yani A/B olay şeması ve `ab/event` korumasızlığı. Müşteri uçları (`app/api/customer/innovation/ab/*`) Özellik ve Deney (F5.2) sahipliğinde; bozuk rapor arayüzü kaldırıldı. Bulgu 10, yani bayrakların `FeatureFlag` modeline taşınması, aynı alanın işi. Bu arada denetimsiz ikinci sistem sorunu, audit + onay + iyimser kilitle kapatıldı. Partner webhook `fetch`'ine zaman aşımı eklenmesi ayrı bir iş: `app/api/internal/inngest/partner-digest-webhook` bu yüzeyin değil. Orada zaten, adres kayıt anında artık herkese açık https ile sınırlı.

@@ -238,3 +238,54 @@
   - Kampanya gönderimi bayi kapsamlı (`qrCode: { dealerId }`) ve bayinin kendi seçtiği `targetSegment` ile çalışıyor. Admin bu ekranda gördüğü kitleyi oraya "göndermiyor". `app/admin/playbooks/page.tsx:98` yalnızca bir gezinme bağlantısı.
   - Kampanya ucu kendi tanımıyla tutarlı çalışıyor, yanlış kişiye gönderim veya yetki aşımı yok.
 - **Sonuç:** "Aynı ad, farklı kitle" bir tutarlılık ve güven sorunu (operatör kafa karışıklığı). Mevcut raporun "Yeniden tasarım vizyonu → Uyum" ve "Çakışmalar" bölümlerinde zaten doğru biçimde ele alınmış. Hata/güvenlik bulgusu olarak KRİTİK/YÜKSEK sınıfına girmiyor, ürün borcu (ORTA) olarak kalmalı.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/segments` (sekmeler: Segmentler · Öneriler · Modüller, `?tab=`). Sunucu bileşeni ilk genel bakışı hesaplar; istemci adası `components/admin/a-segmentler/**`; Öneriler ve Modüller lazy. BFF: `GET /api/admin/segments` (genel bakış, 5 dk Redis, `?fresh=1`), `GET /api/admin/segments/[segmentId]/members`, `GET /api/admin/segments/export` (CSV, denetimli, 5/dk). Hepsi `defineRoute` (ADMIN + zod + rate limit). Testler: `__tests__/admin/a-segmentler/{domain,server}.test.ts` (26 test).
+
+**Veri kaynağı değişti:** Sayfa artık segmenti kendisi hesaplamıyor. Tek doğruluk kaynağı, günlük CLV cron'unun yazdığı `CustomerLifetimeValue.segmentId` → `CustomerSegment` kayıt defteri (`lib/clv-core.ts`). Sayımlar DB'de `groupBy` ile yapılıyor; anonimleşmiş, demo ve gölge yasaklı hesaplar paya girmiyor (gölge yasaklılar ayrı KPI). İki sanal kova eklendi: "Kurala uymayan" (CLV var, segment yok) ve "Hesaplanmamış" (CLV kaydı yok).
+
+| # | Yeni durum | Not |
+|---|---|---|
+| 1 | ÇALIŞIYOR | `defineRoute` roles ADMIN + rate limit |
+| 2 | ÇALIŞIYOR | React Query, sunucudan initialData |
+| 3 | ÇALIŞIYOR | QueryState iskeleti; başlık yükleme sırasında kaybolmuyor; "analiz ediliyor" metni kaldırıldı |
+| 4 | ÇALIŞIYOR | Hata görünür (QueryState + Tekrar dene); boş durum ayrı |
+| 5 | ÇALIŞIYOR | "AI destekli" iddiası kaldırıldı; "Kural tabanlı · günlük CLV hesabı (AI yalnız kayıp olasılığını besler)" |
+| 6 | ÇALIŞIYOR | "Yeniden hesapla": `?fresh=1`, dönen ikon, kilit, ekran okuyucu duyurusu, "Görünüm hh:mm itibarıyla" + "Son CLV hesabı" |
+| 7 | ÇALIŞIYOR | Toplam ayrı `count()`; kesilme yok |
+| 8 | ÇALIŞIYOR | Kartlar kayıt defterinden + ortalama harcama |
+| 9 | ÇALIŞIYOR | `role=radiogroup/radio`, `aria-checked`, ok/Home/End tuşları, gezici tabIndex |
+| 10 | ÇALIŞIYOR | En büyük kalan yöntemi; toplam her zaman 100 (test) |
+| 11 | ÇALIŞIYOR | Kayıt defteri boşken dürüst ilk kullanım mesajı; boş dağılım çubuğu gizli |
+| 12 | ÇALIŞIYOR | Çubuk dekoratif (`aria-hidden`); seçim, görünür % etiketli `button` lejantından (`aria-pressed`); `scaleX` animasyonu azaltılmış harekette anında |
+| 13 | ÇALIŞIYOR | Lejant tıklanabilir, % metni görünür |
+| 14 | ÇALIŞIYOR | Başlık "Ad · N müşteri", tablo toplamı ve sayfalama ile tutarlı |
+| 15 | ÇALIŞIYOR | Kural metinleri `pickSegment` eşikleriyle birebir + öncelik sırası; özel segment için dürüst not |
+| 16 | ÇALIŞIYOR | Sunucu sayfalı tam üye listesi (20/50/100), segmente göre anlamlı varsayılan sıralama |
+| 17 | ÇALIŞIYOR | Ad + e-posta; boş `AvatarImage` kaldırıldı |
+| 18 | ÇALIŞIYOR | Seviye/puan sütunu |
+| 19 | ÇALIŞIYOR | DataTable boş durumu |
+| 20 | ÇALIŞIYOR | Motor CLV cron'u; soft-delete/gölge yasak sorunu artık yok (kaynak değişti) |
+| 21 | ÇALIŞIYOR | Sayaç ticker + detay çapraz geçişi, `useMotionPolicy` |
+| 22 | ÇALIŞIYOR | `width` animasyonu → `scaleX`; `hover:scale-105` kaldırıldı |
+| 23 | ÇALIŞIYOR | Mobilde yatay kaydırılan kart şeridi; tablo mobilde karta dönüşür; seçimde detaya kaydırma + odak |
+| 24 | KALDIRILDI | Yorum/rozet sayısı yeni segment tanımında anlamsız; yerine harcama, ziyaret, son alışveriş, kayıp olasılığı |
+| 25 | ÇALIŞIYOR | Satır → `/admin/users/[id]` (Kullanıcı 360) |
+| 26 | ÇALIŞIYOR | `?segment=<id>` URL durumu (sayfa/sıralama/arama da URL'de) |
+| 27 | KISMİ | Komuta Merkezi kuyruğu `/admin/segments`'e gidiyor; segmente/sekmeye derin bağlantı Komuta sahibinin işi (bu sayfa `?segment=` ve `?tab=oneriler` kabul ediyor) |
+| 28 | ÇALIŞIYOR | Sunucu CSV (formül enjeksiyonu korumalı, ≤10.000 satır, denetim izi, 5/dk) |
+| 29 | KALDIRILDI (bilinçli) | Platform segmentine doğrudan toplu bildirim: rıza/frekans tavanı olan `MarketingMessenger` (F2.6) gelmeden açılmadı. Bayi kaynaklı segment kampanyaları Öneriler sekmesinde onaylanıyor |
+| 30 | AÇIK | Trend/geçiş için günlük anlık görüntü tablosu gerekiyor → ŞEMA İSTEĞİ `CustomerSegmentSnapshot` |
+| 31 | KISMİ | Kural şeffaflığı tam; UI'dan düzenleme yok, çünkü cron `criteria` alanını okumuyor (sahte editör olurdu) |
+| 32 | ÇALIŞIYOR | Arama (ad/e-posta), 5 sütunda sıralama, sayfalama |
+| 33 | KISMİ | TR/EN kopya sözlüğü (`copy.ts`); Öneriler/Modüller EN metinleri şimdilik TR |
+| 34 | ÇALIŞIYOR | `metadata.title = 'Segmentler'` |
+| 35 | ÇALIŞIYOR | `cachedJson` 5 dk + fresh |
+
+**Kapanan bulgular (14/14):** B1 (kaynak CLV; anonim/demo/gölge yasak hariç), B2 (DB `groupBy` + ayrı `count`), B3 (admin sayfası tek kayıt defterine bağlandı; kampanya ucu/playbook anahtar eşlemesi aşağıda açık), B4 (öncelik CLV motorunda; kurallar ve öncelik açıkça yazılı), B5, B6, B7, B8, B9, B10 (bu sayfa tarafı), B11, B12 (tek `domain.ts` + `copy.ts`; ölü import yok), B13 (tek ikon, yaşam döngüsü sırası, risk tonu), B14 (kopya sözlüğü).
+
+**Kalanlar:** (1) Segment trend/geçiş: ŞEMA İSTEĞİ `CustomerSegmentSnapshot { date @db.Date, segmentId, count, @@unique([date, segmentId]) }` ve CLV cron'unun yazması. (2) `dealer/campaigns/[id]/send` ve playbook `targetSegment` anahtarlarının kayıt defterine bağlanması (B3'ün kalan yarısı; bayi kampanya alanının sahipliğinde). (3) Kural düzenleme, `pickSegment` `criteria` okuyunca anlam kazanır (lib/clv-core sahibi). (4) Toplu segment aksiyonu F2.6'ya bağlı.
