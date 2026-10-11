@@ -36,7 +36,7 @@ export const POST = defineRoute(
       return ok(handleDuelRound({ userId: user.id, challenge: body.challenge ?? null }));
     }
     return ok(
-      handleDuelSubmit({
+      await handleDuelSubmit({
         userId: user.id,
         userName: session.user?.name ?? null,
         roundToken: body.roundToken,

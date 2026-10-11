@@ -13,6 +13,7 @@ import {
   buildDuelRound,
   buildPracticeRound,
   buildRankedRound,
+  scoreRound,
   venueQuizVerifier,
 } from '@/lib/games/validators/venue-quiz';
 import { handleDuelRound, handleDuelSubmit, signDuelToken } from '@/lib/games/validators/venue-quiz-duel';
@@ -240,59 +241,80 @@ describe('sunucu doğrulayıcısı (sıralı)', () => {
 
 describe('düello', () => {
   const NOW = 1_800_000_000_000;
+  const mem = () => {
+    const seen = new Set<string>();
+    return async (k: string) => (seen.has(k) ? false : (seen.add(k), true));
+  };
 
-  it('aynı kod → aynı sorular; meydan okuma skoru imzalı ve karşılaştırılır', () => {
+  it('aynı tur belirteci ikinci kez gönderilemez (review ile öğrenilen cevaplarla replay)', async () => {
+    const consume = mem();
     const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET });
+    const round = buildDuelRound(a.code);
+    const weak = play(round, { gapMs: 3000, correct: () => false });
+    await handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: weak, now: NOW + 40_000, secret: SECRET, consume });
+    const perfect = play(round, { gapMs: 3000, correct: () => true });
+    await expect(
+      handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: perfect, now: NOW + 45_000, secret: SECRET, consume })
+    ).rejects.toThrow('zaten');
+    const again = signDuelToken({ k: 'r', c: a.code, u: 'u1', t: NOW + 1000 }, SECRET);
+    await expect(
+      handleDuelSubmit({ userId: 'u1', userName: null, roundToken: again, answers: perfect, now: NOW + 45_000, secret: SECRET, consume })
+    ).rejects.toThrow('zaten');
+  });
+
+  it('aynı kod → aynı sorular; meydan okuma skoru imzalı ve karşılaştırılır', async () => {
+    const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET, consume: mem() });
     expect(a.items).toHaveLength(8);
     expect(a.challenger).toBeNull();
     expect(a.items.every((i) => !('why' in i))).toBe(true);
     const round = buildDuelRound(a.code);
     const answers = play(round, { gapMs: 2500, correct: (i) => i < 6 });
-    const res = handleDuelSubmit({ userId: 'u1', userName: 'Ayşe Yılmaz', roundToken: a.roundToken, answers, now: NOW + 40_000, secret: SECRET });
+    const res = await handleDuelSubmit({ userId: 'u1', userName: 'Ayşe Yılmaz', roundToken: a.roundToken, answers, now: NOW + 40_000, secret: SECRET, consume: mem() });
     expect(res.score).toBe(scoreRun(answers, round.answerKey).score);
     expect(res.correct).toBe(6);
     expect(res.review[0].answer).toBe(round.answerKey.q0);
     expect(res.versus).toBeNull();
 
-    const b = handleDuelRound({ userId: 'u2', challenge: res.challengeToken, now: NOW + 60_000, secret: SECRET });
+    const b = handleDuelRound({ userId: 'u2', challenge: res.challengeToken, now: NOW + 60_000, secret: SECRET, consume: mem() });
     expect(b.code).toBe(a.code);
     expect(b.items).toEqual(a.items);
     expect(b.challenger).toEqual({ name: 'Ayşe Y.', score: res.score });
     const answersB = play(round, { gapMs: 2000, correct: () => true });
-    const resB = handleDuelSubmit({ userId: 'u2', userName: 'Mehmet', roundToken: b.roundToken, answers: answersB, now: NOW + 100_000, secret: SECRET });
+    const resB = await handleDuelSubmit({ userId: 'u2', userName: 'Mehmet', roundToken: b.roundToken, answers: answersB, now: NOW + 100_000, secret: SECRET, consume: mem() });
     expect(resB.versus).toEqual({ opponentName: 'Ayşe Y.', opponentScore: res.score, result: 'win' });
   });
 
-  it('kurcalanmış meydan okuma / kendi düellosu / süresi dolmuş bağlantı reddedilir', () => {
-    const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET });
+  it('kurcalanmış meydan okuma / kendi düellosu / süresi dolmuş bağlantı reddedilir', async () => {
+    const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET, consume: mem() });
     const round = buildDuelRound(a.code);
-    const res = handleDuelSubmit({
+    const res = await handleDuelSubmit({
       userId: 'u1',
       userName: 'Ayşe',
       roundToken: a.roundToken,
       answers: play(round, { gapMs: 3000, correct: () => false, n: 2 }),
       now: NOW + 30_000,
       secret: SECRET,
+      consume: mem(),
     });
     const [v, body, mac] = res.challengeToken.split('.');
     const forged = JSON.parse(Buffer.from(body, 'base64url').toString());
     forged.s = 999;
     const tampered = `${v}.${Buffer.from(JSON.stringify(forged)).toString('base64url')}.${mac}`;
-    expect(() => handleDuelRound({ userId: 'u2', challenge: tampered, now: NOW, secret: SECRET })).toThrow('geçersiz');
-    expect(() => handleDuelRound({ userId: 'u1', challenge: res.challengeToken, now: NOW, secret: SECRET })).toThrow('Kendi');
-    expect(() => handleDuelRound({ userId: 'u2', challenge: res.challengeToken, now: NOW + 8 * 24 * 3600_000, secret: SECRET })).toThrow('süresi');
+    expect(() => handleDuelRound({ userId: 'u2', challenge: tampered, now: NOW, secret: SECRET, consume: mem() })).toThrow('geçersiz');
+    expect(() => handleDuelRound({ userId: 'u1', challenge: res.challengeToken, now: NOW, secret: SECRET, consume: mem() })).toThrow('Kendi');
+    expect(() => handleDuelRound({ userId: 'u2', challenge: res.challengeToken, now: NOW + 8 * 24 * 3600_000, secret: SECRET, consume: mem() })).toThrow('süresi');
     const wrongKey = signDuelToken({ k: 'c', c: a.code, u: 'u9', s: 10, n: 'X', x: NOW + 1000 }, 'another-secret-0123456789');
-    expect(() => handleDuelRound({ userId: 'u2', challenge: wrongKey, now: NOW, secret: SECRET })).toThrow('geçersiz');
+    expect(() => handleDuelRound({ userId: 'u2', challenge: wrongKey, now: NOW, secret: SECRET, consume: mem() })).toThrow('geçersiz');
   });
 
-  it('tur belirteci başka kullanıcıya geçmez; bot hızı ve süre aşımı reddedilir', () => {
-    const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET });
+  it('tur belirteci başka kullanıcıya geçmez; bot hızı ve süre aşımı reddedilir', async () => {
+    const a = handleDuelRound({ userId: 'u1', now: NOW, secret: SECRET, consume: mem() });
     const round = buildDuelRound(a.code);
     const honest = play(round, { gapMs: 3000, correct: () => true });
-    expect(() => handleDuelSubmit({ userId: 'u2', userName: null, roundToken: a.roundToken, answers: honest, now: NOW + 50_000, secret: SECRET })).toThrow();
+    await expect(handleDuelSubmit({ userId: 'u2', userName: null, roundToken: a.roundToken, answers: honest, now: NOW + 50_000, secret: SECRET, consume: mem() })).rejects.toThrow();
     const bot = play(round, { gapMs: 50, correct: () => true });
-    expect(() => handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: bot, now: NOW + 15_000, secret: SECRET })).toThrow('doğrulanamadı');
-    expect(() => handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: honest, now: NOW + 16 * 60_000, secret: SECRET })).toThrow('süresi');
+    await expect(handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: bot, now: NOW + 15_000, secret: SECRET, consume: mem() })).rejects.toThrow('doğrulanamadı');
+    await expect(handleDuelSubmit({ userId: 'u1', userName: null, roundToken: a.roundToken, answers: honest, now: NOW + 16 * 60_000, secret: SECRET, consume: mem() })).rejects.toThrow('süresi');
   });
 });
 

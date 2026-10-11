@@ -12,7 +12,24 @@ import { randomSeed } from '@/lib/games/engine/rng';
 import type { PublicContentItem } from '@/lib/games/verify/types';
 import { ApiError } from '@/lib/http/define-route';
 import { QUESTION_MS, TRANSITION_MS, shortDisplayName, type TimedAnswer } from '@/components/customer/games/venue-quiz/rules';
+import { redisIncrWithTtl } from '@/lib/redis';
 import { buildDuelRound, scoreRound } from './venue-quiz';
+
+/**
+ * Tek kullanımlık tur: aynı (kod, kullanıcı) için yalnız İLK gönderim kabul edilir. Aksi halde
+ * ilk gönderimin `review`'undan doğru şıklar öğrenilip aynı tur belirteciyle yeniden gönderilerek
+ * kusursuz skorlu (sahte) meydan okuma belirteci basılabiliyordu. true = ilk kez tüketildi.
+ */
+export type DuelConsume = (key: string, ttlSec: number) => Promise<boolean>;
+export const redisDuelConsume: DuelConsume = async (key, ttlSec) => {
+  const r = await redisIncrWithTtl(key, ttlSec);
+  // Redis yoksa: üretimde fail-closed (sahte skor yayılamaz), geliştirmede serbest.
+  if (!r) return process.env.NODE_ENV !== 'production';
+  return r.count === 1;
+};
+export function duelConsumeKey(code: string, userId: string): string {
+  return `game:venue-duel:${code}:${userId}`;
+}
 
 const TOKEN_VERSION = 'vqd1';
 /** Tur belirteci geçerliliği (bir düello turu en fazla bu sürede bitirilir). */
@@ -128,14 +145,15 @@ export interface DuelSubmitResponse {
 }
 
 /** POST action=submit — düello cevaplarını sunucu puanlar; paylaşılabilir meydan okuma döner. */
-export function handleDuelSubmit(input: {
+export async function handleDuelSubmit(input: {
   userId: string;
   userName: string | null | undefined;
   roundToken: string;
   answers: readonly TimedAnswer[];
   now?: number;
   secret?: string;
-}): DuelSubmitResponse {
+  consume?: DuelConsume;
+}): Promise<DuelSubmitResponse> {
   const secret = input.secret ?? duelSecret();
   const now = input.now ?? Date.now();
   const claims = verifyRoundToken(input.roundToken, secret);
@@ -146,6 +164,10 @@ export function handleDuelSubmit(input: {
   const scored = scoreRound(round, input.answers, elapsed);
   if (scored.outcome.flags.length > 0) {
     throw new ApiError('BAD_REQUEST', 'Sonuç doğrulanamadı (cevap zamanlaması tutarsız). Turu yeniden oyna.');
+  }
+  const consume = input.consume ?? redisDuelConsume;
+  if (!(await consume(duelConsumeKey(claims.c, input.userId), Math.ceil((DUEL_ROUND_TTL_MS * 2) / 1000)))) {
+    throw new ApiError('CONFLICT', 'Bu düello turu zaten gönderildi.');
   }
   const score = scored.outcome.verifiedScore;
   const challenge: DuelChallengeClaims = {

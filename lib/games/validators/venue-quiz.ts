@@ -34,6 +34,8 @@ import {
   DUEL_COUNT,
   RANKED_COUNT,
   TIMEOUT_VERDICT,
+  TRANSITION_MS,
+  QUESTION_MS,
   scoreRun,
   type CategoryId,
   type TimedAnswer,
@@ -47,6 +49,8 @@ export const VENUE_QUIZ_POOLS = splitPools(VENUE_QUIZ_BANK, PRACTICE_SHARE);
 export const MAX_OVERHEAD_MS = 120_000;
 /** İnsanüstü hızlı cevap sınırı aşımı. */
 export const MAX_FAST_ANSWERS = 2;
+/** Tek soru aralığında (ağ/sekme gecikmesi) tolerans; üstü = beyan edilmiş süre sahte. */
+export const MAX_QUESTION_SLACK_MS = 5_000;
 
 const RANKED_CURVE: readonly (1 | 2 | 3)[] = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3];
 const DUEL_CURVE: readonly (1 | 2 | 3)[] = [1, 1, 2, 2, 2, 3, 3, 3];
@@ -180,6 +184,12 @@ export function scoreRound(round: ClassificationRound, answers: readonly TimedAn
     const optionIds = Array.isArray(item.options) ? (item.options as { id: string }[]).map((o) => o.id) : [];
     if (a.verdict !== TIMEOUT_VERDICT && !optionIds.includes(a.verdict)) return fail('proof_invalid', `geçersiz şık ${a.verdict}`);
     if (a.tMs < lastT) return fail('proof_invalid', 'zaman sırası bozuk');
+    // Soru başına süre sınırı (kök neden düzeltmesi): istemci süreyi kendisi beyan ettiğinden,
+    // tek bir soruya (ör. ilkine) devasa süre yazıp araştırma süresini oraya gömerek kalan
+    // soruları "hızlı" beyan etmek mümkündü. Dürüst istemci her soruyu QUESTION_MS'te zaman
+    // aşımına düşürür; bu yüzden hiçbir aralık süre + tolerans'ı aşamaz.
+    const gap = i === 0 ? a.tMs : a.tMs - (lastT + TRANSITION_MS);
+    if (gap > QUESTION_MS + MAX_QUESTION_SLACK_MS) return fail('implausible', `soru ${a.id} süresi aşıldı`);
     lastT = a.tMs;
   }
   if (answers.length > 0) {
