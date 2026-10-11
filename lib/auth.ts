@@ -509,6 +509,12 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
+      // Geriye uyum: `sid` alanından ÖNCE açılmış oturumlarda kalıcı kimlik yoktu; `jti`'ye düşmek
+      // (her encode'da değişir) admin kapı çerezini her istekte "başka oturum" yapıp kapı ekranında
+      // sonsuz yönlendirme döngüsü yaratıyordu. İlk okumada bir kez sabitlenir, sonra hiç değişmez.
+      if (!user && !token.sid) {
+        token.sid = (token.jti as string | undefined) ?? crypto.randomUUID();
+      }
       // Session fixation: her login'de yeni JTI üret; eski token geçersiz kılınır
       if (user) {
         token.jti = crypto.randomUUID();

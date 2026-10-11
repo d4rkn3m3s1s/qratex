@@ -387,6 +387,16 @@ describe('auth.ts', () => {
       });
     });
 
+    it('sid alanından önce açılmış oturuma kalıcı sid bir kez atanır ve sonra değişmez (kapı döngüsü regresyonu)', async () => {
+      const jwtCallback = getJwtCallback();
+      const legacy = { sub: 'u1', id: 'u1', role: 'ADMIN', jti: 'eski-jti-1' } as Record<string, unknown>;
+      const first = await jwtCallback({ token: legacy, account: null } as unknown as Parameters<typeof jwtCallback>[0]);
+      expect(first.sid).toBe('eski-jti-1');
+      // next-auth her encode'da jti'yi yeniler; sid sabit kalmalı.
+      const second = await jwtCallback({ token: { ...first, jti: 'yeni-jti-2' }, account: null } as unknown as Parameters<typeof jwtCallback>[0]);
+      expect(second.sid).toBe('eski-jti-1');
+    });
+
     it('should set token from dbUser when user exists and found in DB', async () => {
       const jwtCallback = getJwtCallback();
       const mockDbUser = {
