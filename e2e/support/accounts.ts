@@ -103,16 +103,6 @@ export async function createState(browser: Browser, baseURL: string, role: Role)
     }
   }
 
-  // Rıza kararı oturum durumuna bir kez yazılır (gerçek kullanıcı da bir kez karar verir): yoksa
-  // rota taraması her sayfada bandı yeniden görüp karar POST'luyordu → /api/consent 429 (rate-limit-429).
-  const rejectConsent = page.getByRole('button', { name: 'Tümünü reddet' });
-  if (await rejectConsent.isVisible().catch(() => false)) {
-    await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/api/consent') && r.request().method() === 'POST', { timeout: 15_000 }).catch(() => null),
-      rejectConsent.click().catch(() => {}),
-    ]);
-  }
-
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   await context.storageState({ path: statePath(role) });
   const finalPath = new URL(page.url()).pathname;
