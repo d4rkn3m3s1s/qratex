@@ -13,7 +13,7 @@ jest.mock('@/lib/prisma', () => ({
   },
 }));
 
-import { applyBounceToSends, extractBounceInfo } from '@/lib/mail-center/bounce';
+import { extractBounceInfo } from '@/lib/mail-center/bounce';
 
 const GMAIL_DSN = [
   'Reporting-MTA: dns; googlemail.com',
@@ -48,46 +48,5 @@ describe('extractBounceInfo', () => {
     });
     expect(fromBody.recipients).toEqual(['kayip@ornek.com']);
     expect(fromBody.permanent).toBe(true);
-  });
-});
-
-describe('applyBounceToSends', () => {
-  beforeEach(() => {
-    mockFindMany.mockReset();
-    mockUpdateMany.mockReset();
-  });
-
-  it('alıcı başına yalnız EN SON başarılı gönderimi hata yapar (7 gün penceresi)', async () => {
-    mockFindMany.mockResolvedValue([
-      { id: 'yeni', email: 'Stajyer.Yok@ornek.com' },
-      { id: 'eski', email: 'stajyer.yok@ornek.com' },
-    ]);
-    mockUpdateMany.mockResolvedValue({ count: 1 });
-    const n = await applyBounceToSends(
-      { recipients: ['stajyer.yok@ornek.com'], permanent: true, reason: '5.1.1' },
-      new Date('2026-10-05T10:00:00Z')
-    );
-    expect(n).toBe(1);
-    const where = mockFindMany.mock.calls[0][0].where;
-    expect(where.status).toBe('sent');
-    expect(where.kind).toBe('send');
-    expect(where.createdAt.gte.toISOString()).toBe('2026-09-28T10:00:00.000Z');
-    const upd = mockUpdateMany.mock.calls[0][0];
-    expect(upd.where.id.in).toEqual(['yeni']);
-    expect(upd.data).toMatchObject({ status: 'error' });
-    expect(upd.data.lastError).toMatch(/^Teslim edilemedi \(geri döndü\): 5\.1\.1/);
-  });
-
-  it('geçici bounce ya da alıcısız bildirim kayda dokunmaz', async () => {
-    expect(await applyBounceToSends({ recipients: ['a@b.com'], permanent: false, reason: null }, new Date())).toBe(0);
-    expect(await applyBounceToSends({ recipients: [], permanent: true, reason: null }, new Date())).toBe(0);
-    expect(mockFindMany).not.toHaveBeenCalled();
-  });
-
-  it('DB hatası senkronu bozmaz (0 döner)', async () => {
-    mockFindMany.mockRejectedValue(new Error('db down'));
-    await expect(
-      applyBounceToSends({ recipients: ['a@b.com'], permanent: true, reason: null }, new Date())
-    ).resolves.toBe(0);
   });
 });

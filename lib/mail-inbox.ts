@@ -18,7 +18,8 @@ import { prisma } from '@/lib/prisma';
 import { loadInternTemplatesState } from '@/lib/intern-task-emails';
 import { INCOMING_MAILBOXES, MAILBOX_INBOX, type InboxSyncState } from '@/lib/mail-center/inbox-contract';
 import { attachmentDisposition } from '@/lib/mail-center/mail-html';
-import { applyBounceToSends, extractBounceInfo } from '@/lib/mail-center/bounce';
+import { applyBounceToSends, extractBounceInfo, extractTrackTokens } from '@/lib/mail-center/bounce';
+import { isDeliveryStatusReport, verifyMailAuth } from '@/lib/mail-center/mail-auth';
 
 export const INBOX_SYNC_STATE_KEY = 'inbox_sync_state';
 /** İlk kurulumda (imleç ve DB kaydı yokken) geriye dönük çekilecek en fazla mail. */
@@ -162,6 +163,7 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
   let matched = 0;
   let hasMore = false;
   let bouncesLinked = 0;
+  let unverified = 0;
   let storeError: string | null = null;
   let nextState: InboxSyncState = { ...prev };
 
@@ -278,7 +280,12 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
             }
           }
 
-          const m = internMap.get(fromEmail);
+          // Güvenlik: From başlığı uydurulabilir. Otomatik durum değişikliği (stajyer eşleştirme,
+          // bounce işaretleme) yalnız KENDİ MX'imizin en üstteki Authentication-Results'ında hizalı
+          // SPF/DKIM/DMARC pass varsa. Doğrulanmayan mail yine kaydedilir/gösterilir, eşleşmez.
+          const auth = verifyMailAuth(msg.source ?? null, fromEmail);
+          if (!auth.verified) unverified++;
+          const m = auth.verified ? internMap.get(fromEmail) : undefined;
           const result = await prisma.inboxMessage
             .create({
               data: {
@@ -318,7 +325,9 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
             stored++;
             if (m) matched++;
             // Kalıcı bounce → ilgili stajyer gönderim kaydı "Teslim edilemedi" (arka plan O2).
-            if (isBounce) {
+            // Yalnız: doğrulanmış + gerçek DSN (multipart/report; delivery-status) + gönderdiğimiz
+            // mailin izleme token'ı + kalıcı 5.x.x. Eşik ve geri alma bounce.ts'te.
+            if (isBounce && auth.verified && isDeliveryStatusReport(msg.source ?? null)) {
               const dsnPart = rawAtts.find((a) => /message\/(delivery-status|global-delivery-status)/i.test(a.contentType || ''));
               const failedHeader = parsed?.headers?.get('x-failed-recipients');
               const info = extractBounceInfo({
@@ -328,7 +337,7 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
                 subject,
                 ownAddresses: [envVal('IMAP_USER', 'SMTP_USER'), toEmail].filter(Boolean),
               });
-              const marked = await applyBounceToSends(info, sentAt);
+              const marked = await applyBounceToSends(info, sentAt, extractTrackTokens(msg.source ?? null));
               if (marked) bouncesLinked += marked;
             }
           }
@@ -366,6 +375,7 @@ export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSy
 
   await writeSyncState(nextState);
   if (storeError) return { ok: false, error: storeError };
+  if (unverified) console.info(`[inbox] ${unverified} mail kimlik doğrulamasından geçmedi (otomatik eşleştirme/bounce uygulanmadı)`);
   if (bouncesLinked) console.info(`[inbox] ${bouncesLinked} geri dönen gönderim kaydı işaretlendi`);
   return { ok: true, fetched, stored, matched, hasMore };
 }

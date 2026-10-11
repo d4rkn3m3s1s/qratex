@@ -223,7 +223,7 @@ async function deliverOne(tpl: InternTaskEmail, to: string, kind: 'send' | 'test
   const token = makeTrackToken();
   const { html, text } = renderInternTaskEmailHtml(tpl, token, to); // pixel origin = mailPublicOrigin (localhost değil)
   const subject = kind === 'test' ? `[TEST] ${tpl.subject}` : tpl.subject;
-  const r = await sendTransactionalEmail({ to, subject, html, text, headers: { 'X-Entity-Ref-ID': 'qratex-intern-task' } });
+  const r = await sendTransactionalEmail({ to, subject, html, text, headers: { 'X-Entity-Ref-ID': 'qratex-intern-task', 'X-Qratex-Ref': token } });
   await prisma.internEmailSend
     .create({
       data: {
