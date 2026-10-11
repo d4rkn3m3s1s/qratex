@@ -76,7 +76,7 @@ export function GiftDialog({
       const res = await fetch('/api/customer/shop/gift', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cosmeticId: item.id, recipientUserId: recipient.recipientUserId, message: message.trim() || null, requestId: keyRef.current }),
+        body: JSON.stringify({ cosmeticId: item.id, recipientUserId: recipient.recipientUserId, message: message.trim() || null, requestId: keyRef.current, expectedPrice: item.price }),
       });
       const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string } | null;
       if (!res.ok || !json?.success) throw new Error(json?.error || copy.errors.generic);

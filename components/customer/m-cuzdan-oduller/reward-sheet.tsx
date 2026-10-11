@@ -43,20 +43,22 @@ export function RewardSheet({
   const policy = useMotionPolicy();
   const byId = useMemo(() => new Map(rewards.map((r) => [r.id, r])), [rewards]);
   const [flow, setFlow] = useState<Flow | null>(null);
-  const keyRef = useRef<string | null>(null);
+  // İstek anahtarı HEDEFE bağlı: ağ hatasından sonra başka bir ögeye geçilirse eski anahtar
+  // taşınmaz (idempotency yanıt tekrarı gövdeye bakmaz → önceki ögenin yanıtı dönerdi).
+  const keyRef = useRef<{ id: string; key: string } | null>(null);
   const url = useShallowQuery();
   const openId = url.get('reward');
 
   const stageFor = (id: string) => (flow && flow.id === id ? flow : null);
 
   async function claim(reward: RewardDTO) {
-    keyRef.current ??= newIdempotencyKey();
+    if (keyRef.current?.id !== reward.id) keyRef.current = { id: reward.id, key: newIdempotencyKey() };
     setFlow({ id: reward.id, stage: 'claiming' });
     try {
       const result = await walletPost<ClaimRewardResult>(
         '/api/customer/wallet/rewards/claim',
         { rewardId: reward.id },
-        { idempotencyKey: keyRef.current }
+        { idempotencyKey: keyRef.current.key }
       );
       keyRef.current = null;
       setFlow({ id: reward.id, stage: 'success', result });
@@ -108,7 +110,8 @@ export function RewardSheet({
         if (next) return;
         url.set({ reward: null });
         setFlow(null);
-        keyRef.current = null;
+        // Anahtar kapanışta sıfırlanmaz: belirsiz (ağ) hatadan sonra aynı ögeye yeniden deneme
+        // aynı anahtarla gider → sunucu ilk sonucu tekrarlar, çift borç olmaz.
       }}
       size="md"
       title={(id) => byId.get(id)?.name ?? copy.errors.REWARD_NOT_FOUND}

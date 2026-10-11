@@ -484,6 +484,30 @@ export async function makeDonation(db: Db, input: MakeDonationInput): Promise<Ma
   const idempotencyKey = `donation:${input.userId}:${input.requestKey}`;
   const message = input.message?.trim() ? input.message.trim().slice(0, DONATION_MESSAGE_MAX) : null;
 
+  // Aynı anahtarlı eşzamanlı iki istek: ikincisi baştaki kontrolü (kilitsiz) geçer, proje satır
+  // kilidinde ilkini bekler; ilki commit edince debitPoints `duplicate` döner (borç yok). O an
+  // tx'i geri alıp yeniden çalıştırırız → bu kez "zaten işlendi" yolu (proje sayacı ve ikinci
+  // Donation satırı borçsuz şişmez).
+  try {
+    return await runDonationTx(db, input, { now, points, idempotencyKey, message });
+  } catch (e) {
+    if (!(e instanceof DuplicateDonationRace)) throw e;
+    return runDonationTx(db, input, { now, points, idempotencyKey, message });
+  }
+}
+
+class DuplicateDonationRace extends Error {
+  constructor() {
+    super('donation idempotency race');
+  }
+}
+
+async function runDonationTx(
+  db: Db,
+  input: MakeDonationInput,
+  ctx: { now: Date; points: number; idempotencyKey: string; message: string | null },
+): Promise<MakeDonationResult> {
+  const { now, points, idempotencyKey, message } = ctx;
   return db.$transaction(async (tx) => {
     const existing = await tx.pointsLedger.findUnique({
       where: { idempotencyKey },
@@ -566,6 +590,7 @@ export async function makeDonation(db: Db, input: MakeDonationInput): Promise<Ma
       }
       throw e;
     }
+    if (wallet.duplicate) throw new DuplicateDonationRace();
 
     const user = await tx.user.findUnique({ where: { id: input.userId }, select: { preferredLanguage: true } });
     const lang = user?.preferredLanguage === 'en' ? 'en' : 'tr';

@@ -107,6 +107,8 @@ const giftSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{8,100}$/, 'Geçersiz istek kimliği')
     .optional(),
+  /** İstemcinin gördüğü fiyat; sunucudakiyle eşleşmezse ödeme yapılmaz (satın almayla aynı kural). */
+  expectedPrice: z.number().int().min(0).max(10_000_000).optional(),
 });
 
 class AlreadyOwnedError extends Error {}
@@ -142,8 +144,15 @@ export async function POST(req: NextRequest) {
       prisma.user.findFirst({ where: { id: recipientUserId, ...ELIGIBLE_RECIPIENT }, select: { id: true, name: true } }),
     ]);
 
-    if (!cosmetic || !cosmetic.isActive) {
+    // Arşivli ürün satın alınamıyorsa hediye de edilemez (satın almayla aynı kural).
+    if (!cosmetic || !cosmetic.isActive || cosmetic.archivedAt) {
       return json({ error: 'Kozmetik öğesi bulunamadı veya aktif değil.' }, 404);
+    }
+    if (typeof parsed.data.expectedPrice === 'number' && parsed.data.expectedPrice !== cosmetic.price) {
+      return json(
+        { error: 'Ürünün fiyatı değişti. Güncel fiyatı kontrol edip tekrar dene.', code: 'PRICE_CHANGED', price: cosmetic.price },
+        409
+      );
     }
     if (!sender) return json({ error: 'Gönderici hesabı bulunamadı.' }, 404);
     if (!recipient) return json({ error: 'Alıcı bulunamadı ya da hediye alamıyor.' }, 404);

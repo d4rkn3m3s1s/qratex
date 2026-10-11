@@ -46,7 +46,7 @@ export default async function WalletActivityPage({
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fwallet%2Factivity');
+    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fwallet%2Factivity');
   }
   const userId = session.user.id;
   const get = getterFrom(await searchParams);

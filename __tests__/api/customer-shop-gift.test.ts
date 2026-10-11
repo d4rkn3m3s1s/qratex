@@ -144,6 +144,20 @@ describe('gönderim', () => {
     tx.userCosmetic.findFirst.mockResolvedValue(null as never);
   });
 
+  it('arşivli kozmetik hediye edilemez (satın almayla aynı kural); puan düşmez', async () => {
+    db.cosmeticItem.findUnique.mockResolvedValueOnce({ id: 'cos1', name: 'Altın Çerçeve', price: 300, isActive: true, archivedAt: new Date() });
+    expect((await send({ cosmeticId: 'cos1', recipientUserId: 'rcp', requestId: 'gift_12345678' })).status).toBe(404);
+    expect(mockDebit).not.toHaveBeenCalled();
+  });
+
+  it('gösterilen fiyat sunucudakinden farklıysa 409 PRICE_CHANGED; puan düşmez', async () => {
+    const r = await send({ cosmeticId: 'cos1', recipientUserId: 'rcp', requestId: 'gift_12345678', expectedPrice: 250 });
+    expect(r.status).toBe(409);
+    expect(r.body).toMatchObject({ code: 'PRICE_CHANGED', price: 300 });
+    expect(mockDebit).not.toHaveBeenCalled();
+    expect((await send({ cosmeticId: 'cos1', recipientUserId: 'rcp', requestId: 'gift_12345679', expectedPrice: 300 })).status).toBe(200);
+  });
+
   it('askıdaki/anonim ya da müşteri olmayan alıcı 404', async () => {
     db.user.findFirst.mockResolvedValueOnce(null);
     expect((await send({ cosmeticId: 'cos1', recipientUserId: 'ghost' })).status).toBe(404);

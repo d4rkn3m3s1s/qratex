@@ -172,6 +172,23 @@ describe('makeDonation', () => {
     expect(mockDebit).not.toHaveBeenCalled();
   });
 
+  it('eşzamanlı aynı anahtar: debitPoints duplicate dönerse tx geri alınır, ikinci tur "zaten işlendi" yolunu döner', async () => {
+    const { tx, db } = txMock();
+    // 1. tur: baştaki kontrol boş (diğer istek henüz commit etmedi), borç ise duplicate döner.
+    mockDebit.mockResolvedValueOnce({ id: 'u1', points: 450, xp: 0, level: 1, ledgerId: 'led1', duplicate: true });
+    // 2. tur: ilk istek commit edilmiş → mevcut kayıt yolu.
+    tx.pointsLedger.findUnique
+      .mockResolvedValueOnce(null as never)
+      .mockResolvedValueOnce({ userId: 'u1', sourceId: 'don_abc12345', balanceAfter: 450 } as never);
+    tx.donation.findFirst.mockResolvedValueOnce(donationRow() as never);
+    const r = await makeDonation(db as never, { userId: 'u1', projectId: 'p1', points: 50, isPublic: false, requestKey: 'key-12345678', now: NOW });
+    expect(db.$transaction).toHaveBeenCalledTimes(2);
+    expect(r.duplicate).toBe(true);
+    expect(r.goalReached).toBe(false);
+    expect(mockDebit).toHaveBeenCalledTimes(1);
+    expect(tx.notification.create).not.toHaveBeenCalled();
+  });
+
   it('B5: hedefi aşan bağış reddedilir, kalan söylenir; puan düşmez', async () => {
     const { tx, db } = txMock();
     tx.$queryRaw.mockResolvedValueOnce([]);

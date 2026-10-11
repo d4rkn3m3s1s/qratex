@@ -30,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function WalletDonatePage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin?callbackUrl=%2Fcustomer%2Fwallet%2Fdonate');
+    redirect('/auth/login?callbackUrl=%2Fcustomer%2Fwallet%2Fdonate');
   }
   const userId = session.user.id;
   const blocked = await isCustomerModuleBlocked('donations', 'donations', { userId, routeKey: '/customer/wallet/donate' });

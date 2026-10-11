@@ -47,17 +47,19 @@ export function CosmeticSheet({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [giftOpen, setGiftOpen] = useState(false);
-  const keyRef = useRef<string | null>(null);
+  // İstek anahtarı HEDEFE bağlı: ağ hatasından sonra başka bir ögeye geçilirse eski anahtar
+  // taşınmaz (idempotency yanıt tekrarı gövdeye bakmaz → önceki ögenin yanıtı dönerdi).
+  const keyRef = useRef<{ id: string; key: string } | null>(null);
   const stage = (id: string) => (flow?.id === id ? flow : null);
 
   async function buy(item: CosmeticDTO) {
-    keyRef.current ??= newIdempotencyKey();
+    if (keyRef.current?.id !== item.id) keyRef.current = { id: item.id, key: newIdempotencyKey() };
     setFlow({ id: item.id, stage: 'buying' });
     try {
       const r = await walletPost<PurchaseCosmeticResult>(
         '/api/customer/wallet/cosmetics/purchase',
         { cosmeticId: item.id, expectedPrice: item.price },
-        { idempotencyKey: keyRef.current }
+        { idempotencyKey: keyRef.current.key }
       );
       keyRef.current = null;
       onBalance(r.newBalance);
@@ -116,7 +118,8 @@ export function CosmeticSheet({
           url.set({ item: null });
           setFlow(null);
           setActionError(null);
-          keyRef.current = null;
+          // Anahtar kapanışta sıfırlanmaz: belirsiz (ağ) hatadan sonra aynı ögeye yeniden deneme
+          // aynı anahtarla gider → sunucu ilk sonucu tekrarlar, çift borç olmaz.
         }}
         size="md"
         title={(id) => byId.get(id)?.name ?? copy.errors.COSMETIC_NOT_FOUND}
