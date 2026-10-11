@@ -41,7 +41,8 @@ describe('mailFrameCsp (HTTP başlığı)', () => {
 describe('scrubMailHtml / buildMailFrameDocument', () => {
   it('<header> içeren mailde bile kendi <head> ve <base target=_blank> en başta', () => {
     const doc = buildMailFrameDocument({ html: '<html><body><header><img src="https://saldirgan/p.gif"></header>x</body></html>', text: null });
-    expect(doc.indexOf('<base target="_blank">')).toBeLessThan(doc.indexOf('<header>'));
+    expect(doc.indexOf('<base target="_blank">')).toBeLessThan(doc.indexOf('<img'));
+    expect(doc).not.toContain('<header>');
     expect(doc.startsWith('<!DOCTYPE html><html lang="tr"><head>')).toBe(true);
   });
 
@@ -152,15 +153,108 @@ describe('scrubMailHtml — atlatma regresyonu (güvenlik incelemesi)', () => {
     const out = scrubMailHtml(
       '<a href="https://x.example" target="_top">a</a><a target=_self href="https://y">b</a><area target=\'_parent\' href="https://z"><button formaction="https://e">c</button>'
     );
-    expect(out).not.toMatch(/target\s*=/i);
-    expect(out).not.toMatch(/formaction/i);
-    expect(out.match(/rel="noopener noreferrer"/g)).toHaveLength(3);
-    expect(out).toContain('<a rel="noopener noreferrer" href="https://x.example"');
+    expect(out).not.toMatch(/_top|_self|_parent/i);
+    expect(out).not.toMatch(/formaction|<area|<button/i);
+    expect(out.match(/rel="noopener noreferrer" target="_blank"/g)).toHaveLength(2);
+    expect(out).toContain('<a href="https://x.example" rel="noopener noreferrer" target="_blank">a</a>');
   });
 
-  it('a ile başlayan diğer etiketlere (abbr/address) rel eklenmez', () => {
-    expect(scrubMailHtml('<abbr>x</abbr><address>y</address>')).toBe('<abbr>x</abbr><address>y</address>');
+  it('a ile başlayan diğer etiketlere (abbr) rel eklenmez; izinsiz etiket (address) kalkar, metni kalır', () => {
+    expect(scrubMailHtml('<abbr>x</abbr><address>y</address>')).toBe('<abbr>x</abbr>y');
   });
+});
+
+describe('scrubMailHtml — ayrıştırıcı tabanlı allowlist', () => {
+  const s = scrubMailHtml;
+
+  it('büyük-küçük harf karışık tehlikeli etiketler ve içerikleri atılır', () => {
+    expect(s('<ScRiPt>alert(1)</sCrIpT><IFRAME SRC=x>yy</IFRAME>ok')).toBe('ok');
+  });
+
+  it('bozuk/kapanmamış etiketler dengeli üretilir', () => {
+    expect(s('<b><i>x</b>y')).toBe('<b><i>x</i></b>y');
+    expect(s('<div><p>z')).toBe('<div><p>z</p></div>');
+    expect(s('<script>alert(1)')).toBe('');
+  });
+
+  it('entity / kontrol karakteri / boşluk ile gizlenmiş javascript: atılır', () => {
+    for (const href of ['jav&#x61;script:alert(1)', 'jav&#9;ascript:alert(1)', '&#106;avascript:alert(1)', ' javascript:alert(1)', 'java\u0000script:x', 'JaVaScRiPt:x', 'java&Tab;script:x', 'data:text/html,<script>x</script>', '//evil.example/p', '/goreli', 'vbscript:x']) {
+      const out = s(`<a href="${href}">t</a>`);
+      expect(out).toBe('<a rel="noopener noreferrer" target="_blank">t</a>');
+    }
+    expect(s('<a href="mailto:a@b.co">m</a>')).toContain('href="mailto:a@b.co"');
+    expect(s('<a href="http://a.example/?x=1&amp;y=2">h</a>')).toContain('href="http://a.example/?x=1&amp;y=2"');
+  });
+
+  it('tırnaksız öznitelikler ve on* olayları', () => {
+    expect(s('<img src=https://a.example/x.png onerror=alert(1) alt=x>')).toBe('<img src="https://a.example/x.png" alt="x">');
+    expect(s('<p onclick=alert(1) ONMOUSEOVER="x">t</p>')).toBe('<p>t</p>');
+  });
+
+  it('öznitelik değeri kaçışlanır (öznitelikten taşma yok)', () => {
+    expect(s('<img src="https://a.example/x.png" alt=\'"><script>alert(1)</script>\'>')).toBe(
+      '<img src="https://a.example/x.png" alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">'
+    );
+    expect(s('&lt;script&gt;alert(1)&lt;/script&gt;')).toBe('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('svg/math içindeki script ve tüm içerik atılır', () => {
+    expect(s('<svg><script>alert(1)</script><a xlink:href="javascript:x">t</a></svg>ok')).toBe('ok');
+    expect(s('<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>')).toBe('');
+  });
+
+  it('style: url(), expression, @import, behavior, -moz-binding, kaçışlar atılır; güvenli bildirimler kalır', () => {
+    const out = s(
+      '<div style="color:red;background:url(https://t.example/p.gif);width:expression(alert(1));behavior:url(x.htc);-moz-binding:url(x);font-size:14px;background-image:u\\72l(x);position:fixed;display:none">x</div>'
+    );
+    expect(out).toBe('<div style="color:red;font-size:14px;display:none">x</div>');
+    expect(s('<style>@import "https://x";</style><p style="@import x">a</p>')).toBe('<p>a</p>');
+    expect(s('<p style="color:rgb(1,2,3);font-family:\'Segoe UI\', Arial">a</p>')).toBe('<p style="color:rgb(1,2,3);font-family:\'Segoe UI\', Arial">a</p>');
+    expect(s('<p style="color:var(--x);width:calc(1px)">a</p>')).toBe('<p>a</p>');
+  });
+
+  it('meta refresh, base, link, head, form/input/button tamamen yok', () => {
+    const out = s(
+      '<html><head><title>T</title><meta http-equiv=refresh content="0;url=https://evil"><base href="https://evil/"><link rel=stylesheet href=x></head>' +
+        '<body><form action="https://evil"><input name=p><button>Gönder</button><select><option>o</option></select><textarea>t</textarea></form>son</body></html>'
+    );
+    expect(out).toBe('son');
+  });
+
+  it('srcdoc / formaction / ping / xmlns / target / id / class kaldırılır', () => {
+    expect(s('<a href="https://a.example" ping="https://t" target="_top" xmlns="x" id="i" class="c">a</a><div srcdoc="<script>">d</div>')).toBe(
+      '<a href="https://a.example" rel="noopener noreferrer" target="_blank">a</a><div>d</div>'
+    );
+  });
+
+  it('koşullu yorumlar ve CDATA atılır', () => {
+    expect(s('<!--[if mso]><script>alert(1)</script><![endif]-->a<!--[if !mso]><!-->b<!--<![endif]-->')).toBe('ab');
+    expect(s('<![CDATA[<script>alert(1)</script>]]>c')).not.toMatch(/<script/i);
+    expect(s('<!--><img src=x onerror=alert(1)>-->')).not.toMatch(/onerror/i);
+  });
+
+  it('img src: cid / https / data:image kalır; http, javascript, data:svg atılır', () => {
+    expect(s('<img src="cid:logo@x">')).toBe('<img src="cid:logo@x">');
+    expect(s('<img src="https://a.example/l.png">')).toBe('<img src="https://a.example/l.png">');
+    expect(s('<img src="data:image/png;base64,AAAA">')).toBe('<img src="data:image/png;base64,AAAA">');
+    expect(s('<img src="javascript:x">')).toBe('');
+    expect(s('<img src="data:image/svg+xml;base64,AAAA">')).toBe('');
+  });
+
+  it('meşru tablo düzenli bülten bozulmaz', () => {
+    const html =
+      '<table width="600" cellpadding="0" cellspacing="0" border="0" align="center" bgcolor="#ffffff" style="border-collapse:collapse;max-width:600px">' +
+      '<tbody><tr><td align="center" valign="top" style="padding:24px 16px;font-family:Arial, sans-serif;color:#111827">' +
+      '<h1 style="margin:0;font-size:22px">Merhaba &amp; hoş geldin</h1><p>Yeni <strong>kampanya</strong> başladı.</p>' +
+      '<a href="https://ornek.com/kampanya?a=1&amp;b=2" style="background-color:#6d28d9;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">İncele</a>' +
+      '</td></tr><tr><td colspan="2" style="font-size:12px;color:#6b7280">Abonelikten çık</td></tr></tbody></table>';
+    expect(s(html)).toBe(
+      html.replace('">İncele', '" rel="noopener noreferrer" target="_blank">İncele')
+    );
+  });
+});
+
+describe('scrubMailHtml — eski yapı korunur', () => {
 
   it('meta/base içermeyen benzer adlı etiketler (metadata değil, metro) bozulmaz', () => {
     expect(scrubMailHtml('<p>metro <b>base</b></p>')).toBe('<p>metro <b>base</b></p>');

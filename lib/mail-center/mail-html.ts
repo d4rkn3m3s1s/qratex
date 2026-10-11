@@ -9,12 +9,13 @@
  *  - `script-src` yalnız bizim yükseklik betiğimizin SHA-256 özetine izin verir; göndericinin
  *    inline betikleri ve `on*` öznitelikleri çalışmaz ('unsafe-inline' YOK). Böylece betikle
  *    çerçeve içi gezinme (location=...) de yoktur.
- *  - `<meta http-equiv>`, `<base>`, `<script>`, `<iframe|object|embed|form>` sunucuda ayıklanır
- *    (derinlemesine savunma; asıl koruma başlıktaki CSP + sandbox).
- *  - Linkler `<base target="_blank">` ile yeni sekmede açılır (sandbox `allow-popups-to-escape-sandbox`).
+ *  - Gövde sunucuda AYRIŞTIRICI TABANLI ALLOWLIST ile sıfırdan yeniden üretilir (`scrubMailHtml`;
+ *    derinlemesine savunma, asıl koruma başlıktaki CSP + sandbox).
+ *  - Linkler `target="_blank"` + `rel="noopener noreferrer"` ile yeni sekmede açılır.
  *  - Uzak görseller VARSAYILAN KAPALI (`img-src data: cid:`); kullanıcı "göster" derse `https:` açılır.
  */
 import { createHash } from 'crypto';
+import { Parser } from 'htmlparser2';
 
 /** Çerçeve içi yükseklik bildirimi — tek izinli betik (özeti CSP'ye yazılır). */
 export const FRAME_HEIGHT_SCRIPT =
@@ -38,41 +39,189 @@ export function mailFrameCsp(allowRemoteImages: boolean): string {
   ].join('; ');
 }
 
-const STRIP_BLOCKS = /<(script|iframe|object|embed|form|frame|frameset|applet|noscript|template)\b[\s\S]*?<\/\1\s*>/gi;
-const STRIP_SINGLE = /<\/?(script|iframe|object|embed|form|frame|frameset|applet|base|meta|link)\b[^>]*>/gi;
-const EVENT_ATTR = /\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
-const JS_URL_ATTR = /\s+(href|src|action|formaction|xlink:href)\s*=\s*("\s*(?:javascript|vbscript|data:text\/html)[^"]*"|'\s*(?:javascript|vbscript|data:text\/html)[^']*'|(?:javascript|vbscript):[^\s>]*)/gi;
+// ─────────────────────────── Ayrıştırıcı tabanlı allowlist temizleyici ───────────────────────────
+//
+// Girdi htmlparser2 ile tokenize edilir ve çıktı SIFIRDAN yeniden üretilir: girdi metni asla
+// doğrudan geçmez; metin ve öznitelik değerleri (ayrıştırıcının entity çözdüğü hâlleriyle) her
+// zaman kaçışlanarak yazılır. Yalnız izinli etiket/öznitelik/CSS bildirimi çıktıya girer; bu
+// yüzden iç içe/bozuk yazım, büyük-küçük harf, tırnaksız öznitelik ya da entity ile gizleme
+// tehlikeli bir yapıyı "geri kuramaz". Yorumlar, CDATA ve işlem talimatları tamamen atılır.
 
-const TARGET_ATTR = /\s+(target|srcdoc|formaction|ping)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
-/** Ayıklama sonrası HÂLÂ kalan tehlikeli etiket açılışı (ör. bozuk/iç içe yazımdan) → metne çevrilir. */
-const DANGEROUS_OPEN = /<(?=\/?\s*(?:script|iframe|object|embed|form|frame|frameset|applet|base|meta|link|noscript|template|portal)(?![a-z0-9-]))/gi;
+const ALLOWED_TAGS = new Set([
+  'a', 'abbr', 'b', 'blockquote', 'br', 'caption', 'center', 'code', 'col', 'colgroup', 'dd', 'div', 'dl', 'dt', 'em', 'font',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre', 's', 'small', 'span', 'strong', 'sub', 'sup',
+  'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul',
+]);
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr', 'keygen']);
+/** İçeriği (metni dahil) TAMAMEN atılan etiketler. */
+const DROP_CONTENT_TAGS = new Set([
+  'script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'template', 'noscript', 'title', 'textarea', 'select',
+  'head', 'applet', 'frameset', 'frame', 'noembed', 'noframes', 'xmp', 'plaintext', 'option', 'button', 'portal',
+]);
 
-function scrubOnce(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(STRIP_BLOCKS, '')
-    .replace(STRIP_SINGLE, '')
-    .replace(EVENT_ATTR, '')
-    .replace(TARGET_ATTR, '')
-    .replace(JS_URL_ATTR, ' $1="#"');
+type AttrRule = (value: string) => string | null;
+
+const NUM_OR_PCT = /^\d{1,4}(?:\.\d+)?(?:%|px)?$/i;
+const COLOR = /^#?[a-z0-9]{1,20}$/i;
+const ALIGN = /^(left|right|center|justify)$/i;
+const VALIGN = /^(top|middle|bottom|baseline)$/i;
+
+const re =
+  (r: RegExp): AttrRule =>
+  (v) =>
+    r.test(v.trim()) ? v.trim() : null;
+const plain: AttrRule = (v) => v.slice(0, 500);
+
+/** Kontrol karakterleri + boşluklar (tarayıcıların şema ayrıştırırken yok saydıkları dahil). */
+// eslint-disable-next-line no-control-regex
+const URL_NOISE = /[\u0000-\u0020\u007f-\u00a0\u1680\u180e\u2000-\u200f\u2028\u2029\u202f\u205f\u3000\ufeff]/g;
+
+/** href: yalnız http/https/mailto (protokol-göreli, göreli ve diğer her şey atılır). Çözülmüş değer üzerinde. */
+function sanitizeHref(value: string): string | null {
+  const v = value.replace(URL_NOISE, '');
+  return /^(?:https?:\/\/[^/\\]|mailto:)/i.test(v) ? v : null;
+}
+
+/** img src: uzak görsel politikası CSP'de (`img-src data: cid:` + istenirse `https:`); burada yalnız güvenli şemalar. */
+function sanitizeImgSrc(value: string): string | null {
+  const v = value.replace(URL_NOISE, '');
+  if (/^cid:[^\s"'<>]+$/i.test(v)) return v;
+  if (/^https:\/\/[^/\\]/i.test(v)) return v;
+  if (/^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(v)) return v;
+  return null;
+}
+
+const CSS_PROPS = new Set([
+  'color', 'background-color', 'background', 'font', 'font-family', 'font-size', 'font-style', 'font-weight', 'font-variant',
+  'text-align', 'text-decoration', 'text-transform', 'text-indent', 'letter-spacing', 'word-spacing', 'line-height',
+  'white-space', 'word-break', 'word-wrap', 'overflow-wrap', 'vertical-align', 'direction', 'display',
+  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-color', 'border-style', 'border-width',
+  'border-radius', 'border-collapse', 'border-spacing',
+  'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+  'border-top-style', 'border-right-style', 'border-bottom-style', 'border-left-style',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'width', 'height', 'max-width', 'min-width', 'max-height', 'min-height', 'list-style-type', 'table-layout',
+]);
+const CSS_FUNCS = new Set(['rgb', 'rgba', 'hsl', 'hsla']);
+
+/** style: yalnız izinli özellik + güvenli değer içeren bildirimler kalır; geri kalanı atılır. */
+export function sanitizeStyle(style: string): string | null {
+  const out: string[] = [];
+  for (const decl of style.split(';')) {
+    const idx = decl.indexOf(':');
+    if (idx < 0) continue;
+    const prop = decl.slice(0, idx).trim().toLowerCase();
+    const value = decl.slice(idx + 1).trim();
+    if (!CSS_PROPS.has(prop) || !value || value.length > 300) continue;
+    // CSS kaçışları (\75rl), yorumlar, açı/küme parantezleri ve tehlikeli anahtar kelimeler → bildirim atılır.
+    if (/[\\<>{}@`]|\/\*|url|expression|import|behavior|binding|javascript|vbscript|image-set|-moz-|-webkit-/i.test(value)) continue;
+    let funcsOk = true;
+    for (const m of value.matchAll(/([a-z-]*)\s*\(/gi)) if (!CSS_FUNCS.has(m[1].toLowerCase())) funcsOk = false;
+    if (!funcsOk) continue;
+    out.push(`${prop}:${value}`);
+  }
+  return out.length ? out.join(';') : null;
+}
+
+const GLOBAL_ATTRS: Record<string, AttrRule> = {
+  style: sanitizeStyle,
+  title: plain,
+  dir: re(/^(ltr|rtl|auto)$/i),
+  lang: re(/^[a-z]{1,8}(?:-[a-z0-9]{1,8})*$/i),
+  align: re(ALIGN),
+};
+const CELL_ATTRS: Record<string, AttrRule> = {
+  colspan: re(/^\d{1,3}$/),
+  rowspan: re(/^\d{1,3}$/),
+  align: re(ALIGN),
+  valign: re(VALIGN),
+  bgcolor: re(COLOR),
+  border: re(NUM_OR_PCT),
+  cellpadding: re(NUM_OR_PCT),
+  cellspacing: re(NUM_OR_PCT),
+  width: re(NUM_OR_PCT),
+  height: re(NUM_OR_PCT),
+};
+const COL_ATTRS: Record<string, AttrRule> = { span: re(/^\d{1,3}$/), width: re(NUM_OR_PCT), align: re(ALIGN), valign: re(VALIGN) };
+const TAG_ATTRS: Record<string, Record<string, AttrRule>> = {
+  a: { href: sanitizeHref },
+  img: { src: sanitizeImgSrc, alt: plain, width: re(NUM_OR_PCT), height: re(NUM_OR_PCT) },
+  table: CELL_ATTRS,
+  tbody: CELL_ATTRS,
+  thead: CELL_ATTRS,
+  tfoot: CELL_ATTRS,
+  tr: CELL_ATTRS,
+  td: CELL_ATTRS,
+  th: CELL_ATTRS,
+  col: COL_ATTRS,
+  colgroup: COL_ATTRS,
+  font: { color: re(COLOR), size: re(/^[+-]?\d$/), face: re(/^[\w ,'-]{1,100}$/) },
+  ol: { start: re(/^\d{1,5}$/), type: re(/^[1aAiI]$/) },
+};
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
- * Gönderici HTML'inden çalıştırılabilir/gezinme yapan parçaları ayıklar (derinlemesine savunma).
- * Tek geçiş iç içe yazımla atlatılabilir (`<me<meta>ta http-equiv=refresh ...>` → ayıklandıktan
- * sonra `<meta ...>` kalır; meta refresh CSP ile ENGELLENMEZ ve çerçeveyi saldırgan sayfaya
- * götürür). Bu yüzden sabit noktaya kadar tekrarlanır, sonra kalan açılışlar metne çevrilir.
- * `target` kaldırılır (base `_blank` geçerli olsun; `_self/_top/_parent` ile çerçeve/üst gezinme
- * olmasın) ve tüm linklere `rel="noopener noreferrer"` ÖNE eklenir (yinelenen öznitelikte ilki kazanır).
+ * Gönderici HTML'ini ayrıştırıcı tabanlı allowlist ile temizler (derinlemesine savunma; asıl
+ * koruma HTTP CSP + sandbox). Her `<a>`'ya sunucu `rel="noopener noreferrer" target="_blank"` ekler.
  */
 export function scrubMailHtml(html: string): string {
-  let out = html;
-  for (let i = 0; i < 10; i++) {
-    const next = scrubOnce(out);
-    if (next === out) break;
-    out = next;
-  }
-  return out.replace(DANGEROUS_OPEN, '&lt;').replace(/<(a|area)(?=[\s>/])/gi, '<$1 rel="noopener noreferrer"');
+  let out = '';
+  const open: string[] = [];
+  let dropDepth = 0;
+
+  const parser = new Parser(
+    {
+      onopentag(name, attribs) {
+        const tag = name.toLowerCase();
+        if (dropDepth > 0 || DROP_CONTENT_TAGS.has(tag)) {
+          if (!VOID_TAGS.has(tag)) dropDepth++;
+          return;
+        }
+        if (!ALLOWED_TAGS.has(tag)) return;
+        const rules = TAG_ATTRS[tag] ?? {};
+        let attrs = '';
+        const seen = new Set<string>();
+        for (const [rawName, rawValue] of Object.entries(attribs)) {
+          const an = rawName.toLowerCase();
+          if (seen.has(an)) continue;
+          const rule = rules[an] ?? GLOBAL_ATTRS[an];
+          if (!rule) continue;
+          const v = rule(rawValue);
+          if (v === null) continue;
+          seen.add(an);
+          attrs += ` ${an}="${escapeAttr(v)}"`;
+        }
+        if (tag === 'img' && !seen.has('src')) return;
+        if (tag === 'a') attrs += ' rel="noopener noreferrer" target="_blank"';
+        out += `<${tag}${attrs}>`;
+        if (!VOID_TAGS.has(tag)) open.push(tag);
+      },
+      ontext(text) {
+        if (dropDepth === 0) out += escapeText(text);
+      },
+      onclosetag(name) {
+        const tag = name.toLowerCase();
+        if (VOID_TAGS.has(tag)) return;
+        if (dropDepth > 0) {
+          dropDepth--;
+          return;
+        }
+        const i = open.lastIndexOf(tag);
+        if (i < 0) return;
+        while (open.length > i) out += `</${open.pop()}>`;
+      },
+    },
+    { decodeEntities: true, lowerCaseTags: true, lowerCaseAttributeNames: true, recognizeSelfClosing: false, recognizeCDATA: false }
+  );
+  parser.write(html);
+  parser.end();
+  while (open.length) out += `</${open.pop()}>`;
+  return out;
 }
 
 /** Gövdede uzak görsel/arka plan var mı (bant göstermek için). */
