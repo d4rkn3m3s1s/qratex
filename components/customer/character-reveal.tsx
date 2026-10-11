@@ -242,6 +242,11 @@ export function CharacterReveal({
     ? finalAccent
     : CYCLE_ACCENTS[cycleIdx % CYCLE_ACCENTS.length];
 
+  const revealReqRef = useRef<Promise<{ success?: boolean; character?: NonNullable<RevealCharacter>; error?: string }> | null>(null);
+  useEffect(() => {
+    if (!open) revealReqRef.current = null;
+  }, [open]);
+
   // ── Açılış efekti: state'i sıfırla, veriyi getir, aşamaları ilerlet ──
   useEffect(() => {
     if (!open) return;
@@ -285,8 +290,14 @@ export function CharacterReveal({
     } else if (fetchOnOpen) {
       // Sürpriz için mükemmel: POST atıp beklerken "hazırlanıyor" oynar.
       const startedAt = Date.now();
-      fetch('/api/customer/character', { method: 'POST' })
-        .then((r) => r.json())
+      // Tek açılışta TEK POST: efekt yeniden koşarsa (dev StrictMode çift montajı, yeniden
+      // bağlanma) iptal edilen ilk koşunun isteği eşiği tüketip rozeti atıyor, ikinci POST
+      // 503 alıp kullanıcıya "açılamadı" gösteriyordu (rozet aslında verilmişti). Aynı
+      // açılışta süren istek paylaşılır; modal kapanınca sıfırlanır.
+      if (!revealReqRef.current) {
+        revealReqRef.current = fetch('/api/customer/character', { method: 'POST' }).then((r) => r.json());
+      }
+      revealReqRef.current
         .then((res: { success?: boolean; character?: NonNullable<RevealCharacter>; error?: string }) => {
           if (cancelled) return;
           if (!res?.success || !res.character) {
