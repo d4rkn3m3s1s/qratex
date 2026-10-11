@@ -30,6 +30,7 @@ import { assertEnvOrThrow } from '@/lib/env-validation';
 import { emailLookupFilter, normalizeEmail } from '@/lib/auth/normalize-email';
 import { nextAuthRedirect, sanitizeCallbackPath } from '@/lib/auth/post-login-target';
 import { AUTH_ERROR, OAUTH_ERROR, encodeAuthError } from '@/lib/auth/login-errors';
+import { isGoogleSignInEnabled, isRegistrationOpen } from '@/lib/platform-settings/flags';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
 import { invalidateSessionState, verifySessionAgainstDb } from '@/lib/auth/session-state';
 import type { Adapter, AdapterUser } from 'next-auth/adapters';
@@ -302,6 +303,9 @@ export async function resolveOAuthSignIn(params: {
   const origin = getPublicAppOrigin();
   const fail = (code: string) => `${origin}/auth/login?error=${encodeURIComponent(code)}`;
 
+  // Yönetici Google ile girişi kapattıysa (/admin/settings → Kimlik) reddet.
+  if (account.provider === 'google' && !(await isGoogleSignInEnabled())) return fail('AccessDenied');
+
   const email = normalizeEmail(raw.email ?? user?.email);
   if (!email) return fail(OAUTH_ERROR.NO_EMAIL);
   if (account.provider === 'google' && raw.email_verified !== true) return fail(OAUTH_ERROR.EMAIL_UNVERIFIED);
@@ -316,7 +320,11 @@ export async function resolveOAuthSignIn(params: {
     existing = await prisma.user.findFirst({ where: { email: emailLookupFilter(email) }, select: OAUTH_USER_SELECT });
     matchedByEmail = !!existing;
   }
-  if (!existing) return true; // yeni kullanıcı → authAdapter.createUser
+  if (!existing) {
+    // Yeni kullanıcı → authAdapter.createUser; yönetici yeni kayıtları kapattıysa hesap açılmaz.
+    if (!(await isRegistrationOpen())) return fail('AccessDenied');
+    return true;
+  }
 
   if (existing.suspendedAt || existing.anonymizedAt) return fail(OAUTH_ERROR.ACCOUNT_SUSPENDED);
 

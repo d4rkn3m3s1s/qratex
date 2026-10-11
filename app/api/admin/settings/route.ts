@@ -19,7 +19,14 @@ import {
 } from '@/lib/points-rules';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 // P0-01: gizli kapı ayarı bu genel uçtan okunamaz/yazılamaz (yalnız kendi uçları).
-import { PROTECTED_SETTING_KEYS, isProtectedSettingKey } from '@/lib/admin-gate';
+import { PROTECTED_SETTING_KEYS, isProtectedSettingKey as isGateProtectedKey } from '@/lib/admin-gate';
+// B4: eski ekranın düz metin yazdığı OpenAI anahtarı vb. listelenmez/yazılmaz.
+import { RETIRED_SECRET_SETTING_KEYS } from '@/lib/platform-settings/registry';
+
+const HIDDEN_SETTING_KEYS = [...PROTECTED_SETTING_KEYS, ...RETIRED_SECRET_SETTING_KEYS];
+function isProtectedSettingKey(key: unknown): boolean {
+  return isGateProtectedKey(key) || (typeof key === 'string' && RETIRED_SECRET_SETTING_KEYS.has(key.trim()));
+}
 import {
   isVersionConflictError,
   readBaseVersion,
@@ -70,7 +77,7 @@ export async function GET(request: NextRequest) {
     }
 
     const settings = await prisma.settings.findMany({
-      where: { AND: [where as Prisma.SettingsWhereInput, { key: { notIn: [...PROTECTED_SETTING_KEYS] } }] },
+      where: { AND: [where as Prisma.SettingsWhereInput, { key: { notIn: HIDDEN_SETTING_KEYS } }] },
       orderBy: { category: 'asc' },
       select: SETTINGS_LIST_SELECT,
       take: 5000,

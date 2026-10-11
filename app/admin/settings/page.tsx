@@ -1,24 +1,36 @@
-'use client';
+import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { requireAuth } from '@/lib/api-auth';
+import { getPlatformSettingsState, type PlatformSettingsState } from '@/lib/platform-settings/server';
+import { SettingsCenter } from '@/components/admin/a-ayarlar-kapi/settings-center';
+import { SkeletonForm } from '@/components/states';
 
-import dynamic from 'next/dynamic';
-import { Skeleton } from '@/components/ui/skeleton';
+/**
+ * Admin → Ayarlar (/admin/settings). Sunucu önce: kayıt defterindeki ayarlar, sürümleri ve
+ * bağlam (SEO kimliği, dönemsel konsept, e-posta, Google, bakım yayını, gizli kapı özeti)
+ * sunucuda okunur. Ön yükleme düşerse istemci görünür hata + "Tekrar dene" gösterir —
+ * varsayılan değerlerle form AÇILMAZ (B6).
+ */
+export const dynamic = 'force-dynamic';
 
-/** PERF: 2073 satırlık ayarlar gövdesi ayrı chunk + ssr:false → ilk yükte ana thread bloklanmaz. */
-const SettingsClient = dynamic(() => import('./settings-client'), {
-  ssr: false,
-  loading: () => (
-    <div className="space-y-6">
-      <Skeleton className="h-24 w-full rounded-2xl" />
-      <Skeleton className="h-12 w-full rounded-xl" />
-      <div className="grid gap-4 md:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-40 rounded-2xl" />
-        ))}
-      </div>
-    </div>
-  ),
-});
+export const metadata: Metadata = {
+  title: 'Ayarlar',
+  description: 'Platform ayarları: genel, kimlik doğrulama, güvenlik ve gizli kapı, bakım modu, rol bazlı erişim ve değişiklik geçmişi.',
+};
 
-export default function AdminSettingsPage() {
-  return <SettingsClient />;
+export default async function AdminSettingsPage() {
+  let initial: PlatformSettingsState | null = null;
+  const auth = await requireAuth(['ADMIN']);
+  if (!('error' in auth)) {
+    try {
+      initial = await getPlatformSettingsState();
+    } catch (err) {
+      console.error('[admin/settings] sunucu ön yüklemesi başarısız:', err);
+    }
+  }
+  return (
+    <Suspense fallback={<SkeletonForm />}>
+      <SettingsCenter initial={initial} />
+    </Suspense>
+  );
 }

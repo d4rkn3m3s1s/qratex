@@ -8,6 +8,7 @@ import { normalizeEmail, emailLookupFilter } from '@/lib/auth/normalize-email';
 import { createPendingReferral, normalizeReferralCode } from '@/lib/referral';
 import { sendVerificationEmail } from '@/lib/email';
 import { buildEmailVerifyUrl, issueEmailVerificationToken } from '@/lib/auth-email-token';
+import { isRegistrationOpen } from '@/lib/platform-settings/flags';
 
 /**
  * POST /api/auth/register — e-posta ile hesap açar; HER ZAMAN e-posta doğrulaması ister.
@@ -16,6 +17,7 @@ import { buildEmailVerifyUrl, issueEmailVerificationToken } from '@/lib/auth-ema
  *   200 { success, requiresVerification: true, emailSent, referralPending?, verifyUrl? (yalnız dev + gönderilemediyse) }
  *   400 { success: false, code: 'VALIDATION', error: '<validation.* anahtarı>', field }
  *   409 { success: false, code: 'EMAIL_TAKEN', error: 'auth.emailAlreadyRegistered' }
+ *   403 { success: false, code: 'REGISTRATION_CLOSED', error: 'auth.registrationClosed' } (yönetici kaydı kapattı)
  *   429 { success: false, code: 'RATE_LIMITED', error: 'auth.registerRateLimited', retryAfterSec }
  *   500 { success: false, code: 'INTERNAL', error: 'auth.registerServerError' }
  *
@@ -46,6 +48,11 @@ export async function POST(request: NextRequest) {
       429,
       { 'Retry-After': String(sec) }
     );
+  }
+
+  // Yönetici "Yeni kayıtlar" anahtarını kapattıysa (/admin/settings → Kimlik) kayıt reddedilir.
+  if (!(await isRegistrationOpen())) {
+    return json({ success: false, code: 'REGISTRATION_CLOSED', error: 'auth.registrationClosed' }, 403);
   }
 
   try {

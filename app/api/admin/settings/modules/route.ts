@@ -1,70 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
+/**
+ * EMEKLİ UÇ (a-ayarlar-kapi, Dalga 2). Yalnız eski /admin/settings istemcisi kullanıyordu.
+ *  - audit      → GET /api/admin/platform-settings/history (gizli değer döndürmez, sayfalı)
+ *  - modules    → PATCH /api/admin/feature-control/modules/:key (tek kaynak, gerekçeli)
+ *  - visibility → /api/admin/platform-settings/access (sürüm kontrollü)
+ * Eski uç gizli anahtarları ham döndürüyor / sürüm kontrolsüz yazıyordu; 410 ile kapatıldı.
+ */
+import { NextResponse } from 'next/server';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { MODULE_CATALOG, MODULE_CONTROLS_SETTINGS_KEY, normalizeModuleControls } from '@/lib/module-controls';
-import { Prisma } from '@prisma/client';
-
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
-
-  const row = await prisma.settings.findUnique({
-    where: { key: MODULE_CONTROLS_SETTINGS_KEY },
-    select: { value: true },
-  });
-  const controls = normalizeModuleControls(row?.value);
-
-  return NextResponse.json({
-    success: true,
-    catalog: MODULE_CATALOG,
-    controls,
-  }, { headers: PRIVATE_NO_STORE_HEADERS });
+function gone() {
+  return NextResponse.json(
+    { success: false, code: 'GONE', error: 'Bu uç kaldırıldı. Ayarlar ekranının güncel sürümünü kullanın.' },
+    { status: 410, headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
 
-export async function PUT(request: NextRequest) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
-  const { session } = auth;
-
-  const body = await request.json().catch(() => ({}));
-  const controls = normalizeModuleControls(body?.controls);
-
-  const existing = await prisma.settings.findUnique({
-    where: { key: MODULE_CONTROLS_SETTINGS_KEY },
-    select: { id: true, value: true },
-  });
-
-  const saved = await prisma.settings.upsert({
-    where: { key: MODULE_CONTROLS_SETTINGS_KEY },
-    create: {
-      key: MODULE_CONTROLS_SETTINGS_KEY,
-      category: 'admin',
-      value: controls as object,
-    },
-    update: {
-      value: controls as object,
-    },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      userId: session.user.id,
-      action: existing ? 'update_modules' : 'create_modules',
-      entity: 'settings',
-      entityId: saved.id,
-      oldData: (existing?.value ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-      newData: controls as Prisma.InputJsonValue,
-    },
-  });
-
-  // Module-gate cache'ini geçersiz kıl (aksi halde 60s boyunca eski değer gated route'larda kullanılır).
-  const { revalidateTag } = await import('next/cache');
-  const { MODULE_GATE_CACHE_TAG } = await import('@/lib/module-gate');
-  revalidateTag(MODULE_GATE_CACHE_TAG, 'max');
-
-  return NextResponse.json({ success: true, controls }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+export const GET = gone;
+export const PUT = gone;
+export const POST = gone;

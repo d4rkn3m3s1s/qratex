@@ -1,34 +1,22 @@
+/**
+ * EMEKLİ UÇ (a-ayarlar-kapi, Dalga 2). Yalnız eski /admin/settings istemcisi kullanıyordu.
+ *  - audit      → GET /api/admin/platform-settings/history (gizli değer döndürmez, sayfalı)
+ *  - modules    → PATCH /api/admin/feature-control/modules/:key (tek kaynak, gerekçeli)
+ *  - visibility → /api/admin/platform-settings/access (sürüm kontrollü)
+ * Eski uç gizli anahtarları ham döndürüyor / sürüm kontrolsüz yazıyordu; 410 ile kapatıldı.
+ */
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  try {
-    const auth = await requireAuth(['ADMIN']);
-    if ('error' in auth) return auth.error;
-
-    const entries = await prisma.auditLog.findMany({
-      where: { entity: 'settings' },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true,
-        action: true,
-        entityId: true,
-        oldData: true,
-        newData: true,
-        createdAt: true,
-        user: { select: { email: true, name: true } },
-      },
-    });
-
-    return NextResponse.json({ entries }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    console.error('Settings audit GET error:', error);
-    return NextResponse.json({ error: 'Ayar geçmişi alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
-  }
+function gone() {
+  return NextResponse.json(
+    { success: false, code: 'GONE', error: 'Bu uç kaldırıldı. Ayarlar ekranının güncel sürümünü kullanın.' },
+    { status: 410, headers: PRIVATE_NO_STORE_HEADERS }
+  );
 }
+
+export const GET = gone;
+export const PUT = gone;
+export const POST = gone;

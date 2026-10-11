@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 // P0-01: gizli kapı ayarı rollback ile geri yüklenemez (eski düz metin cevap dirilmesin).
 import { isProtectedSettingKey } from '@/lib/admin-gate';
+import { RETIRED_SECRET_SETTING_KEYS } from '@/lib/platform-settings/registry';
+import { revalidateTag } from 'next/cache';
 
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +32,16 @@ export async function POST(request: NextRequest) {
 
     const entry = await prisma.auditLog.findUnique({
       where: { id: parsed.data.auditLogId },
-      select: { id: true, entity: true, oldData: true, newData: true },
+      select: { id: true, entity: true, entityId: true, action: true, oldData: true, newData: true },
     });
     if (!entry || entry.entity !== 'settings') {
       return NextResponse.json({ error: 'Audit kaydı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
+    }
+
+    // B3: yalnız {anahtar: değer} biçimli toplu kayıtlar geri alınabilir (modül/SEO/rozet vb.
+    // kayıtlarının üst düzey alanları ayar anahtarı sanılıp çöp satır açılıyordu).
+    if (entry.entityId || (entry.action !== 'batch_update' && entry.action !== 'rollback')) {
+      return NextResponse.json({ error: 'Bu kayıt bu uçla geri alınamaz' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
 
     const oldData = entry.oldData;
@@ -42,7 +50,13 @@ export async function POST(request: NextRequest) {
     }
 
     const map = oldData as SettingsMap;
-    const keys = Object.keys(map).filter((k) => !isProtectedSettingKey(k));
+    const candidateKeys = Object.keys(map).filter(
+      (k) => !isProtectedSettingKey(k) && !RETIRED_SECRET_SETTING_KEYS.has(k) && map[k] !== null && map[k] !== undefined
+    );
+    // Yalnız VAR OLAN satırlar geri yüklenir (yeni, okuyucusuz satır açılmaz).
+    const present = await prisma.settings.findMany({ where: { key: { in: candidateKeys } }, select: { key: true } });
+    const presentSet = new Set(present.map((r) => r.key));
+    const keys = candidateKeys.filter((k) => presentSet.has(k));
     if (keys.length === 0) {
       return NextResponse.json({ error: 'Rollback edilecek ayar bulunamadı' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
     }
@@ -80,6 +94,14 @@ export async function POST(request: NextRequest) {
         ...getAuditRequestMeta(request),
       },
     });
+
+    for (const tag of ['settings', 'module-gate-settings', 'public-theme-settings']) {
+      try {
+        revalidateTag(tag, { expire: 0 });
+      } catch {
+        /* yut */
+      }
+    }
 
     return NextResponse.json({ success: true, restoredKeys: keys }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

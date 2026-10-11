@@ -12,6 +12,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getBooleanSiteSetting } from '@/lib/site-setting-bool';
+import { isGoogleSignInEnabled, isRegistrationOpen } from '@/lib/platform-settings/flags';
 import { isMailConfigured } from '@/lib/mail-sender';
 import { getPublicAppOrigin } from '@/lib/public-app-origin';
 import { resolvePostLoginTarget, sanitizeCallbackPath } from '@/lib/auth/post-login-target';
@@ -19,15 +20,22 @@ import { normalizeReferralCode, isReferralModuleEnabled } from '@/lib/referral';
 import { getPointsMatrix, getReferralRewards } from '@/lib/points-rules';
 
 export type AuthFeatures = {
+  /** Ortam değişkenleri tanımlı VE yönetici Google ile girişi açık tutuyor. */
   google: boolean;
   github: boolean;
   /** Bağlantıyla giriş açık VE e-posta gönderimi yapılandırılmış. */
   magicLink: boolean;
   mailConfigured: boolean;
+  /** Yönetici yeni kayıtları açık tutuyor mu (/admin/settings → Kimlik). */
+  registrationOpen: boolean;
 };
 
 export async function getAuthFeatures(): Promise<AuthFeatures> {
-  const google = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const [googleEnabled, registrationOpen] = await Promise.all([
+    isGoogleSignInEnabled().catch(() => true),
+    isRegistrationOpen().catch(() => true),
+  ]);
+  const google = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) && googleEnabled;
   const github = Boolean(process.env.GITHUB_ID && process.env.GITHUB_SECRET);
   let mailConfigured = false;
   try {
@@ -36,7 +44,7 @@ export async function getAuthFeatures(): Promise<AuthFeatures> {
     mailConfigured = false;
   }
   const magicEnabled = await getBooleanSiteSetting('enableMagicLink', false).catch(() => false);
-  return { google, github, magicLink: magicEnabled && mailConfigured, mailConfigured };
+  return { google, github, magicLink: magicEnabled && mailConfigured, mailConfigured, registrationOpen };
 }
 
 /** İsteğin kökeni (önizleme dağıtımlarında da doğru); okunamazsa yapılandırılmış genel köken. */

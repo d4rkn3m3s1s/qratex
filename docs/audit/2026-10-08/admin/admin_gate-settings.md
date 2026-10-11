@@ -196,3 +196,48 @@ Toplam: 26 özellik — ÇALIŞIYOR 10, KISMİ 7, BOZUK 3 (+1 ölü kod), SAHTE 
 | 3 | Geçersiz girdi / DB hatası → sabit "7" | Doğrulandı | Orta (PUT yolu düşük, okuma fail-open orta) |
 
 Kök neden ortak: kapı kuralı tek bir yetkili noktada uygulanmıyor. Önerilen yapı, gate doğrulamasını (Web Crypto ile HMAC + epoch + exp) hem `proxy.ts`'te hem de `requireAuth` içinde ADMIN için zorunlu kılmak (muafiyet: `/api/admin/gate`), GET yanıtından cevabı tamamen çıkarmak ve cevabı hash'lenmiş olarak saklamaktır (ayrıntılar yukarıdaki "Veri/API değişiklikleri" bölümünde).
+
+---
+
+## Uygulama (Dalga 2)
+
+Kapı güvenliği Dalga 1'de (A2: `lib/admin-gate.ts`, `lib/admin-elevation.ts`, `proxy.ts`, `requireAuth`) gerçek yapıldı: cevap HMAC özetli, imzalı + süreli + oturuma bağlı çerez, `cfgVer` ile toplu sonlandırma, kümülatif kilit (1 sa 3 yanlış → 1 sa; 24 sa 5 yanlış → 24 sa) + bildirim, fail-closed 503. Bu dalgada ekran **Ayarlar kayıt defterine** bağlandı: `/admin/settings?bolum=guvenlik` "Güvenlik ve kapı" bölümü kapı özetini (varsayılan cevap uyarısı, 24 sa yanlış deneme / kilit sayısı, sürüm, son değişiklik — sunucudan; okunamazsa "okunamadı", sıfır değil) gösterir ve bu ekrana bağlanır; durum şeridinde "Gizli kapı" çipi var. Sayfa sunucu bileşeni oldu (`metadata` başlığı), istemci gövdesi `components/admin/a-ayarlar-kapi/gate-settings.tsx`'e taşındı; geri bağlantısı, `/admin/audit?varlik=AdminGate` bağlantısı ve İstanbul saat dilimi eklendi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi (rol + imzalı kapı çerezi) | ÇALIŞIYOR (A2) |
+| 2 | Başlık | ÇALIŞIYOR — `PageHeader` + Ayarlar'a geri bağlantı |
+| 3 | Bilgi kartı vaadi | ÇALIŞIYOR — vaat artık kodla doğru (`cfgVer`) |
+| 4 | GET | ÇALIŞIYOR — cevap/özet dönmez |
+| 5 | Yükleniyor | ÇALIŞIYOR — `QueryState` |
+| 6 | Yükleme hatası | ÇALIŞIYOR — hata + tekrar dene, form gizli |
+| 7 | Soru alanı | ÇALIŞIYOR — sayaç |
+| 8 | Boş soru | ÇALIŞIYOR — en az 5 karakter (istemci + zod) |
+| 9 | Cevap alanı | ÇALIŞIYOR — mevcut / yeni / tekrar |
+| 10 | Maskeleme | ÇALIŞIYOR — `type=password`, yalnız yazılır |
+| 11 | Cevap hata mesajı (ölü kod) | ÇALIŞIYOR — eşleşme ve sunucu alan hataları `aria-describedby` ile |
+| 12 | Canlı önizleme | ÇALIŞIYOR — statik, hareketsiz küçük kopya (rAF yok); portal bileşeni paylaşımı kalan |
+| 13 | Kirli durum | ÇALIŞIYOR |
+| 14 | Kaydet | ÇALIŞIYOR — `<form>` + Enter |
+| 15 | Sunucu doğrulaması | ÇALIŞIYOR — zod 400, varsayılana düşme yok |
+| 16 | Denetim | ÇALIŞIYOR — `answerChanged` + parmak izi |
+| 17 | Toast'lar | ÇALIŞIYOR — Türkçe karakterli, öneksiz (bu sayfa `admin-toast` kullanmıyor) |
+| 18 | Cevap değişince oturumların düşmesi | ÇALIŞIYOR |
+| 19 | API koruması | ÇALIŞIYOR |
+| 20 | Cevap sızmaması | ÇALIŞIYOR |
+| 21 | Eşzamanlılık | ÇALIŞIYOR — `expectedCfgVer` 409 |
+| 22 | Step-up / onay | ÇALIŞIYOR — mevcut cevap + etki önizlemeli onay |
+| 23 | Başarısız deneme / kilit | ÇALIŞIYOR — kilitli hesaplar + kilit kaldırma |
+| 24 | Değişiklik geçmişi | ÇALIŞIYOR — son 25 olay + denetim merkezi derin bağlantısı |
+| 25 | Metadata | ÇALIŞIYOR — sunucu `metadata` |
+| 26 | Sidebar | ÇALIŞIYOR (navigasyon ajanı) |
+
+### Kapanan bulgular
+B1–B8 ve B10 kapandı (A2 + bu dalga). **B9** (ortak `lib/admin-toast` öneki) bu sayfada geçersiz; ortak yardımcı sahiplik dışı.
+
+### Kalanlar
+- Gerçek ikinci faktör (TOTP/passkey step-up): F1.2 yol haritası.
+- Kilit politikası sabit (`GATE_LOCK_POLICY`); düzenlenebilir politika ve IP izin listesi yok (ürün kararı).
+- Önizleme, `app/admin-gate` ile aynı portal bileşenini paylaşmıyor (kapı ekranı sahiplik dışı).

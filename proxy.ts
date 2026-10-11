@@ -9,6 +9,7 @@ import {
   isGatedAdminPage,
   permissionsPolicyFor,
 } from '@/lib/admin-gate-edge';
+import { maintenanceBlock } from '@/lib/platform-settings/maintenance-edge';
 
 const CORS_ALLOWLIST = (
   process.env.NEXT_PUBLIC_ALLOWED_ORIGINS ||
@@ -154,11 +155,18 @@ export async function proxy(req: NextRequest): Promise<NextResponse> {
       addCorsHeaders(res, req);
       return res;
     }
-    const blocked = await adminApiGateBlock(req);
+    // Bakım modu (/admin/settings → Bakım): panel API'leri 503, yöneticiler muaf.
+    const blocked = (await maintenanceBlock(req)) ?? (await adminApiGateBlock(req));
     const res = blocked ?? NextResponse.next();
     addSecurityHeaders(res, pathname);
     addCorsHeaders(res, req);
     return res;
+  }
+  // Bakım modu: müşteri/bayi paneli sayfaları /bakim ekranına yönlenir (yöneticiler muaf).
+  const maintenance = await maintenanceBlock(req);
+  if (maintenance) {
+    addSecurityHeaders(maintenance, pathname);
+    return maintenance;
   }
   const res = await (authMiddleware as unknown as (r: NextRequest) => Promise<NextResponse | Response | undefined>)(req);
   return (res as NextResponse) ?? NextResponse.next();

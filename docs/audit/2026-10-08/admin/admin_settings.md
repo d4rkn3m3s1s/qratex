@@ -319,3 +319,86 @@ Bu bölüm, yukarıdaki KRİTİK/YÜKSEK iddiaları çürütmek amacıyla kodun 
 | 5 | OpenAI anahtarı düz metin, audit'te çoğalıyor | Doğrulandı |
 | 6 | Yükleme hatasında varsayılanlar canlıyı ezer | Doğrulandı (tetikleyici 500/timeout ve çok sekme) |
 | 7 | Demo kafe: bilinen şifre + defter dışı puan | Doğrulandı |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yüzey:** a-ayarlar-kapi · **Rotalar:** `/admin/settings` (yeniden yazıldı), `/admin/gate-settings` (ayrıntı ekranı olarak korundu).
+
+**Mimari:** `app/admin/settings/page.tsx` artık sunucu bileşeni: `lib/platform-settings/server.ts → getPlatformSettingsState()` sunucuda okunur (ön yükleme düşerse istemci `QueryState` hata + "Tekrar dene"; varsayılanlarla form AÇILMAZ). 2211 satırlık `settings-client.tsx` silindi; yerine `components/admin/a-ayarlar-kapi/**` (kabuk + bölüm başına bileşen; Erişim ve Geçmiş `next/dynamic` ile tembel). **Kayıt defteri** `lib/platform-settings/registry.ts`: her anahtar `{bölüm, etiket, etki metni, zod şeması, okuma yorumu, okuyucu dosyalar, önbellek etiketleri}`; okuyucusu olmayan anahtar deftere giremez (jest testi okuyucu dosyalarının varlığını ve anahtarı gerçekten okuduğunu doğrular). Bölümler: **Genel · Kimlik · Güvenlik ve kapı · Bakım · Erişim · Geçmiş**; üstte acil durum şeridi (Bakım / Kayıt / Google / Bağlantıyla giriş / E-posta / Gizli kapı çipleri ilgili bölüme götürür; bakım açıkken kırmızı bant). Yeni BFF'ler (`defineRoute`, ADMIN + kapı + rate limit + zod): `GET|PATCH /api/admin/platform-settings`, `GET /api/admin/platform-settings/history` (imleçli), `POST /api/admin/platform-settings/revert` (`dryRun` önizleme + sürüm), `GET|PUT /api/admin/platform-settings/access`. Yazma `lib/settings-version` ile anahtar başına sürüm kontrollü (409), tek transaction, anahtar başına STANDART denetim (`{settingKey, value}` eski/yeni). Eşzamanlılık şema değişmeden `updatedAt` sürümüyle çözüldü (C2 iyimser kilit deseni korunur). Hareket: bölüm geçişinde `fadeUp` (`useMotionPolicy` ile azaltılmış harekette statik); 3B yok.
+
+**Gerçek etki kazanan anahtarlar** (eski sahte anahtarlar dağıtımda kendiliğinden etki kazanmasın diye YENİ adlarla):
+- `platform_registration_open` → `app/api/auth/register` 403 `REGISTRATION_CLOSED`; `lib/auth.ts resolveOAuthSignIn` yeni OAuth hesabını reddeder.
+- `platform_google_auth` → `lib/auth.ts` Google girişini reddeder; `getAuthFeatures().google` düğmeyi gizler. Kapatma onayında Google hesabı bağlı kullanıcı sayısı (gerçek `Account` sayımı) gösterilir.
+- `platform_maintenance {enabled, message, plannedEndAt}` → kaydedilince Redis'e yayınlanır; `proxy.ts` → `lib/platform-settings/maintenance-edge.ts` (izolat başına 10 sn bellek önbelleği): müşteri/bayi paneli sayfaları `/bakim` ekranına, `/api/(customer|dealer|staff)/*` 503 `MAINTENANCE`; ADMIN muaf. Redis yoksa bakım AÇILAMAZ (409 `MAINTENANCE_UNAVAILABLE`, anahtar kilitli + açıklama). Ayar ekranı her açılışta DB ↔ Redis eşleşmesini denetleyip onarır. Açma işlemi tipli onay ("BAKIM").
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Dinamik yükleme + skeleton | ÇALIŞIYOR — sunucu bileşeni ön yükleme; tek iskelet |
+| 2 | İç skeleton | ÇALIŞIYOR — `QueryState` (sayaçlar sahte 0 göstermez) |
+| 3 | Yükleme hata durumu | ÇALIŞIYOR — hata + tekrar dene; form kilitli (B6) |
+| 4 | PageHeader | ÇALIŞIYOR |
+| 5 | `?tab=` senkronu | ÇALIŞIYOR — `?bolum=`; eski `?tab=` derin bağlantıları yeni bölümlere eşlenir |
+| 6 | API yetkisi | ÇALIŞIYOR — `defineRoute` + `requireAuth` kapı doğrulaması (A2) |
+| 7–20 | Demo/bootstrap araçları (kafe, sektör, şüpheli, AI örnek, A/B, sil, sayaç, toplu, özet) | KALDIRILDI — ayar ekranında yeri yok (B13); canlı veriye yazıyorlardı. Uç `/api/admin/bootstrap` sahiplik dışı (bkz. Kalanlar) |
+| 21 | Geçmişi getir | ÇALIŞIYOR — Geçmiş bölümü açılınca yüklenir; yanıltıcı boş metin yok |
+| 22 | Geçmiş listesi | ÇALIŞIYOR — insan okunur etiket, önce → sonra, aktör, İstanbul saati, sayfalama, `/admin/audit` bağlantısı |
+| 23 | Bu sürüme dön | ÇALIŞIYOR — "Bu değişikliği geri al": yalnız standart kayıt, sürüm kontrollü, önbellek tazelenir (B3) |
+| 24 | Geri alma onayı | ÇALIŞIYOR — sunucu önizlemesi (şimdiki / geri yüklenecek değer) |
+| 25 | Avatar gösterimi | ÇALIŞIYOR |
+| 26 | Avatar düğmesi | ÇALIŞIYOR — her zaman görünür "Avatar seç" düğmesi, klavye ile erişilir |
+| 27 | Avatar kategorileri | ÇALIŞIYOR — `tablist`/`tab` |
+| 28 | Avatar seçimi | ÇALIŞIYOR — `radiogroup`, anlamlı `aria-label`, ASCII toast yok |
+| 29 | Avatar değiştir | ÇALIŞIYOR (26 ile birleşti) |
+| 30 | Ad + Profili kaydet | ÇALIŞIYOR — ayrı kaydetme durumu; seçilmemiş varsayılan avatar YAZILMAZ |
+| 31 | E-posta (salt okunur) | ÇALIŞIYOR |
+| 32 | "Admin" rol etiketi | KALDIRILDI — bilgi değeri olmayan sabit metin |
+| 33 | Şifre değiştirme | ÇALIŞIYOR — güç göstergesi, eşleşme denetimi; diğer oturumlar zaten düşüyor (P0-07) ve ekranda söylenir; şifresiz OAuth hesabına anlaşılır yönerge |
+| 34–36 | Site adı / URL / açıklama | KALDIRILDI — gerçek kaynak `seo.global`; salt okunur özet + "SEO Motoru'nda düzenle" |
+| 37 | Bakım modu | ÇALIŞIYOR — gerçek (proxy + `/bakim` + 503), mesaj ve tahmini bitiş |
+| 38 | Genel toplu Kaydet | KALDIRILDI — bölüm başına yalnız değişen anahtarlar + sürüm (B6) |
+| 39–42 | Logo / favicon / ana renk / varsayılan tema | KALDIRILDI — okuyucusuz; Tasarım Sistemi'ne bağlantı |
+| 43 | Arka plan efekti seçimi | ÇALIŞIYOR — `radiogroup`, kayıt defteri zod'u, `settings` etiketi anında sona erer |
+| 44 | Efekt hatasında geri alma | ÇALIŞIYOR — seçim sunucu onayından sonra değişir; hata görünür |
+| 45 | Efekt önizlemesi | KALDIRILDI (yerine "Ana sayfayı aç") — 28 canlı canvas önizlemesi ops ekranı için ağır; bkz. Kalanlar |
+| 46 | Seçili bilgi + dönemsel override | ÇALIŞIYOR — etkin dönemsel konsept efekti ezerse bant |
+| 47 | Yeni kayıtlar | ÇALIŞIYOR — gerçek (e-posta + OAuth ilk hesap) |
+| 48 | Google ile giriş | ÇALIŞIYOR — gerçek (callback + düğme) |
+| 49 | Magic link | ÇALIŞIYOR |
+| 50 | Sunucu mail özeti | ÇALIŞIYOR — sunucuda hesaplanır, ayrı `SELECT 1` isteği yok |
+| 51 | .env dokümantasyonu | ÇALIŞIYOR — yalnız yapılandırma eksikken kısa yönerge |
+| 52 | Test e-postası | ÇALIŞIYOR |
+| 53 | Özel e-posta | KALDIRILDI — `/admin/inbox` (aynı uç) tek yer |
+| 54 | Gönderim sonuçları | ÇALIŞIYOR — `aria-live` |
+| 55–57 | AI anahtar / OpenAI anahtarı / model | KALDIRILDI — okuyucusuz; anahtar alanı güvenlik riskiydi (B4) |
+| 58–60 | Geri bildirim / referans puanı / seviye eşiği | KALDIRILDI — puan kuralları tek kaynak Ekonomi Stüdyosu |
+| 61–68 | Modül arama/filtre/yenile/kaydet/toplu/switch/detay/boş durum | KALDIRILDI — global modül aç/kapa tek kaynak `/admin/features` (B9); Erişim'de "Herkese kapalı" rozeti oraya bağlanır |
+| 69 | `admin_bootstrap` modül anahtarı | KALDIRILDI (bu ekrandan) — uç sahiplik dışı |
+| 70 | Kaydedilmemiş değişiklik göstergesi | ÇALIŞIYOR — satır başına "Kaydedilmedi", `DirtyBar` (geri al, Ctrl+S, sayfadan çıkış uyarısı) |
+| 71 | Görünürlük rol seçimi | ÇALIŞIYOR |
+| 72 | Görünürlük Yenile | KALDIRILDI — çakışmada "güncel hâli yükle"; başka durumda gereksiz |
+| 73 | Görünürlük Kaydet | ÇALIŞIYOR — sürüm kontrollü (409), standart denetim, kapı önbelleği anında |
+| 74 | Toplu aç/kapa | ÇALIŞIYOR |
+| 75 | Özellik görünürlüğü | ÇALIŞIYOR — global durum rozeti, kritik rozeti |
+| 76 | Menü görünürlüğü | ÇALIŞIYOR |
+| 77 | Sistem görünürlüğü | KALDIRILDI — Özellik Kontrolü ile çakışan katman; kalmış kapatmalar uyarı + tek tık temizleme |
+| 78 | "Responsive görünüm" etiketi | KALDIRILDI |
+| 79 | Kayıttan sonra geçmiş | ÇALIŞIYOR |
+| 80 | Eşzamanlılık | ÇALIŞIYOR — `updatedAt` sürümü + 409 + çakışma bandı (şema değişikliği gerekmedi) |
+
+### Kapanan bulgular (15'ten 11'i tam, 4'ü bu ekrandan kaldırılarak)
+- **B1** kapandı: kapı API'de zorunlu (A2); ayrıca genel `GET /api/admin/settings` artık `openaiApiKey`'i de listelemez, POST/PUT yazamaz.
+- **B3** kapandı: yeni geri alma yalnız standart kayıt; eski `/api/admin/settings/rollback` (denetim merkezi kullanıyor) sertleştirildi: yalnız `batch_update`/`rollback` + `entityId` boş, yalnız VAR OLAN satırlar, önbellek etiketleri temizlenir.
+- **B4** kapandı (kod): alan kaldırıldı; genel uç gizler/reddeder; ham `oldData/newData` döndüren `/api/admin/settings/audit` 410.
+- **B6, B7, B8, B9, B10 (yeni uç), B13, B14, B15** kapandı. Eski `/api/admin/settings/modules` ve `/visibility` (yalnız eski istemci) 410.
+- **B2, B5, B11, B12** (demo/bootstrap): ayar ekranından kaldırıldı; uçların kendisi kalan.
+
+### Kalanlar
+- `/api/admin/bootstrap` + `lib/demo-cafes-seed.ts` (B2/B5/B11/B12): üretimde kapatma, `dryRun`, denetim ve demo kiracı — sahiplik dışı (başka yüzeyler `BootstrapActionButton` kullanıyor).
+- Canlı DB'de mevcut `openaiApiKey` satırı ve eski denetim kopyaları: veri temizliği onay gerektirir (DB'ye bağlanılmadı).
+- Genel batch ucu (`POST /api/admin/settings`) tema ekranları için kayıt defteri dışı anahtar yazmaya devam ediyor (B10 kısmi) — tema sahibi yüzey.
+- Kayıt ekranı `REGISTRATION_CLOSED`'u genel hata olarak gösterir; özel "kayıtlar kapalı" metni p-auth yüzeyinin işi (sunucu `getAuthFeatures().registrationOpen` artık veriyor).
+- Efekt canlı önizlemesi (#45) ve "etkin durum gezgini"/`module_gate_blocked` sayaçları (eksik özellik 5) yapılmadı.
