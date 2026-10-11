@@ -354,6 +354,27 @@ export function parseSynthesis(raw: string, allowedWinners: readonly string[]): 
   };
 }
 
+/**
+ * Karar metninde geçen ama veri paketinde OLMAYAN metrik anahtarlarını döndürür (halüsinasyon bekçisi).
+ * Metrik anahtarları snake_case'tir (ör. negatif_oran_30g); metinde bu biçimde geçen her belirteç
+ * paketteki anahtarlardan biri olmalı. Paket yoksa (veri kapalı) hiçbir metrik anahtarına izin yok.
+ */
+export function unknownMetricRefs(decision: SessionDecision, pack: DataPack | null): string[] {
+  const allowed = new Set((pack?.metrics ?? []).map((m) => m.key.toLowerCase()));
+  const text = [
+    decision.answer,
+    decision.winnerRationale,
+    ...decision.dissent,
+    ...decision.actions.flatMap((a) => [a.title, a.detail]),
+  ].join('\n');
+  const found = new Set<string>();
+  for (const m of text.matchAll(/(?<![\p{L}\p{N}_])[a-zçğıöşü][a-z0-9çğıöşü]*(?:_[a-z0-9çğıöşü]+)+(?![\p{L}\p{N}_])/gu)) {
+    const k = m[0].toLowerCase();
+    if (!allowed.has(k)) found.add(k);
+  }
+  return [...found];
+}
+
 // ───────────────────────────── Dışa aktarım ─────────────────────────────
 
 export const STATUS_LABEL: Record<SessionStatus, string> = {

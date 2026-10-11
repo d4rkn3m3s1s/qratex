@@ -18,6 +18,7 @@ import {
   AGENT_PROFILES,
   CAPTAIN,
   parseSynthesis,
+  unknownMetricRefs,
   type CouncilAgent,
   type CouncilConfig,
   type DataPack,
@@ -177,9 +178,25 @@ export async function runSynthesis(
   const user = `${header(input, 'synthesis')}\n\nTartışmanın tamamı:\n${transcriptText(input.prior)}\n\nJSON kararı üret.`;
 
   let last: { content: string; model: string; latencyMs: number } | null = null;
+  let correction = '';
+  let invented: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
-    last = await call(complete, { system, user, temperature: 0.3, maxTokens: 1200, jsonMode: true, actorKey: input.actorKey }, 'Kaptan (sentez)');
+    last = await call(
+      complete,
+      { system, user: user + correction, temperature: 0.3, maxTokens: 1200, jsonMode: true, actorKey: input.actorKey },
+      'Kaptan (sentez)'
+    );
     const decision = parseSynthesis(last.content, allowed);
+    // Halüsinasyon bekçisi: veri paketinde olmayan metrik anahtarı geçen karar kabul edilmez.
+    invented = decision ? unknownMetricRefs(decision, input.dataPack) : [];
+    if (decision && invented.length > 0) {
+      const keys = (input.dataPack?.metrics ?? []).map((m) => m.key);
+      correction =
+        `\n\nÖNCEKİ YANITIN REDDEDİLDİ: veri paketinde olmayan metrik(ler) kullandın: ${invented.join(', ')}. ` +
+        (keys.length ? `Yalnız şu anahtarlara atıf yapabilirsin: ${keys.join(', ')}.` : 'Bu oturumda veri paketi yok; hiçbir metrik anahtarı yazma.') +
+        ' Ölçüm önerirken yeni anahtar adı uydurma, düz Türkçe yaz.';
+      continue;
+    }
     if (decision) {
       const round = input.config.rounds + 1;
       return {
@@ -187,6 +204,13 @@ export async function runSynthesis(
         message: { round, agent: CAPTAIN, kind: 'synthesis', content: decision.answer, model: last.model, latencyMs: last.latencyMs },
       };
     }
+  }
+  if (invented.length > 0) {
+    throw new ApiError(
+      'AI_FAILED',
+      `Sentez veri paketinde olmayan metrik uydurdu (${invented.join(', ')}). Hiçbir şey kaydedilmedi; adımı yeniden deneyin.`,
+      { status: 502, retryable: true }
+    );
   }
   throw new ApiError('AI_FAILED', 'Sentez geçerli bir karar biçiminde üretilemedi. Hiçbir şey kaydedilmedi; adımı yeniden deneyin.', {
     status: 502,

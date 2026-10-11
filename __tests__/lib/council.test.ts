@@ -37,7 +37,7 @@ jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn() }));
 jest.mock('@/lib/prisma', () => ({ prisma: db, isPrismaConnectivityError: () => false }));
 
 import { ApiError } from '@/lib/http/define-route';
-import { DEFAULT_COUNCIL_CONFIG, parseSynthesis, plannedCalls, sessionToMarkdown, councilConfigSchema } from '@/lib/council/contract';
+import { DEFAULT_COUNCIL_CONFIG, parseSynthesis, unknownMetricRefs, plannedCalls, sessionToMarkdown, councilConfigSchema } from '@/lib/council/contract';
 import { readConfigValue, updateCouncilConfig } from '@/lib/council/config.server';
 import { publishActions, readContext, stepSession, actionItemText, sessionAction } from '@/lib/council/sessions.server';
 import { transcriptText, type Completion } from '@/lib/council/engine.server';
@@ -110,6 +110,17 @@ describe('sözleşme', () => {
     const raw = '{"answer":"Yeterince uzun bir cevap metni.","winner":"Benjamin","winnerRationale":"Mantık","confidence":50,"actions":[{"title":"Bir iş","priority":"low"}]}';
     expect(parseSynthesis(raw, ['Harper', 'Grok'])).toBeNull();
     expect(parseSynthesis('{bozuk', ['Harper'])).toBeNull();
+  });
+
+  it('halüsinasyon bekçisi: veri paketinde olmayan metrik anahtarı yakalanır', () => {
+    const raw = '{"answer":"negatif_oran_30g yüksek; davranis_degisiklik_30g izlenmeli.","winner":"Harper","winnerRationale":"Veri net.","confidence":60,"actions":[{"title":"Takip","detail":"acik_aksiyon azalt","priority":"high"}]}';
+    const d = parseSynthesis(raw, ['Harper'])!;
+    const pack = { scopeLabel: 'P', windowDays: 30, generatedAt: '', metrics: [
+      { key: 'negatif_oran_30g', label: 'N', value: 10, unit: '%' as const },
+      { key: 'acik_aksiyon', label: 'A', value: 2, unit: 'adet' as const },
+    ] };
+    expect(unknownMetricRefs(d, pack)).toEqual(['davranis_degisiklik_30g']);
+    expect(unknownMetricRefs(d, null)).toEqual(['negatif_oran_30g', 'davranis_degisiklik_30g', 'acik_aksiyon']);
   });
 
   it('ayar şeması: en az bir uzman, tur 1-3; çağrı tahmini', () => {
