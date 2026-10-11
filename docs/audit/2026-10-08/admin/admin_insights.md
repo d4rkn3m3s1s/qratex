@@ -238,3 +238,52 @@ Hepsi `useReducedMotion` ile kapatılabilir olsun. Kartlardaki dekoratif gradyan
 - **Somut senaryo:** Admin `/admin/insights` sayfasındaki boş durumda "Demo sektör verisi üret" düğmesine basıyor (`page.tsx:73` ya da `:129-133`). Örneğin bir berber `demo-hotel` sektörüne atanıyor. Müşteri `/customer/category-leaderboard` sayfasında `demo-hotel` seçeneğini görüyor ve gerçek işletmeleri bu sahte sektörde sıralanmış buluyor.
 - **N+1:** Doğru (`route.ts:249-252`, bayi başına bir `update`). Ancak bu tek seferlik bir admin işlemi; performans etkisi ikincil. Asıl sorun veri bütünlüğü.
 - **Düzeltme yönü:** Seed'i yalnızca demo hesaplarla sınırla (id öneki ya da e-posta alanı) ve üretim ortamında ortam bayrağıyla kapat. Ya da tercihen veritabanına hiç yazmayan "örnek görünüm" moduna geç. Müşteriye ve bayiye dönen tüm uçlarda `demo-` önekli kategorileri savunmacı olarak dışla. Geriye dönük temizlik gerekiyorsa tracker'daki id'lerle hedefli `updateMany` kullan.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Karar uygulandı: birleştir.** `/admin/insights` artık `/admin/analytics?tab=sectors` adresine, sorgu parametrelerini koruyarak kalıcı yönlenir (`app/admin/insights/page.tsx`). Sektör, Platform analitiğinde hem ayrı bir sekme hem de tüm sekmelerde bir süzgeçtir; yani bir **kırılım boyutu**. Toplama mantığı tek yerde: `lib/admin-analytics/{core,load}.ts` (`buildSectors`, `loadAdminSection('sectors')`). Bayi kıyası aynı türetilmiş sektörü kullanır, böylece çakışma bölümündeki "iki formül" sorunu kapandı.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sunucu yetki kontrolü | ÇALIŞIYOR | Hedef sayfa `requireAuth(['ADMIN'])` (DB + admin kapısı); yetkisiz kullanıcı `/auth/login`'e gider. |
+| 2 | Sektör toplama | ÇALIŞIYOR | Dönemli; yorum ağırlıklı ve bayi ağırlıklı ortalama ayrı; QR ∪ tüketim yorumu; silinenler hariç; temiz veri süzgeci. |
+| 3 | Sektör başına tarama | ÇALIŞIYOR | Tüm zamanların `scanCount` sayacı yerine dönemsel `qr_scanned` olayları. |
+| 4 | 5 dk `unstable_cache` | KALDIRILDI | Geçersiz kılınmayan etiket yerine sorgu anahtarlı Redis bölüm önbelleği (120 sn), "Yenile" (`fresh=1`) ve "x önce güncellendi". |
+| 5 | Hero metni | ÇALIŞIYOR | Türkçe tek ad ("Sektör karşılaştırması"); yanlış "anonimleştirilmiş" vaadi kalktı; k-anonimlik bayrağı eklendi. |
+| 6 | "Demo sektör verisi üret" | KALDIRILDI | Analitik yüzeyinde yazma aksiyonu yok. Uç tarafı başka ajanca `demo-guard` ile yalnız demo hesaplara sınırlandı. |
+| 7 | "Demo veriyi sil" | KALDIRILDI | Aynı gerekçe. |
+| 8 | Kategori adı | ÇALIŞIYOR | `lib/places/categories` sözlüğünden TR/EN etiket; ham slug ve `demo-*` asla görünmez. |
+| 9 | "N bayi" | ÇALIŞIYOR | Bayi ve aktif bayi sütunları. |
+| 10 | Ortalama puan | ÇALIŞIYOR | Yorum yoksa "—"; örneklem (n) sütunu var. |
+| 11 | Tarama biçimi | ÇALIŞIYOR | `Intl.NumberFormat`. |
+| 12 | Gradyan şerit | KALDIRILDI | Dekoratifti, bilgi taşımıyordu. |
+| 13 | Sıralama | ÇALIŞIYOR | Sıralanabilir tablo (her sütun). |
+| 14 | Odak önerisi | ÇALIŞIYOR | Kural: platformun geri kalanına göre z ≤ −2, n ≥ 30, ≥ 3 aktif bayi ve k-anonimlik. Gerekçe metni + "Aksiyon planı oluştur" (`/admin/playbooks`). Koşul sağlanmazsa öneri gösterilmez. |
+| 15 | Boş durum | ÇALIŞIYOR | "Sektörü belirsiz bayi" sayısı, "sektörü belirli oran" KPI'ı ve sektörün nasıl belirlendiği. Yanlış beklenti yaratan metin kalktı. |
+| 16 | Tekrarlı butonlar | KALDIRILDI | |
+| 17 | Yükleniyor | ÇALIŞIYOR | Sekmeye özel tablo iskeleti. |
+| 18 | Hata | ÇALIŞIYOR | `QueryState` + `PanelErrorBoundary`; modül kapalıysa 403 `MODULE_DISABLED`. |
+| 19 | Responsive | ÇALIŞIYOR | Tablo mobilde kart listesine döner. |
+| 20 | Azaltılmış hareket | ÇALIŞIYOR | Ops kaydı; animasyon yalnız durum geçişinde (opaklık), `motion-reduce` uyumlu. |
+| 21 | Buton geri bildirimi | KALDIRILDI | Buton yok. |
+| 22 | `/api/admin/insights` | ÇALIŞIYOR | Ölü kopya uç yeniden amaçlandı: `defineRoute` (ADMIN + `insights_global` modülü), sektör bölümüyle AYNI yükleyici ve sözleşme. |
+| 23 | Sidebar girişi | KALDIRILDI | Kayıtta `redirectFrom: ['/admin/insights']` var (navigasyon ajanı). `lib/navigation/legacy-nav.ts`'teki `global_benchmarks` satırı navigasyon ajanına ait. |
+| 24 | Modül anahtarı | ÇALIŞIYOR | `insights_global` kapalıysa sekme gizlenir, uç 403 döner. Katalog etiketi "Sektör Karşılaştırması", detay bağlantısı yeni sekme. |
+| 25 | Yıkıcı aksiyon onayı | KALDIRILDI | Yüzeyde yıkıcı aksiyon kalmadı. |
+| 26 | Denetim kaydı | KALDIRILDI | Aynı gerekçe; bootstrap ucunun denetimi o yüzeyin sahibinde. |
+| 27 | Zaman aralığı / karşılaştırma | ÇALIŞIYOR | Dönem sözleşmesi + değişim % ve puan farkı. |
+| 28 | Drill-down | ÇALIŞIYOR | Sektör satırı → o sektöre süzülmüş bayi kıyası (isimli, Bayes, sapma). |
+| 29 | CSV | ÇALIŞIYOR | Sektör tablosu CSV (k-anonimlik bayrağı sütunuyla). |
+| 30 | Taksonomi / atama | KISMİ | Kontrollü sözlük ve türetme (işletme kategorisi eşanlamlısı ya da ürün kategorisi adları) uygulanıyor; admin toplu atama ekranı yok. **ŞEMA İSTEĞİ:** `BusinessCategory` tablosu + `User.businessCategoryId` (bugün serbest metin). |
+| 31 | `<title>` | ÇALIŞIYOR | Hedef sayfada `metadata`. |
+
+### Kapanan bulgular
+B3 (türetme ile gerçek veri kaynağı + dürüst "belirsiz" sayacı), B4, B5, B6, B7 (k < 3 "örneklem küçük", soluk gösterim), B8, B9, B10. B1 ve B2 bu yüzeyden kaldırıldı (butonlar yok); uç tarafı `lib/data-safety/demo-guard.ts` ile başka ajanca kapatılmış durumda.
+
+### Kalanlar
+- Kategori atama ekranı ve kanonik tablo (yukarıdaki ŞEMA İSTEĞİ).
+- Bayilere açılacak "sektör içgörü paketi" ürünü bu dalganın kapsamı dışında. Dışa açılırken k-anonimlik bayrağı zorunlu kullanılmalı.

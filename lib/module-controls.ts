@@ -53,7 +53,7 @@ export const MODULE_CATALOG: ModuleControlItem[] = [
   { key: 'landing_pricing', label: 'Ana sayfa fiyatlandırma', description: 'Açık ana sayfadaki fiyatlandırma bölümü ve ilgili şema; kapalıyken landing pricing gizlenir', scope: 'platform', severity: 'optional', detailHref: '/' },
   { key: 'landing_marquee', label: 'Ana sayfa reklam şeridi', description: 'Ana sayfadaki kayan reklam/işletme şeridi; kapalıyken gizlenir', scope: 'platform', severity: 'optional', detailHref: '/' },
   { key: 'fraud_prevention', label: 'Fraud Prevention', description: 'Sahtekarlık tespiti ve güvenlik kayıtları', scope: 'admin', severity: 'critical', detailHref: '/admin/fraud-prevention' },
-  { key: 'insights_global', label: 'Global Insights', description: 'Sektörel benchmark ve global içgörü paneli', scope: 'admin', severity: 'important', detailHref: '/admin/insights' },
+  { key: 'insights_global', label: 'Sektör Karşılaştırması', description: 'Platform analitiğinde sektör kırılımı sekmesi ve /api/admin/insights', scope: 'admin', severity: 'important', detailHref: '/admin/analytics?tab=sectors' },
   { key: 'ab_testing', label: 'A/B Testing', description: 'Cohort atama ve performans karşılaştırma', scope: 'admin', severity: 'important', detailHref: '/admin/ab-testing' },
   { key: 'admin_bootstrap', label: 'Demo Bootstrap', description: 'Demo veri üretim/silme ve demo merkez', scope: 'admin', severity: 'optional' },
   { key: 'audit_logs', label: 'Audit Kayıtları', description: 'Yönetim denetim kayıtları ve geri alma', scope: 'platform', severity: 'critical', detailHref: '/admin/audit' },

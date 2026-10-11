@@ -246,3 +246,81 @@ Her iddia çürütülmeye çalışıldı. `app/api/admin/analytics/route.ts`, `a
 **4. UTC kovaları: Doğrulandı.** `vercel.json` içinde TZ tanımı yok, bölge `fra1`. Vercel Functions varsayılan olarak UTC çalışır. `route.ts:218-221` (`setHours`), `247-249` (`getDay`/`getHours`), `387-388` (Sabah/Öğlen/Akşam) ve `233` (`toLocaleDateString` `timeZone` olmadan) sunucu saat dilimine göre hesaplanıyor. Projede doğru yaklaşım zaten var (`lib/timezone.ts:44`, `app/api/cron/intern-deadline/route.ts:40` `Europe/Istanbul` kullanıyor) ama bu uçta kullanılmıyor. **Üretim:** TR saatiyle Salı 01:30'da bırakılan bir yorum UTC'de Pazartesi 22:30'dur; ısı haritasında Pazartesi 22 hücresine, günlük trendde Pazartesi'ye, kök nedende "Akşam" kovasına düşer.
 
 **5. Gate cookie API'de yok: Doğrulandı.** `proxy.ts:105-119` `/api/*` isteklerini `authMiddleware`'e hiç sokmadan yalnızca header ekleyip geçiriyor; gate kontrolü (`proxy.ts:79-88`) yalnızca `/admin` sayfa yollarında çalışıyor. `requireAuth` (`lib/api-auth.ts:52-80`) yalnızca session, rol ve token-replay kontrol ediyor. Kod tabanında `admin_gate` cookie'sini okuyan tek yer `proxy.ts:81` (grep: `gateCookieBelongsTo` başka hiçbir API'de çağrılmıyor). **Üretim:** rolü ADMIN yapılmış ama gate rakamını bilmeyen bir hesap giriş yapar; `/admin` sayfaları onu `/admin-gate`'e yönlendirir, ancak aynı oturumla tarayıcıdan `fetch('/api/admin/analytics?period=1y')` çağrısı 200 döner ve son kayıt olan kullanıcı adlarını, rollerini, müşteri ve bayi adlarını (`route.ts:289-305`) ve tüm platform metriklerini verir. Bu sistem geneli bir açık; tüm `/api/admin/*` uçlarını (yazma uçları dahil) etkiliyor. Öneri: `requireAuth`'a `ADMIN` istendiğinde tam HMAC doğrulamalı gate kontrolü (`lib/admin-gate.ts`) eklenmesi veya `proxy.ts`'te `/api/admin/*` için aynı cookie kontrolünün 403 dönecek şekilde yapılması. Not: gate'in tehdit modeli zaten "rolü ADMIN olan ama yetkisiz kişi" olduğundan, bu senaryo gate'in belgelenmiş amacının (`proxy.ts:76-77`) doğrudan atlatılması anlamına geliyor.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/analytics` (Platform analitiği). `/admin/insights` buraya "Sektörler" sekmesi olarak birleşti; eski URL sorguyu koruyarak `?tab=sectors`'a kalıcı yönlenir.
+
+**Yeni yapı:**
+- `app/admin/analytics/page.tsx`: sunucu bileşeni, `metadata`, yetki `requireAuth(['ADMIN'])` (DB + admin kapısı). Açık sekmenin verisi BFF ile aynı yükleyiciden SSR'da React Query önbelleğine gömülür; yumuşak gezinmede çift yükleme yok.
+- `lib/admin-analytics/{types,params,core,load,csv}.ts`: dönem sözleşmesi (`{range, compare}`, İstanbul günleri, en çok 366 gün), saf hesap çekirdeği (karşılaştırma, kıyas, sektör, kök neden), SQL yükleyicileri, CSV.
+- `app/api/admin/analytics/[section]/route.ts`: `overview | dealers | sectors | root-cause | cards` bölüm uçları (`defineRoute`, yalnız ADMIN, zod, `read` hız sınırı, `fresh=1` için ayrı sıkı limit, sektör bölümünde `insights_global` modül kapısı).
+- `components/admin/a-analitik/**`: QDL v2 ops kaydı istemci adası (PanelPage, yapışkan FilterBar, SectionTabs, MetricTile, ChartFrame + lazy recharts, DataTable, QueryState).
+- Testler: `__tests__/lib/admin-analytics-core.test.ts`, `__tests__/api/admin-analytics.test.ts` (31 test, geçti).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR | Sunucu sayfası ayrıca `requireAuth(['ADMIN'])` yapar. |
+| 2 | API yetkisi | ÇALIŞIYOR | `defineRoute` + `requireAuth`; admin kapısı artık merkezi olarak `requireAuth` içinde. |
+| 3 | Başlık + dönem açıklaması | ÇALIŞIYOR | `PageHeader`; araç çubuğu özeti seçili aralığı yazar; anlamsız `Shield` ikonu kalktı. |
+| 4 | Dönem seçici | ÇALIŞIYOR | Ön ayarlar + özel aralık + karşılaştırma (önceki dönem / geçen yıl / yok). Tüm-zaman kartları "Tüm zamanlar", platform geneli kartlar "sektör ve kaynak süzgecinden etkilenmez" etiketli. |
+| 5 | Yenile | ÇALIŞIYOR | `fresh=1` önbelleği gerçekten atlar (dakikada 6); dönen ikon, görünür metin, hata bandı. |
+| 6 | Yükleniyor | ÇALIŞIYOR | SSR ilk veri; sekme başına yerleşimi koruyan iskelet. |
+| 7 | Hata durumu | ÇALIŞIYOR | `QueryState` (tekrar dene, 403 / modül kapalı ayrımı); `res.ok` ve zarf denetimi; JSON olmayan yanıt da anlamlı hata verir. |
+| 8 | Dönem geçiş göstergesi | ÇALIŞIYOR | `keepPreviousData` + %60 opaklık + `aria-busy` + "Güncelleniyor…". |
+| 9 | Toplam kullanıcı | ÇALIŞIYOR | "Kullanıcı tabanı (tüm zamanlar)" kartı: rol kırılımı + toplam (toplam = rollerin toplamı). |
+| 10 | Kullanıcı büyüme rozeti | ÇALIŞIYOR | "Yeni kullanıcı" KPI'ı kendi deltasıyla; önceki dönem 0 ise yüzde gösterilmez (sabit %100 yok). |
+| 11 | Kullanıcı sparkline | ÇALIŞIYOR | Kendi günlük yeni kullanıcı serisi. |
+| 12 | Geri bildirim değeri | ÇALIŞIYOR | "Değerlendirme" = QR ∪ tüketim yorumu, silinenler hariç, dönemsel. |
+| 13 | Geri bildirim rozeti | ÇALIŞIYOR | Değerle aynı tanımdan (`Comparison`). |
+| 14 | Geri bildirim sparkline | ÇALIŞIYOR | İstanbul günü kovaları. |
+| 15 | QR tarama | ÇALIŞIYOR | Dönemsel `qr_scanned` olayı + kendi serisi; 90 günlük olay saklaması aşılırsa "kısmi" uyarısı. |
+| 16 | Ortalama puan + değişim | ÇALIŞIYOR | Simetrik iki dönem; değişim mutlak puan farkı; n ve düşük örneklem uyarısı. |
+| 17 | Sayaç | ÇALIŞIYOR | `MetricTile` → `useNumberTicker` (azaltılmış hareket politikasına uyar, eski değerden yeniye geçer). |
+| 18 | Bölüm bazlı yükleme | ÇALIŞIYOR | Her sekme ayrı uç + ayrı Redis anahtarı; üzerine gelince ya da odakta ön-yükleme. |
+| 19 | Mobil sekmeler | ÇALIŞIYOR | `SectionTabs` pill; her sekme etiketli, yatay kayar, ≥ 44 px. |
+| 20 | Duygu donut'u | KALDIRILDI | Yerine ham sayılı yığılmış çubuk + lejant. "Toplam" yüzde toplamı yanılgısı yok, "Analiz bekliyor" ayrı. |
+| 21 | Duygu yüzdeleri | ÇALIŞIYOR | En büyük kalan yöntemi (toplam 100); AI duygusu her iki kaynakta kullanılır; null nötre katılmaz. |
+| 22 | Puan dağılımı | ÇALIŞIYOR | Silinenler hariç; sayı + yüzde. |
+| 23 | Kullanıcı dağılımı | ÇALIŞIYOR | STAFF dahil (bkz. 9). |
+| 24 | Kıyas: geri bildirim | ÇALIŞIYOR | Ayrı kıyas kartları KPI deltalarına birleşti; tek `Comparison` nesnesi (B-2). |
+| 25 | Kıyas: ortalama puan | ÇALIŞIYOR | Mutlak puan farkı. |
+| 26 | Kıyas: yeni kullanıcı | ÇALIŞIYOR | |
+| 27 | Kıyas ikon renkleri | KALDIRILDI | Dinamik `bg-${color}` sınıfı yok; ton token'ları kullanılıyor. |
+| 28 | Günlük trend | ÇALIŞIYOR | recharts (lazy): Y eksenleri, ızgara, ortalama puan çizgisi, kesikli karşılaştırma serisi, animasyonsuz, erişilebilir tablo alternatifi. |
+| 29 | Isı haritası | ÇALIŞIYOR | SQL `AT TIME ZONE` + `ISODOW`; yalnız seçili dönem; CSS grid ile hizalı etiketler; stagger yok; dokunuşla değer (canlı bölge); "Tabloyu göster". |
+| 30 | Isı lejantı | ÇALIŞIYOR | |
+| 31 | En İyi Bayiler | ÇALIŞIYOR | Bayi kıyası tablosu: TÜM bayilerin dönem toplamı, Bayes düzeltmeli sıralama; aranabilir, sıralanabilir, sayfalı; satır → bayinin geri bildirimleri. |
+| 32 | Tenant benchmark | ÇALIŞIYOR | Aynı tabloda. n < 5 "yetersiz veri"; hiç değerlendirmesi olmayan bayi ayrı sayılır; sektör türetilir (demo etiketi yok sayılır). |
+| 33 | Anomali rozeti | ÇALIŞIYOR | Bayinin kendisi hariç grup; simetrik ±1,5 z, açıklamada yazılı; akran < 3 ise "akran yetersiz"; sektörde akran yoksa platform grubu. |
+| 34 | Kök neden | ÇALIŞIYOR | Zincir yerine döküm: konu × gün dilimi (Gece ayrı) × en çok geçtiği bayiler. Pay = konulu olumsuzların %'si; önceki döneme göre değişim; satır sınırı yok (GROUP BY). |
+| 35 | Kart KPI'ları | ÇALIŞIYOR | Dönem içi aktivasyon, blok, tüketim, yorum ve yorumlanma oranı; "tüm zamanlar" envanteri ayrı. |
+| 36 | Kart durum barları | ÇALIŞIYOR | |
+| 37 | Kart boş durumu | ÇALIŞIYOR | Yalnız gerçekten kart yoksa. |
+| 38 | Kart hata davranışı | ÇALIŞIYOR | Hata yutulmaz, önbelleğe yazılmaz. |
+| 39 | Son Aktiviteler | KALDIRILDI | Platform Nabzı'nın işi (çakışma bölümündeki öneri); sayfada bağlantı var. Ölü `feedback` dalı ve donmuş göreli zaman gitti. |
+| 40 | Bölüm boş metinleri | ÇALIŞIYOR | |
+| 41 | Redis önbelleği | ÇALIŞIYOR | Dönem zod ile doğrulanır; bölüm anahtarı sorguyu içerir; isabet yalnız sorgu eşleşirse; `generatedAt` döner. |
+| 42 | Dışa aktarma | ÇALIŞIYOR | Her sekmede CSV (BOM, `;`, formül enjeksiyonu korumalı) + yazdır/PDF. |
+| 43 | Drill-down | ÇALIŞIYOR | Bayi → `/admin/feedbacks?search=`; sektör → süzülmüş bayi sekmesi; dikkat paneli → ilgili sekme. Sahte `cursor-pointer` yok. |
+| 44 | Özel tarih aralığı | ÇALIŞIYOR | |
+| 45 | Segment / kaynak filtresi | ÇALIŞIYOR | Kaynak (QR / ziyaret yorumu), sektör, "temiz veri" (varsayılan açık: güven işaretli yorum, gölge yasaklı ve demo hesaplar hariç). |
+| 46 | URL durumu | ÇALIŞIYOR | Dönem, karşılaştırma, süzgeçler ve sekme URL'de. |
+| 47 | i18n | ÇALIŞIYOR | TR/EN metin sözlüğü (`copy.ts`, DS yerel kancası); karışık dilli başlıklar kalktı. |
+| 48 | `<title>` | ÇALIŞIYOR | "Platform analitiği". |
+| 49 | Ürün analitiği | KISMİ | Eklendi: aktif müşteri (dönemde değerlendirme bırakan tekil kişi) ve aktivasyon oranı (dönemde kaydolup ilk etkileşimini yapan müşteri %'si). Kalan: DAU/WAU/MAU ve kohort tutunma. `AnalyticsEvent` 90 günde siliniyor ve oturum olayı kalıcı tutulmuyor; gerçek veriyle yapılamadığı için eklenmedi. |
+| 50 | Veri tazeliği | ÇALIŞIYOR | Başlıkta "x önce güncellendi". |
+
+### Kapanan bulgular
+B-1, B-2, B-3, B-4, B-6 (SQL GROUP BY + bölüm uçları; özet tablo hariç), B-7, B-8, B-9, B-10, B-11, B-12, B-13, B-14 (MiniLineChart yok; DS `Sparkline`), B-15, B-16, B-17. B-5 merkezi olarak `requireAuth` içindeki admin kapısıyla kapanmış durumda; bu yüzeyin uçları onu kullanır.
+
+### Kalanlar
+- **Eski `GET /api/admin/analytics`** (`app/api/admin/analytics/route.ts`) dokunulmadı. Hâlâ `/admin` ana paneli (`app/admin/admin-dashboard-client.tsx`) tarafından çağrılıyor ve o yüzeyin sahibine ait. B-1…B-4 hataları O UÇTA sürüyor. Ana panelin `/api/admin/analytics/overview`'a geçirilmesi ve eski ucun kaldırılması Komuta Merkezi sahibine bırakıldı.
+- **B-6 uzun vade:** günlük özet tablosu (`PlatformDailyStat`) şema dalgası dışında; şimdilik 120 sn Redis + GROUP BY.
+- **Satır 49:** DAU/WAU/retention (gerekçe yukarıda).
+- `cleanup-events` ucunun arayüzü bu sayfada yok (gözlemlenebilirlik / ayarlar yüzeyi).
+- Geri bildirim listesi yalnız `?search=` derin bağlantısını destekliyor; konu ya da bayi kimliğiyle süzme o yüzeyin işi.
