@@ -200,7 +200,7 @@ export async function consumePasswordResetToken(
       },
     });
     return { ok: true as const, userId: row.userId };
-  });
+  }, { maxWait: 10_000, timeout: 15_000 }); // Neon pooler yükte 2 sn varsayılanı aşabiliyor (E2E: 500 'Unable to start a transaction')
 }
 
 // ───────────────────────────────────── E-posta doğrulama ─────────────────────────────────────

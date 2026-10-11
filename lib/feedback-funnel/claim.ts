@@ -62,7 +62,14 @@ export async function claimFeedback(userId: string, token: string, now: Date = n
         data: { userId },
       });
       if (linked.count !== 1) {
-        throw new ApiError('CONFLICT', 'Bu yorum başka bir hesaba bağlanmış.', { details: { reason: 'taken' } });
+        // Yarış: eşzamanlı ikinci istek aynı kullanıcıdan olabilir → doğru mesaj.
+        const owner = await tx.feedback.findUnique({ where: { id: feedbackId }, select: { userId: true } });
+        const mine = owner?.userId === userId;
+        throw new ApiError(
+          'CONFLICT',
+          mine ? 'Bu yorum zaten hesabına bağlı.' : 'Bu yorum başka bir hesaba bağlanmış.',
+          { details: { reason: mine ? 'already_yours' : 'taken' } }
+        );
       }
       const grant = await computeFeedbackGrant(tx, userId, detailed, matrix, now);
       const minted = await mintPoints(tx, {
