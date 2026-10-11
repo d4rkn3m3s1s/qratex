@@ -2,6 +2,8 @@ import OpenAI from 'openai';
 import { buildQraKnowledgeBlock } from '@/lib/qra-knowledge-base';
 import { guardAiCall, isAiGuardError, recordAiCostUsage } from '@/lib/ai-cost-guard';
 import { isDealerAiEnabled } from '@/lib/ai-policy';
+import { withAiRetry } from '@/lib/ai-provider-resilience';
+import { maskPii } from '@/lib/ai-quality/pii-mask';
 import {
   PROMPT_VERSIONS,
   UNTRUSTED_DATA_RULE,
@@ -56,35 +58,12 @@ export const MODELS = {
   instant: 'llama-3.1-8b-instant',
 } as const;
 
-// Retry yapılandırması
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const RETRY_CAP_MS = 8000;
-
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  retries: number = MAX_RETRIES
-): Promise<T> {
-  try {
-    return await fn();
-  } catch (error) {
-    if (retries > 0 && error instanceof Error) {
-      if (error.message.includes('rate_limit') || error.message.includes('429')) {
-        // FULL JITTER + üstel backoff: aynı anda 429 yiyen N istek senkron tekrar denemesin
-        // (thundering herd). delay = random(0, min(CAP, base·2^attempt)).
-        const attempt = MAX_RETRIES - retries; // 0,1,2...
-        const expBackoff = Math.min(RETRY_CAP_MS, RETRY_DELAY * Math.pow(2, attempt));
-        await sleep(Math.floor(Math.random() * expBackoff));
-        return withRetry(fn, retries - 1);
-      }
-    }
-    throw error;
-  }
+/**
+ * Tek yeniden deneme politikası + devre kesici (`lib/ai-provider-resilience`): yalnız 429,
+ * `Retry-After`'a uyar, toplam bekleme bütçeli; ai-engine ve ai-learning ile ORTAK devre.
+ */
+function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  return withAiRetry(fn, { provider: 'groq' });
 }
 
 /**
@@ -211,10 +190,10 @@ export async function chatWithQRA(
     ];
 
     for (const msg of sanitizeQraHistory(conversationHistory)) {
-      messages.push({ role: msg.role, content: msg.content });
+      messages.push({ role: msg.role, content: maskPii(msg.content) });
     }
 
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user', content: maskPii(message) });
 
     const response = await withRetry(() =>
       client.chat.completions.create({

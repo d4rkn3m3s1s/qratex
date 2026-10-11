@@ -41,14 +41,14 @@ export function basePrompts(): BasePromptView[] {
       title: 'Geri bildirim analizi',
       version: PROMPT_VERSIONS.analysis,
       text: buildAnalysisSystemPrompt(),
-      usedBy: ['Anlık analiz (/api/feedbacks)', 'Arka plan analiz hattı ve ai-retry cron', 'Toplu analiz'],
+      usedBy: ['Yeni geri bildirim (/api/feedbacks → ortak analiz hattı)', 'Arka plan analiz hattı ve ai-retry cron', 'Tüketim yorumu analizi'],
     },
     {
       key: 'chat',
-      title: 'AI sohbet (veriye sor)',
+      title: 'Yönetici AI asistanı',
       version: PROMPT_VERSIONS.chat,
       text: CHAT_SYSTEM_PROMPT_BASE,
-      usedBy: ['Bayi AI sohbeti', 'Müşteri AI sohbeti', 'Müşteri önerileri'],
+      usedBy: ['AI Operasyon Merkezi asistanı (askAI)'],
     },
     {
       key: 'autoReply',

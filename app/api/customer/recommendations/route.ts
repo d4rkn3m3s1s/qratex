@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   let headline: string | null = null;
   if (explain && recommendations.length > 0) {
     const aiBudget = await checkRateLimitDb(`reco-headline:${auth.session.user.id}`, 10, 60 * 60_000).catch(() => null);
-    if (aiBudget?.ok) headline = await buildRecommendationHeadline(recommendations);
+    if (aiBudget?.ok) headline = await buildRecommendationHeadline(recommendations, auth.session.user.id);
   }
 
   return NextResponse.json(

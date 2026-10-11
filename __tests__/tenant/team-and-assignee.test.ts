@@ -18,7 +18,6 @@ jest.mock('@/lib/rate-limit', () => ({
   checkRateLimitDb: (...a: unknown[]) => (mockRate as (...x: unknown[]) => unknown)(...a),
   getClientIdentifier: () => '203.0.113.7',
 }));
-jest.mock('@/lib/action-items-ai', () => ({ runActionItemsAutoTrigger: jest.fn(async () => undefined) }));
 jest.mock('@/lib/incident-detection', () => ({
   runIncidentDetection: jest.fn(async () => undefined),
   ensureDemoIncidentIfEmpty: jest.fn(async () => undefined),

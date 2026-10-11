@@ -192,6 +192,11 @@ export interface AIAnalysisResult {
   // Meta
   modelUsed?: string;
   version?: string;
+  /**
+   * Metinde prompt-enjeksiyonu kalıbı görüldü (analiz yine yapıldı; denetim O1). Bu kayıtlar
+   * için müşteriye giden AI metni (otomatik yanıt) üretilmez, bayi şablonuna düşülür.
+   */
+  injectionSuspect?: boolean;
 }
 
 export interface AIEntity {

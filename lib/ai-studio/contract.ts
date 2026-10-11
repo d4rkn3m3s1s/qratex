@@ -59,13 +59,13 @@ export const NOTE_LIMITS: Record<NoteKey, number> = { system: 600, chat: 1_200 }
 export const NOTE_META: Record<NoteKey, { title: string; usedBy: string[]; description: string }> = {
   system: {
     title: 'Analiz ve rapor notu',
-    description: 'İçgörü raporu ve AI sohbetinde, onaylı öğrenilmiş kurallarla birlikte sınırlı ek bağlam olarak eklenir.',
-    usedBy: ['Bayi içgörü raporu (generateInsightReport)', 'AI sohbet / veriye sor (askAI)'],
+    description: 'Yönetici AI asistanında (AI Operasyon Merkezi), onaylı öğrenilmiş kurallarla birlikte sınırlı ek bağlam olarak eklenir. Bayi yüzeyleri (içgörü anlatısı, AI Asistan) yalnız kendi verisinden beslenir; platform notu oraya taşınmaz.',
+    usedBy: ['Yönetici AI asistanı (askAI)'],
   },
   chat: {
     title: 'Sohbet notu',
     description: 'Yalnız AI sohbet çağrılarına "yönetici sohbet notları" bloğu olarak eklenir; temel sohbet promptunun yerine geçmez.',
-    usedBy: ['Bayi AI sohbeti', 'Müşteri AI sohbeti ve öneriler (askAI)'],
+    usedBy: ['Yönetici AI asistanı (askAI)'],
   },
 };
 
@@ -421,7 +421,7 @@ export type ModelSlot = (typeof MODEL_SLOTS)[number];
 export const MODEL_SLOT_META: Record<ModelSlot, { title: string; description: string }> = {
   volume: {
     title: 'Hacim modeli',
-    description: 'Her geri bildirim analizi, AI sohbeti, içgörü raporu, tema kümeleme ve otomatik yanıt bu modelle çalışır.',
+    description: 'Geri bildirim analizi, içgörü ve haftalık özet anlatıları, otomatik yanıt, yönetici asistanı, konsey ve ekip AI bu modelle çalışır.',
   },
   dealerLearning: {
     title: 'Bayi öğrenme modeli',

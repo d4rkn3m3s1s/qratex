@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { parseNonNegativeIntEnv } from '@/lib/safe-env-number';
 import { guardAiCall, recordAiCostUsage } from '@/lib/ai-cost-guard';
+import { withAiRetry } from '@/lib/ai-provider-resilience';
 import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
 import { getRoutedModel, refreshAiModelRouting } from '@/lib/ai-studio/model-routing';
 import {
@@ -57,14 +58,12 @@ function getLearningClient(): OpenAI | null {
   return null;
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (retries <= 0) throw err;
-    await new Promise(resolve => setTimeout(resolve, 400));
-    return withRetry(fn, retries - 1);
-  }
+/**
+ * Ortak politika (`lib/ai-provider-resilience`): eskiden HER hatayı (400/401 dahil) 400 ms sonra
+ * körlemesine tekrar ediyordu; artık yalnız 429, bütçeli ve paylaşılan devre kesiciyle.
+ */
+function withRetry<T>(fn: () => Promise<T>, provider: string = process.env.GROQ_API_KEY ? 'groq' : 'openai'): Promise<T> {
+  return withAiRetry(fn, { provider });
 }
 
 /**
@@ -134,7 +133,7 @@ async function generateEmbedding(text: string, dealerId?: string): Promise<{ vec
         return client.embeddings
           .create({ model: EMBEDDING_MODEL, input: safeText }, { signal: ac.signal })
           .finally(() => clearTimeout(t));
-      });
+      }, 'openai');
       const vector = response.data?.[0]?.embedding;
       await recordAiCostUsage(dealerId ?? null, response.usage?.prompt_tokens ?? 0, 0, 'embedding', EMBEDDING_MODEL);
       if (vector) return { vector, model: EMBEDDING_MODEL };
@@ -205,25 +204,41 @@ export async function findSimilarFeedback(params: {
   const limit = params.limit ?? 5;
   const minScore = params.minScore ?? 0.4;
 
-  // Aynı model ailesiyle üretilmiş vektörler kıyaslanabilir (boyut + uzay aynı).
-  const rows = await prisma.aIEmbedding.findMany({
-    where: { dealerId: params.dealerId, model: query.model, dimension: query.vector.length },
-    select: { feedbackId: true, vector: true },
-    orderBy: { createdAt: 'desc' },
-    take: 1000, // bellek koruması: en güncel 1000 vektör
-  });
+  // Aynı model ailesiyle üretilmiş vektörler kıyaslanabilir (boyut + uzay aynı). Silinmiş
+  // (moderasyonla kaldırılmış) yorumun vektörü aday olmaz (denetim O4: silinmiş metin AI
+  // bağlamına giriyordu).
+  const buckets: Array<{ model: string; vector: number[] }> = [query];
+  // Denetim O4: sağlayıcı o an düştüğünde kayıt YEREL vektörle saklanır; sorgu sağlayıcı
+  // modeliyle üretilince bu kayıtlar `model` süzgeci yüzünden HİÇ bulunamıyordu. Yerel kova
+  // da aynı metnin yerel vektörüyle taranır (yerel kova = anahtar kelime benzerliği).
+  if (query.model !== LOCAL_EMBEDDING_MODEL) {
+    buckets.push({ model: LOCAL_EMBEDDING_MODEL, vector: localEmbed(params.text.trim().slice(0, 4000)) });
+  }
 
-  const scored = rows
-    .map((r) => {
+  const best = new Map<string, number>();
+  for (const b of buckets) {
+    const rows = await prisma.aIEmbedding.findMany({
+      where: {
+        dealerId: params.dealerId,
+        model: b.model,
+        dimension: b.vector.length,
+        feedback: { deletedAt: null },
+      },
+      select: { feedbackId: true, vector: true },
+      orderBy: { createdAt: 'desc' },
+      take: 1000, // bellek koruması: kova başına en güncel 1000 vektör (pgvector isteği: SCHEMA-REQUESTS)
+    });
+    for (const r of rows) {
       const vec = r.vector as unknown;
-      if (!Array.isArray(vec)) return null;
-      return { feedbackId: r.feedbackId, score: cosineSimilarity(query.vector, vec as number[]) };
-    })
-    .filter((x): x is { feedbackId: string; score: number } => x !== null && x.score >= minScore)
+      if (!Array.isArray(vec)) continue;
+      const score = cosineSimilarity(b.vector, vec as number[]);
+      if (score >= minScore && score > (best.get(r.feedbackId) ?? -1)) best.set(r.feedbackId, score);
+    }
+  }
+
+  return Array.from(best, ([feedbackId, score]) => ({ feedbackId, score }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
-
-  return scored;
 }
 
 export async function recordFeedbackCorrection(params: {

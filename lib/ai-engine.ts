@@ -13,6 +13,14 @@
 
 import OpenAI from 'openai';
 import { checkAiCostGuard, guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
+import { normalizeAnalysisPayload } from '@/lib/ai-analysis-normalize';
+import {
+  isAiCircuitOpen,
+  isProviderFailure,
+  recordAiProviderFailure,
+  recordAiProviderSuccess,
+  withAiRetry,
+} from '@/lib/ai-provider-resilience';
 import { getApprovedLearnedPayload, getSystemLearningProfile } from '@/lib/ai-learning';
 import { canUseAi, getDealerAiPolicy } from '@/lib/ai-policy';
 import { getRoutedModel, refreshAiModelRouting } from '@/lib/ai-studio/model-routing';
@@ -26,15 +34,7 @@ import {
   sanitizeContextText,
   wrapUntrusted,
 } from '@/lib/ai-prompt-safety';
-import type {
-  AIAnalysisResult,
-  AIEntity,
-  AITheme,
-  AIStatementSentiment,
-  AIActionSuggestion,
-  AIInsightReportData,
-  AIThemeClusterData,
-} from '@/types';
+import type { AIAnalysisResult, AIThemeClusterData } from '@/types';
 
 export interface AnalyzeOptions {
   customPrompt?: string;
@@ -189,7 +189,6 @@ export async function runChatCompletion(params: {
     if (!content) return null;
     const latencyMs = Date.now() - start;
     const modelUsed = `${getModelProvider()}/${getModel()}`;
-    logAIUsage(task, modelUsed, latencyMs, true);
     await recordAiCostUsage(
       params.dealerId ?? null,
       response.usage?.prompt_tokens ?? 0,
@@ -200,37 +199,18 @@ export async function runChatCompletion(params: {
     );
     return { content, modelUsed };
   } catch (error) {
-    logAIUsage(task, getModel(), Date.now() - start, false, error instanceof Error ? error.message : 'unknown');
     await recordFailure(params.dealerId, task, start, error);
     console.error('[AI] runChatCompletion failed:', error);
     return null;
   }
 }
 
-// Retry logic
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 3000;
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
-  try {
-    return await fn();
-  } catch (error: any) {
-    const msg = error?.message || '';
-    const status = error?.status || error?.statusCode || 0;
-    const isRateLimit = msg.includes('rate_limit') || msg.includes('429') || msg.includes('Rate limit') || status === 429;
-    if (retries > 0 && isRateLimit) {
-      const delay = RETRY_DELAY * (MAX_RETRIES - retries + 1);
-      console.log(`[AI] Rate limited, retrying in ${delay}ms (${retries} left)`);
-      await sleep(delay);
-      return withRetry(fn, retries - 1);
-    }
-    console.error(`[AI] withRetry failed:`, msg || error);
-    throw error;
-  }
+/**
+ * Tek yeniden deneme politikası + devre kesici (`lib/ai-provider-resilience`). Eski sabit
+ * 3+6+9 sn bekleme SDK yeniden denemesinin üstüne biniyor, tek çağrıyı ~2 dk'ya uzatıyordu.
+ */
+function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  return withAiRetry(fn, { provider: getModelProvider() });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -370,10 +350,12 @@ export async function analyzeComprehensive(
   if (!text || text.trim().length < 5) {
     return null;
   }
-  if (detectPromptInjection(text)) {
-    console.warn('[AI] Prompt injection attempt detected, rejecting input');
-    return null;
-  }
+  // Denetim O1: enjeksiyon kalıbı içeren yorum REDDEDİLMEZ (eskiden analiz tamamen düşüyor,
+  // kayıt yerel tahmine ve deneme kuyruğuna kalıyordu; "act as", "system:" gibi masum ifadeler
+  // de yakalanıyordu). Metin zaten <musteri_yorumu> sınırlayıcısında VERİ olarak gider ve çıktı
+  // dar bir JSON şemasıyla sınırlıdır; şüphe yalnız ETİKETLENİR (`injectionSuspect`) ve
+  // müşteriye giden AI metni (otomatik yanıt) bu kayıtlarda üretilmez.
+  const injectionSuspect = detectPromptInjection(text);
 
   // P0-32: bayi AI'ı kapalıysa müşteri metni LLM'e gitmez (çağıran yerel analize düşer).
   if (!(await dealerAllowsAi(options.dealerId))) return null;
@@ -400,79 +382,15 @@ export async function analyzeComprehensive(
     const content = response.choices[0]?.message?.content;
     if (!content) return null;
 
-    const a = JSON.parse(content);
     const latencyMs = Date.now() - startTime;
     const modelUsed = `${getModelProvider()}/${getModel()}`;
-
-    const result: AIAnalysisResult = {
-      // Core
-      sentiment: {
-        label: a.sentiment?.label || 'neutral',
-        score: a.sentiment?.score || 0.5,
-      },
-      // NORMALİZASYON (kök neden fix): LLM emotions'ı string veya {label,score} olarak
-      // dönebilir; topics'i string veya {topic/label} obj olarak. DB'ye HER ZAMAN tutarlı
-      // şekil yazılsın (aksi halde okuma tarafında .forEach/.map non-array/obj'de patlıyordu).
-      emotions: (Array.isArray(a.emotions) ? a.emotions : [])
-        .map((e: unknown) => {
-          if (typeof e === 'string') return { label: e, score: 0.5 };
-          const o = e as { label?: string; score?: number };
-          return { label: String(o?.label ?? ''), score: typeof o?.score === 'number' ? o.score : 0.5 };
-        })
-        .filter((e: { label: string }) => e.label.length > 0),
-      topics: (Array.isArray(a.topics) ? a.topics : [])
-        .map((t: unknown) => {
-          if (typeof t === 'string') return t;
-          const o = t as { topic?: string; label?: string; name?: string };
-          return String(o?.topic ?? o?.label ?? o?.name ?? '');
-        })
-        .filter((t: string) => t.length > 0),
-      toxicity: {
-        isToxic: a.toxicity?.isToxic || false,
-        score: a.toxicity?.score || 0,
-        categories: a.toxicity?.categories || [],
-      },
-      summary: a.summary,
-
-      // Experience Signals
-      intent: a.intent ? {
-        label: a.intent.label || 'general',
-        score: a.intent.score || 0.5,
-      } : undefined,
-      urgency: typeof a.urgency === 'number' ? a.urgency : undefined,
-      effortScore: typeof a.effortScore === 'number' ? a.effortScore : undefined,
-      churnRisk: typeof a.churnRisk === 'number' ? a.churnRisk : undefined,
-
-      // Advanced NLP
-      entities: (a.entities || []).map((e: AIEntity) => ({
-        type: e.type || 'other',
-        name: e.name,
-        sentiment: e.sentiment,
-      })),
-      themes: (a.themes || []).map((t: AITheme) => ({
-        theme: t.theme,
-        subTheme: t.subTheme,
-        sentiment: t.sentiment || 'neutral',
-        score: t.score || 0.5,
-      })),
-      statementSentiments: (a.statementSentiments || []).map((s: AIStatementSentiment) => ({
-        statement: s.statement,
-        sentiment: s.sentiment || 'neutral',
-        score: s.score || 0.5,
-      })),
-      actionSuggestions: (a.actionSuggestions || []).map((s: AIActionSuggestion) => ({
-        action: s.action,
-        priority: s.priority || 'medium',
-        impact: s.impact,
-        category: s.category,
-      })),
-
-      // Meta
+    // Şema doğrulama + [0,1] sıkıştırma + sözlük zorlaması (denetim Y6; saf ve testli).
+    const result = normalizeAnalysisPayload(JSON.parse(content), {
       modelUsed,
       version: `${AI_VERSION}/${PROMPT_VERSIONS.analysis}`,
-    };
+    });
+    if (injectionSuspect) result.injectionSuspect = true;
 
-    logAIUsage('analyze', modelUsed, latencyMs, true);
     {
       const { in_, out } = usageOf(response);
       await recordAiCostUsage(options.dealerId ?? null, in_, out, 'analyze', modelUsed, latencyMs);
@@ -481,431 +399,7 @@ export async function analyzeComprehensive(
     return result;
   } catch (error) {
     console.error('Error in comprehensive analysis:', error);
-    logAIUsage('analyze', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
     await recordFailure(options.dealerId, 'analyze', startTime, error);
-    return null;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// BULK ANALYSIS
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Birden fazla feedback'i toplu analiz et
- */
-export async function analyzeBulk(
-  feedbacks: { id: string; text: string }[],
-  options: AnalyzeOptions = {}
-): Promise<Map<string, AIAnalysisResult>> {
-  const results = new Map<string, AIAnalysisResult>();
-
-  // 2'li batch'ler halinde işle (rate limit koruması - Groq free tier için)
-  const batchSize = 2;
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[AI] analyzeBulk: ${feedbacks.length} feedbacks, batchSize=${batchSize}`);
-  }
-  for (let i = 0; i < feedbacks.length; i += batchSize) {
-    const batch = feedbacks.slice(i, i + batchSize);
-    const promises = batch.map(async (fb) => {
-      try {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[AI] Analyzing fb ${fb.id}: "${fb.text?.slice(0, 50) ?? ''}..."`);
-        }
-        const result = await analyzeComprehensive(fb.text, options);
-        if (result) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[AI] ✓ fb ${fb.id} analyzed: intent=${result.intent?.label}, urgency=${result.urgency}`);
-          }
-          results.set(fb.id, result);
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[AI] ✗ fb ${fb.id} returned null`);
-          }
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`[AI] ✗ fb ${fb.id} error:`, err);
-        } else {
-          console.error('[AI] analyzeBulk item error:', err);
-        }
-      }
-    });
-    await Promise.allSettled(promises);
-
-    // Rate limit arasında daha uzun bekleme (Groq free tier)
-    if (i + batchSize < feedbacks.length) {
-      await sleep(2000);
-    }
-  }
-
-  return results;
-}
-
-// ─────────────────────────────────────────────────────────────
-// THEME CLUSTERING
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Feedback'lerden tema kümeleri oluştur
- */
-export async function clusterThemes(
-  feedbacks: { text: string; sentiment?: string; rating?: number; themes?: AITheme[] }[],
-  period: string,
-  opts: { dealerId?: string } = {}
-): Promise<AIThemeClusterData[]> {
-  const client = getAIClient();
-  if (feedbacks.length === 0) return [];
-
-  // Eğer zaten tema çıkarılmışsa, lokal kümeleme yap (LLM çağrısı yok)
-  const existingThemes = feedbacks.filter(f => f.themes && f.themes.length > 0);
-  if (existingThemes.length > feedbacks.length * 0.5) {
-    return clusterFromExistingThemes(existingThemes.map(f => f.themes!).flat());
-  }
-  if (!client) return [];
-
-  // P0-32: bayi AI'ı kapalıysa yalnız yerel kümeleme.
-  if (!(await dealerAllowsAi(opts.dealerId))) {
-    return clusterFromExistingThemes(existingThemes.map(f => f.themes!).flat());
-  }
-  await guardAiCall({ task: 'theme_cluster', dealerId: opts.dealerId });
-
-  // AI ile kümeleme
-  const startTime = Date.now();
-  try {
-    const feedbackTexts = feedbacks
-      .slice(0, 50) // Max 50 feedback
-      .map((f, i) => `${i + 1}. ${wrapUntrusted('musteri_yorumu', f.text, 600)} (Puan: ${f.rating || '?'}, Duygu: ${f.sentiment || '?'})`)
-      .join('\n');
-
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: getModel(),
-        messages: [
-          {
-            role: 'system',
-            content: `Sen bir tema analisti asistanısın. Verilen geri bildirimleri analiz edip ana temaları ve alt temaları keşfet. SADECE JSON formatında yanıt ver.
-
-JSON formatı:
-{
-  "clusters": [
-    {
-      "theme": "Ana Tema Adı",
-      "subTheme": "Alt Tema (opsiyonel)",
-      "sentiment": "positive|negative|neutral|mixed",
-      "count": 5,
-      "avgScore": 0.8,
-      "keywords": ["anahtar", "kelimeler"],
-      "sampleTexts": ["Örnek metin 1", "Örnek metin 2"]
-    }
-  ]
-}
-
-Kurallar:
-- En fazla 10 tema kümesi oluştur
-- Her küme en az 2 feedback içermeli
-- Benzer temaları birleştir
-- Türkçe tema adları kullan
-- sampleTexts max 3 adet ve kısa olsun
-
-${UNTRUSTED_DATA_RULE}`,
-          },
-          {
-            role: 'user',
-            content: `${period} dönemine ait ${feedbacks.length} geri bildirimi analiz et:\n\n${feedbackTexts}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 1500,
-        response_format: { type: 'json_object' },
-      })
-    );
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) return [];
-
-    const parsed = JSON.parse(content);
-    const clusters: AIThemeClusterData[] = (parsed.clusters || []).map(
-      (c: AIThemeClusterData) => ({
-        theme: c.theme,
-        subTheme: c.subTheme,
-        sentiment: c.sentiment || 'neutral',
-        count: c.count || 1,
-        avgScore: c.avgScore || 0.5,
-        keywords: c.keywords || [],
-        sampleTexts: c.sampleTexts || [],
-      })
-    );
-
-    logAIUsage('theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, true);
-    {
-      const { in_, out } = usageOf(response);
-      await recordAiCostUsage(opts.dealerId ?? null, in_, out, 'theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime);
-    }
-    return clusters;
-  } catch (error) {
-    console.error('Error clustering themes:', error);
-    logAIUsage('theme_cluster', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
-    await recordFailure(opts.dealerId, 'theme_cluster', startTime, error);
-    return [];
-  }
-}
-
-/**
- * Mevcut temalardan lokal kümeleme
- */
-function clusterFromExistingThemes(themes: AITheme[]): AIThemeClusterData[] {
-  const clusterMap = new Map<string, {
-    theme: string;
-    subTheme?: string;
-    sentiments: string[];
-    scores: number[];
-    count: number;
-  }>();
-
-  for (const t of themes) {
-    const key = `${t.theme}|${t.subTheme || ''}`;
-    const existing = clusterMap.get(key);
-    if (existing) {
-      existing.count++;
-      existing.sentiments.push(t.sentiment);
-      existing.scores.push(t.score);
-    } else {
-      clusterMap.set(key, {
-        theme: t.theme,
-        subTheme: t.subTheme,
-        sentiments: [t.sentiment],
-        scores: [t.score],
-        count: 1,
-      });
-    }
-  }
-
-  return Array.from(clusterMap.values())
-    .filter(c => c.count >= 2)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
-    .map(c => {
-      const avgScore = c.scores.reduce((a, b) => a + b, 0) / c.scores.length;
-      const posCount = c.sentiments.filter(s => s === 'positive').length;
-      const negCount = c.sentiments.filter(s => s === 'negative').length;
-      let sentiment = 'neutral';
-      if (posCount > negCount * 2) sentiment = 'positive';
-      else if (negCount > posCount * 2) sentiment = 'negative';
-      else if (posCount > 0 && negCount > 0) sentiment = 'mixed';
-
-      return {
-        theme: c.theme,
-        subTheme: c.subTheme,
-        sentiment,
-        count: c.count,
-        avgScore,
-      };
-    });
-}
-
-// ─────────────────────────────────────────────────────────────
-// AI INSIGHT REPORT GENERATION
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Dealer için AI içgörü raporu oluştur
- */
-export async function generateInsightReport(data: {
-  dealerId: string;
-  period: string;
-  totalFeedbacks: number;
-  avgRating: number;
-  sentimentDist: { positive: number; negative: number; neutral: number };
-  topTopics: { topic: string; count: number }[];
-  themeClusters: AIThemeClusterData[];
-  recentFeedbacks: { text: string; rating: number; sentiment: string; intent?: string; urgency?: number; churnRisk?: number }[];
-  previousPeriodScore?: number;
-  /** Niyet dağılımı (şikayet, övgü, öneri, soru, genel) - AI için ek bağlam */
-  intentSummary?: Record<string, number>;
-  /** Yüksek aciliyet (>=0.7) ve yüksek churn (>=0.5) sayıları - AI için ek bağlam */
-  signalsSummary?: { highUrgencyCount: number; highChurnCount: number };
-}): Promise<AIInsightReportData | null> {
-  const client = getAIClient();
-  if (!client) return null;
-
-  // P0-32: bayi AI'ı kapalıysa rapor üretilmez (müşteri metinleri LLM'e gitmez).
-  if (!(await dealerAllowsAi(data.dealerId))) return null;
-  await guardAiCall({ task: 'insights', dealerId: data.dealerId });
-
-  const startTime = Date.now();
-
-  try {
-    const feedbackSummary = data.recentFeedbacks
-      .slice(0, 20)
-      .map((f, i) => `${i + 1}. ${wrapUntrusted('musteri_yorumu', f.text, 600)} (⭐${f.rating}, ${f.sentiment}${f.intent ? `, Amaç: ${f.intent}` : ''}${f.urgency && f.urgency > 0.5 ? ', ⚠️ ACİL' : ''}${f.churnRisk && f.churnRisk > 0.5 ? ', 🔴 Churn Riski' : ''})`)
-      .join('\n');
-
-    const themesSummary = data.themeClusters
-      .map(t => `- ${sanitizeContextLine(t.theme, 80) ?? '-'}${t.subTheme ? ` > ${sanitizeContextLine(t.subTheme, 80) ?? ''}` : ''}: ${t.sentiment} (${t.count} adet, skor: ${Number(t.avgScore ?? 0).toFixed(2)})`)
-      .join('\n');
-
-    // P0-33: sistem öğrenmesi temel promptun ÖNÜNE değil, sonuna SINIRLI ek bağlam olarak.
-    let learnedBlock = '';
-    try {
-      learnedBlock = buildLearnedSystemContext(await getSystemLearningProfile());
-    } catch {
-      // ignore
-    }
-
-    const response = await withRetry(() =>
-      client.chat.completions.create({
-        model: getModel(),
-        messages: [
-          {
-            role: 'system',
-            content: `Sen QRATEX'in derin öğrenme tabanlı iş zekası motorusun. Müşteri geri bildirim verilerini makine öğrenmesi ve nedensel analiz perspektifiyle değerlendiriyorsun.
-
-Görevin:
-1. Verilerdeki kalıpları (pattern) ve korelasyonları tespit et.
-2. Memnuniyeti tahmin eden anahtar faktörleri (key drivers) nedensel mantıkla çıkar.
-3. Güçlü/zayıf yönleri kanıta dayalı skorla raporla.
-4. Aksiyon önerilerini öncelik ve beklenen etki (ROI) ile sırala.
-5. Acil, toksik veya churn riski taşıyan sinyalleri uyarı olarak işaretle.
-6. Önceki dönemle karşılaştırarak trend ve tahmini bir sonraki dönem puanı ver.
-
-Çıktı formatı: SADECE aşağıdaki JSON. Başka metin yazma.
-
-{
-  "overallScore": 82,
-  "trend": "up|down|stable",
-  "trendValue": 5.2,
-  "summary": "2-4 cümle Türkçe özet. Veriye dayalı, somut. Kalıpları ve ana mesajı vurgula.",
-  "strengths": [
-    { "title": "Kısa başlık", "score": 92, "description": "Veriden nasıl çıkarıldığını kısaca açıkla" }
-  ],
-  "weaknesses": [
-    { "title": "Kısa başlık", "score": 45, "description": "Veriden nasıl çıkarıldığını kısaca açıkla" }
-  ],
-  "recommendations": [
-    { "text": "Somut, uygulanabilir öneri", "priority": "high|medium|low", "impact": "Beklenen etki (müşteri memnuniyeti / puan artışı vb.)", "category": "staff|process|product|facility|marketing" }
-  ],
-  "alerts": [
-    { "type": "toxic|urgent|churn|trend|anomaly", "message": "Kısa uyarı mesajı", "severity": "info|warning|error|critical" }
-  ],
-  "keyDrivers": [
-    { "factor": "Faktör adı", "impact": 0.0-1.0, "correlation": 0.0-1.0, "direction": "positive|negative" }
-  ],
-  "predictedRating": 4.2,
-  "keyMetrics": {
-    "responseRate": 0-100,
-    "avgRating": 1-5,
-    "nps": -100 ile 100,
-    "csat": 0-100,
-    "ces": 1-7
-  }
-}
-
-Kurallar:
-- overallScore: 0-100. Duygu dağılımı, puan, tema tonu ve aciliyet/churn sinyallerini birleştir.
-- strengths/weaknesses: En fazla 4'er. Her biri tema veya konu verisine dayalı olsun.
-- recommendations: En fazla 5. Öncelik yüksek aciliyet/churn/olumsuz temalara göre ver.
-- alerts: Sadece gerçek risk veya fırsat varsa ekle (toksik, yüksek aciliyet, yüksek churn, belirgin düşüş).
-- keyDrivers: Memnuniyet/puan ile en güçlü ilişkili 3-5 faktör. impact: etki büyüklüğü, correlation: verideki korelasyon.
-- predictedRating: Bir sonraki dönem için makul tahmin (mevcut trend ve önerilere göre).
-- Tüm metinler Türkçe. Sayılar gerçek veriyle tutarlı olsun.
-
-${UNTRUSTED_DATA_RULE}${learnedBlock}`,
-          },
-          {
-            role: 'user',
-            content: `${data.period} dönemi için derin analiz raporu oluştur:
-
-📊 Toplam Geri Bildirim: ${data.totalFeedbacks}
-⭐ Ortalama Puan: ${data.avgRating.toFixed(1)}/5
-${data.previousPeriodScore != null ? `📈 Önceki Dönem Genel Skor: ${data.previousPeriodScore} (trend karşılaştırması yap)` : ''}
-
-Duygu Dağılımı (veri):
-- Olumlu: %${data.sentimentDist.positive}
-- Nötr: %${data.sentimentDist.neutral}
-- Olumsuz: %${data.sentimentDist.negative}
-
-En Çok Bahsedilen Konular:
-${data.topTopics.map(t => `- ${t.topic}: ${t.count} kez`).join('\n')}
-
-Tema Kümeleri (duygu + skor):
-${themesSummary || 'Henüz kümeleme yok'}
-
-Son Geri Bildirim Örnekleri (niyet, aciliyet, churn sinyalleri dahil):
-${feedbackSummary}
-${data.intentSummary ? `\nNiyet dağılımı (toplam): ${Object.entries(data.intentSummary).map(([k, v]) => `${k}=${v}`).join(', ')}` : ''}
-${data.signalsSummary ? `\nSinyal özeti: Yüksek aciliyet ${data.signalsSummary.highUrgencyCount} adet, Yüksek churn riski ${data.signalsSummary.highChurnCount} adet.` : ''}
-
-Bu verilere dayanarak: (1) genel skor ve trend, (2) güçlü/zayıf yönler, (3) öncelikli öneriler, (4) uyarılar, (5) memnuniyeti en çok etkileyen faktörler ve (6) tahmini bir sonraki dönem puanı üret. Sadece JSON döndür.`,
-          },
-        ],
-        temperature: 0.35,
-        max_tokens: 2400,
-        response_format: { type: 'json_object' },
-      })
-    );
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) return null;
-
-    const report = JSON.parse(content);
-
-    const result: AIInsightReportData = {
-      overallScore: report.overallScore || 50,
-      trend: report.trend || 'stable',
-      trendValue: report.trendValue || 0,
-      totalFeedbacks: data.totalFeedbacks,
-      summary: report.summary || 'Rapor oluşturulamadı.',
-      strengths: (report.strengths || []).map((s: { title: string; score: number; description: string; icon?: string }) => ({
-        title: s.title,
-        score: s.score,
-        description: s.description,
-        icon: s.icon,
-      })),
-      weaknesses: (report.weaknesses || []).map((w: { title: string; score: number; description: string; icon?: string }) => ({
-        title: w.title,
-        score: w.score,
-        description: w.description,
-        icon: w.icon,
-      })),
-      recommendations: (report.recommendations || []).map((r: { text: string; priority: string; impact: string; category: string }) => ({
-        text: r.text,
-        priority: r.priority || 'medium',
-        impact: r.impact || '',
-        category: r.category || 'other',
-      })),
-      alerts: (report.alerts || []).map((a: { type: string; message: string; severity: string; feedbackId?: string }) => ({
-        type: a.type || 'info',
-        message: a.message,
-        severity: a.severity || 'info',
-        feedbackId: a.feedbackId,
-      })),
-      keyDrivers: (report.keyDrivers || []).map((k: { factor: string; impact: number; correlation: number; direction: string }) => ({
-        factor: k.factor,
-        impact: k.impact || 0,
-        correlation: k.correlation || 0,
-        direction: k.direction || 'positive',
-      })),
-      predictedRating: report.predictedRating,
-      keyMetrics: {
-        responseRate: report.keyMetrics?.responseRate || 0,
-        avgRating: report.keyMetrics?.avgRating || data.avgRating,
-        nps: report.keyMetrics?.nps || 0,
-        csat: report.keyMetrics?.csat || 0,
-        ces: report.keyMetrics?.ces || 0,
-      },
-    };
-
-    logAIUsage('insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, true);
-    {
-      const { in_, out } = usageOf(response);
-      await recordAiCostUsage(data.dealerId, in_, out, 'insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime);
-    }
-    return result;
-  } catch (error) {
-    console.error('Error generating insight report:', error);
-    logAIUsage('insights', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
-    await recordFailure(data.dealerId, 'insights', startTime, error);
     return null;
   }
 }
@@ -1162,7 +656,6 @@ export async function askAI(
     );
 
     const modelUsed = `${getModelProvider()}/${getModel()}`;
-    logAIUsage('ask_ai', modelUsed, Date.now() - startTime, true);
     {
       const { in_, out } = usageOf(response);
       await recordAiCostUsage(opts.dealerId ?? null, in_, out, 'ask_ai', modelUsed, Date.now() - startTime);
@@ -1170,7 +663,6 @@ export async function askAI(
     return response.choices[0]?.message?.content || null;
   } catch (error) {
     console.error('Error in Ask AI:', error);
-    logAIUsage('ask_ai', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
     await recordFailure(opts.dealerId, 'ask_ai', startTime, error);
     return 'Bir hata oluştu. Lütfen tekrar deneyin.';
   }
@@ -1274,12 +766,10 @@ export async function analyzeWithFallback(
   const aiResult = await analyzeComprehensive(text, options);
   if (aiResult) return aiResult;
 
-  // Fallback: Yerel analiz (P2-29: fallback KPI izleme)
-  const fallbackStart = Date.now();
+  // Fallback: Yerel analiz (gerçek LLM sonucu yok; `modelUsed: local-fallback` ile işaretli)
   const sentiment = analyzeSentimentLocal(text);
   const toxicity = checkToxicityLocal(text);
   const intent = detectIntentLocal(text);
-  logAIUsage('analyze', 'local-fallback', Date.now() - fallbackStart, true);
 
   return {
     sentiment,
@@ -1293,61 +783,6 @@ export async function analyzeWithFallback(
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// AI USAGE LOGGING
-// ─────────────────────────────────────────────────────────────
-
-interface AIUsageEntry {
-  action: string;
-  model: string;
-  latencyMs: number;
-  success: boolean;
-  error?: string;
-  timestamp: Date;
-}
-
-// In-memory log (DB'ye yazma işlemi API route'ta yapılacak)
-const usageLog: AIUsageEntry[] = [];
-
-function logAIUsage(action: string, model: string, latencyMs: number, success: boolean, error?: string) {
-  usageLog.push({ action, model, latencyMs, success, error, timestamp: new Date() });
-  // Son 1000 kaydı tut
-  if (usageLog.length > 1000) {
-    usageLog.splice(0, usageLog.length - 1000);
-  }
-}
-
-export function getRecentUsageLogs(limit = 50): AIUsageEntry[] {
-  return usageLog.slice(-limit);
-}
-
-/** P2-29: Fallback oranı için - local-fallback kullanım sayısı (son N kayıttan) */
-export function getFallbackStats(limit = 500): { total: number; fallbacks: number; fallbackRate: number } {
-  const recent = usageLog.slice(-limit);
-  const total = recent.length;
-  const fallbacks = recent.filter((e) => e.model === 'local-fallback').length;
-  return { total, fallbacks, fallbackRate: total > 0 ? fallbacks / total : 0 };
-}
-
-// ─────────────────────────────────────────────────────────────
-// EXPORTS
-// ─────────────────────────────────────────────────────────────
-
-const aiEngine = {
-  analyzeComprehensive,
-  analyzeBulk,
-  clusterThemes,
-  generateInsightReport,
-  askAI,
-  analyzeWithFallback,
-  analyzeSentimentLocal,
-  checkToxicityLocal,
-  detectIntentLocal,
-  getRecentUsageLogs,
-  getFallbackStats,
-};
-
-export default aiEngine;
 /**
  * Otomatik yanıt TEMEL kuralları — kodda sabit, sürümlü (PROMPT_VERSIONS.autoReply).
  * Admin'in DB'de tanımladığı üslup promptu (AITone.systemPrompt) bu kuralların YERİNE
@@ -1432,7 +867,6 @@ export async function generateAutoReply(
 
     const reply = response.choices[0]?.message?.content?.trim() || null;
     const modelUsed = `${getModelProvider()}/${getModel()}`;
-    logAIUsage('auto_reply', modelUsed, Date.now() - startTime, true);
     {
       const { in_, out } = usageOf(response);
       await recordAiCostUsage(dealerId ?? null, in_, out, 'auto_reply', modelUsed, Date.now() - startTime);
@@ -1440,7 +874,6 @@ export async function generateAutoReply(
     return reply;
   } catch (error) {
     console.error('Error generating auto reply:', error);
-    logAIUsage('auto_reply', `${getModelProvider()}/${getModel()}`, Date.now() - startTime, false, String(error));
     await recordFailure(dealerId, 'auto_reply', startTime, error);
     return null;
   }
@@ -1504,6 +937,12 @@ export async function streamToolChatTurn(params: {
     await guardAiCall({ task, dealerId: params.dealerId });
   }
 
+  // Ortak devre kesici: sağlayıcı üst üste arızalıyken akışı hiç açma (kullanıcı 45 sn beklemesin).
+  const provider = getModelProvider();
+  if (await isAiCircuitOpen(provider)) {
+    return { ok: false, reason: 'provider_error', error: 'AI_PROVIDER_UNAVAILABLE' };
+  }
+
   const model = getToolChatModel();
   const modelUsed = `${getModelProvider()}/${model}`;
   const start = Date.now();
@@ -1553,7 +992,6 @@ export async function streamToolChatTurn(params: {
     }
   } catch (error) {
     const aborted = params.signal?.aborted === true;
-    logAIUsage(task, modelUsed, Date.now() - start, false, aborted ? 'aborted' : error instanceof Error ? error.message : 'unknown');
     // İptalde de o ana kadarki tahmini tüketim yazılır (tavan kör kalmasın).
     const estIn = inputTokens || Math.ceil(JSON.stringify(params.messages).length / 4);
     const estOut = outputTokens || Math.ceil(content.length / 4);
@@ -1562,14 +1000,15 @@ export async function streamToolChatTurn(params: {
       error: aborted ? 'aborted' : error instanceof Error ? error.message : String(error),
     });
     if (aborted) return { ok: false, reason: 'aborted' };
+    if (isProviderFailure(error)) await recordAiProviderFailure(provider);
     console.error('[AI] streamToolChatTurn failed:', error);
     return { ok: false, reason: 'provider_error', error: error instanceof Error ? error.message : String(error) };
   }
 
+  recordAiProviderSuccess(provider);
   if (!inputTokens) inputTokens = Math.ceil(JSON.stringify(params.messages).length / 4);
   if (!outputTokens) outputTokens = Math.ceil((content.length + [...calls.values()].reduce((s, c) => s + c.arguments.length, 0)) / 4);
   const latencyMs = Date.now() - start;
-  logAIUsage(task, modelUsed, latencyMs, true);
   await recordAiCostUsage(params.dealerId, inputTokens, outputTokens, task, modelUsed, latencyMs);
   const toolCalls = [...calls.entries()]
     .sort((a, b) => a[0] - b[0])

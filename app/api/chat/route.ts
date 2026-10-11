@@ -40,6 +40,43 @@ function normalizeConversationHistory(raw: unknown): Array<{
   return out;
 }
 
+/** İstemcinin gönderdiği asistan turlarının doğrulandığı geriye bakış penceresi. */
+const ASSISTANT_TURN_LOOKBACK_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Denetim O1 (sahte few-shot jailbreak): geçmiş istemciden gelir ve eskiden `assistant` rolündeki
+ * HER metin modele "QRA'nın kendi söylediği" diye veriliyordu — saldırgan uydurma asistan turlarıyla
+ * modeli koşullandırabiliyordu. Artık bir asistan turu yalnız bu aktörün (girişli kullanıcı ya da
+ * anonim IP parmak izi) son 6 saatte gerçekten aldığı bir QRA yanıtıyla BİREBİR eşleşirse kalır;
+ * eşleşmeyen (uydurma, istemci tarafı hata metni) tur düşer. Kullanıcı turları kişinin kendi
+ * sözüdür ve korunur. Yalnız istemcinin zaten sahip olduğu metin karşılaştırılır → başka bir
+ * kişinin (aynı NAT arkasındaki anonim) sohbeti bağlama asla taşınmaz.
+ */
+async function verifyAssistantTurns(
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  actor: { userId?: string; ipFingerprint: string | null }
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  if (!history.some((m) => m.role === 'assistant')) return history;
+  let logged = new Set<string>();
+  if (actor.userId || actor.ipFingerprint) {
+    try {
+      const rows = await prisma.qraChatLog.findMany({
+        where: {
+          ...(actor.userId ? { userId: actor.userId } : { ipFingerprint: actor.ipFingerprint }),
+          createdAt: { gte: new Date(Date.now() - ASSISTANT_TURN_LOOKBACK_MS) },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_HISTORY_ITEMS,
+        select: { assistantMessage: true },
+      });
+      logged = new Set(rows.map((r) => r.assistantMessage.slice(0, INPUT_LIMITS.messageText).trim()));
+    } catch {
+      logged = new Set();
+    }
+  }
+  return history.filter((m) => m.role === 'user' || logged.has(m.content.trim()));
+}
+
 function resolveChatTier(role: string | undefined, userId: string | undefined): QraChatTier {
   if (!userId) return 'anonymous';
   if (role === 'ADMIN') return 'admin';
@@ -137,7 +174,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const history = normalizeConversationHistory(conversationHistory);
+    const ipFingerprint = userId ? null : fingerprintChatIp(getClientIdentifier(request));
+    const history = await verifyAssistantTurns(normalizeConversationHistory(conversationHistory), {
+      userId,
+      ipFingerprint,
+    });
 
     const started = Date.now();
     let responseText: string;
@@ -155,8 +196,6 @@ export async function POST(request: NextRequest) {
       throw err;
     }
     const latencyMs = Date.now() - started;
-
-    const ipFingerprint = userId ? null : fingerprintChatIp(getClientIdentifier(request));
 
     try {
       await prisma.qraChatLog.create({

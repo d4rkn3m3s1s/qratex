@@ -9,8 +9,8 @@
  *    tek seferliktir (Inngest retry, ai-retry cron'u, inline yol aynı anda koşsa bile).
  *  - Toksik, silinmiş ya da güven işaretli geri bildirime otomatik YANIT yazılmaz
  *    (olay açma kuralları yine çalışır).
- *  - AI üsluplu yanıt yalnız bayinin AI ana anahtarı açıksa üretilir; çıktı moderasyondan
- *    geçemezse (vaat, bağlantı, aşırı uzunluk) bayinin şablonuna düşülür.
+ *  - AI üsluplu yanıt yalnız bayinin AI ana anahtarı açıksa ve yorum enjeksiyon şüpheli DEĞİLSE
+ *    üretilir; çıktı moderasyondan geçemezse (vaat, bağlantı, aşırı uzunluk) şablona düşülür.
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -143,6 +143,7 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
         deletedAt: true,
         dealerReply: true,
         dealerRepliedAt: true,
+        aiAnalysis: true,
         user: { select: { name: true, preferredLanguage: true } },
         qrCode: { select: { dealerId: true } },
       },
@@ -175,7 +176,12 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
         puan: feedback.rating,
       });
       let usedAi = false;
-      if (rule.tone && feedback.text) {
+      // Enjeksiyon şüpheli yorumda müşteriye giden AI metni üretilmez (denetim O1): şablon kalır.
+      const injectionSuspect =
+        !!feedback.aiAnalysis &&
+        typeof feedback.aiAnalysis === 'object' &&
+        (feedback.aiAnalysis as { injectionSuspect?: unknown }).injectionSuspect === true;
+      if (rule.tone && feedback.text && !injectionSuspect) {
         const aiReply = await maybeGenerateAiReply({
           dealerId,
           text: feedback.text,

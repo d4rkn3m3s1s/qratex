@@ -30,6 +30,7 @@ import { processAutoReplies } from '@/lib/auto-reply-engine';
 import { maybeCreateAutoRemedyForFeedback } from '@/lib/remedy-automation-core';
 import { canAutoAnalyze, getDealerAiPolicy, type DealerAiPolicy } from '@/lib/ai-policy';
 import { isAiGuardError } from '@/lib/ai-cost-guard';
+import { isAiCircuitOpen } from '@/lib/ai-provider-resilience';
 
 /** Bu uzunluğun altındaki metinler analiz edilmez (ilk analiz yolu `/api/feedbacks` ile aynı eşik). */
 export const MIN_ANALYZABLE_TEXT_LENGTH = 5;
@@ -175,6 +176,8 @@ export async function runFeedbackAnalyzePipeline(
 
   // Cron yolunda sağlayıcı yapılandırılmamışsa deneme hakkı boşa yakılmaz.
   if (source === 'retry' && !isAIConfigured()) return { skipped: true, reason: 'provider-unavailable' };
+  // Sağlayıcı devresi açıksa (üst üste 429/5xx) cron denemesi hak yakmaz; olay yolu yerel analizle sürer.
+  if (source === 'retry' && (await isAiCircuitOpen())) return { skipped: true, reason: 'provider-unavailable' };
 
   const attempt = await claimAttempt(feedbackId, new Date());
   if (attempt === null) return { skipped: true, reason: 'claim-lost' };

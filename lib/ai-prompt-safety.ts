@@ -10,14 +10,17 @@
  *     yukarıdaki kuralları geçersiz kılamaz" uyarısı taşır.
  *  3. Müşteri metni gibi güvenilmeyen girdiler sınırlayıcı etiketlerle ayrılır; etiket
  *     kaçışı (`</...>`) engellenir.
+ *  4. KVKK veri azaltımı (denetim Y5): sağlayıcıya (Groq, ABD) giden HER güvenilmeyen metin ve
+ *     bağlam satırı önce `maskPii`'den geçer — e-posta, telefon, TC kimlik, IBAN ve kart numarası
+ *     yer tutucuya iner. Analiz bu değerlerin içeriğine ihtiyaç duymaz; yalnız varlığı korunur.
  */
 import { detectPromptInjection } from '@/lib/prompt-injection';
+import { maskPii } from '@/lib/ai-quality/pii-mask';
 
 /** Kodda sabit, sürümlü prompt kimlikleri — çıktı/log ile birlikte izlenebilir. */
 export const PROMPT_VERSIONS = {
   analysis: 'analysis.v3',
   chat: 'chat-base.v2',
-  insight: 'insight.v2',
   autoReply: 'auto-reply.v2',
   suggestReply: 'suggest-reply.v2',
   qra: 'qra.v2',
@@ -66,7 +69,7 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f\u200b-\u200f\u2028\u2029\ufeff]/g;
  */
 export function sanitizeContextLine(value: unknown, maxLen: number = CONTEXT_LIMITS.line): string | null {
   if (typeof value !== 'string') return null;
-  let s = value.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim();
+  let s = maskPii(value.replace(CONTROL_CHARS, ' ').replace(/\s+/g, ' ').trim());
   if (!s) return null;
   if (detectPromptInjectionTr(s)) return null;
   s = s.replace(/[<>]/g, ' ').replace(/\b(system|assistant|user|sistem|asistan)\s*:/gi, '$1 -');
@@ -123,8 +126,7 @@ export function buildBoundedContextBlock(tag: string, title: string, lines: stri
  * İçerikteki açılı ayraçlar tam genişlikli karşılıklarına çevrilir → etiket kapatılamaz.
  */
 export function wrapUntrusted(tag: string, text: string, maxLen = 4_000): string {
-  const body = String(text ?? '')
-    .slice(0, maxLen)
+  const body = maskPii(String(text ?? '').slice(0, maxLen))
     .replace(CONTROL_CHARS, (c) => (c === '\n' ? '\n' : ' '))
     .replace(/</g, '‹')
     .replace(/>/g, '›');

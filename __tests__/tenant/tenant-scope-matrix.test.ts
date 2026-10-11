@@ -4,9 +4,8 @@
  * Her uç × {oturumsuz, CUSTOMER, DEALER (sahip / sahip değil), STAFF (aktif / pasif), ADMIN
  * (platform / açık bayi), tanınmayan rol}. Saldırı senaryoları:
  *  - STAFF hesabı, JWT'sindeki dealerId ne olursa olsun yalnız DB'deki AKTİF bayisini görür.
- *  - Müşteri `/api/ai/analyze` ile kendi yorumunun AI alanlarını yazdıramaz (P0-06).
- *  - Bayi başka bayinin yorumunu analiz edip üzerine yazamaz; metin istemciden alınmaz.
- *  - STAFF başka bayinin AI öğrenme profilini zehirleyemez.
+ *  - Eski AI uçları (/api/ai/*, /api/customer/ai-*) emekli: her rol 410, okuma/yazma/LLM yok
+ *    (eskiden müşteri kendi yorumunun AI alanlarını yazdırabiliyor, STAFF profil zehirleyebiliyordu).
  *  - Bayi müşteri listesi platform geneli CLV'yi DEĞİL, bayi kapsamlı istatistiği okur.
  */
 import { NextRequest } from 'next/server';
@@ -28,15 +27,6 @@ jest.mock('@/lib/rate-limit', () => ({
 jest.mock('@/lib/ai-engine', () => ({
   analyzeWithFallback: jest.fn(),
   analyzeComprehensive: jest.fn(),
-  analyzeBulk: jest.fn(async () => new Map()),
-  clusterThemes: jest.fn(async () => []),
-  generateInsightReport: jest.fn(async () => null),
-  askAI: jest.fn(async () => 'cevap'),
-  getRecentUsageLogs: jest.fn(() => []),
-}));
-jest.mock('@/lib/openai', () => ({
-  generateInsights: jest.fn(async () => null),
-  chatWithAI: jest.fn(async () => 'ok'),
 }));
 jest.mock('@/lib/ai-learning', () => ({
   recordFeedbackCorrection: jest.fn(async () => ({ id: 'corr-1' })),
@@ -151,161 +141,44 @@ describe('GET /api/feedbacks — kapsam matrisi', () => {
   });
 });
 
-// ───────────────────────────── GET /api/ai/detailed ─────────────────────────────
+// ───────────────────────────── Emekli AI uçları (ai-ozellikleri Dalga 3) ─────────────────────────────
 
-describe('GET /api/ai/detailed — kapsam matrisi', () => {
-  async function call(session: unknown, query = '') {
-    setSession(session);
-    db.feedback.findMany.mockResolvedValue([]);
-    const { GET } = await import('@/app/api/ai/detailed/route');
-    return GET(req(`/api/ai/detailed${query}`));
-  }
-  const wheres = () => db.feedback.findMany.mock.calls.map((c) => c[0].where);
+/**
+ * Eski /api/ai/{analyze,detailed,learning} ve /api/customer/{ai-chat,ai-recommendations} hiçbir
+ * ekrandan çağrılmıyordu; kapsam/IDOR/profil zehirleme matrisleri bu uçlarda artık geçerli değil
+ * çünkü uçlar KAPALI: her rol için 410, hiçbir veritabanı okuması ya da LLM çağrısı yok.
+ */
+describe('Emekli AI uçları — her rol 410, yan etkisiz', () => {
+  const RETIRED: Array<{ path: string; method: 'GET' | 'POST'; load: () => Promise<Record<string, unknown>> }> = [
+    { path: '/api/ai/detailed', method: 'GET', load: () => import('@/app/api/ai/detailed/route') },
+    { path: '/api/ai/analyze?action=analyze', method: 'POST', load: () => import('@/app/api/ai/analyze/route') },
+    { path: '/api/ai/analyze?action=update_settings', method: 'POST', load: () => import('@/app/api/ai/analyze/route') },
+    { path: '/api/ai/learning?action=record_correction', method: 'POST', load: () => import('@/app/api/ai/learning/route') },
+    { path: '/api/customer/ai-chat', method: 'POST', load: () => import('@/app/api/customer/ai-chat/route') },
+    { path: '/api/customer/ai-recommendations', method: 'GET', load: () => import('@/app/api/customer/ai-recommendations/route') },
+  ];
 
-  it.each([
-    ['oturumsuz', null, 401],
-    ['CUSTOMER', CUSTOMER, 403],
-    ['tanınmayan rol', WEIRD, 403],
-  ])('%s → %s', async (_label, session, status) => {
-    expect((await call(session)).status).toBe(status);
-    expect(db.feedback.findMany).not.toHaveBeenCalled();
-  });
-
-  it('STAFF → yalnız aktif bayisi (her iki sorgu)', async () => {
-    staffLink('dealer-a');
-    expect((await call(STAFF_A)).status).toBe(200);
-    for (const w of wheres()) expect(w).toMatchObject({ qrCode: { dealerId: 'dealer-a' }, deletedAt: null });
-  });
-
-  it('STAFF pasif → 403', async () => {
-    staffLink(null);
-    expect((await call(STAFF_A)).status).toBe(403);
-  });
-
-  it('DEALER → kendi; ADMIN → platform ya da seçili bayi', async () => {
-    expect((await call(DEALER_A)).status).toBe(200);
-    for (const w of wheres()) expect(w.qrCode).toEqual({ dealerId: 'dealer-a' });
-    db.feedback.findMany.mockClear();
-    expect((await call(ADMIN)).status).toBe(200);
-    for (const w of wheres()) expect(w.qrCode).toBeUndefined();
-    db.feedback.findMany.mockClear();
-    expect((await call(ADMIN, '?dealerId=dealer-b')).status).toBe(200);
-    for (const w of wheres()) expect(w.qrCode).toEqual({ dealerId: 'dealer-b' });
-  });
-});
-
-// ───────────────────────────── POST /api/ai/analyze?action=analyze (P0-06) ─────────────────────────────
-
-describe('POST /api/ai/analyze?action=analyze — IDOR yazma (P0-06)', () => {
-  async function call(session: unknown, body: unknown) {
-    setSession(session);
-    const { POST } = await import('@/app/api/ai/analyze/route');
-    return POST(req('/api/ai/analyze?action=analyze', { method: 'POST', body }));
-  }
-
-  it('CUSTOMER kendi olumsuz yorumunu "olumlu" yazdıramaz → 403, yazma yok', async () => {
-    const res = await call(CUSTOMER, { feedbackId: 'fb-own', text: 'Harika bir deneyimdi, çok memnun kaldım!' });
-    expect(res.status).toBe(403);
-    expect(analyzeWithFallback).not.toHaveBeenCalled();
-    expect(db.feedback.update).not.toHaveBeenCalled();
-  });
-
-  it('DEALER başka bayinin yorumunu analiz edip yazamaz → 404 (sahiplik sorgu filtresinde)', async () => {
-    db.feedback.findFirst.mockResolvedValue(null);
-    const res = await call(DEALER_A, { feedbackId: 'fb-of-b' });
-    expect(res.status).toBe(404);
-    expect(db.feedback.findFirst.mock.calls[0][0].where).toMatchObject({
-      id: 'fb-of-b',
-      qrCode: { dealerId: 'dealer-a' },
+  for (const r of RETIRED) {
+    it(`${r.method} ${r.path} → 410 (oturumsuz, CUSTOMER, DEALER, STAFF, ADMIN)`, async () => {
+      const mod = await r.load();
+      const handler = mod[r.method] as (req: NextRequest) => Promise<Response>;
+      for (const session of [null, CUSTOMER, DEALER_A, STAFF_A, ADMIN]) {
+        setSession(session);
+        const res = await handler(
+          req(r.path, r.method === 'POST' ? { method: 'POST', body: { feedbackId: 'fb-b', text: 'harika bir deneyim' } } : undefined)
+        );
+        expect(res.status).toBe(410);
+        expect((await res.json()).code).toBe('GONE');
+      }
+      expect(db.feedback.findFirst).not.toHaveBeenCalled();
+      expect(db.feedback.findMany).not.toHaveBeenCalled();
+      expect(db.feedback.update).not.toHaveBeenCalled();
+      expect(analyzeWithFallback).not.toHaveBeenCalled();
+      expect(recordFeedbackCorrection).not.toHaveBeenCalled();
     });
-    expect(db.feedback.update).not.toHaveBeenCalled();
-  });
-
-  it('DEALER kendi yorumunda: metin DB’den okunur, istemci metni YOK SAYILIR', async () => {
-    db.feedback.findFirst.mockResolvedValue({ text: 'Yemek soğuktu ve servis çok geç geldi.', qrCode: { dealerId: 'dealer-a' } });
-    db.feedback.update.mockResolvedValue({});
-    db.analyticsEvent.create.mockResolvedValue({});
-    const res = await call(DEALER_A, { feedbackId: 'fb-a', text: 'Mükemmeldi, her şey kusursuz!' });
-    expect(res.status).toBe(200);
-    expect((analyzeWithFallback as jest.Mock).mock.calls[0][0]).toBe('Yemek soğuktu ve servis çok geç geldi.');
-    expect((analyzeWithFallback as jest.Mock).mock.calls[0][1]).toMatchObject({ dealerId: 'dealer-a' });
-    expect(db.feedback.update).toHaveBeenCalledTimes(1);
-  });
-
-  it('pasif STAFF → 403', async () => {
-    staffLink(null);
-    expect((await call(STAFF_A, { feedbackId: 'fb-a' })).status).toBe(403);
-    expect(db.feedback.update).not.toHaveBeenCalled();
-  });
-
-  it('feedbackId olmadan metin → yalnız önizleme, hiçbir satır yazılmaz', async () => {
-    db.analyticsEvent.create.mockResolvedValue({});
-    const res = await call(DEALER_A, { text: 'Bu bir deneme metnidir.' });
-    expect(res.status).toBe(200);
-    expect(db.feedback.update).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /api/ai/analyze — diğer eylemler kapsamlı', () => {
-  async function call(session: unknown, action: string, body: unknown) {
-    setSession(session);
-    const { POST } = await import('@/app/api/ai/analyze/route');
-    return POST(req(`/api/ai/analyze?action=${action}`, { method: 'POST', body }));
   }
-
-  it('bulk_analyze: STAFF yalnız aktif bayisinin yorumlarını seçer', async () => {
-    staffLink('dealer-a');
-    db.feedback.findMany.mockResolvedValue([]);
-    expect((await call(STAFF_A, 'bulk_analyze', { feedbackIds: ['x', 'y'] })).status).toBe(200);
-    expect(db.feedback.findMany.mock.calls[0][0].where).toMatchObject({ qrCode: { dealerId: 'dealer-a' } });
-  });
-
-  it('update_settings: STAFF 403; ADMIN dealerId olmadan 400', async () => {
-    staffLink('dealer-a');
-    expect((await call(STAFF_A, 'update_settings', { isEnabled: false })).status).toBe(403);
-    expect((await call(ADMIN, 'update_settings', { isEnabled: false })).status).toBe(400);
-    expect(db.aISettings.upsert).not.toHaveBeenCalled();
-  });
-
-  it('DEALER başka bayinin ayarlarını gövdeden hedefleyemez → 403', async () => {
-    expect((await call(DEALER_A, 'update_settings', { dealerId: 'dealer-b', isEnabled: false })).status).toBe(403);
-    expect(db.aISettings.upsert).not.toHaveBeenCalled();
-  });
 });
 
-// ───────────────────────────── /api/ai/learning ─────────────────────────────
-
-describe('POST /api/ai/learning?action=record_correction — profil zehirleme', () => {
-  async function call(session: unknown, body: unknown) {
-    setSession(session);
-    const { POST } = await import('@/app/api/ai/learning/route');
-    return POST(req('/api/ai/learning?action=record_correction', { method: 'POST', body }));
-  }
-  const body = { feedbackId: 'fb-of-b', field: 'sentiment', newValue: 'positive' };
-
-  it('CUSTOMER → 403', async () => {
-    expect((await call(CUSTOMER, body)).status).toBe(403);
-    expect(recordFeedbackCorrection).not.toHaveBeenCalled();
-  });
-
-  it('A bayisinin STAFF’ı B’nin yorumuna düzeltme yazamaz → 403', async () => {
-    staffLink('dealer-a');
-    db.feedback.findUnique.mockResolvedValue({ qrCode: { dealerId: 'dealer-b' } });
-    expect((await call(STAFF_A, body)).status).toBe(403);
-    expect(recordFeedbackCorrection).not.toHaveBeenCalled();
-  });
-
-  it('DEALER B kendi yorumuna yazabilir (bayi kimliği yorumdan)', async () => {
-    db.feedback.findUnique.mockResolvedValue({ qrCode: { dealerId: 'dealer-b' } });
-    expect((await call(DEALER_B, body)).status).toBe(200);
-    expect((recordFeedbackCorrection as jest.Mock).mock.calls[0][0]).toMatchObject({ dealerId: 'dealer-b' });
-  });
-
-  it('aşırı büyük düzeltme değeri → 400', async () => {
-    const res = await call(DEALER_B, { ...body, newValue: 'x'.repeat(5000) });
-    expect(res.status).toBe(400);
-  });
-});
 
 // ───────────────────────────── Bayi müşteri listesi (P0-12) ─────────────────────────────
 
