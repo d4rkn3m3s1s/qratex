@@ -27,6 +27,8 @@ export function NavPreview({
   modulesOff: string[];
   highlightId: string | null;
 }) {
+  const fx = useNavStudioCopy().fx;
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const [lang, setLang] = useState<Lang>('tr');
   const motion = useMotionPolicy();
@@ -47,11 +49,11 @@ export function NavPreview({
       <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="min-w-0">
           <h2 id="nav-preview-title" className="text-sm font-semibold text-fg">
-            Canlı önizleme
+            {ux.canliOnizleme}
           </h2>
-          <p className="text-xs text-fg-muted">{count} üst düzey öğe · yayınlanınca böyle görünür</p>
+          <p className="text-xs text-fg-muted">{fx.topLevelCount(count)}</p>
         </div>
-        <div role="radiogroup" aria-label="Önizleme dili" className="flex rounded-chip border border-border p-0.5">
+        <div role="radiogroup" aria-label={ux.onizlemeDili} className="flex rounded-chip border border-border p-0.5">
           {(['tr', 'en'] as const).map((l) => (
             <button
               key={l}
@@ -69,7 +71,7 @@ export function NavPreview({
           ))}
         </div>
       </header>
-      <nav aria-label="Menü önizlemesi" tabIndex={0} className="max-h-[60vh] overflow-y-auto p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" lang={lang}>
+      <nav aria-label={ux.menuOnizlemesi} tabIndex={0} className="max-h-[60vh] overflow-y-auto p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" lang={lang}>
         {shell.nodes.length === 0 ? (
           <p className="p-3 text-sm text-fg-muted">{nx.noVisibleItems}</p>
         ) : (

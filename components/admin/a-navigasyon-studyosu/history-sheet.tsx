@@ -25,6 +25,9 @@ export function NavHistorySheet({
   onOpenChange: (o: boolean) => void;
   onLoad: (entry: NavHistoryEntry) => void;
 }) {
+  const fx = useNavStudioCopy().fx;
+  const uy = useNavStudioCopy().ui2;
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const history = useInfiniteQuery({
     queryKey: navKeys.history,
@@ -39,10 +42,10 @@ export function NavHistorySheet({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" aria-hidden /> Sürüm geçmişi
+            <History className="h-5 w-5" aria-hidden /> {ux.surumGecmisi}
           </SheetTitle>
           <SheetDescription>
-            Her yayın bir sürümdür. Bir sürümü taslağa yükleyip önizledikten sonra yayınlayabilirsiniz.
+            {ux.herYayinBirSurumdur}
           </SheetDescription>
         </SheetHeader>
         <div className="mt-4">
@@ -50,7 +53,7 @@ export function NavHistorySheet({
             query={{ ...history, data: history.data ? entries : undefined }}
             skeleton="list"
             isEmpty={(d) => d.length === 0}
-            empty={{ title: 'Henüz kayıt yok', description: 'Menü ilk kez yayınlandığında geçmiş burada başlar.', compact: true }}
+            empty={{ title: ux.henuzKayitYok, description: ux.menuIlkKezYayinlandiginda, compact: true }}
           >
             {() => (
               <ol className="space-y-3">
@@ -61,7 +64,7 @@ export function NavHistorySheet({
                         <p className="text-sm font-semibold text-fg">
                           {e.actionLabel}
                           {i === 0 ? (
-                            <span className="ml-2 rounded-chip bg-success-subtle px-1.5 py-0.5 text-xs font-medium text-success">Son</span>
+                            <span className="ml-2 rounded-chip bg-success-subtle px-1.5 py-0.5 text-xs font-medium text-success">{uy.son}</span>
                           ) : null}
                         </p>
                         <p className="text-xs text-fg-muted">
@@ -74,9 +77,9 @@ export function NavHistorySheet({
                           size="sm"
                           className="min-h-11 sm:min-h-9"
                           onClick={() => onLoad(e)}
-                          aria-label={`${fmt.format(new Date(e.at))} sürümünü taslağa yükle`}
+                          aria-label={fx.loadVersion(fmt.format(new Date(e.at)))}
                         >
-                          <Undo2 className="h-4 w-4" aria-hidden /> Taslağa yükle
+                          <Undo2 className="h-4 w-4" aria-hidden /> {ux.taslagaYukle}
                         </Button>
                       )}
                     </div>
@@ -85,7 +88,7 @@ export function NavHistorySheet({
                         {e.changes.slice(0, 8).map((c, k) => (
                           <li key={k}>• {c}</li>
                         ))}
-                        {e.changes.length > 8 && <li>… ve {e.changes.length - 8} değişiklik daha</li>}
+                        {e.changes.length > 8 && <li>{fx.moreChanges(e.changes.length - 8)}</li>}
                       </ul>
                     ) : (
                       <p className="mt-2 text-xs text-fg-muted">{nx.noVisibleDiff}</p>
@@ -100,7 +103,7 @@ export function NavHistorySheet({
                       disabled={history.isFetchingNextPage}
                       onClick={() => void history.fetchNextPage()}
                     >
-                      {history.isFetchingNextPage ? 'Yükleniyor…' : 'Daha eski sürümler'}
+                      {history.isFetchingNextPage ? ux.yukleniyor : ux.dahaEskiSurumler}
                     </Button>
                   </li>
                 )}

@@ -19,7 +19,6 @@ import { EmptyState, QueryState } from '@/components/states';
 import { navIcon } from '@/lib/navigation/icons';
 import { groupsForRole, type NavRoute } from '@/lib/navigation/registry';
 import {
-  ROLE_LABEL,
   STUDIO_ROLES,
   describeRoleDiff,
   effectiveGroup,
@@ -69,6 +68,9 @@ function toDrafts(state: NavStudioState): Drafts {
 }
 
 function Studio({ state, reload }: { state: NavStudioState; reload: () => Promise<NavStudioState | null> }) {
+  const fx = useNavStudioCopy().fx;
+  const roleLabel = ((cx) => (r: string) => cx.roles[r] ?? r)(useNavStudioCopy().fx);
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const qc = useQueryClient();
   const url = useUrlState();
@@ -120,8 +122,8 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
       }),
     onSuccess: (r) => {
       adopt(r.state);
-      toast.success('Navigasyon yayınlandı. Menüler kullanıcılarda hemen güncellenir.');
-      announce('Navigasyon yayınlandı.');
+      toast.success(ux.navigasyonYayinlandiMenulerKullanicilarda);
+      announce(ux.navigasyonYayinlandi);
     },
     onError: (e) => {
       if (e instanceof NavApiError && (e.status === 409 || e.status === 428)) setConflict(true);
@@ -144,7 +146,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
       return out;
     });
     setHistoryOpen(false);
-    toast.info('Sürüm taslağa yüklendi. Önizleyip yayınlayın.');
+    toast.info(ux.surumTaslagaYuklendiOnizleyip);
   };
 
   const q = search.trim().toLocaleLowerCase('tr-TR');
@@ -174,14 +176,14 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
       asideWidth="lg"
       header={
         <PageHeader
-          eyebrow="İçerik ve Görünüm"
-          title="Navigasyon Stüdyosu"
-          description="Admin, bayi ve müşteri menülerinin sırasını, gruplarını ve görünürlüğünü menünün gerçek yapısında düzenleyin; sağda yayınlanınca nasıl görüneceğini izleyin."
+          eyebrow={ux.icerikVeGorunum}
+          title={ux.navigasyonStudyosu}
+          description={ux.adminBayiVeMusteri}
           icon={<Navigation />}
           meta={
             saved.lastChange ? (
               <span className="text-xs text-fg-muted">
-                Son yayın: <time dateTime={saved.lastChange.at}>{fmt.format(new Date(saved.lastChange.at))}</time> · {saved.lastChange.actor}
+                {fx.lastPublish} <time dateTime={saved.lastChange.at}>{fmt.format(new Date(saved.lastChange.at))}</time> · {saved.lastChange.actor}
               </span>
             ) : (
               <span className="text-xs text-fg-muted">{nx.notPublished}</span>
@@ -190,10 +192,10 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
           actions={
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setDiffOpen(true)} disabled={!dirty}>
-                <GitCompare className="h-4 w-4" aria-hidden /> Farkı gör
+                <GitCompare className="h-4 w-4" aria-hidden /> {ux.farkiGor}
               </Button>
               <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" aria-hidden /> Geçmiş
+                <History className="h-4 w-4" aria-hidden /> {ux.gecmis}
               </Button>
             </div>
           }
@@ -201,7 +203,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
       }
       toolbar={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div role="tablist" aria-label="Menü rolü" className="flex w-full rounded-control border border-border bg-surface-1 p-1 sm:w-auto">
+          <div role="tablist" aria-label={ux.menuRolu} className="flex w-full rounded-control border border-border bg-surface-1 p-1 sm:w-auto">
             {STUDIO_ROLES.map((r) => (
               <button
                 key={r}
@@ -215,9 +217,9 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
                   role === r ? 'bg-brand text-brand-fg' : 'text-fg-muted hover:text-fg'
                 )}
               >
-                {ROLE_LABEL[r]}
+                {roleLabel(r)}
                 {dirtyRoles.includes(r) && (
-                  <span className="h-2 w-2 rounded-full bg-warning" aria-label="kaydedilmemiş değişiklik var" role="img" />
+                  <span className="h-2 w-2 rounded-full bg-warning" aria-label={ux.kaydedilmemisDegisiklikVar} role="img" />
                 )}
               </button>
             ))}
@@ -230,7 +232,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Öğe veya grup ara"
+                placeholder={ux.ogeVeyaGrupAra}
                 className="min-h-11 pl-9 sm:min-h-10"
               />
             </label>
@@ -239,11 +241,11 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
               className="min-h-11 sm:min-h-10"
               onClick={() => {
                 update(role, () => emptyRoleConfig());
-                announce(`${ROLE_LABEL[role]} menüsü taslakta varsayılana döndü.`);
+                announce(fx.resetAnnounce(roleLabel(role)));
               }}
               disabled={sameRoleConfig(role, cfg, emptyRoleConfig())}
             >
-              <RotateCcw className="h-4 w-4" aria-hidden /> {ROLE_LABEL[role]} menüsünü varsayılana döndür
+              <RotateCcw className="h-4 w-4" aria-hidden /> {fx.resetRole(roleLabel(role))}
             </Button>
           </div>
         </div>
@@ -253,29 +255,29 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
           <NavPreview role={role} config={cfg} modulesOff={modulesOff} highlightId={highlight} />
           <p className="px-1 text-xs text-fg-muted">
             {supportsVisibility(role)
-              ? `${hiddenCount} öğe gizli · ${modulesOff.length} modül kapalı (modül anahtarları `
-              : 'Admin menüsünde görünürlük ayarı yoktur; admin her sayfayı görür ki geri açabilsin. '}
+              ? fx.visSummary(hiddenCount, modulesOff.length)
+              : ux.adminMenusundeGorunurlukAyari}
             {supportsVisibility(role) && (
               <>
                 <Link href="/admin/features" className="underline underline-offset-2 hover:text-fg">
-                  Modüller
+                  {ux.moduller}
                 </Link>{' '}
-                sayfasından yönetilir).
+                {ux.sayfasindanYonetilir}
               </>
             )}
           </p>
         </div>
       }
-      asideLabel="Canlı önizleme"
+      asideLabel={ux.canliOnizleme}
     >
-      <section id="nav-structure" aria-label={`${ROLE_LABEL[role]} menü yapısı`} className="space-y-3">
+      <section id="nav-structure" aria-label={fx.structureOf(roleLabel(role))} className="space-y-3">
         {!roleHasGroups && (
           <p className="rounded-card border border-border bg-surface-1 px-3 py-2 text-sm text-fg-muted">
-            {ROLE_LABEL[role]} menüsü grupsuzdur (mobil öncelikli düz liste); burada sıra ve görünürlük düzenlenir.
+            {fx.flatNote(roleLabel(role))}
           </p>
         )}
         {visibleNodes.length === 0 ? (
-          <EmptyState title="Eşleşen öğe yok" description={`“${search}” için ${ROLE_LABEL[role].toLocaleLowerCase('tr-TR')} menüsünde sonuç bulunamadı.`} compact />
+          <EmptyState title={ux.eslesenOgeYok} description={fx.noResults(search, roleLabel(role))} compact />
         ) : (
           <ol className="space-y-2">
             <AnimatePresence initial={false}>
@@ -333,8 +335,8 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
         }}
         conflict={conflict ? { onReload: reloadLatest } : null}
         error={saveError}
-        message={`${dirtyRoles.map((r) => ROLE_LABEL[r]).join(', ')} menüsünde yayınlanmamış değişiklik var`}
-        saveLabel="Yayınla"
+        message={fx.unpublishedIn(dirtyRoles.map((r) => roleLabel(r)).join(', '))}
+        saveLabel={ux.yayinla}
       />
 
       <NavHistorySheet open={historyOpen} onOpenChange={setHistoryOpen} onLoad={loadFromHistory} />
@@ -351,7 +353,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
             <div className="space-y-4">
               {dirtyRoles.map((r) => (
                 <div key={r}>
-                  <h3 className="text-sm font-semibold text-fg">{ROLE_LABEL[r]}</h3>
+                  <h3 className="text-sm font-semibold text-fg">{roleLabel(r)}</h3>
                   <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
                     {describeRoleDiff(r, saved.roles[r], drafts[r]).map((line, i) => (
                       <li key={i}>• {line}</li>
@@ -387,10 +389,11 @@ function NodeShell({ children }: { children: React.ReactNode }) {
 type UpdateFn = (fn: (c: RoleConfig) => RoleConfig) => void;
 
 function MoveButtons({ label, canUp, canDown, onUp, onDown }: { label: string; canUp: boolean; canDown: boolean; onUp: () => void; onDown: () => void }) {
+  const fx = useNavStudioCopy().fx;
   return (
     <div className="flex shrink-0 items-center">
-      <IconButton aria-label={`${label}: yukarı taşı`} icon={<ArrowUp />} size="sm" disabled={!canUp} onClick={onUp} />
-      <IconButton aria-label={`${label}: aşağı taşı`} icon={<ArrowDown />} size="sm" disabled={!canDown} onClick={onDown} />
+      <IconButton aria-label={fx.moveUp(label)} icon={<ArrowUp />} size="sm" disabled={!canUp} onClick={onUp} />
+      <IconButton aria-label={fx.moveDown(label)} icon={<ArrowDown />} size="sm" disabled={!canDown} onClick={onDown} />
     </div>
   );
 }
@@ -418,6 +421,8 @@ function GroupCard({
   matches: (r: NavRoute) => boolean;
   itemVisible: (it: EditorItem) => boolean;
 }) {
+  const fx = useNavStudioCopy().fx;
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const def = groupsForRole(role).find((g) => g.id === node.groupId);
   const base = def?.label ?? { tr: node.groupId, en: node.groupId };
@@ -439,12 +444,12 @@ function GroupCard({
             <h2 id={headingId} className="text-sm font-semibold text-fg">
               {label.tr?.trim() || base.tr}
             </h2>
-            <span className="text-xs text-fg-muted">{node.items.length} öğe</span>
-            {customized && <StatusBadge label="Özelleştirildi" tone="info" size="sm" />}
+            <span className="text-xs text-fg-muted">{fx.itemCount(node.items.length)}</span>
+            {customized && <StatusBadge label={ux.ozellestirildi} tone="info" size="sm" />}
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block text-xs text-fg-muted">
-              Türkçe ad
+              {ux.turkceAd}
               <Input
                 value={label.tr ?? ''}
                 maxLength={60}
@@ -454,7 +459,7 @@ function GroupCard({
               />
             </label>
             <label className="block text-xs text-fg-muted">
-              İngilizce ad
+              {ux.ingilizceAd}
               <Input
                 value={label.en ?? ''}
                 maxLength={60}
@@ -470,7 +475,7 @@ function GroupCard({
         <div className="flex items-center gap-1">
           {customized && (
             <IconButton
-              aria-label={`${base.tr} grubunun adını varsayılana döndür`}
+              aria-label={fx.resetGroupName(base.tr)}
               icon={<RotateCcw />}
               size="sm"
               onClick={() =>
@@ -552,6 +557,8 @@ function ItemRow({
   matches: (r: NavRoute) => boolean;
   flat?: boolean;
 }) {
+  const fx = useNavStudioCopy().fx;
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const r = item.route;
   const gid = effectiveGroup(r, cfg);
@@ -568,7 +575,7 @@ function ItemRow({
         route={r}
         modulesOff={modulesOff}
         update={update}
-        badge={regrouped ? <StatusBadge label="Grubu değişti" tone="info" size="sm" /> : null}
+        badge={regrouped ? <StatusBadge label={ux.grubuDegisti} tone="info" size="sm" /> : null}
         controls={
           <>
             {groupsAvailable && (
@@ -576,7 +583,7 @@ function ItemRow({
                 value={gid || UNGROUPED}
                 onValueChange={(v) => applyNodes(moveToGroup(nodes, r.id, v === UNGROUPED ? '' : v), r.id)}
               >
-                <SelectTrigger aria-label={`${r.label.tr} öğesinin grubu`} className="h-11 w-full min-w-0 sm:h-9 sm:w-44">
+                <SelectTrigger aria-label={fx.groupOf(r.label.tr)} className="h-11 w-full min-w-0 sm:h-9 sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -594,7 +601,7 @@ function ItemRow({
         }
       />
       {children.length > 0 && (
-        <ol aria-label={`${r.label.tr} alt sayfaları`} className="border-t border-border bg-surface-2/40 pl-6">
+        <ol aria-label={fx.subPagesOf(r.label.tr)} className="border-t border-border bg-surface-2/40 pl-6">
           {children.map(({ c, i }) => (
             <li key={c.id} className="border-b border-border last:border-b-0">
               <RouteLine
@@ -641,6 +648,8 @@ function RouteLine({
   badge?: React.ReactNode;
   compact?: boolean;
 }) {
+  const fx = useNavStudioCopy().fx;
+  const ux = useNavStudioCopy().ui;
   const nx = useNavStudioCopy();
   const Icon = navIcon(route.icon);
   const canHide = supportsVisibility(role) && !!route.menuKey;
@@ -665,13 +674,13 @@ function RouteLine({
         </p>
         <div className="mt-1 flex flex-wrap gap-1 empty:hidden">
           {badge}
-          {hidden && <StatusBadge label="Gizli" tone="warning" size="sm" icon={EyeOff} />}
+          {hidden && <StatusBadge label={ux.gizli} tone="warning" size="sm" icon={EyeOff} />}
           {moduleOff && (
             <Link href="/admin/features" className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <StatusBadge label="Modül kapalı → Modüller" tone="neutral" size="sm" />
+              <StatusBadge label={ux.modulKapaliModuller} tone="neutral" size="sm" />
             </Link>
           )}
-          {route.teamOnly && <StatusBadge label="Yalnız ekip" tone="neutral" size="sm" icon={Users2} />}
+          {route.teamOnly && <StatusBadge label={ux.yalnizEkip} tone="neutral" size="sm" icon={Users2} />}
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
@@ -679,7 +688,7 @@ function RouteLine({
           <label className="flex min-h-11 items-center gap-2 text-xs text-fg-muted sm:min-h-9">
             <Eye className="h-4 w-4" aria-hidden />
             <span className="sr-only sm:not-sr-only">{nx.visible}</span>
-            <Switch checked={!hidden} onCheckedChange={toggle} aria-label={`${route.label.tr} menüde görünsün`} />
+            <Switch checked={!hidden} onCheckedChange={toggle} aria-label={fx.showInMenu(route.label.tr)} />
           </label>
         )}
         {controls}
