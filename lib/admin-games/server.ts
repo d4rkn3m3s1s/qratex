@@ -10,7 +10,7 @@ import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
-import { ALL_GAME_DEFS, getGameDef, visibleMiniGames, type MiniGameDef } from '@/lib/minigame-config';
+import { ALL_GAME_DEFS, defaultEnabledOf, getGameDef, visibleMiniGames, type MiniGameDef } from '@/lib/minigame-config';
 import {
   MINIGAME_CONFIG_TAG,
   OVERRIDE_LIMITS,
@@ -614,7 +614,12 @@ export async function patchGame(actorId: string, input: PatchInput, meta: AuditM
     const oldData = existing
       ? Object.fromEntries(Object.keys(data).map((k) => [k, (existing as Record<string, unknown>)[k] ?? null]))
       : null;
-    const saved = await tx.miniGameConfig.upsert({ where: { gameType }, update: data, create: { gameType, ...data } });
+    // İlk override satırı: isteğe bağlı (optIn) oyun, alan düzenlemesiyle kendiliğinden açılmaz.
+    const saved = await tx.miniGameConfig.upsert({
+      where: { gameType },
+      update: data,
+      create: { gameType, enabled: defaultEnabledOf(def), ...data },
+    });
     await tx.auditLog.create({
       data: {
         userId: actorId,
@@ -642,10 +647,11 @@ export async function resetGame(actorId: string, gameType: string, meta: AuditMe
     const existing = await tx.miniGameConfig.findUnique({ where: { gameType } });
     if (!existing) return false;
     const cleared = Object.fromEntries(OVERRIDE_FIELDS.map((k) => [k, null]));
-    if (existing.enabled) {
+    // Satırı silmek oyunu varsayılan açıklığına döndürür; yalnız mevcut durum varsayılansa sil.
+    if (existing.enabled === defaultEnabledOf(getGameDef(gameType)!)) {
       await tx.miniGameConfig.delete({ where: { gameType } });
     } else {
-      // Kapalı oyunun kill-switch'i sıfırlamayla açılmaz.
+      // Varsayılandan farklı aç/kapa durumu (kapatılan oyun / açılan isteğe bağlı oyun) sıfırlamayla değişmez.
       await tx.miniGameConfig.update({ where: { gameType }, data: cleared });
     }
     await tx.auditLog.create({
@@ -678,7 +684,7 @@ export async function bulkSetEnabled(actorId: string, input: BulkInput, meta: Au
     const byType = new Map(rows.map((r) => [r.gameType, r]));
     const out: string[] = [];
     for (const gameType of unique) {
-      const current = byType.get(gameType)?.enabled ?? true;
+      const current = byType.get(gameType)?.enabled ?? defaultEnabledOf(getGameDef(gameType)!);
       if (current === enabled) continue;
       await tx.miniGameConfig.upsert({ where: { gameType }, update: { enabled }, create: { gameType, enabled } });
       await tx.auditLog.create({

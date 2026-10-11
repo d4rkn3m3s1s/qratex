@@ -21,6 +21,7 @@ import { prisma } from '@/lib/prisma';
 import {
   MINI_GAMES,
   DEFAULT_MAX_DURATION_SEC,
+  defaultEnabledOf,
   getGameDef,
   type MiniGameDef,
 } from '@/lib/minigame-config';
@@ -88,7 +89,8 @@ function clampInt(n: number, lim: { min: number; max: number }): number {
 export function mergeGameConfig(def: MiniGameDef, ov: OverrideRow | null | undefined): EffectiveMiniGame {
   const base: EffectiveMiniGame = {
     ...def,
-    enabled: true,
+    // İsteğe bağlı oyun (optIn) override satırı yokken KAPALI; admin açar.
+    enabled: defaultEnabledOf(def),
     maxDurationSec: def.maxDurationSec ?? DEFAULT_MAX_DURATION_SEC,
   };
   if (!ov) return base;

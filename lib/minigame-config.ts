@@ -93,6 +93,17 @@ export interface MiniGameDef {
    * Oyun ajanı canlıya alırken `hidden` ve `release`'i birlikte kaldırır.
    */
   release?: 'building';
+  /**
+   * İsteğe bağlı oyun (portföy tavanı 12 dışında, §7.2 ilke 4): varsayılan KAPALI — admin oyun
+   * panelinden açar (`MiniGameConfig.enabled = true`). Turnuva rotasyonuna girmez
+   * (`visibleMiniGames` dışında; aday listesi indeksi kaymaz).
+   */
+  optIn?: true;
+}
+
+/** Override satırı yokken oyunun açık olup olmadığı (isteğe bağlı oyunlar kapalı başlar). */
+export function defaultEnabledOf(def: Pick<MiniGameDef, 'optIn'>): boolean {
+  return def.optIn !== true;
 }
 
 /** Deneme penceresi tanımsız oyunlar için varsayılan (sn). */
@@ -533,16 +544,19 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
       'Mekânlar ve kategoriler hakkında süreli sorular; doğru cevap ve hız puan getirir.',
     emoji: '🏆',
     accent: '#8b5cf6',
-    maxScore: 10,
-    rewardThreshold: 6,
+    // Skor = 10 soru × (10 doğru + 0..5 hız + 3. ardışık doğrudan itibaren +2 seri) → tavan 166
+    // (components/customer/games/venue-quiz/rules.ts → maxPossibleScore(10)). Eşik 70 ≈ 5–6 doğru.
+    // Tur ≥ ~15 sn (geri sayım + 10 cevap + 9 × 1,1 sn geçiş); gerçekçi en hızlı dürüst tur ~25 sn
+    // → 166/25 ≈ 6,6/sn; tavan 10/sn (10 × 15 = 150 < 166: anında tavan imkânsız).
+    maxScore: 166,
+    rewardThreshold: 70,
     rewardPoints: 150,
     rewardXp: 75,
-    minDurationSec: 30,
-    maxScorePerSec: 0.3,
-    maxDurationSec: 300,
-    hidden: true,
-    release: 'building',
-    hiddenReason: 'Yapım aşamasında: yeni oyun, sıra 3; canlıya çıkınca portföy tavanı (12) için en zayıf oyun emekliye ayrılır (§7.3).',
+    minDurationSec: 15,
+    maxScorePerSec: 10,
+    maxDurationSec: 420,
+    // Portföy tavanı 12: öne çıkan portföyde değil; admin açar (varsayılan kapalı).
+    optIn: true,
   },
 ];
 
@@ -588,7 +602,7 @@ export function getGameDef(gameType: string): MiniGameDef | undefined {
 
 /** Portföyde görünür (gizlenmemiş) registry oyunları — hub ve turnuva rotasyonu. */
 export function visibleMiniGames(): MiniGameDef[] {
-  return MINI_GAMES.filter((g) => !g.hidden);
+  return MINI_GAMES.filter((g) => !g.hidden && !g.optIn);
 }
 
 /** Generic: bir oyun tanımı + skora göre sunucu ödülünü hesaplar (cap'li). */

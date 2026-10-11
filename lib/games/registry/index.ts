@@ -120,9 +120,12 @@ export function getRetiredGame(id: string): RetiredGame | undefined {
   return RETIRED_BY_ID.get(id);
 }
 
-/** Oynanabilir (canlı) oyunlar, registry sırasında. */
+/**
+ * Portföy tavanına sayılan canlı oyunlar, registry sırasında. İsteğe bağlı (`optIn`, admin
+ * açar) oyunlar hariç — onlar için `isPlayable` + etkin yapılandırmanın `enabled`'ı esastır.
+ */
 export function liveGames(): GameEntry[] {
-  return GAMES.filter((g) => g.status === 'live' && g.component !== null);
+  return GAMES.filter((g) => g.status === 'live' && g.component !== null && !g.optIn);
 }
 
 export function isPlayable(entry: GameEntry | undefined): entry is GameEntry & { component: NonNullable<GameEntry['component']> } {

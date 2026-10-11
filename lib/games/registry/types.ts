@@ -91,6 +91,11 @@ export interface GameEntry {
   verification: VerificationKind;
   /** Bu oyuna birleşen eski kimlikler (yönlendirme ve geçmiş veri için). */
   mergedFrom?: readonly string[];
+  /**
+   * İsteğe bağlı oyun (portföy tavanı dışında): canlıdır ama sunucu kuralında varsayılan
+   * KAPALI (`MiniGameDef.optIn`), admin açar; tavan sayımına ve turnuva rotasyonuna girmez.
+   */
+  optIn?: boolean;
   modes: {
     practice: boolean;
     /** Sıralı mod; `attemptsPerDay` bugün şema gereği 1 (`@@unique([userId, gameType, dayKey])`). */

@@ -20,7 +20,7 @@ import {
   getEffectiveMiniGames,
   computeEffectiveReward,
 } from '@/lib/minigame-config-effective';
-import { getMiniGame } from '@/lib/minigame-config';
+import { defaultEnabledOf, getMiniGame } from '@/lib/minigame-config';
 
 beforeEach(() => {
   mockFindMany.mockReset();
@@ -96,7 +96,9 @@ describe('getEffectiveMiniGames — toplu', () => {
     mockFindMany.mockRejectedValue(new Error('db down'));
     const all = await getEffectiveMiniGames();
     expect(all.length).toBeGreaterThan(0);
-    expect(all.every((g) => g.enabled === true)).toBe(true);
+    // İsteğe bağlı (optIn, admin açar) oyunlar varsayılan kapalı; diğerleri açık kalır.
+    expect(all.every((g) => g.enabled === defaultEnabledOf(g))).toBe(true);
+    expect(all.filter((g) => !g.optIn).every((g) => g.enabled)).toBe(true);
   });
 });
 
