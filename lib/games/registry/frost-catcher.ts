@@ -1,11 +1,10 @@
 /**
  * Kar Tanesi Yakala — kayıt defteri girdisi (istemci güvenli).
  *
- * KORU, aile şablonu (§7.3 #8); guardian-of-trust'ın iyi/kötü ayrımı modifikatör olarak buraya
- * birleşecek (§7.3 #9).
- *
- * OYUN AJANI: v2'ye taşırken `component`'i `{ contract: 'v2', load }` yap, doğrulayıcıyı
- * `./frost-catcher.server.ts`'e yaz. Sözleşme: lib/games/README.md
+ * KORU, aile şablonu (§7.3 #8); Güven Muhafızı'nın iyi/kötü ayrımı modifikatör olarak birleşti
+ * (§7.3 #9): kara buz (bozuk yorum) yakalanmamalı, Güven Kalkanı bir kara buzu emer.
+ * v2 sözleşmesi: saf tohumlu simülasyon (`components/customer/games/frost-catcher/sim.ts`), 2D canvas,
+ * Pratik/Sıralı. Sunucu skoru girdi kaydını yeniden oynatarak hesaplar (`./frost-catcher.server.ts`).
  */
 import { defineGame } from './types';
 
@@ -14,18 +13,18 @@ export const frostCatcherGame = defineGame({
   gameType: 'frost-catcher',
   title: 'Kar Tanesi Yakala',
   tagline:
-    'Düşen kar tanelerini eldivenle yakala, kombo yap; altın kristal bonus, kaçan tane can götürür.',
+    'Kar tanelerini eldivenle yakala, kombo yap; altın kristal +3. Kara buzdan kaç, Güven Kalkanı bir darbeyi emer.',
   emoji: '❄️',
   accent: '#38bdf8',
   status: 'live',
   role: 'action',
-  verification: 'action',
+  verification: 'deterministic',
   mergedFrom: ['guardian-of-trust'],
-  // Eski sözleşmeli bileşen pratik modunu bilmiyor; v2'ye taşınınca true.
-  modes: { practice: false, ranked: { attemptsPerDay: 1 } },
+  modes: { practice: true, ranked: { attemptsPerDay: 1 } },
   component: {
-    contract: 'legacy',
-    load: () => import('@/components/customer/games/frost-catcher-game').then((m) => m.FrostCatcherGame),
+    contract: 'v2',
+    load: () => import('@/components/customer/games/frost-catcher/frost-catcher-game').then((m) => m.FrostCatcherGame),
   },
-  controls: 'Parmağını/fareyi yatay kaydır ya da ← / → tuşları.',
+  controls:
+    'Parmağını/fareyi oyun alanında yatay kaydır ya da ← / → (A / D) tuşları. Kar ve altını yakala, kara buzdan (✕) kaç. Esc duraklatır.',
 });

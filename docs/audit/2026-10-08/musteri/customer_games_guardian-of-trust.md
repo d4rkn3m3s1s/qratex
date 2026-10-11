@@ -234,3 +234,12 @@ Salt okunur inceleme; kod değiştirilmedi, DB'ye dokunulmadı. Okunan dosyalar:
 - Oyun döngüsü (`:126-166`) yalnız düşüşü ve tabana inişi işler; kalkan çarpışması kontrolü yoktur.
 - **Yeniden üretim:** Masaüstünde fareyi kalkanın hizasında sabit tut (veya mobilde parmağı kaldırmadan sabit bekle — dokunmatikte sabit parmak `pointermove` üretmez). Bozuk yorum (💢) kalkanın içinden geçer, `FLOOR`'a ulaşır ve can götürür (`:153-162`). Oyuncu ancak fareyi sürekli kıpırdatarak engelleyebilir; bu, oyunun temel vaadini bozar ve "haksızlık" hissi yaratır.
 - **Öneri:** Çarpışma testi `loop` içine taşınmalı (her karede `shieldRef.current.x` ile yarıçap kontrolü); `moveShield` yalnız konumu güncellemeli. Böylece aynı kare içinde hem engelleme hem iyi yorum geçişi tutarlı hesaplanır ve `endGame(true)` tek yerden tetiklenir.
+
+## Uygulama (Dalga 2)
+
+Güven Muhafızı ayrı oyun olarak emekliye ayrıldı; iyi/kötü ayrımı Kar Tanesi Yakala'ya modifikatör olarak birleşti (§7.3 #9). Ayrıntı: `customer_games_frost-catcher.md` → "Uygulama (Dalga 2)".
+
+- `/customer/games/guardian-of-trust` → `/customer/games/frost-catcher` kalıcı yönlendirme (sorgu korunur); `lib/minigame-config.ts`'te `hidden: true` + gerekçe (veri silinmedi). Eski bileşen silindi.
+- **Kapanan bulgular:** B1 (ödül/turnuva skoru artık sunucu replay'inden; istemci beyanı yalnız `score_mismatch` sinyali), B3 (çarpışma her mantık adımında simülasyonda — sabit duran eldiven de yakalar/engeller), B5 (eşik/tavan etkin `config`'ten), B7 ("koru" fantezisi: kara buz = sahte yorum yakalanmamalı, Güven Kalkanı bir darbeyi emer; puan aktif yakalamadan), B8 (klavye, aria'lı canvas, sanal düğmeler + oyun alanının her yerinde kaydırma → parmak eldiveni kapatmaz, azaltılmış hareket), B11 (kırık yönlendirme/başlık soneki giderildi — sayfa dinamik rotada), B12 (DPR'lı motor yüzeyi, ikon/biçim ayrımı, bitişte kısa nefes sonra sonuç).
+- **Kalan (sahiplik dışı):** B2 turnuva eşitlik kırma, B4 günde 1 hak durum makinesi, B6 turnuva bileşeni teması, B9 `complete` sorgu maliyeti/önbellek, B10 ödül bildirimi transaction dışı — platform/`GameHost`/turnuva sahiplerinde.
+- **Turnuva tuzağı:** guardian-of-trust'ı gizlemek `featuredGameTypeForWeek` aday listesini kaydırır; hafta sınırında yayınlanmalı (turnuva sahibiyle koordine).

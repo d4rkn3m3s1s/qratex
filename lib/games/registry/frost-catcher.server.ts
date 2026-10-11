@@ -1,11 +1,9 @@
 /**
  * Kar Tanesi Yakala — SUNUCU modülü (doğrulayıcı). Yalnız `registry/server.ts` içe aktarır; istemci
- * paketine girmez. Etiketli içerik (`lib/games/content/frost-catcher.ts`) yalnız buradan import edilir.
- *
- * null → bu oyun için kanıt istenmez; `lib/game-session.ts` yalnız ortak makullük
- * kurallarını uygular (süre, saniye başına skor, tavan). Hedef aile: 'action'.
- * Örnek: `export const serverModule: GameServerModule = { verifier: actionVerifier({ … }) };`
+ * paketine girmez. Aile: 'deterministic' (tohum + girdi kaydı → sunucuda replay; eski 'action'
+ * hedefinden daha güçlü — skor eğrisi değil, skorun kendisi sunucuda hesaplanır).
  */
 import type { GameServerModule } from '@/lib/games/verify/types';
+import { frostCatcherVerifier } from '@/lib/games/validators/frost-catcher';
 
-export const serverModule: GameServerModule | null = null;
+export const serverModule: GameServerModule | null = { verifier: frostCatcherVerifier };

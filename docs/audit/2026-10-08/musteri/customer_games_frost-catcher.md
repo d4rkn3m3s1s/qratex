@@ -221,3 +221,14 @@
 - **maxScore override'ı:** Admin maxScore'u düşürürse istemci 60'a kadar devam eder, sunucu skoru kırpar. Yükseltirse oyun 60'ta erken biter. İkisi de tutarsız.
 - Override satırı yoksa (varsayılan durum) davranış tutarlıdır. Etki, admin'in bu oyun için eşik veya maxScore override'ı girmesine bağlıdır. Canlı DB'de override olup olmadığı kontrol edilmedi.
 - **Düzeltme yönü:** `won` sunucuda `clampedScore >= game.rewardThreshold` (ve oyuna özgü kayıp koşulu) ile hesaplanmalı. İstemci yalnızca bitiş nedenini (`timeout`, `lives`, `maxScore`) bildirmeli. Bileşen eşik ve maxScore için `game.config ?? DEF` kullanmalı; `GameShell`'e de effective eşik geçmeli.
+
+## Uygulama (Dalga 2)
+
+Kar Tanesi Yakala v2 olarak yeniden yazıldı; Güven Muhafızı iyi/kötü modifikatörü olarak buraya birleşti (§7.3 #8–9).
+
+- **Oyun:** `components/customer/games/frost-catcher/sim.ts` (saf, tohumlu, 60 Hz) + `frost-catcher-game.tsx` (v2 sözleşmesi, 2D canvas). 45 sn, 3 seviye (doğuş sıklaşır, düşüş hızlanır, kara buz artar). Kar +1, altın kristal +3, 10+/20+ komboda +1/+2; kara buz (sahte yorum) −1 can; Güven Kalkanı bir kara buzu emer.
+- **Sunucu otoritesi:** `lib/games/validators/frost-catcher.ts` + `registry/frost-catcher.server.ts` — deterministik replay; skor sunucunun. Aralık dışı hedef, bilinmeyen kod, insanüstü girdi hızı (> 75/sn), oyun sonrası girdi, bitmeden kanıt → `proof_invalid`; hızlandırılmış betik → `implausible`; kanıtsız → `proof_missing`. Eldiven hızı simülasyonda sınırlı (ışınlanma yok). Jest: `__tests__/lib/frost-catcher.test.ts` (15 test; hile reddi + dürüst oyun ödülü + bot kalibrasyonu).
+- **Kurallar:** `lib/minigame-config.ts` satırı kalibrasyona göre: tavan 200, eşik 45, `maxScorePerSec` 6, pencere 300 sn. Eşik/tavan istemcide etkin `config`'ten (admin override) — B3 kapandı.
+- **Kapanan bulgular:** B3 (statik registry eşiği), B4 (kurallar/hedef/ödül öğreticide ve HUD'da; kombo bonusu açık), B5 (başlat yarışı artık kabukta — bileşen oturum açmaz), B6 kısmen (turnuva/liderlik sunucu replay skoruyla beslenir; istemci beyanı yalnız sinyal), B7 (klavye ←/→/A/D, Esc, odaklanabilir canvas + aria, `aria-live` HUD, azaltılmış hareket → sarsıntı/parçacık/ses kapalı, dokunmatikte ≥ 44 px sanal düğmeler), B8 (gradyan yüzey başına bir kez, `shadowBlur` yok, motor DPR ≤ 2), B9 (oyun metinleri yeniden yazıldı, sahte mekanik yok), B10 (eski bileşen silindi). Ayrıca: ilk oynayışta öğretici, Pratik/Sıralı mod, duraklat/devam (kabuk), renk körü güvenli palet + biçim/ikon ikinci kanalı.
+- **Rotalar:** statik `app/customer/games/frost-catcher/` silindi (dinamik `[game]` rotasını gölgeliyordu); `/customer/games/guardian-of-trust` → `/customer/games/frost-catcher` kalıcı yönlendirme (sorgu korunur).
+- **Kalan (sahiplik dışı):** B1/B2 "günde 1 hak" durum makinesi ve sonuç ekranı (skor/en iyi/yıldız/paylaş) `lib/game-session.ts` + `GameHost`'ta; turnuva eşitlik kırma `lib/tournament-core.ts`'te.

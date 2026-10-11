@@ -1,24 +1,12 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { GuardianOfTrustGame } from '@/components/customer/games/guardian-of-trust-game';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = { title: 'Güven Muhafızı | QRateX' };
-
-export default async function GuardianOfTrustPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
+/** Emekli rota: Kar Tanesi Yakala'ya iyi/kötü modifikatörü olarak birleşti (§7.3 #8–9). Sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) {
+    if (Array.isArray(v)) v.forEach((x) => q.append(k, x));
+    else if (v !== undefined) q.set(k, v);
   }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Güven Muhafızı ✨"
-        description="Düşen olumlu yorumları koru, bozuk yorumları kalkanınla engelle. Günde 1 hak!"
-      />
-      <GuardianOfTrustGame />
-    </div>
-  );
+  const qs = q.toString();
+  permanentRedirect(`/customer/games/frost-catcher${qs ? `?${qs}` : ''}`);
 }

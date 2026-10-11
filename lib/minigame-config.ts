@@ -220,6 +220,8 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 10,
     maxScorePerSec: 2,
     maxDurationSec: 140,
+    hidden: true,
+    hiddenReason: 'Kar Tanesi Yakala (frost-catcher) oyununa iyi/kötü modifikatörü olarak birleşti (§7.3 #8–9).',
   },
   {
     gameType: 'troll-slayer',
@@ -427,15 +429,17 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
       'Buzul Krallığı’nda gökten düşen kar tanelerini eldivenle yakala! Kombo yap, altın kristali kaçırma, buzu eritme.',
     emoji: '❄️',
     accent: '#38bdf8',
-    // Skor = yakalanan kar tanesi + kombo/bonus katkısı. 40 sn'de ~40+ yakalama olası;
-    // altın kristal +5, kombo +ekstra → üst sınır cömert tutuldu (cap: anti-cheat).
-    maxScore: 60,
-    rewardThreshold: 22,
+    // v2 (Dalga 2): 45 sn tohumlu sim, skor sunucuda replay ile hesaplanır. Kar +1, altın +3,
+    // 10+/20+ komboda +1/+2. Bot kalibrasyonu (__tests__/lib/frost-catcher.test.ts): hareketsiz
+    // ≤ ~34, seyrek ~34 ort., dikkatli ~97 ort., en iyi ~155 → eşik 45, tavan 200 (betik sigortası).
+    // Deneme penceresi duraklatma payıyla 300 sn.
+    maxScore: 200,
+    rewardThreshold: 45,
     rewardPoints: 120,
     rewardXp: 60,
     minDurationSec: 10,
-    maxScorePerSec: 5,
-    maxDurationSec: 130,
+    maxScorePerSec: 6,
+    maxDurationSec: 300,
   },
 
   // ── Yeni portföy (yol haritası §7.3, lib/games/registry) — YAPIM AŞAMASINDA ──
@@ -542,27 +546,29 @@ export function getMiniGame(gameType: string): MiniGameDef | undefined {
 }
 
 /**
- * Pacman ("Yıldız Avı") registry dışındaki eski oyundur (ayrı route + bileşen). Sunucu
- * kuralları (ödül, eşik, süre, makullük, admin aç/kapat override'ı) generic oyunlarla
- * AYNI çekirdekten (`lib/game-session.ts`) geçsin diye burada tanım olarak da durur.
- * Hub/sidebar listelerine girmesin diye MINI_GAMES'e EKLENMEZ (hub kartı ayrı).
- * Skor = toplanan yıldız (0..5).
+ * Yıldız Avı (sunucu anahtarı tarihsel olarak 'pacman'). Oyun kayıt defterinde
+ * (lib/games/registry/star-hunt.ts) ve generic `[game]` API'sinden geçer; sunucu kuralları
+ * (ödül, eşik, süre, makullük, admin aç/kapat override'ı) burada. MINI_GAMES'e EKLENMEZ
+ * (hub/turnuva rotasyonu indeks tuzağı — lib/games/README.md).
+ * Skor = 5 seviye boyunca toplanan yıldız (0..25); eşik 5 = ilk seviyeyi temizlemek.
+ * Skor sunucuda deterministik replay ile hesaplanır (lib/games/validators/star-hunt.ts).
  */
 export const PACMAN_GAME: MiniGameDef = {
   gameType: MINIGAME.gameType,
   labelKey: 'pacman_game',
   title: 'Yıldız Avı',
-  description: 'QRatex labirentinde yıldızları topla, hayaletlerden kaç! 5 yıldız = ödül.',
+  description: 'Labirentte yıldızları topla, hayaletlerden kaç: 5 seviye, 3 can. İlk 5 yıldız ödülü getirir.',
   emoji: '👾',
   accent: '#fbbf24',
-  maxScore: MINIGAME.totalStars,
+  // components/customer/games/star-hunt/sim.ts MAX_SCORE (5 seviye × 5 yıldız).
+  maxScore: 25,
   rewardThreshold: MINIGAME.starsForReward,
   rewardPoints: MINIGAME.rewardPoints,
   rewardXp: MINIGAME.rewardXp,
   minDurationSec: MINIGAME.minDurationSec,
-  // En kısa rota 45 hücre ≈ 10,6 sn (4,24 hücre/sn) → 5 yıldız en erken ~10,6 sn.
-  // 0,5/sn: 5 yıldız ≥ 10 sn (dürüst en hızlı oyuncu geçer, 9 sn'de tavan skor geçmez).
-  maxScorePerSec: 0.5,
+  // Oyuncu 4,5 hücre/sn; seviye başı 1,5 sn hazırlık + seviye arası 1,7 sn. Skor replay'le
+  // sunucunun; bu tavan yalnız betik koruması (25 yıldız > 0,8 × 9 sn).
+  maxScorePerSec: 0.8,
   maxDurationSec: 900,
 };
 
