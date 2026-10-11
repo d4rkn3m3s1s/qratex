@@ -25,7 +25,8 @@ import { cn } from '@/lib/utils';
 import { createBadge, errorText, updateBadge, uploadBadgeIcon } from './api';
 import { glyphSource } from './parts';
 import { resolveBadgeThumb } from '@/lib/badge-images';
-import { useBadgesAdminCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { BADGES_DICT, useBadgesAdminCopy } from './copy';
 
 /** İkon galerisi tek kaynaktan: rozet kataloğu (ikinci elle yazılmış liste yok — Bulgu 11). */
 const ICON_GALLERY = Array.from(new Map(BADGE_CATALOG.map((b) => [b.icon, b.name])).entries()).map(([icon, name]) => ({ icon, name }));
@@ -68,6 +69,9 @@ export type BadgeEditorProps = {
 };
 
 export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorProps) {
+  const fz = useBadgesAdminCopy().fx;
+  const L = useSourceT(BADGES_DICT);
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const isCharacter = badge?.isCharacter === true;
   const form = useZodForm<BadgeUpsertValues>(
@@ -89,11 +93,11 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
       onOpenChange={onOpenChange}
       mode={badge ? 'edit' : 'create'}
       entityLabel="rozet"
-      title={badge ? `“${badge.name}” düzenle` : 'Yeni rozet'}
+      title={badge ? fz.editTitle(badge.name) : fz.newBadge}
       description={
         isCharacter
-          ? 'Karakter rozeti: kazanma koşulu karakter motorundadır; ad, görünüm ve durum düzenlenir.'
-          : 'Kaydedilen her değişiklik denetim kaydına yazılır. Ödül puanı kod içindeki ödül tablosundan gelir.'
+          ? ux.karakterRozetiKazanmaKosulu
+          : ux.kaydedilenHerDegisiklikDenetim
       }
       form={form}
       width="lg"
@@ -106,27 +110,27 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
         return created.id;
       }}
       onSaved={(id) => onSaved(String(id))}
-      successToast={badge ? 'Rozet güncellendi' : 'Rozet oluşturuldu'}
+      successToast={badge ? ux.rozetGuncellendi : ux.rozetOlusturuldu}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_14rem]">
         <div className="space-y-4">
-          <TextField control={form.control} name="name" label="Rozet adı" required maxLength={60} />
-          <TextareaField control={form.control} name="description" label="Açıklama" optional description="Müşteri rozeti kazandığında görür. En fazla 300 karakter." />
+          <TextField control={form.control} name="name" label={ux.rozetAdi} required maxLength={60} />
+          <TextareaField control={form.control} name="description" label={ux.aciklama} optional description={ux.musteriRozetiKazandigindaGorur} />
           <IconPicker control={form.control} />
           <div className="grid gap-4 sm:grid-cols-2">
             {!isCharacter && (
               <SelectField
                 control={form.control}
                 name="category"
-                label="Kategori"
-                options={BADGE_CATEGORIES.filter((c) => c.value !== 'dizi').map((c) => ({ value: c.value, label: c.label }))}
+                label={ux.kategori}
+                options={BADGE_CATEGORIES.filter((c) => c.value !== 'dizi').map((c) => ({ value: c.value, label: L(c.label) }))}
               />
             )}
             <SelectField
               control={form.control}
               name="rarity"
-              label="Nadirlik"
-              options={BADGE_RARITIES.map((r) => ({ value: r, label: RARITY_LABEL[r] }))}
+              label={ux.nadirlik}
+              options={BADGE_RARITIES.map((r) => ({ value: r, label: L(RARITY_LABEL[r]) }))}
             />
           </div>
 
@@ -137,15 +141,15 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
                 <SelectField
                   control={form.control}
                   name="requirementType"
-                  label="Sayaç"
+                  label={ux.sayac}
                   options={REQUIREMENT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
-                <NumberField control={form.control} name="targetValue" label="Hedef" min={1} max={1_000_000} />
+                <NumberField control={form.control} name="targetValue" label={ux.hedef} min={1} max={1_000_000} />
               </div>
               {reqOption ? (
                 <p className="text-xs text-fg-muted">
                   <span className={cn('font-medium', trackabilityOf(reqOption.value) === 'exact' ? 'text-success' : 'text-warning')}>
-                    {TRACKABILITY_LABEL[trackabilityOf(reqOption.value)]}
+                    {L(TRACKABILITY_LABEL[trackabilityOf(reqOption.value)])}
                   </span>
                   {' · '}
                   {reqOption.hint}
@@ -165,12 +169,12 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
           <SwitchField
             control={form.control}
             name="isActive"
-            label="Etkin"
+            label={ux.etkin}
             variant="card"
             description={
               isCharacter
-                ? 'Kapalıyken bu karakter yeni kullanıcılara verilmez; kazananlarda kalır.'
-                : 'Kapalıyken kimse yeni kazanamaz; kazananlarda kalır.'
+                ? ux.kapaliykenBuKarakterYeni
+                : ux.kapaliykenKimseYeniKazanamaz
             }
           />
           <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-muted">
@@ -184,14 +188,15 @@ export function BadgeEditor({ open, onOpenChange, badge, onSaved }: BadgeEditorP
 }
 
 function PreviewCard({ control }: { control: Control<BadgeUpsertValues> }) {
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const [name, icon, rarity, color] = useWatch({ control, name: ['name', 'icon', 'rarity', 'color'] });
   return (
-    <aside aria-label="Önizleme" className="order-first lg:order-none">
+    <aside aria-label={ux.onizleme} className="order-first lg:order-none">
       <div className="sticky top-2 flex flex-col items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-center">
         <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{bx.customerView}</span>
         <BadgeGlyph label={name || 'Rozet'} {...glyphSource(icon)} rarity={rarity} color={color ?? undefined} size="xl" register="play" />
-        <span className="line-clamp-2 font-semibold text-fg">{name || 'Rozet adı'}</span>
+        <span className="line-clamp-2 font-semibold text-fg">{name || ux.rozetAdi}</span>
         <RarityBadge rarity={rarity} />
       </div>
     </aside>
@@ -199,6 +204,9 @@ function PreviewCard({ control }: { control: Control<BadgeUpsertValues> }) {
 }
 
 function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
+  const fz = useBadgesAdminCopy().fx;
+  const uy = useBadgesAdminCopy().ui2;
+  const ux = useBadgesAdminCopy().ui;
   const id = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
@@ -216,7 +224,7 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
       render={({ field, fieldState }) => (
         <fieldset className="space-y-2" aria-describedby={fieldState.error ? `${id}-err` : undefined}>
           <legend className="text-sm font-medium text-fg">
-            İkon <span className="text-danger">*</span>
+            {fz.icon} <span className="text-danger">*</span>
           </legend>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1">
@@ -225,8 +233,8 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
                 id={`${id}-q`}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Galeride ara"
-                aria-label="İkon galerisinde ara"
+                placeholder={ux.galerideAra}
+                aria-label={ux.ikonGalerisindeAra}
                 className="min-h-11 pl-8 sm:min-h-10"
               />
             </div>
@@ -235,7 +243,7 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
               type="file"
               accept="image/svg+xml,image/png"
               className="sr-only"
-              aria-label="SVG ya da PNG ikon yükle"
+              aria-label={ux.svgYaDaPng}
               onChange={async (e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
@@ -245,7 +253,7 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
                 try {
                   field.onChange(await uploadBadgeIcon(f));
                 } catch (err) {
-                  setError(errorText(err, 'İkon yüklenemedi.'));
+                  setError(errorText(err, ux.ikonYuklenemedi));
                 } finally {
                   setBusy(false);
                 }
@@ -253,10 +261,10 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
             />
             <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
-              {busy ? 'Yükleniyor…' : 'Dosya yükle'}
+              {busy ? ux.yukleniyor : ux.dosyaYukle}
             </Button>
           </div>
-          <div role="listbox" aria-label="İkon galerisi" className="grid max-h-56 grid-cols-6 gap-1.5 overflow-y-auto rounded-lg border border-border p-2 sm:grid-cols-8">
+          <div role="listbox" aria-label={ux.ikonGalerisi} className="grid max-h-56 grid-cols-6 gap-1.5 overflow-y-auto rounded-lg border border-border p-2 sm:grid-cols-8">
             {list.map((i) => {
               const selected = field.value === i.icon;
               return (
@@ -277,10 +285,10 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
                 </button>
               );
             })}
-            {list.length === 0 ? <p className="col-span-full py-4 text-center text-sm text-fg-muted">Bu aramaya uyan ikon yok.</p> : null}
+            {list.length === 0 ? <p className="col-span-full py-4 text-center text-sm text-fg-muted">{uy.buAramayaUyanIkon}</p> : null}
           </div>
           <p className="truncate text-xs text-fg-muted">
-            Seçili: <span className="font-mono">{field.value || '—'}</span>
+            {fz.selected} <span className="font-mono">{field.value || '—'}</span>
           </p>
           {error ? <InlineError variant="banner">{error}</InlineError> : null}
           {fieldState.error ? (
@@ -295,6 +303,8 @@ function IconPicker({ control }: { control: Control<BadgeUpsertValues> }) {
 }
 
 function ColorRow({ control, name, label, hint }: { control: Control<BadgeUpsertValues>; name: 'color' | 'bgColor'; label: string; hint: string }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const id = useId();
   return (
     <Controller
@@ -306,7 +316,7 @@ function ColorRow({ control, name, label, hint }: { control: Control<BadgeUpsert
           <div className="flex items-center gap-2">
             <input
               type="color"
-              aria-label={`${label} seçici`}
+              aria-label={fz.pickerOf(label)}
               value={field.value ?? '#7c3aed'}
               onChange={(e) => field.onChange(e.target.value)}
               className="h-11 w-11 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-1 sm:h-10 sm:w-10"
@@ -314,7 +324,7 @@ function ColorRow({ control, name, label, hint }: { control: Control<BadgeUpsert
             <Input
               id={`${id}-hex`}
               value={field.value ?? ''}
-              placeholder="Nadirlik rengi"
+              placeholder={ux.nadirlikRengi}
               onChange={(e) => field.onChange(e.target.value.trim() || null)}
               onBlur={field.onBlur}
               aria-invalid={fieldState.error ? true : undefined}
@@ -333,24 +343,25 @@ function ColorRow({ control, name, label, hint }: { control: Control<BadgeUpsert
 }
 
 function ColorFields({ control, onReset }: { control: Control<BadgeUpsertValues>; onReset: () => void }) {
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const [color, bgColor] = useWatch({ control, name: ['color', 'bgColor'] });
   return (
     <fieldset className="space-y-3 rounded-lg border border-border p-3">
       <legend className="px-1 text-sm font-medium text-fg">{bx.appearance}</legend>
       <div className="grid gap-4 sm:grid-cols-2">
-        <ColorRow control={control} name="color" label="Vurgu rengi" hint="Boş bırakılırsa nadirlik rengi kullanılır." />
-        <ColorRow control={control} name="bgColor" label="Arka plan rengi" hint="Yalnız vurgu rengiyle birlikte uygulanır." />
+        <ColorRow control={control} name="color" label={ux.vurguRengi} hint={ux.bosBirakilirsaNadirlikRengi} />
+        <ColorRow control={control} name="bgColor" label={ux.arkaPlanRengi} hint={ux.yalnizVurguRengiyleBirlikte} />
       </div>
       {bgColor && !color ? (
         <p role="status" className="text-xs text-warning">
-          Arka plan rengi, vurgu rengi seçilmeden müşteride uygulanmaz.
+          {ux.arkaPlanRengiVurgu}
         </p>
       ) : null}
       {color || bgColor ? (
         <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={onReset}>
           <RotateCcw className="h-4 w-4" aria-hidden />
-          Nadirlik rengine dön
+          {ux.nadirlikRengineDon}
         </Button>
       ) : null}
     </fieldset>

@@ -14,6 +14,7 @@ import { BadgeDetailBody } from './badge-sheet';
 import { BadgeEditor } from './badge-editor';
 import { CatalogTab, type CatalogInitial } from './catalog-tab';
 import { ThresholdsTab } from './thresholds-tab';
+import { useBadgesAdminCopy } from './copy';
 
 // Test laboratuvarı (sınıflandırıcı, 3B sahne, karakter açılışı) yalnız sekmesi açılınca yüklenir.
 const LabTab = dynamic(() => import('./lab-tab'), { ssr: false, loading: () => <SkeletonCards /> });
@@ -29,6 +30,8 @@ export type BadgesInitial = {
  * ve /admin/character-test buraya (?tab=esikler / ?tab=test) kalıcı yönlenir.
  */
 export function BadgesCenter({ initial }: { initial: BadgesInitial }) {
+  const uy = useBadgesAdminCopy().ui2;
+  const ux = useBadgesAdminCopy().ui;
   const qc = useQueryClient();
   const stats = useQuery({ queryKey: badgeKeys.stats(), queryFn: fetchStats, initialData: initial.stats ?? undefined, staleTime: 30_000 });
   const sheet = useDetailSheet('badge');
@@ -39,18 +42,18 @@ export function BadgesCenter({ initial }: { initial: BadgesInitial }) {
       register="ops"
       header={
         <PageHeader
-          title="Rozetler"
-          description="Rozet kataloğunu yönetin, karakter rozeti eşiklerini etkisini görerek ayarlayın ve açılışları test laboratuvarında deneyin."
+          title={ux.rozetler}
+          description={ux.rozetKatalogunuYonetinKarakter}
           icon={<Award />}
           actions={
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => qc.invalidateQueries({ queryKey: badgeKeys.all })}>
                 <RefreshCw className="h-4 w-4" aria-hidden />
-                Yenile
+                {uy.yenile}
               </Button>
               <Button className="min-h-11 sm:min-h-10" onClick={() => setEditor({ open: true, badge: null })}>
                 <Plus className="h-4 w-4" aria-hidden />
-                Yeni rozet
+                {uy.yeniRozet}
               </Button>
             </div>
           }
@@ -58,13 +61,13 @@ export function BadgesCenter({ initial }: { initial: BadgesInitial }) {
       }
     >
       <SectionTabs
-        ariaLabel="Rozetler bölümleri"
+        ariaLabel={ux.rozetlerBolumleri}
         defaultValue="katalog"
         resetKeys={['page', 'size', 'sort', 'q', 'rarity', 'health', 'series', 'set', 'badge', 'user', 'reveal', 'scene']}
         tabs={[
-          { value: 'katalog', label: 'Katalog', icon: <Library />, count: stats.data ? stats.data.normal.total + stats.data.series.total : undefined },
-          { value: 'esikler', label: 'Eşikler', icon: <SlidersHorizontal /> },
-          { value: 'test', label: 'Test lab', icon: <FlaskConical /> },
+          { value: 'katalog', label: ux.katalog, icon: <Library />, count: stats.data ? stats.data.normal.total + stats.data.series.total : undefined },
+          { value: 'esikler', label: ux.esikler, icon: <SlidersHorizontal /> },
+          { value: 'test', label: ux.testLab, icon: <FlaskConical /> },
         ]}
       >
         {(tab) =>
@@ -78,7 +81,7 @@ export function BadgesCenter({ initial }: { initial: BadgesInitial }) {
         }
       </SectionTabs>
 
-      <DetailSheet paramKey="badge" size="lg" title="Rozet ayrıntısı" description="Kazanım eğilimi, kazananlar ve değişiklik geçmişi">
+      <DetailSheet paramKey="badge" size="lg" title={ux.rozetAyrintisi} description={ux.kazanimEgilimiKazananlarVe}>
         {(id) => <BadgeDetailBody id={id} onEdit={(b) => setEditor({ open: true, badge: b })} onOpenOther={(other) => sheet.open(other)} />}
       </DetailSheet>
 

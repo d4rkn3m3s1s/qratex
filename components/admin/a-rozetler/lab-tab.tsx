@@ -19,7 +19,8 @@ import type { Moment } from '@/lib/moments/types';
 import { badgeKeys, errorText, fetchBadges, fetchLabCatalog, fetchLabStatus, fetchLabTargets, labClassify, labPreview, labSandbox } from './api';
 import { fmtAgo, fmtNumber } from './format';
 import { ProgressBar } from './parts';
-import { useBadgesAdminCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { BADGES_DICT, useBadgesAdminCopy } from './copy';
 
 // Müşterinin gördüğü 3B/canvas içerik yalnız istenince yüklenir (ana paket dışında).
 const CharacterReveal = dynamic(() => import('@/components/customer/character-reveal').then((m) => m.CharacterReveal), { ssr: false });
@@ -52,6 +53,7 @@ export default function LabTab() {
 // ───────────────────────────── Sandbox ─────────────────────────────
 
 function SandboxSection() {
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const user = get('user') ?? '';
@@ -62,22 +64,22 @@ function SandboxSection() {
 
   return (
     <SectionCard
-      title="Test hesabında uçtan uca deneme"
-      description="Karakter barını üretimdeki hesapla görün; sentetik yorumla doldurun, sıfırlayın, temizleyin. Yalnız test hesapları (demo müşteri ya da izin listesi) seçilebilir."
+      title={ux.testHesabindaUctanUca}
+      description={ux.karakterBariniUretimdekiHesapla}
       icon={<Beaker />}
     >
       <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="space-y-2">
           <Label htmlFor={searchId}>{bx.searchTestAccount}</Label>
-          <Input id={searchId} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="E-posta ya da ad" className="min-h-11 sm:min-h-10" />
+          <Input id={searchId} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={ux.ePostaYaDa} className="min-h-11 sm:min-h-10" />
           <QueryState
             query={targets}
             skeleton="list"
             isEmpty={(d) => d.length === 0}
-            empty={{ title: 'Test hesabı bulunamadı', description: 'Demo müşteri hesabı oluşturun ya da CHARACTER_TEST_ALLOWLIST ayarına e-posta ekleyin.', compact: true }}
+            empty={{ title: ux.testHesabiBulunamadi, description: ux.demoMusteriHesabiOlusturun, compact: true }}
           >
             {(items) => (
-              <ul className="max-h-72 space-y-1 overflow-y-auto" aria-label="Test hesapları">
+              <ul className="max-h-72 space-y-1 overflow-y-auto" aria-label={ux.testHesaplari}>
                 {items.map((t) => {
                   const key = t.email ?? t.id;
                   const active = user === key;
@@ -89,7 +91,7 @@ function SandboxSection() {
                         onClick={() => set({ user: key })}
                         className={`flex min-h-11 w-full flex-col items-start rounded-md border px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'border-brand bg-brand-subtle' : 'border-border hover:bg-surface-2'}`}
                       >
-                        <span className="font-medium text-fg">{t.name || 'Adsız'}</span>
+                        <span className="font-medium text-fg">{t.name || ux.adsiz}</span>
                         <span className="text-xs text-fg-muted">
                           {t.email} · {t.isDemo ? 'demo' : 'izin listesi'}
                         </span>
@@ -103,7 +105,7 @@ function SandboxSection() {
         </div>
         <div>
           {!user ? (
-            <EmptyState icon={FlaskConical} title="Bir test hesabı seçin" description="Seçilen hesabın kategori ilerlemesi, sahip olduğu karakterler ve sentetik verisi burada görünür." compact />
+            <EmptyState icon={FlaskConical} title={ux.birTestHesabiSecin} description={ux.secilenHesabinKategoriIlerlemesi} compact />
           ) : (
             <QueryState query={status} skeleton="detail">
               {(s) => <TargetPanel s={s} />}
@@ -116,6 +118,8 @@ function SandboxSection() {
 }
 
 function TargetPanel({ s }: { s: LabStatus }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const [category, setCategory] = useState(s.categories[0]?.key ?? '');
@@ -124,9 +128,9 @@ function TargetPanel({ s }: { s: LabStatus }) {
   const userKey = s.target.email ?? s.target.id;
   const locked = !s.mutationsEnabled || !s.target.allowed;
   const lockReason = !s.mutationsEnabled
-    ? 'Bu ortamda veri değiştiren test araçları kapalı (üretim). Önizleme ve sınıflandırma kullanılabilir.'
+    ? ux.buOrtamdaVeriDegistiren
     : !s.target.allowed
-      ? 'Bu hesap test hesabı değil; veri değiştirilemez.'
+      ? ux.buHesapTestHesabi
       : null;
 
   const run = async (action: 'fill' | 'reset' | 'clearCategories' | 'cleanupTest') => {
@@ -145,13 +149,13 @@ function TargetPanel({ s }: { s: LabStatus }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-fg">{s.target.name || 'Adsız'}</span>
+        <span className="font-medium text-fg">{s.target.name || ux.adsiz}</span>
         <span className="text-sm text-fg-muted">{s.target.email}</span>
-        <StatusBadge size="sm" tone={s.target.allowed ? 'success' : 'danger'} label={s.target.allowed ? 'Test hesabı' : 'Test hesabı değil'} />
+        <StatusBadge size="sm" tone={s.target.allowed ? 'success' : 'danger'} label={s.target.allowed ? ux.testHesabi : ux.testHesabiDegil} />
         {s.target.allowed ? (
           <Button asChild variant="link" size="sm" className="ml-auto h-auto min-h-11 px-0 sm:min-h-0">
             <Link href="/customer/me/badges" target="_blank" rel="noopener noreferrer">
-              Müşteri rozet sayfası
+              {ux.musteriRozetSayfasi}
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </Button>
@@ -164,7 +168,7 @@ function TargetPanel({ s }: { s: LabStatus }) {
         </p>
       ) : null}
 
-      <ul className="space-y-3" aria-label="Kategori ilerlemesi">
+      <ul className="space-y-3" aria-label={ux.kategoriIlerlemesi}>
         {s.categories.map((c) => (
           <li key={c.key} className="space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -173,15 +177,15 @@ function TargetPanel({ s }: { s: LabStatus }) {
                 {c.name}
               </span>
               <span className="tabular-nums text-fg-muted">
-                {fmtNumber(c.current)}/{fmtNumber(c.threshold)} · sayılan {fmtNumber(c.counted)}
-                {c.minReviewLength > 0 ? ` (≥ ${c.minReviewLength} krk)` : ''} · alınan {c.taken} · kalan {c.available}
+                {fz.progressLine(fmtNumber(c.current), fmtNumber(c.threshold), fmtNumber(c.counted))}
+                {c.minReviewLength > 0 ? fz.minChars(c.minReviewLength) : ''}{fz.takenLeft(c.taken, c.available)}
               </span>
             </div>
-            <ProgressBar value={c.current} max={c.threshold} ready={c.ready} label={`${c.name} ilerlemesi`} />
+            <ProgressBar value={c.current} max={c.threshold} ready={c.ready} label={fz.progressOf(c.name)} />
             {c.ready ? (
               <p className="flex items-center gap-1 text-xs text-success">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                Hazır — müşteri açılışı başlatabilir
+                {ux.hazirMusteriAcilisiBaslatabilir}
               </p>
             ) : c.available === 0 ? (
               <p className="text-xs text-fg-muted">{bx.exhausted}</p>
@@ -196,7 +200,7 @@ function TargetPanel({ s }: { s: LabStatus }) {
           ? 'yok'
           : s.ownedCharacters.map((o) => `${o.name} (${fmtAgo(o.earnedAt)})`).join(', ')}
         <br />
-        Sentetik veri: {fmtNumber(s.synthetic.consumptions)} tüketim · {fmtNumber(s.synthetic.cards)} test kartı
+        {fz.synthetic(fmtNumber(s.synthetic.consumptions), fmtNumber(s.synthetic.cards))}
       </div>
 
       <div className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
@@ -217,30 +221,30 @@ function TargetPanel({ s }: { s: LabStatus }) {
         </div>
         <Button className="min-h-11 sm:min-h-10" disabled={locked || busy !== null} onClick={() => run('fill').catch((e) => toast.error(errorText(e)))}>
           <Wand2 className="h-4 w-4" aria-hidden />
-          {busy === 'fill' ? 'Dolduruluyor…' : 'Barı hazır yap'}
+          {busy === 'fill' ? 'Dolduruluyor…' : ux.bariHazirYap}
         </Button>
         <div className="ml-auto flex flex-wrap gap-2">
           <ConfirmAction
             tone="danger"
-            title="Karakter rozetleri sıfırlansın mı?"
-            description="Test hesabının tüm karakter rozetleri kaldırılır. Ödül puanı geri alınmaz ama yeniden kazanımda ikinci kez basılmaz."
+            title={ux.karakterRozetleriSifirlansinMi}
+            description={ux.testHesabininTumKarakter}
             confirmPhrase="SIFIRLA"
-            confirmLabel="Sıfırla"
+            confirmLabel={ux.sifirla}
             disabled={locked || busy !== null}
-            impact={[{ label: 'Kaldırılacak karakter rozeti', value: fmtNumber(s.ownedCharacters.length), emphasis: true }]}
+            impact={[{ label: ux.kaldirilacakKarakterRozeti, value: fmtNumber(s.ownedCharacters.length), emphasis: true }]}
             trigger={
               <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={locked || busy !== null}>
-                Rozetleri sıfırla
+                {ux.rozetleriSifirla}
               </Button>
             }
             onConfirm={() => run('reset')}
           />
           <ConfirmAction
             tone="danger"
-            title="Yorum kategorileri temizlensin mi?"
-            description="Test hesabının tüm yorumlarındaki üslup etiketi kaldırılır; bar sıfırlanır."
-            confirmPhrase="TEMİZLE"
-            confirmLabel="Temizle"
+            title={ux.yorumKategorileriTemizlensinMi}
+            description={ux.testHesabininTumYorumlarindaki}
+            confirmPhrase={ux.temizle}
+            confirmLabel={ux.temizle2}
             disabled={locked || busy !== null}
             trigger={
               <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={locked || busy !== null}>
@@ -251,14 +255,14 @@ function TargetPanel({ s }: { s: LabStatus }) {
           />
           <ConfirmAction
             tone="warning"
-            title="Sentetik test verisi silinsin mi?"
-            description="Yalnız [KARAKTER-TEST] işaretli tüketimler, yorumları ve test kartı silinir. Gerçek veriye dokunulmaz."
+            title={ux.sentetikTestVerisiSilinsin}
+            description={ux.yalnizKarakterTestIsaretli}
             irreversibleNote={false}
-            confirmLabel="Sil"
+            confirmLabel={ux.sil}
             disabled={locked || busy !== null}
             impact={[
-              { label: 'Sentetik tüketim', value: fmtNumber(s.synthetic.consumptions) },
-              { label: 'Test kartı', value: fmtNumber(s.synthetic.cards) },
+              { label: ux.sentetikTuketim, value: fmtNumber(s.synthetic.consumptions) },
+              { label: ux.testKarti, value: fmtNumber(s.synthetic.cards) },
             ]}
             trigger={
               <Button variant="outline" className="min-h-11 sm:min-h-10" disabled={locked || busy !== null}>
@@ -286,6 +290,9 @@ const AI_ERROR: Record<string, string> = {
 };
 
 function ClassifierSection() {
+  const fz = useBadgesAdminCopy().fx;
+  const L = useSourceT(BADGES_DICT);
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const id = useId();
   const [text, setText] = useState('');
@@ -293,7 +300,7 @@ function ClassifierSection() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<LabClassifyResult | null>(null);
   return (
-    <SectionCard title="Canlı sınıflandırma" description="Üretimdeki sınıflandırıcı ve karakter seçicisiyle aynı fonksiyon. Hiçbir şey kaydedilmez." icon={<Sparkles />}>
+    <SectionCard title={ux.canliSiniflandirma} description={ux.uretimdekiSiniflandiriciVeKarakter} icon={<Sparkles />}>
       <form
         className="space-y-3"
         onSubmit={async (e) => {
@@ -314,10 +321,10 @@ function ClassifierSection() {
           <Label htmlFor={`${id}-text`}>{bx.sampleReview}</Label>
           <Textarea id={`${id}-text`} value={text} onChange={(e) => setText(e.target.value)} rows={4} maxLength={1000} aria-describedby={`${id}-count`} />
           <p id={`${id}-count`} className="text-xs text-fg-muted">
-            {text.trim().length}/1000 · 8 karakterden kısa yorumlar üretimde sınıflandırılmaz.
+            {fz.shortNote(text.trim().length)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5" aria-label="Örnek yorumlar">
+        <div className="flex flex-wrap gap-1.5" aria-label={ux.ornekYorumlar}>
           {SAMPLES.map((s) => (
             <Button key={s.label} type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-8" onClick={() => setText(s.text)}>
               {s.label}
@@ -325,7 +332,7 @@ function ClassifierSection() {
           ))}
         </div>
         <Button type="submit" className="min-h-11 sm:min-h-10" disabled={busy || text.trim().length < 3} aria-busy={busy}>
-          {busy ? 'Sınıflandırılıyor…' : 'Sınıflandır'}
+          {busy ? ux.siniflandiriliyor : ux.siniflandir}
         </Button>
       </form>
       {error ? <InlineError variant="banner">{error}</InlineError> : null}
@@ -343,13 +350,13 @@ function ClassifierSection() {
                 </p>
                 <p>
                   Karakter: <strong>{result.character?.name ?? '—'}</strong>{' '}
-                  {result.character ? <span className="text-fg-muted">({result.character.source === 'ai' ? 'AI seçimi' : 'yedek seçim'})</span> : null}
+                  {result.character ? <span className="text-fg-muted">({result.character.source === 'ai' ? ux.aiSecimi : ux.yedekSecim})</span> : null}
                 </p>
                 {result.character?.why ? <p className="italic text-fg-muted">“{result.character.why}”</p> : null}
-                {result.character?.aiError ? <p className="text-warning">{AI_ERROR[result.character.aiError] ?? result.character.aiError}</p> : null}
+                {result.character?.aiError ? <p className="text-warning">{L(AI_ERROR[result.character.aiError] ?? result.character.aiError)}</p> : null}
               </>
             )}
-            <p className="text-xs text-fg-muted">Süre: {fmtNumber(result.latencyMs)} ms</p>
+            <p className="text-xs text-fg-muted">{fz.latency(fmtNumber(result.latencyMs))}</p>
           </div>
         ) : null}
       </div>
@@ -360,6 +367,8 @@ function ClassifierSection() {
 // ───────────────────────────── 3B rozet sahnesi ─────────────────────────────
 
 function ScenePreviewSection() {
+  const uy = useBadgesAdminCopy().ui2;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const sceneId = get('scene') ?? '';
@@ -384,15 +393,15 @@ function ScenePreviewSection() {
     [badge]
   );
   return (
-    <SectionCard title="3B rozet anı önizlemesi" description="Müşterinin rozet kazanınca gördüğü madalyon sahnesi (An Motoru). Önizleme hiçbir şey kaydetmez." icon={<Box />}>
-      <QueryState query={list} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: 'Önizlenecek rozet yok', compact: true }}>
+    <SectionCard title={ux.t3bRozetAniOnizlemesi} description={ux.musterininRozetKazanincaGordugu} icon={<Box />}>
+      <QueryState query={list} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: ux.onizlenecekRozetYok, compact: true }}>
         {(d) => (
           <div className="flex flex-wrap items-end gap-2">
             <div className="min-w-[14rem] flex-1 space-y-1">
-              <Label htmlFor={pickerId}>Rozet</Label>
+              <Label htmlFor={pickerId}>{uy.rozet}</Label>
               <Select value={sceneId || undefined} onValueChange={(v) => set({ scene: v })}>
                 <SelectTrigger id={pickerId} className="min-h-11 sm:min-h-10">
-                  <SelectValue placeholder="Rozet seçin" />
+                  <SelectValue placeholder={ux.rozetSecin} />
                 </SelectTrigger>
                 <SelectContent>
                   {d.items.map((b) => (
@@ -419,11 +428,12 @@ function ScenePreviewSection() {
 // ───────────────────────────── Karakter galerisi + açılış ─────────────────────────────
 
 function CharacterGallerySection() {
+  const ux = useBadgesAdminCopy().ui;
   const q = useQuery({ queryKey: badgeKeys.labCatalog(), queryFn: fetchLabCatalog, staleTime: 60_000 });
   return (
     <SectionCard
-      title="Karakter galerisi ve açılış önizlemesi"
-      description="Her karakterin kademesi, ödülü, açılış metni ve sahip sayısı. Bir karakter seçip açılışı gerçek yükle oynatın (paylaşım kapalı, kayıt yok)."
+      title={ux.karakterGalerisiVeAcilis}
+      description={ux.herKarakterinKademesiOdulu}
       icon={<Sparkles />}
     >
       <QueryState query={q} skeleton="cards">
@@ -436,6 +446,8 @@ function CharacterGallerySection() {
 const TIER_LABEL: Record<string, string> = { common: 'Yaygın', rare: 'Nadir', legendary: 'Efsanevi' };
 
 function Gallery({ cat }: { cat: LabCatalog }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const { get, set } = useUrlState();
   const selected = get('reveal') ?? '';
@@ -456,8 +468,8 @@ function Gallery({ cat }: { cat: LabCatalog }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-fg-muted">
-        {fmtNumber(cat.characters.length)} karakter · {fmtNumber(missingText)} karakterin açılış metni yok
-        {cat.unassigned.length ? ` · kategorisiz: ${cat.unassigned.join(', ')}` : ''}
+        {fz.characterCount(fmtNumber(cat.characters.length), fmtNumber(missingText))}
+        {cat.unassigned.length ? fz.uncategorized(cat.unassigned.join(', ')) : ''}
       </p>
       {cat.categories.map((g) => {
         const items = cat.characters.filter((c) => c.categoryKey === g.key);
@@ -480,12 +492,12 @@ function Gallery({ cat }: { cat: LabCatalog }) {
                     >
                       <span className="font-medium text-fg">{c.name}</span>
                       <span className="text-xs text-fg-muted">
-                        {c.tier ? TIER_LABEL[c.tier] : 'Kademesiz'} · +{fmtNumber(c.rewardPoints)} puan · {fmtNumber(c.holders)} sahip
+                        {fz.tierLine(c.tier ? (fz.tiers[c.tier] ?? TIER_LABEL[c.tier] ?? c.tier) : fz.noTier, fmtNumber(c.rewardPoints), fmtNumber(c.holders))}
                       </span>
                       <span className="flex flex-wrap gap-1">
-                        {!c.hasRevealText ? <StatusBadge size="sm" tone="warning" label="Açılış metni yok" /> : null}
-                        {!c.isActive ? <StatusBadge size="sm" tone="neutral" icon={Lock} label="Pasif" /> : null}
-                        {!c.hasRecord ? <StatusBadge size="sm" tone="info" label="Kayıt ilk kazanımda" /> : null}
+                        {!c.hasRevealText ? <StatusBadge size="sm" tone="warning" label={ux.acilisMetniYok} /> : null}
+                        {!c.isActive ? <StatusBadge size="sm" tone="neutral" icon={Lock} label={ux.pasif} /> : null}
+                        {!c.hasRecord ? <StatusBadge size="sm" tone="info" label={ux.kayitIlkKazanimda} /> : null}
                       </span>
                     </button>
                   </li>
@@ -513,7 +525,7 @@ function Gallery({ cat }: { cat: LabCatalog }) {
             }
           }}
         >
-          <p className="font-medium text-fg">{current.name} — açılış önizlemesi</p>
+          <p className="font-medium text-fg">{fz.revealPreview(current.name)}</p>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor={`${id}-variant`}>{bx.appearance}</Label>
@@ -529,21 +541,21 @@ function Gallery({ cat }: { cat: LabCatalog }) {
             </div>
             <div className="space-y-1 sm:col-span-2">
               <Label htmlFor={`${id}-why`}>{bx.reasonOptional}</Label>
-              <Input id={`${id}-why`} value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} placeholder="Boşsa örnek gerekçe kullanılır" className="min-h-11 sm:min-h-10" />
+              <Input id={`${id}-why`} value={why} onChange={(e) => setWhy(e.target.value)} maxLength={300} placeholder={ux.bossaOrnekGerekceKullanilir} className="min-h-11 sm:min-h-10" />
             </div>
             <div className="space-y-1">
               <Label htmlFor={`${id}-rate`}>{bx.ownerRate}</Label>
-              <Input id={`${id}-rate`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="Gerçek oran" className="min-h-11 sm:min-h-10" />
+              <Input id={`${id}-rate`} inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={ux.gercekOran} className="min-h-11 sm:min-h-10" />
             </div>
           </div>
           {error ? <InlineError variant="banner">{error}</InlineError> : null}
           <Button type="submit" className="min-h-11 sm:min-h-10" disabled={busy} aria-busy={busy}>
             <Play className="h-4 w-4" aria-hidden />
-            {busy ? 'Hazırlanıyor…' : 'Açılışı oynat'}
+            {busy ? ux.hazirlaniyor : ux.acilisiOynat}
           </Button>
         </form>
       ) : (
-        <EmptyState icon={Sparkles} title="Bir karakter seçin" description="Açılışı oynatmak için galeriden bir karakter seçin." compact />
+        <EmptyState icon={Sparkles} title={ux.birKarakterSecin} description={ux.acilisiOynatmakIcinGaleriden} compact />
       )}
 
       {character ? <CharacterReveal open onClose={() => setCharacter(null)} variant={variant} character={character} allowShare={false} /> : null}

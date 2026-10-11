@@ -64,12 +64,12 @@ function toOverrides(categories: ThresholdCategoryRow[], d: Draft): ThresholdOve
   return out;
 }
 
-function fieldError(raw: string, kind: 'threshold' | 'minReviewLength'): string | null {
+function fieldError(raw: string, kind: 'threshold' | 'minReviewLength', m: { intRequired: string; rangeRequired: (a: number, b: number) => string }): string | null {
   if (raw.trim() === '') return null;
   const n = Number(raw);
   const lim = THRESHOLD_LIMITS[kind];
-  if (!Number.isInteger(n)) return 'Tam sayı girin.';
-  if (n < lim.min || n > lim.max) return `${lim.min}–${lim.max} arasında olmalı.`;
+  if (!Number.isInteger(n)) return m.intRequired;
+  if (n < lim.min || n > lim.max) return m.rangeRequired(lim.min, lim.max);
   return null;
 }
 
@@ -77,10 +77,11 @@ const stable = (o: ThresholdOverrides) =>
   JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]?.threshold ?? null, o[k]?.minReviewLength ?? null]));
 
 export function ThresholdsTab({ initial }: { initial: ThresholdsState | null }) {
+  const ux = useBadgesAdminCopy().ui;
   const q = useQuery({ queryKey: badgeKeys.thresholds(), queryFn: fetchThresholds, initialData: initial ?? undefined, staleTime: 0 });
   return (
     <div className="space-y-6 pt-4">
-      <QueryState query={q} skeleton="form" error={{ title: 'Eşikler okunamadı — düzenleme kilitli' }}>
+      <QueryState query={q} skeleton="form" error={{ title: ux.esiklerOkunamadiDuzenlemeKilitli }}>
         {(state) => <ThresholdsEditor state={state} />}
       </QueryState>
       <ThresholdHistory />
@@ -89,6 +90,8 @@ export function ThresholdsTab({ initial }: { initial: ThresholdsState | null }) 
 }
 
 function ThresholdsEditor({ state }: { state: ThresholdsState }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const { reduce } = useMotionPolicy();
@@ -120,7 +123,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
   const errors = useMemo(
     () =>
       Object.fromEntries(
-        state.categories.map((c) => [c.key, { threshold: fieldError(draft[c.key]?.threshold ?? '', 'threshold'), minReviewLength: fieldError(draft[c.key]?.minReviewLength ?? '', 'minReviewLength') }])
+        state.categories.map((c) => [c.key, { threshold: fieldError(draft[c.key]?.threshold ?? '', 'threshold', fz), minReviewLength: fieldError(draft[c.key]?.minReviewLength ?? '', 'minReviewLength', fz) }])
       ),
     [state.categories, draft]
   );
@@ -145,7 +148,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
   return (
     <>
       <SectionCard
-        title="Karakter kategori eşikleri"
+        title={ux.karakterKategoriEsikleri}
         description={
           <>
             {bx.thresholdsIntro} {bx.retroA} <strong>{bx.retroStrong}</strong> {bx.retroB}
@@ -153,7 +156,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
         }
         actions={
           <span className="text-xs text-fg-muted">
-            {state.lastChange ? `Son değişiklik: ${state.lastChange.actor ?? 'Bilinmeyen'} · ${fmtAgo(state.lastChange.at)}` : 'Henüz değiştirilmedi'}
+            {state.lastChange ? fz.lastChange(state.lastChange.actor ?? fz.unknown, fmtAgo(state.lastChange.at)) : ux.henuzDegistirilmedi}
           </span>
         }
       >
@@ -177,7 +180,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
           <div className="sticky bottom-3 z-20">
             <m.div
               role="region"
-              aria-label="Kaydedilmemiş eşik değişiklikleri"
+              aria-label={ux.kaydedilmemisEsikDegisiklikleri}
               initial={reduce ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: 16 }}
@@ -185,17 +188,17 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
               className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3 shadow-lg"
             >
               <span className="text-sm font-medium text-fg">
-                {fmtNumber(changedKeys.length)} kategori değişti{revertOf ? ' (geçmişten geri yükleme)' : ''}
+                {fz.categoriesChanged(fmtNumber(changedKeys.length))}{revertOf ? ux.gecmistenGeriYukleme : ''}
               </span>
               {hasErrors ? <span className="text-sm text-danger">{bx.fixErrors}</span> : null}
               <div className="ml-auto flex flex-wrap gap-2">
                 <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => { setDraft(toDraft(state)); setRevertOf(null); }}>
                   <Undo2 className="h-4 w-4" aria-hidden />
-                  Vazgeç
+                  {ux.vazgec}
                 </Button>
                 <Button className="min-h-11 sm:min-h-10" disabled={hasErrors} onClick={() => setReviewOpen(true)}>
                   <Eye className="h-4 w-4" aria-hidden />
-                  Etkiyi gör ve yayınla
+                  {ux.etkiyiGorVeYayinla}
                 </Button>
               </div>
             </m.div>
@@ -218,7 +221,7 @@ function ThresholdsEditor({ state }: { state: ThresholdsState }) {
             const saved = await saveThresholds(next, state.version, revertOf ?? undefined);
             qc.setQueryData(badgeKeys.thresholds(), saved);
             await qc.invalidateQueries({ queryKey: ['admin-badges', 'thresholds', 'history'] });
-            toast.success('Eşikler yayınlandı.');
+            toast.success(ux.esiklerYayinlandi);
             setReviewOpen(false);
           } catch (e) {
             if (e instanceof BadgesApiError && e.status === 409) setConflict(true);
@@ -245,6 +248,8 @@ function CategoryRow({
   onChange: (f: 'threshold' | 'minReviewLength', v: string) => void;
   onReset: () => void;
 }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const id = useId();
   const th = draft.threshold.trim() === '' ? c.defaultThreshold : Number(draft.threshold);
@@ -268,7 +273,7 @@ function CategoryRow({
       </div>
       <div className="space-y-1">
         <label htmlFor={`${id}-th`} className="text-sm font-medium text-fg">
-          Eşik (yorum)
+          {ux.esikYorum}
         </label>
         <Input
           id={`${id}-th`}
@@ -283,8 +288,8 @@ function CategoryRow({
         <p id={`${id}-th-hint`} className={errors.threshold ? 'text-xs text-danger' : aggressive ? 'text-xs text-warning' : 'text-xs text-fg-muted'} role={errors.threshold ? 'alert' : undefined}>
           {errors.threshold ??
             (aggressive
-              ? `Agresif: her ${th} yorumda bir rozet ve ödül puanı.`
-              : `Varsayılan ${c.defaultThreshold} · izinli ${THRESHOLD_LIMITS.threshold.min}–${THRESHOLD_LIMITS.threshold.max}`)}
+              ? fz.aggressive(th)
+              : fz.defaultAllowed(c.defaultThreshold, THRESHOLD_LIMITS.threshold.min, THRESHOLD_LIMITS.threshold.max))}
         </p>
       </div>
       <div className="space-y-1">
@@ -304,8 +309,8 @@ function CategoryRow({
         <p id={`${id}-len-hint`} className={errors.minReviewLength ? 'text-xs text-danger' : 'text-xs text-fg-muted'} role={errors.minReviewLength ? 'alert' : undefined}>
           {errors.minReviewLength ??
             (minLen > 0
-              ? 'Uzunluk şartı ilerleme hesabında bu kategorinin tüm yorum metinlerini okur (daha maliyetli).'
-              : `Varsayılan ${c.defaultMinReviewLength === 0 ? 'şart yok' : c.defaultMinReviewLength} · 0 = şart yok`)}
+              ? ux.uzunlukSartiIlerlemeHesabinda
+              : fz.defaultLen(c.defaultMinReviewLength === 0 ? fz.noRequirement : String(c.defaultMinReviewLength)))}
         </p>
       </div>
       <Button
@@ -314,10 +319,10 @@ function CategoryRow({
         className="min-h-11 justify-self-start md:mt-6"
         onClick={onReset}
         disabled={draft.threshold === '' && draft.minReviewLength === ''}
-        aria-label={`${c.name} kategorisini varsayılana döndür`}
+        aria-label={fz.resetCategory(c.name)}
       >
         <RotateCcw className="h-4 w-4" aria-hidden />
-        Varsayılan
+        {ux.varsayilan}
       </Button>
     </li>
   );
@@ -340,6 +345,8 @@ function ReviewDialog({
   onPublish: () => Promise<void>;
   onReload: () => Promise<void>;
 }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const [impact, setImpact] = useState<ThresholdImpact | null>(null);
   const [loading, setLoading] = useState(false);
@@ -357,7 +364,7 @@ function ReviewDialog({
     setLoading(true);
     previewThresholds(next)
       .then((r) => alive && setImpact(r))
-      .catch((e) => alive && setError(errorText(e, 'Etki hesaplanamadı.')))
+      .catch((e) => alive && setError(errorText(e, ux.etkiHesaplanamadi)))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -418,7 +425,7 @@ function ReviewDialog({
                       )}
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{r ? `${r.extraReveals >= 0 ? '+' : ''}${fmtNumber(r.extraReveals)} · ${fmtNumber(r.extraPointsEstimate)}` : '—'}</td>
-                    <td className="py-2">{r ? <Histogram values={r.histogram} accent={c.accent} label={`${c.name} ilerleme dağılımı`} /> : null}</td>
+                    <td className="py-2">{r ? <Histogram values={r.histogram} accent={c.accent} label={fz.distributionOf(c.name)} /> : null}</td>
                   </tr>
                 );
               })}
@@ -427,16 +434,16 @@ function ReviewDialog({
         </div>
         {impact ? (
           <p className="text-xs text-fg-muted">
-            {fmtNumber(impact.usersScanned)} kullanıcı tarandı · {fmtDateTime(impact.computedAt)}. Dağılım: %0–25, %25–50, %50–75, %75–100, hazır.
+            {fz.scanned(fmtNumber(impact.usersScanned), fmtDateTime(impact.computedAt))}
           </p>
         ) : null}
         {error ? <InlineError variant="banner">{error}</InlineError> : null}
         {conflict ? (
           <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning">
             <AlertTriangle className="h-4 w-4" aria-hidden />
-            Siz düzenlerken başka bir yönetici eşikleri değiştirdi.
+            {ux.sizDuzenlerkenBaskaBir}
             <Button size="sm" variant="outline" className="ml-auto min-h-11 sm:min-h-9" onClick={onReload}>
-              Güncel hali yükle
+              {ux.guncelHaliYukle}
             </Button>
           </div>
         ) : null}
@@ -444,15 +451,15 @@ function ReviewDialog({
           <label htmlFor={ackId} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-warning-border bg-warning-subtle p-3 text-sm">
             <Checkbox id={ackId} checked={ack} onCheckedChange={(v) => setAck(v === true)} className="mt-0.5" />
             <span>
-              Bu değişiklik {extraPoints > 0 ? `tahminen ${fmtNumber(extraPoints)} puanlık ek rozet açılmasına` : ''}
-              {extraPoints > 0 && regressed > 0 ? ' ve ' : ''}
-              {regressed > 0 ? `${fmtNumber(regressed)} hazır kullanıcının gerilemesine` : ''} yol açacak. Anladım, yayınla.
+              {fz.ackLead} {extraPoints > 0 ? fz.ackExtra(fmtNumber(extraPoints)) : ''}
+              {extraPoints > 0 && regressed > 0 ? fz.ackAnd : ''}
+              {regressed > 0 ? fz.ackRegressed(fmtNumber(regressed)) : ''} {fz.ackTail}
             </span>
           </label>
         ) : null}
         <DialogFooter className="gap-2">
           <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>
-            Düzenlemeye dön
+            {ux.duzenlemeyeDon}
           </Button>
           <Button
             className="min-h-11"
@@ -464,13 +471,13 @@ function ReviewDialog({
               try {
                 await onPublish();
               } catch (e) {
-                setError(errorText(e, 'Eşikler kaydedilemedi.'));
+                setError(errorText(e, ux.esiklerKaydedilemedi));
               } finally {
                 setBusy(false);
               }
             }}
           >
-            {busy ? 'Yayınlanıyor…' : 'Yayınla'}
+            {busy ? ux.yayinlaniyor : ux.yayinla}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -479,8 +486,9 @@ function ReviewDialog({
 }
 
 function Histogram({ values, accent, label }: { values: readonly number[]; accent: string; label: string }) {
+  const ux = useBadgesAdminCopy().ui;
   const max = Math.max(1, ...values);
-  const names = ['%0–25', '%25–50', '%50–75', '%75–100', 'hazır'];
+  const names = ['%0–25', '%25–50', '%50–75', '%75–100', ux.hazir];
   return (
     <div role="img" aria-label={`${label}: ${values.map((v, i) => `${names[i]} ${v}`).join(', ')}`} className="flex h-8 items-end gap-0.5">
       {values.map((v, i) => (
@@ -495,22 +503,25 @@ function Histogram({ values, accent, label }: { values: readonly number[]; accen
 }
 
 function ThresholdHistory() {
+  const fz = useBadgesAdminCopy().fx;
+  const uy = useBadgesAdminCopy().ui2;
+  const ux = useBadgesAdminCopy().ui;
   const [page, setPage] = useState(1);
   const q = useQuery({ queryKey: badgeKeys.thresholdHistory(page), queryFn: () => fetchThresholdHistory(page), staleTime: 15_000 });
   const fmt = (o: ThresholdOverrides) => {
-    const parts = Object.entries(o).map(([k, v]) => `${k}: ${v.threshold != null ? `eşik ${v.threshold}` : ''}${v.threshold != null && v.minReviewLength != null ? ', ' : ''}${v.minReviewLength != null ? `uzunluk ${v.minReviewLength}` : ''}`);
-    return parts.length ? parts.join(' · ') : 'tümü varsayılan';
+    const parts = Object.entries(o).map(([k, v]) => `${k}: ${v.threshold != null ? fz.histThreshold(v.threshold) : ''}${v.threshold != null && v.minReviewLength != null ? ', ' : ''}${v.minReviewLength != null ? fz.histLength(v.minReviewLength) : ''}`);
+    return parts.length ? parts.join(' · ') : ux.tumuVarsayilan;
   };
   return (
-    <SectionCard title="Değişiklik geçmişi" description="Denetim kaydından. Bir sürümü geri yüklemek önce etkisini gösterir." icon={<History />}>
-      <QueryState query={q} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: 'Henüz eşik değişikliği yok', compact: true }}>
+    <SectionCard title={ux.degisiklikGecmisi} description={ux.denetimKaydindanBirSurumu} icon={<History />}>
+      <QueryState query={q} skeleton="list" isEmpty={(d) => d.items.length === 0} empty={{ title: ux.henuzEsikDegisikligiYok, compact: true }}>
         {(d) => {
           const events: TimelineEvent[] = d.items.map((h) => ({
             id: h.id,
             at: h.at,
-            actor: h.actor ?? 'Bilinmeyen',
-            title: h.revertOf ? 'Geçmiş sürüm geri yüklendi' : 'Eşikler güncellendi',
-            description: `Önce: ${fmt(h.before)} → Sonra: ${fmt(h.after)}`,
+            actor: h.actor ?? fz.unknown,
+            title: h.revertOf ? ux.gecmisSurumGeriYuklendi : ux.esiklerGuncellendi,
+            description: fz.beforeAfter(fmt(h.before), fmt(h.after)),
             meta: (
               <Button
                 variant="link"
@@ -518,24 +529,24 @@ function ThresholdHistory() {
                 className="h-auto min-h-11 px-0 sm:min-h-0"
                 onClick={() => window.dispatchEvent(new CustomEvent('badges:thresholds-revert', { detail: { id: h.id, overrides: h.after } }))}
               >
-                Bu sürümü geri yükle
+                {ux.buSurumuGeriYukle}
               </Button>
             ),
           }));
           const pages = Math.max(1, Math.ceil(d.total / d.size));
           return (
             <div className="space-y-3">
-              <Timeline events={events} timeStyle="datetime" dense ariaLabel="Eşik değişiklik geçmişi" />
+              <Timeline events={events} timeStyle="datetime" dense ariaLabel={ux.esikDegisiklikGecmisi} />
               {pages > 1 ? (
                 <div className="flex items-center justify-end gap-2">
                   <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                    Önceki
+                    {ux.onceki}
                   </Button>
                   <span className="text-sm text-fg-muted">
                     {page} / {pages}
                   </span>
                   <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                    Sonraki
+                    {uy.sonraki}
                   </Button>
                 </div>
               ) : null}

@@ -35,7 +35,8 @@ import {
 import { badgeKeys, bulkAction, errorText, fetchBadges } from './api';
 import { BADGE_STATUS, TRACKABILITY_TONE, fmtAgo, fmtNumber } from './format';
 import { glyphSource } from './parts';
-import { useBadgesAdminCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { BADGES_DICT, useBadgesAdminCopy } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -52,16 +53,17 @@ const HEALTH_OPTIONS = [
 export type CatalogInitial = { qs: string; page: BadgeListPage } | null;
 
 export function CatalogTab({ initial, stats, statsError, onRetryStats }: { initial: CatalogInitial; stats: BadgeStats | undefined; statsError: unknown; onRetryStats: () => void }) {
+  const ux = useBadgesAdminCopy().ui;
   return (
     <div className="space-y-4 pt-4">
       <SectionTabs
         paramKey="set"
         variant="pill"
-        ariaLabel="Rozet türü"
+        ariaLabel={ux.rozetTuru}
         resetKeys={['page', 'health', 'series', 'q', 'rarity']}
         tabs={[
-          { value: 'normal', label: 'Normal rozetler', icon: <ShieldCheck />, count: stats?.normal.total },
-          { value: 'series', label: 'Dizi (karakter) rozetleri', icon: <Sparkles />, count: stats?.series.total },
+          { value: 'normal', label: ux.normalRozetler, icon: <ShieldCheck />, count: stats?.normal.total },
+          { value: 'series', label: ux.diziKarakterRozetleri, icon: <Sparkles />, count: stats?.series.total },
         ]}
       >
         {(set) => <CatalogBody set={set} initial={initial} stats={stats} statsError={statsError} onRetryStats={onRetryStats} />}
@@ -83,28 +85,32 @@ function CatalogBody({
   statsError: unknown;
   onRetryStats: () => void;
 }) {
+  const fz = useBadgesAdminCopy().fx;
+  const L = useSourceT(BADGES_DICT);
+  const uy = useBadgesAdminCopy().ui2;
+  const ux = useBadgesAdminCopy().ui;
   const bx = useBadgesAdminCopy();
   const qc = useQueryClient();
   const { set: setUrl } = useUrlState();
   const isSeries = set === 'series';
   const fields = useMemo<FilterField[]>(
     () => [
-      { type: 'search', key: 'q', label: 'Ara', placeholder: 'Ad, açıklama, kimlik ya da koşul', minLength: 2 },
+      { type: 'search', key: 'q', label: ux.ara, placeholder: ux.adAciklamaKimlikYa, minLength: 2 },
       ...(isSeries
         ? [
             {
               type: 'select' as const,
               key: 'series',
-              label: 'Dizi kategorisi',
-              allLabel: 'Tüm kategoriler',
+              label: ux.diziKategorisi,
+              allLabel: ux.tumKategoriler,
               options: (stats?.seriesCategories ?? []).map((c) => ({ value: c.key, label: `${c.emoji} ${c.name}` })),
             },
           ]
         : []),
-      { type: 'select', key: 'rarity', label: 'Nadirlik', allLabel: 'Tümü', options: BADGE_RARITIES.map((r) => ({ value: r, label: RARITY_LABEL[r] })) },
-      { type: 'select', key: 'health', label: 'Durum', allLabel: 'Tümü (arşiv hariç)', options: HEALTH_OPTIONS.filter((o) => !isSeries || !['exact', 'approximate', 'untrackable'].includes(o.value)) },
+      { type: 'select', key: 'rarity', label: ux.nadirlik, allLabel: ux.tumu, options: BADGE_RARITIES.map((r) => ({ value: r, label: L(RARITY_LABEL[r]) })) },
+      { type: 'select', key: 'health', label: ux.durum, allLabel: ux.tumuArsivHaric, options: HEALTH_OPTIONS.map((o) => ({ ...o, label: L(o.label) })).filter((o) => !isSeries || !['exact', 'approximate', 'untrackable'].includes(o.value)) },
     ],
-    [isSeries, stats?.seriesCategories]
+    [isSeries, stats?.seriesCategories, L, ux]
   );
   const filters = useFilterState(fields);
   const sheet = useDetailSheet('badge');
@@ -138,7 +144,7 @@ function CatalogBody({
         accessorKey: 'name',
         header: 'Rozet',
         enableHiding: false,
-        meta: { mobile: 'title', label: 'Rozet' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: ux.rozet } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const b = row.original;
           return (
@@ -155,46 +161,46 @@ function CatalogBody({
       {
         id: 'rarity',
         header: 'Nadirlik',
-        meta: { mobile: 'subtitle', label: 'Nadirlik' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'subtitle', label: ux.nadirlik } satisfies DataTableColumnMeta,
         cell: ({ row }) => <RarityBadge rarity={row.original.rarity} />,
       },
       {
         id: 'requirement',
-        header: 'Koşul',
+        header: ux.kosul,
         enableSorting: false,
-        meta: { label: 'Koşul' } satisfies DataTableColumnMeta,
+        meta: { label: ux.kosul } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const b = row.original;
           return (
             <div className="space-y-1 text-sm">
-              <span className="block">{b.isCharacter ? 'Kategori eşiği' : `${requirementLabel(b.requirementType)} ≥ ${fmtNumber(b.targetValue)}`}</span>
-              <StatusBadge size="sm" tone={TRACKABILITY_TONE[b.trackability]} label={TRACKABILITY_LABEL[b.trackability]} />
+              <span className="block">{b.isCharacter ? ux.kategoriEsigi : `${requirementLabel(b.requirementType)} ≥ ${fmtNumber(b.targetValue)}`}</span>
+              <StatusBadge size="sm" tone={TRACKABILITY_TONE[b.trackability]} label={L(TRACKABILITY_LABEL[b.trackability])} />
             </div>
           );
         },
       },
       {
         id: 'reward',
-        header: 'Ödül',
+        header: ux.odul,
         enableSorting: false,
-        meta: { numeric: true, label: 'Ödül puanı' } satisfies DataTableColumnMeta,
+        meta: { numeric: true, label: ux.odulPuani } satisfies DataTableColumnMeta,
         cell: ({ row }) => (row.original.rewardPoints > 0 ? `+${fmtNumber(row.original.rewardPoints)}` : '—'),
       },
       {
         id: 'earned',
-        header: 'Kazanım',
-        meta: { numeric: true, label: 'Kazanım' } satisfies DataTableColumnMeta,
+        header: ux.kazanim,
+        meta: { numeric: true, label: ux.kazanim } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="text-right">
             <span className="block tabular-nums">{fmtNumber(row.original.earnedCount)}</span>
-            <span className="block text-xs text-fg-muted">30 günde {fmtNumber(row.original.earned30d)}</span>
+            <span className="block text-xs text-fg-muted">{fz.in30d(fmtNumber(row.original.earned30d))}</span>
           </div>
         ),
       },
       {
         id: 'lastEarned',
-        header: 'Son kazanım',
-        meta: { label: 'Son kazanım' } satisfies DataTableColumnMeta,
+        header: ux.sonKazanim,
+        meta: { label: ux.sonKazanim } satisfies DataTableColumnMeta,
         cell: ({ row }) =>
           row.original.lastEarnedAt ? <time dateTime={row.original.lastEarnedAt}>{fmtAgo(row.original.lastEarnedAt)}</time> : <span className="text-fg-muted">{bx.never}</span>,
       },
@@ -202,17 +208,17 @@ function CatalogBody({
         id: 'status',
         header: 'Durum',
         enableSorting: false,
-        meta: { label: 'Durum' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(BADGE_STATUS, row.original.status)} />,
+        meta: { label: ux.durum } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <StatusBadge size="sm" {...statusBadgeProps(BADGE_STATUS, row.original.status)} label={L(statusBadgeProps(BADGE_STATUS, row.original.status).label)} />,
       },
     ],
-    []
+    [L, bx, fz, ux]
   );
 
   const runBulk = async (action: 'activate' | 'deactivate' | 'archive', ids: string[], clear: () => void) => {
     const r = await bulkAction({ action, ids, ...(action === 'archive' ? { confirm: true } : {}) });
-    const label = action === 'archive' ? 'arşivlendi' : action === 'activate' ? 'etkinleştirildi' : 'pasifleştirildi';
-    toast.success(`${fmtNumber(r.changed)} rozet ${label}.${r.skipped.length ? ` ${r.skipped.length} rozet atlandı (${[...new Set(r.skipped.map((s) => s.reason))].join(', ')}).` : ''}`);
+    const label = action === 'archive' ? ux.arsivlendi : action === 'activate' ? ux.etkinlestirildi : ux.pasiflestirildi;
+    toast.success(fz.bulkDone(fmtNumber(r.changed), label, r.skipped.length, [...new Set(r.skipped.map((s) => s.reason))].join(', ')));
     clear();
     await qc.invalidateQueries({ queryKey: badgeKeys.all });
   };
@@ -220,49 +226,49 @@ function CatalogBody({
   return (
     <div className="space-y-4 pt-4">
       {statsError ? (
-        <ErrorState title="Rozet sağlık sayıları yüklenemedi" description={errorText(statsError)} onRetry={onRetryStats} />
+        <ErrorState title={ux.rozetSaglikSayilariYuklenemedi} description={errorText(statsError)} onRetry={onRetryStats} />
       ) : (
         <MetricGrid cols={isSeries ? 4 : 5}>
-          <MetricTile size="compact" label="Etkin" metric={{ value: counts?.active ?? null }} icon={<CheckCircle2 />} tone="success" loading={!counts} href={healthHref('active')} />
-          <MetricTile size="compact" label="Pasif" metric={{ value: counts?.inactive ?? null }} icon={<CircleOff />} tone="warning" loading={!counts} href={healthHref('inactive')} hint="Yeni kazanım durdu" />
-          <MetricTile size="compact" label="Hiç kazanılmamış" metric={{ value: counts?.never ?? null }} icon={<Ghost />} loading={!counts} href={healthHref('never')} />
+          <MetricTile size="compact" label={ux.etkin} metric={{ value: counts?.active ?? null }} icon={<CheckCircle2 />} tone="success" loading={!counts} href={healthHref('active')} />
+          <MetricTile size="compact" label={ux.pasif} metric={{ value: counts?.inactive ?? null }} icon={<CircleOff />} tone="warning" loading={!counts} href={healthHref('inactive')} hint={ux.yeniKazanimDurdu} />
+          <MetricTile size="compact" label={ux.hicKazanilmamis} metric={{ value: counts?.never ?? null }} icon={<Ghost />} loading={!counts} href={healthHref('never')} />
           {!isSeries ? (
             <MetricTile
               size="compact"
-              label="İzlenemez (ölü)"
+              label={ux.izlenemezOlu}
               metric={{ value: counts?.untrackable ?? null }}
               icon={<HelpCircle />}
               tone={counts && counts.untrackable > 0 ? 'danger' : 'neutral'}
               loading={!counts}
               href={healthHref('untrackable')}
-              hint={counts ? `${fmtNumber(counts.approximate)} yaklaşık · ${fmtNumber(counts.exact)} tam` : undefined}
+              hint={counts ? fz.approxExact(fmtNumber(counts.approximate), fmtNumber(counts.exact)) : undefined}
             />
           ) : (
             <MetricTile
               size="compact"
-              label="Katalogda kaydı olmayan"
+              label={ux.katalogdaKaydiOlmayan}
               metric={{ value: stats?.charactersWithoutRecord ?? null }}
               icon={<Layers />}
               loading={!stats}
-              hint="İlk kazanımda otomatik oluşturulur"
+              hint={ux.ilkKazanimdaOtomatikOlusturulur}
             />
           )}
-          <MetricTile size="compact" label="Arşivde" metric={{ value: counts?.archived ?? null }} icon={<Archive />} loading={!counts} href={healthHref('archived')} hint="Kazanımlar korunur" />
+          <MetricTile size="compact" label={ux.arsivde} metric={{ value: counts?.archived ?? null }} icon={<Archive />} loading={!counts} href={healthHref('archived')} hint={ux.kazanimlarKorunur} />
         </MetricGrid>
       )}
       {stats && !statsError ? (
         <p className="flex items-center gap-2 text-sm text-fg-muted">
           <Waves className="h-4 w-4" aria-hidden />
-          Toplam {fmtNumber(stats.totalEarned)} kazanım · son 30 günde {fmtNumber(stats.earned30d)}
+          {fz.totalEarned(fmtNumber(stats.totalEarned), fmtNumber(stats.earned30d))}
           {health ? (
             <Button variant="link" size="sm" className="h-auto min-h-11 px-1 sm:min-h-0" onClick={() => setUrl({ health: null, page: null })}>
-              Durum süzgecini kaldır
+              {ux.durumSuzgeciniKaldir}
             </Button>
           ) : null}
         </p>
       ) : null}
 
-      <FilterBar fields={fields} ariaLabel="Rozet filtreleri" />
+      <FilterBar fields={fields} ariaLabel={ux.rozetFiltreleri} />
       <p className="sr-only" aria-live="polite">
         {list.data ? `${fmtNumber(list.data.total)} rozet bulundu` : ''}
       </p>
@@ -285,21 +291,21 @@ function CatalogBody({
         bulkActions={({ ids, clear }) => (
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => runBulk('activate', ids, clear).catch((e) => toast.error(errorText(e)))}>
-              Etkinleştir
+              {ux.etkinlestir}
             </Button>
             <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => runBulk('deactivate', ids, clear).catch((e) => toast.error(errorText(e)))}>
-              Pasifleştir
+              {ux.pasiflestir}
             </Button>
             {!isSeries ? (
               <ConfirmAction
                 tone="warning"
-                title={`${fmtNumber(ids.length)} rozet arşivlensin mi?`}
-                description="Arşivlenen rozetler yeni kazanılamaz; kullanıcıların kazandıkları ve geçmiş korunur. Karakter rozetleri atlanır."
+                title={fz.bulkArchiveTitle(fmtNumber(ids.length))}
+                description={ux.arsivlenenRozetlerYeniKazanilamaz}
                 irreversibleNote={false}
-                confirmLabel="Arşivle"
+                confirmLabel={ux.arsivle}
                 trigger={
                   <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9">
-                    Arşivle
+                    {ux.arsivle}
                   </Button>
                 }
                 onConfirm={() => runBulk('archive', ids, clear)}
@@ -311,16 +317,16 @@ function CatalogBody({
           filters.activeCount > 0
             ? {
                 variant: 'filtered',
-                title: 'Filtrelere uyan rozet yok',
+                title: ux.filtrelereUyanRozetYok,
                 secondaryAction: (
                   <Button variant="outline" className="min-h-11" onClick={filters.clear}>
-                    Filtreleri temizle
+                    {uy.filtreleriTemizle}
                   </Button>
                 ),
               }
             : {
-                title: isSeries ? 'Dizi rozeti kaydı yok' : 'Henüz rozet yok',
-                description: isSeries ? 'Karakter rozetleri ilk kazanımda otomatik oluşturulur.' : 'Sağ üstteki “Yeni rozet” ile ilk rozeti oluşturun.',
+                title: isSeries ? ux.diziRozetiKaydiYok : ux.henuzRozetYok,
+                description: isSeries ? ux.karakterRozetleriIlkKazanimda : ux.sagUsttekiYeniRozet,
               }
         }
       />

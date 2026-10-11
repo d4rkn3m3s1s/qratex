@@ -12,6 +12,7 @@ import { DURATION, EASE, useMotionPolicy } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 import { resolveBadgeThumb } from '@/lib/badge-images';
 import { errorText } from './api';
+import { useBadgesAdminCopy } from './copy';
 
 /** Rozet ikonu → BadgeGlyph kaynağı (yol/URL → görsel, aksi halde emoji). */
 export function glyphSource(icon: string | null | undefined): { imageSrc?: string; emoji?: string } {
@@ -79,6 +80,8 @@ export function GrantDialog({
   badgeName: string;
   onConfirm: (email: string, reason: string) => Promise<unknown>;
 }) {
+  const fz = useBadgesAdminCopy().fx;
+  const ux = useBadgesAdminCopy().ui;
   const id = useId();
   const [email, setEmail] = useState('');
   const [reason, setReason] = useState('');
@@ -113,21 +116,21 @@ export function GrantDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>“{badgeName}” rozetini ver</DialogTitle>
+            <DialogTitle>{fz.giveTitle(badgeName)}</DialogTitle>
             <DialogDescription>
-              Rozet müşterinin koleksiyonuna eklenir ve rozet anı gösterilir. Elle verme ödül puanı basmaz; işlem denetim kaydına yazılır.
+              {ux.rozetMusterininKoleksiyonunaEklenir}
             </DialogDescription>
           </DialogHeader>
-          <FormRow label="Müşteri e-postası" htmlFor={`${id}-email`}>
+          <FormRow label={ux.musteriEPostasi} htmlFor={`${id}-email`}>
             <Input id={`${id}-email`} type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} className="min-h-11" required />
           </FormRow>
-          <FormRow label="Gerekçe" htmlFor={`${id}-reason`} hint="En az 5 karakter. Ör. “Lansman etkinliği katılımı”.">
+          <FormRow label={ux.gerekce} htmlFor={`${id}-reason`} hint={ux.enAz5Karakter}>
             <Textarea id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={300} aria-describedby={`${id}-reason-hint`} required />
           </FormRow>
           {error ? <InlineError variant="banner">{error}</InlineError> : null}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => onOpenChange(false)}>
-              Vazgeç
+              {ux.vazgec}
             </Button>
             <Button type="submit" className="min-h-11" disabled={!valid || busy} aria-busy={busy}>
               {busy ? 'Veriliyor…' : 'Rozeti ver'}
