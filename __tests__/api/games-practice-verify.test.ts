@@ -139,7 +139,7 @@ describe('pratik modu', () => {
   });
 
   it('yapım aşamasındaki oyun: pratik ve sıralı start 403 "henüz yayında değil"', async () => {
-    const p = await call('practice', 'fake-hunter');
+    const p = await call('practice', 'daily-word');
     expect(p.status).toBe(403);
     expect(p.json.error).toMatch(/henüz yayında değil/);
     const s = await call('start', 'daily-word');

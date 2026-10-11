@@ -52,14 +52,10 @@ describe('buildHubCatalog', () => {
     expect(types).toContain('mind-thief');
   });
 
-  it('hedefi henüz canlı olmayan eski oyun "classic" olarak görünür, hedefi canlı olan görünmez', () => {
+  it('hedefi canlı olan eski oyun ayrı kart olarak görünmez', () => {
     const catalog = buildHubCatalog(effectiveMap());
-    // truth-vs-fake → Sahte Avcısı (yapım aşamasında) → eski sayfa hâlâ oynatır
-    const tvf = catalog.find((g) => g.id === 'truth-vs-fake');
-    expect(tvf?.role).toBe('classic');
-    expect(tvf?.href).toBe('/customer/games/truth-vs-fake');
-    expect(tvf?.mergesInto).toBeTruthy();
-    // guardian-of-trust → Kar Tanesi Yakala (canlı) → ayrı kart yok
+    // truth-vs-fake → Sahte Avcısı (canlı) ve guardian-of-trust → Kar Tanesi Yakala (canlı) → ayrı kart yok
+    expect(catalog.find((g) => g.id === 'truth-vs-fake')).toBeUndefined();
     expect(catalog.find((g) => g.id === 'guardian-of-trust')).toBeUndefined();
   });
 

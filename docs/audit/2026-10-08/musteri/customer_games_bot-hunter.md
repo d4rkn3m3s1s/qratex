@@ -243,3 +243,23 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (salt okunur; DB/su
 - GET (`:83-96`) ve POST (`:145-153`) sıralamayı ayrı sorgularla yeniden hesaplar; kapanmış haftanın verisi değişmese de plan/fiziksel satır sırası değişirse aynı kullanıcı GET'te "2." görüp POST'ta 400 alabilir. Bu kısım plan değişikliğine bağlı olduğundan kod okumasıyla kesin üretilemez — teorik.
 
 **Yeniden üretim (adalet):** Geçen hafta 4+ kullanıcı Bot Avcısı'nda 10 skorla tamamladı → ödül alan 3 kişi DB'nin döndürdüğü rastgele sıraya göre belirlenir; aynı skoru daha önce yapan kullanıcı ödülsüz kalabilir. Düzeltme: eşitlikte en erken `completedAt` (ilk ulaşan) gibi deterministik bir ikincil anahtar + hafta kapanışında sıralamayı `TournamentWeekSnapshot` tablosuna dondurup GET/POST'un aynı anlık görüntüyü okuması; ayrıca iddia 1 kapanmadan turnuva ödülü fiilen tavan-skor çekilişidir.
+
+## Uygulama (Dalga 2)
+
+Bu oyun **Sahte Avcısı** (`/customer/games/fake-hunter`) amiral oyununun **Profil** aşaması olarak yeniden kuruldu; eski rota `/customer/games/bot-hunter` sorgu parametrelerini koruyarak `/customer/games/fake-hunter?mod=profil`'e kalıcı yönlenir, eski bileşen silindi.
+
+Kapatılanlar:
+- **Skor istemci beyanı / cevap anahtarı istemcide** → sınıflandırma doğrulayıcısı (`lib/games/validators/fake-hunter.ts`): tur tohumdan sunucuda kurulur, sıralıda içerik ETİKETSİZ ve açıklamasız gider, kararlar sunucuda puanlanır; tekrarlı/uydurma kimlik, sunucu süresinden sonra cevap ve insanüstü hız (≥ 3 cevap < 400 ms) reddedilir. Jest: `__tests__/lib/fake-hunter-verify.test.ts` (17 test: dürüst oyun ödüllenir, şişirilmiş skor sunucu skoruna iner, kanıtsız/betik/başka tohum reddedilir, "hep sahte de" eşiği geçemez).
+- **Sabit 10–12 cümlelik, kendini ele veren içerik** → 122 özgün, gerçekçi Türkçe öğe (`lib/games/content/fake-hunter.server.ts`; 32 Kaydır, 30 Dosya, 30 Kelime, 30 Profil); "temiz görünen sahte" ve "şüpheli görünen gerçek" zor öğeler; pratik/sıralı havuzlar ayrı (pratikle sıralı etiketler kazınamaz). Kelime modunda ele veren cümlenin yeri kimlik karmasıyla dağıtıldı.
+- **Yanlışa ceza yok (rastgele basmak kârlı)** → doğru +2, 3'lü seride +1, yanlış/süre dolması −1; her ikili aşamada iki etiket de bulunur.
+- **Vaat edilen zorluk ilerlemesi yok** → aşama içinde zorluk kolaydan zora; pratikte sonraki vaka oyuncunun Elo'suna göre seçilir (unvan + seviye değişimi sonuçta).
+- **Çift tık aynı kartı iki kez sayıyor / paylaşılan `x` sıfırlanmıyor** → 450 ms karar kilidi; her kart kendi hareket değeriyle anahtarla yeniden kurulur.
+- **Süre dolunca bayat state** → süre ref tabanlı, duraklatmada durur, dolunca "timeout" kararı kanıta yazılır.
+- **Admin override'ı yok sayılıyor** → eşik/tavan `config`'ten (etkin yapılandırma); başlık/renk kabukta.
+- **Öğretici / "neden sahteydi?" yok** → ilk oynayışta 4 adımlı öğretici, her aşama başında açıklama kartı; pratikte her karardan sonra doğru cevap + gerekçe.
+- **Klavye/ekran okuyucu yok** → ←/A, →/D, 1–4, Enter, Esc; `aria-live` özet, `role="timer"`, isimli düğmeler, ≥ 44 px hedefler; renk körü güvenli mavi/turuncu + ikon + yazı.
+- **Sekme gizlenince süre akıyor / duraklatma yok** → `visibilitychange` ve Esc kabuğu duraklatır; süre durur.
+- **Hareket/ses politikası** → ses, titreşim, sarsıntı, parçacık ve konfeti yalnız `fx` (useMotionPolicy + oyuncu tercihi) üzerinden; azaltılmış harekette radar dönmez, kart dönüşü kapalı.
+- **Sonuç ekranı çıkmaz sokak** → pratik sonu: skor, yıldız, pratik rekoru, seviye, vaka özeti, paylaş; sıralı sonuç ve "günde 1 hak" kilidi ortak kabukta (`GameHost`/`game-session`).
+
+Kalan açıklar: turnuva eşitlik kırıcı, günlük hak/409 ve ağ hatasında yeniden deneme ortak oyun altyapısının işi (bu oyunun dosyaları dışında). Sıralıda istemci doğruluğu bilemediği için skor beyanı 0 gönderilir → ortak doğrulayıcı `score_mismatch` sinyali yazar (sınıflandırma ailesinde bu sinyal anlamsız; ortak altyapıda ele alınmalı). `?mod=` ipucu şimdilik yalnız yönlendirmede taşınır; oyun her turda dört aşamayı oynatır.

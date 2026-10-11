@@ -1,11 +1,8 @@
 /**
- * Sahte Avcısı — SUNUCU modülü (doğrulayıcı). Yalnız `registry/server.ts` içe aktarır; istemci
- * paketine girmez. Etiketli içerik (`lib/games/content/fake-hunter.ts`) yalnız buradan import edilir.
- *
- * null → bu oyun için kanıt istenmez; `lib/game-session.ts` yalnız ortak makullük
- * kurallarını uygular (süre, saniye başına skor, tavan). Hedef aile: 'classification'.
- * Örnek: `export const serverModule: GameServerModule = { verifier: classificationVerifier({ … }) };`
+ * Sahte Avcısı — SUNUCU modülü. Yalnız `registry/server.ts` içe aktarır; istemci paketine girmez.
+ * Doğrulayıcı ve etiketli içerik: `lib/games/validators/fake-hunter.ts`.
  */
 import type { GameServerModule } from '@/lib/games/verify/types';
+import { fakeHunterVerifier } from '@/lib/games/validators/fake-hunter';
 
-export const serverModule: GameServerModule | null = null;
+export const serverModule: GameServerModule | null = { verifier: fakeHunterVerifier };

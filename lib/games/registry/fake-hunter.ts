@@ -6,8 +6,8 @@
  * `lib/games/content/fake-hunter.ts` (etiketli, yalnız sunucu); tur `start` cevabında etiketsiz
  * gelir.
  *
- * OYUN AJANI: `component`'i v2 bileşenine bağla, `status: 'live'` yap, sunucu doğrulayıcısını
- * `./fake-hunter.server.ts`'e yaz ve `lib/minigame-config.ts`'teki `fake-hunter` satırından `hidden`/`release`'i kaldır.
+ * Canlı (Dalga 2): v2 bileşeni `components/customer/games/fake-hunter/`, doğrulayıcı
+ * `lib/games/validators/fake-hunter.ts` (sınıflandırma; 4 aşama × 3 vaka, sunucu puanlar).
  */
 import { defineGame } from './types';
 
@@ -16,14 +16,17 @@ export const fakeHunterGame = defineGame({
   gameType: 'fake-hunter',
   title: 'Sahte Avcısı',
   tagline:
-    'Gerçek yorumu sahtesinden ayır: kaydır, dosyayı incele, botu yakala. Sunucu puanlar, zorluk seninle büyür.',
+    'Dört aşamada sahteyi yakala: yorumu kaydır, yorumcu dosyasını incele, ele veren cümleyi bul, botu tanı. Sıralıda puanı sunucu hesaplar; pratikte zorluk seviyene göre ayarlanır.',
   emoji: '🕵️',
   accent: '#22d3ee',
-  status: 'building',
+  status: 'live',
   role: 'flagship',
   verification: 'classification',
   mergedFrom: ['truth-vs-fake', 'review-detective', 'word-spot', 'bot-hunter'],
   modes: { practice: true, ranked: { attemptsPerDay: 1 } },
-  component: null,
-  controls: 'Kaydırma ya da ← / → tuşları: sahte / gerçek. Enter: seçili kartı onayla.',
+  component: {
+    contract: 'v2',
+    load: () => import('@/components/customer/games/fake-hunter/fake-hunter-game').then((m) => m.FakeHunterGame),
+  },
+  controls: 'Kaydır ya da ← / A: sahte (bot), → / D: gerçek (insan). Kelime aşamasında 1–4: cümle seç. Enter: devam, Esc: duraklat.',
 });

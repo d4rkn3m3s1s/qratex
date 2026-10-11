@@ -104,7 +104,7 @@ describe('rota kararı', () => {
   it('canlı → oyna; yapım → hub; bilinmeyen → hub', () => {
     expect(resolveGameRoute('mind-thief')).toMatchObject({ kind: 'play' });
     expect(resolveGameRoute('star-hunt')).toMatchObject({ kind: 'play' });
-    expect(resolveGameRoute('fake-hunter')).toEqual({ kind: 'hub', reason: 'building' });
+    expect(resolveGameRoute('fake-hunter')).toMatchObject({ kind: 'play' });
     expect(resolveGameRoute('yok-boyle')).toEqual({ kind: 'hub', reason: 'unknown' });
   });
 
@@ -115,8 +115,8 @@ describe('rota kararı', () => {
       to: '/customer/games/frost-catcher?mod=muhafiz',
       permanent: true,
     });
-    // Sahte Avcısı henüz yapım aşamasında → eski oyunlar hub'a (kendi statik sayfaları dururken).
-    expect(resolveGameRoute('truth-vs-fake')).toEqual({ kind: 'hub', reason: 'alias-pending' });
+    // Sahte Avcısı canlı → eski oyunlar kendi aşamasına kalıcı yönlenir.
+    expect(resolveGameRoute('truth-vs-fake')).toEqual({ kind: 'redirect', to: '/customer/games/fake-hunter?mod=kaydir', permanent: true });
   });
 
   it('emekli: halef canlıysa ona, değilse hub', () => {

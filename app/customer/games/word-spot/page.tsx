@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { WordSpotGame } from '@/components/customer/games/word-spot-game';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = { title: 'Sahteyi Yakala | QRateX' };
-
-export default async function WordSpotPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Sahteyi Yakala 🧩"
-        description="Izgaradaki kelimelerden farklı/sahte olanı bul! Gözünü açık tut. Günde 1 hak!"
-      />
-      <WordSpotGame />
-    </div>
-  );
+/** Emekli: Sahte Avcısı'na birleşti (§7.3) — "kelime" aşaması. Sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) for (const x of Array.isArray(v) ? v : v ? [v] : []) q.append(k, x);
+  if (!q.has('mod')) q.set('mod', 'kelime');
+  permanentRedirect(`/customer/games/fake-hunter?${q.toString()}`);
 }

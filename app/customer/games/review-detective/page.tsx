@@ -1,24 +1,9 @@
-import { getServerSession } from 'next-auth';
-import { redirect } from 'next/navigation';
-import { authOptions } from '@/lib/auth';
-import { DashboardPageHeading } from '@/components/dashboard/page-heading';
-import { ReviewDetectiveGame } from '@/components/customer/games/review-detective-game';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = { title: 'Yorum Dedektifi | QRateX' };
-
-export default async function ReviewDetectivePage() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'CUSTOMER') {
-    redirect('/auth/signin');
-  }
-
-  return (
-    <div className="space-y-6 pb-10">
-      <DashboardPageHeading
-        title="Yorum Dedektifi 🕵️"
-        description="Dosyadaki yorumlardan sahte/yapay olanı bul. Süre dolmadan doğru kararı ver. Günde 1 hak!"
-      />
-      <ReviewDetectiveGame />
-    </div>
-  );
+/** Emekli: Sahte Avcısı'na birleşti (§7.3) — "dosya" aşaması. Sorgu parametreleri korunur. */
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) for (const x of Array.isArray(v) ? v : v ? [v] : []) q.append(k, x);
+  if (!q.has('mod')) q.set('mod', 'dosya');
+  permanentRedirect(`/customer/games/fake-hunter?${q.toString()}`);
 }

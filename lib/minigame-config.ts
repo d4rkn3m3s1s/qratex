@@ -446,7 +446,7 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'fake_hunter_game',
     title: 'Sahte Avcısı',
     description:
-      'Gerçek yorumu sahtesinden ayır: kaydır, dosyayı incele, botu yakala. Sunucu puanlar, zorluk seninle büyür.',
+      'Dört aşamada sahteyi yakala: yorumu kaydır, yorumcu dosyasını incele, ele veren cümleyi bul, botu tanı. Puanı sunucu hesaplar.',
     emoji: '🕵️',
     accent: '#22d3ee',
     maxScore: 30,
@@ -456,9 +456,6 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     minDurationSec: 20,
     maxScorePerSec: 1.2,
     maxDurationSec: 240,
-    hidden: true,
-    release: 'building',
-    hiddenReason: 'Yapım aşamasında: truth-vs-fake + review-detective + word-spot + bot-hunter birleşimi (§7.3 #1–4).',
   },
   {
     gameType: 'core-defense',
