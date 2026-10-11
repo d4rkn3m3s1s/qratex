@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { m as Motion, AnimatePresence } from 'framer-motion';
 import {
     Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle,
-    XCircle, ExternalLink, Filter, BellOff, Gift,
+    XCircle, ExternalLink, Filter, BellOff, Gift, Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,6 +103,8 @@ export function NotificationCenter() {
 
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    // İlk liste gelene kadar "Bildirim yok" GÖSTERİLMEZ (yavaş ağda boş durum yanıltıyordu.)
+    const [loaded, setLoaded] = useState(false);
     const [open, setOpen] = useState(false);
     const [filter, setFilter] = useState<TabFilter>('all');
     const [detailOpen, setDetailOpen] = useState(false);
@@ -150,6 +152,7 @@ export function NotificationCenter() {
                 setNotifications(items);
                 setUnreadCount(typeof data.unreadCount === 'number' ? data.unreadCount : 0);
                 firstLoadRef.current = false;
+                setLoaded(true);
                 return changed;
             }
         } catch {
@@ -362,7 +365,7 @@ export function NotificationCenter() {
                 <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
                     {/* Header */}
                     <SheetHeader className="px-5 pt-5 pb-3 border-b space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2 pr-10">
                             <SheetTitle className="flex items-center gap-2 text-lg">
                                 <Bell className="h-5 w-5 shrink-0" aria-hidden />
                                 {t('notificationCenter.title')}
@@ -373,7 +376,7 @@ export function NotificationCenter() {
                                 )}
                             </SheetTitle>
                             {unreadCount > 0 && (
-                                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={markAllAsRead}>
+                                <Button variant="ghost" size="sm" className="h-11 sm:h-8 shrink-0 text-xs gap-1.5" onClick={markAllAsRead}>
                                     <CheckCheck className="h-3.5 w-3.5" />
                                     {t('notificationCenter.markAllRead')}
                                 </Button>
@@ -386,7 +389,7 @@ export function NotificationCenter() {
                                 <button
                                     key={tab}
                                     onClick={() => setFilter(tab)}
-                                    className={`cursor-pointer px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 ${filter === tab
+                                    className={`cursor-pointer px-3 py-1.5 min-h-11 sm:min-h-0 rounded-md text-xs font-medium transition-colors duration-200 ${filter === tab
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground'
                                         }`}
@@ -403,7 +406,12 @@ export function NotificationCenter() {
                     </SheetHeader>
 
                     <div role="region" aria-label={t('notificationCenter.listRegion')} className="flex-1 overflow-y-auto">
-                        {filteredNotifications.length === 0 ? (
+                        {!loaded && notifications.length === 0 ? (
+                            <div className="flex justify-center py-20" role="status" aria-live="polite">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden />
+                                <span className="sr-only">{t('notificationCenter.title')}…</span>
+                            </div>
+                        ) : filteredNotifications.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
                                 <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
                                     <BellOff className="h-8 w-8 text-muted-foreground/50" />
