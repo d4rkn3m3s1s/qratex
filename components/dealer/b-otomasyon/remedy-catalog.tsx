@@ -15,16 +15,17 @@ import { cn } from '@/lib/utils';
 import { REMEDY_TYPES, REMEDY_TYPE_META, parseValueInput, type RemedyType } from '@/lib/dealer-automation/remedy-catalog';
 import { AUTOMATION_KEYS, type RemedyCatalogDto, type RemedyScopeDto, type RemedyTemplateDto } from '@/lib/dealer-automation/types';
 import { createRemedyTemplate, deleteRemedyTemplate, errorText, updateRemedyTemplate } from './api';
+import { useAutomationCopy, type AutomationCopy } from './copy';
 
 const TYPE_ICON: Record<RemedyType, typeof Percent> = { discount: Percent, points: Star, free_item: Gift };
-const SOURCE_LABEL = { location: 'şubeye özel set', dealer: 'işletme geneli set', system: 'sistem varsayılanı' } as const;
 
-function fmtValue(type: string, v: number): string {
-  return type in REMEDY_TYPE_META ? REMEDY_TYPE_META[type as RemedyType].format(v) : String(v);
+function fmtValue(copy: AutomationCopy, type: string, v: number): string {
+  return type in REMEDY_TYPE_META ? copy.remedyType[type as RemedyType].format(v) : String(v);
 }
 
 export function RemedyCatalog({ catalog }: { catalog: RemedyCatalogDto }) {
   const [scopeId, setScopeId] = useState<string>('all');
+  const c = useAutomationCopy().catalog;
   const scope = catalog.scopes.find((s) => (s.locationId ?? 'all') === scopeId) ?? catalog.scopes[0];
   if (!scope) return null;
   const hasLocations = catalog.scopes.length > 1;
@@ -32,7 +33,7 @@ export function RemedyCatalog({ catalog }: { catalog: RemedyCatalogDto }) {
   return (
     <div className="space-y-4 rounded-card border border-subtle bg-surface-1 p-3 sm:p-4">
       {hasLocations ? (
-        <Field kind="labelledby" label="Kapsam" description="Şube seti varsa o şubede işletme seti tamamen yerine geçer (birleşmez).">
+        <Field kind="labelledby" label={c.scope} description={c.scopeHint}>
           {(p) => (
             <ChoiceChips
               aria-labelledby={p['aria-labelledby'] as string}
@@ -49,11 +50,11 @@ export function RemedyCatalog({ catalog }: { catalog: RemedyCatalogDto }) {
         </Field>
       ) : (
         <p className="qx-small text-fg-muted">
-          Şube tanımlamadınız; katalog işletme genelinde geçerli. Şubeleri{' '}
+          {c.noLocationsBefore}{' '}
           <Link href="/dealer/qr-codes?tab=locations" className="font-medium text-brand underline underline-offset-2">
-            QR kodlar › Şubeler
+            {c.noLocationsLink}
           </Link>{' '}
-          bölümünden ekleyip QR kodlarınızı bağlayabilirsiniz.
+          {c.noLocationsAfter}
         </p>
       )}
 
@@ -61,15 +62,15 @@ export function RemedyCatalog({ catalog }: { catalog: RemedyCatalogDto }) {
         <p role="status" className="flex gap-2 rounded-control border border-warning-border bg-warning-subtle p-3 qx-small text-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>
-            Bu şubeye bağlı QR kod yok; buradaki set hiçbir teklifte kullanılmaz.{' '}
+            {c.noQr}{' '}
             <Link href="/dealer/qr-codes?tab=locations" className="font-medium underline underline-offset-2">
-              QR kodları şubeye bağlayın
+              {c.noQrLink}
             </Link>
             .
           </span>
         </p>
       )}
-      {scope.locationId && !scope.isActive && <p className="qx-small text-fg-muted">Bu şube pasif.</p>}
+      {scope.locationId && !scope.isActive && <p className="qx-small text-fg-muted">{c.inactive}</p>}
 
       <EffectiveSet scope={scope} />
 
@@ -99,19 +100,21 @@ export function RemedyCatalog({ catalog }: { catalog: RemedyCatalogDto }) {
 }
 
 function EffectiveSet({ scope }: { scope: RemedyScopeDto }) {
+  const copy = useAutomationCopy();
+  const c = copy.catalog;
   return (
     <div className="rounded-control bg-surface-2 p-3">
       <p className="qx-caption text-fg-muted">
-        {scope.name} kapsamında müşteri şunları görür · kaynak: <strong className="text-fg">{SOURCE_LABEL[scope.effective.source]}</strong>
+        {c.effective(scope.name)}<strong className="text-fg">{c.source[scope.effective.source]}</strong>
       </p>
       <ul className="mt-2 flex flex-wrap gap-2">
         {scope.effective.options.map((o) => (
           <li key={o.type} className="rounded-chip border border-subtle bg-surface-1 px-2 py-1 qx-caption text-fg">
-            {o.label}: {o.values.map((v) => fmtValue(o.type, v)).join(' · ')}
+            {o.label}: {o.values.map((v) => fmtValue(copy, o.type, v)).join(' · ')}
           </li>
         ))}
       </ul>
-      <p className="mt-2 qx-caption text-fg-muted">Değişiklikler yeni tekliflere uygulanır; açılmış teklifler kendi seçeneklerini korur.</p>
+      <p className="mt-2 qx-caption text-fg-muted">{c.effectiveNote}</p>
     </div>
   );
 }
@@ -129,6 +132,8 @@ function ValuesEditor({
   limits: { min: number; max: number; integer: boolean };
   maxValues: number;
 }) {
+  const copy = useAutomationCopy();
+  const c = copy.catalog;
   const [draft, setDraft] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const add = () => {
@@ -140,20 +145,20 @@ function ValuesEditor({
     next.sort((a, b) => a - b);
     onChange(next);
     setDraft('');
-    setErr(bad.length ? `Eklenmedi: ${bad.join(', ')} (${limits.min}–${limits.max}${limits.integer ? ', tam sayı' : ''}).` : null);
+    setErr(bad.length ? c.rejected(bad.join(', '), limits.min, limits.max, limits.integer) : null);
   };
   return (
     <div className="space-y-2">
       {values.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Değerler">
+        <ul className="flex flex-wrap gap-1.5" aria-label={c.values}>
           {values.map((v) => (
             <li key={v} className="inline-flex items-center gap-0.5 rounded-chip border border-subtle bg-surface-2 py-0.5 pl-2 pr-0.5 text-sm text-fg">
-              {fmtValue(type, v)}
+              {fmtValue(copy, type, v)}
               <button
                 type="button"
                 onClick={() => onChange(values.filter((x) => x !== v))}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-chip text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                aria-label={`${fmtValue(type, v)} değerini kaldır`}
+                aria-label={c.removeValue(fmtValue(copy, type, v))}
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -162,10 +167,10 @@ function ValuesEditor({
         </ul>
       )}
       <Field
-        label="Değer ekle"
+        label={c.addValue}
         hideLabel
         error={err ?? undefined}
-        description={`${limits.min}–${limits.max} arası, en çok ${maxValues} değer. Enter ya da virgülle ekleyin.`}
+        description={c.addValueHint(limits.min, limits.max, maxValues)}
       >
         {(p) => (
           <Input
@@ -211,6 +216,9 @@ function TypeCard({
 }) {
   const qc = useQueryClient();
   const meta = REMEDY_TYPE_META[type];
+  const copy = useAutomationCopy();
+  const c = copy.catalog;
+  const typeText = copy.remedyType[type];
   const Icon = TYPE_ICON[type];
   const labelId = useId();
   const [creating, setCreating] = useState(false);
@@ -230,7 +238,7 @@ function TypeCard({
         ? updateRemedyTemplate(template.id, { label: label.trim() || null, values })
         : createRemedyTemplate({ locationId: scope.locationId, type, label: label.trim() || null, values, isActive: true }),
     onSuccess: async () => {
-      toast.success(template ? `${meta.label} şablonu güncellendi` : `${meta.label} şablonu eklendi`);
+      toast.success(template ? c.updated(typeText.label) : c.created(typeText.label));
       setCreating(false);
       await invalidate();
     },
@@ -254,53 +262,53 @@ function TypeCard({
         </span>
         <div className="min-w-0 flex-1">
           <h3 id={labelId} className="text-sm font-semibold text-fg">
-            {meta.label}
+            {typeText.label}
           </h3>
-          <p className="qx-caption text-fg-muted">{meta.hint}</p>
+          <p className="qx-caption text-fg-muted">{typeText.hint}</p>
         </div>
         {template && (
           <Switch
             checked={template.isActive}
             disabled={patch.isPending}
             onCheckedChange={(v) => patch.mutate({ isActive: v })}
-            aria-label={`${meta.label} şablonu ${template.isActive ? 'etkin' : 'pasif'}`}
+            aria-label={c.toggle(typeText.label, template.isActive)}
           />
         )}
       </header>
 
       {!editing ? (
         <div className="flex flex-1 flex-col justify-between gap-2">
-          <p className="qx-small text-fg-muted">Bu kapsamda tanımlı değil.</p>
+          <p className="qx-small text-fg-muted">{c.notDefined}</p>
           <Button variant="outline" className="min-h-11" onClick={() => setCreating(true)}>
-            <Plus className="mr-2 h-4 w-4" aria-hidden /> {meta.label} ekle
+            <Plus className="mr-2 h-4 w-4" aria-hidden /> {c.add(typeText.label)}
           </Button>
         </div>
       ) : (
         <>
-          <Field label="Müşterinin göreceği ad" description={type === 'free_item' ? 'Örn. “Ücretsiz kahve”.' : undefined}>
+          <Field label={c.nameLabel} description={type === 'free_item' ? c.nameHint : undefined}>
             {(p) => <Input {...p} value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} className="min-h-11" />}
           </Field>
           <ValuesEditor type={type} values={values} onChange={setValues} limits={limits} maxValues={maxValues} />
           <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-subtle pt-2">
             <Button size="sm" className="min-h-11" disabled={!dirty || values.length === 0 || save.isPending} onClick={() => save.mutate()}>
-              {template ? 'Kaydet' : 'Ekle'}
+              {template ? c.save : c.create}
             </Button>
             {!template && (
               <Button size="sm" variant="ghost" className="min-h-11" onClick={() => setCreating(false)}>
-                Vazgeç
+                {c.cancel}
               </Button>
             )}
             {template && (
               <>
                 <IconButton
-                  aria-label={`${meta.label}: müşteri listesinde yukarı`}
+                  aria-label={c.moveUp(typeText.label)}
                   icon={<ArrowUp />}
                   tooltip
                   disabled={patch.isPending || index <= 0}
                   onClick={() => patch.mutate({ move: 'up' })}
                 />
                 <IconButton
-                  aria-label={`${meta.label}: müşteri listesinde aşağı`}
+                  aria-label={c.moveDown(typeText.label)}
                   icon={<ArrowDown />}
                   tooltip
                   disabled={patch.isPending || index < 0 || index >= count - 1}
@@ -308,14 +316,14 @@ function TypeCard({
                 />
                 <span className="flex-1" />
                 <ConfirmAction
-                  trigger={<IconButton aria-label={`${meta.label} şablonunu sil`} icon={<Trash2 />} variant="danger" tooltip />}
-                  title={`${meta.label} şablonu silinsin mi?`}
-                  description={`${scope.name} kapsamındaki yeni tekliflerde bu seçenek sunulmaz. Açılmış teklifler etkilenmez. Geçici olarak kapatmak için anahtarı kullanın.`}
+                  trigger={<IconButton aria-label={c.deleteAria(typeText.label)} icon={<Trash2 />} variant="danger" tooltip />}
+                  title={c.deleteTitle(typeText.label)}
+                  description={c.deleteBody(scope.name)}
                   tone="warning"
-                  confirmLabel="Sil"
+                  confirmLabel={c.delete}
                   onConfirm={async () => {
                     await deleteRemedyTemplate(template.id);
-                    toast.success(`${meta.label} şablonu silindi`);
+                    toast.success(c.deleted(typeText.label));
                     await invalidate();
                   }}
                 />
@@ -327,18 +335,18 @@ function TypeCard({
 
       {duplicates.length > 0 && (
         <div className="rounded-control border border-warning-border bg-warning-subtle p-2 qx-small text-fg">
-          <p>Bu türden {duplicates.length} fazla şablon var; müşteriye yalnız ilki sunulur. Fazlaları kaldırın:</p>
+          <p>{c.duplicates(duplicates.length)}</p>
           <ul className="mt-1 space-y-1">
             {duplicates.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-2">
                 <span>
-                  {d.label}: {d.values.map((v) => fmtValue(type, v)).join(', ')}
+                  {d.label}: {d.values.map((v) => fmtValue(copy, type, v)).join(', ')}
                 </span>
                 <ConfirmAction
-                  trigger={<IconButton aria-label={`Fazla ${d.label} şablonunu sil`} icon={<Trash2 />} variant="danger" size="sm" />}
-                  title="Fazla şablon silinsin mi?"
+                  trigger={<IconButton aria-label={c.duplicateDeleteAria(d.label)} icon={<Trash2 />} variant="danger" size="sm" />}
+                  title={c.duplicateDeleteTitle}
                   tone="warning"
-                  confirmLabel="Sil"
+                  confirmLabel={c.delete}
                   onConfirm={async () => {
                     await deleteRemedyTemplate(d.id);
                     await invalidate();

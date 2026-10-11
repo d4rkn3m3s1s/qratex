@@ -21,14 +21,13 @@ import type { RadarLevel, RadarRuleEval, RadarRuleKey, RadarRules } from '@/lib/
 import { AUTOMATION_KEYS, type AlertsOverviewDto, type AlertsStatusDto } from '@/lib/dealer-automation/types';
 import { errorText, fetchAlerts, fmtInt, fmtRelative, previewAlerts, saveAlerts } from './api';
 import { AutomationNav } from './automation-nav';
+import { useAutomationCopy } from './copy';
 
-const LEVEL_TEXT: Record<RadarLevel, { label: string; cls: string }> = {
-  normal: { label: 'Normal', cls: 'bg-success-subtle text-fg' },
-  watch: { label: 'İzlemede', cls: 'bg-warning-subtle text-fg' },
-  alert: { label: 'Eşik aşıldı', cls: 'bg-danger-subtle text-fg' },
+const LEVEL_CLS: Record<RadarLevel, string> = {
+  normal: 'bg-success-subtle text-fg',
+  watch: 'bg-warning-subtle text-fg',
+  alert: 'bg-danger-subtle text-fg',
 };
-
-const STATUS_TR: Record<string, string> = { open: 'Açık', assigned: 'Atandı', in_progress: 'Üzerinde çalışılıyor', resolved: 'Çözüldü' };
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -41,21 +40,22 @@ function useDebounced<T>(value: T, ms: number): T {
 
 export function AlertsScreen() {
   const q = useQuery({ queryKey: AUTOMATION_KEYS.alerts, queryFn: ({ signal }) => fetchAlerts(signal), staleTime: 30_000 });
+  const copy = useAutomationCopy();
   return (
     <PanelPage
       register="ops"
       header={
         <PageHeader
-          eyebrow="Otomasyon"
-          title="Uyarı kuralları"
-          description="Kriz radarı bu eşikler aşıldığında Gelen Kutusu › Vakalar'da sistem vakası açar ve size bildirir. Aynı türde açık vaka varken yenisi açılmaz."
+          eyebrow={copy.eyebrow}
+          title={copy.alerts.title}
+          description={copy.alerts.description}
           icon={<BellRing className="h-5 w-5" aria-hidden />}
           meta={<AutomationNav />}
           actions={
             <Button asChild variant="outline" className="min-h-11">
               <Link href="/dealer/inbox/incidents">
                 <Siren className="mr-2 h-4 w-4" aria-hidden />
-                Vakalar
+                {copy.alerts.incidents}
               </Link>
             </Button>
           }
@@ -71,6 +71,8 @@ export function AlertsScreen() {
 
 function AlertsBody({ data }: { data: AlertsOverviewDto }) {
   const qc = useQueryClient();
+  const copy = useAutomationCopy();
+  const c = copy.alerts;
   const [draft, setDraft] = useState<RadarRules>(data.rules);
   const savedKey = JSON.stringify(data.rules);
   useEffect(() => setDraft(data.rules), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,7 +91,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
   const save = useMutation({
     mutationFn: () => saveAlerts(draft),
     onSuccess: async () => {
-      toast.success('Uyarı eşikleri kaydedildi.');
+      toast.success(c.saved);
       await qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.alerts });
     },
     onError: (e) => toast.error(errorText(e)),
@@ -102,19 +104,19 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
     <>
       <div className="flex flex-wrap items-center gap-3 rounded-card border border-subtle bg-surface-1 p-4" aria-live="polite">
         {status ? (
-          <span className={cn('rounded-chip px-3 py-1 text-sm font-semibold', LEVEL_TEXT[status.level].cls)}>
-            {dirty ? 'Bu eşiklerle: ' : 'Şu an: '}
-            {LEVEL_TEXT[status.level].label}
+          <span className={cn('rounded-chip px-3 py-1 text-sm font-semibold', LEVEL_CLS[status.level])}>
+            {dirty ? c.withThese : c.now}
+            {c.level[status.level]}
           </span>
         ) : (
-          <span className="qx-small text-fg-muted">{dirty ? (preview.isError ? 'Önizleme hesaplanamadı.' : 'Hesaplanıyor…') : 'Canlı durum hesaplanamadı.'}</span>
+          <span className="qx-small text-fg-muted">{dirty ? (preview.isError ? c.previewFailed : c.computing) : c.liveFailed}</span>
         )}
         <span className="qx-caption text-fg-muted">
-          Son otomatik tarama: {fmtRelative(data.lastScanAt)} · eşikler {data.updatedAt ? `${fmtRelative(data.updatedAt)} güncellendi` : 'varsayılan'}
+          {c.lastScan(fmtRelative(data.lastScanAt), data.updatedAt ? fmtRelative(data.updatedAt) : null)}
         </span>
         {!isDefault && (
           <Button variant="ghost" size="sm" className="ml-auto min-h-11" onClick={() => setDraft(data.defaults)}>
-            Varsayılana dön
+            {c.resetDefaults}
           </Button>
         )}
       </div>
@@ -123,18 +125,18 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
         <li>
           <RuleCard
             icon={<TrendingDown className="h-4 w-4" />}
-            title="Puan düşüşü"
-            sentence={`Son 7 günün ortalaması önceki 7 güne göre ${fmt1(draft.ratingDrop.minDrop)} puan ya da daha fazla düşerse (her iki haftada en az ${draft.ratingDrop.minSample} yorum varsa).`}
+            title={c.ratingDrop.title}
+            sentence={c.ratingDrop.sentence(fmt1(draft.ratingDrop.minDrop), draft.ratingDrop.minSample)}
             enabled={draft.ratingDrop.enabled}
             onEnabled={(v) => set('ratingDrop', { enabled: v })}
             evaluation={evalOf('rating_drop')}
             valueText={(e) =>
               e.value == null
-                ? `Yeterli yorum yok (son 7 gün: ${fmtInt(e.sample)})`
-                : `Ortalama ${fmt1(e.detail.avgPrev7)} → ${fmt1(e.detail.avgLast7)} (düşüş ${fmt1(e.value)})`
+                ? c.ratingDrop.notEnough(fmtInt(e.sample))
+                : c.ratingDrop.value(fmt1(e.detail.avgPrev7), fmt1(e.detail.avgLast7), fmt1(e.value))
             }
           >
-            <Field kind="labelledby" label="Düşüş eşiği (puan)">
+            <Field kind="labelledby" label={c.ratingDrop.threshold}>
               {(p) => (
                 <ChoiceChips
                   aria-labelledby={p['aria-labelledby'] as string}
@@ -145,41 +147,41 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
                 />
               )}
             </Field>
-            <IntInput label="En az yorum (hafta başına)" value={draft.ratingDrop.minSample} min={1} max={500} onChange={(n) => set('ratingDrop', { minSample: n })} />
+            <IntInput label={c.ratingDrop.minSample} value={draft.ratingDrop.minSample} min={1} max={500} onChange={(n) => set('ratingDrop', { minSample: n })} />
           </RuleCard>
         </li>
         <li>
           <RuleCard
             icon={<MessageSquareWarning className="h-4 w-4" />}
-            title="Şikâyet artışı"
-            sentence={`Son ${draft.complaintSpike.windowHours} saatte ${draft.complaintSpike.count} ya da daha fazla olumsuz yorum (2 yıldız ve altı ya da olumsuz duygu) gelirse.`}
+            title={c.complaintSpike.title}
+            sentence={c.complaintSpike.sentence(draft.complaintSpike.windowHours, draft.complaintSpike.count)}
             enabled={draft.complaintSpike.enabled}
             onEnabled={(v) => set('complaintSpike', { enabled: v })}
             evaluation={evalOf('complaint_spike')}
-            valueText={(e) => `Pencerede ${fmtInt(e.value ?? 0)} olumsuz yorum`}
+            valueText={(e) => c.complaintSpike.value(fmtInt(e.value ?? 0))}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <IntInput label="Olumsuz yorum sayısı" value={draft.complaintSpike.count} min={1} max={500} onChange={(n) => set('complaintSpike', { count: n })} />
-              <IntInput label="Zaman penceresi (saat)" value={draft.complaintSpike.windowHours} min={1} max={168} onChange={(n) => set('complaintSpike', { windowHours: n })} />
+              <IntInput label={c.complaintSpike.count} value={draft.complaintSpike.count} min={1} max={500} onChange={(n) => set('complaintSpike', { count: n })} />
+              <IntInput label={c.complaintSpike.window} value={draft.complaintSpike.windowHours} min={1} max={168} onChange={(n) => set('complaintSpike', { windowHours: n })} />
             </div>
           </RuleCard>
         </li>
         <li>
           <RuleCard
             icon={<ShieldAlert className="h-4 w-4" />}
-            title="Acil ya da uygunsuz yorum"
-            sentence={`Son 24 saatte AI'ın aciliyetini %${Math.round(draft.urgentToxic.minUrgency * 100)} ve üstü bulduğu ya da uygunsuz işaretlediği tek bir yorum bile gelirse.`}
+            title={c.urgentToxic.title}
+            sentence={c.urgentToxic.sentence(Math.round(draft.urgentToxic.minUrgency * 100))}
             enabled={draft.urgentToxic.enabled}
             onEnabled={(v) => set('urgentToxic', { enabled: v })}
             evaluation={evalOf('urgent_toxic')}
-            valueText={(e) => `Son 24 saatte ${fmtInt(e.value ?? 0)} yorum (${fmtInt(e.detail.toxic ?? 0)} uygunsuz)`}
+            valueText={(e) => c.urgentToxic.value(fmtInt(e.value ?? 0), fmtInt(e.detail.toxic ?? 0))}
           >
-            <Field kind="labelledby" label="Aciliyet eşiği" description="AI analizi gerekir; AI kapalıysa yalnız uygunsuz içerik sayılır.">
+            <Field kind="labelledby" label={c.urgentToxic.threshold} description={c.urgentToxic.thresholdHint}>
               {(p) => (
                 <ChoiceChips
                   aria-labelledby={p['aria-labelledby'] as string}
                   size="sm"
-                  options={[0.6, 0.7, 0.8, 0.9].map((n) => ({ value: String(n), label: `%${Math.round(n * 100)}+` }))}
+                  options={[0.6, 0.7, 0.8, 0.9].map((n) => ({ value: String(n), label: c.urgentToxic.pct(Math.round(n * 100)) }))}
                   value={String(draft.urgentToxic.minUrgency)}
                   onChange={(v) => v && set('urgentToxic', { minUrgency: Number(v) })}
                 />
@@ -190,36 +192,36 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
         <li>
           <RuleCard
             icon={<Clock className="h-4 w-4" />}
-            title="Yanıtsız olumsuz yorum"
-            sentence={`${draft.unansweredNegative.slaHours} saattir yanıtlanmamış ${draft.unansweredNegative.count} ya da daha fazla olumsuz yorum varsa radar “izlemede”ye geçer. Bu kural vaka açmaz; Gelen Kutusu'nda SLA rozetini besler.`}
+            title={c.unanswered.title}
+            sentence={c.unanswered.sentence(draft.unansweredNegative.slaHours, draft.unansweredNegative.count)}
             enabled={draft.unansweredNegative.enabled}
             onEnabled={(v) => set('unansweredNegative', { enabled: v })}
             evaluation={evalOf('unanswered_negative')}
-            valueText={(e) => `${fmtInt(e.value ?? 0)} yanıtsız olumsuz yorum`}
+            valueText={(e) => c.unanswered.value(fmtInt(e.value ?? 0))}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <IntInput label="Yanıt süresi (saat)" value={draft.unansweredNegative.slaHours} min={1} max={336} onChange={(n) => set('unansweredNegative', { slaHours: n })} />
-              <IntInput label="Yorum sayısı" value={draft.unansweredNegative.count} min={1} max={500} onChange={(n) => set('unansweredNegative', { count: n })} />
+              <IntInput label={c.unanswered.sla} value={draft.unansweredNegative.slaHours} min={1} max={336} onChange={(n) => set('unansweredNegative', { slaHours: n })} />
+              <IntInput label={c.unanswered.count} value={draft.unansweredNegative.count} min={1} max={500} onChange={(n) => set('unansweredNegative', { count: n })} />
             </div>
           </RuleCard>
         </li>
       </ul>
 
       <SectionCard
-        title="Son radar vakaları"
+        title={c.recentTitle}
         description={
           data.replyIncidentRules > 0
-            ? `Ayrıca ${fmtInt(data.replyIncidentRules)} otomatik yanıt kuralınız tek tek yorumlar için vaka açıyor.`
-            : 'Tek bir yoruma göre vaka açmak için Otomatik yanıtlar’da “Vaka aç” eylemli kural kurun.'
+            ? c.recentReplyRules(fmtInt(data.replyIncidentRules))
+            : c.recentHint
         }
         actions={
           <Button asChild variant="link" className="h-auto min-h-11 px-0">
-            <Link href="/dealer/automation/replies">Otomatik yanıtlar</Link>
+            <Link href="/dealer/automation/replies">{copy.nav.replies}</Link>
           </Button>
         }
       >
         {data.recent.length === 0 ? (
-          <p className="qx-small text-fg-muted">Radar henüz vaka açmadı.</p>
+          <p className="qx-small text-fg-muted">{c.recentEmpty}</p>
         ) : (
           <ul className="space-y-1">
             {data.recent.map((r) => (
@@ -231,7 +233,7 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
                   <SeverityBadge severity={toSeverity(r.severity)} size="sm" />
                   <span className="min-w-0 flex-1 text-sm text-fg">{r.title}</span>
                   <span className="qx-caption text-fg-muted">
-                    {STATUS_TR[r.status] ?? r.status} · {fmtRelative(r.createdAt)}
+                    {c.status[r.status] ?? r.status} · {fmtRelative(r.createdAt)}
                   </span>
                 </Link>
               </li>
@@ -245,13 +247,13 @@ function AlertsBody({ data }: { data: AlertsOverviewDto }) {
         saving={save.isPending}
         onSave={() => {
           if (!parsed.success) {
-            toast.error(parsed.error.issues[0]?.message ?? 'Bazı değerler geçersiz.');
+            toast.error(parsed.error.issues[0]?.message ?? c.invalid);
             return;
           }
           save.mutate();
         }}
         onDiscard={() => setDraft(data.rules)}
-        message="Kaydedilmemiş eşik değişiklikleri var"
+        message={c.dirty}
       />
     </>
   );
@@ -281,6 +283,7 @@ function RuleCard({
   children: React.ReactNode;
 }) {
   const policy = useMotionPolicy();
+  const c = useAutomationCopy().alerts;
   const id = useMemo(() => `rule-${title.replace(/\s+/g, '-')}`, [title]);
   const ratio = evaluation ? Math.max(0, Math.min(1, evaluation.ratio)) : 0;
   return (
@@ -295,14 +298,14 @@ function RuleCard({
           </h3>
           <p className="qx-small text-fg-muted">{sentence}</p>
         </div>
-        <Switch checked={enabled} onCheckedChange={onEnabled} aria-label={`${title} kuralı ${enabled ? 'açık' : 'kapalı'}`} />
+        <Switch checked={enabled} onCheckedChange={onEnabled} aria-label={c.ruleSwitch(title, enabled)} />
       </header>
       {enabled && <div className="space-y-3">{children}</div>}
       {evaluation && enabled && (
         <div className="mt-auto space-y-1">
           <div className="flex items-center justify-between gap-2">
             <span className="qx-caption text-fg-muted">{valueText(evaluation)}</span>
-            <span className={cn('rounded-chip px-2 py-0.5 qx-caption', LEVEL_TEXT[evaluation.level].cls)}>{LEVEL_TEXT[evaluation.level].label}</span>
+            <span className={cn('rounded-chip px-2 py-0.5 qx-caption', LEVEL_CLS[evaluation.level])}>{c.level[evaluation.level]}</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
             <Motion.div

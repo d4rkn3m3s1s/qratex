@@ -45,64 +45,49 @@ import {
 } from './api';
 import { AutomationNav } from './automation-nav';
 import type { ReplyEditorState } from './reply-editor';
+import { useAutomationCopy, type AutomationCopy } from './copy';
 
 // Düzenleyici (form + önizleme) yalnız açılınca yüklenir.
 const ReplyEditor = dynamic(() => import('./reply-editor').then((mod) => mod.ReplyEditor), { ssr: false });
 
-const PRESETS: Array<{ title: string; hint: string; body: ReplyRuleBody }> = [
-  {
-    title: 'Düşük puana özür yanıtı',
-    hint: 'Puan 2 ve altı → kişisel özür',
-    body: {
-      name: 'Düşük puana özür',
-      condition: { field: 'rating', op: 'lte', value: 2 },
-      action: 'reply',
-      template:
-        'Merhaba {{musteri}}, yaşadığınız olumsuz deneyim için gerçekten üzgünüz. Geri bildiriminizi ekibimizle paylaştık; bir sonraki ziyaretinizde farkı göstermek isteriz. — {{isletme}}',
-      tone: null,
-      isActive: true,
+function presets(copy: AutomationCopy): Array<{ title: string; hint: string; body: ReplyRuleBody }> {
+  const p = copy.replies.presets;
+  return [
+    {
+      title: p.apology.title,
+      hint: p.apology.hint,
+      body: { name: p.apology.name, condition: { field: 'rating', op: 'lte', value: 2 }, action: 'reply', template: p.apology.template, tone: null, isActive: true },
     },
-  },
-  {
-    title: '1 yıldızda vaka aç',
-    hint: 'Sorumlu atanıp takip edilsin',
-    body: {
-      name: '1 yıldız → vaka',
-      condition: { field: 'rating', op: 'eq', value: 1 },
-      action: 'incident',
-      template: '1 yıldızlı geri bildirim: müşteriyle 24 saat içinde iletişime geçin.',
-      tone: null,
-      isActive: true,
+    {
+      title: p.oneStar.title,
+      hint: p.oneStar.hint,
+      body: { name: p.oneStar.name, condition: { field: 'rating', op: 'eq', value: 1 }, action: 'incident', template: p.oneStar.template, tone: null, isActive: true },
     },
-  },
-  {
-    title: '5 yıldıza teşekkür',
-    hint: 'Memnun müşteriye sıcak bir yanıt',
-    body: {
-      name: '5 yıldıza teşekkür',
-      condition: { field: 'rating', op: 'gte', value: 5 },
-      action: 'reply',
-      template: 'Teşekkürler {{musteri}}! Güzel yorumunuz ekibimizi çok mutlu etti. Sizi yeniden ağırlamayı dört gözle bekliyoruz. — {{isletme}}',
-      tone: null,
-      isActive: true,
+    {
+      title: p.thanks.title,
+      hint: p.thanks.hint,
+      body: { name: p.thanks.name, condition: { field: 'rating', op: 'gte', value: 5 }, action: 'reply', template: p.thanks.template, tone: null, isActive: true },
     },
-  },
-  {
-    title: 'Bekleme şikâyetinde vaka',
-    hint: '“bekledim”, “geç geldi”, “yavaş” geçerse',
-    body: {
-      name: 'Bekleme şikâyeti',
-      condition: { field: 'text', op: 'contains', keywords: ['bekledim', 'geç geldi', 'yavaş'], wholeWord: false },
-      action: 'incident',
-      template: 'Servis hızı şikâyeti — vardiya sorumlusu kontrol etsin.',
-      tone: null,
-      isActive: true,
+    {
+      title: p.wait.title,
+      hint: p.wait.hint,
+      body: {
+        name: p.wait.name,
+        // Anahtar kelimeler müşteri yorumlarının diliyle (Türkçe) eşleşir; arayüz diline göre çevrilmez.
+        condition: { field: 'text', op: 'contains', keywords: ['bekledim', 'geç geldi', 'yavaş'], wholeWord: false },
+        action: 'incident',
+        template: p.wait.template,
+        tone: null,
+        isActive: true,
+      },
     },
-  },
-];
+  ];
+}
 
 export function RepliesScreen() {
   const qc = useQueryClient();
+  const copy = useAutomationCopy();
+  const c = copy.replies;
   const q = useQuery({ queryKey: AUTOMATION_KEYS.replies, queryFn: ({ signal }) => fetchReplies(signal), staleTime: 30_000 });
   const [editor, setEditor] = useState<ReplyEditorState>(null);
   const atLimit = !!q.data && q.data.rules.length >= q.data.limit;
@@ -113,11 +98,11 @@ export function RepliesScreen() {
     <Button
       onClick={() => setEditor({ mode: 'create' })}
       disabled={!q.data || atLimit}
-      title={atLimit ? `En fazla ${q.data?.limit} kural tanımlanabilir.` : undefined}
+      title={atLimit ? c.limit(q.data?.limit) : undefined}
       className="min-h-11"
     >
       <Plus className="mr-2 h-4 w-4" aria-hidden />
-      Yeni kural
+      {c.newRule}
     </Button>
   );
 
@@ -126,9 +111,9 @@ export function RepliesScreen() {
       register="ops"
       header={
         <PageHeader
-          eyebrow="Otomasyon"
-          title="Otomatik yanıtlar"
-          description="Geri bildirim geldiği anda koşula göre müşteriye yanıt yazın ya da vaka açın. Her geri bildirim için en fazla bir kural, bir kez çalışır."
+          eyebrow={copy.eyebrow}
+          title={c.title}
+          description={c.description}
           icon={<Reply className="h-5 w-5" aria-hidden />}
           actions={newButton}
           meta={<AutomationNav />}
@@ -144,9 +129,9 @@ export function RepliesScreen() {
               <Presets onPick={(body) => setEditor({ mode: 'create', preset: body })} />
             ) : (
               <SectionCard
-                title="Kurallar"
-                description="Yukarıdan aşağı değerlendirilir; geri bildirime uyan İLK kural çalışır, diğerleri atlanır. Sırayı oklarla değiştirin."
-                actions={<span className="qx-caption tabular-nums text-fg-muted">{fmtInt(data.rules.length)}/{fmtInt(data.limit)} kural</span>}
+                title={c.rules}
+                description={c.rulesHint}
+                actions={<span className="qx-caption tabular-nums text-fg-muted">{c.ruleCount(fmtInt(data.rules.length), fmtInt(data.limit))}</span>}
               >
                 <RuleList
                   data={data}
@@ -157,7 +142,7 @@ export function RepliesScreen() {
                     setEditor({
                       mode: 'create',
                       preset: {
-                        name: `${rule.name} (kopya)`.slice(0, 80),
+                        name: `${rule.name} ${c.copySuffix}`.slice(0, 80),
                         condition: rule.condition,
                         action: rule.action,
                         template: rule.template,
@@ -191,53 +176,55 @@ export function RepliesScreen() {
 }
 
 function Summary({ data }: { data: RepliesOverviewDto }) {
+  const c = useAutomationCopy().replies;
   return (
     <MetricGrid cols={4}>
       <MetricTile
-        label="Etkin kural"
+        label={c.kpiActive}
         metric={{ value: data.summary.activeCount }}
         icon={<Zap className="h-4 w-4" aria-hidden />}
-        hint={`${fmtInt(data.rules.length)}/${fmtInt(data.limit)} kural tanımlı`}
+        hint={c.kpiActiveHint(fmtInt(data.rules.length), fmtInt(data.limit))}
       />
-      <MetricTile label="Otomatik yanıt (7 gün)" metric={{ value: data.summary.replies7 }} icon={<MessageSquareText className="h-4 w-4" aria-hidden />} />
+      <MetricTile label={c.kpiReplies} metric={{ value: data.summary.replies7 }} icon={<MessageSquareText className="h-4 w-4" aria-hidden />} />
       <MetricTile
-        label="Açılan vaka (7 gün)"
+        label={c.kpiIncidents}
         metric={{ value: data.summary.incidents7 }}
         icon={<Siren className="h-4 w-4" aria-hidden />}
         href="/dealer/inbox/incidents"
       />
       <MetricTile
-        label="Tetiklenemeyen kural"
+        label={c.kpiBroken}
         metric={{ value: data.summary.brokenCount }}
         tone={data.summary.brokenCount > 0 ? 'warning' : undefined}
         icon={<AlertTriangle className="h-4 w-4" aria-hidden />}
-        hint="Kayıtlı koşulu geçersiz olan kurallar hiç çalışmaz."
+        hint={c.kpiBrokenHint}
       />
     </MetricGrid>
   );
 }
 
 function Warnings({ data }: { data: RepliesOverviewDto }) {
+  const c = useAutomationCopy().replies;
   const usesTone = data.rules.some((r) => r.isActive && r.tone);
   const usesSentiment = data.rules.some((r) => r.isActive && r.condition?.field === 'sentiment');
   return (
     <div className="space-y-2">
       {data.summary.brokenCount > 0 && (
         <InlineError variant="banner" tone="warning">
-          {fmtInt(data.summary.brokenCount)} kuralın koşulu geçersiz (ör. “Metin ≤ 2”) ve hiç tetiklenmiyor. İşaretli kuralları düzenleyip koşulu yeniden seçin.
+          {c.brokenBanner(fmtInt(data.summary.brokenCount))}
         </InlineError>
       )}
       {usesTone && data.ai.canUseAi === false && (
         <InlineError variant="banner" tone="info">
-          AI ayarınız kapalı: “AI ile kişiselleştir” kuralları şu an yedek metni gönderiyor.{' '}
+          {c.aiOffBanner}{' '}
           <Link href="/dealer/settings" className="font-medium underline underline-offset-2">
-            AI ayarları
+            {c.aiSettings}
           </Link>
         </InlineError>
       )}
       {usesSentiment && data.ai.canAnalyze === false && (
         <InlineError variant="banner" tone="info">
-          Otomatik AI analizi kapalı olduğu için duygu koşullu kurallar tetiklenmiyor.
+          {c.sentimentOff}
         </InlineError>
       )}
     </div>
@@ -245,13 +232,12 @@ function Warnings({ data }: { data: RepliesOverviewDto }) {
 }
 
 function Presets({ onPick, compact }: { onPick: (b: ReplyRuleBody) => void; compact?: boolean }) {
+  const copy = useAutomationCopy();
+  const c = copy.replies;
   return (
-    <SectionCard
-      title={compact ? 'Hazır kural ekleyin' : 'Henüz kural yok — hazır bir kuralla başlayın'}
-      description="Seçtiğiniz kural düzenleyicide açılır; kaydetmeden önce son 30 günde kaç geri bildirime uyacağını görürsünüz."
-    >
+    <SectionCard title={compact ? c.presetsCompact : c.presetsEmpty} description={c.presetsHint}>
       <ul className="grid gap-3 sm:grid-cols-2">
-        {PRESETS.map((p) => (
+        {presets(copy).map((p) => (
           <li key={p.title}>
             <button
               type="button"
@@ -286,6 +272,7 @@ function RuleList({
 }) {
   const qc = useQueryClient();
   const policy = useMotionPolicy();
+  const c = useAutomationCopy().replies;
   const key = AUTOMATION_KEYS.replies;
 
   const reorder = useMutation({
@@ -321,7 +308,7 @@ function RuleList({
       if (ctx?.prev) qc.setQueryData(key, ctx.prev);
       toast.error(errorText(e));
     },
-    onSuccess: (_r, v) => toast.success(v.isActive ? `“${v.name}” başlatıldı` : `“${v.name}” durduruldu`),
+    onSuccess: (_r, v) => toast.success(v.isActive ? c.started(v.name) : c.stopped(v.name)),
     onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 
@@ -337,15 +324,15 @@ function RuleList({
     const res = await deleteReplyRule(rule.id);
     await qc.invalidateQueries({ queryKey: key });
     const snap = replyRuleBodySchema.safeParse(res.snapshot);
-    toast.success(`“${rule.name}” silindi`, {
+    toast.success(c.deleted(rule.name), {
       action:
         snap.success && !atLimit
           ? {
-              label: 'Geri al',
+              label: c.undo,
               onClick: () => {
                 createReplyRule(snap.data)
                   .then(() => {
-                    toast.success('Kural geri getirildi (listenin sonuna eklendi).');
+                    toast.success(c.restored);
                     void qc.invalidateQueries({ queryKey: key });
                   })
                   .catch((e) => toast.error(errorText(e)));
@@ -356,7 +343,7 @@ function RuleList({
   };
 
   return (
-    <ol className="space-y-3" aria-label="Otomatik yanıt kuralları (değerlendirme sırasıyla)">
+    <ol className="space-y-3" aria-label={c.listAria}>
       <AnimatePresence initial={false}>
         {data.rules.map((rule, i) => (
           <Motion.li
@@ -410,11 +397,12 @@ function RuleCard({
   onDelete: () => Promise<void>;
 }) {
   const [showRuns, setShowRuns] = useState(false);
+  const c = useAutomationCopy().replies;
   const broken = !rule.condition;
   const runsId = `runs-${rule.id}`;
   return (
     <article
-      aria-label={`${index + 1}. kural: ${rule.name}`}
+      aria-label={c.cardAria(index + 1, rule.name)}
       className={cn(
         'rounded-card border bg-surface-1 p-3 sm:p-4',
         broken ? 'border-warning-border' : 'border-subtle',
@@ -431,10 +419,10 @@ function RuleCard({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-fg">{rule.name}</h3>
-            {!rule.isActive && <span className="rounded-chip bg-surface-2 px-2 py-0.5 qx-caption text-fg-muted">Durduruldu</span>}
+            {!rule.isActive && <span className="rounded-chip bg-surface-2 px-2 py-0.5 qx-caption text-fg-muted">{c.paused}</span>}
             {broken && (
               <span className="inline-flex items-center gap-1 rounded-chip bg-warning-subtle px-2 py-0.5 qx-caption text-fg">
-                <AlertTriangle className="h-3 w-3" aria-hidden /> Tetiklenemez
+                <AlertTriangle className="h-3 w-3" aria-hidden /> {c.broken}
               </span>
             )}
           </div>
@@ -443,24 +431,24 @@ function RuleCard({
             <span className="text-fg-muted"> → </span>
             {rule.action === 'incident' ? (
               <span className="inline-flex items-center gap-1">
-                <Siren className="h-3.5 w-3.5 text-danger" aria-hidden /> vaka aç
+                <Siren className="h-3.5 w-3.5 text-danger" aria-hidden /> {c.actionIncident}
               </span>
             ) : rule.tone ? (
               <span className="inline-flex items-center gap-1">
-                <Sparkles className="h-3.5 w-3.5 text-brand" aria-hidden /> AI ile yanıtla ({rule.toneName ?? 'üslup kaldırılmış'})
+                <Sparkles className="h-3.5 w-3.5 text-brand" aria-hidden /> {c.actionAi(rule.toneName ?? null)}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1">
-                <MessageSquareText className="h-3.5 w-3.5 text-brand" aria-hidden /> sabit metinle yanıtla
+                <MessageSquareText className="h-3.5 w-3.5 text-brand" aria-hidden /> {c.actionFixed}
               </span>
             )}
           </p>
-          {rule.template && <p className="qx-small line-clamp-2 text-fg-muted">{rule.tone ? `Yedek: ${rule.template}` : rule.template}</p>}
-          {rule.toneMissing && <p className="qx-small text-warning">Seçili üslup artık tanımlı değil; yedek metin gönderiliyor.</p>}
+          {rule.template && <p className="qx-small line-clamp-2 text-fg-muted">{rule.tone ? c.fallback(rule.template) : rule.template}</p>}
+          {rule.toneMissing && <p className="qx-small text-warning">{c.toneMissing}</p>}
           <p className="qx-caption text-fg-muted">
             {rule.stats.count30 > 0
-              ? `Son 30 günde ${fmtInt(rule.stats.count30)} kez çalıştı${rule.stats.ai30 ? ` (${fmtInt(rule.stats.ai30)} AI yanıtı)` : ''} · son: ${fmtRelative(rule.stats.lastAt)}`
-              : 'Son 30 günde çalışmadı'}
+              ? c.runs30(fmtInt(rule.stats.count30), rule.stats.ai30 ? fmtInt(rule.stats.ai30) : null, fmtRelative(rule.stats.lastAt))
+              : c.noRuns30}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -468,19 +456,19 @@ function RuleCard({
             checked={rule.isActive}
             disabled={busy || broken}
             onCheckedChange={onToggle}
-            aria-label={`${rule.name}: ${rule.isActive ? 'etkin, durdurmak için' : 'durduruldu, başlatmak için'} değiştir`}
+            aria-label={c.toggleAria(rule.name, rule.isActive)}
           />
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-subtle pt-2">
-        <IconButton aria-label={`${rule.name}: yukarı taşı`} icon={<ArrowUp />} tooltip disabled={busy || index === 0} onClick={() => onMove(-1)} />
-        <IconButton aria-label={`${rule.name}: aşağı taşı`} icon={<ArrowDown />} tooltip disabled={busy || index === count - 1} onClick={() => onMove(1)} />
+        <IconButton aria-label={c.moveUp(rule.name)} icon={<ArrowUp />} tooltip disabled={busy || index === 0} onClick={() => onMove(-1)} />
+        <IconButton aria-label={c.moveDown(rule.name)} icon={<ArrowDown />} tooltip disabled={busy || index === count - 1} onClick={() => onMove(1)} />
         <span className="mx-1 h-6 border-l border-subtle" aria-hidden />
-        <IconButton aria-label={`${rule.name}: düzenle`} icon={<Pencil />} tooltip onClick={onEdit} />
-        <IconButton aria-label={`${rule.name}: çoğalt`} icon={<Copy />} tooltip disabled={atLimit || broken} onClick={onDuplicate} />
+        <IconButton aria-label={c.edit(rule.name)} icon={<Pencil />} tooltip onClick={onEdit} />
+        <IconButton aria-label={c.duplicate(rule.name)} icon={<Copy />} tooltip disabled={atLimit || broken} onClick={onDuplicate} />
         <IconButton
-          aria-label={`${rule.name}: çalışma geçmişi`}
+          aria-label={c.history(rule.name)}
           icon={<History />}
           tooltip
           pressed={showRuns}
@@ -490,12 +478,12 @@ function RuleCard({
         />
         <span className="flex-1" />
         <ConfirmAction
-          trigger={<IconButton aria-label={`${rule.name}: sil`} icon={<Trash2 />} variant="danger" tooltip />}
-          title={`“${rule.name}” kuralı silinsin mi?`}
-          description="Kural hemen çalışmayı bırakır. Daha önce yazılan yanıtlar ve açılan vakalar yerinde kalır. Silmeden sonra kısa süre “Geri al” ile geri getirebilirsiniz; yalnız durdurmak isterseniz anahtarı kapatın."
+          trigger={<IconButton aria-label={c.deleteAria(rule.name)} icon={<Trash2 />} variant="danger" tooltip />}
+          title={c.deleteTitle(rule.name)}
+          description={c.deleteBody}
           tone="warning"
           irreversibleNote={false}
-          confirmLabel="Sil"
+          confirmLabel={c.delete}
           onConfirm={onDelete}
         />
       </div>
@@ -506,13 +494,14 @@ function RuleCard({
 
 function RunsPanel({ id, ruleId }: { id: string; ruleId: string }) {
   const q = useQuery({ queryKey: AUTOMATION_KEYS.replyRuns(ruleId), queryFn: ({ signal }) => fetchReplyRuns(ruleId, signal), staleTime: 30_000 });
+  const c = useAutomationCopy().replies;
   return (
     <div id={id} className="mt-2 rounded-control bg-surface-2 p-3">
       <QueryState
         query={q}
         skeleton="list"
         isEmpty={(d) => d.runs.length === 0}
-        empty={{ compact: true, title: 'Henüz çalışma kaydı yok', description: 'Kural bir geri bildirime uyduğunda burada görünür.' }}
+        empty={{ compact: true, title: c.runsEmpty, description: c.runsEmptyHint }}
       >
         {(d) => (
           <ul className="space-y-2">
@@ -521,14 +510,14 @@ function RunsPanel({ id, ruleId }: { id: string; ruleId: string }) {
                 <time dateTime={r.at} className="qx-caption tabular-nums text-fg-muted">
                   {fmtDateTime(r.at)}
                 </time>
-                <span className="text-fg">{r.action === 'incident' ? 'Vaka açıldı' : r.ai ? 'AI yanıtı yazıldı' : 'Yanıt yazıldı'}</span>
+                <span className="text-fg">{r.action === 'incident' ? c.runIncident : r.ai ? c.runAi : c.runReply}</span>
                 {r.feedback ? (
                   <Link href={r.feedback.href} className="min-w-0 truncate text-brand underline-offset-2 hover:underline">
                     {r.feedback.rating != null ? `${r.feedback.rating} ★ · ` : ''}
-                    {r.feedback.textPreview ?? 'Yalnız puan'}
+                    {r.feedback.textPreview ?? c.ratingOnly}
                   </Link>
                 ) : (
-                  <span className="qx-caption text-fg-muted">geri bildirim silinmiş</span>
+                  <span className="qx-caption text-fg-muted">{c.feedbackDeleted}</span>
                 )}
               </li>
             ))}

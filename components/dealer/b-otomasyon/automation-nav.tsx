@@ -4,20 +4,22 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BellRing, HeartHandshake, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAutomationCopy } from './copy';
 
 const ITEMS = [
-  { href: '/dealer/automation/replies', label: 'Otomatik yanıtlar', icon: Reply },
-  { href: '/dealer/automation/remedy', label: 'Telafi', icon: HeartHandshake },
-  { href: '/dealer/automation/alerts', label: 'Uyarı kuralları', icon: BellRing },
+  { href: '/dealer/automation/replies', key: 'replies', icon: Reply },
+  { href: '/dealer/automation/remedy', key: 'remedy', icon: HeartHandshake },
+  { href: '/dealer/automation/alerts', key: 'alerts', icon: BellRing },
 ] as const;
 
 /** Otomasyon yüzeyinin üç bölümü arasında gezinme (gerçek bağlantılar; URL'de kalıcı). */
 export function AutomationNav() {
   const pathname = usePathname() ?? '';
+  const copy = useAutomationCopy();
   return (
-    <nav aria-label="Otomasyon bölümleri" className="-mx-1 overflow-x-auto">
+    <nav aria-label={copy.nav.aria} className="-mx-1 overflow-x-auto">
       <ul className="flex min-w-max gap-1 px-1">
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {ITEMS.map(({ href, key, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href}>
@@ -33,7 +35,7 @@ export function AutomationNav() {
                 )}
               >
                 <Icon className="h-4 w-4" aria-hidden />
-                {label}
+                {copy.nav[key]}
               </Link>
             </li>
           );

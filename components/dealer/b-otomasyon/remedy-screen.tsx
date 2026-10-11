@@ -27,6 +27,7 @@ import {
 import { AUTOMATION_KEYS, type RemedyOverviewDto, type RemedyScanResultDto } from '@/lib/dealer-automation/types';
 import { AutomationApiError, errorText, fetchRemedy, fmtInt, fmtRelative, saveRemedyConfig, scanRemedy } from './api';
 import { AutomationNav } from './automation-nav';
+import { useAutomationCopy } from './copy';
 
 // Katalog düzenleyicisi sayfanın altındadır; ilk boyamayı bekletmez.
 const RemedyCatalog = dynamic(() => import('./remedy-catalog').then((mod) => mod.RemedyCatalog), {
@@ -34,27 +35,18 @@ const RemedyCatalog = dynamic(() => import('./remedy-catalog').then((mod) => mod
   loading: () => <div className="h-40 animate-pulse rounded-card bg-surface-2" aria-hidden />,
 });
 
-const SKIP_LABEL: Record<string, string> = {
-  monthly_limit: 'aylık sınır doldu',
-  already_exists: 'bu arada teklif açıldı',
-  cooldown: 'bekleme süresinde',
-  no_options: 'geçerli telafi seçeneği yok',
-  not_eligible: 'artık uygun değil',
-  no_user: 'anonim',
-  disabled: 'otomasyon kapalı',
-};
-
 export function RemedyScreen() {
   const q = useQuery({ queryKey: AUTOMATION_KEYS.remedy, queryFn: ({ signal }) => fetchRemedy(signal), staleTime: 30_000 });
   const moduleOff = q.error instanceof AutomationApiError && q.error.code === 'MODULE_DISABLED';
+  const copy = useAutomationCopy();
   return (
     <PanelPage
       register="ops"
       header={
         <PageHeader
-          eyebrow="Otomasyon"
-          title="Telafi otomasyonu"
-          description="Mutsuz müşteriler için telafi taslağını kendiliğinden hazırlar. Taslaklar müşteriye gitmez; Gelen Kutusu › Telafi onayı'nda siz yayınlarsınız."
+          eyebrow={copy.eyebrow}
+          title={copy.remedy.title}
+          description={copy.remedy.description}
           icon={<HeartHandshake className="h-5 w-5" aria-hidden />}
           meta={<AutomationNav />}
           actions={
@@ -62,7 +54,7 @@ export function RemedyScreen() {
               <Button asChild variant="outline" className="min-h-11">
                 <Link href="/dealer/inbox/remedy">
                   <Inbox className="mr-2 h-4 w-4" aria-hidden />
-                  Onay kuyruğu{q.data.stats.awaiting > 0 ? ` (${fmtInt(q.data.stats.awaiting)})` : ''}
+                  {copy.remedy.queue}{q.data.stats.awaiting > 0 ? ` (${fmtInt(q.data.stats.awaiting)})` : ''}
                 </Link>
               </Button>
             ) : null
@@ -84,6 +76,7 @@ export function RemedyScreen() {
 
 function RemedyBody({ data }: { data: RemedyOverviewDto }) {
   const qc = useQueryClient();
+  const c = useAutomationCopy().remedy;
   const [draft, setDraft] = useState<RemedyAutomationConfig>(data.config);
   const savedKey = JSON.stringify(data.config);
   useEffect(() => setDraft(data.config), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -98,7 +91,7 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
   const save = useMutation({
     mutationFn: () => saveRemedyConfig(draft),
     onSuccess: async () => {
-      toast.success(draft.enabled ? 'Ayar kaydedildi. Otomasyon açık.' : 'Ayar kaydedildi. Otomasyon kapalı.');
+      toast.success(draft.enabled ? c.savedOn : c.savedOff);
       await qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.remedy });
     },
     onError: (e) => toast.error(errorText(e)),
@@ -113,15 +106,15 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
       <Kpis data={data} />
 
       <PageGrid cols={2}>
-        <SectionCard title="Kurallar" description="Ne zaman taslak hazırlansın, ne kadar?">
+        <SectionCard title={c.rules} description={c.rulesHint}>
           <div className="space-y-5">
             <div className="flex items-start justify-between gap-4 rounded-card border border-subtle p-3">
               <div>
                 <p id="remedy-enabled-label" className="text-sm font-medium text-fg">
-                  Otomasyon açık
+                  {c.enabled}
                 </p>
                 <p id="remedy-enabled-desc" className="qx-small text-fg-muted">
-                  Açıkken her yeni geri bildirimde gerçek zamanlı değerlendirilir; geriye dönük tarama da yalnız açıkken çalışır.
+                  {c.enabledHint}
                 </p>
               </div>
               <Switch
@@ -132,11 +125,11 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
               />
             </div>
 
-            <Field kind="labelledby" label="Puan eşiği" required description="Bu puan ve altındaki yorumlar için taslak hazırlanır." error={errors.minRating}>
+            <Field kind="labelledby" label={c.minRating} required description={c.minRatingHint} error={errors.minRating}>
               {(p) => (
                 <ChoiceChips
                   aria-labelledby={p['aria-labelledby'] as string}
-                  options={[1, 2, 3].map((n) => ({ value: String(n), label: n === 1 ? '1 ★' : `${n} ★ ve altı`, textLabel: n === 1 ? '1 yıldız' : `${n} yıldız ve altı` }))}
+                  options={[1, 2, 3].map((n) => ({ value: String(n), label: c.starsOrLess(n), textLabel: c.starsOrLessText(n) }))}
                   value={String(draft.minRating)}
                   onChange={(v) => v && set('minRating', Number(v))}
                 />
@@ -147,22 +140,22 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p id="remedy-churn-label" className="text-sm font-medium text-fg">
-                    Kayıp riski yüksekse de hazırla
+                    {c.churn}
                   </p>
                   <p className="qx-small text-fg-muted">
-                    Puanı eşiğin üstünde olsa bile AI analizi müşteriyi kaybetme riskini yüksek bulursa.
-                    {data.aiAnalyze === false && <strong className="text-warning"> Otomatik AI analiziniz kapalı; bu tetik şu an çalışmaz.</strong>}
+                    {c.churnHint}
+                    {data.aiAnalyze === false && <strong className="text-warning">{c.churnAiOff}</strong>}
                   </p>
                 </div>
                 <Switch checked={draft.churnEnabled} onCheckedChange={(v) => set('churnEnabled', v)} aria-labelledby="remedy-churn-label" />
               </div>
               {draft.churnEnabled && (
-                <Field kind="labelledby" label="Risk eşiği" error={errors.churnThreshold}>
+                <Field kind="labelledby" label={c.churnThreshold} error={errors.churnThreshold}>
                   {(p) => (
                     <ChoiceChips
                       aria-labelledby={p['aria-labelledby'] as string}
                       size="sm"
-                      options={[0.5, 0.6, 0.7, 0.8, 0.9].map((n) => ({ value: String(n), label: `%${Math.round(n * 100)}+` }))}
+                      options={[0.5, 0.6, 0.7, 0.8, 0.9].map((n) => ({ value: String(n), label: c.pct(Math.round(n * 100)) }))}
                       value={String(draft.churnThreshold)}
                       onChange={(v) => v && set('churnThreshold', Number(v))}
                     />
@@ -173,8 +166,8 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <IntField
-                label="Aylık üst sınır"
-                description="Bu ay (İstanbul saatiyle) en fazla kaç OTOMATİK taslak. Elle açtığınız teklifler sayılmaz."
+                label={c.monthlyCap}
+                description={c.monthlyCapHint}
                 value={draft.maxMonthlyAuto}
                 min={REMEDY_LIMITS.maxMonthlyAuto.min}
                 max={REMEDY_LIMITS.maxMonthlyAuto.max}
@@ -182,8 +175,8 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
                 onChange={(n) => set('maxMonthlyAuto', n)}
               />
               <IntField
-                label="Tarama başına en fazla"
-                description="“Geriye dönük tara” bir seferde en çok bu kadar taslak ekler."
+                label={c.perRun}
+                description={c.perRunHint}
                 value={draft.maxPerRun}
                 min={REMEDY_LIMITS.maxPerRun.min}
                 max={REMEDY_LIMITS.maxPerRun.max}
@@ -192,12 +185,12 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
               />
             </div>
 
-            <Field kind="labelledby" label="Müşteri başına bekleme" description="Son bu kadar günde teklif almış müşteriye yeni otomatik taslak hazırlanmaz (düşük puanla telafi toplamaya karşı)." error={errors.cooldownDays}>
+            <Field kind="labelledby" label={c.cooldown} description={c.cooldownHint} error={errors.cooldownDays}>
               {(p) => (
                 <ChoiceChips
                   aria-labelledby={p['aria-labelledby'] as string}
                   size="sm"
-                  options={[0, 7, 14, 30, 60, 90].map((n) => ({ value: String(n), label: n === 0 ? 'Yok' : `${n} gün` }))}
+                  options={[0, 7, 14, 30, 60, 90].map((n) => ({ value: String(n), label: n === 0 ? c.cooldownNone : c.days(n) }))}
                   value={String(draft.cooldownDays)}
                   onChange={(v) => v != null && set('cooldownDays', Number(v))}
                 />
@@ -206,13 +199,13 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
           </div>
         </SectionCard>
 
-        <SectionCard title="Müşteriye giden mesaj" description="Taslakla birlikte gider; onay kuyruğunda düzenleyebilirsiniz.">
+        <SectionCard title={c.messageTitle} description={c.messageHint}>
           <div className="space-y-3">
             <Field
-              label="Mesaj"
+              label={c.message}
               required
               error={errors.messageTemplate}
-              description="{{musteri}} müşterinin adı, {{isletme}} işletme adınızla doldurulur."
+              description={c.messageVars}
               footer={
                 <span className={cn('qx-caption tabular-nums', draft.messageTemplate.length > REMEDY_LIMITS.message.max ? 'text-danger' : 'text-fg-muted')}>
                   {fmtInt(draft.messageTemplate.length)}/{fmtInt(REMEDY_LIMITS.message.max)}
@@ -230,7 +223,7 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
               )}
             </Field>
             <CustomerPreview
-              message={renderRemedyMessage(draft.messageTemplate, { musteri: 'Ayşe Yılmaz', isletme: 'İşletmeniz' })}
+              message={renderRemedyMessage(draft.messageTemplate, { musteri: c.sampleCustomer, isletme: c.sampleBusiness })}
               options={general?.effective.options ?? []}
               source={general?.effective.source ?? 'system'}
             />
@@ -245,10 +238,10 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
       <section id="katalog" aria-labelledby="katalog-title" className="scroll-mt-24 space-y-3">
         <div>
           <h2 id="katalog-title" className="text-lg font-semibold text-fg">
-            Teklif kataloğu
+            {c.catalogTitle}
           </h2>
           <p className="qx-small text-fg-muted">
-            Müşterinin seçebileceği telafiler. Şubeye özel set tanımlarsanız o şubenin QR kodlarından gelen yorumlarda işletme seti yerine o kullanılır.
+            {c.catalogHint}
           </p>
         </div>
         <RemedyCatalog catalog={data.catalog} />
@@ -259,13 +252,13 @@ function RemedyBody({ data }: { data: RemedyOverviewDto }) {
         saving={save.isPending}
         onSave={() => {
           if (!parsed.success) {
-            toast.error('Bazı alanlar geçersiz. Kırmızı işaretli alanları düzeltin.');
+            toast.error(c.invalid);
             return;
           }
           save.mutate();
         }}
         onDiscard={() => setDraft(data.config)}
-        message="Kaydedilmemiş telafi ayarları var"
+        message={c.dirty}
       />
     </>
   );
@@ -317,6 +310,7 @@ function IntField({
 
 function StatusStrip({ data }: { data: RemedyOverviewDto }) {
   const policy = useMotionPolicy();
+  const c = useAutomationCopy().remedy;
   const { stats, config } = data;
   const ratio = stats.cap > 0 ? Math.min(1, stats.monthUsed / stats.cap) : 0;
   return (
@@ -327,17 +321,17 @@ function StatusStrip({ data }: { data: RemedyOverviewDto }) {
           <span className={cn('relative inline-flex h-3 w-3 rounded-full', config.enabled ? 'bg-success' : 'bg-fg-subtle')} />
         </span>
         <div>
-          <p className="text-sm font-semibold text-fg">{config.enabled ? 'Açık · gerçek zamanlı' : 'Kapalı'}</p>
+          <p className="text-sm font-semibold text-fg">{config.enabled ? c.statusOn : c.statusOff}</p>
           <p className="qx-caption text-fg-muted">
-            Son otomatik taslak: {fmtRelative(stats.lastAutoAt)}
-            {stats.lastScan ? ` · son tarama: ${fmtRelative(stats.lastScan.at)}` : ''}
+            {c.lastAuto(fmtRelative(stats.lastAutoAt))}
+            {stats.lastScan ? c.lastScan(fmtRelative(stats.lastScan.at)) : ''}
           </p>
         </div>
       </div>
       <div>
         <div className="flex items-baseline justify-between gap-2">
           <span id="remedy-quota-label" className="qx-small text-fg-muted">
-            Bu ayki otomatik taslak
+            {c.quota}
           </span>
           <span className="text-sm font-semibold tabular-nums text-fg">
             {fmtInt(stats.monthUsed)} / {fmtInt(stats.cap)}
@@ -358,7 +352,7 @@ function StatusStrip({ data }: { data: RemedyOverviewDto }) {
             transition={{ duration: policy.reduce ? 0 : 0.5, ease: 'easeOut' }}
           />
         </div>
-        {ratio >= 1 && <p className="mt-1 qx-caption text-danger">Aylık sınır doldu; yeni taslak ay başında (İstanbul) açılır ya da sınırı artırın.</p>}
+        {ratio >= 1 && <p className="mt-1 qx-caption text-danger">{c.quotaFull}</p>}
       </div>
     </div>
   );
@@ -366,56 +360,59 @@ function StatusStrip({ data }: { data: RemedyOverviewDto }) {
 
 function Kpis({ data }: { data: RemedyOverviewDto }) {
   const s = data.stats;
+  const c = useAutomationCopy().remedy;
   return (
     <MetricGrid cols={4}>
-      <MetricTile label="Bu ay hazırlanan" metric={{ value: s.month.queued }} icon={<ClipboardList className="h-4 w-4" aria-hidden />} />
-      <MetricTile label="Onay bekleyen" metric={{ value: s.awaiting }} icon={<Timer className="h-4 w-4" aria-hidden />} href="/dealer/inbox/remedy" tone={s.awaiting > 0 ? 'warning' : undefined} />
+      <MetricTile label={c.kpiQueued} metric={{ value: s.month.queued }} icon={<ClipboardList className="h-4 w-4" aria-hidden />} />
+      <MetricTile label={c.kpiAwaiting} metric={{ value: s.awaiting }} icon={<Timer className="h-4 w-4" aria-hidden />} href="/dealer/inbox/remedy" tone={s.awaiting > 0 ? 'warning' : undefined} />
       <MetricTile
-        label="Yayınlanan / reddedilen"
+        label={c.kpiPublished}
         metric={{ value: s.month.published }}
         icon={<Send className="h-4 w-4" aria-hidden />}
-        hint={`Bu ayki otomatik taslaklardan ${fmtInt(s.month.rejected)} tanesi reddedildi.`}
+        hint={c.kpiRejected(fmtInt(s.month.rejected))}
       />
       <MetricTile
-        label="Müşteri kabul oranı"
+        label={c.kpiAccept}
         metric={{ value: s.acceptRate == null ? null : s.acceptRate * 100, format: 'percent', fractionDigits: 0, n: s.month.published, minN: 5 }}
         icon={<CheckCircle2 className="h-4 w-4" aria-hidden />}
-        hint={s.acceptRate == null ? 'Bu ay yayınlanan otomatik teklif yok.' : `${fmtInt(s.month.accepted)}/${fmtInt(s.month.published)} yayınlanan teklif kabul edildi.`}
+        hint={s.acceptRate == null ? c.kpiAcceptNone : c.kpiAcceptHint(fmtInt(s.month.accepted), fmtInt(s.month.published))}
       />
     </MetricGrid>
   );
 }
 
 function CustomerPreview({ message, options, source }: { message: string; options: RemedyOverviewDto['catalog']['defaults']; source: string }) {
+  const copy = useAutomationCopy();
+  const c = copy.remedy;
+  const unitOf = (o: { type: string; unit: string }) =>
+    o.type in copy.remedyType ? copy.remedyType[o.type as keyof typeof copy.remedyType].unit : o.unit;
   return (
-    <div className="rounded-card border border-subtle bg-surface-2 p-3" aria-label="Müşteri önizlemesi (örnek ad: Ayşe Yılmaz)">
-      <p className="qx-caption text-fg-muted">Müşterinin göreceği (işletme geneli)</p>
+    <div className="rounded-card border border-subtle bg-surface-2 p-3" aria-label={c.previewAria(c.sampleCustomer)}>
+      <p className="qx-caption text-fg-muted">{c.previewTitle}</p>
       <p className="mt-1 text-sm text-fg">{message}</p>
       <ul className="mt-2 flex flex-wrap gap-2">
         {options.map((o) => (
           <li key={o.type} className="rounded-chip border border-subtle bg-surface-1 px-2 py-1 qx-caption text-fg">
-            {o.label}: {o.values.map((v) => (o.type === 'discount' ? `%${v}` : `${v}`)).join(' · ')} {o.type !== 'discount' ? o.unit : ''}
+            {o.label}: {o.values.map((v) => (o.type === 'discount' ? copy.remedyType.discount.format(v) : `${v}`)).join(' · ')} {o.type !== 'discount' ? unitOf(o) : ''}
           </li>
         ))}
       </ul>
-      {source === 'system' && <p className="mt-2 qx-caption text-fg-muted">Katalog tanımlamadığınız için sistem varsayılanı kullanılıyor.</p>}
+      {source === 'system' && <p className="mt-2 qx-caption text-fg-muted">{c.previewSystem}</p>}
     </div>
   );
 }
 
 function CoverageNote({ data }: { data: RemedyOverviewDto }) {
+  const c = useAutomationCopy().remedy;
   return (
-    <aside className="flex gap-3 rounded-card border border-subtle bg-surface-1 p-4" aria-label="Otomasyonun kapsamı">
+    <aside className="flex gap-3 rounded-card border border-subtle bg-surface-1 p-4" aria-label={c.coverageAria}>
       <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" aria-hidden />
       <ul className="qx-small list-disc space-y-1 pl-4 text-fg-muted">
-        <li>QR geri bildirimleri kapsanır; puan tetiği AI'dan bağımsızdır (metinsiz 1 yıldız da yakalanır).</li>
-        <li>Anonim bırakılan geri bildirimlere teklif gönderilemez, atlanır.</li>
-        <li>İşletme sahibi ya da personelinin yazdığı ya da güvenlik denetiminin şüpheli bulduğu (güven işaretli) yorumlara taslak hazırlanmaz.</li>
-        <li>Bir yoruma daha önce teklif açıldıysa (reddettikleriniz dahil) yeniden hazırlanmaz.</li>
-        <li>
-          Kayıp riski tetiği AI analizi gerektirir{data.aiAnalyze === false ? ' — şu an kapalı' : ''}. Tüketim (kasa) yorumları bu otomasyonun dışındadır; onlar için
-          Gelen Kutusu'ndan elle teklif açın.
-        </li>
+        <li>{c.coverage1}</li>
+        <li>{c.coverage2}</li>
+        <li>{c.coverage3}</li>
+        <li>{c.coverage4}</li>
+        <li>{c.coverage5(data.aiAnalyze === false)}</li>
       </ul>
     </aside>
   );
@@ -423,33 +420,34 @@ function CoverageNote({ data }: { data: RemedyOverviewDto }) {
 
 function ScanPanel({ savedEnabled, dirty }: { savedEnabled: boolean; dirty: boolean }) {
   const qc = useQueryClient();
+  const c = useAutomationCopy().remedy;
   const [result, setResult] = useState<RemedyScanResultDto | null>(null);
   const run = useMutation({
     mutationFn: (dryRun: boolean) => scanRemedy(dryRun),
     onSuccess: async (r) => {
       setResult(r);
       if (!r.dryRun) {
-        toast.success(r.queued > 0 ? `${r.queued} taslak onay kuyruğuna eklendi.` : 'Kuyruğa eklenecek uygun yorum bulunamadı.');
+        toast.success(r.queued > 0 ? c.scanQueued(r.queued) : c.scanNone);
         await qc.invalidateQueries({ queryKey: AUTOMATION_KEYS.remedy });
       }
     },
     onError: (e) => toast.error(errorText(e)),
   });
-  const blockedReason = !savedEnabled ? 'Önce otomasyonu açıp kaydedin.' : dirty ? 'Tarama kayıtlı ayarlarla çalışır; önce değişiklikleri kaydedin.' : null;
+  const blockedReason = !savedEnabled ? c.scanNeedsEnable : dirty ? c.scanNeedsSave : null;
   return (
     <SectionCard
-      title="Geriye dönük tarama"
-      description="Son 14 günün eşik altındaki (ya da açıksa kayıp riski yüksek) yorumlarını tarar. Önce dener, sonra onaylarsanız kuyruğa ekler."
+      title={c.scanTitle}
+      description={c.scanHint}
       icon={<ScanSearch className="h-4 w-4" aria-hidden />}
     >
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="min-h-11" disabled={!!blockedReason || run.isPending} onClick={() => run.mutate(true)}>
-            Önce dene
+            {c.tryFirst}
           </Button>
           {result?.dryRun && result.queued > 0 && (
             <Button className="min-h-11" disabled={!!blockedReason || run.isPending} onClick={() => run.mutate(false)}>
-              {fmtInt(result.queued)} taslağı kuyruğa ekle
+              {c.addToQueue(fmtInt(result.queued))}
             </Button>
           )}
         </div>
@@ -459,26 +457,26 @@ function ScanPanel({ savedEnabled, dirty }: { savedEnabled: boolean; dirty: bool
           <div className="rounded-card border border-subtle p-3" aria-live="polite">
             <p className="text-sm font-medium text-fg">
               {result.dryRun
-                ? `${fmtInt(result.found)} yorum bulundu; ${fmtInt(result.queued)} taslak eklenebilir.`
-                : `${fmtInt(result.queued)} taslak kuyruğa eklendi.`}
+                ? c.dryResult(fmtInt(result.found), fmtInt(result.queued))
+                : c.realResult(fmtInt(result.queued))}
             </p>
             <ul className="mt-2 grid gap-1 qx-small text-fg-muted sm:grid-cols-2">
-              <li>Uygun: {fmtInt(result.eligible)}</li>
-              <li>Anonim (atlandı): {fmtInt(result.anonymous)}</li>
-              <li>Teklifi zaten var: {fmtInt(result.alreadyOffered)}</li>
-              <li>Bekleme süresinde / aynı müşteri: {fmtInt(result.cooldown)}</li>
-              <li>Bu ay kalan hak: {fmtInt(result.capRemaining)}</li>
-              <li>Tarama başına sınır: {fmtInt(result.perRun)}</li>
+              <li>{c.eligible}: {fmtInt(result.eligible)}</li>
+              <li>{c.anonymous}: {fmtInt(result.anonymous)}</li>
+              <li>{c.alreadyOffered}: {fmtInt(result.alreadyOffered)}</li>
+              <li>{c.cooldownSame}: {fmtInt(result.cooldown)}</li>
+              <li>{c.capRemaining}: {fmtInt(result.capRemaining)}</li>
+              <li>{c.perRunLimit}: {fmtInt(result.perRun)}</li>
               {Object.entries(result.skipped).map(([k, n]) => (
                 <li key={k}>
                   <XCircle className="mr-1 inline h-3 w-3" aria-hidden />
-                  {SKIP_LABEL[k] ?? k}: {fmtInt(n)}
+                  {c.skip[k] ?? k}: {fmtInt(n)}
                 </li>
               ))}
             </ul>
             {!result.dryRun && result.queued > 0 && (
               <Button asChild variant="link" className="mt-1 h-auto min-h-11 px-0">
-                <Link href="/dealer/inbox/remedy">Onay kuyruğuna git</Link>
+                <Link href="/dealer/inbox/remedy">{c.goQueue}</Link>
               </Button>
             )}
           </div>

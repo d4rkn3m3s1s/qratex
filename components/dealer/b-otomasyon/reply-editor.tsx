@@ -24,6 +24,7 @@ import {
 } from '@/lib/dealer-automation/reply-rules';
 import { AUTOMATION_KEYS, type RepliesOverviewDto, type ReplyRuleDto } from '@/lib/dealer-automation/types';
 import { createReplyRule, fmtInt, fmtRelative, previewReply, updateReplyRule } from './api';
+import { useAutomationCopy } from './copy';
 
 export type ReplyEditorState = { mode: 'create'; preset?: ReplyRuleBody } | { mode: 'edit'; rule: ReplyRuleDto } | null;
 
@@ -68,6 +69,8 @@ export function ReplyEditor({
   onSaved: (id: string, mode: 'create' | 'edit') => void;
 }) {
   const open = state !== null;
+  const copy = useAutomationCopy();
+  const c = copy.editor;
   const initial = useMemo<ReplyRuleBody>(() => {
     if (!state) return EMPTY;
     if (state.mode === 'edit') return bodyFromRule(state.rule);
@@ -108,8 +111,8 @@ export function ReplyEditor({
   };
 
   const samplePreview = renderReplyTemplate(v.template ?? '', {
-    musteri: 'Ayşe Yılmaz',
-    isletme: 'İşletmeniz',
+    musteri: copy.remedy.sampleCustomer,
+    isletme: copy.remedy.sampleBusiness,
     puan: cond?.field === 'rating' ? cond.value : 2,
   });
 
@@ -118,12 +121,12 @@ export function ReplyEditor({
       open={open}
       onOpenChange={(o) => !o && onClose()}
       mode={state?.mode === 'edit' ? 'edit' : 'create'}
-      title={state?.mode === 'edit' ? 'Kuralı düzenle' : 'Yeni otomatik kural'}
-      description="Kural, geri bildirim geldiği anda bir kez çalışır. Yalnız ilk eşleşen kural uygulanır."
+      title={state?.mode === 'edit' ? c.titleEdit : c.titleCreate}
+      description={c.description}
       form={form}
       width="xl"
-      submitLabel={state?.mode === 'edit' ? 'Kaydet' : 'Kuralı oluştur'}
-      successToast={state?.mode === 'edit' ? 'Kural güncellendi' : 'Kural oluşturuldu'}
+      submitLabel={state?.mode === 'edit' ? c.submitEdit : c.submitCreate}
+      successToast={state?.mode === 'edit' ? c.toastEdit : c.toastCreate}
       onSubmit={(values) =>
         state?.mode === 'edit' ? updateReplyRule(state.rule.id, values) : createReplyRule(values)
       }
@@ -131,100 +134,100 @@ export function ReplyEditor({
     >
       {state?.mode === 'edit' && !state.rule.condition && (
         <InlineError variant="banner" tone="warning">
-          Bu kuralın kayıtlı koşulu geçersizdi ve hiç tetiklenmiyordu. Koşulu aşağıda yeniden seçip kaydedin.
+          {c.brokenBanner}
         </InlineError>
       )}
 
-      <TextField control={form.control} name="name" label="Kural adı" required maxLength={80} placeholder="Düşük puana özür" />
+      <TextField control={form.control} name="name" label={c.name} required maxLength={80} placeholder={c.namePlaceholder} />
 
       <fieldset className="space-y-3 rounded-card border border-subtle p-3 sm:p-4">
-        <legend className="px-1 text-sm font-semibold text-fg">1. Ne zaman?</legend>
+        <legend className="px-1 text-sm font-semibold text-fg">{c.when}</legend>
         <Controller
           control={form.control}
           name="condition"
           render={({ field, fieldState }) => {
-            const c = field.value as ReplyCondition;
+            const cnd = field.value as ReplyCondition;
             return (
               <div className="space-y-3">
-                <Field kind="labelledby" label="Neye bakılsın?" required>
+                <Field kind="labelledby" label={c.field} required>
                   {(p) => (
                     <ChoiceChips
                       aria-labelledby={p['aria-labelledby'] as string}
                       options={[
-                        { value: 'rating', label: 'Puan', icon: <Star className="h-4 w-4" aria-hidden /> },
-                        { value: 'sentiment', label: 'Duygu', icon: <MessageSquareText className="h-4 w-4" aria-hidden /> },
-                        { value: 'text', label: 'Yorumdaki kelimeler', icon: <Type className="h-4 w-4" aria-hidden /> },
+                        { value: 'rating', label: c.fieldRating, icon: <Star className="h-4 w-4" aria-hidden /> },
+                        { value: 'sentiment', label: c.fieldSentiment, icon: <MessageSquareText className="h-4 w-4" aria-hidden /> },
+                        { value: 'text', label: c.fieldText, icon: <Type className="h-4 w-4" aria-hidden /> },
                       ]}
-                      value={c.field}
-                      onChange={(next) => next && next !== c.field && field.onChange(defaultConditionFor(next as ReplyCondition['field']))}
+                      value={cnd.field}
+                      onChange={(next) => next && next !== cnd.field && field.onChange(defaultConditionFor(next as ReplyCondition['field']))}
                     />
                   )}
                 </Field>
 
-                {c.field === 'rating' && (
+                {cnd.field === 'rating' && (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field kind="labelledby" label="Karşılaştırma" required>
+                    <Field kind="labelledby" label={c.compare} required>
                       {(p) => (
                         <ChoiceChips
                           aria-labelledby={p['aria-labelledby'] as string}
                           options={[
-                            { value: 'lte', label: 've altı' },
-                            { value: 'gte', label: 've üstü' },
-                            { value: 'eq', label: 'tam' },
+                            { value: 'lte', label: c.lte },
+                            { value: 'gte', label: c.gte },
+                            { value: 'eq', label: c.eq },
                           ]}
-                          value={c.op}
-                          onChange={(op) => op && field.onChange({ ...c, op })}
+                          value={cnd.op}
+                          onChange={(op) => op && field.onChange({ ...cnd, op })}
                         />
                       )}
                     </Field>
-                    <Field kind="labelledby" label="Puan" required>
+                    <Field kind="labelledby" label={c.rating} required>
                       {(p) => (
                         <ChoiceChips
                           aria-labelledby={p['aria-labelledby'] as string}
-                          options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} ★`, textLabel: `${n} yıldız` }))}
-                          value={String(c.value)}
-                          onChange={(val) => val && field.onChange({ ...c, value: Number(val) })}
+                          options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} ★`, textLabel: c.star(n) }))}
+                          value={String(cnd.value)}
+                          onChange={(val) => val && field.onChange({ ...cnd, value: Number(val) })}
                         />
                       )}
                     </Field>
                   </div>
                 )}
 
-                {c.field === 'sentiment' && (
+                {cnd.field === 'sentiment' && (
                   <>
-                    <Field kind="labelledby" label="Duygu" required>
+                    <Field kind="labelledby" label={c.sentiment} required>
                       {(p) => (
                         <ChoiceChips
                           aria-labelledby={p['aria-labelledby'] as string}
                           options={[
-                            { value: 'negative', label: 'Olumsuz' },
-                            { value: 'neutral', label: 'Nötr' },
-                            { value: 'positive', label: 'Olumlu' },
+                            { value: 'negative', label: c.negative },
+                            { value: 'neutral', label: c.neutral },
+                            { value: 'positive', label: c.positive },
                           ]}
-                          value={c.value}
-                          onChange={(val) => val && field.onChange({ ...c, value: val })}
+                          value={cnd.value}
+                          onChange={(val) => val && field.onChange({ ...cnd, value: val })}
                         />
                       )}
                     </Field>
                     <p className="qx-small text-fg-muted">
-                      Duygu, yorum metni AI ile analiz edildiğinde belirlenir; metinsiz yorumlarda ve AI analizi kapalıyken bu kural tetiklenmez.
+                      {c.sentimentHint}
                       {overview.ai.canAnalyze === false && (
-                        <strong className="text-warning"> Şu an otomatik AI analiziniz kapalı.</strong>
+                        <strong className="text-warning">{c.analyzeOff}</strong>
                       )}
                     </p>
                   </>
                 )}
 
-                {c.field === 'text' && (
+                {cnd.field === 'text' && (
                   <KeywordInput
-                    keywords={c.keywords}
-                    wholeWord={c.wholeWord}
+                    keywords={cnd.keywords}
+                    wholeWord={cnd.wholeWord}
                     error={errorMessageOf(fieldState.error)}
-                    onChange={(keywords, wholeWord) => field.onChange({ ...c, keywords, wholeWord })}
+                    onChange={(keywords, wholeWord) => field.onChange({ ...cnd, keywords, wholeWord })}
                   />
                 )}
                 <p className="qx-small font-medium text-fg" aria-live="polite">
-                  {parsedCond.success ? describeCondition(parsedCond.data) : 'Koşulu tamamlayın.'}
+                  {parsedCond.success ? describeCondition(parsedCond.data) : c.completeCondition}
                 </p>
               </div>
             );
@@ -233,18 +236,18 @@ export function ReplyEditor({
       </fieldset>
 
       <fieldset className="space-y-3 rounded-card border border-subtle p-3 sm:p-4">
-        <legend className="px-1 text-sm font-semibold text-fg">2. Ne yapılsın?</legend>
+        <legend className="px-1 text-sm font-semibold text-fg">{c.what}</legend>
         <Controller
           control={form.control}
           name="action"
           render={({ field }) => (
-            <Field kind="labelledby" label="Eylem" required>
+            <Field kind="labelledby" label={c.action} required>
               {(p) => (
                 <ChoiceChips
                   aria-labelledby={p['aria-labelledby'] as string}
                   options={[
-                    { value: 'reply', label: 'Müşteriye yanıt yaz', icon: <MessageSquareText className="h-4 w-4" aria-hidden /> },
-                    { value: 'incident', label: 'Vaka aç', icon: <Siren className="h-4 w-4" aria-hidden /> },
+                    { value: 'reply', label: c.actionReply, icon: <MessageSquareText className="h-4 w-4" aria-hidden /> },
+                    { value: 'incident', label: c.actionIncident, icon: <Siren className="h-4 w-4" aria-hidden /> },
                   ]}
                   value={field.value}
                   onChange={(next) => {
@@ -264,15 +267,15 @@ export function ReplyEditor({
               control={form.control}
               name="tone"
               render={({ field }) => (
-                <Field kind="labelledby" label="Yanıt biçimi">
+                <Field kind="labelledby" label={c.replyMode}>
                   {(p) => (
                     <ChoiceChips
                       aria-labelledby={p['aria-labelledby'] as string}
                       options={[
-                        { value: 'fixed', label: 'Sabit metin' },
+                        { value: 'fixed', label: c.fixed },
                         {
                           value: 'ai',
-                          label: 'AI ile kişiselleştir',
+                          label: c.ai,
                           icon: <Sparkles className="h-4 w-4" aria-hidden />,
                           disabled: toneOptions.length === 0,
                         },
@@ -286,12 +289,11 @@ export function ReplyEditor({
             />
             {aiMode && (
               <>
-                <SelectField control={form.control} name="tone" label="Üslup" options={toneOptions} required />
+                <SelectField control={form.control} name="tone" label={c.tone} options={toneOptions} required />
                 <p className="qx-small text-fg-muted">
-                  AI, müşterinin yorumuna göre bu üslupla kısa bir yanıt yazar. Yanıt vaat (indirim, ücretsiz ürün), bağlantı ya da
-                  uygunsuz içerik taşırsa yayınlanmaz; aşağıdaki yedek metin gönderilir.
+                  {c.aiHint}
                   {overview.ai.canUseAi === false && (
-                    <strong className="text-warning"> AI ayarınız kapalı olduğu için şu an her zaman yedek metin gönderilir.</strong>
+                    <strong className="text-warning">{c.aiOff}</strong>
                   )}
                 </p>
               </>
@@ -299,29 +301,29 @@ export function ReplyEditor({
             <TextareaField
               control={form.control}
               name="template"
-              label={aiMode ? 'Yedek metin (AI yanıt üretemezse)' : 'Yanıt metni'}
+              label={aiMode ? c.fallbackLabel : c.replyLabel}
               required
               rows={4}
               maxLength={1000}
-              placeholder="Merhaba {{musteri}}, yaşadığınız sorun için üzgünüz. Ekibimizle hemen ilgileneceğiz."
+              placeholder={c.replyPlaceholder}
             />
             <div className="flex flex-wrap items-center gap-2">
-              <span className="qx-caption text-fg-muted">Değişken ekle:</span>
+              <span className="qx-caption text-fg-muted">{c.addVariable}</span>
               {TEMPLATE_VARIABLES.map((tv) => (
                 <Button key={tv.key} type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => insertVariable(tv.key)}>
-                  {`{{${tv.key}}}`} <span className="sr-only">({tv.label})</span>
-                  <span aria-hidden className="text-fg-muted">· {tv.label}</span>
+                  {`{{${tv.key}}}`} <span className="sr-only">({c.variables[tv.key] ?? tv.label})</span>
+                  <span aria-hidden className="text-fg-muted">· {c.variables[tv.key] ?? tv.label}</span>
                 </Button>
               ))}
             </div>
             {unknownVars.length > 0 && (
               <p className="qx-small text-warning" role="status">
-                Tanınmayan değişken: {unknownVars.map((u) => `{{${u}}}`).join(', ')} — olduğu gibi gönderilir.
+                {c.unknownVars(unknownVars.map((u) => `{{${u}}}`).join(', '))}
               </p>
             )}
             {(v.template ?? '').trim().length >= 5 && (
               <div className="rounded-card border border-subtle bg-surface-2 p-3">
-                <p className="qx-caption text-fg-muted">Müşteri böyle görür (örnek: “Ayşe Yılmaz”)</p>
+                <p className="qx-caption text-fg-muted">{c.customerSees(copy.remedy.sampleCustomer)}</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-fg">{samplePreview}</p>
               </div>
             )}
@@ -330,40 +332,41 @@ export function ReplyEditor({
           <TextareaField
             control={form.control}
             name="template"
-            label="Vaka notu"
+            label={c.incidentNote}
             optional
             rows={3}
             maxLength={1000}
-            description="Vakaya eklenecek açıklama. Vaka Gelen Kutusu › Vakalar'da açılır; müşteriye hiçbir şey gönderilmez."
+            description={c.incidentNoteHint}
           />
         )}
       </fieldset>
 
-      <SwitchField control={form.control} name="isActive" label="Kural etkin" description="Kapalı kural saklanır ama çalışmaz." variant="card" />
+      <SwitchField control={form.control} name="isActive" label={c.active} description={c.activeHint} variant="card" />
 
       <section aria-labelledby="reply-preview-title" className="space-y-2 rounded-card border border-subtle p-3 sm:p-4">
         <h3 id="reply-preview-title" className="text-sm font-semibold text-fg">
-          Son 30 günde bu koşul
+          {c.previewTitle}
         </h3>
         {!debouncedCond ? (
-          <p className="qx-small text-fg-muted">Koşul tamamlanınca gerçek geri bildirimleriniz üzerinde denenir.</p>
+          <p className="qx-small text-fg-muted">{c.previewWaiting}</p>
         ) : preview.isError ? (
-          <InlineError onRetry={() => preview.refetch()}>Önizleme yüklenemedi.</InlineError>
+          <InlineError onRetry={() => preview.refetch()}>{c.previewFailed}</InlineError>
         ) : !preview.data ? (
-          <p className="qx-small text-fg-muted" role="status">Deneniyor…</p>
+          <p className="qx-small text-fg-muted" role="status">{c.previewLoading}</p>
         ) : (
           <div className="space-y-2" aria-live="polite">
             <p className="text-sm text-fg">
-              <strong className="tabular-nums">{fmtInt(preview.data.matched)}</strong> geri bildirime uyardı
+              <strong className="tabular-nums">{fmtInt(preview.data.matched)}</strong>
+              {c.matched}
               {preview.data.matched > 0 && isReply && (
                 <span className="text-fg-muted">
                   {' '}
-                  ({fmtInt(preview.data.alreadyReplied)} zaten yanıtlanmış, {fmtInt(preview.data.unsafe)} uygunsuz/şüpheli — bunlara yanıt yazılmaz)
+                  {c.matchedDetail(fmtInt(preview.data.alreadyReplied), fmtInt(preview.data.unsafe))}
                 </span>
               )}
               .
             </p>
-            {preview.data.capped && <p className="qx-caption text-fg-muted">En yeni {fmtInt(preview.data.scanned)} kayıt tarandı.</p>}
+            {preview.data.capped && <p className="qx-caption text-fg-muted">{c.scanned(fmtInt(preview.data.scanned))}</p>}
             {preview.data.samples.length > 0 && (
               <ul className="space-y-2">
                 {preview.data.samples.map((s) => (
@@ -371,10 +374,10 @@ export function ReplyEditor({
                     <div className="flex flex-wrap items-center gap-2 qx-caption text-fg-muted">
                       {s.rating != null && <span>{s.rating} ★</span>}
                       <span>{fmtRelative(s.createdAt)}</span>
-                      {s.replied && <span>· yanıtlanmış</span>}
+                      {s.replied && <span>{c.replied}</span>}
                       {s.keywordHits.length > 0 && <span>· {s.keywordHits.join(', ')}</span>}
                     </div>
-                    <p className="mt-1 text-sm text-fg">{s.textPreview ?? <span className="text-fg-muted">Yalnız puan</span>}</p>
+                    <p className="mt-1 text-sm text-fg">{s.textPreview ?? <span className="text-fg-muted">{c.ratingOnly}</span>}</p>
                   </li>
                 ))}
               </ul>
@@ -398,6 +401,7 @@ function KeywordInput({
   onChange: (keywords: string[], wholeWord: boolean) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const c = useAutomationCopy().editor;
   const wholeId = useId();
   const commit = () => {
     const parts = draft
@@ -415,10 +419,10 @@ function KeywordInput({
   return (
     <div className="space-y-2">
       <Field
-        label="Anahtar kelimeler"
+        label={c.keywords}
         required
         error={error}
-        description={`Enter ya da virgülle ekleyin (en çok ${MAX_KEYWORDS}). Büyük/küçük harf ve Türkçe harf farkı (ı/i, ş/s) yok sayılır.`}
+        description={c.keywordsHint(MAX_KEYWORDS)}
       >
         {(p) => (
           <Input
@@ -435,13 +439,13 @@ function KeywordInput({
             }}
             onBlur={commit}
             maxLength={200}
-            placeholder="soğuk, geç geldi, bekledim"
+            placeholder={c.keywordsPlaceholder}
             className="min-h-11"
           />
         )}
       </Field>
       {keywords.length > 0 && (
-        <ul className="flex flex-wrap gap-2" aria-label="Eklenen anahtar kelimeler">
+        <ul className="flex flex-wrap gap-2" aria-label={c.keywordsAdded}>
           {keywords.map((k) => (
             <li key={k} className="inline-flex items-center gap-1 rounded-chip border border-subtle bg-surface-2 py-1 pl-3 pr-1 text-sm text-fg">
               {k}
@@ -449,7 +453,7 @@ function KeywordInput({
                 type="button"
                 onClick={() => onChange(keywords.filter((x) => x !== k), wholeWord)}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-chip text-fg-muted hover:bg-surface-1 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                aria-label={`“${k}” kelimesini kaldır`}
+                aria-label={c.removeKeyword(k)}
               >
                 <X className="h-4 w-4" aria-hidden />
               </button>
@@ -458,15 +462,15 @@ function KeywordInput({
         </ul>
       )}
       <div className="flex min-h-11 items-center gap-2">
-        <Checkbox id={wholeId} checked={wholeWord} onCheckedChange={(c) => onChange(keywords, c === true)} />
+        <Checkbox id={wholeId} checked={wholeWord} onCheckedChange={(v) => onChange(keywords, v === true)} />
         <label htmlFor={wholeId} className="cursor-pointer text-sm text-fg">
-          Yalnız tam kelime eşleşsin (“geç” → “geçti”yi saymaz)
+          {c.wholeWord}
         </label>
       </div>
       {keywords.length === 0 && (
         <p className="qx-small text-fg-muted">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-          Olumsuzlamalar ayırt edilmez: “kötü değildi” de “kötü” ile eşleşir.
+          {c.negationNote}
         </p>
       )}
     </div>
