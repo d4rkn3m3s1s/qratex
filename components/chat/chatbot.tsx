@@ -359,7 +359,8 @@ export function Chatbot() {
             transition={fabSpring}
             className={cn(
               floatingZTw.assistant,
-              'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-floating flex flex-col items-end gap-2 sm:bottom-8 sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-10 md:right-10'
+              // Mobil alt sekme çubuğu varken (--qx-tabbar-h) FAB çubuğun ÜSTÜNDE durur; yoksa Cüzdan sekmesini örter.
+              'fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px),calc(var(--qx-tabbar-h,0px)+0.75rem))] right-[max(1rem,env(safe-area-inset-right,0px))] z-floating flex flex-col items-end gap-2 sm:bottom-[max(2rem,calc(var(--qx-tabbar-h,0px)+0.75rem))] sm:right-8 sm:flex-row sm:items-end sm:justify-end sm:gap-3 md:bottom-[max(2.5rem,calc(var(--qx-tabbar-h,0px)+0.75rem))] md:right-10'
             )}
           >
             <Motion.button

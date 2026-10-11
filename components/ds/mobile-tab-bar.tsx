@@ -20,6 +20,7 @@
  *   ile çakışmadan konumlanır. Değişkeni çubuğu kullanan layout tanımlar (müşteri: `lg` altında
  *   `calc(4rem + safe-area)`, `lg` ve üstünde `0px`).
  */
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,7 +46,37 @@ export interface MobileTabBarProps {
 /** Çubuğun içerik yüksekliği (güvenli alan hariç). Kapsayıcı alt boşluğu bununla hesaplanır. */
 export const MOBILE_TAB_BAR_HEIGHT = '4rem';
 
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'tel', 'url', 'password', 'number', '']);
+
+function isTextEntry(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
+  return el.tagName === 'INPUT' && TEXT_INPUT_TYPES.has(((el as HTMLInputElement).type || '').toLowerCase());
+}
+
+/**
+ * Dokunmatik cihazda bir metin alanı odaktayken (yazılım klavyesi açık) true.
+ * Android Chrome / Capacitor WebView'de klavye görünür alanı daraltınca sabit alt çubuk
+ * odaktaki alanın üstüne biner; çubuğu bu sırada gizlemek alanı görünür tutar.
+ */
+function useSoftKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia?.('(pointer: coarse)').matches) return;
+    const sync = () => setOpen(isTextEntry(document.activeElement));
+    const onOut = () => window.setTimeout(sync, 0);
+    document.addEventListener('focusin', sync);
+    document.addEventListener('focusout', onOut);
+    return () => {
+      document.removeEventListener('focusin', sync);
+      document.removeEventListener('focusout', onOut);
+    };
+  }, []);
+  return open;
+}
+
 export function MobileTabBar({ items, activeId, ariaLabel, className }: MobileTabBarProps) {
+  const keyboardOpen = useSoftKeyboardOpen();
   if (items.length === 0) return null;
   return (
     <nav
@@ -54,6 +85,7 @@ export function MobileTabBar({ items, activeId, ariaLabel, className }: MobileTa
         'fixed inset-x-0 bottom-0 z-header lg:hidden',
         'border-t border-border/60 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80',
         'pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)]',
+        keyboardOpen && 'hidden',
         className
       )}
     >
