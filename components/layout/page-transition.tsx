@@ -22,7 +22,7 @@ interface PageTransitionProps {
  */
 export const PageTransition = ({ children }: PageTransitionProps) => {
   return (
-    <div className="w-full h-full min-h-screen">
+    <div className="w-full h-full min-h-dvh">
       <Suspense fallback={null}>{children}</Suspense>
     </div>
   );
