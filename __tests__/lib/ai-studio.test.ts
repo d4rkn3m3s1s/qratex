@@ -161,9 +161,9 @@ describe('model yönlendirmesi', () => {
   });
 
   it('slot durumu: geçersiz seçim yok sayılır', () => {
-    const s = slotStates({ volume: 'yok-model', systemLearning: MODEL_CATALOG.groq[2].id }, 'groq');
+    const s = slotStates({ volume: 'yok-model', systemLearning: MODEL_CATALOG.groq[1].id }, 'groq');
     expect(s[0]).toMatchObject({ slot: 'volume', overrideIgnored: true, source: expect.not.stringMatching('override') });
-    expect(s[2]).toMatchObject({ slot: 'systemLearning', effective: MODEL_CATALOG.groq[2].id, source: 'override' });
+    expect(s[2]).toMatchObject({ slot: 'systemLearning', effective: MODEL_CATALOG.groq[1].id, source: 'override' });
     expect(slotStates({}, 'none')[0]).toMatchObject({ effective: null, source: 'none' });
   });
 });

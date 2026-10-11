@@ -87,8 +87,18 @@ export function getVolumeModelEnvDefault(): string {
   if (process.env.AI_MODEL) return process.env.AI_MODEL;
   // HACİM yolu (her feedback analiz edilir) → ücretsiz tier'da 14.4K istek/gün + 500K token/gün.
   // Model tablosu/gerekçe: lib/groq.ts MODELS.
-  if (process.env.GROQ_API_KEY) return 'llama-3.1-8b-instant';
+  // llama-3.1-8b-instant Groq'tan kalktı (404 model_not_found, 2026-10) → gpt-oss-20b.
+  if (process.env.GROQ_API_KEY) return 'openai/gpt-oss-20b';
   return process.env.OPENAI_MODEL || 'gpt-4-turbo-preview';
+}
+
+/**
+ * gpt-oss (Groq) akıl yürüten modeldir: gizli düşünme token'ları `max_tokens` bütçesinden yer.
+ * Düşük bütçeli çağrılarda (konsey turu 320-380) bütçe düşünmeye gidip içerik BOŞ dönüyordu →
+ * "yanıt üretemedi". Hacim/sohbet yollarında düşünme kısa tutulur.
+ */
+function reasoningOpts(model: string): { reasoning_effort?: 'low' } {
+  return model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {};
 }
 
 /** Yönetici seçimi (Prompt ve Model Stüdyosu, katalog denetimli) > ortam > varsayılan. */
@@ -183,6 +193,7 @@ export async function runChatCompletion(params: {
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: getModel(),
+        ...reasoningOpts(getModel()),
         messages: [
           { role: 'system', content: params.system },
           { role: 'user', content: params.user },
@@ -376,6 +387,7 @@ export async function analyzeComprehensive(
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: getModel(),
+        ...reasoningOpts(getModel()),
         messages: [
           { role: 'system', content: buildAnalysisSystemPrompt(options.customPrompt, options.adaptiveProfile) },
           { role: 'user', content: `Analiz et:\n${wrapUntrusted('musteri_yorumu', text)}` },
@@ -656,6 +668,7 @@ export async function askAI(
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: getModel(),
+        ...reasoningOpts(getModel()),
         messages,
         temperature: 0.5,
         max_tokens: 800,
@@ -860,6 +873,7 @@ export async function generateAutoReply(
     const response = await withRetry(() =>
       client.chat.completions.create({
         model: getModel(),
+        ...reasoningOpts(getModel()),
         messages: [
           { role: 'system', content: buildAutoReplySystemPrompt(toneSlug, dbTonePrompt) },
           {

@@ -23,7 +23,7 @@ const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-
 export const LEARNING_MODEL =
   process.env.AI_LEARNING_MODEL ||
   process.env.OPENAI_LEARNING_MODEL ||
-  (process.env.GROQ_API_KEY ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
+  (process.env.GROQ_API_KEY ? 'openai/gpt-oss-20b' : 'gpt-4o-mini'); // llama-3.1-8b-instant decommission (2026-10)
 
 let embeddingClient: OpenAI | null = null;
 let learningClient: OpenAI | null = null;

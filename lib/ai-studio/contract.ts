@@ -437,8 +437,7 @@ export type AiProvider = 'groq' | 'openai' | 'none';
 
 export const MODEL_CATALOG: Record<Exclude<AiProvider, 'none'>, ReadonlyArray<{ id: string; label: string; note: string }>> = {
   groq: [
-    { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant', note: 'Hızlı ve ucuz; ücretsiz katmanda yüksek günlük istek kotası. Hacim için uygun.' },
-    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: 'Orta boy; JSON uyumu 8B modelden iyi, kota daha dar.' },
+    { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: 'Hacim varsayılanı; hızlı, JSON uyumu iyi. (Llama 3.1 8B Groq listesinden kalktı.)' },
     { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: 'En yüksek kalite ve katı JSON; ücretsiz katmanda günlük istek kotası düşük.' },
   ],
   openai: [

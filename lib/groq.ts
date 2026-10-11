@@ -55,7 +55,7 @@ export const MODELS = {
    *  Groq üretim listesinden kalktı). Ayrı bir kota tüketmemesi için `fast` ile aynı. */
   reasoning: 'openai/gpt-oss-120b',
   /** Hacim: yüksek frekanslı analizler. Ücretsiz: 14.4K istek/gün, 500K token/gün. */
-  instant: 'llama-3.1-8b-instant',
+  instant: 'openai/gpt-oss-20b', // llama-3.1-8b-instant Groq'tan kalktı (404, 2026-10)
 } as const;
 
 /**
