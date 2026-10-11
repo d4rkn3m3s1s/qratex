@@ -135,7 +135,7 @@ export function CouponsCenter({ initial }: { initial: CouponsInitial }) {
         header: 'Kod',
         enableHiding: false,
         enableSorting: false,
-        meta: { mobile: 'title', label: 'Kod' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'title', label: 'Kod', interactive: true } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-1">
             <span className="truncate font-mono font-semibold tracking-wider text-fg">{row.original.code}</span>

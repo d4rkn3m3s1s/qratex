@@ -316,7 +316,19 @@ function DefaultCard<TData>({
         {select && <div className="relative z-raised pt-0.5">{render(select)}</div>}
         <div className="min-w-0 flex-1">
           {title &&
-            (onRowClick ? (
+            (onRowClick && getColumnMeta(title.column).interactive ? (
+              // Başlık hücresi kendi düğmesini taşıyor (ör. kopyala) → <button> içinde <button>
+              // geçersiz HTML/hydration hatası olur. Kart tıklaması ayrı, gerilmiş bir düğmede.
+              <>
+                <button
+                  type="button"
+                  onClick={() => onRowClick(row.original)}
+                  aria-label="Ayrıntıyı aç"
+                  className="absolute inset-0 rounded-card outline-none"
+                />
+                <div className="qx-body relative z-raised min-w-0 font-medium text-fg">{render(title)}</div>
+              </>
+            ) : onRowClick ? (
               <button
                 type="button"
                 onClick={() => onRowClick(row.original)}
