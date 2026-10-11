@@ -906,3 +906,9 @@ html.reduce-animations .qx-enter,
 html.reduce-animations .qx-marquee-track {
   animation: none;
 }
+
+/* Çerez bannerı ilk HTML'de basılır (LCP); karar verilmiş/kiosk ziyaretçide ilk boyamadan önce
+   <html>'e eklenen sınıfla gizlenir (lib/consent/types.ts CONSENT_PREPAINT_SNIPPET). */
+html.qx-consent-decided [data-consent-banner] {
+  display: none;
+}

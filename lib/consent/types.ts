@@ -18,6 +18,15 @@ export const CONSENT_MAX_AGE_SECONDS = 180 * 24 * 60 * 60;
 /** Eski banner'ın localStorage anahtarı (geçiş için okunur, yazılmaz). */
 export const LEGACY_CONSENT_STORAGE_KEY = 'qratex_cookie_consent_v1';
 
+/**
+ * Çerez bannerı ilk HTML'de basılır (LCP); karar verilmiş ya da kiosk ekranındaki ziyaretçide
+ * bu sınıf ilk boyamadan önce <html>'e eklenir ve globals.css banner'ı gizler. Kontrol kaba
+ * (çerez/eski anahtar var mı); geçersiz/süresi geçmiş karar hidrasyondan sonra banner
+ * tarafından düzeltilir (sınıf kaldırılır).
+ */
+export const CONSENT_PREPAINT_CLASS = 'qx-consent-decided';
+export const CONSENT_PREPAINT_SNIPPET = `try{var cd=/(?:^|;\\s*)${CONSENT_COOKIE}=[^;]+/.test(document.cookie);if(!cd){try{cd=!!localStorage.getItem('${LEGACY_CONSENT_STORAGE_KEY}');}catch(e){}}if(cd||location.pathname.indexOf('/wall/')===0)document.documentElement.classList.add('${CONSENT_PREPAINT_CLASS}');}catch(e){}`;
+
 export const CONSENT_CATEGORIES = ['necessary', 'analytics', 'replay', 'marketing'] as const;
 export type ConsentCategory = (typeof CONSENT_CATEGORIES)[number];
 export type OptionalConsentCategory = Exclude<ConsentCategory, 'necessary'>;
