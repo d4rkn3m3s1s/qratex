@@ -29,6 +29,7 @@ jest.mock('@/lib/innovation-segment-users', () => ({
 }));
 const mockPush = jest.fn();
 jest.mock('@/lib/push', () => ({ sendPushNotification: (...a: unknown[]) => mockPush(...a) }));
+jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn(async () => ({ ok: true })) }));
 
 /** Kullanıcı tercih tablosu: id → notificationPrefs. */
 const users: Record<string, { role: string; prefs: unknown }> = {};
@@ -41,7 +42,10 @@ const mockProposalUpdateMany = jest.fn();
 const mockFeedbackFindMany = jest.fn();
 const mockConsumptionFindMany = jest.fn();
 
+/** Sıklık tavanı: son 7 günde bu işletmeden alınmış pazarlama bildirimleri (userId listesi). */
+const recentMarketing: string[] = [];
 const notificationApi = {
+  findMany: jest.fn(async () => recentMarketing.map((userId, i) => ({ id: `n${i}`, userId, data: { dealerId: 'dealer-1' } }))),
   createMany: jest.fn(async ({ data }: { data: Array<{ userId: string; data: Record<string, unknown> }> }) => {
     createdNotifications.push(...data);
     return { count: data.length };
@@ -62,6 +66,8 @@ const prismaMock = {
   campaign: {
     findUnique: (...a: unknown[]) => mockCampaignFindUnique(...a),
     updateMany: (...a: unknown[]) => mockCampaignUpdateMany(...a),
+    // Sıklık tavanı sayacı: son 7 günde gönderilmiş kampanya yok.
+    findMany: jest.fn(async () => []),
   },
   segmentCampaignProposal: {
     findUnique: (...a: unknown[]) => mockProposalFindUnique(...a),
@@ -92,6 +98,7 @@ const pushed = () => mockPush.mock.calls.map((c) => c[0]).sort();
 beforeEach(() => {
   jest.clearAllMocks();
   createdNotifications.length = 0;
+  recentMarketing.length = 0;
   for (const k of Object.keys(users)) delete users[k];
   users.optedOut = { role: 'CUSTOMER', prefs: OPTED_OUT };
   users.pushOff = { role: 'CUSTOMER', prefs: { campaign: { push: false } } };
@@ -136,6 +143,29 @@ describe('segment önerisi gönderimi (/api/dealer/innovation/segment-proposals/
     expect(createdNotifications.every((n) => n.data.kind === 'campaign-segment-proposal')).toBe(true);
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(await res.json()).toMatchObject({ sentCount: 2, optedOutCount: 1 });
+  });
+
+  it('sıklık tavanı: son 7 günde 2 pazarlama iletisi almış müşteri atlanır; herkes tavandaysa SENT yapılmaz', async () => {
+    mockProposalFindUnique.mockResolvedValue({
+      id: 'p1', dealerId: 'dealer-1', status: 'APPROVED', segmentKey: 'loyal', title: 'T', message: 'M',
+    });
+    mockSegmentUsers.mockResolvedValue(['pushOff', 'fresh']);
+    recentMarketing.push('fresh', 'fresh');
+    const { POST } = await import('@/app/api/dealer/innovation/segment-proposals/[id]/send/route');
+    const res = await POST(req('/api/dealer/innovation/segment-proposals/p1/send'), params('p1'));
+    expect(res.status).toBe(200);
+    expect(recipients()).toEqual(['pushOff']);
+    expect(pushed()).toEqual([]);
+    expect(await res.json()).toMatchObject({ sentCount: 1, frequencyCappedCount: 1 });
+
+    jest.clearAllMocks();
+    createdNotifications.length = 0;
+    recentMarketing.push('pushOff', 'pushOff');
+    const res2 = await POST(req('/api/dealer/innovation/segment-proposals/p1/send'), params('p1'));
+    expect(res2.status).toBe(400);
+    expect((await res2.json()).code).toBe('FREQUENCY_CAPPED');
+    expect(mockProposalUpdateMany).not.toHaveBeenCalled();
+    expect(createdNotifications).toHaveLength(0);
   });
 
   it('herkes kapatmışsa taslak SENT yapılmaz', async () => {

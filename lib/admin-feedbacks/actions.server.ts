@@ -213,7 +213,7 @@ async function remindDealers(body: BulkBody, ctx: ActionCtx): Promise<BulkResult
             g.low > 0
               ? `${n} müşteri yorumu yanıtınızı bekliyor; ${g.low} tanesi düşük puanlı. Hızlı bir yanıt müşteriyi geri kazanmanın en etkili yolu.`
               : `${n} müşteri yorumu yanıtınızı bekliyor. Yanıtlamak müşteriye sesinin duyulduğunu gösterir.`,
-          data: { kind: 'admin_feedback_reminder', href: '/dealer/feedbacks', keys: g.keys.slice(0, 50) },
+          data: { kind: 'admin_feedback_reminder', href: '/dealer/inbox', keys: g.keys.slice(0, 50) },
         },
       });
       notified += 1;

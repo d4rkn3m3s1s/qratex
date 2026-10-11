@@ -17,7 +17,7 @@ import { getPageSeo } from '@/lib/seo-settings';
  * bağlantı hedefidir — değiştirmeyin.
  */
 const SLUG = 'kullanim-sartlari' as const;
-const PRIVACY_SETTINGS = '/customer/settings?tab=privacy';
+const PRIVACY_SETTINGS = '/customer/me/settings?tab=privacy';
 
 export function generateMetadata(): Promise<Metadata> {
   return buildLegalMetadata(SLUG);

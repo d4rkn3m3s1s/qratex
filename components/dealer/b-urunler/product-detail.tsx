@@ -143,7 +143,7 @@ export function ProductDetail({ productId }: { productId: string }) {
                   Son değerlendirmeler
                 </h3>
                 <Button asChild variant="ghost" className="min-h-11">
-                  <Link href="/dealer/reviews">
+                  <Link href="/dealer/inbox">
                     <MessageSquareText className="mr-1.5 h-4 w-4" aria-hidden /> Tümü
                   </Link>
                 </Button>

@@ -204,11 +204,6 @@ export async function POST(request: NextRequest) {
     }
     const v = validatedData.data;
 
-    const idemCheck = await checkIdempotency(request, 'feedback');
-    if ('error' in idemCheck) return idemCheck.error;
-    if (idemCheck.cached) return idemCheck.response;
-    const idemKey = idemCheck.key;
-
     const { submitFeedback } = await import('@/lib/feedback-funnel/submit');
     const { resolveOptionalViewer } = await import('@/lib/feedback-funnel/viewer');
     const { ATTRIBUTION_SOURCES } = await import('@/lib/feedback-funnel/schema');
@@ -216,6 +211,14 @@ export async function POST(request: NextRequest) {
       ? (v.attributionSource as (typeof ATTRIBUTION_SOURCES)[number])
       : undefined;
     const viewer = await resolveOptionalViewer();
+
+    // İdempotency yanıtı göndericiye BAĞLI (oturumlu: kullanıcı, oturumsuz: istemci kimliği):
+    // sızan bir anahtarla başkasının yanıtı (geri bildirim kimliği, ödül durumu) oynatılamaz.
+    const idemRoute = `feedback:${viewer ? `u:${viewer.userId}` : `c:${clientId}`}`;
+    const idemCheck = await checkIdempotency(request, idemRoute);
+    if ('error' in idemCheck) return idemCheck.error;
+    if (idemCheck.cached) return idemCheck.response;
+    const idemKey = idemCheck.key;
     const result = await submitFeedback(
       { id: v.qrCodeId },
       {
@@ -239,7 +242,7 @@ export async function POST(request: NextRequest) {
           : null,
       rewardStatus: r.status,
     };
-    if (idemKey) await storeIdempotency(idemKey, 'feedback', 200, resBody);
+    if (idemKey) await storeIdempotency(idemKey, idemRoute, 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     const { ApiError } = await import('@/lib/http/define-route');

@@ -83,6 +83,13 @@ export function isRemedyOfferError(e: unknown): e is RemedyOfferError {
   return e instanceof RemedyOfferError;
 }
 
+/** Kullanıcı bu işletmenin kendisi ya da (pasif dahil) personeli mi? */
+async function isDealerInsider(db: typeof prisma, dealerId: string, userId: string): Promise<boolean> {
+  if (userId === dealerId) return true;
+  const link = await db.dealerStaff.findFirst({ where: { dealerId, userId }, select: { id: true } });
+  return Boolean(link);
+}
+
 export type RemedySource =
   | { kind: 'feedback'; feedbackId: string }
   | { kind: 'consumption_review'; consumptionReviewId: string }
@@ -227,6 +234,13 @@ export async function createRemedyOffer(
   if (options.length === 0) {
     throw new RemedyOfferError('NO_OPTIONS', 'Geçerli bir telafi seçeneği tanımlı değil. Telafi şablonlarınızı kontrol edin.');
   }
+  // İşletme içi kişi (bayinin kendisi ya da personel kaydı — pasif dahil) tarafsız müşteri
+  // değildir: puan türlü telafi/kişisel teklifle bayi bütçesinden kendi ekibine puan aktarılırdı.
+  // Tek kapı burası — geri bildirim/tüketim yorumu telafisi, Müşteriler 360 toplu teklif, kayıp
+  // müdahalesi ve kişisel teklif hepsi buradan geçer.
+  if (await isDealerInsider(db, dealerId, userId)) {
+    throw new RemedyOfferError('FORBIDDEN', 'İşletmenizin personeline telafi ya da kişisel teklif gönderilemez.');
+  }
   const message = (input.message || '').trim().slice(0, REMEDY_MESSAGE_MAX) || DEFAULT_REMEDY_MESSAGE;
   const status = mode === 'queue' ? 'awaiting_dealer_approval' : 'pending';
   const blockIfAccepted = input.blockIfAccepted !== false;
@@ -348,6 +362,10 @@ export async function acceptRemedyOffer(
   const selection = findRemedySelection(offer.options, params.selectedType, params.selectedValue);
   if (!selection) {
     throw new RemedyOfferError('INVALID_SELECTION', 'Seçtiğiniz telafi bu teklifte yok. Lütfen listeden bir seçenek seçin.');
+  }
+  // Kural değişmeden önce açılmış teklifler için de: işletme içi kişi PUAN telafisi alamaz.
+  if (selection.type === 'points' && (await isDealerInsider(db, offer.dealerId, userId))) {
+    throw new RemedyOfferError('FORBIDDEN', 'İşletme personeli puan telafisi alamaz. Başka bir telafi türü seçebilirsiniz.');
   }
 
   const acceptedAt = params.now ?? new Date();

@@ -94,7 +94,7 @@ export function ScanRecentVenues({ summary, copy, locale }: { summary: ScanSumma
             ))}
           </ul>
           <Link
-            href="/customer/feedbacks"
+            href="/customer/me/voices"
             className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             {copy.sideRecentAll}

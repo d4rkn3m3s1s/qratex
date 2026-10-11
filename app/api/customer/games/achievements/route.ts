@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { evaluateAchievements } from '@/lib/game-achievements';
@@ -15,13 +14,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Unauthorized', achievements: [] },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
     const userId = session.user.id;
 
     const stats = await computeAchievementStats(prisma, userId);

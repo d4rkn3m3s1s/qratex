@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requireAuth } from '@/lib/api-auth';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { checkRateLimitDb } from '@/lib/rate-limit';
@@ -25,10 +24,9 @@ class CouponLimitReachedError extends Error {}
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Oturum gerekli' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
     const userId = session.user.id;
 
     // Brute-force kod denemesini sınırla.

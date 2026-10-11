@@ -34,7 +34,7 @@ import type {
 
 const FLASH_LIST_LIMIT = 30;
 const PERSONAL_LIST_LIMIT = 20;
-export const REMEDY_TEMPLATES_EDIT_HREF = '/dealer/remedy-automation/templates';
+export const REMEDY_TEMPLATES_EDIT_HREF = '/dealer/automation/remedy';
 
 /** Kişiye özel (kaynaksız) telafi teklifi filtresi — B5: hedef müşteriye bağlı teklif. */
 export function personalOfferWhere(dealerId: string) {

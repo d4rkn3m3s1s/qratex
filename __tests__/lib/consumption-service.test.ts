@@ -44,6 +44,7 @@ function setup(opts: {
   product?: Record<string, unknown> | null;
   birthDate?: Date | null;
   createError?: unknown;
+  insider?: boolean;
 } = {}) {
   let balance = 1000;
   const created = {
@@ -101,6 +102,7 @@ function setup(opts: {
       findFirst: jest.fn(async () => opts.existingByClientOp ?? null),
     },
     product: { findUnique: jest.fn(async () => opts.product ?? null) },
+    dealerStaff: { findFirst: jest.fn(async () => (opts.insider ? { id: 'staff_link_1' } : null)) },
     happyHour: { findMany: jest.fn(async () => opts.happyHours ?? []) },
     seasonalCampaign: { findMany: jest.fn(async () => opts.campaigns ?? []) },
     user: {
@@ -263,6 +265,16 @@ describe('createConsumption — kart, ürün ve girdi kuralları', () => {
   it('bayi kendi kartına tüketim yazamaz (kendine puan basma)', async () => {
     setup({ card: { id: 'card_1', status: 'ACTIVATED', customerId: DEALER, archivedAt: null } });
     await expectCode(createConsumption({ cardToken: 'tok' }, ctx), 'SELF_DEALING');
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('işletme personelinin (pasif dahil) kartına tüketim yazılamaz — personele pasif puan basma', async () => {
+    setup({ insider: true });
+    await expectCode(createConsumption({ cardToken: 'tok' }, ctx), 'SELF_DEALING');
+    expect(mockPrisma.dealerStaff.findFirst).toHaveBeenCalledWith({
+      where: { dealerId: DEALER, userId: CUSTOMER },
+      select: { id: true },
+    });
     expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 

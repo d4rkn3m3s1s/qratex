@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { createBillingPortalSession } from '@/lib/billing-core';
 import { isStripeConfigured } from '@/lib/stripe';
@@ -13,6 +14,9 @@ export const dynamic = 'force-dynamic';
 export async function POST() {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
+  // Her çağrı Stripe'ta yeni portal oturumu açar: dış API kotası için sıkı sınır.
+  const limited = await enforceRouteRateLimit('dealer.billing.portal', auth.session.user.id, { max: 10, windowMs: 10 * 60_000 });
+  if (limited) return limited;
 
   if (!isStripeConfigured()) {
     return NextResponse.json(

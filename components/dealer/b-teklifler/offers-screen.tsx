@@ -37,7 +37,7 @@ function MovedNotice() {
   const links = [
     { label: copy.moved.segments, where: copy.moved.segmentsWhere, href: '/dealer/campaigns' },
     { label: copy.moved.table, where: copy.moved.tableWhere, href: '/dealer/inbox/incidents' },
-    { label: copy.moved.weekly, where: copy.moved.weeklyWhere, href: '/dealer/weekly-brief' },
+    { label: copy.moved.weekly, where: copy.moved.weeklyWhere, href: '/dealer' },
   ];
   return (
     <section role="status" aria-labelledby="offers-moved-title" className="rounded-lg border border-info-border bg-info-subtle p-4 text-fg">

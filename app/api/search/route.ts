@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
               role === 'ADMIN'
                 ? `/admin/feedbacks?search=${encodeURIComponent(q)}`
                 : role === 'DEALER'
-                  ? `/dealer/feedbacks?search=${encodeURIComponent(q)}`
-                  : `/customer/feedbacks?search=${encodeURIComponent(q)}`,
+                  ? `/dealer/inbox?search=${encodeURIComponent(q)}`
+                  : `/customer/me/voices?search=${encodeURIComponent(q)}`,
           }))
         ),
       prisma.product
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
                 ? `/admin/feedbacks?search=${encodeURIComponent(q)}`
                 : role === 'DEALER'
                   ? `/dealer/products?search=${encodeURIComponent(q)}`
-                  : `/customer/consumptions?search=${encodeURIComponent(q)}`,
+                  : `/customer/wallet/activity?search=${encodeURIComponent(q)}`,
           }))
         ),
       (role === 'ADMIN' || role === 'DEALER')

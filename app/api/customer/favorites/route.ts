@@ -12,12 +12,9 @@ const favoritePostSchema = z.object({
 
 /** GET: Müşterinin favori işletme id listesi ve özet bilgileri */
 export async function GET() {
-  const auth = await requireAuth();
+  const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
-  if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
 
   try {
     const list = await prisma.customerFavoriteDealer.findMany({
@@ -69,12 +66,9 @@ export async function GET() {
 
 /** POST: Favorilere ekle. Body: { dealerId } */
 export async function POST(request: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
-  if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
 
   try {
     const raw = await request.json().catch(() => ({}));
@@ -119,12 +113,9 @@ export async function POST(request: NextRequest) {
 
 /** DELETE: Favorilerden çıkar. Query: ?dealerId= */
 export async function DELETE(request: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(['CUSTOMER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
-  if (session.user.role !== 'CUSTOMER') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: PRIVATE_NO_STORE_HEADERS });
-  }
 
   const dealerId = request.nextUrl.searchParams.get('dealerId');
   if (!dealerId) {

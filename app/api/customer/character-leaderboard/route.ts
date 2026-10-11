@@ -14,6 +14,7 @@ import {
   normalizeCollectionRarity,
 } from '@/lib/badges/collection-logic';
 import { nextIstanbulWeekStart } from '@/components/ds/play/istanbul-time';
+import { HIDDEN_PLAYER_LABEL, leaderboardHiddenUserIds } from '@/lib/privacy/leaderboard-optout';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,9 +68,13 @@ export const GET = defineRoute(
         .sort((a, b) => b._count._all - a._count._all || a.userId.localeCompare(b.userId))
         .slice(0, TOP_N);
 
-      const users = sorted.length
-        ? await prisma.user.findMany({ where: { id: { in: sorted.map((g) => g.userId) } }, select: { id: true, name: true } })
-        : [];
+      const [users, hiddenIds] = sorted.length
+        ? await Promise.all([
+            prisma.user.findMany({ where: { id: { in: sorted.map((g) => g.userId) } }, select: { id: true, name: true } }),
+            // "Liderlikte görün" kapalıysa başkalarına anonim (sıra değişmez).
+            leaderboardHiddenUserIds(sorted.map((g) => g.userId)),
+          ])
+        : [[], new Set<string>()] as const;
       const nameById = new Map(users.map((u) => [u.id, u.name]));
 
       const rows = sorted.map((g, i) => {
@@ -79,7 +84,8 @@ export const GET = defineRoute(
           rank: competitionRank(count, allCounts) ?? 0,
           // Opak anahtar: diğer kullanıcıların kimliğinden hiçbir parça istemciye gitmez.
           rowKey: isCurrentUser ? 'me' : `w-${i}`,
-          name: maskDisplayName(nameById.get(g.userId)),
+          name:
+            hiddenIds.has(g.userId) && !isCurrentUser ? HIDDEN_PLAYER_LABEL : maskDisplayName(nameById.get(g.userId)),
           count,
           isCurrentUser,
         };

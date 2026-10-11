@@ -251,7 +251,7 @@ export async function awardActivityBadges(userId: string): Promise<ActivityBadge
             type: 'badge',
             title: '🏅 Yeni rozet kazandın!',
             message: text?.quote ?? `Yeni bir rozet açıldı: ${outcome.badge.name}`,
-            data: { kind: 'activity-badge', badgeId, href: '/customer/badges' } as object,
+            data: { kind: 'activity-badge', badgeId, href: '/customer/me/badges' } as object,
           },
         }).catch(() => {});
       }

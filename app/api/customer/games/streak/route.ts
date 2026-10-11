@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
@@ -25,13 +24,9 @@ function addDays(key: string, delta: number): string {
  */
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Unauthorized', current: 0, longest: 0 },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     // Tamamlanmış oturumların benzersiz günleri (son ~120 gün yeterli).
     const since = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);

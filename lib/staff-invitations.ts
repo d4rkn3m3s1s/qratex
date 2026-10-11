@@ -30,6 +30,12 @@ import { invalidateSessionState } from '@/lib/auth/session-state';
 
 export const STAFF_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const STAFF_INVITE_PATH = '/auth/staff-invite';
+/**
+ * Bir işletmenin aktif personel + bekleyen davet toplamı üst sınırı (guvenlik-bayi-api O7/Y5:
+ * personel sayısı sınırsızdı — bayi N hesap açıp personel başına limitleri N'e katlayabiliyordu).
+ * Plan bazlı tavan için `PricingPlan.maxStaff` şema isteği: docs/audit/2026-10-08/SCHEMA-REQUESTS-ek.md.
+ */
+export const MAX_TEAM_SIZE = 50;
 
 export type InvitationErrorCode =
   | 'INVALID_EMAIL'
@@ -43,6 +49,7 @@ export type InvitationErrorCode =
   | 'EMAIL_MISMATCH'
   | 'ROLE_NOT_CONVERTIBLE'
   | 'ALREADY_STAFF_ELSEWHERE'
+  | 'TEAM_LIMIT'
   | 'INVALID_SIGNUP';
 
 export interface InvitationFailure {
@@ -109,6 +116,21 @@ export async function createStaffInvitation(input: CreateInvitationInput): Promi
   });
   if (existingOwnStaff) {
     return fail(409, 'ALREADY_YOUR_STAFF', 'Bu kişi zaten ekibinizde.');
+  }
+
+  // Ekip tavanı: aktif personel + (bu kişi dışındaki) geçerli bekleyen davetler.
+  const [activeStaff, pendingOthers] = await Promise.all([
+    prisma.dealerStaff.count({ where: { dealerId: input.dealerId, isActive: true } }),
+    prisma.staffInvitation.count({
+      where: { dealerId: input.dealerId, acceptedAt: null, revokedAt: null, expiresAt: { gt: now }, NOT: { email } },
+    }),
+  ]);
+  if ((activeStaff ?? 0) + (pendingOthers ?? 0) >= MAX_TEAM_SIZE) {
+    return fail(
+      409,
+      'TEAM_LIMIT',
+      `Ekibinizde en fazla ${MAX_TEAM_SIZE} kişi (aktif personel ve bekleyen davetler) olabilir. Yeni davet için bekleyen bir daveti iptal edin ya da ayrılan bir personeli pasife alın.`
+    );
   }
 
   const plainToken = generateInviteToken();
@@ -316,6 +338,16 @@ export async function acceptStaffInvitation(input: AcceptInvitationInput): Promi
         });
         userId = created.id;
         createdAccount = true;
+      }
+
+      // 3a) Ekip tavanı (davet oluşturulduktan sonra başka kabuller tavanı doldurmuş olabilir).
+      const teamSize = await tx.dealerStaff.count({
+        where: { dealerId: inv.dealerId, isActive: true, NOT: { userId } },
+      });
+      if ((teamSize ?? 0) >= MAX_TEAM_SIZE) {
+        throw new AcceptAbort(
+          fail(409, 'TEAM_LIMIT', 'Bu işletmenin ekibi dolu. Daveti gönderen işletmeyle iletişime geçin.')
+        );
       }
 
       // 3) Personel bağı: kişi başka işletmede AKTİF personelse reddet.

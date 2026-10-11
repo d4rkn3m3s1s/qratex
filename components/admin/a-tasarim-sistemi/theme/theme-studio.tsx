@@ -246,7 +246,7 @@ export function ThemeStudio({ initial }: { initial: ThemeOverview | null }) {
                       {data.seasonal.familyName ? ` “${data.seasonal.familyName}”` : ' konseptin'} paletini görür; burada yayınlanan tema konsept bitince görünür.
                     </span>
                     <Button asChild size="sm" variant="outline" className="min-h-11 sm:min-h-9">
-                      <Link href="/admin/seasonal-concepts">Konsepte git</Link>
+                      <Link href="/admin/campaigns-calendar">Konsepte git</Link>
                     </Button>
                   </div>
                 )}

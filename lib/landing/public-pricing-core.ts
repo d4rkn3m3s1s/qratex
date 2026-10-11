@@ -157,7 +157,7 @@ export function registerHrefForPlan(planId: string, src = 'pricing'): string {
     role: 'DEALER',
     plan: planId,
     src,
-    callbackUrl: `/dealer/billing?plan=${planId}`,
+    callbackUrl: `/dealer/settings?plan=${planId}`,
   });
   return `/auth/register?${params.toString()}`;
 }

@@ -41,7 +41,7 @@ export function AccessibilityToggles({
   };
 
   const rows: Array<{
-    key: keyof AccessibilityPrefs;
+    key: Exclude<keyof AccessibilityPrefs, 'textScale'>;
     icon: React.ReactNode;
     title: string;
     desc: string;

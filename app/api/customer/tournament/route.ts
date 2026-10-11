@@ -5,6 +5,7 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
 import { visibleMiniGames } from '@/lib/minigame-config';
 import { mintPoints, isEconomyError } from '@/lib/economy';
+import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 import {
   isoWeekStart,
   isoWeekEnd,
@@ -60,7 +61,7 @@ async function weeklyRanking(gameType: string, from: Date, to: Date) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAuth(['CUSTOMER']);
     if ('error' in auth) return auth.error;
     const userId = auth.session.user.id;
     const now = new Date();
@@ -77,21 +78,32 @@ export async function GET(request: NextRequest) {
     // Bu haftanın canlı sıralaması.
     const ranked = await weeklyRanking(game.gameType, isoWeekStart(now), isoWeekEnd(now));
     const top = ranked.slice(0, 10);
-    const users = top.length
-      ? await prisma.user.findMany({
-          where: { id: { in: top.map((r) => r.userId) } },
-          select: { id: true, name: true, image: true },
-        })
-      : [];
+    const [users, hiddenIds] = top.length
+      ? await Promise.all([
+          prisma.user.findMany({
+            where: { id: { in: top.map((r) => r.userId) } },
+            select: { id: true, name: true, image: true },
+          }),
+          // "Liderlikte görün" kapalıysa başkalarına anonim (sıra ve ödül hakkı değişmez).
+          leaderboardHiddenUserIds(top.map((r) => r.userId)),
+        ])
+      : [[], new Set<string>()] as const;
     const userMap = new Map(users.map((u) => [u.id, u]));
-    const leaderboard = top.map((r, i) => ({
-      rank: i + 1,
-      name: shortName(userMap.get(r.userId)?.name ?? null),
-      image: userMap.get(r.userId)?.image ?? null,
-      score: r.best,
-      prize: isFeatured ? prizeForRank(i + 1) : 0,
-      isMe: r.userId === userId,
-    }));
+    const leaderboard = top.map((r, i) => {
+      const isMe = r.userId === userId;
+      const identity = leaderboardIdentity(
+        { name: shortName(userMap.get(r.userId)?.name ?? null), image: userMap.get(r.userId)?.image ?? null },
+        { hidden: hiddenIds.has(r.userId), isViewer: isMe }
+      );
+      return {
+        rank: i + 1,
+        name: identity.name,
+        image: identity.image,
+        score: r.best,
+        prize: isFeatured ? prizeForRank(i + 1) : 0,
+        isMe,
+      };
+    });
     const myIndex = ranked.findIndex((r) => r.userId === userId);
     const me = myIndex >= 0 ? { rank: myIndex + 1, score: ranked[myIndex].best } : null;
 

@@ -33,6 +33,8 @@ jest.mock('@/lib/mail-sender', () => ({
   isMailConfigured: () => mockMailConfigured(),
 }));
 jest.mock('@/lib/public-app-origin', () => ({ getPublicAppOrigin: () => 'https://qratex.test' }));
+// lib/team/access → define-route → api-auth → lib/auth (ESM @auth/prisma-adapter); cron yolu oturum kullanmaz.
+jest.mock('@/lib/auth', () => ({ authOptions: {} }));
 jest.mock('@/lib/intern-task-emails', () => ({
   getInternTaskEmails: () => mockGetTemplates(),
   INTERN_TASK_DEADLINE_LABEL: '23:59',
@@ -110,7 +112,9 @@ describe('GET /api/cron/team-task-due', () => {
   it('pencere geçmiş 36 saati de kapsar (başarısız kalan hatırlatma ertesi gün kaybolmaz)', async () => {
     mockTaskFindMany.mockResolvedValue([]);
     await teamTaskDue(req('/api/cron/team-task-due'));
-    const where = mockTaskFindMany.mock.calls[0][0].where;
+    // where = { AND: [NOT_INITIATIVE, { dueAt, dueReminderSentAt, ... }] } (ekip girişimleri hariç).
+    const and = mockTaskFindMany.mock.calls[0][0].where.AND as Array<{ dueAt?: { gte: Date; lte: Date }; dueReminderSentAt?: unknown }>;
+    const where = and.find((c) => c.dueAt) as { dueAt: { gte: Date; lte: Date }; dueReminderSentAt?: unknown };
     expect(where.dueReminderSentAt).toBeNull();
     expect(Date.now() - where.dueAt.gte.getTime()).toBeGreaterThanOrEqual(35 * 60 * 60 * 1000);
     expect(where.dueAt.lte.getTime() - Date.now()).toBeGreaterThan(23 * 60 * 60 * 1000);

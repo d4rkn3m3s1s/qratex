@@ -28,7 +28,7 @@ export function MultipliersTab({ resource }: { resource: EditableResource<Multip
         description={
           <>
             Çarpanlar yalnız aşağıdaki kaynaklarda uygulanır. Zaman pencereli (ör. hafta sonu 2×) çarpanlar için{' '}
-            <Link className="underline underline-offset-2" href="/admin/seasonal-campaigns">Sezonluk Kampanyalar</Link> kullanılır.
+            <Link className="underline underline-offset-2" href="/admin/campaigns-calendar">Sezonluk Kampanyalar</Link> kullanılır.
           </>
         }
       >

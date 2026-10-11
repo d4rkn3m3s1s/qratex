@@ -230,7 +230,7 @@ function Warnings({ data }: { data: RepliesOverviewDto }) {
       {usesTone && data.ai.canUseAi === false && (
         <InlineError variant="banner" tone="info">
           AI ayarınız kapalı: “AI ile kişiselleştir” kuralları şu an yedek metni gönderiyor.{' '}
-          <Link href="/dealer/ai-settings" className="font-medium underline underline-offset-2">
+          <Link href="/dealer/settings" className="font-medium underline underline-offset-2">
             AI ayarları
           </Link>
         </InlineError>

@@ -54,7 +54,7 @@ async function createInactiveFeedbackNudge(userId: string): Promise<boolean> {
         kind: 'reminder-inactive-feedback',
         module: 'customer_reminder',
         nudgeType: 'inactive_feedback',
-        ctaPath: '/customer/consumptions',
+        ctaPath: '/customer/wallet/activity',
       },
     },
   });

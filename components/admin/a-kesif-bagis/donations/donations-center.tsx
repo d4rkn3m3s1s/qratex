@@ -60,7 +60,7 @@ export function DonationsCenter({ initial }: { initial: DonationsInitial }) {
       {s && !s.moduleEnabled ? (
         <div role="status" className={cn('rounded-lg border p-3 text-sm', TONE_CALLOUT.warning)}>
           Bağış modülü müşteriler için kapalı; kampanyalar açık olsa da müşteri bağış yapamaz.{' '}
-          <Link href="/admin/modules" className="font-medium underline underline-offset-2">
+          <Link href="/admin/features" className="font-medium underline underline-offset-2">
             Modülü yönet
           </Link>
         </div>

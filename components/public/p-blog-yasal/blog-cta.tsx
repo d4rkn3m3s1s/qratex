@@ -20,7 +20,7 @@ function copyFor(audience: BlogAudience, category: BlogCategorySlug | null): Cta
     return {
       title: 'Verileriniz üzerinde söz sizde',
       body: 'Verilerinizi indirmek, başvuru yapmak ya da çerez tercihinizi değiştirmek için hesabınızın gizlilik bölümüne gidin.',
-      primary: { label: 'Ayarlar › Gizlilik', href: '/customer/settings?tab=privacy' },
+      primary: { label: 'Ayarlar › Gizlilik', href: '/customer/me/settings?tab=privacy' },
       secondary: { label: 'KVKK Aydınlatma Metni', href: '/kvkk-aydinlatma-metni' },
     };
   }

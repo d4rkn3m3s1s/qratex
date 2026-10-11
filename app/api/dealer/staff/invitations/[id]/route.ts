@@ -1,6 +1,7 @@
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -17,6 +18,8 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ id
     const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
     if (moduleGate) return moduleGate;
     const dealerId = auth.session.user.id;
+    const limited = await enforceRouteRateLimit('dealer.staff.invitations.revoke', dealerId, 'mutation');
+    if (limited) return limited;
     const { id } = await props.params;
 
     const revoked = await revokeInvitation(dealerId, id);

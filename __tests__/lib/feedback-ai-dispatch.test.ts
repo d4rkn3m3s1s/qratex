@@ -121,12 +121,19 @@ describe('runInlineFeedbackAnalysis', () => {
 });
 
 describe('/api/feedbacks satır içi analiz kopyası kaldırıldı (regresyon kalkanı)', () => {
-  const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'app/api/feedbacks/route.ts'), 'utf8');
+  const read = (rel: string) => fs.readFileSync(path.resolve(__dirname, '..', '..', rel), 'utf8');
+  // POST artık ortak huniye (lib/feedback-funnel/submit) devreder; yan etkiler on-feedback-created'da.
+  const files = ['app/api/feedbacks/route.ts', 'lib/feedback-funnel/submit.ts', 'lib/feedback-funnel/on-feedback-created.ts'];
+  const sideEffects = read('lib/feedback-funnel/on-feedback-created.ts');
 
   it('LLM analizi doğrudan çağrılmaz; ortak yönlendirici kullanılır', () => {
-    expect(src).not.toMatch(/analyzeWithFallback/);
-    expect(src).not.toMatch(/aISettings\.findUnique/);
-    expect(src).toMatch(/shouldDispatchFeedbackAnalysis\(/);
-    expect(src).toMatch(/runInlineFeedbackAnalysis\(/);
+    for (const f of files) {
+      const src = read(f);
+      expect(src).not.toMatch(/analyzeWithFallback/);
+      expect(src).not.toMatch(/aISettings\.findUnique/);
+    }
+    expect(read('app/api/feedbacks/route.ts')).toMatch(/feedback-funnel\/submit/);
+    expect(sideEffects).toMatch(/shouldDispatchFeedbackAnalysis\(/);
+    expect(sideEffects).toMatch(/runInlineFeedbackAnalysis\(/);
   });
 });

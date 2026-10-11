@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { authOptions } from '@/lib/auth';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAuth, getOptionalSession } from '@/lib/api-auth';
 import { createQuestSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { getPointsMatrix, getQuestReward } from '@/lib/points-rules';
@@ -18,7 +16,8 @@ export async function GET(req: Request) {
   try {
     const gate = await assertModuleEnabled('quests');
     if (gate) return gate;
-    const session = await getServerSession(authOptions);
+    // Doğrulanmış isteğe bağlı oturum: ADMIN'in `?userId=<başkası>` yetkisi kapı + DB rolüyle.
+    const session = await getOptionalSession();
     const { searchParams } = new URL(req.url);
     // P0-09: `?userId=` yalnız `me` (oturumlu) ya da ADMIN için; başkasının görev profili okunamaz.
     const subject = resolveSubjectUserId(session, searchParams.get('userId'));

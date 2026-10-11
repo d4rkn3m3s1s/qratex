@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
@@ -26,12 +25,15 @@ export const dynamic = 'force-dynamic';
  *     onaylanan kimliğe gider. Puan düşümü defterli (`source: gift`), `requestId` ile tek-kez.
  */
 
-type Session = { user: { id: string; role: string } };
-
-async function customerSession(): Promise<Session | null> {
-  const session = (await getServerSession(authOptions)) as Session | null;
-  if (!session || session.user.role !== 'CUSTOMER') return null;
-  return session;
+/**
+ * Yalnız CUSTOMER; oturum sürümü, askı, güncel rol ve token replay DB'den (`requireAuth`).
+ * Eskiden ham JWT okunuyordu: askıya alınmış ya da oturumu iptal edilmiş hesap puan harcayıp
+ * hediye gönderebiliyordu.
+ */
+async function customerSession(): Promise<{ session: { user: { id: string } } } | { error: NextResponse }> {
+  const auth = await requireAuth(['CUSTOMER']);
+  if ('error' in auth) return { error: auth.error };
+  return { session: { user: { id: auth.session.user.id } } };
 }
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -47,8 +49,9 @@ const ELIGIBLE_RECIPIENT: Prisma.UserWhereInput = {
 /** GET — alıcı önizlemesi. */
 export async function GET(req: NextRequest) {
   try {
-    const session = await customerSession();
-    if (!session) return json({ error: 'Oturum açmanız gerekiyor' }, 401);
+    const authResult = await customerSession();
+    if ('error' in authResult) return authResult.error;
+    const session = authResult.session;
 
     const q = (req.nextUrl.searchParams.get('q') ?? '').trim();
     if (q.length < 3 || q.length > 254) {
@@ -115,8 +118,9 @@ class AlreadyOwnedError extends Error {}
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await customerSession();
-    if (!session) return json({ error: 'Oturum açmanız gerekiyor' }, 401);
+    const authResult = await customerSession();
+    if ('error' in authResult) return authResult.error;
+    const session = authResult.session;
     const senderId = session.user.id;
 
     const raw = await req.json().catch(() => null);

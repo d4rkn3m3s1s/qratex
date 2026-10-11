@@ -1,5 +1,13 @@
 /**
- * Dealer AI ayarları: GET (ayarlar + istatistikler), PATCH (ayar güncelleme).
+ * Dealer AI ayarları (ESKİ uç; yeni yüzey `/api/dealer/settings/ai`): GET (ayarlar + istatistikler),
+ * PATCH (ayar güncelleme).
+ *
+ * Güvenlik (guvenlik-bayi-api Y6/D5): PATCH eskiden gövdeyi tipsiz yazıyordu — `customPrompt`
+ * uzunluk sınırı ve enjeksiyon denetimi olmadan kaydedilebiliyor (yeni uçtaki 1000 karakter +
+ * `detectPromptInjection` kuralı bu uçtan dolanılıyordu), yanlış tip 500 veriyordu ve ADMIN kendi
+ * kimliğine anlamsız bir ayar satırı açabiliyordu. Artık: yalnız DEALER, katı zod şeması (bilinmeyen
+ * alan 400), yeni uçla aynı bağlam sınırı/enjeksiyon kuralı, `ai_features` modül kapısı, oran
+ * sınırı ve yazımdan sonra AI politika önbelleği bayatlatılır.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -7,6 +15,10 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { z } from 'zod';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { detectPromptInjection } from '@/lib/prompt-injection';
+import { AI_CONTEXT_MAX } from '@/lib/dealer-settings/contract';
 import {
   NO_VERSION,
   VersionConflictError,
@@ -42,8 +54,38 @@ const DEFAULT_SETTINGS = {
   customPrompt: null as string | null,
 };
 
+const legacyAiPatchSchema = z
+  .object({
+    isEnabled: z.boolean().optional(),
+    autoAnalyze: z.boolean().optional(),
+    analysisLanguage: z.enum(['tr', 'en']).optional(),
+    sentimentEnabled: z.boolean().optional(),
+    emotionEnabled: z.boolean().optional(),
+    topicEnabled: z.boolean().optional(),
+    intentEnabled: z.boolean().optional(),
+    urgencyEnabled: z.boolean().optional(),
+    entityEnabled: z.boolean().optional(),
+    toxicityEnabled: z.boolean().optional(),
+    churnEnabled: z.boolean().optional(),
+    themeClusterEnabled: z.boolean().optional(),
+    weeklyReportEnabled: z.boolean().optional(),
+    monthlyReportEnabled: z.boolean().optional(),
+    alertOnToxic: z.boolean().optional(),
+    alertOnUrgent: z.boolean().optional(),
+    alertOnChurnRisk: z.boolean().optional(),
+    customPrompt: z
+      .string()
+      .trim()
+      .max(AI_CONTEXT_MAX, `İşletme bağlamı en çok ${AI_CONTEXT_MAX} karakter olabilir`)
+      .nullable()
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v && v.length > 0 ? v : null)),
+    baseVersion: z.string().min(1).max(128).optional(),
+  })
+  .strict();
+
 export async function GET() {
-  const auth = await requireAuth(['DEALER', 'ADMIN']);
+  const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
 
@@ -177,28 +219,50 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireAuth(['DEALER', 'ADMIN']);
+  const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  const dealerId = session.user.id;
 
-  const dealerId = session.user.role === 'DEALER' ? session.user.id : session.user.id;
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+  const limited = await enforceRouteRateLimit('dealer.ai-settings.legacy', dealerId, 'mutation');
+  if (limited) return limited;
+  // Yeni uçla aynı modül kapısı (admin `ai_features`'ı kapattıysa ayar yazılamaz).
+  const moduleGate = await import('@/lib/module-gate')
+    .then(({ assertModuleEnabled }) => assertModuleEnabled('ai_features', { role: 'dealer' }))
+    .catch(() => null);
+  if (moduleGate) return moduleGate;
+
+  const rawBody: unknown = await request.json().catch(() => null);
+  if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
     return NextResponse.json({ success: false, error: 'Geçersiz istek' }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
-  const baseVersion = readBaseVersion(body);
+  const baseVersion = readBaseVersion(rawBody);
   if (!baseVersion) return baseVersionRequiredResponse();
 
+  const parsed = legacyAiPatchSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { success: false, error: parsed.error.errors[0]?.message ?? 'Geçersiz istek', code: 'VALIDATION' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+  const { baseVersion: _baseVersion, ...body } = parsed.data;
+  void _baseVersion;
+  if (typeof body.customPrompt === 'string' && detectPromptInjection(body.customPrompt)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'İşletme bağlamında izin verilmeyen bir ifade var. Yalnız işletmenizi anlatan düz metin yazın; talimat, kod ya da bağlantı eklemeyin.',
+        code: 'VALIDATION',
+      },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
   const updateData: Record<string, unknown> = {};
-  const keys = [
-    'isEnabled', 'autoAnalyze', 'analysisLanguage', 'sentimentEnabled', 'emotionEnabled',
-    'topicEnabled', 'intentEnabled', 'urgencyEnabled', 'entityEnabled', 'toxicityEnabled',
-    'churnEnabled', 'themeClusterEnabled', 'weeklyReportEnabled', 'monthlyReportEnabled',
-    'alertOnToxic', 'alertOnUrgent', 'alertOnChurnRisk', 'customPrompt',
-  ] as const;
-  for (const k of keys) {
-    if (body[k] !== undefined) updateData[k] = body[k];
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== undefined) updateData[k] = v;
   }
 
   try {
@@ -242,6 +306,11 @@ export async function PATCH(request: NextRequest) {
         },
       });
     });
+
+    // Analiz hattı / sohbet ayarı en geç bir sonraki çağrıda görsün (yeni uçla aynı davranış).
+    await import('@/lib/ai-policy')
+      .then(({ invalidateDealerAiPolicy }) => invalidateDealerAiPolicy(dealerId))
+      .catch(() => {});
 
     return NextResponse.json(
       { success: true, settings: updated, version: versionFromDate(updated.updatedAt) },

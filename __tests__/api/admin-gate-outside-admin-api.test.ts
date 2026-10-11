@@ -174,7 +174,7 @@ describe('P0-07 · rol değişikliği açık oturumları düşürür', () => {
     const res = await POST(req('/api/admin/users/bulk', 'POST', { action: 'update_role', userIds: [U1, U2], role: 'DEALER' }));
     expect(res.status).toBe(200);
     expect(userUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [U2] }, role: { not: 'DEALER' } },
+      where: { id: { in: [U2] }, role: { in: ['DEALER', 'CUSTOMER'], not: 'DEALER' }, anonymizedAt: null },
       data: { role: 'DEALER', sessionVersion: { increment: 1 } },
     });
     expect(mockInvalidate).toHaveBeenCalledWith(U2);

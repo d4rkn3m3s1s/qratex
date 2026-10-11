@@ -232,7 +232,7 @@ function AnonymizeCard({ user: u, onDone }: { user: User360; onDone: () => Promi
       <p className="text-sm text-fg-muted">
         Kalıcı silme yoktur. Anonimleştirme ad, e-posta, telefon, adres, şifre ve oturumları geri döndürülemez biçimde kaldırır; denetim izi, puan
         geçmişi ve istatistikler korunur. Veri sahibi talepleri için{' '}
-        <Link href="/admin/privacy-requests" className="text-brand underline-offset-4 hover:underline">
+        <Link href="/admin/privacy" className="text-brand underline-offset-4 hover:underline">
           KVKK talepleri
         </Link>{' '}
         akışını kullanın.

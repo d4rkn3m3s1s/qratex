@@ -288,6 +288,10 @@
     "destination": "/dealer/assistant"
   },
   {
+    "source": "/dealer/automation",
+    "destination": "/dealer/automation/replies"
+  },
+  {
     "source": "/dealer/benchmark",
     "destination": "/dealer/analytics/benchmark"
   },

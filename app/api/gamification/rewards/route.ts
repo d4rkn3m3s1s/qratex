@@ -1,79 +1,28 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
-import { authOptions } from '@/lib/auth';
-import { requireAuth } from '@/lib/api-auth';
-import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
+import { requireAuth, getOptionalSession } from '@/lib/api-auth';
 import { createRewardSchema } from '@/lib/validations';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
-import crypto from 'crypto';
-import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
-import { getVariant } from '@/lib/gamification-ab';
 import { captureApiError } from '@/lib/capture-api-error';
 import { assertModuleEnabled } from '@/lib/module-gate';
-import { stripPrivateMetadata, takePoolCode } from '@/lib/admin-store/code-pool';
+import { stripPrivateMetadata } from '@/lib/admin-store/code-pool';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { claimReward } from '@/lib/wallet-rewards/mutations';
+import { rethrowAsApiError } from '@/lib/wallet-rewards/http';
+import { assertCustomerModule } from '@/lib/customer-wallet/gate';
 
 // Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
-
-// Generate unique coupon code
-function generateCouponCode(rewardType: string): string {
-  const prefix = rewardType === 'coupon' || rewardType === 'COUPON' ? 'KPN' : 
-                 rewardType === 'digital' || rewardType === 'DIGITAL' ? 'DJT' : 
-                 rewardType === 'vip' || rewardType === 'VIP' ? 'VIP' : 'ODL';
-  const randomPart = crypto.randomBytes(4).toString('hex').toUpperCase();
-  const timestamp = Date.now().toString(36).toUpperCase().slice(-4);
-  return `${prefix}-${randomPart}-${timestamp}`;
-}
-
-type RewardPoolRules = {
-  perUserLimit: number | null;
-  validFrom: Date | null;
-  validUntil: Date | null;
-};
-
-function parseRewardPoolRules(metadata: unknown): RewardPoolRules {
-  if (!metadata || typeof metadata !== 'object') {
-    return {
-      perUserLimit: null,
-      validFrom: null,
-      validUntil: null,
-    };
-  }
-
-  const payload = metadata as Record<string, unknown>;
-  const perUserLimitRaw = payload.perUserLimit;
-  const validFromRaw = payload.validFrom;
-  const validUntilRaw = payload.validUntil;
-
-  const perUserLimit =
-    typeof perUserLimitRaw === 'number' && Number.isFinite(perUserLimitRaw)
-      ? Math.max(1, Math.floor(perUserLimitRaw))
-      : null;
-
-  const validFrom =
-    typeof validFromRaw === 'string' && !Number.isNaN(Date.parse(validFromRaw))
-      ? new Date(validFromRaw)
-      : null;
-
-  const validUntil =
-    typeof validUntilRaw === 'string' && !Number.isNaN(Date.parse(validUntilRaw))
-      ? new Date(validUntilRaw)
-      : null;
-
-  return {
-    perUserLimit,
-    validFrom,
-    validUntil,
-  };
-}
 
 export async function GET(req: Request) {
   try {
     const gate = await assertModuleEnabled('rewards');
     if (gate) return gate;
-    const session = await getServerSession(authOptions);
+    // Doğrulanmış isteğe bağlı oturum: kendi kuponların ve ADMIN arşiv görünümü ham JWT ile değil
+    // DB rolü + yönetici kapısıyla (getOptionalSession, lib/api-auth).
+    const session = await getOptionalSession();
     const { searchParams } = new URL(req.url);
     const myRewards = searchParams.get('myRewards') === 'true';
     const status = searchParams.get('status');
@@ -206,223 +155,43 @@ export async function POST(req: Request) {
   }
 }
 
-// Claim reward endpoint
-export async function PATCH(req: Request) {
-  try {
-    const gate = await assertModuleEnabled('rewards');
-    if (gate) return gate;
-    const idemCheck = await checkIdempotency(req, 'reward-claim');
-    if ('error' in idemCheck) return idemCheck.error;
-    if (idemCheck.cached) return idemCheck.response;
-    const idemKey = idemCheck.key;
-
-    const auditMeta = getAuditRequestMeta(req);
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' }, { status: 401 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const { rewardId } = await req.json();
-
-    if (!rewardId) {
-      return NextResponse.json(
-        { success: false, error: 'Ödül ID gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const [user, reward] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { id: true, points: true },
-      }),
-      prisma.reward.findUnique({
-        where: { id: rewardId },
-        select: {
-          id: true,
-          name: true,
-          cost: true,
-          stock: true,
-          isActive: true,
-          archivedAt: true,
-          type: true,
-          metadata: true,
-        },
-      }),
-    ]);
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Kullanıcı bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (!reward || !reward.isActive || reward.archivedAt) {
-      return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    let couponCode = generateCouponCode(reward.type);
-    const poolRules = parseRewardPoolRules(reward.metadata);
-    const now = new Date();
-
-    if (poolRules.validFrom && now < poolRules.validFrom) {
-      return NextResponse.json(
-        { success: false, error: 'Bu ödül henüz aktif değil' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (poolRules.validUntil && now > poolRules.validUntil) {
-      return NextResponse.json(
-        { success: false, error: 'Bu ödülün süresi doldu' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const abVariant = await getVariant(session.user.id, 'reward_copy');
-
-    const [updatedUser, userReward] = await prisma.$transaction(async (tx) => {
-      if (poolRules.perUserLimit) {
-        const userClaimCount = await tx.userReward.count({
-          where: {
-            userId: user.id,
-            rewardId: reward.id,
-          },
-        });
-
-        if (userClaimCount >= poolRules.perUserLimit) {
-          throw new Error('REWARD_USER_LIMIT_REACHED');
-        }
-      }
-
-      // Koşullu yazım hem stoğu hem "hâlâ aktif ve arşivde değil" koşulunu satır kilidiyle
-      // doğrular: okuma ile tx arasında admin ödülü arşivlediyse alım yapılmaz (P0-26).
-      const claimGuard = await tx.reward.updateMany({
-        where: {
-          id: reward.id,
-          isActive: true,
-          archivedAt: null,
-          ...(reward.stock !== -1 ? { stock: { gt: 0 } } : {}),
-        },
-        data: reward.stock !== -1 ? { stock: { decrement: 1 } } : { updatedAt: new Date() },
-      });
-
-      if (claimGuard.count === 0) {
-        const fresh = await tx.reward.findUnique({
-          where: { id: reward.id },
-          select: { isActive: true, archivedAt: true },
-        });
-        if (!fresh || !fresh.isActive || fresh.archivedAt) throw new Error('REWARD_INACTIVE');
-        throw new Error('REWARD_OUT_OF_STOCK');
-      }
-
-      const updatedWallet = await debitPoints(tx, {
+/**
+ * PATCH /api/gamification/rewards — ESKİ ödül alma ucu (geriye uyumlu takma ad).
+ *
+ * Eskiden ayrı bir alım yolu vardı: ham `getServerSession` (rol yok, askıdaki hesap geçiyordu),
+ * kimlikten ÖNCE ve kullanıcıya bağlanmamış idempotency önbelleği (sızan anahtarla başkasının
+ * kupon kodu okunabiliyordu), şemasız gövde ve kişi başı limitin kilitsiz sayımı (eşzamanlı
+ * taleple aşılabiliyordu). Artık Cüzdan → Ödüller ucuyla AYNI servis (`claimReward`: kullanıcı
+ * satırı kilidi altında limit + stok + havuz + defterli borç) ve aynı kapılar kullanılır.
+ * Yeni istemci: POST /api/customer/wallet/rewards/claim.
+ */
+export const PATCH = defineRoute(
+  {
+    name: 'gamification.rewards.claim.legacy',
+    roles: ['CUSTOMER'],
+    rateLimit: { max: 20, windowMs: 60_000, by: 'user' },
+    schema: z.object({ rewardId: z.string().trim().min(1).max(64) }),
+    idempotent: true,
+  },
+  async ({ body, user, request }) => {
+    await assertCustomerModule('rewards', null, { userId: user.id, request, routeKey: 'gamification.rewards.claim.legacy' });
+    try {
+      const result = await claimReward({
         userId: user.id,
-        points: reward.cost,
-        source: 'reward',
-        sourceId: reward.id,
+        rewardId: body.rewardId,
+        requestKey: request.headers.get('idempotency-key'),
+        audit: getAuditRequestMeta(request),
       });
-
-      // Kod havuzu açıksa kod havuzdan gelir (satır yukarıdaki koşullu yazımla kilitli).
-      const pooled = await takePoolCode(tx, reward.id);
-      if (pooled.exhausted) throw new Error('REWARD_OUT_OF_STOCK');
-      if (pooled.code) couponCode = pooled.code;
-
-      const claimedReward = await tx.userReward.create({
-        data: {
-          userId: user.id,
-          rewardId: reward.id,
-          code: couponCode,
-        },
+      return ok({
+        message: 'Ödül başarıyla talep edildi',
+        rewardName: result.rewardName,
+        cost: result.cost,
+        newBalance: result.newBalance,
+        couponCode: result.code,
+        userRewardId: result.userRewardId,
       });
-
-      await tx.notification.create({
-        data: {
-          userId: user.id,
-          title: '🎁 Ödül Talep Edildi!',
-          message: `${reward.name} ödülünü başarıyla talep ettiniz! Kupon kodunuz: ${couponCode}`,
-          type: 'success',
-          data: {
-            rewardId: reward.id,
-            rewardName: reward.name,
-            couponCode,
-            cost: reward.cost,
-          },
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: 'CLAIM_REWARD',
-          entity: 'Reward',
-          entityId: reward.id,
-          newData: {
-            rewardId: reward.id,
-            rewardName: reward.name,
-            couponCode,
-            cost: reward.cost,
-            remainingPoints: updatedWallet.points,
-          },
-          ...auditMeta,
-        },
-      });
-
-      await tx.analyticsEvent.create({
-        data: {
-          userId: user.id,
-          event: 'gamification_ab_impression',
-          category: 'gamification',
-          data: {
-            experiment: 'reward_copy',
-            variant: abVariant ?? 'default',
-            outcome: 'reward_claim',
-            rewardId: reward.id,
-          },
-        },
-      });
-
-      return [updatedWallet, claimedReward];
-    });
-
-    const resBody = {
-      success: true,
-      message: 'Ödül başarıyla talep edildi',
-      data: {
-        rewardName: reward.name,
-        cost: reward.cost,
-        newBalance: updatedUser.points,
-        couponCode: couponCode,
-        userRewardId: userReward.id,
-      },
-    };
-    if (idemKey) await storeIdempotency(idemKey, 'reward-claim', 200, resBody);
-    return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    if (error instanceof InsufficientPointsError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Yetersiz puan. ${Math.max(0, error.requiredPoints - error.currentPoints)} puan daha gerekiyor.`,
-        }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    } catch (err) {
+      rethrowAsApiError(err);
     }
-
-    if (error instanceof Error && error.message === 'REWARD_INACTIVE') {
-      return NextResponse.json(
-        { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (error instanceof Error && error.message === 'REWARD_OUT_OF_STOCK') {
-      return NextResponse.json({ success: false, error: 'Bu ödülün stoğu tükendi' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (error instanceof Error && error.message === 'REWARD_USER_LIMIT_REACHED') {
-      return NextResponse.json(
-        { success: false, error: 'Bu ödülü talep etme limitine ulaştınız' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-
-    captureApiError(error, { route: 'PATCH /api/gamification/rewards', status: 500 });
-    console.error('Reward claim error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Ödül talep edilemedi. Lütfen tekrar deneyin.' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
   }
-}
-
+);

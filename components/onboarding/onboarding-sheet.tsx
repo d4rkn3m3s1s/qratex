@@ -26,14 +26,14 @@ const STEPS_BY_ROLE: Record<string, RoleSteps> = {
     steps: [
       { id: 'welcome' },
       { id: 'qr', link: '/dealer/qr-codes' },
-      { id: 'feedback', link: '/dealer/feedbacks' },
+      { id: 'feedback', link: '/dealer/inbox' },
     ],
   },
   CUSTOMER: {
     ns: 'customer',
     steps: [
       { id: 'welcome' },
-      { id: 'card', link: '/customer/my-card' },
+      { id: 'card', link: '/customer/wallet/card' },
       { id: 'scan', link: '/customer/scan' },
     ],
   },

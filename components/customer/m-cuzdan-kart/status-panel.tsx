@@ -101,7 +101,7 @@ function BirthdayMoment({
           {copy.birthdayUnset(amount)}
         </p>
         <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
-          <Link href="/customer/settings">{copy.birthdayUnsetCta}</Link>
+          <Link href="/customer/me/settings">{copy.birthdayUnsetCta}</Link>
         </Button>
       </div>
     );

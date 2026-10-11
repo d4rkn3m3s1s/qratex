@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { z } from 'zod';
 import { validateAssignee } from '@/lib/dealer/assignee';
 
@@ -23,6 +24,8 @@ export async function PATCH(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('dealer.action-items.update', session.user.id, 'mutation');
+    if (limited) return limited;
 
     const { id } = await params;
     const existing = await prisma.actionItem.findUnique({
@@ -36,7 +39,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Bu aksiyonu güncelleme yetkiniz yok' }, { status: 403 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const body = await request.json();
+    const body: unknown = await request.json().catch(() => null);
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });

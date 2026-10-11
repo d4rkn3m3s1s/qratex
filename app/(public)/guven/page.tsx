@@ -38,7 +38,7 @@ import { getTrustCopy, TRUST_CONTENT_UPDATED_AT } from '@/components/public/p-la
 
 const PATH = '/guven';
 /** Gizlilik ayarları (eski yol; `/customer/me/settings?tab=privacy`'ye yönlenir, derin link korunur). */
-const PRIVACY_SETTINGS_HREF = '/customer/settings?tab=privacy';
+const PRIVACY_SETTINGS_HREF = '/customer/me/settings?tab=privacy';
 const CONTROL_ICONS: LucideIcon[] = [Download, ScrollText, Trash2];
 const SECURITY_ICONS: LucideIcon[] = [KeyRound, MailCheck, Fingerprint, Lock, Timer, ShieldCheck, FileText, Archive, Activity, Repeat];
 

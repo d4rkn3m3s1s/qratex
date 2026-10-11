@@ -74,7 +74,7 @@ export function StoreCenter({ initial }: { initial: StoreInitial }) {
         <p role="status" className="flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-fg">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden />
           Ödül modülü kapalı: müşteriler ödül kataloğunu göremez ve talep edemez. Burada yönetmeye devam edebilirsiniz.
-          <Link href="/admin/modules" className="inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline sm:min-h-0">
+          <Link href="/admin/features" className="inline-flex min-h-11 items-center font-medium text-brand underline-offset-4 hover:underline sm:min-h-0">
             Modüller sayfasına git
           </Link>
         </p>

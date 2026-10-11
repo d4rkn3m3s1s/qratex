@@ -246,7 +246,7 @@ function Editor({ state, coverage, onReloaded }: { state: DiscoveryState; covera
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/admin/modules">
+                      <Link href="/admin/features">
                         <FileJson className="h-4 w-4" aria-hidden />
                         Modül ayarları
                       </Link>
@@ -261,7 +261,7 @@ function Editor({ state, coverage, onReloaded }: { state: DiscoveryState; covera
         {!state.moduleEnabled ? (
           <div role="status" className={cn('rounded-lg border p-3 text-sm', TONE_CALLOUT.warning)}>
             Keşif modülü müşteriler için kapalı; burada yaptığınız değişiklikler modül açılana kadar müşteriye görünmez.{' '}
-            <Link href="/admin/modules" className="font-medium underline underline-offset-2">
+            <Link href="/admin/features" className="font-medium underline underline-offset-2">
               Modülü yönet
             </Link>
           </div>

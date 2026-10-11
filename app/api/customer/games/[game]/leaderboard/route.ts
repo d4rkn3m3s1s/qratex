@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
+import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,19 +62,24 @@ export async function GET(
       .filter((r) => r.best > 0);
 
     const top = ranked.slice(0, 10);
-    const users = await prisma.user.findMany({
-      where: { id: { in: top.map((r) => r.userId) } },
-      select: { id: true, name: true, image: true },
-    });
+    const [users, hiddenIds] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: top.map((r) => r.userId) } },
+        select: { id: true, name: true, image: true },
+      }),
+      // "Liderlikte görün" kapalıysa başkalarına anonim (sıra/skor değişmez).
+      leaderboardHiddenUserIds(top.map((r) => r.userId)),
+    ]);
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    const leaderboard = top.map((r, i) => ({
-      rank: i + 1,
-      name: shortName(userMap.get(r.userId)?.name ?? null),
-      image: userMap.get(r.userId)?.image ?? null,
-      score: r.best,
-      isMe: r.userId === userId,
-    }));
+    const leaderboard = top.map((r, i) => {
+      const isMe = r.userId === userId;
+      const identity = leaderboardIdentity(
+        { name: shortName(userMap.get(r.userId)?.name ?? null), image: userMap.get(r.userId)?.image ?? null },
+        { hidden: hiddenIds.has(r.userId), isViewer: isMe }
+      );
+      return { rank: i + 1, name: identity.name, image: identity.image, score: r.best, isMe };
+    });
 
     // Kendi sıram (ilk 10 dışındaysam) + en iyi skorum.
     const myIndex = ranked.findIndex((r) => r.userId === userId);

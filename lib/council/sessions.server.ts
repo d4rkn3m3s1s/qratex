@@ -512,7 +512,7 @@ export async function publishActions(id: string, input: PublishInput, actor: Aud
       title: 'Yeni aksiyon maddeleri',
       message: `Yönetim ${result.created} yeni aksiyon maddesini kuyruğunuza ekledi.`,
       type: 'info',
-      data: { kind: 'action_items', href: '/dealer/action-items' },
+      data: { kind: 'action_items', href: '/dealer/inbox/assigned' },
     });
   }
   return { ...result, detail: await getSessionDetail(id) };

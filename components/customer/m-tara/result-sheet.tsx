@@ -267,7 +267,7 @@ export function ResultSheet({
                     </Button>
                   ) : (
                     <Button ref={primaryRef} asChild size="lg" className="min-h-12 flex-1 gap-2 text-base touch-manipulation">
-                      <Link href="/customer/my-card">
+                      <Link href="/customer/wallet/card">
                         {copy.goToMyCard}
                         <ArrowRight className="h-5 w-5" aria-hidden />
                       </Link>

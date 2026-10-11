@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { askAI } from '@/lib/ai-engine';
 import { z } from 'zod';
@@ -20,13 +19,9 @@ const AI_CHAT_LIMIT_PER_MIN = 10;
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const rlChat = await checkRateLimitDb(`ai_chat:${session.user.id}`, AI_CHAT_LIMIT_PER_MIN, 60_000);
     if (!rlChat.ok) {

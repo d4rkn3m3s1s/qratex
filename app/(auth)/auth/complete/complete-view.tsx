@@ -221,7 +221,7 @@ export function CompleteView({
             {copy.completeContinue}
           </Button>
           <Button variant="outline" className="w-full" asChild>
-            <Link href="/customer/referral">{copy.completeReferralLink}</Link>
+            <Link href="/customer/me/invite">{copy.completeReferralLink}</Link>
           </Button>
         </div>
       </AuthCard>

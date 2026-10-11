@@ -529,17 +529,53 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
-      // Handle session update — only overwrite fields that are explicitly provided.
-      // `sv` ve `role` istemciden ASLA güncellenmez.
+      // Oturum güncellemesi (`useSession().update({...})`). `sv` ve `role` istemciden ASLA
+      // güncellenmez. Müşteri API denetimi D3: istemcinin gönderdiği DEĞER artık yazılmaz —
+      // gönderilen alan yalnız "bu alanı tazele" sinyalidir, değer DB'den okunur (eskiden
+      // istemci kendi token'ına keyfi puan/seviye/görsel/kozmetik adresi yazabiliyordu).
+      // Dil tercihi kullanıcının kendi seçimidir; yalnız izinli değerler kabul edilir.
       if (trigger === 'update' && session) {
-        if (session.name !== undefined) token.name = session.name;
-        if (session.image !== undefined) token.image = session.image;
-        if (session.points !== undefined) token.points = session.points;
-        if (session.level !== undefined) token.level = session.level;
-        if (session.preferredLanguage !== undefined) token.preferredLanguage = session.preferredLanguage;
-        if (session.equippedFrame !== undefined) token.equippedFrame = session.equippedFrame;
-        if (session.equippedBackground !== undefined) token.equippedBackground = session.equippedBackground;
-        if (session.customFrameColor !== undefined) token.customFrameColor = session.customFrameColor;
+        const s = session as Record<string, unknown>;
+        if (s.preferredLanguage === 'tr' || s.preferredLanguage === 'en') token.preferredLanguage = s.preferredLanguage;
+        const wantsProfile = ['name', 'image', 'points', 'level', 'customFrameColor'].some((k) => s[k] !== undefined);
+        const wantsCosmetics = s.equippedFrame !== undefined || s.equippedBackground !== undefined;
+        const uid = typeof token.id === 'string' && token.id ? token.id : typeof token.sub === 'string' ? token.sub : '';
+        if (uid && (wantsProfile || wantsCosmetics)) {
+          const fresh = await prisma.user
+            .findUnique({
+              where: { id: uid },
+              select: {
+                name: true,
+                image: true,
+                points: true,
+                level: true,
+                customFrameColor: true,
+                ...(wantsCosmetics
+                  ? {
+                      equippedCosmetics: {
+                        where: { isEquipped: true },
+                        select: { cosmetic: { select: { type: true, imageUrl: true } } },
+                      },
+                    }
+                  : {}),
+              },
+            })
+            .catch(() => null);
+          if (fresh) {
+            if (s.name !== undefined) token.name = fresh.name;
+            if (s.image !== undefined) token.image = fresh.image;
+            if (s.points !== undefined || s.level !== undefined) {
+              token.points = fresh.points;
+              token.level = fresh.level;
+            }
+            if (s.customFrameColor !== undefined) token.customFrameColor = fresh.customFrameColor || null;
+            if (wantsCosmetics && 'equippedCosmetics' in fresh && Array.isArray(fresh.equippedCosmetics)) {
+              const equipped = fresh.equippedCosmetics as Array<{ cosmetic: { type: string; imageUrl: string | null } }>;
+              token.equippedFrame = equipped.find((c) => c.cosmetic.type === 'avatar_frame')?.cosmetic.imageUrl ?? null;
+              token.equippedBackground = equipped.find((c) => c.cosmetic.type === 'profile_background')?.cosmetic.imageUrl ?? null;
+            }
+          }
+        }
       }
 
       return token;

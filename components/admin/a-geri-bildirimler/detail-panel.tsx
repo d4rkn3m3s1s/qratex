@@ -163,7 +163,7 @@ function DetailBody({ d }: { d: FeedDetail }) {
             {d.ai.intentScore != null && d.ai.intentScore < 0.7 ? (
               <p className="text-xs text-fg-muted">
                 Yapay zekâ güveni düşük.{' '}
-                <Link href="/admin/ai-quality" className="text-brand-text underline-offset-4 hover:underline">
+                <Link href="/admin/ai/quality" className="text-brand-text underline-offset-4 hover:underline">
                   AI kalite kuyruğunda incele
                 </Link>
               </p>

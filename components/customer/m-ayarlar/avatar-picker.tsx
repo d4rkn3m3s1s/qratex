@@ -27,7 +27,7 @@ export function AvatarPicker({ current, name }: { current: string | null; name: 
   const { update } = useSession();
   const cache = useSettingsCache();
   const [open, setOpen] = useState(false);
-  const firstCategory = CATEGORIES.find((c) => current && c.items.includes(current))?.category ?? CATEGORIES[0]?.category ?? '';
+  const firstCategory = CATEGORIES.find((c) => current && (c.items as readonly string[]).includes(current))?.category ?? CATEGORIES[0]?.category ?? '';
   const [category, setCategory] = useState(firstCategory);
   const [selected, setSelected] = useState<string | null>(current);
   const [saving, setSaving] = useState(false);

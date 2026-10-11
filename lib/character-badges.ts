@@ -371,7 +371,7 @@ export async function processConsumptionReviewForCharacterBadge(
               type: 'badge',
               title: '✨ Yeni bir karakter hazır!',
               message: 'Gizemli kürende bir karakter belirdi — açıp kim olduğunu keşfet!',
-              data: { kind: 'character-ready', href: '/customer/badges' } as object,
+              data: { kind: 'character-ready', href: '/customer/me/badges' } as object,
             },
           }).catch(() => {});
         }

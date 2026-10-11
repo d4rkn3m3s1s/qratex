@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAuth, getOptionalSession } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { archiveGateResponse, readArchiveIntent, type DeletionImpact } from '@/lib/data-safety/archive';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { createRewardSchema } from '@/lib/validations';
 import { preservePool, readPool, stripPrivateMetadata } from '@/lib/admin-store/code-pool';
 import type { Prisma } from '@prisma/client';
@@ -35,8 +33,9 @@ export async function GET(
       where: { id },
     });
 
-    // Pasif/arşivdeki ödül ve kod havuzu yalnız admine (B11 bilgi sızıntısı).
-    const session = await getServerSession(authOptions);
+    // Pasif/arşivdeki ödül ve kod havuzu yalnız admine (B11 bilgi sızıntısı) — rol DB'den,
+    // yönetici kapısı doğrulanmış (ham JWT rolü yetmez).
+    const session = await getOptionalSession();
     const isAdmin = session?.user?.role === 'ADMIN';
     if (!reward || (!isAdmin && (!reward.isActive || reward.archivedAt))) {
       return NextResponse.json(

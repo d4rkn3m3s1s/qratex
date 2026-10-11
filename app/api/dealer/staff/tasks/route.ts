@@ -1,6 +1,7 @@
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
   const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
   if (moduleGate) return moduleGate;
   const dealerId = auth.session.user.id;
+  const limited = await enforceRouteRateLimit('dealer.staff.tasks.create', dealerId, 'mutation');
+  if (limited) return limited;
 
   const body: unknown = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

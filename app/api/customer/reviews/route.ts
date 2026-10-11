@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
@@ -53,14 +52,9 @@ const CUSTOMER_REVIEW_SELECT = {
  */
 export async function GET(_request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user || session.user.role !== 'CUSTOMER') {
-      return NextResponse.json(
-        { error: 'Yetkisiz erişim' },
-        { status: 403, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const customerId = session.user.id;
     const LIST_CAP = 200;

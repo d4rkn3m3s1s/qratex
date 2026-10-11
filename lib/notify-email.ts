@@ -196,7 +196,7 @@ export async function emailDealerReply(params: {
     heading: 'İşletme size yanıt verdi',
     bodyLines,
     ctaLabel: 'Yanıtı gör',
-    ctaPath: '/customer/feedbacks',
+    ctaPath: '/customer/me/voices',
   });
 }
 
@@ -217,6 +217,6 @@ export async function emailBadgeEarned(params: {
       'Koleksiyonunu görmek ve daha fazlasını açmak için devam et.',
     ],
     ctaLabel: 'Rozetlerim',
-    ctaPath: '/customer/badges',
+    ctaPath: '/customer/me/badges',
   });
 }

@@ -535,7 +535,7 @@ export async function bulkCards(body: BulkBody, actor: Actor, meta: ReqMeta): Pr
             title,
             message,
             type: body.action === 'unblock' ? 'success' : 'warning',
-            data: { actionUrl: '/customer/my-card' },
+            data: { actionUrl: '/customer/wallet/card' },
           })),
         });
       }

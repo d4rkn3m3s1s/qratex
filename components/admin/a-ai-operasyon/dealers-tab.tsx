@@ -162,7 +162,7 @@ export function DealersTab() {
       icon={<Store />}
       density="flush"
       actions={
-        <Link href="/admin/ai-settings" className="inline-flex min-h-[44px] items-center gap-1.5 rounded px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9">
+        <Link href="/admin/ai/studio" className="inline-flex min-h-[44px] items-center gap-1.5 rounded px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9">
           <Settings2 className="h-4 w-4" aria-hidden /> Ayrıntılı ayarlar
         </Link>
       }

@@ -226,7 +226,7 @@ export function AssistantChat({
               <p className="font-medium text-danger">{errorText(myPending.error.code, copy)}</p>
               {myPending.error.retryAfterSec ? <p className="mt-0.5 text-xs text-fg-muted">{copy.retryIn(myPending.error.retryAfterSec)}</p> : null}
               {myPending.error.code === 'AI_DISABLED' && (
-                <Link href="/dealer/ai-settings" className="mt-1 inline-flex min-h-9 items-center text-xs font-medium text-brand hover:underline">
+                <Link href="/dealer/settings" className="mt-1 inline-flex min-h-9 items-center text-xs font-medium text-brand hover:underline">
                   {copy.status.ai_disabled.cta}
                 </Link>
               )}
@@ -316,7 +316,7 @@ function BlockedNotice({ overview, resetTime }: { overview: AssistantOverview; r
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-surface-2 px-3 py-2 text-sm" role="status">
         <span>{copy.status.ai_disabled.desc}</span>
         <Button asChild size="sm" variant="outline" className="min-h-10">
-          <Link href="/dealer/ai-settings">
+          <Link href="/dealer/settings">
             <Settings2 className="me-1.5 h-4 w-4" aria-hidden />
             {copy.status.ai_disabled.cta}
           </Link>

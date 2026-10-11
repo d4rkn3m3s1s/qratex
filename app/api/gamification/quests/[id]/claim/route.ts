@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
+import { checkRateLimitDb } from '@/lib/rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { checkIdempotency, storeIdempotency } from '@/lib/idempotency';
@@ -27,6 +27,11 @@ class QuestClaimError extends Error {
   }
 }
 
+/** Kullanıcıya bağlı idempotency rotası: başka hesabın anahtarı başkasının yanıtını oynatamaz. */
+const idemRoute = (userId: string) => `quest-claim:${userId}`;
+/** Görev kimliği biçimi (seed'de `quest-…`, yöneticinin açtıklarında cuid). */
+const QUEST_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 const CLAIM_ERRORS: Record<ClaimErrorCode, { status: number; message: string }> = {
   QUEST_NOT_FOUND: { status: 404, message: 'Görev bulunamadı veya aktif değil' },
   QUEST_EXPIRED: { status: 400, message: 'Görevin süresi dolmuş' },
@@ -52,22 +57,40 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Kimlik ÖNCE (yalnız CUSTOMER; oturum sürümü/askı/rol DB'den, token replay): eskiden ham
+    // JWT ile her rol ve askıdaki hesap ödül alabiliyor, idempotency önbelleği oturumsuz okunuyordu.
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const userId = auth.session.user.id;
+
     const gate = await assertModuleEnabled('quests');
     if (gate) return gate;
-    const idemCheck = await checkIdempotency(request, 'quest-claim');
+
+    const limit = await checkRateLimitDb(`quest-claim:${userId}`, 20, 60_000);
+    if (!limit.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Çok fazla istek gönderdiniz. Lütfen biraz sonra tekrar deneyin.', code: 'RATE_LIMITED' },
+        {
+          status: 429,
+          headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.max(1, Math.ceil((limit.retryAfterMs ?? 60_000) / 1000))) },
+        }
+      );
+    }
+
+    const { id: questId } = await params;
+    if (!QUEST_ID_RE.test(questId)) {
+      return NextResponse.json(
+        { success: false, error: CLAIM_ERRORS.QUEST_NOT_FOUND.message, code: 'QUEST_NOT_FOUND' },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
+    const idemCheck = await checkIdempotency(request, idemRoute(userId));
     if ('error' in idemCheck) return idemCheck.error;
     if (idemCheck.cached) return idemCheck.response;
     const idemKey = idemCheck.key;
 
     const auditMeta = getAuditRequestMeta(request);
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { success: false, error: 'Giriş yapmalısınız' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const { id: questId } = await params;
-    const userId = session.user.id;
     const matrix = await getPointsMatrix();
     const abVariant = await getVariant(userId, 'reward_copy');
 
@@ -209,7 +232,7 @@ export async function POST(
       message: 'Görev ödülü cüzdana işlendi',
       data: result,
     };
-    if (idemKey) await storeIdempotency(idemKey, 'quest-claim', 200, resBody);
+    if (idemKey) await storeIdempotency(idemKey, idemRoute(userId), 200, resBody);
     return NextResponse.json(resBody, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     if (error instanceof QuestClaimError) {

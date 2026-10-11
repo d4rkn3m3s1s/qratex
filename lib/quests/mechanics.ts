@@ -80,10 +80,10 @@ export interface QuestCta {
 
 const CTA: Record<QuestCtaKind, QuestCta> = {
   scan: { kind: 'scan', href: '/customer/scan' },
-  nearby: { kind: 'nearby', href: '/customer/nearby' },
-  referral: { kind: 'referral', href: '/customer/referral' },
-  shop: { kind: 'shop', href: '/customer/shop' },
-  settings: { kind: 'settings', href: '/customer/settings' },
+  nearby: { kind: 'nearby', href: '/customer/places' },
+  referral: { kind: 'referral', href: '/customer/me/invite' },
+  shop: { kind: 'shop', href: '/customer/wallet/rewards' },
+  settings: { kind: 'settings', href: '/customer/me/settings' },
 };
 
 const ACHIEVEMENT_CTA: Record<string, QuestCtaKind> = {

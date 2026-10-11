@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth, requireDealerResource } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { getDealerInnovationPrefs, saveDealerInnovationPrefs } from '@/lib/innovation-dealer-prefs';
 
@@ -32,6 +33,8 @@ export async function PUT(request: NextRequest) {
   const auth = await requireAuth(['DEALER', 'ADMIN']);
   if ('error' in auth) return auth.error;
   const { session } = auth;
+  const limited = await enforceRouteRateLimit('dealer.innovation.prefs', session.user.id, 'mutation');
+  if (limited) return limited;
 
   const body = await request.json().catch(() => ({}));
   const parsed = patchSchema.safeParse(body);

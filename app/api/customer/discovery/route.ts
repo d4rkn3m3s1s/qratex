@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { getDiscoveryConfig } from '@/lib/discovery-config';
 import { computeDiscovery } from '@/lib/discovery/compute.server';
 import { assertMenuItemVisible, assertModuleEnabled } from '@/lib/module-gate';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 
-/** getServerSession / gates — not compatible with static rendering during build. */
+/** Oturum ve kapılar istek anında okunur — build sırasında statik üretilemez. */
 export const dynamic = 'force-dynamic';
 
 const DISCOVERY_FAVORITES_CAP = 500;
@@ -20,10 +19,9 @@ const DISCOVERY_FAVORITES_CAP = 500;
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: PRIVATE_NO_STORE_HEADERS });
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
     const menuGate = await assertMenuItemVisible('nearby', 'customer', {
       request,
       userId: session.user.id,

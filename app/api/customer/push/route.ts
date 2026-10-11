@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/api-auth';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { checkRateLimitDb } from '@/lib/rate-limit';
+import { isAllowedPushEndpoint, MAX_PUSH_ENDPOINT_LENGTH } from '@/lib/push-endpoint';
 
 export const dynamic = 'force-dynamic';
 
-const MAX_ENDPOINT_LEN = 2048;
+const MAX_ENDPOINT_LEN = MAX_PUSH_ENDPOINT_LENGTH;
 const MAX_KEY_LEN = 512;
+/** Hesap başına etkin cihaz aboneliği tavanı (her bildirim hepsine gider → dış istek çoğaltma). */
+const MAX_ACTIVE_SUBSCRIPTIONS = 10;
 
 function isValidSubscription(sub: unknown): sub is {
   endpoint: string;
@@ -17,9 +20,8 @@ function isValidSubscription(sub: unknown): sub is {
   const s = sub as Record<string, unknown>;
   const endpoint = s.endpoint;
   const keys = s.keys;
-  if (typeof endpoint !== 'string' || endpoint.length === 0 || endpoint.length > MAX_ENDPOINT_LEN) {
-    return false;
-  }
+  // Yalnız tarayıcı push servisleri (https + bilinen alan adı): keyfi adres = sunucudan SSRF.
+  if (!isAllowedPushEndpoint(endpoint)) return false;
   if (!keys || typeof keys !== 'object') return false;
   const k = keys as Record<string, unknown>;
   const p256dh = k.p256dh;
@@ -31,11 +33,15 @@ function isValidSubscription(sub: unknown): sub is {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
+
+    const rl = await checkRateLimitDb(`customer_push:${session.user.id}`, 20, 60 * 60_000);
+    if (!rl.ok) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+        { error: 'Çok fazla bildirim kaydı denemesi. Lütfen daha sonra tekrar deneyin.', code: 'RATE_LIMITED' },
+        { status: 429, headers: { ...PRIVATE_NO_STORE_HEADERS, 'Retry-After': String(Math.max(1, Math.ceil((rl.retryAfterMs ?? 60_000) / 1000))) } }
       );
     }
 
@@ -44,7 +50,7 @@ export async function POST(req: Request) {
 
     if (!isValidSubscription(subscription)) {
       return NextResponse.json(
-        { error: 'Invalid subscription' },
+        { error: 'Geçersiz bildirim aboneliği.', code: 'VALIDATION' },
         { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
@@ -83,6 +89,16 @@ export async function POST(req: Request) {
         );
       }
     } else {
+      const active = await prisma.pushSubscription.count({ where: { userId, isActive: true } });
+      if (active >= MAX_ACTIVE_SUBSCRIPTIONS) {
+        return NextResponse.json(
+          {
+            error: `En fazla ${MAX_ACTIVE_SUBSCRIPTIONS} cihazda bildirim açık olabilir. Ayarlar → Cihazlar bölümünden eski bir cihazı kaldırın.`,
+            code: 'LIMIT_REACHED',
+          },
+          { status: 409, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
       await prisma.pushSubscription.create({
         data: {
           userId,
@@ -108,13 +124,9 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
+    const auth = await requireAuth(['CUSTOMER']);
+    if ('error' in auth) return auth.error;
+    const session = auth.session;
 
     const body = await req.json().catch(() => ({}));
     const { endpoint } = body as { endpoint?: unknown };

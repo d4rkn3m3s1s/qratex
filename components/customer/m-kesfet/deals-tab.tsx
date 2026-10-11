@@ -302,7 +302,7 @@ function NowHero({
 </Button>
         ) : null}
         <Button asChild variant={best.scope === 'dealer' ? 'outline' : 'default'} className="min-h-11">
-          <Link href="/customer/my-card">
+          <Link href="/customer/wallet/card">
             <CreditCard aria-hidden className="mr-2 h-4 w-4" />
             {copy.showCard}
           </Link>

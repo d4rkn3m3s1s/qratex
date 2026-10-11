@@ -1,6 +1,8 @@
 import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
+import { hashPassword } from '@/lib/password';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -45,6 +47,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
         if (moduleGate) return moduleGate;
         const { session } = auth;
+        const limited = await enforceRouteRateLimit('dealer.staff.update', session.user.id, 'mutation');
+        if (limited) return limited;
 
         const params = await props.params;
         const staffId = params.id;
@@ -56,7 +60,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
         const data: { jobTitle?: string | null; pinCode?: string | null; isActive?: boolean } = {};
         if (jobTitle !== undefined) data.jobTitle = jobTitle;
-        if (pinCode !== undefined) data.pinCode = pinCode;
+        // D4: PIN düz metin saklanmaz (bcrypt). Hiçbir uç PIN'i geri döndürmez/karşılaştırmaz;
+        // ileride kasa PIN doğrulaması eklenirse `bcrypt.compare` ile yapılmalı.
+        if (pinCode !== undefined) data.pinCode = pinCode === null ? null : await hashPassword(pinCode);
         if (isActive !== undefined) data.isActive = isActive;
 
         if (Object.keys(data).length === 0) {

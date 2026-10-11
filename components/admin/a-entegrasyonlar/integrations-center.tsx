@@ -112,7 +112,7 @@ function OverviewBlock({ data: o }: { data: IntegrationsOverview }) {
           </span>
         </p>
         <p className="flex flex-wrap items-center gap-3 text-xs">
-          <Link href="/admin/modules" className="underline underline-offset-2 hover:no-underline">
+          <Link href="/admin/features" className="underline underline-offset-2 hover:no-underline">
             Dış API anahtarını yönet
           </Link>
           <span className="text-fg-muted">

@@ -14,6 +14,10 @@
  *    tutar sınırı, denetim kaydı ve `clientOpId` idempotency'si iki kanalda da aynı.
  *  - Kart–bayi ilişkisi: bayi kendi müşteri kartına tüketim yazamaz (kendine puan basma);
  *    arşivlenmiş/bloklu/aktive edilmemiş kart reddedilir.
+ *  - İşletme içi kişi (bu işletmenin personel kaydı — pasif dahil): kartına tüketim yazılamaz.
+ *    Müşteri hesabıyken personel davetini kabul eden kişinin kartı ACTIVATED kalır; bayi kendi
+ *    personeline tüketim girerek `dealer_passive` puan basabiliyordu (kişisel teklif / telafi /
+ *    görev / lig ile aynı "işletme içi kişi tarafsız müşteri değildir" kuralı).
  *
  * Yan etkiler (ısı haritası, ziyaret görevleri) transaction dışında `runConsumptionSideEffects`
  * ile, route'ta `after()` içinde çalıştırılır; tekrar oynatılan (duplicate) kayıtta çalışmaz.
@@ -286,6 +290,13 @@ export async function createConsumption(
   const customerId = card.customerId;
   if (customerId === dealerId || (ctx.actorId && customerId === ctx.actorId)) {
     throw new ConsumptionError('SELF_DEALING', 'Kendi kartınıza tüketim kaydedemezsiniz');
+  }
+  const insider = await prisma.dealerStaff.findFirst({
+    where: { dealerId, userId: customerId },
+    select: { id: true },
+  });
+  if (insider) {
+    throw new ConsumptionError('SELF_DEALING', 'İşletme personelinizin kartına tüketim kaydedilemez.');
   }
 
   // 2. İdempotency: aynı clientOpId tekrar gelirse (ağ kopması, offline tekrar oynatma)

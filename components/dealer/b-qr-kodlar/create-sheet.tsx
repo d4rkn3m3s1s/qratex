@@ -91,7 +91,7 @@ export function CreateSheet({
             <>
               {' '}
               Bu kadar kod oluşturulamaz; kullanılmayan kodları arşivleyin ya da{' '}
-              <Link href="/dealer/billing" className="font-medium text-brand underline underline-offset-2">
+              <Link href="/dealer/settings" className="font-medium text-brand underline underline-offset-2">
                 planınızı yükseltin
               </Link>
               .

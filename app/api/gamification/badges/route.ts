@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { requireAuth } from '@/lib/api-auth';
+import { requireAuth, getOptionalSession } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { Prisma } from '@prisma/client';
@@ -82,7 +80,9 @@ function normalizeRequirement(input: unknown): Prisma.InputJsonObject {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    // Oturum isteğe bağlı ama DOĞRULANMIŞ (getOptionalSession, lib/api-auth): ham JWT rolüyle
+    // (kapısız/askıdaki) ADMIN yönetim görünümü ya da başkasının profili açılmaz.
+    const session = await getOptionalSession();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
 

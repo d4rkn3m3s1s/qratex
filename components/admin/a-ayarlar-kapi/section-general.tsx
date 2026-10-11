@@ -17,7 +17,7 @@ import { EFFECT_GROUPS, changeFor, effectName, effectOf, useSaveSettings } from 
 const OWNER_LINKS: Array<{ title: string; text: string; href: string; cta: string }> = [
   { title: 'Tema ve renkler', text: 'Açık/koyu tema, marka renkleri ve varsayılan mod Tasarım Sistemi’nde yönetilir.', href: '/admin/design-system', cta: 'Tasarım Sistemi' },
   { title: 'Puan kuralları', text: 'Geri bildirim, davet ve seviye puanlarının tek kaynağı Ekonomi Stüdyosu’dur.', href: '/admin/economy', cta: 'Ekonomi Stüdyosu' },
-  { title: 'Yapay zekâ', text: 'Sağlayıcı ve model sunucu ortamından, işletme bazlı AI ayarları AI Ayarları’ndan gelir.', href: '/admin/ai-settings', cta: 'AI Ayarları' },
+  { title: 'Yapay zekâ', text: 'Sağlayıcı ve model sunucu ortamından, işletme bazlı AI ayarları AI Ayarları’ndan gelir.', href: '/admin/ai/studio', cta: 'AI Ayarları' },
   { title: 'Modüller', text: 'Modülleri herkese açıp kapatma ve kademeli açılış Özellik ve Deney Kontrolü’ndedir.', href: '/admin/features', cta: 'Özellik Kontrolü' },
 ];
 

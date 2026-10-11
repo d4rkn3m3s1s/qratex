@@ -179,7 +179,7 @@ async function awardCollectionBadge(userId: string, def: CollectionAchievementDe
         type: 'success',
         title: `🏆 Yeni başarım: ${def.name}!`,
         message: def.description,
-        data: { kind: 'collection-achievement', badgeId: def.badgeId, href: '/customer/badges' } as object,
+        data: { kind: 'collection-achievement', badgeId: def.badgeId, href: '/customer/me/badges' } as object,
       },
     });
   } catch {

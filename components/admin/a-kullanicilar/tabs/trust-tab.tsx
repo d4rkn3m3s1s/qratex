@@ -22,7 +22,7 @@ export function TrustTab({ user: u }: { user: User360 }) {
         icon={<ShieldAlert />}
         actions={
           <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-9">
-            <Link href="/admin/trust-command">Güven merkezi</Link>
+            <Link href="/admin/trust">Güven merkezi</Link>
           </Button>
         }
       >

@@ -41,9 +41,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const lat = parseFloat(searchParams.get('lat') || '');
   const lng = parseFloat(searchParams.get('lng') || '');
-  const radiusKm = Math.min(parseFloat(searchParams.get('radiusKm') || '15') || 15, 50);
+  const radiusRaw = parseFloat(searchParams.get('radiusKm') || '15');
+  const radiusKm = Math.min(Math.max(Number.isFinite(radiusRaw) ? radiusRaw : 15, 0.5), 50);
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     return NextResponse.json(
       { error: 'lat ve lng gerekli' },
       { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
@@ -59,7 +60,19 @@ export async function GET(request: NextRequest) {
       validTo: { gte: now },
       // Kişiye özel churn taslakları (eski sürüm) herkese açık listeye ASLA girmez (P0-22).
       ...EXCLUDE_LEGACY_CHURN_FLASH,
+      // Konum süzgeci DB'de (işletme sınırlayıcı kutusu): eskiden platformdaki TÜM aktif
+      // tekliflerden sırasız 300'ü çekilip bellekte süzülüyordu → yakındakiler keyfi kayboluyordu.
+      dealer: {
+        isDemo: false,
+        suspendedAt: null,
+        latitude: { gte: lat - radiusKm / 111, lte: lat + radiusKm / 111 },
+        longitude: {
+          gte: lng - radiusKm / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180))),
+          lte: lng + radiusKm / (111 * Math.max(0.1, Math.cos((lat * Math.PI) / 180))),
+        },
+      },
     },
+    orderBy: { validTo: 'asc' },
     include: {
       dealer: {
         select: {

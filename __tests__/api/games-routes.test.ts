@@ -33,6 +33,13 @@ jest.mock('@/lib/economy', () => ({
 jest.mock('@/lib/game-achievement-stats', () => ({
   computeAchievementStats: jest.fn(async () => ({ totalWins: 0, distinctGames: 0, bestScore: 0, totalPlays: 0, streak: 0 })),
 }));
+// Bu dosya generic route'ların makullük (doğrulayıcısız) yolunu sınar. Zihin Hırsızı v2 artık
+// sunucu replay doğrulayıcısı taşıyor (ayrı test: games-practice-verify / mind-thief); burada
+// doğrulayıcısı devre dışı bırakılır ki eşik/süre/mint kuralları izole kalsın (pacman gerçek kalır).
+jest.mock('@/lib/games/registry/server', () => {
+  const actual = jest.requireActual('@/lib/games/registry/server');
+  return { ...actual, getVerifierForGameType: (g: string) => (g === 'mind-thief' ? null : actual.getVerifierForGameType(g)) };
+});
 
 type Row = Record<string, unknown> & { id: string; status: string };
 const db = {

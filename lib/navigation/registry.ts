@@ -715,6 +715,25 @@ const DEALER: NavRoute[] = [
     status: 'hidden',
   },
   {
+    // Kısa bağlantı: `/dealer/surveys/[id]` → sonuçlar (sayfa yönlendirme koçanı).
+    id: 'dealer.surveys.detail',
+    role: 'dealer',
+    href: '/dealer/surveys/[id]',
+    label: { tr: 'Anket', en: 'Survey' },
+    icon: 'ClipboardList',
+    parent: 'dealer.surveys',
+    status: 'hidden',
+  },
+  {
+    id: 'dealer.surveys.edit',
+    role: 'dealer',
+    href: '/dealer/surveys/[id]/edit',
+    label: { tr: 'Anketi düzenle', en: 'Edit survey' },
+    icon: 'ClipboardList',
+    parent: 'dealer.surveys',
+    status: 'hidden',
+  },
+  {
     id: 'dealer.analytics',
     role: 'dealer',
     href: '/dealer/analytics',
@@ -891,7 +910,8 @@ const DEALER: NavRoute[] = [
     status: 'primary',
     menuKey: 'auto_replies',
     keywords: ['yanıt şablonu', 'auto replies'],
-    redirectFrom: ['/dealer/settings/auto-replies'],
+    // `/dealer/automation` grup kökü → ilk bölüm (sayfa koçanı + next.config 308).
+    redirectFrom: ['/dealer/settings/auto-replies', '/dealer/automation'],
   },
   {
     id: 'dealer.automation.remedy',
@@ -1360,6 +1380,16 @@ const ADMIN: NavRoute[] = [
     group: 'content',
     status: 'primary',
     keywords: ['cms', 'blog'],
+  },
+  {
+    // `yeni` → oluşturma; aksi hâlde sayfa editörü.
+    id: 'admin.pages.edit',
+    role: 'admin',
+    href: '/admin/pages/[id]',
+    label: { tr: 'Sayfa düzenle', en: 'Edit page' },
+    icon: 'FileText',
+    parent: 'admin.pages',
+    status: 'hidden',
   },
   {
     id: 'admin.design-system',

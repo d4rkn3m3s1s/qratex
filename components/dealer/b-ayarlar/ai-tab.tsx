@@ -138,7 +138,7 @@ export function AiTab({ section }: { section: AiSection }) {
       <SectionCard title="Otomasyon" description="AI'ın bulgularına göre çalışan kurallar.">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button asChild variant="outline">
-            <Link href="/dealer/settings/auto-replies">
+            <Link href="/dealer/automation/replies">
               Otomatik yanıt kuralları
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>

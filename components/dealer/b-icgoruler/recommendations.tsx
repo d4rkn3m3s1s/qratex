@@ -36,7 +36,7 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
       icon={<ListTodo className="h-4 w-4" aria-hidden />}
       actions={
         <Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9">
-          <Link href="/dealer/action-items">
+          <Link href="/dealer/inbox/assigned">
             {copy.recs.goToList}
             <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
           </Link>
@@ -84,7 +84,7 @@ export function Recommendations({ data, handlers, lang }: { data: InsightsData; 
                 </Button>
                 {r.actionItemId ? (
                   <Link
-                    href={`/dealer/action-items?q=${encodeURIComponent(r.text.slice(0, 60))}`}
+                    href={`/dealer/inbox/assigned?q=${encodeURIComponent(r.text.slice(0, 60))}`}
                     className="inline-flex min-h-11 items-center gap-1.5 rounded-chip px-2 qx-small font-medium text-success underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-9"
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden />

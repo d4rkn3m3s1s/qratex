@@ -151,7 +151,7 @@ export function EventCard({ event, highlight = false }: { event: SeasonalEventDt
                   </Motion.span>
                 ) : event.phase === 'active' ? (
                   <Button key="cta" asChild variant="outline" className="min-h-11">
-                    <Link href={ch.type === 'games_played' ? '/customer/games' : '/customer/consumptions'}>
+                    <Link href={ch.type === 'games_played' ? '/customer/games' : '/customer/wallet/activity'}>
                       {ch.type === 'games_played' ? <Gamepad2 aria-hidden className="mr-2 h-4 w-4" /> : <MessageSquareText aria-hidden className="mr-2 h-4 w-4" />}
                       {ch.type === 'games_played' ? copy.challengeCtaGames : copy.challengeCtaReviews}
                     </Link>

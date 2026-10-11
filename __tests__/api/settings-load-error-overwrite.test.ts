@@ -69,7 +69,7 @@ function settingsDelegate() {
 const prismaMock = {
   $executeRaw: jest.fn().mockResolvedValue(1),
   settings: settingsDelegate(),
-  auditLog: { create: (...a: unknown[]) => mockAuditCreate(...a) },
+  auditLog: { create: (...a: unknown[]) => mockAuditCreate(...a), findFirst: jest.fn(async () => null) },
   aISettings: {
     findUnique: jest.fn(async () => (db.aiSettings ? { ...db.aiSettings } : null)),
     update: jest.fn(async (args: { data: Record<string, unknown> }) => {
@@ -277,8 +277,9 @@ describe('karakter kategori eşikleri', () => {
 
   it('admin GET: okuma hatası → 500 ("override yok" sanılmaz)', async () => {
     db.failReads = true;
-    const { GET } = await import('@/app/api/admin/settings/character-thresholds/route');
-    expect((await GET()).status).toBe(500);
+    // Eski /api/admin/settings/character-thresholds → /api/admin/badges/thresholds taşındı.
+    const { GET } = await import('@/app/api/admin/badges/thresholds/route');
+    expect((await GET(new NextRequest('http://localhost/api/admin/badges/thresholds'))).status).toBe(500);
   });
 
   it('admin PUT: bayat sürüm → 409', async () => {
@@ -289,8 +290,8 @@ describe('karakter kategori eşikleri', () => {
       category: 'gamification',
       updatedAt: T0,
     });
-    const { PUT } = await import('@/app/api/admin/settings/character-thresholds/route');
-    const res = await PUT(req('/api/admin/settings/character-thresholds', 'PUT', { overrides: {}, baseVersion: 'none' }));
+    const { PUT } = await import('@/app/api/admin/badges/thresholds/route');
+    const res = await PUT(req('/api/admin/badges/thresholds', 'PUT', { overrides: {}, baseVersion: 'none' }));
     expect(res.status).toBe(409);
     expectNoWrites();
   });

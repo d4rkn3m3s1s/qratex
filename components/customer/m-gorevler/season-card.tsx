@@ -82,7 +82,7 @@ export function SeasonCard({ season, copy, locale, claiming, claimDisabled, onCl
         </Button>
       ) : (
         <Button asChild variant="outline" className="min-h-11 w-full sm:w-auto">
-          <Link href="/customer/event" prefetch={false}>
+          <Link href="/customer/places" prefetch={false}>
             {copy.season.open}
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>

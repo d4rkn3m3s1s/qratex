@@ -172,7 +172,7 @@ export default async function CerezPolitikasiPage() {
       body: (
         <p>
           KVKK m.11 kapsamındaki erişim, düzeltme, silme ve itiraz haklarınızı hesabınızın{' '}
-          <LegalLink href="/customer/settings?tab=privacy">Ayarlar › Gizlilik</LegalLink> bölümünden kullanabilirsiniz; başvurunuz en geç 30 gün
+          <LegalLink href="/customer/me/settings?tab=privacy">Ayarlar › Gizlilik</LegalLink> bölümünden kullanabilirsiniz; başvurunuz en geç 30 gün
           içinde sonuçlandırılır. Hesabınız yoksa <LegalLink href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</LegalLink> adresine
           yazabilirsiniz.
         </p>

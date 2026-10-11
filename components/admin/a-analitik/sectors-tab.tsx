@@ -102,7 +102,7 @@ export function SectorsTab({ data }: { data: AdminSectors }) {
               )}
             </p>
             <Button asChild variant="outline" size="sm" className="h-11 shrink-0 sm:h-9">
-              <Link href="/admin/playbooks">{copy.focusAction}</Link>
+              <Link href="/admin/dealers-health">{copy.focusAction}</Link>
             </Button>
           </div>
         ) : (

@@ -32,7 +32,7 @@ const REVEAL_MS = secToMs(MEDALLION_TIMELINE.revealAt);
 const BURST_MS = secToMs(MEDALLION_TIMELINE.burstAt);
 const MARKS = [REVEAL_MS, BURST_MS];
 
-export const BADGES_HREF = '/customer/badges';
+export const BADGES_HREF = '/customer/me/badges';
 
 /** Nadirlik çipi — yalnız QDL rol token'ları (metin her zaman `*-text` rolü, AA). */
 const RARITY_CHIP: Record<SceneRarity, string> = {

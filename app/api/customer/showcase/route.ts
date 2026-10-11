@@ -1,134 +1,73 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { SHOWCASE_PIN_LIMIT } from '@/lib/badges/collection-logic';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions);
+/**
+ * Profil vitrini (eski uç; yeni istemci Cüzdan → Kozmetik `cosmetics/state` kullanır).
+ *
+ * Güvenlik (müşteri API denetimi O3/D1): eskiden ham `getServerSession` (askıya alınmış / oturumu
+ * iptal edilmiş hesap geçiyordu) ve şemasız gövde (dizi olmayan değer 500, sınırsız kimlik
+ * listesi) vardı. Artık yalnız CUSTOMER (`requireAuth`: oturum sürümü, askı, güncel rol DB'den),
+ * zod gövdesi ve hız sınırı.
+ */
+export const GET = defineRoute(
+  { name: 'customer.showcase.get', roles: ['CUSTOMER'], rateLimit: 'read' },
+  async ({ user }) => {
+    const [ownedCosmetics, ownedBadges, userDetails] = await Promise.all([
+      prisma.userCosmetic.findMany({ where: { userId: user.id }, include: { cosmetic: true }, take: 500 }),
+      prisma.userBadge.findMany({ where: { userId: user.id }, include: { badge: true }, take: 500 }),
+      prisma.user.findUnique({ where: { id: user.id }, select: { customFrameColor: true } }),
+    ]);
+    return ok(
+      { cosmetics: ownedCosmetics, badges: ownedBadges, customFrameColor: userDetails?.customFrameColor || null },
+      { legacySpread: true }
+    );
+  }
+);
 
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
+const idList = z
+  .array(z.string().trim().min(1).max(64))
+  .max(SHOWCASE_PIN_LIMIT)
+  .default([])
+  .refine((ids) => new Set(ids).size === ids.length, 'Aynı öge vitrine iki kez eklenemez.');
 
-        const userId = session.user.id;
+const Body = z
+  .object({ pinnedBadgeIds: idList, pinnedCosmeticIds: idList })
+  .strict()
+  .refine((b) => b.pinnedBadgeIds.length + b.pinnedCosmeticIds.length <= SHOWCASE_PIN_LIMIT, {
+    message: `Vitrinde en fazla ${SHOWCASE_PIN_LIMIT} öge sergilenebilir.`,
+  });
 
-        // Fetch user's cosmetics (including backgrounds, frames, badges) and badges
-        const [ownedCosmetics, ownedBadges, userDetails] = await Promise.all([
-            prisma.userCosmetic.findMany({
-                where: { userId },
-                include: { cosmetic: true }
-            }),
-            prisma.userBadge.findMany({
-                where: { userId },
-                include: { badge: true }
-            }),
-            prisma.user.findUnique({
-                where: { id: userId },
-                select: { customFrameColor: true }
-            })
-        ]);
+export const POST = defineRoute(
+  { name: 'customer.showcase.update', roles: ['CUSTOMER'], schema: Body, rateLimit: 'mutation' },
+  async ({ user, body }) => {
+    const userId = user.id;
+    const { pinnedBadgeIds, pinnedCosmeticIds } = body;
+    const totalPins = pinnedBadgeIds.length + pinnedCosmeticIds.length;
 
-        return NextResponse.json({
-            success: true,
-            cosmetics: ownedCosmetics,
-            badges: ownedBadges,
-            customFrameColor: userDetails?.customFrameColor || null
-        }, { headers: PRIVATE_NO_STORE_HEADERS });
-
-    } catch (error) {
-        console.error('[SHOWCASE_GET_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Internal Server Error' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
+    // Yalnız sahip olunan ögeler sergilenebilir.
+    const [validBadges, validCosmetics] = await Promise.all([
+      prisma.userBadge.count({ where: { userId, badgeId: { in: pinnedBadgeIds } } }),
+      prisma.userCosmetic.count({ where: { userId, cosmeticId: { in: pinnedCosmeticIds } } }),
+    ]);
+    if (validBadges !== pinnedBadgeIds.length || validCosmetics !== pinnedCosmeticIds.length) {
+      throw new ApiError('VALIDATION', 'Geçersiz öge seçimi. Sadece sahip olduğunuz ögeleri sergileyebilirsiniz.');
     }
-}
 
-export async function POST(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions);
+    await prisma.$transaction([
+      prisma.userCosmetic.updateMany({ where: { userId }, data: { isPinned: false } }),
+      prisma.userBadge.updateMany({ where: { userId }, data: { isPinned: false } }),
+      prisma.userCosmetic.updateMany({ where: { userId, cosmeticId: { in: pinnedCosmeticIds } }, data: { isPinned: true } }),
+      prisma.userBadge.updateMany({ where: { userId, badgeId: { in: pinnedBadgeIds } }, data: { isPinned: true } }),
+    ]);
 
-        if (!session || session.user.role !== 'CUSTOMER') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
+    // Vitrin ustası başarımı (tek seferlik ödeme lib/quests/reward → rewardQuestOnce).
+    const { advanceAchievementProgress } = await import('@/lib/achievements');
+    await advanceAchievementProgress(userId, 'quest-showcase-master', totalPins, 'set');
 
-        const userId = session.user.id;
-        const { pinnedBadgeIds = [], pinnedCosmeticIds = [] } = await req.json();
-
-        // 1. Enforce max 4 pinned items total
-        const totalPins = pinnedBadgeIds.length + pinnedCosmeticIds.length;
-        if (totalPins > 4) {
-            return NextResponse.json(
-                { error: 'Vitrinde en fazla 4 öge sergilenebilir.' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        // 2. Validate ownership of badges and cosmetics
-        const [validBadges, validCosmetics] = await Promise.all([
-            prisma.userBadge.findMany({
-                where: { userId, badgeId: { in: pinnedBadgeIds } }
-            }),
-            prisma.userCosmetic.findMany({
-                where: { userId, cosmeticId: { in: pinnedCosmeticIds } }
-            })
-        ]);
-
-        if (validBadges.length !== pinnedBadgeIds.length || validCosmetics.length !== pinnedCosmeticIds.length) {
-            return NextResponse.json(
-                { error: 'Geçersiz öge seçimi. Sadece sahip olduğunuz ögeleri sergileyebilirsiniz.' },
-                { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
-            );
-        }
-
-        // 3. Update database: reset all pins for this user, then set the specified ones
-        await prisma.$transaction([
-            // Reset cosmetics
-            prisma.userCosmetic.updateMany({
-                where: { userId },
-                data: { isPinned: false }
-            }),
-            // Reset badges
-            prisma.userBadge.updateMany({
-                where: { userId },
-                data: { isPinned: false }
-            }),
-            // Pin selected cosmetics
-            prisma.userCosmetic.updateMany({
-                where: { userId, cosmeticId: { in: pinnedCosmeticIds } },
-                data: { isPinned: true }
-            }),
-            // Pin selected badges
-            prisma.userBadge.updateMany({
-                where: { userId, badgeId: { in: pinnedBadgeIds } },
-                data: { isPinned: true }
-            })
-        ]);
-
-        // Trigger showcase master achievement
-        const { advanceAchievementProgress } = await import('@/lib/achievements');
-        await advanceAchievementProgress(userId, 'quest-showcase-master', totalPins, 'set');
-
-        return NextResponse.json(
-            { success: true, message: 'Vitrin başarıyla güncellendi!' },
-            { headers: PRIVATE_NO_STORE_HEADERS }
-        );
-
-    } catch (error) {
-        console.error('[SHOWCASE_POST_ERROR]', error);
-        return NextResponse.json(
-            { error: 'Vitrin güncellenirken bir hata oluştu.' },
-            { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-        );
-    }
-}
+    return ok({ message: 'Vitrin başarıyla güncellendi!' }, { legacySpread: true });
+  }
+);

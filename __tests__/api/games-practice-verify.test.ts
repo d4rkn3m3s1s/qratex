@@ -139,12 +139,24 @@ describe('pratik modu', () => {
   });
 
   it('yapım aşamasındaki oyun: pratik ve sıralı start 403 "henüz yayında değil"', async () => {
-    const p = await call('practice', 'daily-word');
-    expect(p.status).toBe(403);
-    expect(p.json.error).toMatch(/henüz yayında değil/);
-    const s = await call('start', 'daily-word');
-    expect(s.status).toBe(403);
-    expect(s.json.error).toMatch(/henüz yayında değil/);
+    // Portföyde şu an `release: 'building'` oyun kalmadı (hepsi canlıda); kuralı bir tanımı
+    // geçici olarak yapım aşamasına çekerek sınarız.
+    const { getGameDef } = await import('@/lib/minigame-config');
+    const def = getGameDef('daily-word') as { hidden?: boolean; release?: 'building' };
+    const prev = { hidden: def.hidden, release: def.release };
+    def.hidden = true;
+    def.release = 'building';
+    try {
+      const p = await call('practice', 'daily-word');
+      expect(p.status).toBe(403);
+      expect(p.json.error).toMatch(/henüz yayında değil/);
+      const s = await call('start', 'daily-word');
+      expect(s.status).toBe(403);
+      expect(s.json.error).toMatch(/henüz yayında değil/);
+    } finally {
+      def.hidden = prev.hidden;
+      def.release = prev.release;
+    }
   });
 
   it('bilinmeyen oyun 404; oturumsuz 401', async () => {
@@ -210,8 +222,9 @@ describe('sıralı mod + doğrulayıcı', () => {
     expect(s.json.content).toBeUndefined();
     expect(s.json.verification).toBe('plausibility');
     db.rows[0].serverStartedAt = new Date(Date.now() - 40_000);
-    const r = await call('complete', 'frost-catcher', { sessionId: s.json.sessionId, score: 30, durationSec: 38, attemptToken: s.json.attemptToken });
-    expect(r.json).toMatchObject({ rewarded: true, won: true, score: 30 });
+    // Eşik (rewardThreshold 45) üstünde, saniye başı tavanın (6) altında dürüst bir skor.
+    const r = await call('complete', 'frost-catcher', { sessionId: s.json.sessionId, score: 60, durationSec: 38, attemptToken: s.json.attemptToken });
+    expect(r.json).toMatchObject({ rewarded: true, won: true, score: 60 });
   });
 
   it('geçersiz gövde 400 VALIDATION (defineRoute zarfı, eski `error` alanı korunur)', async () => {

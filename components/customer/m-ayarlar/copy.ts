@@ -109,7 +109,7 @@ const TR = {
 
   matrixTitle: 'Neyi, nereden alacağın',
   matrixDesc: 'Yalnız gerçekten gönderdiğimiz bildirimler burada. Değişiklik anında kaydedilir.',
-  channel: { app: 'Uygulama içi', email: 'E-posta', push: 'Anlık (push)' } as const,
+  channel: { app: 'Uygulama içi', email: 'E-posta', push: 'Anlık (push)' },
   rows: {
     campaign: {
       label: 'Kampanyalar ve sürprizler',
@@ -181,7 +181,7 @@ const TR = {
   languageSaved: 'Dil güncellendi.',
   themeTitle: 'Tema',
   themeDesc: 'Bu cihazda geçerlidir.',
-  themeOptions: { light: 'Açık', dark: 'Koyu', system: 'Sistem' } as const,
+  themeOptions: { light: 'Açık', dark: 'Koyu', system: 'Sistem' },
   a11yTitle: 'Erişilebilirlik',
   a11yDesc: 'Hesabına kaydedilir; bu ekranı açtığın her cihazda uygulanır.',
   reduceMotion: 'Hareketi azalt',

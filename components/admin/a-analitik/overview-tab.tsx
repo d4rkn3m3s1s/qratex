@@ -270,7 +270,7 @@ export function OverviewTab({ data }: { data: AdminOverview }) {
 
       <p className="qx-caption text-fg-subtle">
         {copy.tzNote} {data.query.clean ? copy.cleanNote : null} {copy.activityMoved}{' '}
-        <Link href="/admin/platform-pulse" className="font-medium text-brand-text underline-offset-4 hover:underline">
+        <Link href="/admin" className="font-medium text-brand-text underline-offset-4 hover:underline">
           {copy.activityLink}
         </Link>
       </p>

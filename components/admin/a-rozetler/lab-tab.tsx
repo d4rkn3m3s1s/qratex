@@ -147,7 +147,7 @@ function TargetPanel({ s }: { s: LabStatus }) {
         <StatusBadge size="sm" tone={s.target.allowed ? 'success' : 'danger'} label={s.target.allowed ? 'Test hesabı' : 'Test hesabı değil'} />
         {s.target.allowed ? (
           <Button asChild variant="link" size="sm" className="ml-auto h-auto min-h-11 px-0 sm:min-h-0">
-            <Link href="/customer/badges" target="_blank" rel="noopener noreferrer">
+            <Link href="/customer/me/badges" target="_blank" rel="noopener noreferrer">
               Müşteri rozet sayfası
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </Link>

@@ -454,7 +454,7 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     // ≤ ~34, seyrek ~34 ort., dikkatli ~97 ort., en iyi ~155 → eşik 45, tavan 200 (betik sigortası).
     // Deneme penceresi duraklatma payıyla 300 sn.
     maxScore: 200,
-    rewardThreshold: 24,
+    rewardThreshold: 45,
     rewardPoints: 120,
     rewardXp: 60,
     minDurationSec: 10,

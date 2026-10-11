@@ -22,7 +22,7 @@ export function generateMetadata(): Promise<Metadata> {
   return buildLegalMetadata(SLUG);
 }
 
-const PRIVACY_SETTINGS = '/customer/settings?tab=privacy';
+const PRIVACY_SETTINGS = '/customer/me/settings?tab=privacy';
 
 const RIGHTS: Array<{ text: string; action?: { href: string; label: string } }> = [
   { text: 'Kişisel verilerinizin işlenip işlenmediğini öğrenme ve işlenmişse bilgi talep etme (m.11/1-a, b)', action: { href: PRIVACY_SETTINGS, label: 'Verilerimi indir' } },

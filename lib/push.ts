@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import prisma from "@/lib/prisma";
+import { isAllowedPushEndpoint } from "@/lib/push-endpoint";
 
 const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY || "";
@@ -22,9 +23,20 @@ export async function sendPushNotification(
             return false;
         }
 
-        const subscriptions = await prisma.pushSubscription.findMany({
+        const rows = await prisma.pushSubscription.findMany({
             where: { userId, isActive: true },
+            orderBy: { createdAt: "desc" },
+            take: 20,
         });
+        // Bilinen push servisi dışındaki uç noktaya (eski/kötü niyetli kayıt) ASLA istek atılmaz
+        // (SSRF); bu kayıtlar pasifleştirilir.
+        const subscriptions = rows.filter((sub) => isAllowedPushEndpoint(sub.endpoint));
+        const rejectedIds = rows.filter((sub) => !isAllowedPushEndpoint(sub.endpoint)).map((sub) => sub.id);
+        if (rejectedIds.length > 0) {
+            await prisma.pushSubscription
+                .updateMany({ where: { id: { in: rejectedIds } }, data: { isActive: false } })
+                .catch((e) => console.error("invalid push endpoint deactivate failed:", e));
+        }
 
         if (!subscriptions.length) return false;
 

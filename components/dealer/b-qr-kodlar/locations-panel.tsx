@@ -179,7 +179,7 @@ export function LocationsPanel({ data, onChanged, onShowCodes }: { data: Locatio
       {full && !adding && (
         <p className="qx-small rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-fg">
           Şube hakkınız doldu. Bir şubeyi arşivleyin ya da{' '}
-          <Link href="/dealer/billing" className="font-medium text-brand underline underline-offset-2">
+          <Link href="/dealer/settings" className="font-medium text-brand underline underline-offset-2">
             planınızı yükseltin
           </Link>
           .

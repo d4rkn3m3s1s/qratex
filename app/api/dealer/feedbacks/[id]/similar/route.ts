@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
+import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { findSimilarFeedback } from '@/lib/ai-learning';
@@ -11,6 +12,10 @@ export const dynamic = 'force-dynamic';
  * Bir feedback'e en benzer geçmiş feedback'leri (aynı bayi) embedding cosine
  * benzerliğiyle döndürür. Tekrarlayan şikâyet/temaları ve daha önce verilen
  * yanıtları yüzeye çıkarır.
+ *
+ * Embedding üretimi AI geçidinden (`guardAiCall('embedding')`, kiracı bütçesi) geçer; uç ayrıca
+ * aktör başına `ai` oran sınırındadır (GET ile tetiklenen sınırsız embedding çağrısı — Y5).
+ * Eşleşme ayrıntıları yine bu bayinin QR'larıyla kapsanır (derinlemesine savunma).
  */
 export async function GET(
   request: NextRequest,
@@ -20,6 +25,8 @@ export async function GET(
     const auth = await requireAuth(['DEALER', 'ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
+    const limited = await enforceRouteRateLimit('dealer.feedbacks.similar', session.user.id, 'ai');
+    if (limited) return limited;
 
     const { id } = await params;
 
@@ -47,7 +54,7 @@ export async function GET(
 
     // Eşleşen feedback'lerin metin + puan + bayi yanıtını getir.
     const details = await prisma.feedback.findMany({
-      where: { id: { in: matches.map((m) => m.feedbackId) } },
+      where: { id: { in: matches.map((m) => m.feedbackId) }, qrCode: { dealerId }, deletedAt: null },
       select: {
         id: true,
         text: true,

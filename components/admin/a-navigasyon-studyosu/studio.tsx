@@ -255,7 +255,7 @@ function Studio({ state, reload }: { state: NavStudioState; reload: () => Promis
               : 'Admin menüsünde görünürlük ayarı yoktur; admin her sayfayı görür ki geri açabilsin. '}
             {supportsVisibility(role) && (
               <>
-                <Link href="/admin/modules" className="underline underline-offset-2 hover:text-fg">
+                <Link href="/admin/features" className="underline underline-offset-2 hover:text-fg">
                   Modüller
                 </Link>{' '}
                 sayfasından yönetilir).
@@ -662,7 +662,7 @@ function RouteLine({
           {badge}
           {hidden && <StatusBadge label="Gizli" tone="warning" size="sm" icon={EyeOff} />}
           {moduleOff && (
-            <Link href="/admin/modules" className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link href="/admin/features" className="rounded-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <StatusBadge label="Modül kapalı → Modüller" tone="neutral" size="sm" />
             </Link>
           )}
