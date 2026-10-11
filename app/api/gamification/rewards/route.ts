@@ -12,6 +12,7 @@ import { debitPoints, InsufficientPointsError } from '@/lib/points-wallet';
 import { getVariant } from '@/lib/gamification-ab';
 import { captureApiError } from '@/lib/capture-api-error';
 import { assertModuleEnabled } from '@/lib/module-gate';
+import { stripPrivateMetadata, takePoolCode } from '@/lib/admin-store/code-pool';
 
 // Force dynamic rendering - disable caching
 export const dynamic = 'force-dynamic';
@@ -137,8 +138,9 @@ export async function GET(req: Request) {
       take: 200,
     });
 
+    // Partner kupon kod havuzu yalnız admin BFF'inde görünür (/api/admin/store/rewards).
     return NextResponse.json(
-      { success: true, data: rewards },
+      { success: true, data: rewards.map(stripPrivateMetadata) },
       { headers: PRIVATE_NO_STORE_HEADERS }
     );
   } catch (error) {
@@ -173,7 +175,8 @@ export async function POST(req: Request) {
         stock: validatedData.stock,
         type: validatedData.type,
         ...(validatedData.metadata ? { metadata: validatedData.metadata as object } : {}),
-        isActive: true,
+        // B7: gönderilen "Aktif" anahtarı uygulanır (eski davranış: her zaman true).
+        isActive: typeof (body as { isActive?: unknown })?.isActive === 'boolean' ? (body as { isActive: boolean }).isActive : true,
       },
     });
 
@@ -257,7 +260,7 @@ export async function PATCH(req: Request) {
         { success: false, error: 'Ödül bulunamadı veya aktif değil' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
     }
 
-    const couponCode = generateCouponCode(reward.type);
+    let couponCode = generateCouponCode(reward.type);
     const poolRules = parseRewardPoolRules(reward.metadata);
     const now = new Date();
 
@@ -314,6 +317,11 @@ export async function PATCH(req: Request) {
         source: 'reward',
         sourceId: reward.id,
       });
+
+      // Kod havuzu açıksa kod havuzdan gelir (satır yukarıdaki koşullu yazımla kilitli).
+      const pooled = await takePoolCode(tx, reward.id);
+      if (pooled.exhausted) throw new Error('REWARD_OUT_OF_STOCK');
+      if (pooled.code) couponCode = pooled.code;
 
       const claimedReward = await tx.userReward.create({
         data: {

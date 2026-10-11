@@ -20,7 +20,8 @@ const FILES = [
   'app/admin/quests/page.tsx',
   'app/admin/rewards/page.tsx',
   'components/admin/a-gorevler/quest-editor.tsx',
-  'app/admin/rewards/reward-form.tsx',
+  'components/admin/a-magaza-oduller/reward-editor.tsx',
+  'components/admin/a-magaza-oduller/cosmetic-editor.tsx',
 ];
 
 type Finding = { name: string; line: number };

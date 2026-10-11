@@ -12,6 +12,7 @@ import { debitPoints, InsufficientPointsError, lockUserForUpdate, mintPoints } f
 import { isUniqueViolation } from '@/lib/economy/errors';
 import { istanbulDayKey } from '@/lib/quests/period';
 import { generateRewardCode, dailyBoxPoints } from './codes';
+import { takePoolCode } from '@/lib/admin-store/code-pool';
 import { WalletError } from './errors';
 import {
   COSMETIC_PIN_LIMIT,
@@ -112,7 +113,11 @@ export async function claimReward(
         throw new WalletError('ALREADY_PROCESSED', 'Bu talep zaten işlendi. Ödüllerim sayfasına bak.');
       }
 
-      const code = generateRewardCode(reward.type, now);
+      // Partner kupon kod havuzu (admin /admin/rewards): açıksa kod havuzdan gelir; satır yukarıdaki
+      // koşullu yazımla kilitli olduğundan iki talep aynı kodu alamaz. Kapalıysa eskisi gibi üretilir.
+      const pooled = await takePoolCode(tx, reward.id);
+      if (pooled.exhausted) throw new WalletError('REWARD_SOLD_OUT', 'Bu ödülün stoğu tükendi.');
+      const code = pooled.code ?? generateRewardCode(reward.type, now);
       const userReward = await tx.userReward.create({
         data: { userId, rewardId: reward.id, code },
         select: { id: true },

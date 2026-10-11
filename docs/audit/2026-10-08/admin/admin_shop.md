@@ -262,3 +262,67 @@ Her iddia çürütülmeye çalışılarak kaynak koddan yeniden okundu (kod değ
 - **Senaryo:** Admin formda tür `avatar_frame`, Görsel URL `https://cdn.../neon.png` ile ürün oluşturur; admin kartında görsel görünür. Müşteri vitrinde boş varsayılan çerçeve görür, 3000 puan harcayıp satın alıp kuşanır; profilinde hiçbir değişiklik olmaz. `profile_background` için aynı akış kart/dashboard'da hiçbir arka plan uygulamaz. URL'li `profile_badge` ise doğru çalışıyor (`shop-client.tsx:194-203`), bu yüzden sorun yalnız çerçeve ve arka plan türleri için geçerli.
 
 **Özet:** 4 iddianın 4'ü de kodla doğrulandı. Öncelik sırası: 2 (sistemik yetki katmanı açığı) → 1 (puan ekonomisi / satış kontrolü) → 4 (müşteriye karşılıksız puan harcatma) → 3 (admin kaynaklı veri ezme, audit eksikliği).
+
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/shop` emekli: `permanentRedirect('/admin/rewards?tab=kozmetik')` (sorgu korunur). Kozmetik yönetimi **Mağaza ve Ödüller** merkezinin **Kozmetik** sekmesinde (bkz. `admin_rewards.md` → "Uygulama (Dalga 2)"). Yalnız bu sayfanın kullandığı eski `/api/admin/cosmetics/*` silindi; yerine `defineRoute` BFF `app/api/admin/store/cosmetics/*`. Sunucu: `lib/admin-store/cosmetics.server.ts`; UI: `components/admin/a-magaza-oduller/{cosmetics-tab,cosmetic-editor,cosmetic-sheet}.tsx`. Test: `__tests__/lib/admin-store.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Kenar çubuğu girişi | ÇALIŞIYOR | Navigasyon ajanının (registry `redirectFrom: /admin/shop`). |
+| 2 | Sayfa erişimi | ÇALIŞIYOR | |
+| 3 | API erişimi | ÇALIŞIYOR | defineRoute → `requireAuth` (gizli kapı dahil) + rate limit. |
+| 4 | Hero | ÇALIŞIYOR | Kompakt ops `PageHeader`. |
+| 5 | Yenile | ÇALIŞIYOR | |
+| 6 | Demo ürünleri yükle | ÇALIŞIYOR | Yalnız EKSİK slug'lar "satışta değil" eklenir; onaylı, sayı gösterilir; denetimde eklenen slug listesi; eksik yoksa düğme görünmez. |
+| 7 | Yeni ürün | ÇALIŞIYOR | |
+| 8 | Liste | ÇALIŞIYOR | Sunucu filtre/sıralama/sayfalama. |
+| 9 | Yükleniyor | ÇALIŞIYOR | İskelet + `keepPreviousData` (liste kaybolmaz). |
+| 10 | Hata | ÇALIŞIYOR | Görünür hata + Tekrar dene. |
+| 11 | Boş durum | ÇALIŞIYOR | "İlk ürünü oluştur" + "Eksik demo ürünleri ekle". |
+| 12-14 | Durum rozeti / ad / slug | ÇALIŞIYOR | Slug çekmecede kopyalanabilir. |
+| 15 | Düzenle butonu | ÇALIŞIYOR | Satır tıklaması/Enter → çekmece; etiketli düğmeler. |
+| 16 | Sol renk şeridi | KALDIRILDI | Bilgi taşımıyordu; nadirlik metinli `RarityBadge` ile. |
+| 17-20 | Önizleme (rozet/efekt/URL/arka plan) | ÇALIŞIYOR | Müşteri bileşeninin KENDİSİ (`CosmeticPreview`); efektler yalnız hover/odakta oynar. |
+| 21 | "No Image" | KALDIRILDI | |
+| 22 | Tür rozeti | ÇALIŞIYOR | Türkçe etiket. |
+| 23 | Nadirlik rozeti | ÇALIŞIYOR | Renk + ikon + metin. |
+| 24 | Fiyat | ÇALIŞIYOR | "puan" (XP değil), tr-TR. |
+| 25 | Dialog ipucu | ÇALIŞIYOR | Türe göre görünüm açıklaması. |
+| 26 | Ad | ÇALIŞIYOR | |
+| 27 | Slug | ÇALIŞIYOR | Canlı doğrulama, Türkçe "Addan üret", çakışma 409 + alan hatası. |
+| 28 | Açıklama | ÇALIŞIYOR | Textarea + sayaç. |
+| 29 | Tür | ÇALIŞIYOR | Etiketli; sahibi varsa kilitli (UI + 409). |
+| 30 | Fiyat alanı | ÇALIŞIYOR | Tam sayı, Türkçe hata; sahipli üründe "yeni fiyat yalnız yeni alımları etkiler". |
+| 31 | Görsel URL | KALDIRILDI | Türe göre **Görünüm seçici**: çerçeve efekt galerisi; rozet hazır + R2 yükleme; arka plan R2 görseli. Sunucu da doğrular. |
+| 32 | Nadirlik | ÇALIŞIYOR | Enum segment kontrol. |
+| 33 | Satışta anahtarı | ÇALIŞIYOR | Satın alma `lib/wallet-rewards` `isActive + archivedAt` kontrolü (Bulgu 1 önceki dalgada kapanmıştı); görünümü geçersiz ürün satışa açılamaz. |
+| 34 | İptal | ÇALIŞIYOR | Kirli form uyarısı. |
+| 35 | Oluştur | ÇALIŞIYOR | İdempotent, varsayılan satışta değil. |
+| 36 | Güncelle | ÇALIŞIYOR | Değişen alanlar + iyimser kilit (yüklendiği andaki değerler; şemada `updatedAt` yok) → 409. |
+| 37 | Audit | ÇALIŞIYOR | Tam alan farkı, güncellemeyle aynı tx; çekmecede geçmiş. |
+| 38 | Rate limit | ÇALIŞIYOR | `checkRateLimitDb` (Redis öncelikli). |
+| 39 | Toast | ÇALIŞIYOR | sonner, sunucunun Türkçe mesajı. |
+| 40 | Silme/arşiv | ÇALIŞIYOR | Arşiv/geri al (satışta değil döner) + çoğalt. |
+| 41 | Arama/filtre/sıralama | ÇALIŞIYOR | Tür, durum, nadirlik, arama; fiyat/sahip/30 gün/nadirlik/tarih sıralaması, URL'de. |
+| 42 | Metrikler | ÇALIŞIYOR | Satışta/kapalı, 30 gün satış + hediye, 30 gün yakılan puan (PointsLedger `shop` + `gift`), en çok satan; satır başı sahip/kuşanmış/30 gün. |
+| 43 | R2 yükleme | ÇALIŞIYOR | Klasör `cosmetics` (yükleme ucuna eklemeli olarak eklendi). |
+| 44 | Müşteri önizlemesi | ÇALIŞIYOR | Canlı, düzenleyicinin sağ panelinde. |
+| 45 | Mobil | ÇALIŞIYOR | DataTable mobil kart düzeni, ≥44px hedefler. |
+| 46 | Azaltılmış hareket | ÇALIŞIYOR | |
+| 47 | i18n | KISMİ | Tam Türkçe metin; i18n anahtarı yok. |
+
+### Kapanan bulgular (14'ün 14'ü)
+1 (önceki dalga), 2 (defineRoute → `requireAuth`), 3, 4, 5, 6, 7, 8, 9, 10 (önizleme müşteri bileşeniyle `unoptimized`), 11, 12, 13, 14 (eski route ve ölü import silindi; Türkçe sunucu mesajları).
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `CosmeticItem.updatedAt` (gerçek sürüm kilidi), `rarity` enum ya da `rarityRank`, `assetKind/assetRef`, `publishAt/unpublishAt`, `stock`. Şimdilik doğrulama sözleşmede, kilit alan değeri karşılaştırmasıyla.
+- Mevcut sınıf tabanlı/URL'li çerçeve kayıtları otomatik dönüştürülmedi (DB'ye dokunulmadı): sayıları uyarı bandında, satırda uyarı simgesiyle gösteriliyor; düzenlerken geçerli görünüm seçmek gerekiyor.
+- `lib/cosmetic-seed-server.ts` (prisma seed / `add-shop-items.ts`) hâlâ upsert ile ezer; admin yolu artık bunu kullanmıyor.
+- `lib/data/admin-api-catalog.json` eski `/api/admin/cosmetics` girdilerini içeriyor (üretilmiş katalog; sahiplik dışı).
+- Toplu işlem ve "bu kullanıcıya hediye et" eklenmedi.

@@ -248,3 +248,71 @@ Yöntem: salt okunur kod okuması (sayfa, çağrılan API'ler, `lib/points-walle
 | 2 | Cascade silme, iade yok, onay yok | Doğrulandı | Yüksek |
 | 3 | PATCH doğrulamasız, cost 0 ile bedava | Doğrulandı | Orta (admin-only, mint yok) |
 | 4 | Upload Vercel'de çalışmaz | Doğrulandı (canlıda denenmedi) | Yüksek (rozet sayfasını da etkiler) |
+
+
+---
+
+## Uygulama (Dalga 2)
+
+`/admin/rewards` artık **Mağaza ve Ödüller** merkezi: **Ödüller · Kozmetik · Talepler** sekmeleri (QDL v2 ops kaydı: `PanelPage` + `SectionTabs` + `DataTable` + `DetailSheet` + `EntityEditorSheet`). Eski `/admin/shop`, `permanentRedirect` ile `?tab=kozmetik` adresine yönlenir (sorgu korunur). Sunucu bileşeni KPI'ları ve aktif sekmenin ilk sayfasını ön yükler; istemci adası `initialData` alır, hatalar görünür (`ErrorState`/`QueryState`).
+
+- Sunucu çekirdeği: `lib/admin-store/{contract,rewards.server,redemptions.server,cosmetics.server,code-pool,shared.server}.ts`
+- BFF (`defineRoute`; ADMIN + DB rolü + zod + rate limit + idempotency): `app/api/admin/store/rewards{,/stats,/[id],/[id]/actions,/[id]/pool}`, `app/api/admin/store/redemptions{,/stats,/[id]}`, `app/api/admin/store/cosmetics{,/stats,/[id],/[id]/actions,/seed}`
+- UI: `components/admin/a-magaza-oduller/*`
+- Test: `__tests__/lib/admin-store.test.ts` (19 test). Eski `reward-form-model.test.ts` güvenceleri (R2 URL tanıma, -1 stok, boş açıklama/0 maliyet reddi) buraya taşındı; odak kaybı kalkanı (`admin-forms-no-inline-components`) yeni düzenleyicileri tarıyor.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa erişim koruması | ÇALIŞIYOR | Proxy + sayfada `requireAuth(['ADMIN'])` (DB rolü). |
+| 2 | API yazma yetkisi | ÇALIŞIYOR | Yeni `/api/admin/store/*` defineRoute (gizli kapı `requireAuth` içinde). |
+| 3 | Modül kapısı | ÇALIŞIYOR | Admin yönetimi modülden bağımsız; modül kapalıysa uyarı bandı + /admin/modules bağlantısı. |
+| 4 | Hero | ÇALIŞIYOR | Kompakt `PageHeader`. |
+| 5 | Rehber kartı | KALDIRILDI | Bilgi bağlamına taşındı: tür ipucu formda, "-1 = sınırsız" stok alanında, boş durum metni. |
+| 6 | Havuz özeti | KALDIRILDI | KPI şeridiyle değiştirildi (tr-TR biçim). |
+| 7 | Stat: Toplam | ÇALIŞIYOR | Sekme sayacı (yayında + taslak); sunucu sayımı. |
+| 8 | Stat: Aktif | ÇALIŞIYOR | "Yayında", tıklanınca filtreler. |
+| 9 | Stat: Talep edilen | ÇALIŞIYOR | Son 30 gün talep + puan defterinden harcanan puan + iade sayısı; hediyeler "ödemesiz" olarak ayrışır. |
+| 10 | Stat: Düşük stok | ÇALIŞIYOR | "Tükenen" ve "Az kalan" ayrı, tıklanınca filtreler. |
+| 11 | Arama | ÇALIŞIYOR | Ad + açıklama, `tr-TR` duyarlı, URL'de. |
+| 12 | Yeni ödül | ÇALIŞIYOR | Sağ çekmece düzenleyici. |
+| 13-15 | Ad / Açıklama / İkon | ÇALIŞIYOR | Modül seviyesinde form (odak kaybı yok), alan hataları, sayaç, hızlı emoji. |
+| 16 | Görsel yükleme | ÇALIŞIYOR | R2 (`/api/admin/assets/upload`, klasör `rewards`). |
+| 17 | Sahte "Dosya Seç" | KALDIRILDI | Gerçek "Görsel yükle" düğmesi (gizli input). |
+| 18 | Görsel önizleme | ÇALIŞIYOR | `isImageSrc`: https + kök-göreli; emoji de önizlenir; canlı müşteri kartı. |
+| 19 | Tür | ÇALIŞIYOR | Türe göre davranış ipucu; "Kupon" → "Partner kuponu". |
+| 20 | Puan maliyeti | ÇALIŞIYOR | Tam sayı ≥ 1; istemci ve sunucu aynı şema. |
+| 21 | Stok | ÇALIŞIYOR | Oluştururken alan; düzenlemede göreli stok hareketi (talepleri ezmez) + sınırsız geçişi. |
+| 22 | Aktif anahtarı | ÇALIŞIYOR | Varsayılan taslak; gerçekten uygulanır (B7). |
+| 23 | İptal | ÇALIŞIYOR | Kirli form uyarısı `EntityEditorSheet`'te. |
+| 24 | Oluştur | ÇALIŞIYOR | Kilitli gönderim, idempotency, alan hataları. |
+| 25 | Düzenle açma | ÇALIŞIYOR | Ayrıntı çekmecesinden. |
+| 26 | Güncelle | ÇALIŞIYOR | Yalnız değişen alanlar + `expectedUpdatedAt` koşullu yazım → 409 + "Güncel hâli yükle". |
+| 27 | Sil | KALDIRILDI | Arşiv (etki önizlemeli; talepli ödülde adı yazarak onay) + geri al (taslak döner). |
+| 28 | Ödül kartı | ÇALIŞIYOR | Yoğun tablo satırı (ikon, tür, maliyet, stok, 30 gün talep, bekleyen, durum). |
+| 29 | Stok rozeti | ÇALIŞIYOR | "Sınırsız / Tükendi / Az kaldı: N". |
+| 30 | Hover aksiyonları | KALDIRILDI | Satır tıklaması → çekmecede her zaman görünür, etiketli düğmeler. |
+| 31 | İskelet | ÇALIŞIYOR | `DataTable`/`QueryState`. |
+| 32 | Boş durum | ÇALIŞIYOR | Gerçek boş (CTA) ile filtre boşu (temizle) ayrı. |
+| 33 | Hata durumu | ÇALIŞIYOR | 403/500/503 görünür hata + Tekrar dene. |
+| 34 | Giriş animasyonu | KALDIRILDI | Ops kaydında dekoratif ölçek animasyonu yok; DS KPI sayı geçişi azaltılmış harekete uyar. |
+| 35 | Kapanışta sıfırlama | ÇALIŞIYOR | Her açılışta `reset(kayıt ya da boş)` (B4). |
+| 36 | Havuz kuralları UI | ÇALIŞIYOR | Kişi başı limit + başlangıç/bitiş (İstanbul saati); tablo/çekmecede rozet; Zamanlanmış/Süresi doldu durumları. |
+| 37 | Filtre | ÇALIŞIYOR | Durum (yayında/taslak/zamanlanmış/süresi doldu/tükenen/az kalan/arşiv) + tür. |
+| 38 | Sıralama | ÇALIŞIYOR | Maliyet/ad/30 gün talep/oluşturma/stok, URL'de. |
+| 39 | Talep/teslim defteri | ÇALIŞIYOR | Talepler sekmesi: durum/tür/ödül/arama; "teslim edildi / kullanıldı"; iptal + puan iadesi (`lib/economy` `mintPoints`, `reward-refund:<id>` tek-kez anahtarı, tavansız, fraud kapısı kapalı), stok iadesi, müşteriye bildirim. |
+| 40 | Sayfalama | ÇALIŞIYOR | Sunucu sayfalama (25/sayfa). |
+| 41 | Geçmiş | ÇALIŞIYOR | Çekmecede alan farklı zaman çizelgesi. |
+| 42 | Çoğalt / arşiv / toplu | ÇALIŞIYOR (toplu hariç) | Çoğalt (taslak kopya) + arşiv/geri al. Toplu işlem bilinçli olarak eklenmedi (bkz. Kalanlar). |
+| 43 | i18n | KISMİ | Tüm metinler tam Türkçe; i18n anahtarlarına taşınmadı. |
+| yeni | Partner kod havuzu | ÇALIŞIYOR | Kodları yapıştır → biçim doğrula, tekilleştir, daha önce dağıtılmışı ele; talep havuzdan sıradaki kodu alır (satır kilitli tx), stok = havuz; müşteri GET'lerinde kodlar çıkarılır. |
+
+### Kapanan bulgular (16'dan 15'i tam, 1'i kısmi)
+B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11 (admin yazma `/api/admin/store`'a taşındı; eski `[id]` GET pasif/arşiv kaydı ve kod havuzunu admin dışına vermiyor; eski PATCH artık zod kısmi şema + `isActive` korunur + havuz korunur; eski POST `isActive`'i uygular), B12, B13, B14, B16. B15 kısmi (terminoloji "Partner kuponu", `tr-TR` arama; i18n anahtarı yok).
+
+### Kalanlar
+- **ŞEMA İSTEĞİ:** `UserReward.status/fulfilledAt/fulfilledBy/note/shippingAddress`. Durum şimdilik `claimedAt` + `CANCEL_USER_REWARD` denetim kaydından türetiliyor; iptal edilen kod müşteri tarafında "kullanıldı" görünür. `UserReward.reward onDelete: Restrict` (arşiv zaten tek yol). Fiziksel ödülde talep anında adres toplama da şema ister.
+- Toplu işlem: ödül sayısı düşük ve her yayın/arşiv etki önizlemesi istiyor; eklenmedi.
+- i18n: admin-only Türkçe sayfa; anahtar düzenine taşıma ayrı iş.
+- `reward_copy` A/B sonuçları ve görüntülenme→talep dönüşümü: görüntülenme olayı yazılmıyor, gerçek veri yok; eklenmedi.

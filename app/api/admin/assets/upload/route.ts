@@ -28,7 +28,7 @@ export const dynamic = 'force-dynamic';
 
 const ALLOWED_MIME = new Set(['image/svg+xml', 'image/png']);
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const ALLOWED_FOLDERS = new Set(['badges', 'rewards']);
+const ALLOWED_FOLDERS = new Set(['badges', 'rewards', 'cosmetics']);
 
 function sanitizeFilename(name: string): string {
   return name
