@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PulseSeries } from '@/lib/admin-command/types';
 import { bucketLabel, formatInt } from './format';
+import { AdminKomutaText } from './copy';
 
 type Props = {
   keys: string[];
@@ -252,7 +253,7 @@ export function PulseStrip({ keys, unit, series, className }: Props) {
         </summary>
         <div className="mt-2 max-h-72 overflow-auto rounded-md border border-border">
           <table className="w-full text-left text-xs tabular-nums">
-            <caption className="sr-only">Platform nabzı kova verisi</caption>
+            <caption className="sr-only"><AdminKomutaText k="pulseData" /></caption>
             <thead className="sticky top-0 bg-surface-muted">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">{unit === 'hour' ? 'Saat' : 'Gün'}</th>

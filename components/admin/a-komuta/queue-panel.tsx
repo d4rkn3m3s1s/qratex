@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { TONE_CHIP, TONE_TEXT, type Tone } from '@/components/states';
 import type { QueueGroup, QueueSection } from '@/lib/admin-command/types';
 import { formatInt } from './format';
+import { AdminKomutaText } from './copy';
 
 const ICONS: Record<QueueGroup['id'], typeof Inbox> = { dsr: Scale, cases: ShieldAlert, review: Inbox };
 
@@ -58,7 +59,7 @@ export function QueuePanel({ data }: { data: QueueSection }) {
                       <span className={cn(r.count === 0 ? 'text-fg-muted' : 'text-fg')}>{r.label}</span>
                       <span className={cn('tabular-nums font-medium', r.count === 0 ? 'text-fg-muted' : TONE_TEXT[r.tone as Tone])}>
                         {formatInt(r.count)}
-                        <span className="sr-only"> kayıt</span>
+                        <span className="sr-only"> <AdminKomutaText k="records" /></span>
                       </span>
                     </Link>
                   </li>

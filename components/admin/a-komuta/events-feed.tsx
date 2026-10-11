@@ -11,6 +11,7 @@ import { relativeTr } from '@/lib/admin-command/core';
 import type { CommandEvent, EventActor } from '@/lib/admin-command/types';
 import { useCommandEvents } from './use-command';
 import { formatDateTime } from './format';
+import { AdminKomutaText } from './copy';
 
 const ACTOR_OPTIONS: Array<{ value: EventActor; label: string }> = [
   { value: 'all', label: 'Tümü' },
@@ -71,7 +72,7 @@ export function EventsFeed() {
                   <span>{e.entityLabel}</span>
                 </p>
                 <p className="text-xs text-fg-muted">
-                  <span className="sr-only">Aktör türü: </span>
+                  <span className="sr-only"><AdminKomutaText k="actorType" /> </span>
                   {KIND_LABEL[e.actorKind]} ·{' '}
                   <time dateTime={e.at} title={formatDateTime(e.at)}>
                     {relativeTr(e.at)}
