@@ -137,7 +137,7 @@ export async function ensureCharacterBadgeRecord(badgeId: string): Promise<{ id:
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Tek bir yorumu ÜSLUP kategorisine sınıflandırır (dram-suc|komedi|fantastik|gizem-gerilim). */
-export async function classifyFeedbackCategory(text: string): Promise<string | null> {
+export async function classifyFeedbackCategory(text: string, actorKey?: string): Promise<string | null> {
   const clean = (text || '').trim();
   if (clean.length < 8) return null; // çok kısa yorum sınıflandırılmaz
 
@@ -147,15 +147,19 @@ export async function classifyFeedbackCategory(text: string): Promise<string | n
 
   try {
     const { runChatCompletion } = await import('@/lib/ai-engine');
+    const { UNTRUSTED_DATA_RULE, wrapUntrusted } = await import('@/lib/ai-prompt-safety');
     const res = await runChatCompletion({
       system:
         'Sen bir yorum ÜSLUP sınıflandırıcısısın. Verilen TEK yorumu, aşağıdaki kategorilerden ' +
         'üslubuna EN UYGUN olanına ata. Yalnızca bir categoryKey döndür. ' +
-        'JSON: {"categoryKey":"..."}.',
-      user: `KATEGORİLER:\n${catLines}\n\nYORUM:\n"${clean.slice(0, 500)}"\n\nEn uygun kategoriyi seç. JSON:`,
+        `JSON: {"categoryKey":"..."}.\n${UNTRUSTED_DATA_RULE}`,
+      // Yorum sınırlayıcı içinde VERİ olarak ve kişisel veri maskeli gider (ai-ozellikleri O1/Y5).
+      user: `KATEGORİLER:\n${catLines}\n\nYORUM:\n${wrapUntrusted('musteri_yorumu', clean, 500)}\n\nEn uygun kategoriyi seç. JSON:`,
       temperature: 0.2,
       maxTokens: 40,
       jsonMode: true,
+      // Müşteri başına dakikalık limit (yoksa platform geneli tek havuz; ai-ozellikleri Y3).
+      ...(actorKey ? { actorKey: `character:${actorKey}` } : {}),
     });
     const content = res && typeof res !== 'string' ? res.content : (res as string | null);
     if (!content) return null;
@@ -209,6 +213,8 @@ export async function selectCharacterForSamples(input: {
   categoryKey: string;
   samples: { text: string; rating?: number | null }[];
   excludeBadgeIds?: Iterable<string>;
+  /** Müşteri başına dakikalık AI limiti anahtarı (yoksa platform geneli havuz). */
+  actorKey?: string;
 }): Promise<CharacterSelection | null> {
   const { CATEGORY_BY_KEY, charactersInCategory } = await import('@/lib/character-categories');
   const cat = CATEGORY_BY_KEY[input.categoryKey];
@@ -219,7 +225,7 @@ export async function selectCharacterForSamples(input: {
 
   const sample = input.samples
     .slice(0, 12)
-    .map((f, i) => `${i + 1}. (${f.rating ?? 5}★) ${String(f.text ?? '').slice(0, 200)}`)
+    .map((f, i) => `${i + 1}. (${f.rating ?? '-'}★) ${String(f.text ?? '').slice(0, 200)}`)
     .join(NL);
   const options = available.map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join(NL);
   const fallback = (aiError: CharacterSelection['aiError']): CharacterSelection => ({
@@ -232,6 +238,7 @@ export async function selectCharacterForSamples(input: {
 
   try {
     const { runChatCompletion } = await import('@/lib/ai-engine');
+    const { UNTRUSTED_DATA_RULE, wrapUntrusted } = await import('@/lib/ai-prompt-safety');
     const res = await runChatCompletion({
       system:
         `Sen bir kişilik analistisin. Kullanıcı "${cat.name}" üslubunda yorumlar yazan biri. ` +
@@ -242,19 +249,22 @@ export async function selectCharacterForSamples(input: {
         'Yorumları ASLA eleştirme, kullanıcıya soru sorma, öneri verme. Sadece neden bu karaktere ' +
         'benzediğini söyle. TAM cümle, en fazla 30 kelime, nokta ile bitir. ' +
         'Örnek doğru why: "Yorumlarını ince bir mizah ve keskin gözlemle yazıyorsun; tıpkı her ayrıntıyı yakalayan Sherlock gibi." ' +
-        'JSON: {"badgeId":"...","why":"..."}.',
+        'JSON: {"badgeId":"...","why":"..."}.' +
+        NL +
+        UNTRUSTED_DATA_RULE,
       user: [
         'KARAKTERLER:',
         options,
         '',
         'KULLANICININ YAZIM TARZINI GÖSTEREN ÖRNEK YORUMLAR:',
-        sample || '(örnek yok)',
+        sample ? wrapUntrusted('musteri_yorumu', sample, 3_000) : '(örnek yok)',
         '',
         'Bu yazım tarzına en uygun karakteri seç ve neden benzediğini olumlu anlat. JSON:',
       ].join(NL),
       temperature: 0.5,
       maxTokens: 220,
       jsonMode: true,
+      ...(input.actorKey ? { actorKey: `character:${input.actorKey}` } : {}),
     });
     const content = res && typeof res !== 'string' ? res.content : (res as string | null);
     if (!content) return fallback('unavailable');
@@ -307,6 +317,7 @@ export async function pickCharacterInCategory(
     categoryKey,
     samples: reviews.map((r) => ({ text: r.text ?? '', rating: r.rating })),
     excludeBadgeIds: exclude,
+    actorKey: userId,
   });
   if (!picked) return null; // bu kategorideki tüm karakterler alınmış / pasif
   return { badgeId: picked.badgeId, name: picked.name, why: picked.why, categoryKey: cat.key, categoryName: cat.name };
@@ -325,7 +336,7 @@ export async function processConsumptionReviewForCharacterBadge(
   text: string,
 ): Promise<void> {
   try {
-    const categoryKey = await classifyFeedbackCategory(text);
+    const categoryKey = await classifyFeedbackCategory(text, userId);
     if (!categoryKey) return;
     await prisma.consumptionReview.update({
       where: { id: reviewId },

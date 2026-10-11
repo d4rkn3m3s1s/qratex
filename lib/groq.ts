@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { buildQraKnowledgeBlock } from '@/lib/qra-knowledge-base';
 import { guardAiCall, isAiGuardError, recordAiCostUsage } from '@/lib/ai-cost-guard';
 import { isDealerAiEnabled } from '@/lib/ai-policy';
-import { withAiRetry } from '@/lib/ai-provider-resilience';
+import { isAiProviderUnavailableError, withAiRetry } from '@/lib/ai-provider-resilience';
 import { maskPii } from '@/lib/ai-quality/pii-mask';
 import {
   PROMPT_VERSIONS,
@@ -220,7 +220,8 @@ export async function chatWithQRA(
       success: false,
       error: error instanceof Error ? error.message : String(error),
     });
-    return QRA_MESSAGES.error;
+    // Devre açık (sağlayıcı üst üste arızalı): "hata" değil, dürüst "şu an bakımda" mesajı.
+    return isAiProviderUnavailableError(error) ? QRA_MESSAGES.unavailable : QRA_MESSAGES.error;
   }
 }
 
