@@ -186,6 +186,8 @@ describe('Rozet / ödül / plan silme = onaylı arşiv (P0-26)', () => {
   });
 
   it('arşivlenmiş ödül alınamaz (okuma ile tx arasında arşivlense bile)', async () => {
+    // Eski PATCH takma adı artık requireAuth (defineRoute) + claimReward servisi kullanır.
+    mockRequireAuth.mockResolvedValue({ session: { user: { id: 'cust-1', role: 'CUSTOMER' } } });
     mockGetServerSession.mockResolvedValue({ user: { id: 'cust-1', role: 'CUSTOMER' } });
     db.user.findUnique.mockResolvedValue({ id: 'cust-1', points: 1000 });
     db.reward.findUnique
@@ -200,8 +202,11 @@ describe('Rozet / ödül / plan silme = onaylı arşiv (P0-26)', () => {
       body: JSON.stringify({ rewardId: 'r-1' }),
     }));
     expect(res.status).toBe(404);
-    // Koşullu yazım arşiv/aktiflik koşulunu taşır; puan düşülmez, kupon üretilmez.
-    expect(db.reward.updateMany.mock.calls[0][0].where).toMatchObject({ id: 'r-1', isActive: true, archivedAt: null });
+    // claimReward kullanıcı kilidi altında ödülü TAZE okur; arşivliyse 404 (stok/borç yazımı yok).
+    // Koşullu stok yazımı da arşiv/aktiflik koşulunu taşır (yarışın son savunması).
+    for (const call of db.reward.updateMany.mock.calls) {
+      expect(call[0].where).toMatchObject({ id: 'r-1', isActive: true, archivedAt: null });
+    }
     expect(db.user.updateMany).not.toHaveBeenCalled();
     expect(db.userReward.create).not.toHaveBeenCalled();
   });
