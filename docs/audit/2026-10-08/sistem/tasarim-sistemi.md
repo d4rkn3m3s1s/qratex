@@ -500,3 +500,72 @@ Kayıt, layout'ta `data-register="ops|play"` ile işaretlenir; `play`'e özgü y
 - K1 ve Y3'ün görsel sonucu tarayıcıda gözlenmedi; K1 derlenmiş CSS ile, Y3 Next.js `loading.tsx` yerleşim semantiği ve kaynak kodla doğrulandı.
 - `app/lab/` (git'te izlenmeyen deneme dizini) kapsam dışı bırakıldı; sayımlarda yer aldığı yerler (ör. hex en yüksek dosya `app/lab/zoom/zoom-client.tsx`) sonuçları anlamlı ölçüde değiştirmiyor.
 - Grep tabanlı sayımlar çok satırlı JSX'te bir miktar eksik sayabilir; oranlar ve sıralama güvenilir, mutlak sayılar ±%5 kabul edilmeli.
+
+---
+
+## Uygulama sonrası durum
+
+> Yeniden denetim: 2026-10-11, `feat/platform-overhaul`. Her bulgu ŞİMDİKİ koda karşı grep + dosya okuma + Jest ile yeniden ölçüldü (iki dalganın yeniden yazımları dahil). Tarayıcıda gözle doğrulama yine YAPILMADI (dev server yasak); görsel iddialar kaynak + kontrast hesabı + test düzeyindedir.
+> Bu turun commit'leri: `bcba3d68` (tema motoru, body.dark regresyonu, Y3/Y5/Y6, primitifler, fontlar), `feab726f` (z-index ölçeği, panel hata sınırları, ölü bileşenler, korkuluk testleri), `4b58b8bd` (ölü eski ekip panosu, dekoratif zeminler hareket politikasına, bildirim merkezi token'ları), `21657f5c`, `53d1a114`, `98822bb9`.
+
+### Bulgu bulgu
+
+| # | Durum | Kanıt (şimdiki kod) |
+|---|---|---|
+| **K1** `.animate-in` çakışması | **KAPANDI** | Proje sınıfı `qx-enter` (`app/globals.css`); `.animate-in`/`fade-in`/`float`/`enter` adları yeniden tanımlanmıyor; Tailwind'de çekirdek `bounce`/`pulse` ezmeleri ve 14 ölü animasyon da kaldırıldı (`animate-bob` ayrı ad). Bekçi: `__tests__/design/tokens-contrast.test.ts` "ad alanı kuralları" — bu turda o testteki keyframe regex'inin şablon dizesinde `\s` → `s` olduğu için **hiçbir şeyi yakalamadığı** bulundu ve `String.raw` ile düzeltildi. |
+| **K2** Koyu modda destructive metin 1,93:1 | **KAPANDI** | `text-destructive/danger/success/warning/info/brand` Tailwind'de `*-text` rolüne gider; koyu `--danger-text` 7,2:1. Bu turda kalan yarısı kapandı: `text-primary` (650+ kullanım, koyuda 3,49:1) da `--brand-text`'e bağlandı (`tailwind.config.ts` `textColor.primary`). Kontrast sözleşmesi 6 tema kombinasyonunda (açık/koyu × normal/renk körü/yüksek kontrast) Jest'te. |
+| **Y1** Çok yazarlı, kontrastsız tema motoru | **KAPANDI** | `lib/design/theme-derive.ts` tohumdan rol token'larını kontrast GARANTİLİ türetir (dolgu üstü metin beyaz/mürekkep seçimi — Kraliyet Altını 2,10:1 → mürekkep; kart zeminden +3/+6/+9 L; metin/marka/durum metinleri tüm yüzeylerde ≥ 4,5; odak halkası ≥ 3; mod dışı özel zeminde bile). `lib/design-system/theme-runtime.ts` iki modun bloğunu tek `<style>` olarak üretir; **SSR ilk HTML'e basar** (`app/layout.tsx`, FOUC yok), istemci yalnız değişiklikte yazar (`lib/apply-runtime-theme.ts`). `html`+`body` satır içi yazım, mod değişiminde yeniden boyama, ölü önizleme dinleyicisi ve rakip `hooks/use-theme-colors.ts` kalktı; dönemsel konsept aynı türetmeden geçer. Öncelik CSS özgüllüğüyle sabit: varsayılan (0,1,0) < tema `:root:not(.dark)` / `:root.dark` (0,2,0) < a11y `html:root.…` (≥ 0,2,1). Admin kontrast raporu ve CSS dışa aktarımı aynı fonksiyonu kullanır. `Card glass` (token dışı `bg-white/85`) kaldırıldı. Jest `__tests__/design/theme-derive.test.ts`: 13 aile × 2 mod + 5 uç özel tema tam sözleşme, varsayılanlar = globals.css, CSS çıktısı yalnız sayısal HSL. |
+| **Y2** Durum token'ları kullanılmıyor | **KAPANDI** | Rol token sınıfı kullanımı 0 → **1.420**; panel sayfa dizinleri (admin/bayi/müşteri/personel) ham palet / sabit hex / < 12px = **0** (`lib/data/design-drift.json`); `Badge` rol token'lı; renk körü ve yüksek kontrast modları rol token'larını yeniden tanımlar. Kalan 121 ham palet yalnız `components/` altında oyun, kimlik çerçevesi (avatar-frame) ve asistan; `html.colorblind .text-red-*` yedeği yalnız bunlar için duruyor. Bekçi: `__tests__/design/design-guards.test.ts` (panel alanları 0 + toplam cırcırı). |
+| **Y3** Panel `loading.tsx` kabuğu ikinci kez çiziyor | **KAPANDI** | `components/dashboard/dashboard-route-loading.tsx` yalnız içerik iskeleti (başlık + 4 metrik + bölüm, statik); sahte `lg:w-72` kenar çubuğu ve sahte başlık yok. Personel `loading.tsx` i18n etiketli. |
+| **Y4** "Animasyonları azalt" framer'a ulaşmıyor | **KAPANDI** | `MotionPolicyConfig` (OS VEYA uygulama ayarı → `reducedMotion="always"`), `app/layout.tsx` init betiği `qratex-a11y`'yi ilk boyamadan önce uygular, `Ambient` / `useReducedMotionPref`. Bu turda: `DynamicBackground` (26 dekoratif zemin; framer `repeat: Infinity` + canvas rAF) azaltılmış harekette hiç yüklenmez/çizilmez; ölü `FloatingOrbs` (blur + opaklık döngüsü) silindi. `repeat: Infinity` 89 → 35; kalanların hepsi play yüzeyinde ve politika kancalı ya da `DynamicBackground` arkasında. |
+| **Y5** Çelişkili belgeler, yaşamayan rehber | **KAPANDI** | `MASTER.md` + `pages/dashboard.md` → `docs/archive/design-system-qratex-v0/` (UYGULAMAYIN bandıyla); `components/layout/DESIGN-LANGUAGE.md` değişiklik günlüğünden tek sayfalık 10 kurala (CI'ın koruduğu kurallar). Yaşayan rehber `/admin/design-system` (dalga 2; eski `/admin/design-language` kalıcı yönlenir). `BRAND_PRIMARY_HEX` `#9333ea` → `#7c3aed` (= `--primary`), tarayıcı çubuğu `#f9f8fc` / `#070a13` (= `--background`); Jest eşitliği doğrular. |
+| **Y6** Parçalı sayfa başlığı | **KAPANDI** | Tek `PageHeader` (`components/ds/page` → `components/states`; `compact|hero`, mobilde görünür tek h1). `AdminPremiumHero`, `DashboardPageHero`, eski `dashboard/page-header`, `DashboardPageHeading` silindi; son 4 kullanıcı göçtü. Başlık kapsaması (sayfa ya da segment kabuğu h1'i, yönlendirmeler hariç): admin 45/45, bayi 29/29, müşteri 23/23, personel 1/1. `bg-white text-emerald-900` hero butonları 11 → 0, "hero üstü outline" kopyaları 30 → 0. |
+| **O1** Marka moru ~155 yerde sabit | **KAPANDI (bilinçli istisnalarla)** | 155 → **28**; kalanlar CSS değişkeni okuyamayan bağlamlar (canvas/WebGL zeminleri, 3B boss, konfeti, OG görseli, e-posta) ve kimlik rengi (karakter rozeti). Glow/gölge/gradyan token'ları `hsl(var(--primary))`; bu turda TV duvarı parıltısı ve sabit `rgba(139,92,246)`'lı eski GlowCard/FloatingOrbs kapandı. |
+| **O2** Motion dili tanımsız | **KISMEN** | `lib/motion` tek kaynak (süre/easing/spring/ofset/stagger token'ları, varyantlar, `staggerDelay` bütçesi, `Ambient`, `Reveal`) + CSS eşleniği; 164 dosya kullanıyor (`DURATION.*` 98, `SPRING.*` 20). Tam `motion` importu 5 → 0 (bekçili), CSS keyframe çakışmaları yok, bütçesiz `index * 0.1` kademesi bekçili (son kullanıcı genel menü düzeltildi). **Kalan:** play yüzeylerinde (kutlama, oyun, ambient) 106 ham `duration:` değeri; `LazyMotion strict` açılmadı (bekçi testi aynı garantiyi veriyor, 3. taraf riski). |
+| **O3** Primitif sapmaları | **KISMEN** | Radius token'ları (`chip/control/card/sheet`), `Card` `rounded-card` + `CardTitle` 16px; `Button loading` etiketi korur; `Button glass` ve globals'taki sınıf adına göre `!important` "açık mod güvenlik ağı" silindi (koyu oyun/kamera/TV yüzeylerinde butonları açık hapa çeviriyordu); `Badge` `<span>`, nadirlik → `RarityBadge`; RHF + zod `components/ds/form` (20 ekran); `ConfirmAction` 95 dosya, native `confirm()` 14 → 1 (gerekçeli: kaydedilmemiş değişiklikle ayrılma koruması). **Kalan:** `Card` `h-full flex-col` varsayılanı bilinçli korundu (ebeveyn yüksekliği yokken etkisiz; ızgarada eşit yükseklik sağlıyor — küresel kaldırma görsel doğrulama ister); 53 native `<select>` ekran-yerel sabitlerle (erişilebilir ama ortak `NativeSelect` primitifi yok); 366 ham `<button>`. |
+| **O4** Durum standardı yok | **KAPANDI** | `QueryState` 191, `EmptyState` 131 dosya, `ErrorState`, `PanelErrorBoundary`. Bu turda dört panel `error.tsx` tek `PanelRouteError`'a (role=alert `<section>`, tekrar dene, hata kodu, panele dön, TR/EN): her biri layout'un `<main>`'i içinde **ikinci `<main>` + ikinci içeriğe-atla** açıyordu, görünüm/dil karışıktı. Toast yüzeyi `surface-2` + `elevation-2`, tür ikonları rol token'ı. |
+| **O5** Kopya yüzey kalıpları | **KAPANDI** | `PREMIUM_PANEL_CARD_BASE` ve 37 satır içi kopyası 0 (`lib/panel-surface.ts` silindi); `MetricTile/MetricGrid` 78, `StatusBadge` 160 dosya; inbox `tones.split` hatası yeniden yazımla yok; ölü `StatsCard`, glass/shimmer/tilt kartları, `AdminProgressStatCard` silindi. |
+| **O6** `globals.css` ölü/çift tanım | **KAPANDI** | 20+ ölü sınıf 0; bu turda `aurora`, `premium-hero-breathe`, `no-print`, container sorgusu ve Tailwind çekirdeğinin kopyası 4 yardımcı da kalktı; `:root` tek açık tanım. Dosya bölünmedi (bölümlü tek kaynak; token sözleşmesi Jest'te). |
+| **D1** Tipografi | **KAPANDI** | `qx-display…qx-overline` ölçeği (1.000+ kullanım); `font-mono` artık gerçek eş aralıklı **JetBrains Mono** (önyüklemesiz), Space Grotesk `font-display`; `latin-ext` alt kümesi (Türkçe glifler ilk istekte). `text-[≤9px]` 47 → 3 (2'si oyun karosundaki dekoratif ✓ işareti, 1'i rehberdeki "yapma" örnek metni); `text-[10/11px]` 493 → 118. |
+| **D2** İkonografi kuralı | **KISMEN** | Tek kütüphane (lucide) korunuyor; hero'daki `[&_svg]:!text-foreground` çatışması kahramanla birlikte kalktı; `PageHeader` / `ErrorState` ikon boyutunu kendisi normalize eder. **Kalan:** ortak `Icon` sarmalayıcısı (boyut/stroke token'ı) yok. |
+| **D3** z-index ölçeği | **KAPANDI** | `--z-base…skip` + yeni `floating 45`, `popover 80` (menüler modal ve çerez bandı üstünde); Radix primitifleri token'da; sayfa üstü keyfi `z-[N≥10]` **0** (bekçili), Tailwind safelist kaldırıldı, `lib/ui-z.ts` token sınıfları. |
+| **D4** Personel kabuğu | **KAPANDI** | Personel layout iki dilli, hata sınırı ortak `PanelRouteError`, yükleme iskeleti yalnız içerik + i18n. |
+
+### Bu turda bulunan yeni sorunlar (dalga regresyonları) — hepsi kapandı
+
+1. **Koyu modda erişilebilirlik modları fiilen çalışmıyordu.** `ThemeModeSync`, başlık ve auth kabuğu `dark` sınıfını `body`'ye de ekliyor; globals'taki çıplak `.dark { … }` bloğu body'de varsayılan koyu token'ları YENİDEN bildirip `html.colorblind.dark` / `html.dark.high-contrast` değerlerini (ve tema paletini) tüm sayfa için geçersiz kılıyordu. → `.dark:not(body)` + a11y seçicileri `html:root…`; Jest bekçisi.
+2. **Satır içi tema a11y'yi eziyordu:** preset zemini seçiliyken yüksek kontrastın `--border` / `--muted-foreground` değerleri tema tarafından eziliyordu → tek `<style>` + özgüllük sırası.
+3. **Açık mod güvenlik ağı yanlış hedefe vuruyordu:** `[class*='bg-white/10'][class*='text-white']` `hover:bg-white/10`'u da yakalıyor; oyun HUD'u, kamera vizörü, TV duvarı, kart yüzü gibi koyu yüzeylerdeki butonları açık modda açık hapa çeviriyordu → silindi.
+4. **Bildirim merkezinde telafi teklifi düğmesi** amber-500 üstünde beyaz metin (2,1:1) → `bg-warning text-warning-fg`.
+5. **Select/dropdown menüleri çerez bandının altında kalabilirdi** (eski 100 sabiti token'a göçerken) → popover katmanı 80.
+6. **Ölü ama sayılan kod:** `/admin/ekip` ve `/customer/ekip` `team-workspace`'e taşınmıştı; eski `team-board.tsx` (1.600+ satır) ve yalnız onun kullandığı 10 bileşen hiçbir yerden içe aktarılmıyordu ama ham paletin %55'ini ve < 12px metnin %40'ını taşıyordu → silindi (+ ikinci derece yetimler). Ayrıca kullanılmayan 11 efekt/eski bileşen (AuroraText, Spotlight, HallOfFame, LoginStreakCard…).
+7. **Boş geçen test:** kontrast testindeki keyframe çakışma regex'i hiçbir şeyi yakalamıyordu (yukarıda K1).
+
+### Önce / sonra (bu raporun taban metrikleri)
+
+| Metrik | Rapor tarihi | Şimdi | Hedef |
+|---|---|---|---|
+| Panel dizinlerinde ham palet / hex / < 12px | ~2.000 / – / – | **0 / 0 / 0** | < 150 |
+| Rol durum token'ı kullanımı | 0 | 1.420 | > 800 |
+| Marka moru literal | ~155 | 28 (yalnız canvas / OG / e-posta / kimlik) | 0 (kimlik istisnalı) |
+| AA altı token çifti (preset × mod × a11y) | ≥ 7 | **0** (CI: 13 aile × 2 mod + 6 a11y kombinasyonu + uç özel temalar) | 0 |
+| `text-[≤9px]` | 47 | 3 (2 dekoratif ✓, 1 belge örneği) | 0 |
+| Başlık kapsaması admin / bayi / müşteri | %71 / %51 / %29 | %100 / %100 / %100 | %100 |
+| `EmptyState` kullanan dosya | 4 | 131 | ≥ 60 |
+| Native `confirm()` | 14 | 1 (gerekçeli istisna) | 0 |
+| Tam `motion` importu | 5 | 0 | 0 |
+| Sayfa üstü keyfi `z-[N]` | 15+ | 0 | – |
+| `globals.css` ölü sınıf | 20+ | 0 | 0 |
+
+### Yeni puan: **9 / 10**
+
+Gerekçe: Raporun yapısal sorunlarının tamamı kök nedenden kapandı ve CI'a bağlandı — tema motoru tek yazarlı, SSR'lı ve her preset/özel temada kontrast garantili; a11y modları gerçekten çalışıyor (bu turda bulunan body.dark regresyonu dahil); tek başlık / durum / hata / z-index sistemi; panel sayfaları ham paletten tamamen arınmış ve `__tests__/design/*` (kontrast sözleşmesi, tema türetme, ad alanı, eski katman / z / onay / stagger yasakları, drift cırcırı) gerilemeyi düşürüyor. 10 olmamasının nedenleri aşağıdaki kalanlar ve görsel regresyon tabanının (Playwright ekran görüntüleri) hâlâ olmaması.
+
+### Kalan maddeler
+
+1. **O2:** play yüzeylerinde 106 ham `duration:` (kutlama/oyun/ambient) → `DURATION.celebrate|moment` token'larına göç; ardından `LazyMotion strict`.
+2. **O3:** ortak `NativeSelect` primitifi + 53 native `<select>`'in ekran-yerel sınıf sabitlerinden göçü; `Card` `h-full` varsayılanını `stretch` prop'una almak (görsel doğrulama ile).
+3. **D2:** `Icon` sarmalayıcısı (12/16/20/24, stroke 1,75, `tone`).
+4. **Y2 kuyruğu:** `components/` altındaki 121 ham palet (oyunlar, avatar çerçeveleri, asistan) — kimlik renkleri `--category-*`'e; bitince `html.colorblind` sınıf yedeği silinir.
+5. **Yönetişim 4.6(3):** Playwright görsel regresyon tabanı (10 temsilî sayfa × açık/koyu × 2 preset) — bu ortamda dev server yasak olduğu için kurulamadı.
+6. Ölü i18n anahtarları (`adminDesignLanguage`, `customerError`, `dealerError`) `messages/*.json`'da duruyor (dosya paralel i18n çalışmasıyla düzenlendiği için dokunulmadı).
