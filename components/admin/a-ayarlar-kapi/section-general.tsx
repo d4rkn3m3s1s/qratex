@@ -10,9 +10,10 @@ import { InlineError, SectionCard } from '@/components/states';
 import { StatusBadge } from '@/components/ds';
 import { cn } from '@/lib/utils';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
-import { SETTINGS_KEYS, type BackgroundEffect } from '@/lib/platform-settings/registry';
+import { PLATFORM_SETTINGS, SETTINGS_KEYS, type BackgroundEffect } from '@/lib/platform-settings/registry';
 import { errorText, formatIstanbul, sendTestMail, type MailTestResult } from './api';
 import { EFFECT_GROUPS, changeFor, effectName, effectOf, useSaveSettings } from './shared';
+import { AdminAyarlarKapiText } from './copy';
 
 const OWNER_LINKS: Array<{ title: string; text: string; href: string; cta: string }> = [
   { title: 'Tema ve renkler', text: 'Açık/koyu tema, marka renkleri ve varsayılan mod Tasarım Sistemi’nde yönetilir.', href: '/admin/design-system', cta: 'Tasarım Sistemi' },
@@ -40,7 +41,7 @@ export function GeneralSection({ state }: { state: PlatformSettingsState }) {
         {context.seo ? (
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
-              <dt className="qx-caption text-fg-muted">Site adı</dt>
+              <dt className="qx-caption text-fg-muted"><AdminAyarlarKapiText k="siteName" /></dt>
               <dd className="qx-body font-medium text-fg">{context.seo.siteName || '—'}</dd>
             </div>
             <div className="min-w-0">
@@ -72,6 +73,8 @@ export function GeneralSection({ state }: { state: PlatformSettingsState }) {
   );
 }
 
+const DEFAULT_EFFECT: BackgroundEffect = PLATFORM_SETTINGS[SETTINGS_KEYS.backgroundEffect].default;
+
 function BackgroundEffectCard({ state }: { state: PlatformSettingsState }) {
   const save = useSaveSettings();
   const [pending, setPending] = useState<BackgroundEffect | null>(null);
@@ -94,11 +97,23 @@ function BackgroundEffectCard({ state }: { state: PlatformSettingsState }) {
       description={effectOf(SETTINGS_KEYS.backgroundEffect)}
       icon={<Sparkles aria-hidden />}
       actions={
-        <Button asChild variant="ghost" size="sm" className="min-h-11 gap-1.5">
-          <a href="/" target="_blank" rel="noreferrer">
-            Ana sayfayı aç <ArrowUpRight className="h-4 w-4" aria-hidden />
-          </a>
-        </Button>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11"
+            disabled={current === DEFAULT_EFFECT || save.isPending}
+            onClick={() => choose(DEFAULT_EFFECT)}
+          >
+            Varsayılana dön
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="min-h-11 gap-1.5">
+            <a href="/" target="_blank" rel="noreferrer">
+              Ana sayfayı aç <ArrowUpRight className="h-4 w-4" aria-hidden />
+            </a>
+          </Button>
+        </div>
       }
     >
       {seasonal?.backgroundEffect ? (

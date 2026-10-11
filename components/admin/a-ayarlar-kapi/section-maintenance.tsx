@@ -11,7 +11,8 @@ import { DirtyBar, StatusBadge } from '@/components/ds';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
 import { MAINTENANCE_MESSAGE_MAX, PLATFORM_SETTINGS, SETTINGS_KEYS, type MaintenanceState } from '@/lib/platform-settings/registry';
 import { errorText, formatIstanbul, isConflict } from './api';
-import { SettingSwitchRow, changeFor, useSaveSettings } from './shared';
+import { SettingSwitchRow, changeFor, useReportDirty, useSaveSettings } from './shared';
+import { AdminAyarlarKapiText } from './copy';
 
 /** ISO → `datetime-local` (Europe/Istanbul, UTC+3 sabit). */
 function isoToLocal(iso: string | null): string {
@@ -42,6 +43,7 @@ export function MaintenanceSection({ state }: { state: PlatformSettingsState }) 
     () => draft.enabled !== base.enabled || draft.message.trim() !== base.message || draft.plannedEndAt !== base.plannedEndAt,
     [draft, base]
   );
+  useReportDirty('bakim', dirty);
   const turningOn = !base.enabled && draft.enabled;
 
   const doSave = async () => {
@@ -108,7 +110,7 @@ export function MaintenanceSection({ state }: { state: PlatformSettingsState }) 
               placeholder="Örn: Ödeme altyapısını güncelliyoruz, kısa süre içinde döneceğiz."
             />
             <p id={ids.help} className="qx-caption flex justify-between gap-3 text-fg-muted">
-              <span>Boş bırakılırsa genel bir bakım metni gösterilir.</span>
+              <span><AdminAyarlarKapiText k="maintenanceDefault" /></span>
               <span className="tabular-nums">
                 {draft.message.length}/{MAINTENANCE_MESSAGE_MAX}
               </span>
@@ -124,7 +126,7 @@ export function MaintenanceSection({ state }: { state: PlatformSettingsState }) 
               value={isoToLocal(draft.plannedEndAt)}
               onChange={(e) => setDraft((d) => ({ ...d, plannedEndAt: localToIso(e.target.value) }))}
             />
-            <p className="qx-caption text-fg-muted">Yalnız bilgi amaçlı; bakım kendiliğinden kapanmaz.</p>
+            <p className="qx-caption text-fg-muted"><AdminAyarlarKapiText k="maintenanceInfoOnly" /></p>
           </div>
         </div>
       </div>

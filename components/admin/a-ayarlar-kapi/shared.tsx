@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
@@ -14,6 +14,21 @@ import {
   type MaintenanceState,
 } from '@/lib/platform-settings/registry';
 import { errorText, isConflict, saveSettings, settingsKeys, type SettingChange } from './api';
+
+/**
+ * Bölüm içi kaydedilmemiş taslak bildirimi. `DirtyBar` yalnız sekme kapanışını (`beforeunload`)
+ * yakalar; Ayarlar merkezinde bölüm değiştirmek bileşeni söküp taslağı SESSİZCE atıyordu.
+ * Bölümler kirli durumlarını buraya bildirir, merkez bölüm değişiminde onay ister.
+ */
+export const SettingsDirtyContext = createContext<((section: string, dirty: boolean) => void) | null>(null);
+
+export function useReportDirty(section: string, dirty: boolean) {
+  const report = useContext(SettingsDirtyContext);
+  useEffect(() => {
+    report?.(section, dirty);
+    return () => report?.(section, false);
+  }, [report, section, dirty]);
+}
 
 export const EFFECT_GROUPS: Array<{ title: string; items: Array<{ id: BackgroundEffect; name: string; description: string }> }> = [
   {

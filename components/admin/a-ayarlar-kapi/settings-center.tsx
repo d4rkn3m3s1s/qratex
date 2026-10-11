@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -16,6 +16,8 @@ import { GeneralSection } from './section-general';
 import { IdentitySection } from './section-identity';
 import { SecuritySection } from './section-security';
 import { MaintenanceSection } from './section-maintenance';
+import { SettingsDirtyContext } from './shared';
+import { AdminAyarlarKapiText } from './copy';
 
 const AccessSection = dynamic(() => import('./section-access').then((x) => x.AccessSection), {
   ssr: false,
@@ -74,18 +76,34 @@ export function SettingsCenter({ initial }: { initial: PlatformSettingsState | n
     setSection(resolveSection(params.get('bolum'), params.get('tab')));
   }, [params]);
 
+  // Kaydedilmemiş taslağı olan bölümler (bölüm değişince taslak sessizce kaybolmasın).
+  const dirtySections = useRef(new Set<string>());
+  const reportDirty = useCallback((id: string, dirty: boolean) => {
+    if (dirty) dirtySections.current.add(id);
+    else dirtySections.current.delete(id);
+  }, []);
+
   const go = useCallback(
     (id: SectionId) => {
+      if (id === section) return;
+      if (
+        dirtySections.current.size > 0 &&
+        !window.confirm('Bu bölümde kaydedilmemiş değişiklikler var. Bölümden çıkarsanız kaybolacak. Devam edilsin mi?')
+      ) {
+        return;
+      }
+      dirtySections.current.clear();
       setSection(id);
       const next = new URLSearchParams(params.toString());
       next.delete('tab');
       next.set('bolum', id);
       router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     },
-    [params, pathname, router]
+    [params, pathname, router, section]
   );
 
   return (
+    <SettingsDirtyContext.Provider value={reportDirty}>
     <div className="space-y-6 pb-24">
       <PageHeader
         icon={<Settings2 aria-hidden />}
@@ -155,6 +173,7 @@ export function SettingsCenter({ initial }: { initial: PlatformSettingsState | n
         </Motion.section>
       </div>
     </div>
+    </SettingsDirtyContext.Provider>
   );
 }
 
@@ -198,7 +217,7 @@ function StatusStrip({ state, onGo }: { state: PlatformSettingsState; onGo: (id:
     <div className="space-y-3">
       {maint.enabled ? (
         <div role="status" className="qx-small rounded-card border border-danger-border bg-danger-subtle px-4 py-3 text-fg">
-          <strong className="text-danger">Bakım modu açık.</strong> Müşteri ve bayi panelleri şu an kapalı.{' '}
+          <strong className="text-danger"><AdminAyarlarKapiText k="maintenanceOn" /></strong> Müşteri ve bayi panelleri şu an kapalı.{' '}
           <button type="button" className="font-medium underline underline-offset-4" onClick={() => onGo('bakim')}>
             Bakım ayarına git
           </button>

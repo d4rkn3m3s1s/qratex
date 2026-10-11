@@ -8,9 +8,16 @@ import { DirtyBar, StatusBadge } from '@/components/ds';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
 import { PLATFORM_SETTINGS, SETTINGS_KEYS } from '@/lib/platform-settings/registry';
 import { errorText, isConflict } from './api';
-import { SettingSwitchRow, changeFor, useSaveSettings } from './shared';
+import { SettingSwitchRow, changeFor, useReportDirty, useSaveSettings } from './shared';
+import { Button } from '@/components/ui/button';
 
 type Draft = { registration: boolean; google: boolean; magic: boolean };
+
+const DEFAULTS: Draft = {
+  registration: PLATFORM_SETTINGS[SETTINGS_KEYS.registrationOpen].default,
+  google: PLATFORM_SETTINGS[SETTINGS_KEYS.googleAuth].default,
+  magic: PLATFORM_SETTINGS[SETTINGS_KEYS.magicLink].default,
+};
 
 function fromState(s: PlatformSettingsState): Draft {
   return {
@@ -32,6 +39,8 @@ export function IdentitySection({ state }: { state: PlatformSettingsState }) {
 
   const dirtyKeys = (Object.keys(draft) as Array<keyof Draft>).filter((k) => draft[k] !== base[k]);
   const dirty = dirtyKeys.length > 0;
+  useReportDirty('kimlik', dirty);
+  const atDefaults = (Object.keys(DEFAULTS) as Array<keyof Draft>).every((k) => draft[k] === DEFAULTS[k]);
   const risky = (base.registration && !draft.registration) || (base.google && !draft.google);
 
   const doSave = async () => {
@@ -56,6 +65,19 @@ export function IdentitySection({ state }: { state: PlatformSettingsState }) {
       title="Kimlik doğrulama"
       description="Bu anahtarlar gerçek kimlik akışlarını yönetir; her birinin yanında etkisi yazılıdır."
       icon={<KeyRound aria-hidden />}
+      actions={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11"
+          disabled={atDefaults || save.isPending}
+          onClick={() => setDraft(DEFAULTS)}
+          title="Kayıt açık, Google açık, bağlantıyla giriş kapalı. Taslağa uygular; kaydetmeden etkisizdir."
+        >
+          Varsayılana dön
+        </Button>
+      }
     >
       <div className="divide-y divide-border">
         <SettingSwitchRow
