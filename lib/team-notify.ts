@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isChannelEnabled, kindToGroup } from '@/lib/notification-prefs';
 import { teamTaskHref } from '@/lib/team/href';
+import { runAfterResponse } from '@/lib/run-after';
 
 /**
  * Ekip modülü in-app bildirimleri. Mevcut Notification modeli + /api/notifications
@@ -54,8 +55,12 @@ async function createNotification(opts: {
     }
 
     if (pushEnabled) {
-      const { sendPushNotification } = await import('@/lib/push');
-      void sendPushNotification(opts.userId, opts.title, opts.message, href).catch(() => {});
+      // Ateşle-unut yerine after(): yanıt sonrası fonksiyon dondurulsa da push yarıda kalmaz (O4).
+      const userId = opts.userId;
+      runAfterResponse('ekip push', async () => {
+        const { sendPushNotification } = await import('@/lib/push');
+        await sendPushNotification(userId, opts.title, opts.message, href);
+      });
     }
   } catch {
     /* bildirim hatası akışı bozmasın */

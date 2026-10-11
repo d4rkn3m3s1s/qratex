@@ -4,7 +4,9 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
-Sentry.init({
+// Tek başlatma: `instrumentation-client.ts` (her derlemede) ve Sentry webpack eklentisi
+// (DISABLE_SENTRY_BUILD kapalıyken) bu dosyayı ikisi birden yükleyebilir.
+if (!Sentry.getClient()) Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
   environment: process.env.NODE_ENV,

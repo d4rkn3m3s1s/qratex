@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { runAfterResponse } from '@/lib/run-after';
 
 /**
  * AI Karakter Rozeti Atama.
@@ -377,14 +378,15 @@ export async function processConsumptionReviewForCharacterBadge(
         }
 
         // (2) E-posta bildirimi — kullanıcının e-postası varsa VE 'character'/'email' açıksa,
-        //     sürprizi bozmadan "karakterin hazır" maili (fire-and-forget). Sürpriz: hangi
-        //     karakter/kategori olduğu SÖYLENMEZ.
+        //     sürprizi bozmadan "karakterin hazır" maili (yanıttan sonra, after() ile — sunucusuz
+        //     dondurmada yarıda kalmasın; arka plan O4). Sürpriz: hangi karakter/kategori olduğu SÖYLENMEZ.
         if (user?.email && isChannelEnabled(prefs, 'character', 'email')) {
           const email = user.email;
           const name = user.name;
-          import('@/lib/team-email')
-            .then((m) => m.sendCharacterReadyEmail({ to: email, name }))
-            .catch(() => {});
+          runAfterResponse('karakter hazır e-postası', async () => {
+            const m = await import('@/lib/team-email');
+            await m.sendCharacterReadyEmail({ to: email, name });
+          });
         }
       }
     }

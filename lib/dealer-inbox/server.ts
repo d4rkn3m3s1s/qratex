@@ -17,6 +17,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { runAfterResponse } from '@/lib/run-after';
 import { redisGetJson, redisSetJson } from '@/lib/redis';
 import { parsePositiveIntEnv } from '@/lib/safe-env-number';
 import { addDays, istanbulDay, istanbulDayStart } from '@/components/ds/page/date-range';
@@ -1020,12 +1021,13 @@ async function resolveDealerName(dealerId: string): Promise<string> {
   return d?.businessName || d?.name || 'İşletme';
 }
 
+/** Yanıt e-postası yanıt döndükten SONRA (after) gider: sunucusuz dondurmada kaybolmaz (arka plan O4). */
 function fireReplyEmail(customerId: string, dealerId: string, snippet: string | null) {
-  void import('@/lib/notify-email')
-    .then(({ emailDealerReply }) =>
-      resolveDealerName(dealerId).then((dealerName) => emailDealerReply({ customerId, dealerName, feedbackSnippet: snippet }))
-    )
-    .catch((err) => console.error('[INBOX_REPLY_EMAIL] gönderim hatası:', err));
+  runAfterResponse('gelen kutusu yanıt e-postası', async () => {
+    const { emailDealerReply } = await import('@/lib/notify-email');
+    const dealerName = await resolveDealerName(dealerId);
+    await emailDealerReply({ customerId, dealerName, feedbackSnippet: snippet });
+  });
 }
 
 /**

@@ -14,6 +14,7 @@
  */
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { runAfterResponse } from '@/lib/run-after';
 import { getDealerAiPolicy, canUseAi } from '@/lib/ai-policy';
 import { moderateAutoReply } from '@/lib/ai-prompt-safety';
 import { matchReplyCondition, parseStoredCondition, renderReplyTemplate } from '@/lib/dealer-automation/reply-rules';
@@ -212,11 +213,14 @@ export async function processAutoReplies(feedbackId: string): Promise<AutoReplyO
             type: 'info',
           },
         });
-        // Transactional e-posta (opt-out kontrollü, ateşle-unut).
+        // Transactional e-posta (opt-out kontrollü). after(): yanıt/iş bittikten sonra da
+        // tamamlanır; sunucusuz dondurmada yarıda kalmaz (denetim O4).
         const customerId = feedback.userId;
-        import('@/lib/notify-email')
-          .then(({ emailDealerReply }) => emailDealerReply({ customerId, dealerName, feedbackSnippet: feedback.text }))
-          .catch((err) => console.error('[AUTO_REPLY_EMAIL]', err));
+        const snippet = feedback.text;
+        runAfterResponse('otomatik yanıt e-postası', async () => {
+          const { emailDealerReply } = await import('@/lib/notify-email');
+          await emailDealerReply({ customerId, dealerName, feedbackSnippet: snippet });
+        });
       }
       return { action: 'reply', written: true, ai: usedAi };
     }

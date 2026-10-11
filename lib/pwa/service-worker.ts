@@ -64,3 +64,26 @@ export function ensureServiceWorkerRegistration(): Promise<ServiceWorkerRegistra
 export function __resetServiceWorkerRegistrationForTests(): void {
   pendingRegistration = null;
 }
+
+/**
+ * Paylaşılan cihazda push aboneliğini bırakır (arka plan Y4): çıkış yapan ya da cihazı başka
+ * hesaba devreden kullanıcının bildirimleri bu tarayıcıya düşmeye devam etmesin.
+ *
+ * Yalnız TARAYICI tarafı `unsubscribe()` yapılır — oturum artık kapalı olabileceği için sunucu
+ * ucu çağrılmaz. Push servisi uç noktayı geçersiz kılar; sunucudaki kayıt ilk gönderimde
+ * 404/410 alır ve `lib/push` tarafından silinir. Yeni kullanıcı abone olduğunda tarayıcı YENİ
+ * bir uç nokta üretir (eski kayda bağlı 409 çakışması da böylece oluşmaz).
+ *
+ * SW kaydını OLUŞTURMAZ (yalnız var olanı okur). Hata yutulur; dönüş: abonelik bırakıldı mı.
+ */
+export async function releaseDevicePushSubscription(): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return false;
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    if (!subscription) return false;
+    return await subscription.unsubscribe();
+  } catch {
+    return false;
+  }
+}

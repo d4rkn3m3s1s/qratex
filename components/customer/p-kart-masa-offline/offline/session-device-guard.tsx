@@ -8,6 +8,10 @@
  *     bulgu 2). Son kullanıcı id'si yazılır → çevrimdışı sayfa yalnız onun kartını gösterir.
  *  2. Çevrimiçiyken sunucu KESİN olarak "oturum yok" derse (çıkış yapıldı): hepsi silinir.
  *     Çevrimdışıyken (`unauthenticated` ağ hatasından da gelebilir) hiçbir şey silinmez.
+ *  1-2b. Her iki durumda cihazın push aboneliği de bırakılır (arka plan Y4): çıkış yapan A'nın
+ *     bildirimleri, cihazı sonra kullanan B'nin ekranına düşmesin. Yalnız ÖNCEKİ kullanıcı
+ *     biliniyorken yapılır — ilk girişte (önceki kullanıcı kaydı yok) kişinin kendi aboneliği
+ *     bozulmaz.
  *  3. Çevrimdışı yedek sayfa gösterimleri (offline sayfasının yazdığı günlük) bağlantı gelince
  *     rızaya bağlı analitiğe (`track`) gönderilir ve günlük temizlenir.
  *
@@ -16,6 +20,7 @@
 import { useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { track } from '@/lib/analytics';
+import { releaseDevicePushSubscription } from '@/lib/pwa/service-worker';
 import {
   clearOfflineLog,
   clearUserRuntimeCaches,
@@ -49,6 +54,8 @@ export function SessionDeviceGuard() {
       if (prev !== uid) {
         void clearUserRuntimeCaches(cachesApi());
         purgeSnapshots(storage, uid);
+        // Önceki kullanıcı biliniyorsa cihazdaki abonelik ONUNDUR → bırak (yeni kullanıcı isterse yeniden açar).
+        if (prev) void releaseDevicePushSubscription();
       }
       writeSessionUid(storage, uid);
       return;
@@ -64,6 +71,7 @@ export function SessionDeviceGuard() {
         if (cancelled || !json || typeof json !== 'object') return;
         if ((json as { user?: unknown }).user) return;
         void clearUserRuntimeCaches(cachesApi());
+        void releaseDevicePushSubscription();
         purgeSnapshots(storage, null);
         writeSessionUid(storage, null);
       })
