@@ -29,8 +29,14 @@ export function Toaster() {
       dir="ltr"
       toastOptions={{
         classNames: {
+          // Yükseltilmiş yüzey (surface-2 + elevation-2): eskiden bg-background idi, kart/zeminle
+          // ayrışmıyordu. Tür ikonları rol token'ı (tema, renk körü ve yüksek kontrast izler).
           toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
+            'group toast group-[.toaster]:bg-surface-elevated group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:qx-elevation-2',
+          success: '[&_[data-icon]]:text-success',
+          error: '[&_[data-icon]]:text-danger',
+          warning: '[&_[data-icon]]:text-warning',
+          info: '[&_[data-icon]]:text-info',
           description: 'group-[.toast]:text-muted-foreground',
           actionButton:
             'group-[.toast]:min-h-9 group-[.toast]:cursor-pointer group-[.toast]:touch-manipulation group-[.toast]:rounded-md group-[.toast]:bg-primary group-[.toast]:px-3 group-[.toast]:py-2 group-[.toast]:text-sm group-[.toast]:font-medium group-[.toast]:text-primary-foreground group-[.toast]:transition-colors group-[.toast]:duration-200 group-[.toast]:focus-visible:outline-none group-[.toast]:focus-visible:ring-2 group-[.toast]:focus-visible:ring-ring',
