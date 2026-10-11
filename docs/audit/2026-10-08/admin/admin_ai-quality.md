@@ -203,3 +203,78 @@ Sayfa ilk bakışta "çalışıyor" görünüyor, ama değerlendirme döngüsün
 - İşaret tutarsızlığı da gerçek: `startEdit` notu `[bootstrap-demo]` ile önceden dolduruyor (`page.tsx:107`). İnceleyici notu değiştirirse PATCH (`app/api/admin/ai-quality/route.ts:85`) işareti siler; tracker ID'si yine de silmeyi garanti eder. Tersine, tracker kaydı kaybolursa (ör. elle `Settings` sıfırlanırsa) not değiştirilmiş demo örnekleri artık temizlenemez ve kalıcı olarak "gerçek" örnek gibi kalır.
 - **Yeniden üretim:** "Demo örnek üret" → bir örneği aç, "Skor Ver" → 40 gir, kaydet (`status:'reviewed'`) → "Demo örnekleri sil" → toast "silinen: N"; incelenmiş örnek ve skoru geri dönüşsüz yok olur, "İncelendi" sayacı düşer.
 - Düzeltme yönü: demo kaynağını şemada bir `source` alanıyla işaretlemek (not alanını işaret olarak kullanmamak), temizliği `status:'pending'` ile sınırlamak veya incelenmişleri `source:'manual'`'a terfi ettirmek, yıkıcı bootstrap eylemlerine onay diyaloğu eklemek ve üretimde bootstrap seed/clear uçlarını ortam bayrağıyla kapatmak.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/ai/quality` (sekme `?tab=inceleme`). `/admin/ai-quality` sorgu parametreleri korunarak buraya kalıcı yönlenir (`permanentRedirect`). Eski `GET/PATCH /api/admin/ai-quality` silindi.
+
+**Yeni yapı:** Sunucu bileşeni (`app/admin/ai/quality/page.tsx`) metrikleri ve kuyruğun ilk sayfasını sunucuda okur. İstemci adası `components/admin/a-ai-kalite/**` içinde: QDL v2 `PanelPage`, `SectionTabs`, `MetricTile`, `DataTable` ve `DetailSheet` ile ops kaydında kuruldu. Sunucu mantığı `lib/ai-quality/{contract,quality.server,sampler,pii-mask,time}.ts` dosyalarında. BFF uçları `defineRoute` ile tanımlı (ADMIN, zod, rate limit; admin kapısı `requireAuth` içinde): `GET /api/admin/ai/quality/samples`, `GET|PATCH /samples/[id]`, `GET /metrics`, `POST /run`. Haftalık iş (`/api/internal/inngest/ai-quality-sample`, `/api/cron/daily` Pazar günü çağırır) aynı `runSampling` fonksiyonunu kullanır. Test: `__tests__/lib/ai-quality.test.ts` (23 test).
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR | QDL `PageHeader` (ops) ve "Yenile" aksiyonu |
+| 2 | Bekleyen sayacı | ÇALIŞIYOR | KPI kutusu ve sekme rozeti. Altında incelendi, atlandı ve geçersiz kırılımı var. |
+| 3 | İncelendi sayacı | ÇALIŞIYOR | Artık kalite metriğiyle birlikte gösteriliyor: haftalık ortalama doğruluk, delta ve 12 haftalık seri. |
+| 4–6 | Filtreler (Bekleyen/İncelendi/Tümü) | ÇALIŞIYOR | URL'ye bağlı `FilterBar`: durum (Bekliyor, İncelendi, Atlandı, Geçersiz, Tümü), model, duygu, niyet ve arama. Değerler zod ile doğrulanır. |
+| 7 | "Demo örnek üret" | KALDIRILDI | Gerçek veride örnek açan bu butonun yerini onaylı "Şimdi örnekle" aldı; gerçek örnekleme işini elle tetikler. Bootstrap eylemi Ayarlar'da duruyor. Demo bayi örnekleri "Demo bayi" rozetiyle ayrılır ve metriğe girmez. |
+| 8 | "Demo örnekleri sil" | KALDIRILDI | Bu sayfadan kaldırıldı. Bootstrap temizliği zaten yalnızca `pending` kayıtları siliyor; bunu başka bir yüzey düzeltmiş. |
+| 9 | Yükleniyor iskeleti | ÇALIŞIYOR | `QueryState`/`DataTable` iskeleti. Sayfa geçişinde önceki veri yerinde kalır. |
+| 10 | Boş durum | ÇALIŞIYOR | "Kuyruk temiz" ile "bu filtreyle örnek yok" ayrı gösterilir. Yanlış "haftalık 100 örnek" vaadinin yerine son örneklemenin zamanı ve örnek sayısı yazılır. |
+| 11 | Hata durumu | ÇALIŞIYOR | Hata artık boş liste gibi görünmüyor: `ErrorState` ve "Tekrar dene" var. 404 ve 403 ayrı gösterilir. |
+| 12 | Yorum metni | ÇALIŞIYOR | Listede 2 satırlık önizleme, detayda tam metin (PII maskeli). |
+| 13 | Yıldız | ÇALIŞIYOR | Ekran okuyucu için metin eklendi. |
+| 14 | Sentiment rozeti | ÇALIŞIYOR | Türkçe etiket ("Olumlu", "Olumsuz"…). Niyet de Türkçe gösterilir. |
+| 15 | Doğruluk rozeti | ÇALIŞIYOR | Renk tonunun yanında metin de var; durum yalnızca renkle anlatılmıyor. |
+| 16 | İncelendi ikonu | ÇALIŞIYOR | Metinli `StatusBadge` |
+| 17 | Satırı aç/kapa | ÇALIŞIYOR | `DataTable` satırı Enter ya da Space ile açılır. `DetailSheet` `?id=` derin bağlantısını ve önceki/sonraki gezinmeyi destekler. |
+| 18 | "Skor Ver" (BOZUK) | ÇALIŞIYOR | Ayrı düzenleme modu kaldırıldı; satır açılınca değerlendirme formu her zaman görünür. |
+| 19 | AI analizi görünümü | ÇALIŞIYOR | Alanlar tek tek gösterilir: duygu ve duygular, niyet ve güven, tema ve konu, aciliyet, kayıp riski ve çaba, aksiyon önerileri. Model, prompt sürümü ve analiz zamanı görünür. Ham JSON, katlanır "geliştirici görünümü"nde maskeli olarak durur. |
+| 20 | Skor girişi 0–100 | KALDIRILDI (yerine alan bazlı karar) | Her alan Doğru, Kısmen, Yanlış ya da Değerlendirilemez olarak işaretlenir. Skor sunucuda türetilir (1 / 0,5 / 0). Yanlış ya da kısmen işaretlenen alanlara doğru değer girilebilir. |
+| 21 | Notlar | ÇALIŞIYOR | `[bootstrap-demo]` iç işareti nota hiç dolmaz ve gösterilmez. |
+| 22 | Kaydet | ÇALIŞIYOR | Yükleniyor ve devre dışı durumu var. İyimser kilit (beklenen durum ve reviewedAt) çakışmada 409 döner. `auditLog` kararları, düzeltmeleri, eski ve yeni değeri tutar. "Kaydet ve sonraki" Ctrl/⌘+Enter ile de çalışır. |
+| 23 | İptal | ÇALIŞIYOR | Çekmeceyi kapatmak (Esc) |
+| 24 | Kayıtlı not | ÇALIŞIYOR | İç işaret sızmaz. Geçmiş zaman çizelgesi kimin, ne zaman, hangi skoru verdiğini gösterir. |
+| 25 | Yeniden skorlama (EKSİK) | ÇALIŞIYOR | İncelenmiş örnekte "Değerlendirmeyi güncelle", atlanan ve geçersiz örneklerde "Kuyruğa geri al" var. |
+| 26 | Sayfalama (EKSİK) | ÇALIŞIYOR | Sunucu tarafında sayfalı ve durumu URL'de. Bekleyen görünümü FIFO çalışır (en eski önce). |
+| 27 | Arama/filtre (EKSİK) | ÇALIŞIYOR | Metin, işletme ve QR araması; model, duygu ve niyet filtresi |
+| 28 | Kalite metrikleri (EKSİK) | ÇALIŞIYOR | İstanbul haftasına göre haftalık ortalama, delta ve seri. 12 haftalık grafik (lazy recharts ve erişilebilir tablo). Model kırılımı, alan kırılımı, en zayıf alan, inceleme oranı ve %70 eşik uyarısı. |
+| 29 | Bağlam (EKSİK) | ÇALIŞIYOR | İşletme, QR, yorum ve analiz zamanı, model, sürüm |
+| 30 | Örnekleme işi (KISMİ) | ÇALIŞIYOR | Duygu × niyet katmanlarıyla rastgele örnekleme. LLM dışı analizler (`bootstrap-heuristic`, `local-fallback`) ve demo bayiler hariç tutulur. Yorumu silinmiş bekleyen örnekler geçersiz sayılır. `/api/cron/daily` işi Pazar günü tetikler. Her çalışma denetim kaydına yazılır ve "son örnekleme" satırını besler. |
+| 31 | Yetki | ÇALIŞIYOR | `defineRoute` ile ADMIN rolü, admin kapısı (requireAuth) ve rate limit |
+| 32 | Denetim günlüğü (EKSİK) | ÇALIŞIYOR | review, skip, void, reopen ve sample_run kaydedilir. İnceleyici adı listede ve geçmişte görünür. |
+| 33 | Çok dillilik (KISMİ) | ÇALIŞIYOR (TR) | Tüm metinler tam Türkçe karakterli. Diğer Dalga 2 admin yüzeyleri gibi metin sabit Türkçe; admin genelinde EN çevirisi yok. |
+| 34 | Mobil satır (KISMİ) | ÇALIŞIYOR | `FilterBar` satır kaydırır, tablo `md` altında karta dönüşür, çekmece alttan açılır, dokunma hedefleri en az 44px. |
+| 35 | Liste animasyonu | ÇALIŞIYOR | Tüm listenin fade animasyonu kaldırıldı. Yalnızca örnek değişirken `fadeIn` çapraz geçişi var; `useMotionPolicy` ile azaltılmış harekette kapanır. |
+
+### Kapanan bulgular (11/11)
+
+1. "Skor Ver" ölü butondu. Düzeltildi.
+2. Sezgisel analizler havuza giriyordu. Artık örneklemeden ve metrikten dışlanıyor, bekleyen örnekleri geçersiz sayılıyor ve model rozeti görünüyor.
+3. Demo temizliği ve iç işaret sorunu. Butonlar sayfadan kaldırıldı, iç işaret gizlendi, demo rozeti eklendi.
+4. Skor hiçbir yerde okunmuyordu. Metrik paneliyle kapandı.
+5. Rubriksiz tek sayı. Yerine alan bazlı karar geldi ve tam metin gösteriliyor.
+6. Örnekleme yanlıydı. Artık katmanlı rastgele, son çalışma da görünüyor.
+7. Sayfalama yoktu, eski örnekler görünmüyordu. Liste sayfalı ve FIFO; `limit` ve `page` zod ile doğrulanıyor.
+8. Çift gönderim, yarış koşulu ve denetim izi eksikti. React Query, iyimser kilit (409) ve auditLog ile kapandı.
+9. Silinmiş yorumlar görünebiliyordu. Liste de örnekleme de bunları dışlıyor.
+10. Erişilebilirlik ve mobil kusurları giderildi.
+11. Dil ve tutarlılık: Türkçe etiket sözlüğü eklendi, ölü importlar temizlendi.
+
+### Eksik özelliklerden uygulananlar
+
+- Kalite gösterge paneli (1).
+- Odaklı inceleme akışı (2, kısmen): tam metin, alan kararı, Ctrl/⌘+Enter ile "kaydet ve sonraki", önceki/sonraki gezinme.
+- Alan bazlı düzeltme (3): düzeltmeler denetim kaydında tutuluyor.
+- Filtre ve arama (5).
+- Örnekleme kontrolü ile atla ve geçersiz durumları (6).
+
+### Kalanlar
+
+- **ŞEMA İSTEĞİ:** `AIQualitySample` için `source` (cron/manual/demo), `modelUsed` ve `promptVersion` anlık kopyası, `fieldVerdicts Json` ve `updatedAt` alanları. Bugün alan kararları ve düzeltmeler `AuditLog.newData` içinde tutuluyor; alan kırılımı da buradan okunuyor. Model bilgisi, örneğin bağlı olduğu yorumun güncel `aiModelUsed` değerinden okunuyor; yorum yeniden analiz edilirse bu değer kayabilir.
+- Düzeltmeler `AIFeedbackCorrection` tablosuna ya da öğrenme profiline yazılmıyor. Bu tablo bayi düzeltmesi anlamı taşıyor (`dealerId`) ve `/admin/ai/studio` (ai-learning) yüzeyine ait. Yönetici düzeltmesi bayi profiline karışmasın diye bilinçli olarak bırakıldı.
+- Çoklu inceleyici, uzlaşı (kappa) ve inceleme verisinin CSV/JSONL dışa aktarımı yapılmadı; atama ve uzlaşı şema değişikliği ister.
+- Eşiğin altında kalan haftalar için admin bildirimi gönderilmiyor; uyarı yalnızca sayfada görünüyor. Bildirim akışı başka bir yüzeye ait.

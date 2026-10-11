@@ -321,7 +321,7 @@ export function checkAdminRateLimit(identifier: string): { ok: boolean; retryAft
 
 // --- QRA floating chat (/api/chat): müşteri sıkı, bayi/admin gevşek, anon IP parmak izi ---
 const QRA_CHAT_WINDOW_MS = 60 * 1000;
-const MAX_QRA_CHAT_PER_MINUTE = {
+export const MAX_QRA_CHAT_PER_MINUTE = {
   admin: 120,
   dealer_staff: 80,
   customer: 12,

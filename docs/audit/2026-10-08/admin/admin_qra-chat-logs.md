@@ -235,3 +235,71 @@ Her iddia, çağıran/çağrılan kod uçtan uca okunarak çürütülmeye çalı
 **Yeniden üretim:** Neon geçici olarak erişilemez olduğunda veya token-replay 403 döndüğünde admin sayfada "0 kayıt / Kayıt yok" görür; hata ile gerçekten boş sonuç ayırt edilemez. Arama sonrası bu durum "bu ifadeyle hiç sohbet yok" şeklinde yanlış sonuca götürür.
 
 **Önem notu:** Veri sızıntısı veya bozulması yok; yanlış negatif algısı yaratan bir güvenilirlik/UX hatası. Öneri: `fetch` sarmalayıcısı `!r.ok` durumunda `error` state'i set etsin; 401/403'te oturum yenileme/giriş yönlendirmesi, 5xx'te "Kayıtlar alınamadı — Tekrar dene" durumu ayrı bir boş durum bileşeniyle gösterilsin; ayrıca `useEffect` içinde `AbortController` ile yarış koşulu (hızlı sayfa değişiminde eski yanıtın yeni sayfayı ezmesi) kapatılsın.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rota:** `/admin/ai/quality?tab=sohbet`, yani "Sohbet denetimi" sekmesi. `/admin/qra-chat-logs` buraya kalıcı olarak yönlenir; sorgu parametreleri korunur (`q` → `cq`, `page` → `cpage`). Eski `GET /api/admin/qra-chat-logs` silindi.
+
+**Yeni yapı:** Sunucu mantığı `lib/ai-quality/chats.server.ts` dosyasında, istemci tarafı `components/admin/a-ai-kalite/{chats-tab,chat-panel}.tsx` dosyalarında. BFF uçları `defineRoute` ile tanımlı (ADMIN, zod, rate limit, admin kapısı): `GET /api/admin/ai/quality/chats`, `GET /chats/[id]`, `POST /chats/[id]/reveal`, `GET /chats/stats`, `GET /chats/export`. Test: `__tests__/lib/ai-quality.test.ts`.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Hero | ÇALIŞIYOR | AI Kalite sayfasıyla ortak, kompakt QDL başlığı |
+| 2–5 | Arama, Enter, Ara, Temizle | ÇALIŞIYOR | `FilterBar` araması gecikmeli (debounce) çalışır ve URL'de `cq` olarak tutulur. Temizleme düğmesi bileşenin içinde. |
+| 6 | Sunucu araması | ÇALIŞIYOR | Mesaj, yanıt, e-posta ve ad üzerinde arar; parmak izi önekiyle de arar. |
+| 7 | Yükleniyor (KISMİ) | ÇALIŞIYOR | Yüklenirken tablo yerinde kalır (`keepPreviousData`); ilk yüklemede iskelet gösterilir. |
+| 8 | Toplam sayı | ÇALIŞIYOR | Yerel biçimle, tablo sayfalamasında gösterilir. |
+| 9 | Kota metni (KISMİ) | ÇALIŞIYOR | Tüm katmanların değeri API üzerinden `lib/rate-limit` içindeki `MAX_QRA_CHAT_PER_MINUTE` sabitinden gelir. |
+| 10–12 | Sayfalama | ÇALIŞIYOR | `DataTable` sayfalaması: düğmeler etiketli, sayfa URL'de `cpage` olarak tutulur. |
+| 13 | Zaman | ÇALIŞIYOR | Göreli zaman; üzerine gelince İstanbul saatiyle mutlak zaman |
+| 14 | Kullanıcı | ÇALIŞIYOR | Ad ya da maskeli e-posta. Tıklayınca listeyi o kullanıcıya süzer (pivot). |
+| 15 | Anonim parmak izi (KISMİ) | ÇALIŞIYOR | "Ziyaretçi #…" olarak gösterilir. Kullanıcı silinmişse "Silinmiş kullanıcı" yazar. |
+| 16 | Rol rozeti (KISMİ) | ÇALIŞIYOR | Türkçe rol adı |
+| 17–18 | Mesaj/yanıt özeti | ÇALIŞIYOR | PII maskeli, markdown'u sadeleştirilmiş önizleme. Sütun başlığı "Kullanıcı mesajı → bot yanıtı" oldu. |
+| 19 | Gecikme (KISMİ) | ÇALIŞIYOR | Bakım ve güvenlik engeli yanıtlarında "—" görünür, çünkü model çağrılmadı. 5 saniye ve üstü "yavaş" olarak vurgulanır ve metinle de belirtilir. |
+| 20 | Detay düğmesi | ÇALIŞIYOR | Satır fareyle ve klavyeyle açılır; satırın erişilebilir bir adı var. |
+| 21 | Detay: zaman | ÇALIŞIYOR | |
+| 22 | Detay: kullanıcı (KISMİ) | ÇALIŞIYOR | Mesaj anındaki rol gösterilir; şu anki rol farklıysa o da yazılır. Boş değerler "—" olarak görünür. |
+| 23 | Detay: model/gecikme (KISMİ) | ÇALIŞIYOR | Model çağrılmadıysa "Çağrılmadı" yazar. |
+| 24–25 | Tam metin | ÇALIŞIYOR | Maskeli tam metin konuşma balonlarında gösterilir. Aynı kişinin ±30 dakika içindeki turları, önceki/sonraki kayıt geçişi ve kayıt numarasını kopyalama var. Gerekçe girilerek "Maskeyi kaldır" kullanılabilir. |
+| 26 | Boş durum (KISMİ) | ÇALIŞIYOR | "Bu dönemde kayıt yok" ile "bu filtreyle kayıt yok" ayrı gösterilir. |
+| 27 | Hata durumu (BOZUK) | ÇALIŞIYOR | `r.ok` ve zarf kontrol ediliyor. `QueryState` hatayı "Tekrar dene" ile gösterir; 404 ayrı ele alınır. |
+| 28 | Yetki (KISMİ) | ÇALIŞIYOR | Admin kapısı artık merkezi olarak `requireAuth` içinde (başka bir yüzeyde kapatıldı). Uçlar `defineRoute` ile tanımlı. |
+| 29 | Mobil (KISMİ) | ÇALIŞIYOR | `md` altında kart listesi; detay alttan açılan çekmecede. |
+| 30 | Yerelleştirme | ÇALIŞIYOR (TR) | Diğer Dalga 2 admin yüzeyleri gibi sabit Türkçe |
+| 31 | Filtreler (EKSİK) | ÇALIŞIYOR | Dönem (24 saat, 7 gün, 30 gün, tümü), sonuç, rol ve yavaş yanıt filtresi; kullanıcıya ya da ziyaretçiye süzme (pivot) |
+| 32 | Sıralama (EKSİK) | KALDIRILDI | Bilinçli karar: denetim akışı zamana göre ilerliyor. "En çok yazanlar" ayrı bir panelde, yavaş yanıtlar için filtre var. |
+| 33 | Konuşma bağlamı (EKSİK) | ÇALIŞIYOR (yaklaşık) | Şemada oturum kimliği yok. Bunun yerine aynı kullanıcının ya da parmak izinin ±30 dakika içindeki turları gösteriliyor. |
+| 34 | Özet istatistik (EKSİK) | ÇALIŞIYOR | Hacim, delta ve günlük seri; hata ve bakım oranı; güvenlik engeli sayısı; p50/p95 gecikme (yalnızca modelin çağrıldığı turlar); en çok yazan 5 aktör; günlük hacim tablosu |
+| 35 | Kalite kuyruğuna gönder (EKSİK) | KALDIRILDI | `AIQualitySample.feedbackId` zorunlu olduğu için sohbet kaydı kuyruğa bağlanamıyor. ŞEMA İSTEĞİ olarak aşağıda. |
+| 36 | Kullanıcıya pivot (EKSİK) | ÇALIŞIYOR | Detaydan ve "En çok yazanlar" panelinden çalışır. Yasaklama ve kota düşürme başka bir yüzeye ait. |
+| 37 | Dışa aktarma (EKSİK) | ÇALIŞIYOR | Filtreli CSV: PII maskeli, BOM'lu, formül enjeksiyonuna karşı korumalı, en çok 5000 satır. Her dışa aktarma denetim kaydına yazılır. |
+| 38 | URL'de durum (EKSİK) | ÇALIŞIYOR | Tüm filtreler, sayfa ve açık kayıt URL'de tutulur. |
+| 39 | Erişim denetimi (EKSİK) | ÇALIŞIYOR | Her detay açılışı `qra_chat_log.view`, gerekçeli maskesiz görüntüleme `qra_chat_log.reveal`, dışa aktarma `qra_chat_log.export` olarak kaydedilir. |
+| 40 | KVKK (EKSİK) | ÇALIŞIYOR | Silme, dışa aktarma ve 180 günlük otomatik saklama PII kayıt defterinde çözüldü (başka yüzey, E1). Bu sayfa saklama süresini ve en eski kaydı gösterir; PII varsayılan olarak maskelidir. |
+
+### Kapanan bulgular (12/12)
+
+- **B1, KVKK:** Kayıt defteri silme, dışa aktarma ve saklamayı kapsıyor. Bu sayfa saklama süresini gösteriyor ve PII'yi maskeliyor.
+- **B2, kapı API'de uygulanmıyordu:** Artık merkezi olarak `requireAuth` içinde.
+- **B3, hata boş liste gibi görünüyordu:** Hata durumu ayrı gösteriliyor.
+- **B4, sonuç ayrımı yoktu:** Sonuç artık yanıt metninden türetiliyor (güvenlik engeli, bakım, model hatası). Model çağrılmadıysa model ve gecikme gösterilmiyor.
+- **B5, erişim denetlenmiyordu:** Her okuma denetim kaydına yazılıyor.
+- **B6, ölçeklenme:** Listeye yalnızca kısa önizleme gidiyor. Dönem filtresi varsayılan olarak 7 gün ve sayfa boyutunun üst sınırı var.
+- **B7, geçersiz parametre 500 üretiyordu:** zod `catch` ile varsayılana düşüyor.
+- **B8, yarış koşulu ve tam ekran yükleyici:** Önceki veri yerinde kalıyor, yarış ortadan kalktı.
+- **B9, silinmiş kullanıcı ve rol tutarsızlığı:** Giderildi.
+- **B10, erişilebilirlik:** Giderildi.
+- **B11, sabit kota metni ve belirsiz başlıklar:** Giderildi.
+- **B12, mobil:** Kart listesi ve alttan açılan çekmece eklendi.
+
+### Kalanlar
+
+- **ŞEMA İSTEĞİ:** `QraChatLog` için `outcome`, `sessionId`, `promptTokens` ve `completionTokens` alanları, `@@index([outcome, createdAt])` ve `pg_trgm` indeksleri. Şemadaki varsayılan model (`llama-3.3-70b-versatile`) de güncellenmeli. Sonuç bugün `lib/groq` içindeki `QRA_MESSAGES` sabit yanıt metinleriyle eşleştirilerek türetiliyor; bu metinler değişirse sınıflama da güncellenmeli.
+- 429'a takılan istekler hâlâ kaydedilmiyor; `/api/chat` başka bir yüzeye ait.
+- Liste sorgusu veritabanından tam `assistantMessage` okuyor, istemciye yalnızca önizleme gidiyor. Bunu düzeltmek için `LEFT()` kullanan ham SQL ya da ayrı bir önizleme sütunu gerekiyor; ikincisi şema değişikliği ister.
+- Konu/niyet kümeleme ve kaydedilmiş görünümler yapılmadı. GET isteklerinde LLM çağrısı yasak; gece çalışan toplu etiketleme ayrı bir iş.
