@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { fcKeys, fetchOverview } from './api';
 import { fmtAbs, fmtNum } from './format';
 import { ModulesTab } from './modules-tab';
+import { useFeatureLabCopy } from './copy';
 
 // Sekme içerikleri yalnız açıldığında yüklenir (istemci adası küçük kalır).
 const tabFallback = () => <SkeletonTable />;
@@ -33,6 +34,8 @@ const RESET_KEYS = ['q', 'scope', 'state', 'enf', 'sev', 'sort', 'modul', 'deney
  * her anahtarın gerçekten neyi kapattığı koddan taranır, etkisiz anahtarlar açıkça işaretlenir.
  */
 export function FeatureControl({ initial }: { initial: FeatureControlInitial }) {
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const qc = useQueryClient();
   const overview = useQuery({
     queryKey: fcKeys.overview(),
@@ -49,8 +52,8 @@ export function FeatureControl({ initial }: { initial: FeatureControlInitial }) 
       register="ops"
       header={
         <PageHeader
-          title="Özellik ve Deney Kontrolü"
-          description="Modül anahtarları, kademeli açılışlar ve A/B deneyleri tek yerde. Her anahtarın gerçekte neyi kapattığı koddan okunur."
+          title={ux.ozellikVeDeneyKontrolu}
+          description={ux.modulAnahtarlariKademeliAcilislar}
           icon={<ToggleRight />}
           actions={
             <Button
@@ -61,7 +64,7 @@ export function FeatureControl({ initial }: { initial: FeatureControlInitial }) 
               aria-busy={overview.isFetching}
             >
               <RefreshCw className={cn('h-4 w-4', overview.isFetching && 'motion-safe:animate-spin')} aria-hidden />
-              Yenile
+              {uy.yenile}
             </Button>
           }
         />
@@ -72,14 +75,14 @@ export function FeatureControl({ initial }: { initial: FeatureControlInitial }) 
       </QueryState>
 
       <SectionTabs
-        ariaLabel="Özellik ve deney bölümleri"
+        ariaLabel={ux.ozellikVeDeneyBolumleri}
         defaultValue="moduller"
         resetKeys={RESET_KEYS}
         tabs={[
-          { value: 'moduller', label: 'Modül anahtarları', icon: <ShieldCheck />, count: o?.totals.disabled || undefined },
-          { value: 'acilis', label: 'Kademeli açılış', icon: <TrendingUp />, count: o?.totals.activeRollouts || undefined },
-          { value: 'deneyler', label: 'A/B deneyleri', icon: <FlaskConical />, count: o?.totals.runningExperiments || undefined },
-          { value: 'gecmis', label: 'Değişiklik geçmişi', icon: <History /> },
+          { value: 'moduller', label: ux.modulAnahtarlari, icon: <ShieldCheck />, count: o?.totals.disabled || undefined },
+          { value: 'acilis', label: ux.kademeliAcilis, icon: <TrendingUp />, count: o?.totals.activeRollouts || undefined },
+          { value: 'deneyler', label: ux.aBDeneyleri, icon: <FlaskConical />, count: o?.totals.runningExperiments || undefined },
+          { value: 'gecmis', label: ux.degisiklikGecmisi, icon: <History /> },
         ]}
       >
         {(t) => (
@@ -101,11 +104,13 @@ export function FeatureControl({ initial }: { initial: FeatureControlInitial }) 
 }
 
 function OverviewBlock({ data: o }: { data: ModulesOverview }) {
+  const fz = useFeatureLabCopy().fx;
+  const ux = useFeatureLabCopy().ui;
   const t = o.totals;
   const problems: string[] = [];
-  if (!o.killSwitches.featureFlags) problems.push('Kademeli açılış acil durdurmada (feature_flags kapalı): tüm açılış kuralları yok sayılıyor');
-  if (!o.killSwitches.abTesting) problems.push('A/B deneyleri acil durdurmada (ab_testing kapalı): herkes kontrol varyantını görüyor');
-  if (o.unknownKeys.length) problems.push(`Katalog dışı ${fmtNum(o.unknownKeys.length)} kapı anahtarı var; bunlar buradan kapatılamaz`);
+  if (!o.killSwitches.featureFlags) problems.push(ux.kademeliAcilisAcilDurdurmada);
+  if (!o.killSwitches.abTesting) problems.push(ux.aBDeneyleriAcil);
+  if (o.unknownKeys.length) problems.push(fz.unknownKeys(fmtNum(o.unknownKeys.length)));
   const tone = problems.length ? 'warning' : t.disabled > 0 ? 'info' : 'success';
 
   return (
@@ -115,8 +120,8 @@ function OverviewBlock({ data: o }: { data: ModulesOverview }) {
           <Activity className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div className="space-y-1">
             <p className="font-medium">
-              {t.disabled > 0 ? `${fmtNum(t.disabled)} modül kapalı` : 'Bütün modüller açık'} · {fmtNum(t.apiGated)} modül API kapısıyla korunuyor ·{' '}
-              {fmtNum(t.inert)} anahtarın okuyucusu yok
+              {t.disabled > 0 ? fz.modulesOff(fmtNum(t.disabled)) : ux.butunModullerAcik} · {fz.apiProtected(fmtNum(t.apiGated))}{' '}
+              {fz.noReader(fmtNum(t.inert))}
             </p>
             {problems.map((p) => (
               <p key={p} className="text-fg-muted">
@@ -132,46 +137,46 @@ function OverviewBlock({ data: o }: { data: ModulesOverview }) {
 
       <MetricGrid cols={5}>
         <MetricTile
-          label="Kapalı modül"
+          label={ux.kapaliModul}
           icon={<Ban />}
           tone={t.disabled > 0 ? 'warning' : 'neutral'}
           metric={{ value: t.disabled }}
-          hint={`${fmtNum(t.modules)} modülün · rol kısıtlı ${fmtNum(t.roleRestricted)}`}
+          hint={fz.ofModules(fmtNum(t.modules), fmtNum(t.roleRestricted))}
           href="/admin/features?tab=moduller&state=off"
           animate
         />
         <MetricTile
-          label="API kapılı modül"
+          label={ux.apiKapiliModul}
           icon={<ShieldCheck />}
           tone="success"
           metric={{ value: t.apiGated }}
-          hint="Kapatınca bağlı uçlar 403 döner"
+          hint={ux.kapatincaBagliUclar403}
           href="/admin/features?tab=moduller&enf=api"
           animate
         />
         <MetricTile
-          label="Etkisiz anahtar"
+          label={ux.etkisizAnahtar}
           icon={<ShieldAlert />}
           tone={t.inert > 0 ? 'danger' : 'success'}
           metric={{ value: t.inert }}
-          hint="Okuyan kod yok; değiştirilemez"
+          hint={ux.okuyanKodYokDegistirilemez}
           href="/admin/features?tab=moduller&enf=none"
           animate
         />
         <MetricTile
-          label="Engellenen istek (24 sa)"
+          label={ux.engellenenIstek24Sa}
           icon={<Gauge />}
           tone={t.blocks24h > 0 ? 'info' : 'neutral'}
           metric={{ value: t.blocks24h, compact: true }}
-          hint="Oturumlu istekler; gerekçe kırılımı satır detayında"
+          hint={ux.oturumluIsteklerGerekceKirilimi}
           href="/admin/features?tab=moduller&sort=blocks"
           animate
         />
         <MetricTile
-          label="Kademeli açılış / deney"
+          label={ux.kademeliAcilisDeney}
           icon={<FlaskConical />}
           metric={{ value: t.activeRollouts + t.runningExperiments }}
-          hint={`${fmtNum(t.activeRollouts)} açılış · ${fmtNum(t.runningExperiments)} çalışan deney`}
+          hint={fz.rolloutsRunning(fmtNum(t.activeRollouts), fmtNum(t.runningExperiments))}
           href="/admin/features?tab=deneyler"
           animate
         />

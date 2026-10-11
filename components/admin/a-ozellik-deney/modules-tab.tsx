@@ -24,6 +24,9 @@ import { fcKeys, patchModule } from './api';
 import { ENFORCEMENT_TONE, SEVERITY_TONE, fmtAbs, fmtNum, fmtRel, norm } from './format';
 import { ReasonDialog } from './reason-dialog';
 import { ModuleDetail } from './module-detail';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { FEATURE_LAB_DICT, useFeatureLabCopy } from './copy';
+import { localizeFields } from '@/components/ds/page/source-dict';
 
 const FIELDS: FilterField[] = [
   { type: 'search', key: 'q', label: 'Ara', placeholder: 'Ad, anahtar, açıklama' },
@@ -102,18 +105,20 @@ export function applyModuleFilters(rows: ModuleRow[], get: (k: string) => string
 }
 
 function RoleDots({ roles }: { roles: ModuleRow['roles'] }) {
+  const fz = useFeatureLabCopy().fx;
+  const ux = useFeatureLabCopy().ui;
   const items = [
-    ['Müşteri', roles.customer],
+    [ux.musteri, roles.customer],
     ['Bayi', roles.dealer],
     ['Sistem', roles.system],
   ] as const;
   const shown = items.filter(([, v]) => v !== null);
   if (!shown.length) return <span className="text-sm text-fg-muted">—</span>;
   return (
-    <ul className="flex flex-wrap gap-1" aria-label="Rol görünürlüğü">
+    <ul className="flex flex-wrap gap-1" aria-label={ux.rolGorunurlugu}>
       {shown.map(([label, v]) => (
         <li key={label}>
-          <StatusBadge size="sm" tone={v ? 'success' : 'danger'} label={`${label} ${v ? 'açık' : 'kapalı'}`} />
+          <StatusBadge size="sm" tone={v ? 'success' : 'danger'} label={fz.onOff(label, !!v)} />
         </li>
       ))}
     </ul>
@@ -123,6 +128,10 @@ function RoleDots({ roles }: { roles: ModuleRow['roles'] }) {
 type Pending = { row: ModuleRow; next: boolean };
 
 export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }) {
+  const fz = useFeatureLabCopy().fx;
+  const L = useSourceT(FEATURE_LAB_DICT);
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const qc = useQueryClient();
   const sp = useSearchParams();
   const sheet = useDetailSheet('modul');
@@ -135,7 +144,7 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
     () => [
       {
         id: 'module',
-        header: 'Modül',
+        header: ux.modul,
         enableSorting: false,
         meta: { mobile: 'title' } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
@@ -151,7 +160,7 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
         id: 'enforcement',
         header: 'Zorlama',
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Zorlama' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.zorlama } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const m = row.original;
           const n = m.bindings.api.length;
@@ -159,8 +168,8 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
             <StatusBadge
               size="sm"
               tone={ENFORCEMENT_TONE[m.enforcement]}
-              label={m.enforcement === 'api' ? `API kapısı · ${fmtNum(n)} uç` : ENFORCEMENT_LABEL[m.enforcement]}
-              title={ENFORCEMENT_HINT[m.enforcement]}
+              label={m.enforcement === 'api' ? fz.apiGateN(fmtNum(n)) : L(ENFORCEMENT_LABEL[m.enforcement])}
+              title={L(ENFORCEMENT_HINT[m.enforcement])}
             />
           );
         },
@@ -169,17 +178,17 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
         id: 'scope',
         header: 'Kapsam',
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Kapsam' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.kapsam } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-1">
-            <span className="text-sm text-fg">{SCOPE_LABEL[row.original.scope]}</span>
-            {row.original.severity !== 'optional' ? <StatusBadge size="sm" tone={SEVERITY_TONE[row.original.severity]} label={SEVERITY_LABEL[row.original.severity]} /> : null}
+            <span className="text-sm text-fg">{L(SCOPE_LABEL[row.original.scope])}</span>
+            {row.original.severity !== 'optional' ? <StatusBadge size="sm" tone={SEVERITY_TONE[row.original.severity]} label={L(SEVERITY_LABEL[row.original.severity])} /> : null}
           </div>
         ),
       },
       {
         id: 'roles',
-        header: 'Rol görünürlüğü',
+        header: ux.rolGorunurlugu,
         enableSorting: false,
         meta: { mobile: 'hidden' } satisfies DataTableColumnMeta,
         cell: ({ row }) => <RoleDots roles={row.original.roles} />,
@@ -188,11 +197,11 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
         id: 'blocks',
         header: 'Engelleme (24 sa)',
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Engelleme (24 sa)', numeric: true, align: 'end' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.engelleme24Sa, numeric: true, align: 'end' } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const b = row.original.blocks24h;
           return (
-            <span className="tabular-nums text-sm text-fg" title={`Genel ${b.global} · Rol ${b.role} · Açılış ${b.rollout}`}>
+            <span className="tabular-nums text-sm text-fg" title={fz.blockBreakdown(b.global, b.role, b.rollout)}>
               {b.total ? fmtNum(b.total) : '—'}
             </span>
           );
@@ -200,9 +209,9 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
       },
       {
         id: 'changed',
-        header: 'Son değişiklik',
+        header: ux.sonDegisiklik,
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Son değişiklik' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.sonDegisiklik } satisfies DataTableColumnMeta,
         cell: ({ row }) => {
           const c = row.original.lastChange;
           if (!c) return <span className="text-sm text-fg-muted">—</span>;
@@ -227,13 +236,13 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
           return (
             <div className="flex min-h-11 items-center justify-end gap-2 sm:min-h-0" onClick={(e) => e.stopPropagation()}>
               <span className={m.enabled ? 'text-sm text-fg' : 'text-sm font-medium text-danger'} aria-hidden>
-                {m.enabled ? 'Açık' : 'Kapalı'}
+                {m.enabled ? ux.acik : ux.kapali}
               </span>
               <Switch
                 checked={m.enabled}
                 disabled={inertLocked}
                 onCheckedChange={(next) => setPending({ row: m, next })}
-                aria-label={`${m.label} modülünü ${m.enabled ? 'kapat' : 'aç'}`}
+                aria-label={fz.toggleModule(m.label, m.enabled)}
                 title={inertLocked ? ENFORCEMENT_HINT.none : undefined}
               />
             </div>
@@ -247,38 +256,38 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
   const p = pending?.row;
   const impact = p
     ? [
-        { label: 'Zorlama', value: ENFORCEMENT_LABEL[p.enforcement], emphasis: true },
-        { label: 'Etkilenen API ucu', value: fmtNum(p.bindings.api.length), emphasis: p.bindings.api.length > 0 },
-        { label: 'Sayfa / menü kapısı', value: `${fmtNum(p.bindings.pages.length)} sayfa · ${p.bindings.menu.length ? 'menüde' : 'menüde yok'}` },
-        { label: 'Son 24 saatte engellenen', value: fmtNum(p.blocks24h.total) },
-        ...(p.rollout?.active ? [{ label: 'Kademeli açılış', value: `%${p.rollout.percent} (kapatınca herkes için kapanır)` }] : []),
+        { label: ux.zorlama, value: L(ENFORCEMENT_LABEL[p.enforcement]), emphasis: true },
+        { label: ux.etkilenenApiUcu, value: fmtNum(p.bindings.api.length), emphasis: p.bindings.api.length > 0 },
+        { label: ux.sayfaMenuKapisi, value: fz.pagesMenu(fmtNum(p.bindings.pages.length), p.bindings.menu.length > 0) },
+        { label: ux.son24SaatteEngellenen2, value: fmtNum(p.blocks24h.total) },
+        ...(p.rollout?.active ? [{ label: ux.kademeliAcilis, value: fz.rolloutOff(p.rollout.percent) }] : []),
       ]
     : [];
 
   return (
     <SectionCard
-      title="Modül anahtarları"
-      description="Kapatmanın etkisi koddan taranır: API kapısı olan modüllerde bağlı uçlar 403 döner. Satıra tıklayınca bağlı uçlar, rol görünürlüğü ve geçmiş açılır."
+      title={ux.modulAnahtarlari}
+      description={ux.kapatmaninEtkisiKoddanTaranir}
     >
       <div className="space-y-4">
-        <FilterBar fields={FIELDS} resetKeys={['modul']} />
+        <FilterBar fields={localizeFields(FIELDS, L)} resetKeys={['modul']} />
         <p className="sr-only" aria-live="polite">
-          {rows ? `${fmtNum(rows.length)} modül listeleniyor` : ''}
+          {rows ? fz.modulesListed(fmtNum(rows.length)) : ''}
         </p>
         {data?.unknownKeys.length ? (
           <p className="text-sm text-fg-muted">
-            Katalog dışı kapı anahtarları:{' '}
+            {fz.outOfCatalog}{' '}
             {data.unknownKeys.map((u, i) => (
               <span key={u.key}>
                 {i ? ', ' : ''}
                 <code className="font-mono text-fg">{u.key}</code> ({u.files.length} dosya)
               </span>
             ))}
-            . Bu kapılar kapatılamaz; kataloğa eklenmeleri gerekir.
+            {ux.buKapilarKapatilamazKataloga}
           </p>
         ) : null}
         <DataTable
-          ariaLabel="Modül anahtarları"
+          ariaLabel={ux.modulAnahtarlari}
           columns={columns}
           data={rows}
           query={query}
@@ -291,33 +300,33 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
           activeRowId={sheet.id}
           empty={
             filtered
-              ? { title: 'Filtreye uyan modül yok', description: 'Filtreleri gevşetin ya da aramayı temizleyin.' }
-              : { title: 'Katalogda modül yok', description: 'lib/module-controls.ts kataloğu boş.' }
+              ? { title: ux.filtreyeUyanModulYok, description: ux.filtreleriGevsetinYaDa }
+              : { title: ux.katalogdaModulYok, description: ux.libModuleControlsTs }
           }
         />
       </div>
 
-      <DetailSheet paramKey="modul" size="lg" title="Modül ayrıntısı" siblings={rows?.map((r) => r.key)}>
+      <DetailSheet paramKey="modul" size="lg" title={ux.modulAyrintisi} siblings={rows?.map((r) => r.key)}>
         {(key: string) => {
           const row = data?.modules.find((m) => m.key === key);
-          return row ? <ModuleDetail row={row} onToggle={(next) => setPending({ row, next })} /> : <p className="text-sm text-fg-muted">Bu anahtar katalogda yok.</p>;
+          return row ? <ModuleDetail row={row} onToggle={(next) => setPending({ row, next })} /> : <p className="text-sm text-fg-muted">{uy.buAnahtarKatalogdaYok}</p>;
         }}
       </DetailSheet>
 
       <ReasonDialog
         open={pending !== null}
         onOpenChange={(v) => !v && setPending(null)}
-        title={p ? `${p.label} ${pending?.next ? 'açılsın' : 'kapatılsın'} mı?` : ''}
-        description={p ? ENFORCEMENT_HINT[p.enforcement] : undefined}
+        title={p ? fz.toggleTitle(p.label, !!pending?.next) : ''}
+        description={p ? L(ENFORCEMENT_HINT[p.enforcement]) : undefined}
         impact={impact}
         warning={
           p && !pending?.next && p.severity === 'critical'
-            ? 'Kritik modül. Kapatmak kullanıcıların bu özelliğe erişimini hemen keser (önbellek anında tazelenir).'
+            ? ux.kritikModulKapatmakKullanicilarin
             : undefined
         }
         confirmPhrase={p && !pending?.next && p.severity === 'critical' ? p.key : undefined}
         tone={pending?.next ? 'brand' : 'danger'}
-        confirmLabel={pending?.next ? 'Aç' : 'Kapat'}
+        confirmLabel={pending?.next ? ux.ac : 'Kapat'}
         onConfirm={async (reason) => {
           if (!pending || !data) return;
           try {
@@ -326,7 +335,7 @@ export function ModulesTab({ query }: { query: UseQueryResult<ModulesOverview> }
             await qc.invalidateQueries({ queryKey: fcKeys.overview() });
             throw e;
           }
-          const msg = `${pending.row.label} ${pending.next ? 'açıldı' : 'kapatıldı'}.`;
+          const msg = fz.toggled(pending.row.label, pending.next);
           toast.success(msg);
           announce(msg);
           await qc.invalidateQueries({ queryKey: fcKeys.all });

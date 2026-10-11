@@ -45,6 +45,8 @@ export function ReasonDialog({
   onConfirm: (reason: string) => Promise<unknown>;
   children?: ReactNode;
 }) {
+  const fz = useFeatureLabCopy().fx;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const noteId = useId();
   const phraseId = useId();
@@ -121,21 +123,21 @@ export function ReasonDialog({
                 id={noteId}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Kısa gerekçe (denetim günlüğüne yazılır)"
+                placeholder={ux.kisaGerekceDenetimGunlugune}
                 rows={3}
                 maxLength={500}
                 aria-invalid={note.length > 0 && note.trim().length < minLength}
                 aria-describedby={`${noteId}-hint`}
               />
               <p id={`${noteId}-hint`} className="text-xs text-fg-muted">
-                En az {minLength} karakter. Gerekçe ve işlemi yapan kişi denetim günlüğüne yazılır.
+                {fz.minChars(minLength)}
               </p>
             </div>
           ) : null}
           {confirmPhrase ? (
             <div className="space-y-2">
               <Label htmlFor={phraseId}>
-                Onaylamak için <span className="font-mono font-semibold text-fg">{confirmPhrase}</span> yazın
+                {fz.typeToConfirm} <span className="font-mono font-semibold text-fg">{confirmPhrase}</span> {ux.yazin}
               </Label>
               <Input id={phraseId} value={phrase} onChange={(e) => setPhrase(e.target.value)} autoComplete="off" spellCheck={false} className="font-mono" />
             </div>
@@ -143,7 +145,7 @@ export function ReasonDialog({
           {error ? <InlineError>{error}</InlineError> : null}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" onClick={() => onOpenChange(false)} disabled={busy}>
-              Vazgeç
+              {ux.vazgec}
             </Button>
             <Button type="submit" variant={tone === 'danger' ? 'destructive' : 'default'} className="min-h-11 sm:min-h-10" disabled={!valid || busy} aria-busy={busy}>
               {busy ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> : null}

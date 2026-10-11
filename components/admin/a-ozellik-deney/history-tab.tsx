@@ -9,6 +9,9 @@ import { DataTable, StatusBadge, useUrlTableState, type DataTableColumnMeta } fr
 import type { HistoryItem } from '@/lib/admin-flags/contract';
 import { fcKeys, fetchHistory } from './api';
 import { fmtAbs, fmtNum, fmtRel } from './format';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { FEATURE_LAB_DICT, useFeatureLabCopy } from './copy';
+import { localizeFields } from '@/components/ds/page/source-dict';
 
 const FIELDS: FilterField[] = [
   {
@@ -30,6 +33,9 @@ const KIND_TONE = { module: 'brand', rollout: 'info', experiment: 'success' } as
 
 /** Modül, açılış ve deney değişikliklerinin tek zaman çizelgesi (AuditLog; Ayar Merkezi yazımları da modül bazında çözülür). */
 export function HistoryTab() {
+  const fz = useFeatureLabCopy().fx;
+  const L = useSourceT(FEATURE_LAB_DICT);
+  const ux = useFeatureLabCopy().ui;
   const sp = useSearchParams();
   const table = useUrlTableState({ defaultSort: [{ id: 'at', desc: true }], sortableIds: [] });
   const kind = sp.get('kind') || 'all';
@@ -43,35 +49,35 @@ export function HistoryTab() {
     () => [
       {
         id: 'summary',
-        header: 'Değişiklik',
+        header: ux.degisiklik,
         enableSorting: false,
         meta: { mobile: 'title' } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <div className="min-w-0 max-w-lg">
             <p className="font-medium text-fg">{row.original.summary}</p>
-            {row.original.reason ? <p className="line-clamp-2 text-xs text-fg-muted">Gerekçe: {row.original.reason}</p> : null}
+            {row.original.reason ? <p className="line-clamp-2 text-xs text-fg-muted">{fz.reasonIs} {row.original.reason}</p> : null}
           </div>
         ),
       },
       {
         id: 'kind',
-        header: 'Tür',
+        header: ux.tur,
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Tür' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => <StatusBadge size="sm" tone={KIND_TONE[row.original.kind]} label={KIND_LABEL[row.original.kind]} />,
+        meta: { mobile: 'field', label: ux.tur } satisfies DataTableColumnMeta,
+        cell: ({ row }) => <StatusBadge size="sm" tone={KIND_TONE[row.original.kind]} label={L(KIND_LABEL[row.original.kind])} />,
       },
       {
         id: 'actor',
         header: 'Kim',
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Kim' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.kim } satisfies DataTableColumnMeta,
         cell: ({ row }) => <span className="text-sm text-fg-muted">{row.original.actor ?? 'Sistem'}</span>,
       },
       {
         id: 'at',
         header: 'Zaman',
         enableSorting: false,
-        meta: { mobile: 'field', label: 'Zaman' } satisfies DataTableColumnMeta,
+        meta: { mobile: 'field', label: ux.zaman } satisfies DataTableColumnMeta,
         cell: ({ row }) => (
           <time dateTime={row.original.at} title={fmtAbs(row.original.at)} className="whitespace-nowrap text-sm text-fg-muted">
             {fmtRel(row.original.at)}
@@ -79,19 +85,19 @@ export function HistoryTab() {
         ),
       },
     ],
-    []
+    [L, fz, ux]
   );
 
   const filtered = kind !== 'all' || !!key;
   return (
-    <SectionCard title="Değişiklik geçmişi" description="Kim, ne zaman, neyi değiştirdi ve neden. Ayrıntılı denetim için /admin/audit.">
+    <SectionCard title={ux.degisiklikGecmisi} description={ux.kimNeZamanNeyi}>
       <div className="space-y-4">
-        <FilterBar fields={FIELDS} resetKeys={['page']} />
+        <FilterBar fields={localizeFields(FIELDS, L)} resetKeys={['page']} />
         <p className="sr-only" aria-live="polite">
-          {list.data ? `${fmtNum(list.data.total)} kayıt` : ''}
+          {list.data ? fz.records(fmtNum(list.data.total)) : ''}
         </p>
         <DataTable
-          ariaLabel="Değişiklik geçmişi"
+          ariaLabel={ux.degisiklikGecmisi}
           columns={columns}
           data={list.data?.items}
           query={list}
@@ -104,8 +110,8 @@ export function HistoryTab() {
           density="compact"
           empty={
             filtered
-              ? { title: 'Filtreye uyan değişiklik yok', description: 'Türü ya da anahtarı değiştirin.' }
-              : { title: 'Henüz değişiklik yok', description: 'Modül, açılış ve deney değişiklikleri burada listelenir.' }
+              ? { title: ux.filtreyeUyanDegisiklikYok, description: ux.turuYaDaAnahtari }
+              : { title: ux.henuzDegisiklikYok, description: ux.modulAcilisVeDeney }
           }
         />
       </div>

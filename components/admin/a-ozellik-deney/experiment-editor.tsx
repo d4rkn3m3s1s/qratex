@@ -11,7 +11,8 @@ import { ChoiceChips } from '@/components/ds/a11y';
 import { InlineError } from '@/components/states';
 import { CreateExperimentBody, DIMENSIONS, DIMENSION_LABEL, type Dimension } from '@/lib/admin-flags/contract';
 import { errorText } from './api';
-import { useFeatureLabCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { FEATURE_LAB_DICT, useFeatureLabCopy } from './copy';
 
 export type ExperimentDraft = {
   id: string;
@@ -80,6 +81,10 @@ export function ExperimentEditor({
   onClose: () => void;
   onSubmit: (v: ExperimentValues) => Promise<void>;
 }) {
+  const fz = useFeatureLabCopy().fx;
+  const L = useSourceT(FEATURE_LAB_DICT);
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const [d, setD] = useState(initial);
   const [idTouched, setIdTouched] = useState(mode === 'edit');
@@ -130,15 +135,15 @@ export function ExperimentEditor({
         {errors[k]}
       </p>
     ) : null;
-  const [phA, phB] = PLACEHOLDER[d.dimension];
+  const [phA, phB] = PLACEHOLDER[d.dimension].map((x) => L(x));
 
   return (
     <Dialog open onOpenChange={(v) => !v && !busy && onClose()}>
       <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'Yeni A/B deneyi' : 'Deneyi düzenle'}</DialogTitle>
+          <DialogTitle>{mode === 'create' ? 'Yeni A/B deneyi' : ux.deneyiDuzenle}</DialogTitle>
           <DialogDescription>
-            {mode === 'create' ? 'Deney taslak olarak doğar; “Başlat” denene kadar hiçbir kullanıcı etkilenmez.' : lockVariants ? 'Deney başladığı için varyantlar, boyut ve trafik payı kilitli.' : 'Taslak deney.'}
+            {mode === 'create' ? ux.deneyTaslakOlarakDogar : lockVariants ? ux.deneyBasladigiIcinVaryantlar : 'Taslak deney.'}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -150,7 +155,7 @@ export function ExperimentEditor({
           }}
         >
           <div className="space-y-1">
-            <Label htmlFor={f.name}>Ad</Label>
+            <Label htmlFor={f.name}>{uy.ad}</Label>
             <Input
               id={f.name}
               value={d.name}
@@ -176,13 +181,13 @@ export function ExperimentEditor({
               aria-describedby={`${f.id}-hint${errors.id ? ' id-err' : ''}`}
             />
             <p id={`${f.id}-hint`} className="text-xs text-fg-muted">
-              İstemci bu anahtarla varyant ister: <code className="font-mono">/api/customer/innovation/ab/variant?experimentId={d.id || '…'}</code>. Sonradan değiştirilemez.
+              {fz.keyRequest} <code className="font-mono">/api/customer/innovation/ab/variant?experimentId={d.id || '…'}</code>{fz.cantChange}
             </p>
             {err('id')}
           </div>
           <div className="space-y-1">
             <Label htmlFor={f.hyp}>Hipotez</Label>
-            <Textarea id={f.hyp} rows={2} maxLength={500} value={d.hypothesis} onChange={(e) => set({ hypothesis: e.target.value })} placeholder="B metni, kampanya butonuna tıklamayı artırır çünkü…" />
+            <Textarea id={f.hyp} rows={2} maxLength={500} value={d.hypothesis} onChange={(e) => set({ hypothesis: e.target.value })} placeholder={ux.bMetniKampanyaButonuna} />
           </div>
           <div className="space-y-1">
             <Label htmlFor={f.metric}>Birincil metrik</Label>
@@ -246,11 +251,11 @@ export function ExperimentEditor({
           {formError ? <InlineError>{formError}</InlineError> : null}
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" className="min-h-11 sm:min-h-10" onClick={onClose} disabled={busy}>
-              Vazgeç
+              {ux.vazgec}
             </Button>
             <Button type="submit" className="min-h-11 sm:min-h-10" disabled={busy} aria-busy={busy}>
               {busy ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden /> : null}
-              {mode === 'create' ? 'Taslağı oluştur' : 'Kaydet'}
+              {mode === 'create' ? ux.taslagiOlustur : 'Kaydet'}
             </Button>
           </DialogFooter>
         </form>

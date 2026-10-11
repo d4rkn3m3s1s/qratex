@@ -16,7 +16,8 @@ import { actOnExperiment, checkAssignment, errorText, fcKeys, fetchResults } fro
 import { STATUS_TONE, daysBetween, fmtAbs, fmtDay, fmtNum, fmtP, fmtPct, fmtSignedPct, fmtSignedPp } from './format';
 import { ReasonDialog } from './reason-dialog';
 import { ExperimentEditor } from './experiment-editor';
-import { useFeatureLabCopy } from './copy';
+import { useSourceT } from '@/components/ds/page/source-dict';
+import { FEATURE_LAB_DICT, useFeatureLabCopy } from './copy';
 
 type Act = 'start' | 'pause' | 'resume' | 'complete' | 'delete';
 
@@ -36,6 +37,10 @@ const VERDICT: Record<ExperimentResults['comparison']['verdict'], { label: strin
 };
 
 export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; version: string | null }) {
+  const fz = useFeatureLabCopy().fx;
+  const L = useSourceT(FEATURE_LAB_DICT);
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const qc = useQueryClient();
   const [act, setAct] = useState<Act | null>(null);
@@ -58,9 +63,9 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={STATUS_TONE[e.status]} label={STATUS_LABEL[e.status]} />
-          {days !== null && e.status !== 'draft' ? <span className="text-sm text-fg-muted">{fmtNum(days)}. gün</span> : null}
+          {days !== null && e.status !== 'draft' ? <span className="text-sm text-fg-muted">{fz.dayN(fmtNum(days))}</span> : null}
           {e.winner ? <StatusBadge tone="brand" label={`Kazanan: ${e.winner}`} /> : null}
-          {e.legacy ? <StatusBadge tone="neutral" label="Eski kayıt" title="Eski /admin/innovation'dan geldi; başlangıç tarihi bilinmiyor (son 90 gün gösterilir)." /> : null}
+          {e.legacy ? <StatusBadge tone="neutral" label={ux.eskiKayit} title={ux.eskiAdminInnovationDan} /> : null}
         </div>
         <h3 className="text-lg font-semibold text-fg">{e.name}</h3>
         {e.hypothesis ? <p className="text-sm text-fg-muted">Hipotez: {e.hypothesis}</p> : null}
@@ -68,7 +73,7 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
           {e.status === 'draft' ? (
             <Button className="min-h-11 sm:min-h-10" onClick={() => setAct('start')}>
               <Play className="h-4 w-4" aria-hidden />
-              Başlat
+              {ux.baslat}
             </Button>
           ) : null}
           {e.status === 'running' ? (
@@ -80,25 +85,25 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
           {e.status === 'paused' ? (
             <Button className="min-h-11 sm:min-h-10" onClick={() => setAct('resume')}>
               <Play className="h-4 w-4" aria-hidden />
-              Sürdür
+              {ux.surdur}
             </Button>
           ) : null}
           {e.status === 'running' || e.status === 'paused' ? (
             <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setAct('complete')}>
               <Square className="h-4 w-4" aria-hidden />
-              Tamamla
+              {uy.tamamla}
             </Button>
           ) : null}
           {e.status !== 'completed' ? (
             <Button variant="outline" className="min-h-11 sm:min-h-10" onClick={() => setEditing(true)}>
               <Pencil className="h-4 w-4" aria-hidden />
-              Düzenle
+              {ux.duzenle}
             </Button>
           ) : null}
           {e.status === 'draft' ? (
             <Button variant="outline" className="min-h-11 text-danger sm:min-h-10" onClick={() => setAct('delete')}>
               <Trash2 className="h-4 w-4" aria-hidden />
-              Taslağı sil
+              {ux.taslagiSil}
             </Button>
           ) : null}
         </div>
@@ -108,22 +113,22 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
         layout="grid"
         columns={2}
         items={[
-          { label: 'Anahtar', value: e.id, mono: true, copyValue: e.id },
-          { label: 'Boyut', value: DIMENSION_LABEL[e.dimension] },
-          { label: 'A varyantı (kontrol)', value: e.variantA },
-          { label: 'B varyantı', value: e.variantB },
-          { label: 'Trafik', value: `A %${100 - e.splitPercentB} · B %${e.splitPercentB}` },
-          { label: 'Birincil metrik', value: e.primaryMetric ?? 'Dönüşüm olayı oranı' },
-          { label: 'Başlangıç', value: e.startedAt ? fmtAbs(e.startedAt) : '—' },
-          { label: 'Bitiş', value: e.endedAt ? fmtAbs(e.endedAt) : '—' },
-          { label: 'Sahip', value: e.owner ?? '—' },
-          { label: 'Karar notu', value: e.decisionNote ?? '—', hidden: !e.decisionNote },
+          { label: ux.anahtar, value: e.id, mono: true, copyValue: e.id },
+          { label: ux.boyut, value: DIMENSION_LABEL[e.dimension] },
+          { label: ux.aVaryantiKontrol, value: e.variantA },
+          { label: ux.bVaryanti, value: e.variantB },
+          { label: ux.trafik, value: `A %${100 - e.splitPercentB} · B %${e.splitPercentB}` },
+          { label: ux.birincilMetrik, value: e.primaryMetric ?? ux.donusumOlayiOrani },
+          { label: ux.baslangic, value: e.startedAt ? fmtAbs(e.startedAt) : '—' },
+          { label: ux.bitis, value: e.endedAt ? fmtAbs(e.endedAt) : '—' },
+          { label: ux.sahip, value: e.owner ?? '—' },
+          { label: ux.kararNotu, value: e.decisionNote ?? '—', hidden: !e.decisionNote },
         ]}
       />
 
       <section className="space-y-3" aria-labelledby={`res-${e.id}`}>
         <h3 id={`res-${e.id}`} className="text-sm font-semibold text-fg">
-          Sonuç
+          {ux.sonuc}
         </h3>
         {e.status === 'draft' ? (
           <p className="text-sm text-fg-muted">{fx.resultsAfterStart}</p>
@@ -139,8 +144,8 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
       <section className="space-y-2 rounded-card border border-border p-3 text-xs text-fg-muted">
         <p className="font-medium text-fg">Entegrasyon</p>
         <p>
-          Varyant: <code className="font-mono">GET /api/customer/innovation/ab/variant?experimentId={e.id}</code> (gösterim kaydeder). Dönüşüm:{' '}
-          <code className="font-mono">POST /api/customer/innovation/ab/event</code> {'{ experimentId, variant }'} — yalnız çalışan deney için kaydedilir.
+          {fz.variantLabel} <code className="font-mono">GET /api/customer/innovation/ab/variant?experimentId={e.id}</code> {fz.recordsImpression}{' '}
+          <code className="font-mono">POST /api/customer/innovation/ab/event</code> {'{ experimentId, variant }'} {fz.runningOnly}
         </p>
       </section>
 
@@ -148,10 +153,10 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
         <ReasonDialog
           open
           onOpenChange={(v) => !v && setAct(null)}
-          title={ACT_COPY[act].title}
-          description={ACT_COPY[act].desc}
+          title={L(ACT_COPY[act].title)}
+          description={L(ACT_COPY[act].desc)}
           tone={ACT_COPY[act].tone}
-          confirmLabel={ACT_COPY[act].label}
+          confirmLabel={L(ACT_COPY[act].label)}
           requireReason={act !== 'delete'}
           confirmPhrase={act === 'complete' || act === 'delete' ? e.id : undefined}
           onConfirm={async (reason) => {
@@ -163,7 +168,7 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
                 baseVersion: version,
                 ...(act === 'complete' ? { winner: winner === 'none' ? null : winner } : {}),
               });
-            toast.success(`Deney: ${ACT_COPY[act].label.toLocaleLowerCase('tr-TR')} tamam.`);
+            toast.success(fz.actDone(L(ACT_COPY[act].label)));
             await refresh();
           }}
         >
@@ -175,9 +180,9 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
               <ChoiceChips<'A' | 'B' | 'none'>
                 aria-labelledby={`win-${e.id}`}
                 options={[
-                  { value: 'none', label: 'Kazanan yok' },
-                  { value: 'A', label: 'A kazandı' },
-                  { value: 'B', label: 'B kazandı' },
+                  { value: 'none', label: ux.kazananYok },
+                  { value: 'A', label: ux.aKazandi },
+                  { value: 'B', label: ux.bKazandi },
                 ]}
                 value={winner}
                 onChange={(v) => v && setWinner(v)}
@@ -215,7 +220,7 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
               splitPercentB: v.splitPercentB,
               baseVersion: version,
             });
-            toast.success('Deney güncellendi.');
+            toast.success(ux.deneyGuncellendi);
             await refresh();
           }}
         />
@@ -226,10 +231,11 @@ export function ExperimentDetail({ row: e, version }: { row: ExperimentRow; vers
 
 /** Güven aralığı çubuğu: 0–max ölçeğinde aralık + nokta tahmini (yalnız renge dayanmaz; metin yanında). */
 function CiBar({ ci, rate, max, label }: { ci: [number, number] | null; rate: number | null; max: number; label: string }) {
+  const fz = useFeatureLabCopy().fx;
   if (!ci || rate === null || max <= 0) return <span className="text-xs text-fg-muted">—</span>;
   const pos = (v: number) => `${Math.min(100, Math.max(0, (v / max) * 100))}%`;
   return (
-    <div className="relative h-3 w-full min-w-[6rem] rounded-full bg-surface-muted" role="img" aria-label={`${label}: ${fmtPct(rate)}, %95 aralık ${fmtPct(ci[0])} – ${fmtPct(ci[1])}`}>
+    <div className="relative h-3 w-full min-w-[6rem] rounded-full bg-surface-muted" role="img" aria-label={fz.ciAria(label, fmtPct(rate), fmtPct(ci[0]), fmtPct(ci[1]))}>
       <div className="absolute top-0 h-full rounded-full bg-brand-subtle ring-1 ring-inset ring-brand-border" style={{ left: pos(ci[0]), width: `calc(${pos(ci[1])} - ${pos(ci[0])})` }} />
       <div className="absolute top-[-2px] h-[16px] w-[3px] -translate-x-1/2 rounded bg-brand" style={{ left: pos(rate) }} />
     </div>
@@ -237,17 +243,22 @@ function CiBar({ ci, rate, max, label }: { ci: [number, number] | null; rate: nu
 }
 
 function ResultsView({ r }: { r: ExperimentResults }) {
+  const fz = useFeatureLabCopy().fx;
+  const L = useSourceT(FEATURE_LAB_DICT);
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const [a, b] = r.variants;
   const totalImpr = a.impressions + b.impressions;
   const max = Math.max(a.ci?.[1] ?? 0, b.ci?.[1] ?? 0, 1);
-  const v = VERDICT[r.comparison.verdict];
+  const v0 = VERDICT[r.comparison.verdict];
+  const v = { ...v0, label: L(v0.label) };
   const daily = r.daily.slice(-30);
 
   if (totalImpr === 0) {
     return (
       <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-fg-muted">
-        Bu pencerede hiç gösterim yok. Deneyi gösteren ekranın varyant ucunu çağırdığından emin olun (aşağıdaki “Entegrasyon”).
+        {ux.buPenceredeHicGosterim}
       </p>
     );
   }
@@ -261,15 +272,15 @@ function ResultsView({ r }: { r: ExperimentResults }) {
         </p>
         <p className="text-fg-muted">
           Fark (B − A): {fmtSignedPp(r.comparison.diffPp)}
-          {r.comparison.diffCi ? ` (%95 GA ${fmtSignedPp(r.comparison.diffCi[0])} … ${fmtSignedPp(r.comparison.diffCi[1])})` : ''} · göreli {fmtSignedPct(r.comparison.relativeLift)} · {fmtP(r.comparison.pValue)}
+          {r.comparison.diffCi ? fz.ciShort(fmtSignedPp(r.comparison.diffCi[0]), fmtSignedPp(r.comparison.diffCi[1])) : ''} · {fz.relative} {fmtSignedPct(r.comparison.relativeLift)} · {fmtP(r.comparison.pValue)}
         </p>
-        {r.comparison.verdict === 'insufficient' ? <p className="text-fg-muted">Her varyantta en az {fmtNum(r.minSample)} tekil kullanıcı ve toplam 10 dönüşüm gerekir.</p> : null}
+        {r.comparison.verdict === 'insufficient' ? <p className="text-fg-muted">{fz.minSample(fmtNum(r.minSample))}</p> : null}
       </div>
 
       {r.srm.mismatch ? (
         <p role="alert" className={cn('rounded-card border px-3 py-2 text-sm', TONE_CALLOUT.danger)}>
-          Örneklem oranı uyumsuz (SRM, {fmtP(r.srm.pValue)}): gözlenen A/B dağılımı ayarlanan paydan sapıyor. Atama ya da gösterim kaydında sorun olabilir; sonuçlara
-          güvenmeyin.
+          {fz.srm(fmtP(r.srm.pValue))}{' '}
+          {ux.guvenmeyin}
         </p>
       ) : null}
 
@@ -282,16 +293,16 @@ function ResultsView({ r }: { r: ExperimentResults }) {
                 Varyant
               </th>
               <th scope="col" className="py-2 pr-3 text-right font-medium">
-                Gören kullanıcı
+                {ux.gorenKullanici}
               </th>
               <th scope="col" className="py-2 pr-3 text-right font-medium">
-                Dönüşen
+                {ux.donusen}
               </th>
               <th scope="col" className="py-2 pr-3 text-right font-medium">
-                Oran
+                {uy.oran}
               </th>
               <th scope="col" className="w-1/3 py-2 font-medium">
-                %95 güven aralığı
+                {ux.t95GuvenAraligi}
               </th>
             </tr>
           </thead>
@@ -313,34 +324,34 @@ function ResultsView({ r }: { r: ExperimentResults }) {
         </table>
       </div>
       <p className="text-xs text-fg-muted">
-        Ham olay: gösterim A {fmtNum(a.impressions)} / B {fmtNum(b.impressions)} · dönüşüm A {fmtNum(a.conversions)} / B {fmtNum(b.conversions)} · oturumsuz gösterim{' '}
-        {fmtNum(a.anonymousImpressions + b.anonymousImpressions)} (oranlara katılmaz). Pencere: {r.window.from ? fmtAbs(r.window.from) : 'son 90 gün'} → {fmtAbs(r.window.to)}.
+        {fz.rawEvents(fmtNum(a.impressions), fmtNum(b.impressions), fmtNum(a.conversions), fmtNum(b.conversions))}{' '}
+        {fmtNum(a.anonymousImpressions + b.anonymousImpressions)} {fz.notInRates} {r.window.from ? fmtAbs(r.window.from) : ux.son90Gun} → {fmtAbs(r.window.to)}.
       </p>
 
       {daily.length > 1 ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-fg">Günlük gösterim (son {fmtNum(daily.length)} gün)</p>
+          <p className="text-sm font-medium text-fg">{fz.dailyN(fmtNum(daily.length))}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <p className="text-xs text-fg-muted">A</p>
-              <Sparkline data={daily.map((d) => d.aImpr)} height={40} area zeroBased label="A varyantı günlük gösterim" />
+              <Sparkline data={daily.map((d) => d.aImpr)} height={40} area zeroBased label={ux.aVaryantiGunlukGosterim} />
             </div>
             <div>
               <p className="text-xs text-fg-muted">B</p>
-              <Sparkline data={daily.map((d) => d.bImpr)} height={40} area zeroBased tone="brand" label="B varyantı günlük gösterim" />
+              <Sparkline data={daily.map((d) => d.bImpr)} height={40} area zeroBased tone="brand" label={ux.bVaryantiGunlukGosterim} />
             </div>
           </div>
           <details className="text-sm">
             <summary className="cursor-pointer text-fg-muted">{fx.showDaily}</summary>
             <ChartDataTable
               data={daily}
-              caption="Günlük gösterim ve dönüşüm (İstanbul)"
+              caption={ux.gunlukGosterimVeDonusum}
               columns={[
-                { key: 'day', label: 'Gün', format: (v) => fmtDay(String(v)) },
-                { key: 'aImpr', label: 'A gösterim', numeric: true },
-                { key: 'bImpr', label: 'B gösterim', numeric: true },
-                { key: 'aConv', label: 'A dönüşüm', numeric: true },
-                { key: 'bConv', label: 'B dönüşüm', numeric: true },
+                { key: 'day', label: ux.gun, format: (v) => fmtDay(String(v)) },
+                { key: 'aImpr', label: ux.aGosterim, numeric: true },
+                { key: 'bImpr', label: ux.bGosterim, numeric: true },
+                { key: 'aConv', label: ux.aDonusum, numeric: true },
+                { key: 'bConv', label: ux.bDonusum, numeric: true },
               ]}
             />
           </details>
@@ -351,6 +362,8 @@ function ResultsView({ r }: { r: ExperimentResults }) {
 }
 
 function AssignmentChecker({ id }: { id: string }) {
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const inputId = useId();
   const [subject, setSubject] = useState('');
@@ -361,7 +374,7 @@ function AssignmentChecker({ id }: { id: string }) {
   return (
     <section className="space-y-2" aria-labelledby={`${inputId}-h`}>
       <h3 id={`${inputId}-h`} className="text-sm font-semibold text-fg">
-        Atama denetleyicisi
+        {uy.atamaDenetleyicisi}
       </h3>
       <form
         className="flex flex-col gap-2 sm:flex-row sm:items-end"
@@ -393,7 +406,7 @@ function AssignmentChecker({ id }: { id: string }) {
       {res ? (
         <p className="text-sm text-fg" role="status">
           {res.label ?? res.resolvedUserId} → <strong>{res.variant}</strong> (kova {res.bucket}/100)
-          {res.experimentActive ? '' : ' · deney şu an çalışmıyor; kullanıcı A görür'}
+          {res.experimentActive ? '' : ux.deneySuAnCalismiyor}
         </p>
       ) : null}
     </section>

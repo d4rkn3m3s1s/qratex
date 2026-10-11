@@ -52,13 +52,17 @@ function draftFrom(r: RolloutRow): Draft {
 }
 
 function RolloutState({ r }: { r: RolloutRow }) {
-  if (!r.active) return <StatusBadge size="sm" tone="neutral" label="Durduruldu" />;
-  if (r.expired) return <StatusBadge size="sm" tone="info" label="Süresi doldu · herkese açık" />;
-  if (r.moduleEnabled === false) return <StatusBadge size="sm" tone="danger" label="Modül kapalı" />;
-  return <StatusBadge size="sm" tone="success" label={r.percent >= 100 ? 'Herkese açık' : `%${r.percent} açık`} />;
+  const fz = useFeatureLabCopy().fx;
+  const ux = useFeatureLabCopy().ui;
+  if (!r.active) return <StatusBadge size="sm" tone="neutral" label={ux.durduruldu} />;
+  if (r.expired) return <StatusBadge size="sm" tone="info" label={ux.suresiDolduHerkeseAcik2} />;
+  if (r.moduleEnabled === false) return <StatusBadge size="sm" tone="danger" label={ux.modulKapali} />;
+  return <StatusBadge size="sm" tone="success" label={r.percent >= 100 ? ux.herkeseAcik : fz.pctOn(r.percent)} />;
 }
 
 export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
+  const fz = useFeatureLabCopy().fx;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: fcKeys.rollouts(), queryFn: ({ signal }) => fetchRollouts(signal), initialData: initial ?? undefined, staleTime: 30_000 });
@@ -72,17 +76,17 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Kademeli açılış"
+        title={ux.kademeliAcilis}
         icon={<TrendingUp />}
-        description="Açık bir modülü kullanıcıların yalnız bir yüzdesine ya da seçili kişilere aç. Kova kullanıcı kimliğinden türetilir (yapışkan); oturumsuz istekler kapsam dışında sayılır. Modül kapısı her istekte uygular."
+        description={ux.acikBirModuluKullanicilarin}
       >
         <QueryState query={query} skeleton="list" onRetry={() => query.refetch()}>
           {(d) => (
             <div className="space-y-4">
               {!d.killSwitchOn ? (
                 <p role="status" className={cn('rounded-card border px-3 py-2 text-sm', TONE_CALLOUT.warning)}>
-                  Acil durdurma etkin: <code className="font-mono">feature_flags</code> modülü kapalı olduğu için aşağıdaki kurallar şu an yok sayılıyor ve modüller genel
-                  anahtarlarına göre davranıyor. “Modül anahtarları” sekmesinden yeniden açabilirsiniz.
+                  Acil durdurma etkin: <code className="font-mono">feature_flags</code> {ux.moduluKapaliOlduguIcin}
+                  {ux.anahtarlarinaGoreDavraniyorModul}
                 </p>
               ) : null}
 
@@ -114,12 +118,12 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
                 </div>
                 <Button type="submit" className="min-h-11 sm:min-h-10" disabled={!newKey}>
                   <Plus className="h-4 w-4" aria-hidden />
-                  Kural oluştur
+                  {ux.kuralOlustur}
                 </Button>
               </form>
 
               {d.rollouts.length ? (
-                <ul className="divide-y divide-border rounded-card border border-border" aria-label="Kademeli açılış kuralları">
+                <ul className="divide-y divide-border rounded-card border border-border" aria-label={ux.kademeliAcilisKurallari}>
                   {d.rollouts.map((r) => (
                     <li key={r.id} className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0 space-y-1">
@@ -129,28 +133,28 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
                         </div>
                         <p className="text-xs text-fg-muted">
                           <code className="font-mono">{r.key}</code>
-                          {r.allowUserIds.length ? ` · ${fmtNum(r.allowUserIds.length)} kişi allowlist’te` : ''}
-                          {r.expiresAt ? ` · bitiş ${fmtAbs(r.expiresAt)}` : ''}
+                          {r.allowUserIds.length ? fz.allowlisted(fmtNum(r.allowUserIds.length)) : ''}
+                          {r.expiresAt ? fz.endsLower(fmtAbs(r.expiresAt)) : ''}
                           {` · ${fmtRel(r.updatedAt)}`}
                           {r.owner ? ` · ${r.owner}` : ''}
                         </p>
                         {r.note ? <p className="text-sm text-fg-muted">{r.note}</p> : null}
                         {r.active && !r.expired && r.percent < 100 ? (
-                          <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={`Kullanıcıların yüzde ${r.percent}'i kapsamda`}>
+                          <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-surface-muted" role="img" aria-label={fz.pctAria(r.percent)}>
                             <div className="h-full rounded-full bg-brand" style={{ width: `${r.percent}%` }} />
                           </div>
                         ) : null}
                       </div>
                       <Button variant="outline" className="min-h-11 shrink-0 sm:min-h-9" onClick={() => setDraft(draftFrom(r))}>
                         <Pencil className="h-4 w-4" aria-hidden />
-                        Düzenle
+                        {ux.duzenle}
                       </Button>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-fg-muted">
-                  Henüz kademeli açılış kuralı yok. Modüller şu an yalnız genel anahtarlarına göre açık ya da kapalı.
+                  {ux.henuzKademeliAcilisKurali}
                 </p>
               )}
             </div>
@@ -159,9 +163,9 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
       </SectionCard>
 
       <SectionCard
-        title="Yetim bayraklar"
+        title={ux.yetimBayraklar}
         icon={<Archive />}
-        description="Eski özellik bayrağı ekranında oluşturulan ve hiçbir kodun okumadığı kayıtlar. Açık ya da kapalı olmaları hiçbir şeyi değiştirmez; arşivlemek yalnız listeyi temizler (kayıt silinmez)."
+        description={ux.eskiOzellikBayragiEkraninda}
       >
         {visibleOrphans.length ? (
           <ul className="divide-y divide-border rounded-card border border-border">
@@ -170,12 +174,12 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
                 <div className="min-w-0">
                   <p className="font-medium text-fg">{o.name}</p>
                   <p className="truncate text-xs text-fg-muted">
-                    <code className="font-mono">{o.key}</code> · kayıtta {o.isEnabled ? 'açık' : 'kapalı'} görünüyor · etkisi yok · {fmtRel(o.updatedAt)}
+                    <code className="font-mono">{o.key}</code>{fz.orphanLine(o.isEnabled ? ux.acik2 : ux.kapali2, fmtRel(o.updatedAt))}
                   </p>
                 </div>
                 <Button variant="outline" className="min-h-11 shrink-0 sm:min-h-9" onClick={() => setArchiving({ id: o.id, key: o.key })}>
                   <Archive className="h-4 w-4" aria-hidden />
-                  Arşivle
+                  {ux.arsivle}
                 </Button>
               </li>
             ))}
@@ -199,15 +203,15 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
       <ReasonDialog
         open={archiving !== null}
         onOpenChange={(v) => !v && setArchiving(null)}
-        title="Yetim bayrak arşivlensin mi?"
-        description="Kayıt silinmez; listeden kalkar ve kapalıya çekilir. Denetim günlüğüne yazılır."
+        title={ux.yetimBayrakArsivlensinMi}
+        description={ux.kayitSilinmezListedenKalkar}
         confirmPhrase={archiving?.key}
-        confirmLabel="Arşivle"
+        confirmLabel={ux.arsivle}
         tone="warning"
         onConfirm={async (reason) => {
           if (!archiving) return;
           await archiveFlag(archiving.id, reason);
-          toast.success('Bayrak arşivlendi.');
+          toast.success(ux.bayrakArsivlendi);
           await qc.invalidateQueries({ queryKey: fcKeys.rollouts() });
         }}
       />
@@ -216,6 +220,9 @@ export function RolloutsTab({ initial }: { initial: RolloutsState | null }) {
 }
 
 function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () => void; onSaved: () => Promise<void> }) {
+  const fz = useFeatureLabCopy().fx;
+  const uy = useFeatureLabCopy().ui2;
+  const ux = useFeatureLabCopy().ui;
   const fx = useFeatureLabCopy();
   const [d, setD] = useState(draft);
   const ids = { pct: useId(), allow: useId(), exp: useId(), note: useId(), active: useId() };
@@ -231,16 +238,16 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
     <ReasonDialog
       open
       onOpenChange={(v) => !v && onClose()}
-      title={`${d.label}: kademeli açılış`}
-      description={isNew ? 'Yeni kural kapalı (taslak) doğar; “Etkin” açılmadıkça kimse etkilenmez.' : 'Kaydedince modül kapısı en geç birkaç saniyede yeni kuralı uygular.'}
+      title={fz.rolloutTitle(d.label)}
+      description={isNew ? ux.yeniKuralKapaliTaslak : ux.kaydedinceModulKapisiEn}
       impact={[
-        { label: 'Kapsam', value: d.active ? (pctValid ? `Kullanıcıların %${pct}'i${allowList.length ? ` + ${allowList.length} kişi` : ''}` : '—') : 'Kural etkin değil (modül herkese açık)', emphasis: true },
-        { label: 'Bitiş', value: d.expires ? `${d.expires.replace('T', ' ')} (İstanbul) — sonra herkese açılır` : 'Yok' },
+        { label: ux.kapsam, value: d.active ? (pctValid ? fz.scopeValue(String(pct), allowList.length) : '—') : ux.kuralEtkinDegilModul, emphasis: true },
+        { label: ux.bitis, value: d.expires ? fz.expiresValue(d.expires.replace('T', ' ')) : fz.none },
       ]}
-      warning={d.active && pctValid && pct === 0 && !allowList.length ? 'Yüzde 0 ve boş allowlist: modül herkes için kapalı gibi davranır.' : undefined}
-      confirmLabel={isNew ? 'Kuralı oluştur' : 'Kaydet'}
+      warning={d.active && pctValid && pct === 0 && !allowList.length ? ux.yuzde0VeBos : undefined}
+      confirmLabel={isNew ? ux.kuraliOlustur : 'Kaydet'}
       onConfirm={async (reason) => {
-        if (!pctValid) throw new Error('Yüzde 0–100 arasında tam sayı olmalı.');
+        if (!pctValid) throw new Error(fz.pctInvalid);
         await putRollout(d.key, {
           active: d.active,
           percent: pct,
@@ -250,13 +257,13 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
           reason,
           baseUpdatedAt: d.baseUpdatedAt,
         });
-        toast.success(isNew ? 'Kademeli açılış kuralı oluşturuldu.' : 'Kural güncellendi.');
+        toast.success(isNew ? ux.kademeliAcilisKuraliOlusturuldu : ux.kuralGuncellendi);
         await onSaved();
       }}
     >
       <div className="flex items-center justify-between gap-3 rounded-card border border-border px-3 py-2">
         <Label htmlFor={ids.active} className="text-sm">
-          Kural etkin
+          {uy.kuralEtkin}
         </Label>
         <Switch id={ids.active} checked={d.active} onCheckedChange={(v) => setD({ ...d, active: v })} />
       </div>
@@ -272,7 +279,7 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
             aria-describedby={`${ids.pct}-hint`}
           />
           <p id={`${ids.pct}-hint`} className="text-xs text-fg-muted">
-            0–100. Yüzdeyi artırmak mevcut kapsamdakileri korur (aynı kova).
+            {ux.t0100YuzdeyiArtirmak}
           </p>
         </div>
         <div className="space-y-1">
@@ -283,12 +290,12 @@ function RolloutEditor({ draft, onClose, onSaved }: { draft: Draft; onClose: () 
       </div>
       <div className="space-y-1">
         <Label htmlFor={ids.allow}>{fx.allowlist}</Label>
-        <Textarea id={ids.allow} rows={3} value={d.allow} onChange={(e) => setD({ ...d, allow: e.target.value })} className="font-mono text-xs" placeholder="Her satıra bir kullanıcı kimliği" />
-        <p className="text-xs text-fg-muted">{fmtNum(allowList.length)} kimlik · en fazla 200. Bu kişiler yüzdeden bağımsız olarak kapsamdadır.</p>
+        <Textarea id={ids.allow} rows={3} value={d.allow} onChange={(e) => setD({ ...d, allow: e.target.value })} className="font-mono text-xs" placeholder={ux.herSatiraBirKullanici} />
+        <p className="text-xs text-fg-muted">{fz.idsCount(fmtNum(allowList.length))}</p>
       </div>
       <div className="space-y-1">
         <Label htmlFor={ids.note}>{fx.noteOptional}</Label>
-        <Input id={ids.note} value={d.note} maxLength={300} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder="Ör. yeni klan akışı önce %10 ile" />
+        <Input id={ids.note} value={d.note} maxLength={300} onChange={(e) => setD({ ...d, note: e.target.value })} placeholder={ux.orYeniKlanAkisi} />
       </div>
     </ReasonDialog>
   );
