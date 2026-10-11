@@ -211,3 +211,56 @@ Yöntem: `app/admin/pages/page.tsx`, `app/api/admin/pages/route.ts`, `prisma/sch
 | 2 | "Yayınla" hiçbir yerde okunmuyor | Doğrulandı | YÜKSEK (yanıltıcı UI) |
 | 3 | Onaysız kalıcı silme | Doğrulandı | ORTA |
 | 4 | P2002 yarışı / optimistik kilit yok | Doğrulandı | DÜŞÜK |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Ürün kararı: gerçek yayın hattı kuruldu** (kaldırmak yerine). "Yayında" kayıtlar `app/(okuma)/sayfa/[slug]` adresinde sakin okuma kabuğuyla render edilir; `noindex` olmayanlar sitemap'e girer; her yazım `cms-page:<slug>` etiketini anında sona erdirir. Yasal metinler sistemden üretildiği için (P0-34) bu modele TAŞINMADI; ekran bunu açıkça söylüyor.
+
+Yeni dosyalar: `lib/cms-pages/contract.ts` (paylaşılan zod, sürümlü içerik `{v:1, format:'markdown', body}`, `meta {seoTitle, description, noindex}`, güvenli markdown alt kümesi ayrıştırıcısı), `lib/cms-pages/pages.server.ts`, `components/admin/a-seo-sayfalar/{pages-console,page-editor,cms-content}.tsx`, `app/admin/pages/[id]/page.tsx` (editör rotası; `yeni` = oluştur), `app/(okuma)/sayfa/[slug]/page.tsx`. API: `GET/POST /api/admin/pages`, `GET/PATCH/DELETE /api/admin/pages/[id]`, `POST …/[id]/publish`, `GET …/[id]/history` (hepsi `defineRoute`). `app/sitemap.ts`'e eklemeli CMS girdisi. Test: `__tests__/admin/a-seo-sayfalar/cms-pages-server.test.ts` (7) + mevcut `pages-slug.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Rota yetkisi | ÇALIŞIYOR |
+| 2 | API yetkisi | ÇALIŞIYOR — `defineRoute` (rol DB'den + zod + rate limit); gate çerezi sistem geneli konu |
+| 3 | Sekme başlığı | ÇALIŞIYOR — sunucu `metadata` |
+| 4 | Başlık | ÇALIŞIYOR — kompakt `PageHeader` + yayında/taslak sayaç çipleri (premium hero kaldırıldı) |
+| 5 | Liste yükleme | ÇALIŞIYOR — sunucu ön yükleme + React Query |
+| 6 | Yükleniyor | ÇALIŞIYOR — tablo iskeleti |
+| 7 | Hata durumu | ÇALIŞIYOR — `QueryState` hata + "Tekrar dene" (boş listeden ayrı) |
+| 8 | Boş durum | ÇALIŞIYOR — ilk kullanım (CTA) ile filtre/arama boşu ("filtreleri temizle") ayrı |
+| 9 | Arama | ÇALIŞIYOR — sunucuda, `?q=`, gecikmeli, etiketli, sonuç sayısı `aria-live` |
+| 10 | Sıralama | ÇALIŞIYOR — seçilebilir (son güncellenen / başlık), `?sirala=` |
+| 11 | Durum filtresi | ÇALIŞIYOR — Tümü/Yayında/Taslak, sayılı, `?durum=` |
+| 12 | Sayfa satırı | ÇALIŞIYOR — başlık, `/sayfa/slug`, durum, "Aramada gizli", düz metin özet, göreli tarih, son düzenleyen, karakter sayısı |
+| 13 | Giriş animasyonu | ÇALIŞIYOR — `fadeUp` + tavanlı stagger; azaltılmış harekette kapalı |
+| 14 | Yeni sayfa | ÇALIŞIYOR — ayrı rota; form kalıntısı sızıntısı yapısal olarak imkânsız |
+| 15 | Form alanları | ÇALIŞIYOR — ds/form (RHF + paylaşılan zod); odak kaybı yok |
+| 16 | Slug | ÇALIŞIYOR — Türkçe transliterasyon, elle değiştirilene kadar başlıktan otomatik, kayıtta kırpma, `---` reddi |
+| 17 | İstemci doğrulaması | ÇALIŞIYOR — oluşturma ve düzenlemede aynı şema; alan altı hata + sayaç |
+| 18 | Oluşturma | ÇALIŞIYOR — idempotent; alan hataları alana yazılır (`[object Object]` yok); slug yarışı 409 |
+| 19 | Düzenleme | ÇALIŞIYOR — iyimser kilit 409 + "güncel hali yükle", DirtyBar |
+| 20 | Silme | ÇALIŞIYOR — yalnız taslak, slug yazarak onay; yayındaki sayfa önce yayından kaldırılmalı (409); son içerik denetim izinde |
+| 21 | Yayınla + rozet | ÇALIŞIYOR (eskiden SAHTE) — gerçek public sayfa + sitemap + anında önbellek sona erdirme; listeden onaylı yayına al/kaldır |
+| 22 | Denetim günlüğü | ÇALIŞIYOR — içerik bir kez (`newData` = sürüm), `oldData` yalnız değişen alan adları; editörde geçmiş |
+| 23 | Slug benzersizliği | ÇALIŞIYOR — P2002 → 409 (`defineRoute`) |
+| 24 | SEO meta | ÇALIŞIYOR — SEO başlığı, meta açıklama, noindex; public metadata'ya bağlı |
+| 25 | Önizleme / canlı link | ÇALIŞIYOR — editörde canlı önizleme (public sayfayla AYNI render bileşeni) + Google görünümü; "Canlı görüntüle" |
+| 26 | Zengin içerik | ÇALIŞIYOR — sürümlü markdown alt kümesi (başlık, liste, alıntı, ayraç, kalın/italik, güvenli bağlantı); HTML enjeksiyonu yok |
+| 27 | Sürüm geçmişi / geri alma / zamanlanmış yayın | Geçmiş + "editöre yükle" ÇALIŞIYOR; zamanlanmış yayın KALDIRILDI (kapsam dışı) — şemada `publishAt` yok (ŞEMA İSTEĞİ) |
+| 28 | Çoklu dil | ÇALIŞIYOR — tüm metin Türkçe; tarih `Intl` + `Europe/Istanbul` |
+| 29 | Sayfalama | ÇALIŞIYOR — sunucu sayfalama (20), özet `select` |
+| 30 | Erişilebilirlik | ÇALIŞIYOR — etiket bağları, ikon butonlarda erişilebilir ad, ≥44px |
+| 31 | Mobil | ÇALIŞIYOR — tek sütun form, Düzenle/Önizleme geçişi |
+| 32 | Kaydetme göstergesi | ÇALIŞIYOR — satır başına mutasyon (ortak `saving` kilidi yok) |
+
+### Kapanan bulgular (11/12)
+1 yayın hattı · 2 odak kaybı · 3 onaysız silme · 4 `[object Object]` · 5 form sızıntısı · 6 P2002 + iyimser kilit · 7 sözleşme kayması (sürümlü içerik + meta) · 8 dil · 9 erişilebilirlik/mobil · 10 hata/boş ayrımı · 11 özet liste + denetimde tek kopya.
+
+### Kalanlar
+- **Bulgu 12** (`/api/admin/*` için gate çerezi): sistem geneli, sahiplik dışı.
+- **Çöp kutusu / yumuşak silme, zamanlanmış yayın, `status` iş akışı, `PageRevision` tablosu:** ŞEMA İSTEĞİ — `Page`'e `deletedAt`, `publishAt`, `publishedAt`, `updatedById` alanları ve `PageRevision` modeli. Şimdilik silme yalnız taslakta ve içerik denetim izinde korunuyor.
+- **`/admin/seo` sayfa ezmeleriyle tek kaynak:** CMS sayfalarının SEO'su kendi kaydında (`Page.meta`); SEO Motoru'nun ezmeleri yalnız sabit public rotalar için. İki kaynak çakışmıyor, SEO ekranı bunu belirtiyor.

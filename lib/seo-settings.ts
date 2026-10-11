@@ -149,3 +149,6 @@ export async function getPageSeo(path: string): Promise<SeoPageOverride | null> 
 export function getCanonicalBase(settings: SeoGlobalSettings): string {
   return settings.canonicalBase || settings.siteUrl;
 }
+
+/** Varsayılan SEO ayarları (salt-okunur kopya) — admin SEO Motoru onarım/karşılaştırma için. */
+export const SEO_DEFAULTS: Readonly<SeoGlobalSettings> = Object.freeze({ ...defaults });

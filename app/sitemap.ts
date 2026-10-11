@@ -3,6 +3,7 @@ import { getSeoSettings } from '@/lib/seo-settings';
 import { LEGAL_DOCUMENTS, legalDateToDate } from '@/lib/legal/documents';
 import { getAllPosts, getLatestModified } from '@/lib/blog-posts';
 import { TRUST_CONTENT_UPDATED_AT, WHY_CONTENT_UPDATED_AT } from '@/lib/landing/content-dates';
+import { listPublishedCmsForSitemap } from '@/lib/cms-pages/pages.server';
 
 /** URL sayısı bu eşiği aşarsa ileride sitemap-index (app/sitemap.xml/route.ts) ile bölünebilir. */
 const SITEMAP_INDEX_THRESHOLD = 5000;
@@ -99,5 +100,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: typeof e.priority === 'number' ? e.priority : 0.5,
     }));
 
-  return [...defaultEntries, ...blogEntries, ...extraEntries];
+  // Yayındaki CMS içerik sayfaları (/admin/pages → /sayfa/<slug>); noindex olanlar hariç. DB yoksa boş.
+  const cmsEntries: MetadataRoute.Sitemap = (await listPublishedCmsForSitemap()).map((p) => ({
+    url: `${base}/sayfa/${p.slug}`,
+    lastModified: p.updatedAt,
+    changeFrequency: 'monthly',
+    priority: 0.5,
+  }));
+
+  return [...defaultEntries, ...blogEntries, ...cmsEntries, ...extraEntries];
 }

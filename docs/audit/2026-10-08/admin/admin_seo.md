@@ -247,3 +247,78 @@ Salt okunur inceleme; kod değiştirilmedi, DB/sunucu/test çalıştırılmadı.
   - keywords çökmesi geçicidir: PUT yanıtı state'e yazılınca (page.tsx:102) `g.keywords.join` (page.tsx:501) patlar, ama sayfa yenilenince `lib/seo-settings.ts:103` dizi olmayan keywords'ü varsayılana çevirir; GET normalleşmiş veri döner, site metadata'sı da etkilenmez.
   - Geçersiz `lastModified` → `new Date('x')` → sitemap serileştirmede `toISOString` RangeError ihtimali kod okumasıyla makul ama UI tarih girdisi bunu üretmez; yalnız elle hazırlanmış istekle mümkün (doğrulanmadı).
 - Öneri (Düşük): Bulgu 1 ve 2 için önerilen tek Zod şeması (`seoGlobalSchema.strict()`) bu sınıfı da kapatır; içe aktarmada aynı şema istemci tarafında `safeParse` ile çalıştırılıp hatalı alanlar listelenmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+Yeni dosyalar: `lib/admin-seo/contract.ts` (tek zod şeması + sayfa registry + saf yardımcılar), `lib/admin-seo/seo.server.ts`, `components/admin/a-seo-sayfalar/{seo-console,seo-fields,seo-preview,seo-history,seo-draft,api,format}`, `__tests__/admin/a-seo-sayfalar/seo-server.test.ts` (13 test). `app/admin/seo/page.tsx` artık sunucu bileşeni (ön yükleme) + istemci adası. `/api/admin/seo{,/audit,/rollback,/health}` `defineRoute` ile yeniden yazıldı (ADMIN + zod + Redis öncelikli rate limit, zarf v2). `lib/seo-settings.ts`'e yalnız eklemeli `SEO_DEFAULTS` dışa aktarımı. D2/P0-39 Site URL güvencesi (`lib/seo-url.ts`) korunur; şema ek bir katman olarak eklendi.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa başlığı | ÇALIŞIYOR — QDL `PageHeader` + sekme `metadata` başlığı |
+| 2 | Yükleniyor | ÇALIŞIYOR — sunucu ön yükleme + `QueryState` iskeleti |
+| 3 | Hata durumu | ÇALIŞIYOR — zarf/`res.ok` kontrolü, `QueryState` hata + "Tekrar dene" (sonsuz spinner yok) |
+| 4 | Yetki | ÇALIŞIYOR — `defineRoute` (`requireAuth`, yetki DB'den); gate çerezi sistem geneli konu (aşağıda) |
+| 5 | Siteyi aç | ÇALIŞIYOR — kayıtlı taban adresi kullanılır |
+| 6 | Dışa aktar | ÇALIŞIYOR — açıkça "kayıtlı ayarlar"; `kind` + tarih damgası |
+| 7 | İçe aktar | ÇALIŞIYOR — 200 KB sınırı, tek şemayla doğrulama, alan hataları listesi, fark önizlemesi, yalnız TASLAĞA uygulanır |
+| 8 | Kaydet | ÇALIŞIYOR — yapışkan `DirtyBar` (Ctrl/⌘+S, beforeunload), iyimser kilit 409 + "güncel hali yükle", alan bazlı hata |
+| 9 | Sağlık butonu | ÇALIŞIYOR — `POST /api/admin/seo/health` (6/dk) |
+| 10 | Sağlık skoru | ÇALIŞIYOR — noindex / nofollow / `Disallow: /` / sitemap kapalı / başlık-açıklama uzunluğu / OG oranı / OG görsel HEAD / kayıtlı veri geçerliliği / robots / sitemap adres sayısı; önem ağırlıklı skor; test edilemeyen kontrol skoru etkilemez |
+| 11 | Son kontrol zamanı | ÇALIŞIYOR — sonuç `Settings('seo.health.last')`'ta kalıcı, çalıştıran kişi görünür |
+| 12 | Sadece hatalar filtresi | ÇALIŞIYOR |
+| 13 | Kontrol satırları + rozet | ÇALIŞIYOR — Türkçe önem (Kritik/Uyarı/Bilgi/Test edilmedi); "Düzelt" ilgili sekme ve alana odaklanır |
+| 14 | Health boş durumu | ÇALIŞIYOR |
+| 15 | Google önizlemesi | ÇALIŞIYOR — gerçek SERP düzeni, masaüstü/mobil, canvas `measureText` ile piksel kırpma, sayfa seçici (override önizlenir); sahte link hissi yok |
+| 16 | Rich Results linki | ÇALIŞIYOR — `?url=` ile dolu; ek olarak Schema.org doğrulayıcı |
+| 17 | Facebook debugger | ÇALIŞIYOR (+ LinkedIn Post Inspector) |
+| 18 | Twitter validator | KALDIRILDI — X bu aracı kapattı; kullanıcıyı işe yaramaz sayfaya yolluyordu |
+| 19 | Sekmeler | ÇALIŞIYOR — `?sekme=` URL'de; hatalı sekmede hata sayısı |
+| 20 | Varsayılan başlık | ÇALIŞIYOR — canlı uzunluk göstergesi (10–60) |
+| 21 | Site adı | ÇALIŞIYOR — panellerdeki etkisi açıklamada |
+| 22 | Meta description | ÇALIŞIYOR — gösterge (70–160), sağlık kontrolüyle aynı eşik |
+| 23 | Site URL | ÇALIŞIYOR — zorunlu http(s); boş kaydedilemez (istemci + şema + `validateSeoGlobalUrls` + okuma onarımı + `resolveSeoBaseUrl`) |
+| 24 | Canonical base | ÇALIŞIYOR — sondaki `/` normalize edilir |
+| 25 | OG görsel URL | ÇALIŞIYOR — ana sayfanın dosya tabanlı `/opengraph-image` kullandığı arayüzde dürüstçe belirtilir ve önizlenir; diğer sayfalar alanı kullanır |
+| 26 | OG genişlik/yükseklik | ÇALIŞIYOR — serbest yazım (taslak metin), 200–4096 doğrulaması, oran kontrolü |
+| 27 | Twitter kullanıcı adı | ÇALIŞIYOR — `@` biçim doğrulaması |
+| 28 | Twitter kart tipi | ÇALIŞIYOR — sunucuda enum, Türkçe etiket |
+| 29 | Locale | ÇALIŞIYOR — `xx_XX` doğrulaması |
+| 30 | Anahtar kelimeler | ÇALIŞIYOR — çip girdisi (Enter/virgül/×), çok kelimeli ifade; Google'ın kullanmadığı belirtildi |
+| 31–33 | Organization / WebSite alanları | ÇALIŞIYOR — canlı JSON-LD önizlemesi |
+| 34 | İndekslemeye izin | ÇALIŞIYOR — kırmızı tehlike satırı + kayıt öncesi yazılı onay ("onaylıyorum"); sunucu onaysız isteği 428 ile reddeder |
+| 35 | Link takibi | ÇALIŞIYOR — açıklama + aynı onay protokolü |
+| 36 | Disallow yolları | ÇALIŞIYOR — satır bazlı editör (Enter yeni satır açar), yol doğrulaması, `/` için tehlike onayı, boş listede varsayılan gösterilir, canlı robots.txt önizlemesi |
+| 37 | Sitemap etkin | ÇALIŞIYOR — kapatma onay ister |
+| 38 | Sitemap ek URL satırları | ÇALIŞIYOR — öncelik 0–1, sıklık enum (Türkçe), tarih doğrulaması; otomatik eklenen adresler açıklanır |
+| 39 | URL ekle/sil | ÇALIŞIYOR — erişilebilir adlı ikon butonları |
+| 40 | Yinelenen path | ÇALIŞIYOR — şemada engellenir; seçicide kullanılan sayfa tekrar seçilemez |
+| 41 | Sayfa override satırları | ÇALIŞIYOR — serbest metin yerine `SEO_ROUTES` registry (ezmeyi gerçekten okuyan 8 sayfa); boş alan yazılmaz (varsayılan korunur); çelişkili açıklama kaldırıldı |
+| 42 | Override canonical | ÇALIŞIYOR — girdi eklendi |
+| 43 | Satır ekle/sil | ÇALIŞIYOR — kararlı satır anahtarı (index değil) |
+| 44 | Geçmiş | ÇALIŞIYOR — çekmece, açılınca yüklenir, sayfalı, alan bazlı fark (eski → yeni), Türkçe eylem adı, tehlikeli değişiklik vurgusu; ham JSON dönmez |
+| 45 | Rollback | ÇALIŞIYOR — "Bu sürümü geri yükle" = o kayıtla oluşan sürüm (`newData`); onay + kaydedilmemiş taslak uyarısı, iyimser kilit, tehlike onayı; `create` kaydında da çalışır. Eski `undo` (oldData) modu /admin/audit yüzeyi için geriye uyumlu |
+| 46 | Audit yazımı | ÇALIŞIYOR — `auditEntry` aktör anlık görüntüsü, kayıtla aynı işlemde |
+| 47 | Rate limit | ÇALIŞIYOR — `checkRateLimitDb` (Redis öncelikli), tüm uçlarda |
+| 48 | Önbellek geçersizleştirme | ÇALIŞIYOR — `revalidateTag('seo', { expire: 0 })`; admin okuması önbelleği atlar |
+| 49 | Kirli durum uyarısı | ÇALIŞIYOR — DirtyBar + beforeunload |
+| 50 | Mobil | ÇALIŞIYOR — önizleme editörün altına iner, yatay kaydırmalı sekmeler, ≥44px hedefler, alta yapışık kaydet çubuğu |
+| 51 | Form erişilebilirliği | ÇALIŞIYOR — ds `Field` (label for, aria-describedby, aria-invalid), switch etiketleri, satır girdilerinde etiketler |
+| 52 | Dil tutarlılığı | ÇALIŞIYOR — tüm metin Türkçe (ops ekranı; sayfa i18n anahtar düzeni kullanmıyordu) |
+
+### Kapanan bulgular (14/14)
+1 boş Site URL · 2 boş override · 3 kontrollü girdi hatası · 4 noindex onayı + sağlıkta kritik · 5 sonsuz spinner · 6 gevşek doğrulama → tek şema · 7 rollback semantiği · 8 okuma-sonrası-yazma + iyimser kilit · 9 sayaç / kirli durum / alan hatası · 10 SERP + sosyal önizleme, Twitter linki kaldırıldı · 11 OG çakışması arayüzde dürüstçe gösterilir, ana sayfa görseli önizlenir · 12 override registry · 13 rate limit Redis'e taşındı, sağlık kontrolünde SSRF sınırı (yalnız uygulamanın kendi host'una istek) · 14 erişilebilirlik + ölü importlar.
+
+### Eksik özelliklerden uygulananlar
+1 sürüm geçmişi + alan farkı + geri yükleme · 2 kirli durum + yapışkan kaydet + tehlikeli değişiklikte yazılı onay · 3 sosyal kart önizlemesi + OG görsel erişim/oran kontrolü · 5 (kısmen) sağlık sonucu kalıcı.
+
+### Kalanlar (gerekçeli)
+- **Bulgu 13'ün gate çerezi kısmı:** `/api/admin/*` için gizli kapı çerezi zorunluluğu sistem geneli (`requireAuth`/proxy); bu yüzeyin sahipliğinde değil.
+- **`seo_engine` modül anahtarı:** rotalara `module` eklenirse paylaşılan `lib/data/module-gate-bindings.json` yeniden üretilmeli (özellik-deney yüzeyinin dosyası). Eklenmedi; anahtar hâlâ etkisiz.
+- **Günlük otomatik sağlık + trend grafiği:** cron dosyası (`app/api/cron/daily/jobs.ts`) başka ajanın aktif değişikliğinde. `runSeoHealth` cron'dan çağrılmaya hazır.
+- **Sayfa envanteri/tarayıcı görünümü ve Search Console entegrasyonu:** gerçek veri kaynağı yok (GSC OAuth yok); sahte veriyle yapılmadı.
+- **OG görselinin tek kaynağa indirilmesi:** `app/opengraph-image.tsx` kök/paylaşılan dosya; değiştirilmedi, davranış arayüzde açıkça anlatılıyor.
+- Kullanılmayan eski yardımcılar `adminSeoPutSchema`/`adminSeoRollbackSchema` (`lib/validations-admin.ts`) ve `checkAdminSeoRateLimit` (`lib/rate-limit.ts`) paylaşılan dosyalarda bırakıldı; artık referansları yok.
