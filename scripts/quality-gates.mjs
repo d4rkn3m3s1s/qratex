@@ -90,7 +90,9 @@ if (!SKIP.has('jest')) {
 let records = [];
 if (!SKIP.has('e2e')) {
   const pf = path.join(OUT_DIR, 'playwright.json');
-  run('npx', ['playwright', 'test', '--project=gates', '--reporter=json', '--workers=3'], {
+  // --output: Playwright çıktı klasörünü (varsayılan test-results/) koşu başında SİLER; ayrı alt
+  // klasör verilmezse test-results/gates (jest.json, rota kayıtları) da silinir.
+  run('npx', ['playwright', 'test', '--project=gates', '--reporter=json', '--workers=3', '--output=test-results/pw-gates'], {
     env: { GATES_OUT: RECORDS, PLAYWRIGHT_JSON_OUTPUT_NAME: pf, E2E_WRITE: '' },
   });
   if (fs.existsSync(pf)) {
@@ -123,6 +125,8 @@ if (!SKIP.has('e2e')) {
   const sumGate = (name, target, pick, fmt) => {
     const bad = records.filter((r) => pick(r).length > 0);
     const total = records.reduce((n, r) => n + pick(r).length, 0);
+    // 0 rota ölçüldüyse (giriş kurulumu düştü vb.) "0 ihlal" YEŞİL sayılmaz: ölçülmedi.
+    if (records.length === 0) return skipped(name, target, 'rota kaydı yok (giriş kurulumu / e2e düştü)');
     gate(name, target, `${total} (${bad.length}/${records.length} rota)`, total === 0, bad.slice(0, 40).map((r) => `${tag(r)}: ${fmt(pick(r))}`));
   };
   const head = (arr, n = 3) => arr.slice(0, n).join(' · ') + (arr.length > n ? ` (+${arr.length - n})` : '');
@@ -136,7 +140,8 @@ if (!SKIP.has('e2e')) {
   );
   {
     const bad = records.filter((r) => r.overflowPx > 1);
-    gate('Yatay taşma (412px)', '0 rota', `${bad.length} rota`, bad.length === 0, bad.map((r) => `${tag(r)}: +${r.overflowPx}px`));
+    if (records.length === 0) skipped('Yatay taşma (412px)', '0 rota', 'rota kaydı yok (giriş kurulumu / e2e düştü)');
+    else gate('Yatay taşma (412px)', '0 rota', `${bad.length} rota`, bad.length === 0, bad.map((r) => `${tag(r)}: +${r.overflowPx}px`));
   }
   sumGate('Dokunma hedefi <44px', '0', (r) => r.smallTargets, (a) => head(a));
   sumGate('Kontrast ihlali (AA)', '0', (r) => r.lowContrast, (a) => head(a));
@@ -182,7 +187,7 @@ function cookieHeader(role) {
 
 if (!SKIP.has('lighthouse')) {
   const keep = ['tsconfig.json', 'next-env.d.ts'].map((f) => [f, fs.existsSync(path.join(ROOT, f)) ? fs.readFileSync(path.join(ROOT, f)) : null]);
-  const build = run('npx', ['next', 'build', '--webpack'], { env: { NEXT_DIST_DIR: DIST, DISABLE_SENTRY_BUILD: '1' } });
+  const build = run('npx', ['next', 'build', '--webpack'], { env: { NEXT_DIST_DIR: DIST, DISABLE_SENTRY_BUILD: '1', NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192`.trim() } });
   for (const [f, buf] of keep) if (buf) fs.writeFileSync(path.join(ROOT, f), buf);
   fs.writeFileSync(path.join(OUT_DIR, 'build.log'), build.out);
   if (build.code !== 0) {
