@@ -13,7 +13,7 @@ export type SourceGroup = (typeof SOURCE_GROUPS)[number];
 export const GROUP_SOURCES: Readonly<Record<SourceGroup, readonly string[]>> = {
   feedback: ['feedback', 'review', 'consumption_review', 'rating_fallback'],
   visit: ['consumption', 'dealer_passive', 'consumption_passive'],
-  game: ['game', 'game_streak', 'tournament', 'spin'],
+  game: ['game', 'game_streak', 'game_quest', 'tournament', 'spin'],
   mission: [
     'quest',
     'badge',
@@ -26,9 +26,9 @@ export const GROUP_SOURCES: Readonly<Record<SourceGroup, readonly string[]>> = {
     'event',
   ],
   social: ['referral', 'referral_milestone', 'squad', 'squad_battle', 'squad_escrow', 'squad_escrow_refund', 'gift'],
-  bonus: ['streak', 'login_streak', 'birthday', 'surprise', 'remedy', 'automation', 'risk_segment_campaign'],
+  bonus: ['streak', 'login_streak', 'birthday', 'surprise', 'surprise_box', 'remedy', 'automation', 'risk_segment_campaign'],
   spend: ['shop', 'reward', 'donation', 'badge_unlock', 'spend', 'purchase'],
-  adjust: ['admin_adjust', 'reversal', 'opening_balance'],
+  adjust: ['admin_adjust', 'reversal', 'reward_refund', 'opening_balance', 'demo_seed'],
 };
 
 const SOURCE_TO_GROUP: ReadonlyMap<string, SourceGroup> = new Map(
@@ -68,6 +68,7 @@ const SOURCE_LABELS: Readonly<Record<string, Label>> = {
   consumption_passive: { tr: 'Ziyaret puanı', en: 'Visit points' },
   game: { tr: 'Oyun ödülü', en: 'Game reward' },
   game_streak: { tr: 'Oyun serisi bonusu', en: 'Game streak bonus' },
+  game_quest: { tr: 'Oyun görevi', en: 'Game quest' },
   tournament: { tr: 'Turnuva ödülü', en: 'Tournament prize' },
   spin: { tr: 'Günlük çark', en: 'Daily spin' },
   quest: { tr: 'Görev ödülü', en: 'Quest reward' },
@@ -90,6 +91,7 @@ const SOURCE_LABELS: Readonly<Record<string, Label>> = {
   login_streak: { tr: 'Giriş serisi bonusu', en: 'Login streak bonus' },
   birthday: { tr: 'Doğum günü hediyesi', en: 'Birthday gift' },
   surprise: { tr: 'Sürpriz kutu', en: 'Surprise box' },
+  surprise_box: { tr: 'Sürpriz kutu', en: 'Surprise box' },
   remedy: { tr: 'Telafi puanı', en: 'Make-good points' },
   automation: { tr: 'Kampanya puanı', en: 'Campaign points' },
   risk_segment_campaign: { tr: 'Kampanya puanı', en: 'Campaign points' },
@@ -101,6 +103,8 @@ const SOURCE_LABELS: Readonly<Record<string, Label>> = {
   purchase: { tr: 'Satın alma', en: 'Purchase' },
   admin_adjust: { tr: 'Hesap düzeltmesi', en: 'Account adjustment' },
   reversal: { tr: 'Geri alma', en: 'Reversal' },
+  reward_refund: { tr: 'Ödül iadesi', en: 'Reward refund' },
+  demo_seed: { tr: 'Başlangıç puanı', en: 'Starter points' },
   opening_balance: { tr: 'Açılış bakiyesi', en: 'Opening balance' },
 };
 

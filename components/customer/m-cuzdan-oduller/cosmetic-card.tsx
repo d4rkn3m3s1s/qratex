@@ -33,7 +33,7 @@ export function CosmeticCard({
       onClick={() => onOpen(item.id)}
       aria-haspopup="dialog"
       className={cn(
-        'group relative flex h-full min-w-0 flex-col overflow-hidden rounded-card border border-subtle bg-surface-1 text-left qx-elevation-1',
+        'group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-card border border-subtle bg-surface-1 text-left qx-elevation-1',
         'transition-[border-color] duration-fast ease-standard hover:border-strong',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
       )}

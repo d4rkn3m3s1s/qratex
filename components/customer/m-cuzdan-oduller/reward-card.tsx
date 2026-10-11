@@ -46,7 +46,7 @@ export function RewardCard({ reward, balance, onOpen }: { reward: RewardDTO; bal
       onClick={() => onOpen(reward.id)}
       aria-haspopup="dialog"
       className={cn(
-        'group flex h-full min-w-0 flex-col overflow-hidden rounded-card border border-subtle bg-surface-1 text-left qx-elevation-1',
+        'group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-card border border-subtle bg-surface-1 text-left qx-elevation-1',
         'transition-[border-color,box-shadow] duration-fast ease-standard hover:border-strong',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
       )}

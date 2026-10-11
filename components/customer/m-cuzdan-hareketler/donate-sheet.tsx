@@ -93,7 +93,7 @@ function DonateSheetInner({ project, balance, defaultPublic, fmt, onClose, onDon
   }, [max, fmt, copy]);
   const quickValue = quick.some((o) => o.value === String(amount)) ? String(amount) : null;
 
-  const preview = amount > 0 ? impactValue(amount, project.impact) : null;
+  const preview = amount > 0 && !localError ? impactValue(amount, project.impact) : null;
 
   const submit = async () => {
     if (!canSubmit) return;
