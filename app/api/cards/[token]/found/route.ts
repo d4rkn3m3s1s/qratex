@@ -14,7 +14,7 @@ import { after } from 'next/server';
 import { z } from 'zod';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { prisma } from '@/lib/prisma';
-import { sendPushNotification } from '@/lib/push';
+import { sendPush } from '@/lib/push';
 import { getUserAgent } from '@/lib/request-metadata';
 import { CARD_TOKEN_PATTERN } from '@/lib/qr-resolve';
 
@@ -96,7 +96,7 @@ export const POST = defineRoute(
       }),
     ]);
 
-    const push = () => sendPushNotification(ownerId, title, message, url).catch(() => false);
+    const push = () => sendPush(ownerId, { title, body: message, url, kind: 'card_found' }).catch(() => false);
     try {
       after(push);
     } catch {

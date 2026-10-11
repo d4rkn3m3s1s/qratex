@@ -34,7 +34,7 @@ jest.mock('@/lib/module-gate', () => ({
   getModuleControls: async () => ({ incidents: cfg.incidents }),
 }));
 const mockPush = jest.fn(async () => true);
-jest.mock('@/lib/push', () => ({ sendPushNotification: (...a: unknown[]) => mockPush(...(a as [])) }));
+jest.mock('@/lib/push', () => ({ sendPush: (...a: unknown[]) => mockPush(...(a as [])) }));
 jest.mock('@/lib/idempotency', () => ({
   checkIdempotency: async () => ({ cached: false, key: '' }),
   storeIdempotency: async () => undefined,

@@ -28,7 +28,7 @@ jest.mock('@/lib/innovation-segment-users', () => ({
   resolveInnovationSegmentUserIds: (...a: unknown[]) => mockSegmentUsers(...a),
 }));
 const mockPush = jest.fn();
-jest.mock('@/lib/push', () => ({ sendPushNotification: (...a: unknown[]) => mockPush(...a) }));
+jest.mock('@/lib/push', () => ({ sendPush: (...a: unknown[]) => mockPush(...a) }));
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn(async () => ({ ok: true })) }));
 
 /** Kullanıcı tercih tablosu: id → notificationPrefs. */

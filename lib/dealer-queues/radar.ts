@@ -16,7 +16,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { cachedJson, redisSetJson } from '@/lib/redis';
-import { sendPushNotification } from '@/lib/push';
+import { sendPush } from '@/lib/push';
 import { dispatchWebhookEvent } from '@/lib/webhook-dispatch';
 import {
   DEFAULT_RADAR_RULES,
@@ -294,7 +294,7 @@ async function announceIncidents(dealerId: string, created: RadarRunResult['crea
     },
   });
   if (top.severity === 'high' || top.severity === 'critical') {
-    runAfter('radar push', () => sendPushNotification(dealerId, title, message, ctaPath));
+    runAfter('radar push', () => sendPush(dealerId, { title, body: message, url: ctaPath, kind: 'radar_incident' }));
   }
   runAfter('incident.created webhook', () =>
     Promise.all(

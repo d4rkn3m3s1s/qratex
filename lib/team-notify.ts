@@ -58,8 +58,8 @@ async function createNotification(opts: {
       // Ateşle-unut yerine after(): yanıt sonrası fonksiyon dondurulsa da push yarıda kalmaz (O4).
       const userId = opts.userId;
       runAfterResponse('ekip push', async () => {
-        const { sendPushNotification } = await import('@/lib/push');
-        await sendPushNotification(userId, opts.title, opts.message, href);
+        const { sendPush } = await import('@/lib/push');
+        await sendPush(userId, { title: opts.title, body: opts.message, url: href });
       });
     }
   } catch {

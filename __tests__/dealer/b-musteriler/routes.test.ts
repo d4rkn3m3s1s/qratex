@@ -23,7 +23,7 @@ jest.mock('@/lib/redis', () => ({
 }));
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: jest.fn(async () => ({ ok: true, remaining: 10 })) }));
 jest.mock('@/lib/module-gate', () => ({ assertModuleEnabled: jest.fn(async () => null), getModuleControls: jest.fn(async () => ({})) }));
-jest.mock('@/lib/push', () => ({ sendPushNotification: jest.fn(async () => true) }));
+jest.mock('@/lib/push', () => ({ sendPush: jest.fn(async () => true) }));
 const mockCreateRemedyOffer = jest.fn();
 jest.mock('@/lib/remedy-offer-service', () => ({
   createRemedyOffer: (...a: unknown[]) => mockCreateRemedyOffer(...a),
@@ -124,8 +124,8 @@ describe('POST /api/dealer/customers/actions', () => {
     expect(rows.map((r) => r.userId)).toEqual(['fresh']);
     expect(rows[0]!.data).toMatchObject({ kind: 'campaign-win-back', dealerId: 'dealer-a' });
     expect(rows[0]!.type).toBe('campaign');
-    const { sendPushNotification } = jest.requireMock('@/lib/push') as { sendPushNotification: jest.Mock };
-    expect(sendPushNotification.mock.calls.map((c) => c[0]).sort()).toEqual(['fresh', 'pushOnly']);
+    const { sendPush } = jest.requireMock('@/lib/push') as { sendPush: jest.Mock };
+    expect(sendPush.mock.calls.map((c) => c[0]).sort()).toEqual(['fresh', 'pushOnly']);
     const ev = db.analyticsEvent.create.mock.calls[0][0].data;
     expect(ev).toMatchObject({ userId: 'dealer-a', event: 'dealer_customer_action' });
     expect(ev.data.recipients.sort()).toEqual(['fresh', 'pushOnly']);

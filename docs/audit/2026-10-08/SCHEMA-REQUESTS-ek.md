@@ -14,3 +14,7 @@
   Bugün senkron `verifyMailAuth` (en üstteki Authentication-Results, authserv-id = `MAIL_AUTHSERV_ID`, hizalı SPF/DKIM/DMARC pass) sonucunu yalnız otomatik işleri (stajyer eşleştirme, bounce) kapatmak için kullanıyor; sonuç saklanmadığı için panelde "doğrulanmamış" rozeti gösterilemiyor. Alan eklenince `lib/mail-inbox.ts` create verisine `authVerified: auth.verified, authReason: auth.reason` yazılır, listede rozet gösterilir.
   İsteğe bağlı: **InternEmailSend.bounceCount Int @default(0)** — bugün eşik sayımı `lastError` `[bounce]` önekiyle yapılıyor.
   Kaynak: mail-inbox güvenlik incelemesi (3 bulgu).
+
+- **PushSubscription.platform String @default("web")** ("web" | "fcm" | "apns") + **PushSubscription.token String?** (native cihaz jetonu); `p256dh`/`auth` native için opsiyonel (`String?`).
+  Bugün native jeton geçici olarak `endpoint = "native:<fcm|apns>:<token>"`, `p256dh = auth = "native"` biçiminde saklanıyor (`lib/push-native.ts`, `app/api/push/native/route.ts`); `lib/push.ts` öneke göre ayırıyor. Alan eklenince: kayıt ucu `platform/token` yazar, `sendPush` `platform` ile ayırır, mevcut `native:` satırları tek seferlik betikle taşınır, `@@index([userId, platform, isActive])`.
+  Kaynak: native-push işi (Capacitor FCM/APNs).

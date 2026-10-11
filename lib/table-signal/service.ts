@@ -11,7 +11,7 @@
  */
 import { after } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendPushNotification } from '@/lib/push';
+import { sendPush } from '@/lib/push';
 import {
   CONCERN_DUE_MS,
   DUPLICATE_WINDOW_MS,
@@ -109,7 +109,7 @@ async function notifyTeam(
     })),
   });
   runAfter(() =>
-    Promise.allSettled(recipients.map((r) => sendPushNotification(r.userId, payload.title, payload.message, r.url)))
+    Promise.allSettled(recipients.map((r) => sendPush(r.userId, { title: payload.title, body: payload.message, url: r.url, kind: 'table_signal' })))
   );
   return true;
 }

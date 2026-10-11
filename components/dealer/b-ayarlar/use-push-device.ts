@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ensureServiceWorkerRegistration } from '@/lib/pwa/service-worker';
 import { SettingsApiError } from './api';
+import {
+  getNativePushStatus,
+  isNativePushPlatform,
+  NativePushError,
+  registerNativePush,
+  unregisterNativePush,
+} from '@/lib/native/push-client';
 
 export type PushSupport = 'checking' | 'unsupported' | 'unconfigured' | 'denied' | 'ready';
 
@@ -31,6 +38,18 @@ export function usePushDevice() {
   const [busy, setBusy] = useState(false);
 
   const evaluate = useCallback(async () => {
+    // Capacitor (Android/iOS): FCM/APNs jetonu — web-push/VAPID yerine native akış.
+    if (isNativePushPlatform()) {
+      try {
+        const st = await getNativePushStatus();
+        setSupport(st.state);
+        setEndpoint(st.token);
+      } catch {
+        setSupport('unsupported');
+        setEndpoint(null);
+      }
+      return;
+    }
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       setSupport('unsupported');
       return;
@@ -60,6 +79,16 @@ export function usePushDevice() {
   const enable = useCallback(async () => {
     setBusy(true);
     try {
+      if (isNativePushPlatform()) {
+        try {
+          setEndpoint(await registerNativePush());
+        } catch (e) {
+          await evaluate();
+          if (e instanceof NativePushError && e.code === 'PUSH_DENIED') throw new SettingsApiError(403, 'Bildirim izni verilmedi. Telefon ayarlarından izin verebilirsiniz.', 'PUSH_DENIED', undefined, false);
+          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, 'Cihaz kaydedilemedi.', 'PUSH_ERROR', undefined, true);
+        }
+        return;
+      }
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
         await evaluate();
@@ -96,6 +125,15 @@ export function usePushDevice() {
   const disable = useCallback(async () => {
     setBusy(true);
     try {
+      if (isNativePushPlatform()) {
+        try {
+          await unregisterNativePush();
+        } catch (e) {
+          throw new SettingsApiError(e instanceof NativePushError ? e.status : 0, 'Cihaz kaydedilemedi.', 'PUSH_ERROR', undefined, true);
+        }
+        setEndpoint(null);
+        return;
+      }
       const sub = await readSubscription();
       if (sub) {
         const ep = sub.endpoint;

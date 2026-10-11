@@ -20,7 +20,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isChannelEnabled, kindToGroup } from '@/lib/notification-prefs';
-import { sendPushNotification } from '@/lib/push';
+import { sendPush } from '@/lib/push';
 
 /** Pazarlama iletilerinin düştüğü bildirim tercih grubu. */
 export const MARKETING_PREF_GROUP = 'campaign';
@@ -156,7 +156,7 @@ export async function sendMarketingPush(
   for (let i = 0; i < ids.length; i += PUSH_CONCURRENCY) {
     const batch = ids.slice(i, i + PUSH_CONCURRENCY);
     const results = await Promise.allSettled(
-      batch.map((userId) => sendPushNotification(userId, input.title, input.message, input.url, input.icon))
+      batch.map((userId) => sendPush(userId, { title: input.title, body: input.message, url: input.url, icon: input.icon }))
     );
     for (const r of results) if (r.status === 'fulfilled' && r.value === true) delivered++;
   }

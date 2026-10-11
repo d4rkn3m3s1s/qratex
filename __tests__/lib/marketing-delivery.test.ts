@@ -9,7 +9,7 @@ jest.mock('@/lib/prisma', () => ({
   prisma: { user: { findMany: (...a: unknown[]) => mockUserFindMany(...a) } },
 }));
 jest.mock('@/lib/push', () => ({
-  sendPushNotification: (...a: unknown[]) => mockSendPush(...a),
+  sendPush: (...a: unknown[]) => mockSendPush(...a),
 }));
 
 import {
@@ -135,6 +135,6 @@ describe('kanallar', () => {
     const delivered = await sendMarketingPush(ids, { title: 'T', message: 'M', url: '/customer' });
     expect(mockSendPush).toHaveBeenCalledTimes(47);
     expect(delivered).toBe(45);
-    expect(mockSendPush).toHaveBeenCalledWith('u1', 'T', 'M', '/customer', undefined);
+    expect(mockSendPush).toHaveBeenCalledWith('u1', { title: 'T', body: 'M', url: '/customer', icon: undefined });
   });
 });

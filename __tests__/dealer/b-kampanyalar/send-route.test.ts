@@ -24,7 +24,7 @@ jest.mock('@/lib/module-gate', () => ({
   assertMenuItemVisible: jest.fn(async () => (gate.menu ? new Response('{}', { status: 403 }) : null)),
 }));
 const mockPush = jest.fn(async (..._a: unknown[]) => true);
-jest.mock('@/lib/push', () => ({ sendPushNotification: (...a: unknown[]) => mockPush(...a) }));
+jest.mock('@/lib/push', () => ({ sendPush: (...a: unknown[]) => mockPush(...a) }));
 
 type Row = Record<string, unknown>;
 const db = {
@@ -218,7 +218,7 @@ describe('POST /api/dealer/campaigns/:id/send', () => {
     expect(campaignNotifs().map((n) => n.userId).sort()).toEqual(['fresh', 'pushOff']);
     expect(campaignNotifs().every((n) => (n.data as Row).kind === 'campaign' && (n.data as Row).campaignId === 'c1' && (n.data as Row).dealerId === 'dealer-1')).toBe(true);
     expect(mockPush.mock.calls.map((c) => c[0])).toEqual(['fresh']);
-    expect(mockPush.mock.calls[0][3]).toBe('/api/campaigns/c1/open');
+    expect(mockPush.mock.calls[0][1].url).toBe('/api/campaigns/c1/open');
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
 
     const snap = db.audit.find((a) => a.action === 'campaign.send')!.newData as Row;

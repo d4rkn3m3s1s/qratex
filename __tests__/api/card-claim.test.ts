@@ -16,7 +16,7 @@ const mockRequireAuth = jest.fn();
 jest.mock('@/lib/api-auth', () => ({ requireAuth: (...a: unknown[]) => mockRequireAuth(...a) }));
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimitDb: async () => ({ ok: true }) }));
 const mockPush = jest.fn(async () => true);
-jest.mock('@/lib/push', () => ({ sendPushNotification: (...a: unknown[]) => mockPush(...(a as [])) }));
+jest.mock('@/lib/push', () => ({ sendPush: (...a: unknown[]) => mockPush(...(a as [])) }));
 jest.mock('@/lib/points-rules', () => ({
   getPointsMatrix: async () => ({
     consumptionReview: { base: { points: 20, xp: 5 }, detailed: { points: 40, xp: 10 }, longTextThreshold: 80 },
