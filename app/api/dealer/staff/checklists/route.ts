@@ -1,51 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { CHECKLIST_MAX_ITEMS, CHECKLIST_TYPES, parseChecklistItems } from '@/lib/staff-ops/core';
 
 export const dynamic = 'force-dynamic';
 
-const createSchema = z.object({
-  type: z.enum(['open', 'close', 'custom']),
-  title: z.string().min(1).max(200),
-  items: z.array(z.object({ id: z.string(), label: z.string(), required: z.boolean().optional() })),
-});
-
-export async function GET() {
-  const auth = await requireAuth(['DEALER']);
-  if ('error' in auth) return auth.error;
-  const dealerId = auth.session.user.id;
-
-  const templates = await prisma.checklistTemplate.findMany({
-    where: { dealerId, isActive: true },
-    orderBy: { type: 'asc' },
-    take: 100,
-  });
-
-  return NextResponse.json({ success: true, templates }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
-
-export async function POST(request: NextRequest) {
-  const auth = await requireAuth(['DEALER']);
-  if ('error' in auth) return auth.error;
-  const dealerId = auth.session.user.id;
-
-  const body = await request.json();
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+/** GET /api/dealer/staff/checklists — işletmenin aktif kontrol listeleri. */
+export const GET = defineRoute(
+  {
+    name: 'dealer.team.checklists.list',
+    roles: ['DEALER'],
+    tenant: 'dealer',
+    module: 'staff_management',
+    rateLimit: 'read',
+  },
+  async ({ tenant }) => {
+    const rows = await prisma.checklistTemplate.findMany({
+      where: { dealerId: tenant.dealerId, isActive: true },
+      select: { id: true, type: true, title: true, items: true },
+      orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
+      take: 100,
+    });
+    return ok({ templates: rows.map((r) => ({ ...r, items: parseChecklistItems(r.items) })) }, { legacySpread: true });
   }
+);
 
-  const template = await prisma.checklistTemplate.create({
-    data: {
-      dealerId,
-      type: parsed.data.type,
-      title: parsed.data.title,
-      items: parsed.data.items as object,
-    },
-  });
-
-  return NextResponse.json({ success: true, template }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+/** POST /api/dealer/staff/checklists — yeni kontrol listesi (açılış / kapanış / özel; en fazla 50 madde). */
+export const POST = defineRoute(
+  {
+    name: 'dealer.team.checklists.create',
+    roles: ['DEALER'],
+    tenant: 'dealer',
+    module: 'staff_management',
+    schema: z.object({
+      type: z.enum(CHECKLIST_TYPES),
+      title: z.string().trim().min(1, 'Başlık gerekli.').max(200),
+      items: z
+        .array(
+          z.object({
+            id: z.string().min(1).max(64),
+            label: z.string().trim().min(1, 'Madde boş olamaz.').max(200),
+            required: z.boolean().default(true),
+          })
+        )
+        .min(1, 'En az bir madde ekleyin.')
+        .max(CHECKLIST_MAX_ITEMS, `En fazla ${CHECKLIST_MAX_ITEMS} madde eklenebilir.`),
+    }),
+    rateLimit: 'mutation',
+  },
+  async ({ tenant, body }) => {
+    const template = await prisma.checklistTemplate.create({
+      data: { dealerId: tenant.dealerId, type: body.type, title: body.title, items: body.items as object },
+      select: { id: true, title: true },
+    });
+    return ok({ template }, { status: 201, legacySpread: true });
+  }
+);

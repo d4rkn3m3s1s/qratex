@@ -3,6 +3,8 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
+import { compareTasks } from '@/lib/staff-ops/core';
+import { notifyStaffTaskAssigned } from '@/lib/staff-ops/notify';
 
 
 export const dynamic = 'force-dynamic';
@@ -30,9 +32,11 @@ export async function GET(request: NextRequest) {
     include: {
       user: { select: { id: true, name: true, email: true } },
     },
-    orderBy: [{ status: 'asc' }, { dueAt: 'asc' }],
+    // Durum alfabetik sıralanmaz (completed < pending olurdu): açıklar önce, sonra son tarih.
+    orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
     take: 500,
   });
+  tasks.sort(compareTasks);
 
   return NextResponse.json({ success: true, tasks }, { headers: PRIVATE_NO_STORE_HEADERS });
 }
@@ -72,5 +76,6 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  await notifyStaffTaskAssigned(task.assignedTo, task.title);
   return NextResponse.json({ success: true, task }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

@@ -5,6 +5,7 @@ import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/a
 import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { invalidateStaffScope } from '@/lib/auth/scope';
 import { invalidateSessionState } from '@/lib/auth/session-state';
+import { bumpSessionVersion } from '@/lib/auth/session-version';
 import { z } from 'zod';
 
 /** Yanıt DTO'su: PIN hiçbir zaman ham dönmez (GET listesiyle tutarlı: `****`). */
@@ -81,6 +82,10 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         }
         // Pasifleştirme/yeniden etkinleştirme kapsamı ANINDA etkilesin (Redis sıcak katmanı düşür).
         if (isActive !== undefined) {
+            // A2: pasifleştirmede personelin AÇIK oturumları da düşer (sessionVersion artar → eski JWT'ler geçersiz).
+            if (isActive === false) {
+                await bumpSessionVersion(updated.userId).catch(() => {});
+            }
             await Promise.all([
                 invalidateStaffScope(updated.userId).catch(() => {}),
                 // requireAuth'un oturum durumu önbelleği de düşsün: pasif personel bir sonraki istekte dışarıda.

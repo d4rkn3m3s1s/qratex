@@ -3,15 +3,17 @@ import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { z } from 'zod';
+import { HHMM_RE, isYmd, validateShiftTimes } from '@/lib/staff-ops/core';
+import { notifyStaffShiftPlanned } from '@/lib/staff-ops/notify';
 
 
 export const dynamic = 'force-dynamic';
 
 const createSchema = z.object({
   userId: z.string().min(1).max(191),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-  startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  date: z.string().refine(isYmd), // YYYY-MM-DD
+  startTime: z.string().regex(HHMM_RE),
+  endTime: z.string().regex(HHMM_RE),
   note: z.string().max(500).optional(),
 });
 
@@ -27,8 +29,10 @@ export async function GET(request: NextRequest) {
 
   const where: { dealerId: string; date?: { gte?: Date; lte?: Date }; userId?: string } = { dealerId };
   if (userId) where.userId = userId;
-  if (from) where.date = { ...(where.date as object), gte: new Date(from) };
-  if (to) where.date = { ...(where.date as object), lte: new Date(to) };
+  // Varsayılan pencere: son 7 gün + önümüzdeki 14 gün (eskiden en ESKİ kayıtlar dönüyordu).
+  const fromDate = from && isYmd(from) ? new Date(from) : new Date(Date.now() - 7 * 86_400_000);
+  const toDate = to && isYmd(to) ? new Date(to) : new Date(Date.now() + 14 * 86_400_000);
+  where.date = { gte: fromDate, lte: toDate };
 
   const shifts = await prisma.staffShift.findMany({
     where,
@@ -49,6 +53,10 @@ export async function POST(request: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+  }
+  const timeError = validateShiftTimes(parsed.data.startTime, parsed.data.endTime);
+  if (timeError) {
+    return NextResponse.json({ error: timeError }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
   }
 
   // P0-11: yalnız bu işletmenin AKTİF personeline atanır (ayrılmış/pasif personel hedeflenemez).
@@ -72,5 +80,6 @@ export async function POST(request: NextRequest) {
     include: { user: { select: { id: true, name: true, email: true } } },
   });
 
+  await notifyStaffShiftPlanned(shift.userId, `${parsed.data.date} · ${shift.startTime}–${shift.endTime}`);
   return NextResponse.json({ success: true, shift }, { headers: PRIVATE_NO_STORE_HEADERS });
 }

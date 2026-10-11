@@ -1,84 +1,86 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { dbDateToYmd, istanbulYmd, rangesOverlap, validateLeaveRange, ymdToDbDate } from '@/lib/staff-ops/core';
+import { notifyDealerLeaveRequested } from '@/lib/staff-ops/notify';
 
 export const dynamic = 'force-dynamic';
 
-const createSchema = z.object({
-  startDate: z.string(),
-  endDate: z.string(),
-  reason: z.string().max(500).optional(),
-});
+const tenant = { kind: 'dealer', allowRoles: ['STAFF'] } as const;
 
-export async function GET() {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const userId = auth.session.user.id;
-
+/** GET /api/staff/leave — kendi izin taleplerim (en yeni önce). */
+export const GET = defineRoute(
+  { name: 'staff.leave.list', roles: ['STAFF'], tenant, rateLimit: 'read' },
+  async ({ tenant: t, user }) => {
     const requests = await prisma.staffLeaveRequest.findMany({
-      where: { userId },
+      where: { userId: user.id, dealerId: t.dealerId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
-
-    return NextResponse.json({ success: true, requests }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/leave GET:', error);
-    return NextResponse.json(
-      { error: 'Talepler yüklenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ requests }, { legacySpread: true });
   }
-}
+);
 
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const session = auth.session;
-    const dealerId = getStaffDealerId(session);
-    if (dealerId instanceof NextResponse) return dealerId;
-    const userId = session.user.id;
+/**
+ * POST /api/staff/leave { startDate, endDate, reason? } — izin talebi. Kurallar (sunucu): bugünden
+ * önce başlayamaz, tek talepte ≤ 30 gün, ≤ 1 yıl ileri; bekleyen/onaylı başka talebinizle çakışamaz.
+ * İşletme sahibine bildirim gider.
+ */
+export const POST = defineRoute(
+  {
+    name: 'staff.leave.create',
+    roles: ['STAFF'],
+    tenant,
+    schema: z.object({
+      startDate: z.string(),
+      endDate: z.string(),
+      reason: z.string().trim().max(500).optional(),
+    }),
+    rateLimit: { max: 10, windowMs: 60 * 60_000, by: 'user' },
+  },
+  async ({ tenant: t, user, body, session }) => {
+    const today = istanbulYmd(new Date());
+    const err = validateLeaveRange(body.startDate, body.endDate, today);
+    if (err) throw new ApiError('VALIDATION', err);
 
-    const body = await request.json();
-    const parsed = createSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const start = new Date(parsed.data.startDate);
-    const end = new Date(parsed.data.endDate);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return NextResponse.json({ error: 'Geçersiz tarih' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    if (end < start) {
-      return NextResponse.json({ error: 'Bitiş tarihi başlangıçtan önce olamaz' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+    const existing = await prisma.staffLeaveRequest.findMany({
+      where: { userId: user.id, dealerId: t.dealerId, status: { in: ['pending', 'approved'] }, endDate: { gte: ymdToDbDate(today) } },
+      select: { startDate: true, endDate: true },
+      take: 50,
+    });
+    if (existing.some((e) => rangesOverlap(body.startDate, body.endDate, dbDateToYmd(e.startDate), dbDateToYmd(e.endDate)))) {
+      throw new ApiError('CONFLICT', 'Bu tarihlerle çakışan bekleyen ya da onaylı bir talebiniz var.');
     }
 
     const leave = await prisma.staffLeaveRequest.create({
       data: {
-        dealerId,
-        userId,
-        startDate: start,
-        endDate: end,
-        reason: parsed.data.reason ?? null,
+        dealerId: t.dealerId,
+        userId: user.id,
+        startDate: ymdToDbDate(body.startDate),
+        endDate: ymdToDbDate(body.endDate),
+        reason: body.reason || null,
       },
     });
-
-    return NextResponse.json({ success: true, request: leave }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/leave POST:', error);
-    return NextResponse.json(
-      { error: 'Talep oluşturulamadı' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    await notifyDealerLeaveRequested(t.dealerId, session.user.name ?? null, `${body.startDate} – ${body.endDate}`);
+    return ok({ request: leave }, { status: 201, legacySpread: true });
   }
-}
+);
+
+/** DELETE /api/staff/leave?id= — yalnız BEKLEYEN kendi talebini geri çeker (kayıt silinmez, `cancelled`). */
+export const DELETE = defineRoute(
+  {
+    name: 'staff.leave.cancel',
+    roles: ['STAFF'],
+    tenant,
+    query: z.object({ id: z.string().min(1).max(64) }),
+    rateLimit: 'mutation',
+  },
+  async ({ tenant: t, user, query }) => {
+    const n = await prisma.staffLeaveRequest.updateMany({
+      where: { id: query.id, userId: user.id, dealerId: t.dealerId, status: 'pending' },
+      data: { status: 'cancelled' },
+    });
+    if (n.count === 0) throw new ApiError('CONFLICT', 'Yalnız bekleyen talep geri çekilebilir.');
+    return ok({ id: query.id });
+  }
+);

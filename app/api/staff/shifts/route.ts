@@ -1,87 +1,79 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { CLOCK_ERROR_MESSAGES, decideClock, isYmd, ymdToDbDate } from '@/lib/staff-ops/core';
+import { toShiftDto } from '@/lib/staff-ops/server';
 
 export const dynamic = 'force-dynamic';
 
-const clockSchema = z.object({
-  shiftId: z.string(),
-  action: z.enum(['clock_in', 'clock_out']),
-});
-
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const userId = auth.session.user.id;
-
-    const { searchParams } = new URL(request.url);
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-
-    const where: { userId: string; date?: { gte?: Date; lte?: Date } } = { userId };
-    if (from) where.date = { ...(where.date as object), gte: new Date(from) };
-    if (to) where.date = { ...(where.date as object), lte: new Date(to) };
-
-    const shifts = await prisma.staffShift.findMany({
-      where,
-      orderBy: { date: 'desc' },
-      take: 30,
+/** GET /api/staff/shifts?from&to — kendi vardiyalarım (en fazla 62 gün aralık). */
+export const GET = defineRoute(
+  {
+    name: 'staff.shifts.list',
+    roles: ['STAFF'],
+    tenant: { kind: 'dealer', allowRoles: ['STAFF'] },
+    query: z.object({ from: z.string().refine(isYmd), to: z.string().refine(isYmd) }),
+    rateLimit: 'read',
+  },
+  async ({ tenant, user, query }) => {
+    if (query.to < query.from) throw new ApiError('VALIDATION', 'Bitiş tarihi başlangıçtan önce olamaz.');
+    const rows = await prisma.staffShift.findMany({
+      where: { userId: user.id, dealerId: tenant.dealerId, date: { gte: ymdToDbDate(query.from), lte: ymdToDbDate(query.to) } },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+      take: 120,
     });
-
-    return NextResponse.json({ success: true, shifts }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/shifts GET:', error);
-    return NextResponse.json(
-      { error: 'Vardiyalar yüklenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
-  }
-}
-
-export async function PATCH(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const userId = auth.session.user.id;
-
-    const body = await request.json();
-    const parsed = clockSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-    if (parsed.data.shiftId.length > 64) {
-      return NextResponse.json({ error: 'Geçersiz vardiya' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
     const now = new Date();
-    const data =
-      parsed.data.action === 'clock_in'
-        ? { clockInAt: now }
-        : { clockOutAt: now };
-
-    const n = await prisma.staffShift.updateMany({
-      where: { id: parsed.data.shiftId, userId },
-      data,
-    });
-    if (n.count === 0) {
-      return NextResponse.json({ error: 'Vardiya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const updated = await prisma.staffShift.findUnique({ where: { id: parsed.data.shiftId } });
-    return NextResponse.json({ success: true, shift: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/shifts PATCH:', error);
-    return NextResponse.json(
-      { error: 'Vardiya güncellenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ shifts: rows.map((r) => toShiftDto(r, now)) });
   }
-}
+);
+
+/**
+ * PATCH /api/staff/shifts { shiftId, action: 'clock_in' | 'clock_out' } — puantaj. Sunucu otoriter:
+ * durum makinesi + zaman penceresi (`decideClock`) ve yarışa dayanıklı koşullu güncelleme
+ * (giriş yalnız `clockInAt IS NULL`, çıkış yalnız `clockInAt NOT NULL AND clockOutAt IS NULL`).
+ * Her olay denetim kaydına (IP/UA) yazılır.
+ */
+export const PATCH = defineRoute(
+  {
+    name: 'staff.shifts.clock',
+    roles: ['STAFF'],
+    tenant: { kind: 'dealer', allowRoles: ['STAFF'] },
+    schema: z.object({ shiftId: z.string().min(1).max(64), action: z.enum(['clock_in', 'clock_out']) }),
+    rateLimit: { max: 20, windowMs: 60_000, by: 'user' },
+  },
+  async ({ tenant, user, body, request }) => {
+    const shift = await prisma.staffShift.findFirst({
+      where: { id: body.shiftId, userId: user.id, dealerId: tenant.dealerId },
+    });
+    if (!shift) throw new ApiError('NOT_FOUND', 'Vardiya bulunamadı.');
+    const now = new Date();
+    const decision = decideClock(shift, body.action, now);
+    if (!decision.ok) throw new ApiError(decision.code, CLOCK_ERROR_MESSAGES[decision.code], { status: 409 });
+
+    const write = await prisma.staffShift.updateMany({
+      where:
+        body.action === 'clock_in'
+          ? { id: shift.id, userId: user.id, clockInAt: null }
+          : { id: shift.id, userId: user.id, clockInAt: { not: null }, clockOutAt: null },
+      data: body.action === 'clock_in' ? { clockInAt: now } : { clockOutAt: now },
+    });
+    if (write.count === 0) throw new ApiError('CONFLICT', 'Vardiya durumu bu arada değişti. Ekranı yenileyin.');
+
+    await prisma.auditLog
+      .create({
+        data: {
+          userId: user.id,
+          action: body.action === 'clock_in' ? 'STAFF_CLOCK_IN' : 'STAFF_CLOCK_OUT',
+          entity: 'StaffShift',
+          entityId: shift.id,
+          newData: { at: now.toISOString() },
+          ...getAuditRequestMeta(request),
+        },
+      })
+      .catch(() => {});
+
+    const fresh = await prisma.staffShift.findUnique({ where: { id: shift.id } });
+    return ok({ shift: fresh ? toShiftDto(fresh, now) : null });
+  }
+);

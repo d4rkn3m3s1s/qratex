@@ -1,87 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { dbDateToYmd } from '@/lib/staff-ops/core';
+import { notifyStaffLeaveDecision } from '@/lib/staff-ops/notify';
 
 export const dynamic = 'force-dynamic';
 
-const updateSchema = z.object({ status: z.enum(['approved', 'rejected']) });
-
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER']);
-    if ('error' in auth) return auth.error;
-    const dealerId = auth.session.user.id;
-
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-
-    const where: { dealerId: string; status?: string } = { dealerId };
-    if (status) where.status = status;
-
+/** GET /api/dealer/staff/leave?status= — işletmenin izin talepleri (en yeni önce, en fazla 200). */
+export const GET = defineRoute(
+  {
+    name: 'dealer.team.leave.list',
+    roles: ['DEALER'],
+    tenant: 'dealer',
+    module: 'staff_management',
+    query: z.object({ status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional() }),
+    rateLimit: 'read',
+  },
+  async ({ tenant, query }) => {
     const requests = await prisma.staffLeaveRequest.findMany({
-      where,
+      where: { dealerId: tenant.dealerId, ...(query.status ? { status: query.status } : {}) },
       include: { user: { select: { id: true, name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-
-    return NextResponse.json({ success: true, requests }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('dealer/staff/leave GET:', error);
-    return NextResponse.json(
-      { error: 'Talepler yüklenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ requests }, { legacySpread: true });
   }
-}
+);
 
-export async function PATCH(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['DEALER']);
-    if ('error' in auth) return auth.error;
-    const dealerId = auth.session.user.id;
-
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    if (!id || id.length > 64) {
-      return NextResponse.json({ error: 'id gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const body = await request.json();
-    const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Geçersiz status' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
+/**
+ * PATCH /api/dealer/staff/leave?id= { status: 'approved' | 'rejected' } — yalnız BEKLEYEN talep
+ * karara bağlanır (koşullu güncelleme; iki yönetici aynı anda basarsa ikincisi 409). Personele bildirim gider.
+ */
+export const PATCH = defineRoute(
+  {
+    name: 'dealer.team.leave.decide',
+    roles: ['DEALER'],
+    tenant: 'dealer',
+    module: 'staff_management',
+    query: z.object({ id: z.string().min(1).max(64) }),
+    schema: z.object({ status: z.enum(['approved', 'rejected']) }),
+    rateLimit: 'mutation',
+  },
+  async ({ tenant, query, body, user, request }) => {
     const n = await prisma.staffLeaveRequest.updateMany({
-      where: { id, dealerId, status: 'pending' },
-      data: { status: parsed.data.status },
+      where: { id: query.id, dealerId: tenant.dealerId, status: 'pending' },
+      data: { status: body.status },
     });
-    if (n.count === 0) {
-      return NextResponse.json(
-        { error: 'Talep bulunamadı veya zaten işlendi' },
-        { status: 404 , headers: PRIVATE_NO_STORE_HEADERS }
-      );
-    }
-
+    if (n.count === 0) throw new ApiError('CONFLICT', 'Talep bulunamadı ya da zaten karara bağlanmış.');
     const updated = await prisma.staffLeaveRequest.findUnique({
-      where: { id },
+      where: { id: query.id },
       include: { user: { select: { id: true, name: true, email: true } } },
     });
-
-    return NextResponse.json({ success: true, request: updated }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('dealer/staff/leave PATCH:', error);
-    return NextResponse.json(
-      { error: 'Talep güncellenemedi' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    if (updated) {
+      await notifyStaffLeaveDecision(
+        updated.userId,
+        body.status === 'approved',
+        `${dbDateToYmd(updated.startDate)} – ${dbDateToYmd(updated.endDate)}`
+      );
+    }
+    await prisma.auditLog
+      .create({
+        data: {
+          userId: user.id,
+          action: body.status === 'approved' ? 'APPROVE_STAFF_LEAVE' : 'REJECT_STAFF_LEAVE',
+          entity: 'StaffLeaveRequest',
+          entityId: query.id,
+          ...getAuditRequestMeta(request),
+        },
+      })
+      .catch(() => {});
+    return ok({ request: updated }, { legacySpread: true });
   }
-}
+);

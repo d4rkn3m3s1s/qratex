@@ -1,56 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
 
 export const dynamic = 'force-dynamic';
 
-const bodySchema = z.object({ moduleId: z.string().min(1).max(64) });
-
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const session = auth.session;
-    const dealerId = getStaffDealerId(session);
-    if (dealerId instanceof NextResponse) return dealerId;
-    const userId = session.user.id;
-
-    const body = await request.json();
-    const parsed = bodySchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'moduleId gerekli' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    const trainingModule = await prisma.trainingModule.findFirst({
-      where: {
-        id: parsed.data.moduleId,
-        isActive: true,
-        OR: [{ dealerId }, { dealerId: null }],
-      },
+/**
+ * POST /api/staff/training/complete { moduleId, acknowledged: true } — "Okudum ve anladım" onayı.
+ * İstemci yalnız içerik okuma görünümü açıldıktan sonra onay kutusunu gösterir; sunucu açık
+ * onay (`acknowledged: true`) olmadan kaydı yazmaz. Tekrar onay ilk tarihi korur.
+ */
+export const POST = defineRoute(
+  {
+    name: 'staff.training.complete',
+    roles: ['STAFF'],
+    tenant: { kind: 'dealer', allowRoles: ['STAFF'] },
+    schema: z.object({
+      moduleId: z.string().min(1).max(64),
+      acknowledged: z.literal(true, { errorMap: () => ({ message: 'Eğitimi okuduğunuzu onaylayın.' }) }),
+    }),
+    rateLimit: 'mutation',
+  },
+  async ({ tenant, user, body }) => {
+    const m = await prisma.trainingModule.findFirst({
+      where: { id: body.moduleId, isActive: true, OR: [{ dealerId: tenant.dealerId }, { dealerId: null }] },
+      select: { id: true },
     });
-    if (!trainingModule) {
-      return NextResponse.json({ error: 'Modül bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    await prisma.staffTrainingCompletion.upsert({
-      where: {
-        userId_moduleId: { userId, moduleId: parsed.data.moduleId },
-      },
-      create: { userId, moduleId: parsed.data.moduleId },
+    if (!m) throw new ApiError('NOT_FOUND', 'Eğitim modülü bulunamadı.');
+    const row = await prisma.staffTrainingCompletion.upsert({
+      where: { userId_moduleId: { userId: user.id, moduleId: m.id } },
+      create: { userId: user.id, moduleId: m.id },
       update: {},
+      select: { completedAt: true },
     });
-
-    return NextResponse.json({ success: true }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/training/complete POST:', error);
-    return NextResponse.json(
-      { error: 'Kayıt başarısız' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ completedAt: row.completedAt.toISOString() });
   }
-}
+);

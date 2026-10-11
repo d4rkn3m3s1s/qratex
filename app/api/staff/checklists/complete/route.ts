@@ -1,68 +1,64 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, getStaffDealerId } from '@/lib/api-auth';
-import { prisma } from '@/lib/prisma';
-import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { z } from 'zod';
-
+import { prisma } from '@/lib/prisma';
+import { ApiError, defineRoute, ok } from '@/lib/http/define-route';
+import { CHECKLIST_MAX_ITEMS, istanbulYmd, missingRequiredItems, parseChecklistItems } from '@/lib/staff-ops/core';
 
 export const dynamic = 'force-dynamic';
 
-const CHECKLIST_ITEMS_MAX = 120;
-
-const bodySchema = z.object({
-  templateId: z.string().min(1).max(64),
-  shiftId: z.string().max(64).optional(),
-  items: z.array(z.object({ itemId: z.string().min(1).max(64), done: z.boolean() })).max(CHECKLIST_ITEMS_MAX),
-});
-
-export async function POST(request: NextRequest) {
-  try {
-    const auth = await requireAuth(['STAFF']);
-    if ('error' in auth) return auth.error;
-    const session = auth.session;
-    const dealerId = getStaffDealerId(session);
-    if (dealerId instanceof NextResponse) return dealerId;
-    const userId = session.user.id;
-
-    const body = await request.json();
-    const parsed = bodySchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Geçersiz veri' }, { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
+/**
+ * POST /api/staff/checklists/complete { templateId, shiftId?, items } — kontrol listesini gönder.
+ * Sunucu otoriter: zorunlu maddelerin hepsi işaretli değilse 400 (eksikler `details`'te); yalnız
+ * şablonda tanımlı maddeler kaydedilir; vardiya verilirse kendi vardiyası olmalı; aynı liste
+ * aynı İstanbul gününde ikinci kez gönderilemez (409).
+ */
+export const POST = defineRoute(
+  {
+    name: 'staff.checklists.complete',
+    roles: ['STAFF'],
+    tenant: { kind: 'dealer', allowRoles: ['STAFF'] },
+    schema: z.object({
+      templateId: z.string().min(1).max(64),
+      shiftId: z.string().max(64).optional(),
+      items: z.array(z.object({ itemId: z.string().min(1).max(64), done: z.boolean() })).max(CHECKLIST_MAX_ITEMS * 2),
+    }),
+    rateLimit: 'mutation',
+  },
+  async ({ tenant, user, body }) => {
     const template = await prisma.checklistTemplate.findFirst({
-      where: { id: parsed.data.templateId, dealerId, isActive: true },
+      where: { id: body.templateId, dealerId: tenant.dealerId, isActive: true },
+      select: { id: true, items: true },
     });
-    if (!template) {
-      return NextResponse.json({ error: 'Checklist bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-    }
-
-    if (parsed.data.shiftId) {
-      const shift = await prisma.staffShift.findFirst({
-        where: { id: parsed.data.shiftId, userId },
+    if (!template) throw new ApiError('NOT_FOUND', 'Kontrol listesi bulunamadı.');
+    const defs = parseChecklistItems(template.items);
+    const missing = missingRequiredItems(defs, body.items);
+    if (missing.length) {
+      throw new ApiError('VALIDATION', `Zorunlu maddeler işaretlenmedi: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}`, {
+        details: { missing },
       });
-      if (!shift) {
-        return NextResponse.json({ error: 'Vardiya bulunamadı' }, { status: 404 , headers: PRIVATE_NO_STORE_HEADERS });
-      }
     }
-
+    if (body.shiftId) {
+      const shift = await prisma.staffShift.findFirst({ where: { id: body.shiftId, userId: user.id, dealerId: tenant.dealerId }, select: { id: true } });
+      if (!shift) throw new ApiError('NOT_FOUND', 'Vardiya bulunamadı.');
+    }
+    const now = new Date();
+    const last = await prisma.staffChecklistCompletion.findFirst({
+      where: { userId: user.id, templateId: template.id, completedAt: { gte: new Date(now.getTime() - 26 * 3_600_000) } },
+      orderBy: { completedAt: 'desc' },
+      select: { completedAt: true },
+    });
+    if (last && istanbulYmd(last.completedAt) === istanbulYmd(now)) {
+      throw new ApiError('CONFLICT', 'Bu kontrol listesini bugün zaten gönderdiniz.');
+    }
+    const valid = new Set(defs.map((d) => d.id));
     const completion = await prisma.staffChecklistCompletion.create({
       data: {
-        userId,
-        templateId: parsed.data.templateId,
-        shiftId: parsed.data.shiftId ?? null,
-        items: parsed.data.items as object,
+        userId: user.id,
+        templateId: template.id,
+        shiftId: body.shiftId ?? null,
+        items: body.items.filter((i) => valid.has(i.itemId)) as object,
       },
+      select: { id: true, completedAt: true },
     });
-
-    return NextResponse.json({ success: true, completion }, { headers: PRIVATE_NO_STORE_HEADERS });
-  } catch (error) {
-    const db = responseIfDatabaseUnavailable(error);
-    if (db) return db;
-    console.error('staff/checklists/complete POST:', error);
-    return NextResponse.json(
-      { error: 'Kayıt oluşturulamadı' },
-      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    return ok({ id: completion.id, completedAt: completion.completedAt.toISOString() }, { status: 201 });
   }
-}
+);
