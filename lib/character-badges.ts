@@ -156,7 +156,9 @@ export async function classifyFeedbackCategory(text: string, actorKey?: string):
       // Yorum sınırlayıcı içinde VERİ olarak ve kişisel veri maskeli gider (ai-ozellikleri O1/Y5).
       user: `KATEGORİLER:\n${catLines}\n\nYORUM:\n${wrapUntrusted('musteri_yorumu', clean, 500)}\n\nEn uygun kategoriyi seç. JSON:`,
       temperature: 0.2,
-      maxTokens: 40,
+      // gpt-oss akıl yürüten model: gizli düşünme token'ları bu bütçeden yer. 40 ile çıktı boş
+      // kalıyor (Groq json_validate_failed) → HER yorum sınıflandırılmadan düşüyordu.
+      maxTokens: 900,
       jsonMode: true,
       // Müşteri başına dakikalık limit (yoksa platform geneli tek havuz; ai-ozellikleri Y3).
       ...(actorKey ? { actorKey: `character:${actorKey}` } : {}),
@@ -262,7 +264,7 @@ export async function selectCharacterForSamples(input: {
         'Bu yazım tarzına en uygun karakteri seç ve neden benzediğini olumlu anlat. JSON:',
       ].join(NL),
       temperature: 0.5,
-      maxTokens: 220,
+      maxTokens: 1000, // akıl yürütme payı (gpt-oss: düşük bütçe boş çıktı → yedeğe düşme riski)
       jsonMode: true,
       ...(input.actorKey ? { actorKey: `character:${input.actorKey}` } : {}),
     });
