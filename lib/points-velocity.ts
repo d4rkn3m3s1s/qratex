@@ -53,6 +53,14 @@ export const VELOCITY_EXEMPT_CATEGORIES: readonly string[] = [
   'demo_seed',
 ];
 const EXEMPT_CATEGORIES: ReadonlySet<string> = new Set(VELOCITY_EXEMPT_CATEGORIES);
+/**
+ * "Muaf" kategoriler genel eşikten muaftır ama tespitten DEĞİL: kendi kovalarında toplanır ve
+ * bu tavanı aşarsa şüphelidir. Tek bir dürüst günde en büyük tek seferlik ödül (efsanevi rozet
+ * 10.000) + birkaç küçük ödül/iade bunun çok altında kalır; sınırsız tekrarlanabilen kaynaklar
+ * (sahte hesaplarla davet çiftliği, danışıklı savaş kazancı, içeriden admin_adjust, iade döngüsü)
+ * ise tamamen görünmez olmamalı (güvenlik incelemesi: tam muafiyet tespiti kapatıyordu).
+ */
+export const VELOCITY_ONE_OFF_BUCKET_LIMIT = 25_000;
 
 type VelocityEvent = { category?: string | null; data: unknown };
 
@@ -62,23 +70,28 @@ function pointsOf(data: unknown): number {
 }
 
 /** Olayları genel / oyun kovalarına ayırır. */
-function bucketize(events: readonly VelocityEvent[]): { general: number; game: number } {
+function bucketize(events: readonly VelocityEvent[]): { general: number; game: number; oneOff: number } {
   let general = 0;
   let game = 0;
+  let oneOff = 0;
   for (const e of events) {
     const p = pointsOf(e.data);
     if (!p) continue;
     const c = e.category ?? '';
-    if (EXEMPT_CATEGORIES.has(c)) continue;
-    if (GAME_CATEGORIES.has(c)) game += p;
+    if (EXEMPT_CATEGORIES.has(c)) oneOff += p;
+    else if (GAME_CATEGORIES.has(c)) game += p;
     else general += p;
   }
-  return { general, game };
+  return { general, game, oneOff };
 }
 
-function isSuspiciousBuckets(b: { general: number; game: number }): boolean {
-  return b.general >= THRESHOLD || b.game > GAME_BUCKET_LIMIT;
+/** @internal test için dışa açık. */
+export function isSuspiciousBuckets(b: { general: number; game: number; oneOff?: number }): boolean {
+  return b.general >= THRESHOLD || b.game > GAME_BUCKET_LIMIT || (b.oneOff ?? 0) > VELOCITY_ONE_OFF_BUCKET_LIMIT;
 }
+
+/** @internal test için dışa açık. */
+export const __bucketizeForTest = bucketize;
 
 /** Son 24 saatte kredilenen TOPLAM puan (tüm kategoriler; görünürlük için). */
 export async function getPointsDelta24h(userId: string): Promise<number> {

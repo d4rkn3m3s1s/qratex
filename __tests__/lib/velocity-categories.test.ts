@@ -62,3 +62,22 @@ describe('puan hızı kategorileri', () => {
     expect([...sources].filter((s) => !known.has(s)).sort()).toEqual([]);
   });
 });
+
+describe('muaf kova tespitten kaçmaz (güvenlik regresyonu)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const v = require('@/lib/points-velocity') as typeof import('@/lib/points-velocity');
+  const ev = (category: string, points: number) => ({ category, data: { points } });
+  it('dürüst tek seferlik efsanevi rozet + davet şüpheli değil', () => {
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest([ev('badge', 10_000), ev('referral', 200)]))).toBe(false);
+  });
+  it('sınırsız davet çiftliği / admin_adjust / savaş kazancı tavanı aşınca şüpheli', () => {
+    const farm = Array.from({ length: 300 }, () => ev('referral', 100));
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest(farm))).toBe(true);
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest([ev('admin_adjust', 50_000)]))).toBe(true);
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest([ev('squad_battle', v.VELOCITY_ONE_OFF_BUCKET_LIMIT + 1)]))).toBe(true);
+  });
+  it('genel ve oyun eşikleri korunur', () => {
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest([ev('consumption', 500)]))).toBe(true);
+    expect(v.isSuspiciousBuckets(v.__bucketizeForTest([ev('game', v.VELOCITY_GAME_BUCKET_LIMIT + 1)]))).toBe(true);
+  });
+});

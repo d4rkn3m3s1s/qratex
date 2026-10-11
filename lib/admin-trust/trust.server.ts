@@ -7,7 +7,7 @@
  * silme yok (vakalar çözülür/yeniden açılır). Zaman kovaları Europe/Istanbul.
  */
 import { Prisma } from '@prisma/client';
-import { VELOCITY_EXEMPT_CATEGORIES, VELOCITY_GAME_BUCKET_LIMIT, VELOCITY_GAME_CATEGORIES } from '@/lib/points-velocity';
+import { VELOCITY_EXEMPT_CATEGORIES, VELOCITY_GAME_BUCKET_LIMIT, VELOCITY_GAME_CATEGORIES, VELOCITY_ONE_OFF_BUCKET_LIMIT } from '@/lib/points-velocity';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
 import { auditEntry } from '@/lib/data-safety/audit';
@@ -286,13 +286,18 @@ export async function runScan(ctx: ActionCtx, now = new Date()): Promise<ScanSum
         // müşteri (2.500–10.000 tek seferlik) YÜKSEK önemli "puan hızı" vakası üretiyordu.
         prisma.$queryRaw<{ userId: string; total: number }[]>(Prisma.sql`
           SELECT "userId",
-                 CASE WHEN v."general" >= ${rules.velocity.points} THEN v."general" ELSE v."game" END AS "total"
+                 CASE WHEN v."general" >= ${rules.velocity.points} THEN v."general"
+                      WHEN v."game" > ${VELOCITY_GAME_BUCKET_LIMIT} THEN v."game"
+                      ELSE v."oneOff" END AS "total"
           FROM (
             SELECT ae."userId" AS "userId",
                    SUM(CASE WHEN ae."category" IN (${Prisma.join([...VELOCITY_EXEMPT_CATEGORIES, ...VELOCITY_GAME_CATEGORIES])}) THEN 0
                             WHEN jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "general",
                    SUM(CASE WHEN ae."category" IN (${Prisma.join([...VELOCITY_GAME_CATEGORIES])})
-                             AND jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "game"
+                             AND jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "game",
+                   -- muaf (tek seferlik/iade) kova: genel eşikten muaf, tespitten değil — tavanı aşarsa vaka
+                   SUM(CASE WHEN ae."category" IN (${Prisma.join([...VELOCITY_EXEMPT_CATEGORIES])})
+                             AND jsonb_typeof(ae."data"->'points') = 'number' THEN (ae."data"->>'points')::numeric ELSE 0 END)::float8 AS "oneOff"
             FROM "AnalyticsEvent" ae
             JOIN "User" u ON u."id" = ae."userId"
             WHERE ae."event" = 'points_credited'
@@ -301,7 +306,8 @@ export async function runScan(ctx: ActionCtx, now = new Date()): Promise<ScanSum
             GROUP BY ae."userId"
           ) v
           WHERE v."general" >= ${rules.velocity.points} OR v."game" > ${VELOCITY_GAME_BUCKET_LIMIT}
-          ORDER BY GREATEST(v."general", v."game") DESC
+             OR v."oneOff" > ${VELOCITY_ONE_OFF_BUCKET_LIMIT}
+          ORDER BY GREATEST(v."general", v."game", v."oneOff") DESC
           LIMIT 200`)
       : Promise.resolve([]),
     rules.rapidConsumption.enabled
