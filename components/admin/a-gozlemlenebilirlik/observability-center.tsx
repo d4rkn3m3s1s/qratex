@@ -20,6 +20,7 @@ import { errorText, fetchSnapshot, obsKeys } from './api';
 import { fmtAgo, fmtInt, fmtPct } from './format';
 import { HealthBadge } from './parts';
 import { GuideSection, HealthSection, PlatformSection, TrafficSection, VitalsSection } from './sections';
+import { AdminGozlemlenebilirlikText } from './copy';
 
 type Interval = '30' | '60' | 'off';
 const INTERVAL_KEY = 'qx.obs.refresh';
@@ -267,7 +268,7 @@ function IssuesList({ data, reduced }: { data: ObservabilitySnapshot; reduced: b
                 {i.external ? (
                   <a href={i.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 rounded px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     {i.actionLabel} <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                    <span className="sr-only">(yeni sekmede açılır)</span>
+                    <span className="sr-only"><AdminGozlemlenebilirlikText k="newTab" /></span>
                   </a>
                 ) : (
                   <Link href={i.href} className="inline-flex min-h-11 items-center rounded px-2 text-sm font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -287,7 +288,7 @@ function JobsCard({ section }: { section: ObservabilitySnapshot['jobs'] }) {
   return (
     <div className="h-full rounded-lg border border-border p-3">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium">Arka plan işleri</p>
+        <p className="text-sm font-medium"><AdminGozlemlenebilirlikText k="backgroundJobs" /></p>
         <HealthBadge status={section.ok ? section.data.overall : 'unknown'} />
       </div>
       <p className="mt-1 text-sm text-fg-muted">{section.ok ? section.data.detail : section.error}</p>

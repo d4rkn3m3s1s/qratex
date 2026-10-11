@@ -12,6 +12,7 @@ import type { HealthView, PlatformView, Section, TrafficView, VitalsView, ObsWin
 import { OBS_WINDOW_LABEL, PLATFORM_TONE_UI, VITAL_META } from '@/lib/observability/contract';
 import { DataGrid, HealthBadge, NoteText, RatingBar } from './parts';
 import { fmtAgo, fmtDateTime, fmtHour, fmtInt, fmtMs, fmtPct, fmtVital } from './format';
+import { AdminGozlemlenebilirlikText } from './copy';
 
 function SectionError({ section, onRetry }: { section: { ok: false; error: string }; onRetry: () => void }) {
   return <ErrorState title="Bu bölüm yüklenemedi" description={section.error} onRetry={onRetry} />;
@@ -126,7 +127,7 @@ function TrafficBody({ data }: { data: Extract<TrafficView, { collecting: true }
 
       {data.series.length > 1 && (
         <details className="rounded-lg border border-border p-3 text-sm">
-          <summary className="min-h-11 cursor-pointer content-center font-medium">Saatlik döküm</summary>
+          <summary className="min-h-11 cursor-pointer content-center font-medium"><AdminGozlemlenebilirlikText k="hourly" /></summary>
           <DataGrid caption="Saatlik istek ve 5xx sayıları" head={['Saat', 'İstek', '5xx']}>
             {data.series.map((s) => (
               <tr key={s.hourStart}>
@@ -141,9 +142,9 @@ function TrafficBody({ data }: { data: Extract<TrafficView, { collecting: true }
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-2">
         <div className="min-w-0">
-          <h3 className="mb-2 text-sm font-semibold">En çok hata veren uçlar</h3>
+          <h3 className="mb-2 text-sm font-semibold"><AdminGozlemlenebilirlikText k="topErrors" /></h3>
           {data.topErrors.length === 0 ? (
-            <p className="text-sm text-fg-muted">Bu pencerede 5xx dönen uç yok.</p>
+            <p className="text-sm text-fg-muted"><AdminGozlemlenebilirlikText k="noErrors" /></p>
           ) : (
             <DataGrid caption="5xx sayısına göre uçlar" head={['Uç', 'İstek', '5xx', 'Oran']}>
               {data.topErrors.map((r) => (
@@ -158,9 +159,9 @@ function TrafficBody({ data }: { data: Extract<TrafficView, { collecting: true }
           )}
         </div>
         <div className="min-w-0">
-          <h3 className="mb-2 text-sm font-semibold">En yavaş uçlar (p95, en az 5 istek)</h3>
+          <h3 className="mb-2 text-sm font-semibold"><AdminGozlemlenebilirlikText k="slowest" /></h3>
           {data.slowest.length === 0 ? (
-            <p className="text-sm text-fg-muted">Sıralama için yeterli istek yok.</p>
+            <p className="text-sm text-fg-muted"><AdminGozlemlenebilirlikText k="notEnough" /></p>
           ) : (
             <DataGrid caption="p95 yanıt süresine göre uçlar" head={['Uç', 'İstek', 'p50', 'p95']}>
               {data.slowest.map((r) => (
@@ -223,7 +224,7 @@ export function VitalsSection({ section, onRetry }: { section: Section<VitalsVie
               <div key={name} className="min-w-0">
                 <h3 className="mb-2 text-sm font-semibold">En yavaş sayfalar · {name} p75</h3>
                 {section.data.collecting && section.data.worstPaths[name].length === 0 ? (
-                  <p className="text-sm text-fg-muted">Sayfa kırılımı için en az 5 örnekli sayfa yok.</p>
+                  <p className="text-sm text-fg-muted"><AdminGozlemlenebilirlikText k="noPages" /></p>
                 ) : (
                   <DataGrid caption={`${name} p75 değerine göre en yavaş sayfalar`} head={['Sayfa', 'Örnek', 'p75']}>
                     {section.data.collecting &&
@@ -241,7 +242,7 @@ export function VitalsSection({ section, onRetry }: { section: Section<VitalsVie
               </div>
             ))}
           </div>
-          <NoteText>Kimlikler yoldan çıkarılır (`/admin/users/:id`); derece sunucuda değerden hesaplanır. Örnekler sayfa başına tek istekte gelir.</NoteText>
+          <NoteText><AdminGozlemlenebilirlikText k="idsNote" /></NoteText>
         </div>
       )}
     </SectionCard>
@@ -282,7 +283,7 @@ export function PlatformSection({ section, onRetry }: { section: Section<Platfor
                     {i.shortlink && (
                       <a href={i.shortlink} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 rounded text-sm text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                         Detay <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">(yeni sekmede açılır)</span>
+                        <span className="sr-only"><AdminGozlemlenebilirlikText k="newTab" /></span>
                       </a>
                     )}
                   </div>
@@ -307,10 +308,10 @@ export function PlatformSection({ section, onRetry }: { section: Section<Platfor
             {fmtInt(section.data.operationalCount)} / {fmtInt(section.data.components.length)} bileşen çalışıyor.
           </p>
           <details className="rounded-lg border border-border p-3" open={section.data.components.some((c) => c.tone !== 'ok')}>
-            <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">Bileşenler</summary>
+            <summary className="min-h-11 cursor-pointer content-center text-sm font-medium"><AdminGozlemlenebilirlikText k="components" /></summary>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <label className="relative min-w-0 flex-1">
-                <span className="sr-only">Bileşen ara</span>
+                <span className="sr-only"><AdminGozlemlenebilirlikText k="searchComponents" /></span>
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden />
                 <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bileşen ara" className="h-11 pl-9" />
               </label>
@@ -361,11 +362,11 @@ export function GuideSection() {
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <a className="inline-flex min-h-11 items-center gap-1 rounded text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="https://web.dev/articles/vitals" target="_blank" rel="noopener noreferrer">
             web.dev: Web Vitals <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            <span className="sr-only">(yeni sekmede açılır)</span>
+            <span className="sr-only"><AdminGozlemlenebilirlikText k="newTab" /></span>
           </a>
           <a className="inline-flex min-h-11 items-center gap-1 rounded text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="https://vercel.com/docs/speed-insights" target="_blank" rel="noopener noreferrer">
             Vercel Speed Insights <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            <span className="sr-only">(yeni sekmede açılır)</span>
+            <span className="sr-only"><AdminGozlemlenebilirlikText k="newTab" /></span>
           </a>
         </div>
       </details>
