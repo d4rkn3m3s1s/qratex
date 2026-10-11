@@ -221,3 +221,59 @@ Sayfa küçük, temiz ve sunucu tarafında doğru doğrulanmış (whitelist norm
   - Basım sınırlı: her kategori karakter listesiyle sınırlı (`:384-385`, sahip olunan karakter tükenince kategori atlanır), kullanıcı başına en fazla 43 rozet; puan karakter başına sabit `badgeRewardPoints` (`lib/badge-reward-points.ts:25-31`); çift basıma karşı advisory lock + `skipDuplicates` (`:442`, `:467-471`). Puan ekonomisi değişmezleri (atomik tek-sefer kredi) korunuyor.
   - Rozetler gerçekten yazılmış ve sınıflandırılmış yorumlara karşılık geliyor; "geriye dönük uygulama" sistemin belgelenmiş semantiği (eşik = N yorumda bir karakter).
 - **Geçerli kalan kısım (orta):** Sunucuda makul aralık doğrulaması yok (`lib/character-thresholds.ts:22-25` yalnız `>0`), sayfada etki önizlemesi/onay adımı yok. Admin'in yazım hatası (6 yerine 1) tek kayıtta geniş çaplı rozet + puan dağıtımı yapar ve geri alınamaz. Bu, raporun Bulgu 2 (aralık doğrulaması) ve önizleme/onay önerileriyle zaten karşılanıyor; ayrı bir yüksek önemli güvenlik bulgusu olarak sayılmamalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Sayfa `/admin/badges?tab=esikler` sekmesine taşındı; `/admin/character-thresholds` kalıcı yönlenir (sorgu korunur). Uç: `GET/PUT /api/admin/badges/thresholds`, `POST …/thresholds/preview`, `GET …/thresholds/history` (eski `/api/admin/settings/character-thresholds` silindi). Mantık: `lib/admin-badges/thresholds.server.ts`; UI: `components/admin/a-rozetler/thresholds-tab.tsx`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR | Rozetler `PageHeader` + `metadata.title`. |
+| 2 | Bilgi kartı | ÇALIŞIYOR | Sabit "varsayılan 20" metni yok; varsayılan her satırda sunucudan; geriye dönüklük açıkça yazılı. |
+| 3 | Yükleme | ÇALIŞIYOR | Cache'siz, fail-closed; sunucu ön yüklemesi. |
+| 4 | Yükleniyor iskeleti | ÇALIŞIYOR | QueryState iskeleti (`aria-busy`). |
+| 5 | Hata durumu | ÇALIŞIYOR | "Eşikler okunamadı — düzenleme kilitli" + Tekrar dene; form render edilmez. |
+| 6 | Boş durum | ÇALIŞIYOR | Kategoriler koddan; geçmiş için boş durum. |
+| 7 | Kategori kartı | ÇALIŞIYOR | Accent şeridi, emoji (`aria-hidden`), karakter sayısı, etkin değer. |
+| 8 | Override vurgusu | ÇALIŞIYOR | "değişti" etiketi taslağa göre; varsayılana eşit değer override sayılmaz (sunucuda da temizlenir). |
+| 9 | Eşik alanı | ÇALIŞIYOR | 3–100 aralığı istemci + sunucu (zod, 400 alan hatası); < 4 "agresif" uyarısı. |
+| 10 | Min. uzunluk alanı | ÇALIŞIYOR | 0–2000; performans notu. |
+| 11 | Varsayılan gösterimi | ÇALIŞIYOR | Her alanın altında "Varsayılan N", satırda "Etkin". |
+| 12 | Kategori sıfırla | ÇALIŞIYOR | Erişilebilir adlı düğme. |
+| 13 | Dirty takibi | ÇALIŞIYOR | Anahtar sıralı kararlı karşılaştırma (yanlış pozitif yok). |
+| 14 | Kaydet | ÇALIŞIYOR | Önce etki diyaloğu → Yayınla; `baseVersion` 409. |
+| 15 | Kaydedilmemiş ipucu | ÇALIŞIYOR | Yapışkan değişiklik çubuğu ("N kategori değişti · Vazgeç · Etkiyi gör"). |
+| 16 | Ayrılırken uyarı (EKSİK) | ÇALIŞIYOR | `beforeunload`. |
+| 17 | Sunucu doğrulaması | ÇALIŞIYOR | Sessiz atma yok: bilinmeyen kategori/aralık dışı → 400 + alan yolu. |
+| 18 | Audit | ÇALIŞIYOR | Yazma ile aynı tx (`writeVersionedSetting`), sayfada geçmiş olarak okunur. |
+| 19 | Cache invalidation | KISMİ | Bu örnek temizlenir; diğer örnekler en geç 60 sn'de yeniler (Redis sürüm anahtarı yapılmadı — `lib/character-thresholds.ts` ortak modül). |
+| 20 | Yetki | ÇALIŞIYOR | `defineRoute` ADMIN + DB rolü (gizli kapı `requireAuth` içinde, P0-01). |
+| 21 | Runtime tüketimi | ÇALIŞIYOR | Değişmedi. |
+| 22 | Etki önizlemesi (EKSİK) | ÇALIŞIYOR | Tek toplu SQL: hazır şimdi→sonra, yeni hazır/gerileyen, ek rozet, ~puan, dağılım histogramı; büyük etkide "anladım" onayı. |
+| 23 | Geçmiş / geri al (EKSİK) | ÇALIŞIYOR | Denetim kaydından sayfalı geçmiş; "Bu sürümü geri yükle" → etki diyaloğu → yayın (`revertOf` denetimde). |
+| 24 | Son güncelleyen (EKSİK) | ÇALIŞIYOR | "Son değişiklik: kişi · ne zaman". |
+| 25 | Tümünü varsayılana döndür (EKSİK) | KALDIRILDI | Kategori başına sıfırlama + geçmişten geri yükleme yeterli; ayrı düğme gereksiz. |
+| 26 | Aralık uyarısı (EKSİK) | ÇALIŞIYOR | Tek kaynak `THRESHOLD_LIMITS`. |
+| 27 | Eşzamanlılık (EKSİK) | ÇALIŞIYOR | 409 + "Güncel hali yükle". |
+| 28 | Toast | ÇALIŞIYOR | `sonner`, Türkçe, tekrar ikon yok. |
+| 29 | i18n (EKSİK) | KALDIRILDI | Admin panelinin geri kalanı (Dalga 2 yüzeyleri) sabit Türkçe; i18n anahtarı eklenmedi (paylaşılan `messages/*.json` başka ajanların). |
+| 30 | Form erişilebilirliği | ÇALIŞIYOR | `label htmlFor`/`id`, `aria-describedby`, `role=group`. |
+| 31 | Mobil | ÇALIŞIYOR | Tek sütun, yapışkan çubuk, ≥ 44px. |
+| 32 | Kategori bağlamı (EKSİK) | ÇALIŞIYOR | Açıklama/accent/karakter sayısı + önizlemede kullanıcı dağılımı. |
+| 33 | Test paneli tutarlılığı (BOZUK) | ÇALIŞIYOR | Test lab üretimdeki `getCategoryProgressDetailed` ile etkin eşik/uzunluğu gösterir ve doldurur. |
+
+### Kapanan bulgular
+1 (önizleme + onay; geriye dönüklük açıkça yazılı) · 2 (aralık doğrulaması) · 3 (Dalga 1'de fail-closed; UI kilidi) · 4 (409 + tek tx) · 7 (test lab etkin eşik) · 8 (varsayılan/etkin görünür, sessiz atma yok) · 9 (a11y) · 10 (kararlı dirty + beforeunload + yapışkan çubuk) · 11 (toast Türkçe) · 12 (gizli kapı `requireAuth` içinde — P0-01).
+
+### Kalanlar
+- Bulgu 5 (çoklu örnek cache): Redis sürüm anahtarı ortak `lib/character-thresholds.ts`'e dokunmayı gerektirir; 60 sn TTL ile sınırlı.
+- Bulgu 6 (`minReviewLength` sıcak yol maliyeti): `ConsumptionReview.textLength` kolonu gerekir → ŞEMA İSTEĞİ. UI uyarısı eklendi.
+- "Yalnız yeni döngülere uygula" seçeneği: kullanıcı-kategori baseline tablosu gerekir → ŞEMA İSTEĞİ.
+
+### ŞEMA İSTEKLERİ
+- `ConsumptionReview.textLength Int?` (yazımda `char_length(btrim(text))`) — uzunluk şartlı sayımı tek sorguya indirir.
+- `CharacterCycleBaseline(userId, categoryKey, consumed)` — eşik değişikliğini yalnız yeni döngülere uygulamak için.

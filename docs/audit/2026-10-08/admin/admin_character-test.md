@@ -241,3 +241,63 @@ Ortak ön koşul: dört iddianın hepsi **ADMIN rolü** gerektiriyor (`route.ts:
 - **Önem:** Bu bir operatör aracı hatası; kullanıcıya veya veriye doğrudan zarar vermiyor. KRİTİK/YÜKSEK değil, ORTA/DÜŞÜK. **Öneri:** Fill hedefi sunucuda `categoryThreshold(cat, overrides) * (takenInCat + 1)` olarak hesaplanmalı ve `getCategoryProgress` sonucu yanıtta döndürülmeli. Durum kartı hedef kullanıcıyı ve kategori başına gerçek eşiği göstermeli.
 
 **Özet:** 4/4 iddia kodda doğrulandı. Hiçbiri yetkisiz bir saldırgan tarafından istismar edilemez. #1 ve #2 canlı veri ve ekonomi açısından gerçek risk taşıyor (ORTA-YÜKSEK), #3 gerçek kullanıcı verisini sessizce bozuyor (YÜKSEK), #4 işlevsel bir hata (ORTA/DÜŞÜK).
+
+---
+
+## Uygulama (Dalga 2)
+
+Araç `/admin/badges?tab=test` (Test lab) sekmesine taşındı; `/admin/character-test` kalıcı yönlenir. Uçlar ayrıldı (B12): `GET /api/admin/badges/lab?user=`, `…/lab/targets`, `…/lab/catalog`, `POST …/lab/classify` (AI hız sınırı), `POST …/lab/preview`, `POST …/lab/sandbox` — hepsi `defineRoute` + zod. Eski `/api/admin/character-test` silindi; P0-23 testleri `__tests__/admin/a-rozetler/lab-sandbox.test.ts`'e taşındı ve genişletildi. Mantık: `lib/admin-badges/lab.server.ts`; UI: `components/admin/a-rozetler/lab-tab.tsx` (yalnız sekme açılınca yüklenir).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1–3 | Rota erişimi / API yetkisi / sidebar | ÇALIŞIYOR | Rozetler girdisi (navigasyon kaydında `redirectFrom`). |
+| 4 | Başlık + `<title>` | ÇALIŞIYOR | `metadata.title = 'Rozetler'`. |
+| 5 | Durum GET (hedefe bağlı değil) | ÇALIŞIYOR | `?user=` URL bağlamı; durum seçilen hedefin. |
+| 6 | Yükleniyor | ÇALIŞIYOR | QueryState iskeleti. |
+| 7 | Hata | ÇALIŞIYOR | Görünür hata + Tekrar dene. |
+| 8 | Metin alanı | ÇALIŞIYOR | Etiketli, 1000 sınırı + sayaç. |
+| 9 | Örnek çipleri | ÇALIŞIYOR | 5 kategori (Gizemli dahil). |
+| 10 | Sınıflandır | ÇALIŞIYOR | Üretimle aynı `classifyFeedbackCategory` + `selectCharacterForSamples` (B5). |
+| 11 | Kısa metin | ÇALIŞIYOR | < 8 karakter "üretim saymaz" açıklaması. |
+| 12 | Sonuç kartı | ÇALIŞIYOR | Kategori anahtarı, AI/yedek seçim, hata nedeni, süre; `aria-live`. |
+| 13 | AI yoksa | ÇALIŞIYOR | `aiError` görünür (unavailable/parse/invalid_choice). |
+| 14–15 | Kategori/varyant seçimi | ÇALIŞIYOR | DS `Select` (Kader küresi / Maskot). |
+| 16 | Karakter seçimi | ÇALIŞIYOR | 43 karakterlik galeri; her biri önizlenebilir. |
+| 17 | Açılışı oynat | ÇALIŞIYOR | `CharacterReveal` lazy; DB'ye yazmaz. |
+| 18 | Önizleme sadakati | ÇALIŞIYOR | Müşteri ucuyla aynı yük (katalog açıklaması, gerçek sahip/oran); `why` ve oran elle girilebilir. |
+| 19–20 | Esc/kapat, azaltılmış hareket | ÇALIŞIYOR | Değişmedi. |
+| 21 | Reveal focus trap | KISMİ | Müşteri bileşeni (başka yüzey); dokunulmadı. 3B rozet sahnesi (`SceneShell`) odak tuzaklı. |
+| 22 | Paylaş (önizlemede) | ÇALIŞIYOR | `allowShare={false}` (müşteri bileşenine eklemeli prop). |
+| 23 | Bar eşiği (BOZUK) | ÇALIŞIYOR | Kategori başına etkin eşik + min. uzunluk. |
+| 24 | Kategori sayıları | ÇALIŞIYOR | Ad, sayılan/eşik, alınan/kalan, hazır, ilerleme çubuğu (`getCategoryProgressDetailed`). |
+| 25 | Kazanılan rozetler | ÇALIŞIYOR | Ad + ne zaman. |
+| 26 | Hedef durumu (BOZUK) | ÇALIŞIYOR | İşlem sonrası hedefin güncel durumu yanıtta döner. |
+| 27 | Hedef alanı | ÇALIŞIYOR | Yalnız test hesabı seçici (demo + allowlist, aranabilir); bulunamayan 404. |
+| 28 | Varsayılan "kendim" (SAHTE) | KALDIRILDI | Hedef zorunlu; admin hesabı seçilemez. |
+| 29 | Barı doldur (BOZUK) | ÇALIŞIYOR | Hedef = etkin eşik × (alınan + 1); min. uzunluğu karşılayan metin; tükenmiş kategori 409; gerçek yorumlara dokunmaz. |
+| 30 | `created` sayacı (BOZUK) | ÇALIŞIYOR | Tek transaction: ya hepsi ya hiç. |
+| 31 | Rozetleri sıfırla | ÇALIŞIYOR | Tipli onay ("SIFIRLA"), ödül kilidi (tekrar basılmaz), denetim. |
+| 32 | Kategorileri temizle | ÇALIŞIYOR | Yalnız test hesabı, tipli onay ("TEMİZLE"), denetim. |
+| 33 | Test verisini sil | ÇALIŞIYOR | Etki önizlemeli onay, tek tx; fill artık gerçek yorumları etiketlemediği için geri alınacak etiket yok. |
+| 34 | Meşgul durumu | ÇALIŞIYOR | |
+| 35 | Toast'lar | ÇALIŞIYOR | Sunucunun Türkçe, sayılı mesajı ("15 sentetik yorum eklendi; … barı hazır."). |
+| 36 | Yıkıcı onay (EKSİK) | ÇALIŞIYOR | `ConfirmAction` + tipli onay + etki. |
+| 37 | Denetim izi (EKSİK) | ÇALIŞIYOR | Her sandbox işlemi `CHARACTER_TEST_*`. |
+| 38 | Üretim koruması (EKSİK) | ÇALIŞIYOR | Üretimde kapalı + allowlist (P0-23); UI kilit nedenini söyler. |
+| 39 | AI hız sınırı (EKSİK) | ÇALIŞIYOR | `rateLimit: 'ai'`. |
+| 40 | Yardım metni | ÇALIŞIYOR | Yanıltıcı iddialar kaldırıldı; müşteri rozet sayfasına bağlantı. |
+| 41 | i18n | KALDIRILDI | Admin Dalga 2 yüzeyleriyle tutarlı sabit Türkçe. |
+| 42 | Mobil | ÇALIŞIYOR | Yıkıcı düğmeler ana eylemden ayrık, ≥ 44px. |
+
+### Kapanan bulgular
+B1 (ödül kilidi, Dalga 1 + korunan test) · B2 (allowlist, onay, denetim, üretim kapısı) · B3 (doğru hedef) · B4 (gerçek yoruma dokunulmaz) · B5 (tek seçici `selectCharacterForSamples`) · B6 (hedef bağlamı, üretim hesabı) · B7 (hedef zorunlu, test hesabı) · B9 (404, tek tx, sayılı mesaj, AI hata nedeni) · B10 (karakter seçici, gerçek yük, paylaşım kapalı) · B11 (etiketler, `aria-live`, DS Select; reveal odak tuzağı hariç) · B12 (ayrı uçlar, zod, hız sınırı) · B13 (Türkçe terimler) · B14 (lazy reveal, tek tx fill). Ek: 3B rozet anı (An Motoru madalyonu) önizlemesi — §4.2 politikasındaki "rozet test laboratuvarı".
+
+### Kalanlar
+- B8 (sentetik veri metrikleri kirletir): yalnız test hesaplarında ve işaretli; kalıcı çözüm `Consumption.isSynthetic` ya da `CharacterTestOverride` → ŞEMA İSTEĞİ.
+- Reveal odak tuzağı (müşteri bileşeni, başka yüzey).
+- Golden set / toplu sınıflandırıcı değerlendirmesi: etiketli veri seti gerekir; yapılmadı.
+
+### ŞEMA İSTEKLERİ
+- `CharacterTestOverride(userId, categoryKey, extraCount)` ya da `Consumption.isSynthetic Boolean @default(false)` — sentetik veriyi metriklerden yapısal olarak ayırmak için.

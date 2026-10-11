@@ -119,6 +119,20 @@ export const badgeListQuerySchema = z.object({
 });
 export type BadgeListQuery = z.infer<typeof badgeListQuerySchema>;
 
+/** Liste sorgu dizesi — sunucu ön yüklemesi ve istemci sorgu anahtarı AYNI biçimi üretir. */
+export function buildListQs(p: { set: string; series?: string; q?: string; rarity?: string; health?: string; sort?: string | null; page?: number; size?: number }): string {
+  const sp = new URLSearchParams();
+  sp.set('tab', p.set === 'series' ? 'series' : 'normal');
+  if (p.series) sp.set('series', p.series);
+  if (p.q) sp.set('q', p.q);
+  if (p.rarity) sp.set('rarity', p.rarity);
+  if (p.health) sp.set('health', p.health);
+  sp.set('sort', p.sort || BADGE_DEFAULT_SORT);
+  sp.set('page', String(p.page ?? 1));
+  sp.set('size', String(p.size ?? BADGE_PAGE_SIZE));
+  return sp.toString();
+}
+
 export type BadgeStatus = 'active' | 'inactive' | 'archived';
 
 export type BadgeListItem = {

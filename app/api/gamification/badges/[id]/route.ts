@@ -6,6 +6,9 @@ import { getAuditRequestMeta } from '@/lib/request-metadata';
 import { sanitizeHexColor } from '@/lib/badge-colors';
 import { archiveGateResponse, readArchiveIntent, type DeletionImpact } from '@/lib/data-safety/archive';
 import { actorFromSession, auditEntry } from '@/lib/data-safety/audit';
+import { ZodError } from 'zod';
+import { ApiError } from '@/lib/http/define-route';
+import { updateBadge as updateAdminBadge } from '@/lib/admin-badges/server';
 
 // GET /api/gamification/badges/[id] - Get single badge
 
@@ -16,6 +19,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Bulgu 3: ham rozet tanımı (gizli/karakter rozetleri dahil) oturumsuz okunuyordu → yalnız ADMIN.
+    const auth = await requireAuth(['ADMIN']);
+    if ('error' in auth) return auth.error;
     const { id } = await params;
 
     const badge = await prisma.badge.findUnique({
@@ -92,38 +98,24 @@ export async function PATCH(
       );
     }
 
-    const badge = await prisma.badge.update({
-      where: { id },
-      data: {
-        name: body.name,
-        description: body.description,
-        icon: body.icon,
-        category: body.category || undefined,
-        rarity: (body.rarity || 'common').toLowerCase(),
-        requirement: (typeof body.requirement === 'object' && body.requirement)
-          ? body.requirement as object
-          : { type: 'custom', value: body.points || 100 },
-        ...(typeof body.pointCost === 'number' || body.pointCost === null ? { pointCost: body.pointCost } : {}),
-        isActive: body.isActive,
-        // Renk: alan gövdede varsa güncelle (boş string/null → temizle = rarity varsayılanına dön).
-        ...('color' in body ? { color: sanitizeHexColor(body.color) } : {}),
-        ...('bgColor' in body ? { bgColor: sanitizeHexColor(body.bgColor) } : {}),
-        ...('hiddenUntilEarned' in body ? { hiddenUntilEarned: body.hiddenUntilEarned === true } : {}),
-      },
-    });
-
-    // Log audit
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'UPDATE_BADGE',
-        entity: 'Badge',
-        entityId: badge.id,
-        oldData: oldBadge as object,
-        newData: badge as object,
-        ...auditMeta,
-      },
-    });
+    // Bulgu 7: doğrulamasız ham yazma (koşul metadata'sını silen, serbest nadirlik) kaldırıldı —
+    // admin rozet servisi: zod + koşul birleştirme + aynı tx denetim. Yeni istemci: PATCH /api/admin/badges/[id].
+    void auditMeta;
+    let badge;
+    try {
+      badge = await updateAdminBadge(id, body, actorFromSession(session), request);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return NextResponse.json(
+          { success: false, code: 'VALIDATION', error: e.issues[0]?.message ?? 'Geçersiz rozet bilgisi', details: e.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) },
+          { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+      if (e instanceof ApiError) {
+        return NextResponse.json({ success: false, code: e.code, error: e.message }, { status: e.status, headers: PRIVATE_NO_STORE_HEADERS });
+      }
+      throw e;
+    }
 
     return NextResponse.json({ success: true, data: badge }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

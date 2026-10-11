@@ -10,6 +10,9 @@ import { sanitizeHexColor } from '@/lib/badge-colors';
 import { trackabilityOf } from '@/lib/badge-trackability';
 import { resolveSubjectUserId } from '@/lib/auth/subject-user';
 import { archivedListFilter } from '@/lib/data-safety/archive';
+import { actorFromSession } from '@/lib/data-safety/audit';
+import { badgeUpsertSchema } from '@/lib/admin-badges/contract';
+import { createBadge as createAdminBadge } from '@/lib/admin-badges/server';
 
 
 export const dynamic = 'force-dynamic';
@@ -319,37 +322,19 @@ export async function POST(request: NextRequest) {
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
-    const body = await request.json();
-    const normalizedCategory = normalizeBadgeCategory(body.category);
-    const normalizedRequirement = normalizeRequirement(body.requirement || { type: 'custom', value: body.points || 100 });
-    
-    const badge = await prisma.badge.create({
-      data: {
-        name: body.name,
-        description: body.description,
-        icon: body.icon,
-        category: normalizedCategory,
-        rarity: (body.rarity || 'common').toLowerCase(),
-        requirement: normalizedRequirement,
-        pointCost: typeof body.pointCost === 'number' ? body.pointCost : null,
-        isActive: body.isActive ?? true,
-        color: sanitizeHexColor(body.color),
-        bgColor: sanitizeHexColor(body.bgColor),
-        hiddenUntilEarned: body.hiddenUntilEarned === true,
-      },
-    });
-
-    // Log audit
-    await prisma.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CREATE_BADGE',
-        entity: 'Badge',
-        entityId: badge.id,
-        newData: badge as object,
-        ...auditMeta,
-      },
-    });
+    // Bulgu 7: doğrulamasız ham yazma kaldırıldı — admin rozet servisiyle aynı zod şeması +
+    // aynı transaction'da denetim (lib/admin-badges/server.ts). Yeni istemci: POST /api/admin/badges.
+    void auditMeta;
+    const body = await request.json().catch(() => null);
+    const parsed = badgeUpsertSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, code: 'VALIDATION', error: parsed.error.issues[0]?.message ?? 'Geçersiz rozet bilgisi', details: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+    const { id } = await createAdminBadge(parsed.data, actorFromSession(session), request);
+    const badge = await prisma.badge.findUnique({ where: { id } });
 
     return NextResponse.json({ success: true, data: badge }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

@@ -60,6 +60,8 @@ export interface CharacterRevealProps {
   character?: RevealCharacter;
   /** true ise açılınca POST /api/customer/character çağrılır; sonuç beklenirken "hazırlanıyor" oynar. */
   fetchOnOpen?: boolean;
+  /** Paylaş düğmesi (varsayılan açık). Admin önizlemesi kapatır: sahte gerekçeli kart paylaşılmasın. */
+  allowShare?: boolean;
 }
 
 // ── Yardımcı: değişen gizemli hazırlanma yazıları ─────────────────────
@@ -151,6 +153,7 @@ export function CharacterReveal({
   variant = 'orb',
   character: characterProp = null,
   fetchOnOpen = false,
+  allowShare = true,
 }: CharacterRevealProps) {
   const [phase, setPhase] = useState<Phase>('preparing');
   const [character, setCharacter] = useState<RevealCharacter>(null);
@@ -419,6 +422,7 @@ export function CharacterReveal({
                         theme={theme}
                         showWhy={phase === 'details'}
                         onClose={onClose}
+                        allowShare={allowShare}
                       />
                     )}
                   </AnimatePresence>
@@ -492,12 +496,14 @@ function DetailsText({
   theme,
   showWhy,
   onClose,
+  allowShare = true,
 }: {
   character: NonNullable<RevealCharacter>;
   accent: string;
   theme: RarityTheme;
   showWhy: boolean;
   onClose: () => void;
+  allowShare?: boolean;
 }) {
   // Karaktere özel açılış metni (lib/character-reveal-texts.ts). Henüz yazılmamışsa null
   // döner ve eski davranış (katalog açıklaması) gösterilir — yarım liste hiçbir şeyi bozmaz.
@@ -728,7 +734,7 @@ function DetailsText({
           transition={{ type: 'spring', delay: 0.25, damping: 18 }}
           className="mt-2 flex flex-wrap items-center justify-center gap-2"
         >
-          <ShareButton character={character} theme={theme} />
+          {allowShare ? <ShareButton character={character} theme={theme} /> : null}
           <Button
             onClick={onClose}
             className="gap-2 text-white"

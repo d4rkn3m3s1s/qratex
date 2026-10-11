@@ -267,3 +267,79 @@ Dosyalar: `app/admin/badges/page.tsx` (32 satır, `dynamic(..., { ssr:false })` 
 | 3 | `?userId=` IDOR | Doğrulandı (önem ORTA) | id'ler herkese açık leaderboard'dan alınabiliyor; puan/seviye zaten açık, ek sızıntı rozet listesi ve zamanları |
 | 4 | Dizi rozetinde isActive etkisiz | Doğrulandı | UI notu yanıltıcı |
 | 5 | public/ altına writeFile | Doğrulandı (canlıda denenmedi) | R2 altyapısı hazır |
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `/admin/badges` = **Katalog · Eşikler · Test lab** (SectionTabs, `?tab=`). `/admin/character-thresholds` → `?tab=esikler`, `/admin/character-test` → `?tab=test` kalıcı yönlenir (sorgu korunur). Sunucu önce (`app/admin/badges/page.tsx`: `requireAuth` + katalog/sağlık sayıları/eşikler sunucuda, istemci `initialData`), istemci adası `components/admin/a-rozetler/**`, Test lab `next/dynamic` ile yalnız sekmesi açılınca yüklenir. BFF: `app/api/admin/badges/**` (hepsi `defineRoute`, ADMIN + DB rolü + zod + hız sınırı). Sunucu çekirdeği: `lib/admin-badges/{contract,server,thresholds.server,lab.server}.ts`. Testler: `__tests__/admin/a-rozetler/*` (26 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa kabuğu | ÇALIŞIYOR | `ssr:false` kabuk + çift iskelet kaldırıldı; sunucu bileşeni + tek Suspense iskeleti. |
+| 2 | Yetki | ÇALIŞIYOR | Sayfada da `requireAuth(['ADMIN'])` (DB rolü); BFF'ler `defineRoute`. |
+| 3 | Hero başlığı | ÇALIŞIYOR | QDL `PageHeader` (ops kaydı), tam Türkçe. |
+| 4 | KPI: Toplam kazanım | ÇALIŞIYOR | Toplam + son 30 gün özet satırı. |
+| 5–8 | KPI: Tam/Yaklaşık/Karakter/İzlenemez | ÇALIŞIYOR | Tek sağlık şeridi; her kutu `health=` süzgeci uygular; sayılar aktif sekmeye (Normal/Dizi) göre. |
+| 9 | Nadirlik istatistik kartları | KALDIRILDI | Tekrar eden ikinci şerit; nadirlik süzgeci + sütun + sıralama yeterli (Bulgu 9). |
+| 10 | Normal / Dizi sekmesi | ÇALIŞIYOR | Radix `SectionTabs` (`role=tab`), emoji yok. |
+| 11 | Dizi alt-kategori | ÇALIŞIYOR | `lib/character-categories`'den türer, süzgeç. |
+| 12 | "Pasif yapılabilir" notu | ÇALIŞIYOR | Pasifleştirme motorda gerçekten uygulanır (`inactiveCharacterIds`). |
+| 13 | Arama | ÇALIŞIYOR | Ad + açıklama + kimlik + koşul etiketi + dizi adı; sunucuda, Türkçe harf duyarsız. |
+| 14 | Nadirlik filtresi | ÇALIŞIYOR | URL'de kalıcı. |
+| 15 | Grid/Liste geçişi | KALDIRILDI | Yoğun tablo + mobilde otomatik kart; dekoratif galeri ops yüzeyinde gereksiz (Bulgu 13). |
+| 16 | Yeni rozet diyaloğu | ÇALIŞIYOR | `EntityEditorSheet`; her açılışta `reset` → kalıntı sızmaz (Bulgu 6). |
+| 17 | Ad | ÇALIŞIYOR | zod 2–60 (istemci + sunucu aynı şema). |
+| 18 | Açıklama | ÇALIŞIYOR | ≤ 300. |
+| 19 | İkon yükleme | ÇALIŞIYOR | Ortak R2 yükleme ucu (HTTPS URL), hata görünür. |
+| 20–21 | İkon arama + galeri | ÇALIŞIYOR | Galeri `lib/badge-catalog.ts`'ten türer; `role=option`/`aria-selected`. |
+| 22 | Kategori | ÇALIŞIYOR | Tek taksonomi (`BADGE_CATEGORIES`), PATCH de doğrular; detayda gösterilir. |
+| 23 | Nadirlik | ÇALIŞIYOR | Enum; geçersiz değer 400 (çökme yolu kapandı). |
+| 24 | "Puan Ödülü" (SAHTE) | KALDIRILDI | Sahte alan çıktı; gerçek ödül (`badgeRewardPoints`) tablo/detayda salt-okunur. Düzenlenebilir ödül için ŞEMA İSTEĞİ. |
+| 25 | Puanla açma maliyeti | KALDIRILDI | Satın alma 410 (tam sürpriz); eski değer detayda "kullanılmıyor". |
+| 26–28 | Koşul türü/hedef/ipucu | ÇALIŞIYOR | Düzenlemede birleştirilir (`period/metadata` korunur, Bulgu 7). |
+| 29–31 | Vurgu/arka plan/sıfırla | ÇALIŞIYOR | Hex alan hatası; arka plan vurgu olmadan uygulanmaz uyarısı. |
+| 32 | Canlı önizleme | ÇALIŞIYOR | DS `BadgeGlyph` + `RarityBadge` (müşteri kitiyle aynı primitif). |
+| 33 | Aktif anahtarı | ÇALIŞIYOR | Karakter rozetlerinde de etkili. |
+| 34 | "Müşteride gizli" anahtarı | KALDIRILDI | Tam sürpriz politikasında etkisizdi; formda politika özeti. |
+| 35 | İptal | ÇALIŞIYOR | Kirli formda kapatma onayı. |
+| 36 | Oluştur | ÇALIŞIYOR | Gönderim kilidi + `Idempotency-Key`. |
+| 37 | Düzenle | ÇALIŞIYOR | Ayrıntı çekmecesinden; her açılışta sıfırlanır. |
+| 38 | Güncelle | ÇALIŞIYOR | zod, koşul birleştirme, sunucu hataları alanlara. |
+| 39 | Sil (tehlikeli) | ÇALIŞIYOR | Silme yok → arşiv; `dryRun` etki, kazanan varsa 409 + adı yazarak onay; karakterde engelli; geri al (pasif döner). |
+| 40 | "N kişi kazandı" | ÇALIŞIYOR | Detayda son 20 kazanan → Kullanıcı 360. |
+| 41 | Yıldızlı "puan" (BOZUK) | ÇALIŞIYOR | Ayrı sütunlar: Koşul (hedef) · Ödül (gerçek puan). |
+| 42 | İzlenebilirlik rozeti | ÇALIŞIYOR | `StatusBadge` (ikon + metin). |
+| 43 | Pasif etiketi | ÇALIŞIYOR | Durum sütunu her görünümde. |
+| 44 | Kart aksiyonları (hover) | ÇALIŞIYOR | Satır → ayrıntı çekmecesi; aksiyonlar görünür düğmeler (≥ 44px). |
+| 45 | Yükleniyor | ÇALIŞIYOR | QueryState/DataTable iskeleti. |
+| 46 | Boş durum | ÇALIŞIYOR | Filtre boşu (Filtreleri temizle) ile katalog boşu ayrı. |
+| 47 | Hata durumu | ÇALIŞIYOR | Görünür hata + Tekrar dene. |
+| 48 | Toast'lar | ÇALIŞIYOR | `sonner`, Türkçe, öneksiz. |
+| 49 | Stagger | KALDIRILDI | Ops kaydında yoğun tabloda stagger yok (§4.2). |
+| 50 | Starfield/neon/pulse | KALDIRILDI | Ops yüzeyinde sürekli animasyon yasak; 3B yalnız Test lab önizlemesinde. |
+| 51 | Mobil | ÇALIŞIYOR | Mobil kart tablo, tam ekran çekmece, ≥ 44px hedefler. |
+| 52 | Denetim kaydı | ÇALIŞIYOR | Yazmayla aynı tx; detayda "Değişiklik geçmişi". |
+| 53 | Sıralama | ÇALIŞIYOR | Ad, nadirlik (anlamlı sıra), kazanım, son kazanım. |
+| 54 | Toplu işlem | ÇALIŞIYOR | Etkinleştir/pasifleştir/arşivle (karakter/arşiv atlanır, denetimli). |
+| 55 | Detay / kazananlar / seri | ÇALIŞIYOR | 30 günlük İstanbul günü sparkline, kazananlar, geçmiş. |
+| 56 | Sayfalama | ÇALIŞIYOR | Sunucu sayfalama. |
+| 57 | Kopyala / taslak / zamanlı yayın | ÇALIŞIYOR (çoğalt) | Çoğalt pasif kopya üretir; taslak/zamanlı yayın şema ister (kalan). |
+
+### Kapanan bulgular (15/15)
+1 arşiv + onay + karakter engeli · 2 sahte ödül alanı kaldırıldı, hedef/ödül ayrı · 3 admin ayrı BFF; `GET /api/gamification/badges/[id]` yalnız ADMIN · 4 karakter pasifleştirme `pickCharacterInCategory` + ilerleme havuzundan dışlar · 5 R2 yükleme · 6 form her açılışta sıfırlanır · 7 zod + idempotency + koşul birleştirme (eski POST/PATCH da aynı servise bağlandı) · 8 görünür aksiyonlar, aria, sekmeler · 9 tek, tıklanabilir sağlık şeridi · 10 hata ≠ boş · 11 bileşen klasörü, tek doğruluk kaynakları, ölü `badges/algorithm` uçları silindi · 12 pointCost/gizli alanlar kaldırıldı, politika metni · 13 dekor yok, sayfalama · 14 Türkçe, nadirlik sırası · 15 BadgeGlyph önizleme, arka plan uyarısı.
+
+### Eksik özelliklerden uygulananlar
+Yoğun tablo + sıralama + sunucu arama/sayfalama + URL durumu; detay çekmecesi; denetim izi UI; toplu işlem + çoğalt; manuel ver (gerekçeli, puan basmaz, denetimli); Test lab'da 3B rozet anı önizlemesi.
+
+### Kalanlar
+- Simülasyon ("bu koşulla kaç kişi anında kazanır"): sayaçlar kullanıcı başına ayrı sorgu; toplu hesap için sayaç tabloları gerekir. Sahte sayı gösterilmedi.
+- Rozeti kullanıcıdan geri alma: ürün kararı + ödül iadesi kuralı gerekli.
+- Taslak / zamanlanmış yayın: şema gerekir.
+- Görsel doğrulama headless tezgâhta yapılmadı (dev server/build bu görevde yasak).
+
+### ŞEMA İSTEKLERİ
+- `Badge.rewardPoints Int?` — panelden düzenlenebilir ödül puanı (`badgeRewardPoints()` önce DB'yi, yoksa metin tablosunu okur).
+- İsteğe bağlı `Badge.publishAt DateTime?` — taslak ve zamanlanmış yayın.
