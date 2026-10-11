@@ -16,6 +16,7 @@ import type {
   TonePreviewResult,
   TonesState,
 } from '@/lib/ai-studio/contract';
+import { clientMessage } from '@/lib/client-messages';
 
 /** Zarf v2 hatası — `QueryState` (`status`/`code`) ve formlar (`details`) aynı nesneyi okur. */
 export class StudioApiError extends Error {
@@ -46,7 +47,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
     });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new StudioApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new StudioApiError(0, clientMessage('network'), 'NETWORK');
   }
   let body: unknown = null;
   try {
@@ -56,12 +57,12 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   }
   const env = (body && typeof body === 'object' ? body : {}) as Envelope<T>;
   if (!res.ok || env.success === false || env.ok === false) {
-    throw new StudioApiError(res.status || 500, env.error || 'İstek tamamlanamadı.', env.code ?? null, env.details);
+    throw new StudioApiError(res.status || 500, env.error || clientMessage('requestFailed'), env.code ?? null, env.details);
   }
   return (env.data !== undefined ? env.data : (env as unknown)) as T;
 }
 
-export function errorText(e: unknown, fallback = 'İşlem tamamlanamadı.'): string {
+export function errorText(e: unknown, fallback = clientMessage('failed')): string {
   if (e instanceof Error && e.message) return e.message;
   return fallback;
 }

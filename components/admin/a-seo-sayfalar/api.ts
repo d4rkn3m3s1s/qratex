@@ -2,6 +2,7 @@
 
 import type { HealthReport, SeoHistoryPage, SeoPayload, SeoState } from '@/lib/admin-seo/contract';
 import type { CmsHistoryEntry, CmsListQuery, CmsPageDetail, CmsPageFormParsed, CmsPageList } from '@/lib/cms-pages/contract';
+import { clientMessage, requestFailedStatus } from '@/lib/client-messages';
 
 /**
  * SEO Motoru + İçerik sayfaları istemci katmanı (zarf v2). Hata `status/code/details` taşır →
@@ -43,7 +44,7 @@ async function call<T>(url: string, init?: Omit<RequestInit, 'body'> & { json?: 
     res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...init, body, headers });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new SurfaceApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new SurfaceApiError(0, clientMessage('network'), 'NETWORK');
   }
   let parsed: unknown = null;
   try {
@@ -53,12 +54,12 @@ async function call<T>(url: string, init?: Omit<RequestInit, 'body'> & { json?: 
   }
   const env = (parsed && typeof parsed === 'object' ? parsed : {}) as Envelope<T>;
   if (!res.ok || env.ok === false || env.success === false) {
-    throw new SurfaceApiError(res.status, env.error || env.message || `İstek başarısız (${res.status}).`, env.code ?? null, env.details);
+    throw new SurfaceApiError(res.status, env.error || env.message || requestFailedStatus(res.status), env.code ?? null, env.details);
   }
   return env.data as T;
 }
 
-export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Beklenmeyen bir hata oluştu.');
+export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : clientMessage('unexpected'));
 export const isStatus = (e: unknown, s: number) => e instanceof SurfaceApiError && e.status === s;
 
 // ───────────────────────────── SEO ─────────────────────────────

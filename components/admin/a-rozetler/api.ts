@@ -21,6 +21,7 @@ import type {
   ThresholdOverrides,
   ThresholdsState,
 } from '@/lib/admin-badges/contract';
+import { clientMessage } from '@/lib/client-messages';
 
 /** Zarf v2 hatası — `QueryState` (`status`/`code`) ve formlar (`details`) aynı nesneyi okur. */
 export class BadgesApiError extends Error {
@@ -51,7 +52,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
     });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new BadgesApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new BadgesApiError(0, clientMessage('network'), 'NETWORK');
   }
   let body: unknown = null;
   try {
@@ -61,12 +62,12 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   }
   const env = (body && typeof body === 'object' ? body : {}) as Envelope<T>;
   if (!res.ok || env.success === false || env.ok === false) {
-    throw new BadgesApiError(res.status || 500, env.error || 'İstek tamamlanamadı.', env.code ?? null, env.details);
+    throw new BadgesApiError(res.status || 500, env.error || clientMessage('requestFailed'), env.code ?? null, env.details);
   }
   return (env.data !== undefined ? env.data : (env as unknown)) as T;
 }
 
-export function errorText(e: unknown, fallback = 'İşlem tamamlanamadı.'): string {
+export function errorText(e: unknown, fallback = clientMessage('failed')): string {
   if (e instanceof Error && e.message) return e.message;
   return fallback;
 }
@@ -124,11 +125,11 @@ export async function uploadBadgeIcon(file: File): Promise<string> {
   try {
     res = await fetch('/api/admin/assets/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
   } catch {
-    throw new BadgesApiError(0, 'Bağlantı kurulamadı.', 'NETWORK');
+    throw new BadgesApiError(0, clientMessage('networkShort'), 'NETWORK');
   }
   const body = (await res.json().catch(() => ({}))) as { success?: boolean; url?: string; path?: string; error?: string };
   if (!res.ok || body.success === false || !(body.url || body.path)) {
-    throw new BadgesApiError(res.status, body.error || 'İkon yüklenemedi.', null);
+    throw new BadgesApiError(res.status, body.error || clientMessage('uploadFailed'), null);
   }
   return (body.url || body.path) as string;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import type { BulkInput, GameDetail, GamesOverview, TournamentOverview } from '@/lib/admin-games/contract';
+import { clientMessage } from '@/lib/client-messages';
 
 /** Zarf v2 hatası — `QueryState` (`status`/`code`) ve formlar (`details`) aynı nesneyi okur. */
 export class GamesApiError extends Error {
@@ -25,7 +26,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...init, headers });
   } catch {
-    throw new GamesApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new GamesApiError(0, clientMessage('network'), 'NETWORK');
   }
   let body: unknown = null;
   try {
@@ -35,7 +36,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   }
   const env = (body && typeof body === 'object' ? body : {}) as Envelope<T>;
   if (!res.ok || env.success === false || env.ok === false) {
-    throw new GamesApiError(res.status || 500, env.error || 'İstek tamamlanamadı.', env.code ?? null, env.details);
+    throw new GamesApiError(res.status || 500, env.error || clientMessage('requestFailed'), env.code ?? null, env.details);
   }
   return env.data as T;
 }
@@ -61,7 +62,7 @@ export const bulkGames = (body: BulkInput) =>
   call<{ changed: string[]; skipped: number }>('/api/admin/games/bulk', { method: 'POST', body: JSON.stringify(body) });
 
 export function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : 'İşlem tamamlanamadı.';
+  return e instanceof Error ? e.message : clientMessage('failed');
 }
 
 export const fmt = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('tr-TR'));

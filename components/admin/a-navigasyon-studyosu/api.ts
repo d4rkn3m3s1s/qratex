@@ -1,6 +1,7 @@
 'use client';
 
 import type { NavHistoryPage, NavPutBody, NavStudioState } from '@/lib/admin-navigation/contract';
+import { clientMessage, requestFailedStatus } from '@/lib/client-messages';
 
 /** Navigasyon Stüdyosu istemci katmanı (zarf v2). Hata `status/code/details` taşır. */
 export class NavApiError extends Error {
@@ -30,7 +31,7 @@ async function call<T>(url: string, init?: { method?: string; json?: unknown; si
     res = await fetch(url, { method: init?.method ?? 'GET', cache: 'no-store', credentials: 'same-origin', body, headers, signal: init?.signal });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new NavApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new NavApiError(0, clientMessage('network'), 'NETWORK');
   }
   let parsed: unknown = null;
   try {
@@ -40,7 +41,7 @@ async function call<T>(url: string, init?: { method?: string; json?: unknown; si
   }
   const env = (parsed && typeof parsed === 'object' ? parsed : {}) as Envelope<T>;
   if (!res.ok || env.ok === false || env.success === false) {
-    throw new NavApiError(res.status, env.error || env.message || `İstek başarısız (${res.status}).`, env.code ?? null, env.details);
+    throw new NavApiError(res.status, env.error || env.message || requestFailedStatus(res.status), env.code ?? null, env.details);
   }
   return env.data as T;
 }
@@ -55,4 +56,4 @@ export const saveNavigation = (body: NavPutBody) => call<{ state: NavStudioState
 export const fetchNavHistory = (cursor: string | undefined, signal?: AbortSignal) =>
   call<NavHistoryPage>(`/api/admin/navigation/history?limit=15${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal });
 
-export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Beklenmeyen bir hata oluştu.');
+export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : clientMessage('unexpected'));

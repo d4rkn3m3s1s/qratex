@@ -17,6 +17,7 @@ import type {
   SegmentMembersPage,
   SegmentOverview,
 } from '../domain';
+import { clientMessage } from '@/lib/client-messages';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -41,10 +42,10 @@ async function parse<T>(res: Response): Promise<T> {
     const message =
       (json && typeof json.error === 'string' && json.error) ||
       (res.status === 401 || res.status === 403
-        ? 'Bu işlem için yetkiniz yok.'
+        ? clientMessage('forbidden')
         : res.status >= 500
-          ? 'Sunucu şu an yanıt veremiyor. Lütfen birazdan tekrar deneyin.'
-          : 'İşlem tamamlanamadı. Lütfen tekrar deneyin.');
+          ? clientMessage('unavailable')
+          : clientMessage('failed'));
     throw new ApiRequestError(message, res.status, typeof json?.code === 'string' ? json.code : undefined, json?.details);
   }
   return (json.data ?? json) as T;

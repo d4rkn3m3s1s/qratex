@@ -5,6 +5,7 @@ import type { ThemeHistoryItem, ThemeOverview } from '@/lib/design-system/theme.
 import type { ChecklistData, PrefsSummary } from '@/lib/design-system/a11y.server';
 import type { CheckStatus } from '@/lib/design-system/a11y-checklist';
 import type { ThemeSettingRow } from '@/lib/theme-settings-keys';
+import { clientMessage, requestFailedStatus } from '@/lib/client-messages';
 
 /** Zarf v2 hatası (`status` QueryState tarafından okunur: 403 → yetkisiz, 409 → çakışma). */
 export class DsApiError extends Error {
@@ -32,7 +33,7 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
     res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...init, body, headers });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new DsApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new DsApiError(0, clientMessage('network'), 'NETWORK');
   }
   let parsed: unknown = null;
   try {
@@ -42,12 +43,12 @@ async function call<T>(url: string, init?: RequestInit & { json?: unknown }): Pr
   }
   const env = (parsed && typeof parsed === 'object' ? parsed : {}) as Envelope<T>;
   if (!res.ok || env.ok === false || env.success === false) {
-    throw new DsApiError(res.status, env.error || env.message || `İstek başarısız (${res.status}).`, env.code ?? null);
+    throw new DsApiError(res.status, env.error || env.message || requestFailedStatus(res.status), env.code ?? null);
   }
   return env.data as T;
 }
 
-export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : 'Beklenmeyen bir hata oluştu.');
+export const errorText = (e: unknown) => (e instanceof Error && e.message ? e.message : clientMessage('unexpected'));
 export const isConflict = (e: unknown) => e instanceof DsApiError && e.status === 409;
 
 const BASE = '/api/admin/design-system';

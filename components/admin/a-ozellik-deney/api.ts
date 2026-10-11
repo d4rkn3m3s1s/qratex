@@ -13,6 +13,7 @@ import type {
   RolloutsState,
   UpsertRolloutInput,
 } from '@/lib/admin-flags/contract';
+import { clientMessage, requestFailedStatus } from '@/lib/client-messages';
 
 /** Zarf v2 hatası — QueryState (`status`/`code`) ve formlar aynı nesneyi okur. */
 export class FeatureControlApiError extends Error {
@@ -36,7 +37,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
     res = await fetch(url, { cache: 'no-store', credentials: 'same-origin', ...init, headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) } });
   } catch (e) {
     if ((e as { name?: string })?.name === 'AbortError') throw e;
-    throw new FeatureControlApiError(0, 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.', 'NETWORK');
+    throw new FeatureControlApiError(0, clientMessage('network'), 'NETWORK');
   }
   let body: unknown = null;
   try {
@@ -46,12 +47,12 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   }
   const env = (body && typeof body === 'object' ? body : {}) as Envelope<T>;
   if (!res.ok || env.ok === false || env.success === false) {
-    throw new FeatureControlApiError(res.status, env.error || env.message || `İstek başarısız (${res.status}).`, env.code ?? null);
+    throw new FeatureControlApiError(res.status, env.error || env.message || requestFailedStatus(res.status), env.code ?? null);
   }
   return env.data as T;
 }
 
-export const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Beklenmeyen bir hata oluştu.');
+export const errorText = (e: unknown) => (e instanceof Error ? e.message : clientMessage('unexpected'));
 export const isConflict = (e: unknown) => e instanceof FeatureControlApiError && e.status === 409;
 
 const BASE = '/api/admin/feature-control';
