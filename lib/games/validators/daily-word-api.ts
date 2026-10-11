@@ -107,6 +107,12 @@ export async function handleRankedGuess(
   }
 
   const dayKey = prev?.d ?? istanbulDayKey(row.serverStartedAt ?? row.startedAt);
+  // Günlük hak anahtarı UTC günü, kelime günü Europe/Istanbul: 21:00–24:00 UTC arası başlayan
+  // deneme ile ertesi UTC günü başlayan deneme AYNI kelimeye düşer → ikinci denemede cevap bilinir.
+  // Kök: aynı Istanbul kelime gününe ait başka (oynanmış) deneme varsa reddet. Her tahminde denetlenir
+  // (iki denemeyi paralel açıp sürdürme de kapanır).
+  await assertSingleAttemptPerWordDay(db, p.userId, row, dayKey);
+
   const answer = dailyWordFor(dayKey, secret);
 
   // Atomik tek-sayaç: yalnız okuduğumuz sayaçtan bir sonrakine geçer.
@@ -133,6 +139,27 @@ export async function handleRankedGuess(
     chain: signChain(claims, secret),
     dayKey,
   };
+}
+
+async function assertSingleAttemptPerWordDay(db: DailyWordDb, userId: string, row: SessionRow, dayKey: string) {
+  const t = (row.serverStartedAt ?? row.startedAt).getTime();
+  const others = (await db.miniGameSession.findMany({
+    where: {
+      userId,
+      gameType: DAILY_WORD_GAME_TYPE,
+      id: { not: row.id },
+      startedAt: { gte: new Date(t - 2 * 86_400_000), lte: new Date(t + 2 * 86_400_000) },
+    },
+    select: { id: true, status: true, starsCollected: true, startedAt: true, serverStartedAt: true },
+    take: 10,
+  })) as Array<Pick<SessionRow, 'id' | 'status' | 'starsCollected' | 'startedAt' | 'serverStartedAt'>>;
+  const clash = others.some(
+    (o) =>
+      o.id !== row.id &&
+      (o.starsCollected > 0 || o.status !== 'active') &&
+      istanbulDayKey(o.serverStartedAt ?? o.startedAt) === dayKey
+  );
+  if (clash) throw new ApiError('CONFLICT', 'Bugünün kelimesini zaten oynadın. Yarın yeni kelime seni bekliyor!', { status: 409 });
 }
 
 export function handlePracticeGuess(p: { seed: string; guess?: string; reveal?: boolean; now?: Date }): {

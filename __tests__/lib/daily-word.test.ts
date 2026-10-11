@@ -80,10 +80,13 @@ describe('kelime listesi', () => {
     expect(other).not.toEqual(mine);
   });
 
-  it('pratik kelimesi bugünün/yarının kelimesi olamaz', () => {
+  it('pratik kelimesi dışlama yapmaz (bugün/yarın kâhini yok): tohumdan tekdüze', () => {
     const now = new Date('2026-10-11T09:00:00Z');
-    const banned = new Set([dailyWordFor('2026-10-11', SECRET), dailyWordFor('2026-10-12', SECRET)]);
-    for (let i = 0; i < 300; i++) expect(banned.has(practiceWordFor(`seed${i}abcdef`, now, SECRET))).toBe(false);
+    const seen = new Set<string>();
+    for (let i = 0; i < 20000; i++) seen.add(practiceWordFor(`seed${i}abcdef`, now, SECRET));
+    // Örneklenmeyen kelime kümesi bugünün/yarının kelimesini ele vermemeli.
+    expect(seen.has(dailyWordFor('2026-10-11', SECRET))).toBe(true);
+    expect(seen.has(dailyWordFor('2026-10-12', SECRET))).toBe(true);
   });
 });
 
@@ -95,7 +98,9 @@ function makeDb(rows: Row[]): DailyWordDb {
       findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
         rows.find((r) => r.userId === where.userId && r.gameType === where.gameType && r.seed === where.seed && r.status === where.status) ?? null
       ),
-      findMany: jest.fn(async () => []),
+      findMany: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
+        rows.filter((r) => r.userId === where.userId && r.gameType === where.gameType && r.id !== (where.id as { not: string }).not)
+      ),
       updateMany: jest.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         const r = rows.find((x) => x.id === where.id && x.status === where.status && x.starsCollected === where.starsCollected);
         if (!r) return { count: 0 };
@@ -179,6 +184,29 @@ describe('sıralı tahmin uç noktası', () => {
     expect(last!.done).toBe(true);
     expect(last!.answer).toBe(WORD());
     await expectApiError(handleRankedGuess(db, { userId: 'u1', seed: SEED, guess: WORD(), chain, now: NOW }), 'CONFLICT');
+  });
+
+  it('hile: UTC gün sınırında ikinci deneme aynı Istanbul kelimesine düşer → reddedilir', async () => {
+    // 22:00 UTC (01:00 Istanbul, 12 Ekim) başlayan deneme 12 Ekim kelimesini oynar ve bitirir.
+    const s1 = new Date('2026-10-11T22:00:00Z');
+    const first: Row = { ...freshRow(), id: 'old', seed: 'b'.repeat(32), status: 'completed', starsCollected: 6, startedAt: s1, serverStartedAt: s1 };
+    // Ertesi UTC günü (yeni günlük hak) 06:00 UTC = aynı Istanbul günü → cevap biliniyor.
+    const s2 = new Date('2026-10-12T06:00:00Z');
+    const second: Row = { ...freshRow(), id: 'new', startedAt: s2, serverStartedAt: s2, expiresAt: new Date(s2.getTime() + 900_000) };
+    const db = makeDb([first, second]);
+    await expectApiError(
+      handleRankedGuess(db, { userId: 'u1', seed: SEED, guess: dailyWordFor('2026-10-12', SECRET), now: new Date(s2.getTime() + 60_000) }),
+      'CONFLICT'
+    );
+    expect(second.starsCollected).toBe(0);
+  });
+
+  it('farklı Istanbul gününe ait önceki deneme engellemez', async () => {
+    const s1 = new Date('2026-10-10T08:00:00Z');
+    const first: Row = { ...freshRow(), id: 'old', seed: 'b'.repeat(32), status: 'completed', starsCollected: 4, startedAt: s1, serverStartedAt: s1 };
+    const row = freshRow();
+    const r = await handleRankedGuess(makeDb([first, row]), { userId: 'u1', seed: SEED, guess: wrongWords()[0], now: NOW });
+    expect(r.guessCount).toBe(1);
   });
 
   it('başkasının tohumu / aktif olmayan deneme → 404', async () => {

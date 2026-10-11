@@ -21,7 +21,6 @@ import { DAILY_WORD_ANSWERS, DAILY_WORD_EXTRA } from '@/lib/games/content/daily-
 import {
   MAX_GUESSES,
   isWellFormed,
-  istanbulDayKey,
   normalizeWord,
   scoreFor,
   scoreGuess,
@@ -72,17 +71,14 @@ export function dailyWordFor(dayKey: string, secret: string = dailyWordSecret())
 }
 
 /**
- * Pratik kelimesi: pratik tohumundan (gizli anahtarla) — bugünün ve yarının kelimesi ASLA
- * çıkmaz (pratikle sıralı cevap kazınamaz).
+ * Pratik kelimesi: pratik tohumundan (gizli anahtarla) TEKDÜZE seçilir. Bilerek HİÇBİR kelime
+ * dışlanmaz: önceki sürüm bugünün/yarının kelimesini dışlıyordu → `reveal` ile çok sayıda tohum
+ * örneklenince HİÇ çıkmayan iki kelime = bugün + yarın (kâhin). Tekdüze dağılım bilgi taşımaz;
+ * pratikte rastlantıyla bugünün kelimesi çıksa da hangisi olduğu anlaşılamaz.
  */
-export function practiceWordFor(seed: string, now: Date = new Date(), secret: string = dailyWordSecret()): string {
-  const today = istanbulDayKey(now);
-  const tomorrow = istanbulDayKey(new Date(now.getTime() + 86_400_000));
-  const banned = new Set([dailyWordFor(today, secret), dailyWordFor(tomorrow, secret)]);
+export function practiceWordFor(seed: string, _now: Date = new Date(), secret: string = dailyWordSecret()): string {
   const h = createHmac('sha256', secret).update(`practice:${seed}`).digest();
-  let i = h.readUInt32BE(0) % DAILY_WORD_ANSWERS.length;
-  while (banned.has(DAILY_WORD_ANSWERS[i])) i = (i + 1) % DAILY_WORD_ANSWERS.length;
-  return DAILY_WORD_ANSWERS[i];
+  return DAILY_WORD_ANSWERS[h.readUInt32BE(0) % DAILY_WORD_ANSWERS.length];
 }
 
 // ───────────────────────────── Zincir belirteci ─────────────────────────────
