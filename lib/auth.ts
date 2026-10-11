@@ -510,6 +510,10 @@ export const authOptions: NextAuthOptions = {
       // Session fixation: her login'de yeni JTI üret; eski token geçersiz kılınır
       if (user) {
         token.jti = crypto.randomUUID();
+        // next-auth v4 her encode'da `jti`'yi YENİ uuid ile EZER (jwt/index.js setJti) → oturum
+        // kimliği her çerez yenilemesinde değişiyordu; kapı çerezi (oturuma bağlı) ve token-replay
+        // bu yüzden ilk /api/auth/session yenilemesinde bozuluyordu. Kalıcı oturum kimliği `sid`.
+        token.sid = token.jti;
         // OAuth kullanıcı nesnesi yalnız temel bilgiyi taşır → DB'den oku.
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
@@ -654,7 +658,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).adminDepartment = (token.adminDepartment as string | null) ?? null;
         (session.user as any).adminTeamRole = (token.adminTeamRole as string | null) ?? null;
         if (token.dealerId) session.user.dealerId = token.dealerId as string;
-        (session as { jti?: string }).jti = token.jti as string;
+        // Oturum kimliği: kalıcı `sid` (eski token'larda yoksa dönen `jti`'ye düşer).
+        (session as { jti?: string }).jti = ((token.sid as string | undefined) ?? token.jti) as string;
         // P0-07: requireAuth bu değeri DB'deki User.sessionVersion ile karşılaştırır.
         (session as { sv?: number }).sv = typeof token.sv === 'number' ? token.sv : 0;
       }

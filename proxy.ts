@@ -71,7 +71,7 @@ function addCorsHeaders(res: NextResponse, req: NextRequest): void {
   res.headers.set('Access-Control-Max-Age', '86400');
 }
 
-type GateToken = { role?: string; sub?: string; id?: string; jti?: string };
+type GateToken = { role?: string; sub?: string; id?: string; jti?: string; sid?: string };
 
 const authMiddleware = withAuth(
   async function middleware(req) {
@@ -107,7 +107,8 @@ const authMiddleware = withAuth(
     // API tarafı aynı kuralı `requireAuth` içinde DB'deki güncel sürümle uygular.
     if (token?.role === 'ADMIN' && isGatedAdminPage(pathname)) {
       const gateCookie = req.cookies.get(ADMIN_GATE_COOKIE)?.value;
-      const check = await checkGateCookieForToken(gateCookie, token);
+      // Oturum kimliği kalıcı `sid` (next-auth `jti`'yi her encode'da yeniler) — lib/auth.ts jwt.
+      const check = await checkGateCookieForToken(gateCookie, { ...token, jti: token.sid ?? token.jti });
       if (!check.ok) {
         const url = new URL('/admin-gate', req.url);
         url.searchParams.set('from', pathname);
@@ -147,7 +148,7 @@ async function adminApiGateBlock(req: NextRequest): Promise<NextResponse | null>
     token = null;
   }
   if (token?.role !== 'ADMIN') return null;
-  const check = await checkGateCookieForToken(req.cookies.get(ADMIN_GATE_COOKIE)?.value, token);
+  const check = await checkGateCookieForToken(req.cookies.get(ADMIN_GATE_COOKIE)?.value, { ...token, jti: token.sid ?? token.jti });
   if (check.ok) return null;
   return NextResponse.json(
     {

@@ -12,7 +12,7 @@ if (!(globalThis as { crypto?: Crypto }).crypto?.subtle) {
 }
 process.env.NEXTAUTH_SECRET = 'test-secret-proxy';
 
-type Tok = { role?: string; id?: string; sub?: string; jti?: string } | null;
+type Tok = { role?: string; id?: string; sub?: string; jti?: string; sid?: string } | null;
 const state: { token: Tok; redis: unknown } = { token: null, redis: null };
 
 jest.mock('@/lib/redis', () => ({ redisGetJson: jest.fn(async () => state.redis) }));
@@ -80,6 +80,14 @@ describe('proxy — /api/admin/* kapısı', () => {
     const res = await proxy(req('/api/admin/users', c));
     expect(res.status).toBe(200);
     expect(res.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('next-auth her encode ile jti yeniler: çerez kalıcı sid ile bağlıysa API + sayfa geçer', async () => {
+    // Kök neden (e2e a-platform): /api/auth/session yenilemesi jti'yi değiştirince kapı düşüyordu.
+    state.token = { ...ADMIN, sid: 'sid-1', jti: 'rotated-jti-9' };
+    const c = await signElevation({ userId: 'admin1', cfgVer: 0, jti: 'sid-1' });
+    expect((await proxy(req('/api/admin/users', c))).status).toBe(200);
+    expect((await proxy(req('/admin', c))).status).toBe(200);
   });
 
   it('"tüm kapı oturumlarını sonlandır" sonrası (Redis cfgVer arttı) eski çerez → 403', async () => {
