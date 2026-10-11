@@ -1214,12 +1214,15 @@ export async function applyInboxAction(params: {
     const entry = cases.get(itemKey);
     try {
       if (action === 'viewed') {
-        if (item.source === 'qr') {
-          await prisma.feedback.updateMany({
-            where: { AND: [fbBase(dealerId), { id: item.id, dealerFirstViewedAt: null }] },
-            data: { dealerFirstViewedAt: now },
-          });
+        if (item.source !== 'qr') {
+          // Tüketim yorumunda "görüldü" alanı yok (ŞEMA İSTEĞİ) → sahte "güncellendi" sayılmaz.
+          results.push({ key: itemKey, ok: false, error: 'Tüketim yorumlarında okundu işareti tutulmuyor.' });
+          continue;
         }
+        await prisma.feedback.updateMany({
+          where: { AND: [fbBase(dealerId), { id: item.id, dealerFirstViewedAt: null }] },
+          data: { dealerFirstViewedAt: now },
+        });
       } else if (action === 'resolve') {
         if (entry?.openIds.length) {
           await prisma.incident.updateMany({
@@ -1276,7 +1279,7 @@ export async function applyInboxAction(params: {
                 type: 'info',
                 title: 'Size bir müşteri yorumu atandı',
                 message: `★${item.rating} · ${item.label ?? (item.source === 'qr' ? 'QR geri bildirimi' : 'Tüketim yorumu')}`.slice(0, 200),
-                data: { type: 'inbox_assigned', href: `/dealer/inbox?id=${itemKey}`, key: itemKey },
+                data: { type: 'inbox_assigned', href: inboxAssignHref(dealerId, assigneeId, itemKey), key: itemKey },
               },
             });
           } catch (err) {
@@ -1301,6 +1304,14 @@ export async function applyInboxAction(params: {
 
   if (changed) await bumpInboxVersion(dealerId);
   return results;
+}
+
+/**
+ * Atama bildiriminin bağlantısı alıcının açabileceği yüzeye gider: personel `/dealer/*`
+ * sayfalarını açamaz (proxy rol eşlemesi) → personel panelindeki "Size atananlar" listesi.
+ */
+export function inboxAssignHref(dealerId: string, assigneeId: string, itemKey: string): string {
+  return assigneeId === dealerId ? `/dealer/inbox?id=${encodeURIComponent(itemKey)}` : '/staff';
 }
 
 /** Kayıt başına tek gelen kutusu vakası (çift tık / iki sekme serileşir). */

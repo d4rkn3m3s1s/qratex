@@ -81,9 +81,16 @@ function ReplyComposer({ detail, meta, readOnly }: { detail: InboxDetail; meta: 
   const [conflict, setConflict] = useState<{ reply: string | null } | null>(null);
   const [drafts, setDrafts] = useState<InboxSuggestResult | null>(null);
   const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Çakışmada (409) bayinin yazdığı taslak korunur: yeniden çekilen güncel yanıt editörü ezmez.
+  const keepDraft = useRef(false);
 
   // Kayıt değişince (gezinme ya da yenileme) editör kaydın güncel yanıtıyla eşitlenir.
   useEffect(() => {
+    if (keepDraft.current) {
+      keepDraft.current = false;
+      setEditing(true);
+      return;
+    }
     setEditing(!detail.reply);
     setText(detail.reply ?? '');
     setDrafts(null);
@@ -103,6 +110,7 @@ function ReplyComposer({ detail, meta, readOnly }: { detail: InboxDetail; meta: 
       if (err instanceof InboxFetchError && err.code === 'REPLY_CONFLICT') {
         const d = (err.details ?? {}) as { currentReply?: string | null };
         setConflict({ reply: d.currentReply ?? null });
+        keepDraft.current = (d.currentReply ?? null) !== (detail.reply ?? null);
         invalidate(detail.key);
         return;
       }
@@ -250,7 +258,7 @@ function ReplyComposer({ detail, meta, readOnly }: { detail: InboxDetail; meta: 
               rows={5}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim()) {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && text.trim() && !send.isPending) {
                   e.preventDefault();
                   send.mutate();
                 }
@@ -675,7 +683,9 @@ export function InboxDetailBody({
 
   return (
     <QueryState query={q} skeleton={<SkeletonDetail />} isEmpty={() => false} loadingLabel={copy.detailLoading}>
-      {(d) => <DetailContent detail={d} meta={meta} readOnly={readOnly} onOpenKey={onOpenKey} />}
+      {/* Kayda göre anahtarlı: önceki/sonraki gezinmede telafi mesajı, atama seçimi ve çakışma
+          uyarısı bir kayıttan ötekine taşınmaz (taşınırsa yanlış kayda telafi gönderilebilirdi). */}
+      {(d) => <DetailContent key={d.key} detail={d} meta={meta} readOnly={readOnly} onOpenKey={onOpenKey} />}
     </QueryState>
   );
 }

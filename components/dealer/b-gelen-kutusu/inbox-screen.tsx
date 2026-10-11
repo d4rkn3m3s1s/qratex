@@ -15,7 +15,7 @@ import { DetailSheet, SelectionCheckbox } from '@/components/ds/data';
 import { parseDateRange, serializeDateRange, toPeriod, type DateRangeValue } from '@/components/ds/page';
 import { EmptyState, ErrorState, QueryState, SkeletonDetail, SkeletonList } from '@/components/states';
 import { Button } from '@/components/ui/button';
-import { DEFAULT_INBOX_FILTERS, normalizeInboxFilters } from '@/lib/dealer-inbox/core';
+import { DEFAULT_INBOX_FILTERS, normalizeInboxFilters, viewableKeys } from '@/lib/dealer-inbox/core';
 import type { InboxFilters, InboxListPage, InboxMeta, InboxSummary } from '@/lib/dealer-inbox/types';
 import {
   fetchDetail,
@@ -122,6 +122,7 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
     });
   }, []);
   const visibleSelected = keys.filter((k) => selected.has(k));
+  const viewableSelected = viewableKeys(visibleSelected);
   const allChecked = keys.length > 0 && visibleSelected.length === keys.length;
 
   /* ───── URL yazımı ───── */
@@ -189,8 +190,9 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
   /* ───── Toplu işlem ───── */
   const [bulkAssignee, setBulkAssignee] = useState('');
   const bulk = useMutation({
+    // "Okundu say" yalnız QR kayıtlarına gider (tüketim yorumunda görüldü alanı yok; sahte "güncellendi" sayılmaz).
     mutationFn: (v: { action: 'resolve' | 'reopen' | 'viewed' | 'assign'; assigneeId?: string }) =>
-      postAction(visibleSelected, v.action, v.assigneeId),
+      postAction(v.action === 'viewed' ? viewableSelected : visibleSelected, v.action, v.assigneeId),
     onSuccess: (res) => {
       (res.failCount ? toast.warning : toast.success)(copy.bulkDone(res.okCount, res.failCount));
       setSelected(new Set());
@@ -338,7 +340,7 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
           className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-sticky flex flex-wrap items-end gap-2 rounded-card border border-subtle bg-surface-2 p-3 qx-elevation-2"
         >
           <p className="qx-small mr-auto self-center font-semibold text-fg">{copy.selected(visibleSelected.length)}</p>
-          <Button type="button" variant="outline" className="min-h-11 gap-2 sm:h-10 sm:min-h-10" disabled={bulk.isPending} onClick={() => bulk.mutate({ action: 'viewed' })}>
+          <Button type="button" variant="outline" className="min-h-11 gap-2 sm:h-10 sm:min-h-10" disabled={bulk.isPending || viewableSelected.length === 0} onClick={() => bulk.mutate({ action: 'viewed' })}>
             <Eye aria-hidden className="h-4 w-4" />
             {copy.bulkViewed}
           </Button>

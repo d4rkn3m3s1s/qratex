@@ -115,10 +115,12 @@ import {
   sourcesFor,
   toCsv,
   unifiedSentiment,
+  viewableKeys,
 } from '@/lib/dealer-inbox/core';
 import {
   applyInboxAction,
   getInboxSummary,
+  inboxAssignHref,
   listInbox,
   replyToInboxItem,
   suggestInboxReplies,
@@ -483,7 +485,28 @@ describe('applyInboxAction', () => {
     await applyInboxAction({ dealerId: DEALER, actorId: DEALER, keys: ['qr-f1'], action: 'assign', assigneeId: 'staff_1', now: NOW });
     expect(mockTxIncidentCreate.mock.calls[0][0].data).toMatchObject({ status: 'assigned', assignedToId: 'staff_1' });
     expect(mockTxIncidentCreate.mock.calls[0][0].data.dueAt).toEqual(new Date('2026-10-11T08:00:00.000Z'));
-    expect(mockNotificationCreate.mock.calls[0][0].data).toMatchObject({ userId: 'staff_1', data: { href: '/dealer/inbox?id=qr-f1' } });
+    // Personel /dealer/* sayfalarını açamaz → bildirim kendi paneline götürür.
+    expect(mockNotificationCreate.mock.calls[0][0].data).toMatchObject({ userId: 'staff_1', data: { href: '/staff', key: 'qr-f1' } });
+  });
+
+  it('atama bildirimi bağlantısı alıcının açabileceği yüzeye gider', () => {
+    expect(inboxAssignHref(DEALER, DEALER, 'qr-f1')).toBe('/dealer/inbox?id=qr-f1');
+    expect(inboxAssignHref(DEALER, 'staff_1', 'cr-r1')).toBe('/staff');
+  });
+
+  it('görüldü: tüketim yorumunda alan yok → sahte "güncellendi" yerine dürüst başarısızlık', async () => {
+    mockReviewFindMany.mockResolvedValue([
+      { id: 'r1', rating: 4, createdAt: NOW, sentiment: null, dealerRepliedAt: null, consumption: { product: { name: 'Latte' } } },
+    ]);
+    mockFeedbackFindMany.mockResolvedValue([fbRow]);
+    mockFeedbackUpdateMany.mockResolvedValue({ count: 1 });
+    const res = await applyInboxAction({ dealerId: DEALER, actorId: DEALER, keys: ['qr-f1', 'cr-r1'], action: 'viewed', now: NOW });
+    expect(res).toEqual([
+      { key: 'qr-f1', ok: true },
+      { key: 'cr-r1', ok: false, error: 'Tüketim yorumlarında okundu işareti tutulmuyor.' },
+    ]);
+    expect(mockReviewUpdateMany).not.toHaveBeenCalled();
+    expect(viewableKeys(['qr-f1', 'cr-r1', 'bogus', 'qr-f2'])).toEqual(['qr-f1', 'qr-f2']);
   });
 
   it('görüldü: yalnız ilk açılışta (koşullu) yazılır, vaka taranmaz', async () => {

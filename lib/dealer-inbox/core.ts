@@ -125,6 +125,11 @@ export function normalizeInboxFilters(params: RawParams): InboxFilters {
   };
 }
 
+/** "Okundu say" işlemine gidebilecek anahtarlar: yalnız QR (tüketim yorumunda görüldü alanı yok). */
+export function viewableKeys(keys: readonly string[]): string[] {
+  return keys.filter((k) => parseInboxKey(k)?.source === 'qr');
+}
+
 /** Hangi kaynaklar sorgulanır (QR'a özgü filtreler tüketim kaynağını eler). */
 export function sourcesFor(filters: Pick<InboxFilters, 'source' | 'signal' | 'qr'>): { qr: boolean; consumption: boolean } {
   const qrOnly = filters.qr !== null || filters.signal === 'urgent' || filters.signal === 'trust';
