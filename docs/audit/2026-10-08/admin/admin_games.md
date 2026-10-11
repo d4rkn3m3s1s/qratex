@@ -213,3 +213,63 @@ Her iddia çağıran/çağrılan kod baştan okunarak çürütülmeye çalışı
 - Gerçek olan kısım: Şemada `rewardPoints`/`rewardXp` için 0..1.000.000 aralığı var, `rewardThreshold=0` ve `minDurationSec=0` de kabul ediliyor (`app/api/admin/games/route.ts:127-130`). `complete` içinde oyun puanına tavan yok, `points_credited` yalnızca görünürlük amaçlı (`complete/route.ts:162-171`).
 - Çürüten kısım: "Ele geçirilmiş admin oturumu" senaryosu yeni bir saldırı yüzeyi açmıyor. ADMIN rolü zaten `PATCH /api/admin/users` üzerinden herhangi bir kullanıcının puanını sınırsız ayarlayabiliyor (`app/api/admin/users/route.ts:19` `points: z.number().optional()`, `:399-404` `add_points` `increment: data.amount`). `POST /api/admin/surprise-box/send` de üst sınırsız puan gönderebiliyor (`app/api/admin/surprise-box/send/route.ts:12` `z.number().int().min(0)`, `randomCount` en fazla 500). Oyun yolu bundan daha yavaş ve daha sınırlı: kullanıcı başına oyun başına günde 1 ödül (`@@unique([userId, gameType, dayKey])`). `threshold=0` ve `minDurationSec=0` meşru operatör seçimleri (etkinlik/kolay mod); skor zaten istemci bildirimi olduğu için eşik tek başına güvenlik sınırı değil.
 - Kalan risk: Yazım hatası (150 yerine 1500/15000 girmek). Bu bir güvenlik açığı değil, operasyonel koruma eksikliği. Öneri: registry varsayılanının ×N katını aşan değerler için Kaydet'te "etki özeti + onay" diyaloğu gösterin (tahmini günlük basım = son 7 günün ödül alan oturum sayısı × yeni puan). Sunucuda makul bir yumuşak tavan (ör. 5.000) koyun; bunun üstü için açık bir `confirmHighReward:true` bayrağı isteyin. Audit'e `oldData` yazın.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `/admin/games` → **Oyun Kontrol Odası**. Sunucu bileşeni (`app/admin/games/page.tsx`) genel bakışı sunucuda çeker; istemci adası `components/admin/a-oyunlar/` (tablo + KPI; detay çekmecesi ve turnuva sekmesi `next/dynamic` ile tembel). Sunucu mantığı tek yerde: `lib/admin-games/server.ts` (+ istemci güvenli `contract.ts`). BFF uçları `defineRoute` ile (ADMIN rolü DB'den, Redis öncelikli rate limit, zarf v2, Türkçe hata):
+`GET/PATCH/DELETE /api/admin/games` · `GET /api/admin/games/:gameType` (eğilim, skor dağılımı, bütünlük, geçmiş) · `POST /api/admin/games/bulk` (gerekçeli toplu aç/kapat) · `GET /api/admin/games/tournament`. Testler: `__tests__/api/admin-games.test.ts` (14 test, prisma mock).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Erişim kontrolü (sayfa) | ÇALIŞIYOR | proxy + sayfada `requireAuth(['ADMIN'])` (DB'den). |
+| 2 | Erişim kontrolü (API) | ÇALIŞIYOR | Tüm uçlar `defineRoute({ roles: ['ADMIN'] })`. |
+| 3 | PATCH hız sınırı | ÇALIŞIYOR | `rateLimit: 'mutation'` → `checkRateLimitDb` (Redis öncelikli, dağıtık); okuma uçları `read`. |
+| 4 | İlk yükleme | ÇALIŞIYOR | Sunucu ön yüklemesi + `QueryState` tablo iskeleti. |
+| 5 | Yükleme hatası durumu | ÇALIŞIYOR | `QueryState` hata kartı + "Tekrar dene"; ön yükleme düşerse istemci görünür hata gösterir. |
+| 6 | Boş durum | ÇALIŞIYOR | Oyun yok / süzgeç sonucu yok (süzgeç temizle). |
+| 7 | Başlık + aktif sayacı | ÇALIŞIYOR | KPI "Oynanabilir oyun x / y" (pacman dahil, gizliler oynanabilir sayılmaz). |
+| 8 | Oyun kartı accent | ÇALIŞIYOR | Kart ızgarası yerine yoğun tablo; accent yalnız doğrulanmış `#RRGGBB` (okumada da `mergeGameConfig` doğrular). |
+| 9 | Giriş animasyonu | KALDIRILDI | Vizyon gereği tabloda stagger yok (gecikme yaratıyordu); yalnız `motion-safe` renk geçişi. |
+| 10 | gameType etiketi | ÇALIŞIYOR | |
+| 11 | "özelleştirilmiş" rozeti | ÇALIŞIYOR | Etkin ≠ varsayılan alan sayısı ("N özel alan"), alan bazında "özel" işareti. |
+| 12 | Aktif/pasif anahtarı | ÇALIŞIYOR | `aria-label`'lı; form state'inden bağımsız; önbellek `expire: 0`, complete `game_disabled` ile süren denemeye ödül vermez. |
+| 13 | İstatistik "Bugün" | ÇALIŞIYOR | Tüm durumlar (başlatılan) + İstanbul günü (`istanbulDayStart`). |
+| 14 | İstatistik "30g oynanma" | ÇALIŞIYOR | Huni: başlatılan / kazanılan / kaybedilen / süren-terk. |
+| 15 | İstatistik "30g puan" | ÇALIŞIYOR | + önceki 30 güne göre değişim (KPI). |
+| 16 | `rewarded30d` | ÇALIŞIYOR | Detay hunisinde "30g ödüllenen (%)" ve etki önizlemesinde kullanılıyor. |
+| 17 | Etkin özet | ÇALIŞIYOR | Tablo: ödül p/XP, eşik/maks çubuğu; çekmecede deneme penceresi, makullük tavanı. |
+| 18 | Düzenle / Vazgeç | ÇALIŞIYOR | Çekmecede; "Değişiklikleri geri al"; çekmece başına tek form. |
+| 19 | Başlık override | ÇALIŞIYOR | Sayaçlı (40), alan altında yansıma haritası; oyun ekranına yansıma v2 `config` sözleşmesiyle (oyun motoru). |
+| 20 | Emoji override | ÇALIŞIYOR | Sunucuda tek grafem (`Intl.Segmenter`). |
+| 21 | Açıklama override | ÇALIŞIYOR | Sayaçlı (200). |
+| 22 | Renk override | ÇALIŞIYOR | Renk seçici + hex doğrulama + canlı hub kartı önizlemesi. |
+| 23 | Ödül puanı | ÇALIŞIYOR | Sunucu tavanı 1.000; ×2 üstü etki önizlemeli onay. |
+| 24 | Ödül XP | ÇALIŞIYOR | Tavan 500. |
+| 25 | Maks. skor | ÇALIŞIYOR | Sunucu kırpması etkin değerle; istemci v2 `config.maxScore` (oyun motoru sözleşmesi). |
+| 26 | Ödül eşiği | ÇALIŞIYOR | Karar sunucuda (`evaluateAttempt` → `below_threshold`), `won` kozmetik; eşik düşürme onaylı; skor dağılımı üstünde eşik. |
+| 27 | Min. süre | ÇALIŞIYOR | En az 3 sn; düşürme onaylı. |
+| 28 | Kaydet | ÇALIŞIYOR | Yalnız kirli alanlar, `enabled` asla formdan, `expectedUpdatedAt` → 409 (liste yenilenir), alan altı Türkçe hatalar. |
+| 29 | Pacman yönetimi | ÇALIŞIYOR | Listede (Yıldız Avı, kayıt defteri `star-hunt`). |
+| 30 | Eşik ≤ maks. kontrolü | ÇALIŞIYOR | Mevcut override ∪ gelen ∪ varsayılan; istemcide de ön doğrulama. |
+| 31 | Audit kaydı | ÇALIŞIYOR | oldData + newData; çekmecede **Geçmiş** sekmesi (son 20, kim/ne zaman/neyden-neye, gerekçe) + "Bu değişikliği geri al". |
+| 32 | Varsayılana sıfırla | ÇALIŞIYOR | Kart + alan bazında; DELETE kapalı oyunu kapalı bırakır. |
+| 33 | Kapatmanın süren oturumlara etkisi | ÇALIŞIYOR | `lib/game-session.ts` `game_disabled` bloklayıcı bayrak + önbelleksiz okuma (oyun motoru, Dalga 1). |
+| 34 | Arama / filtre / sıralama | ÇALIŞIYOR | Arama, 7 süzgeç (sayaçlı), 5 sıralama. |
+| 35 | Toplu işlem | ÇALIŞIYOR | Seçim + "Seçilenleri kapat/aç" + "Tümünü durdur"; gerekçe zorunlu, etki (30g puan) önizlemeli, oyun başına audit. Ödül çarpanı KALDIRILDI (gerekçe: zamanlı çarpan için şema yok; kalıcı çarpan tavanlarla çakışır). |
+| 36 | Mobil düzen | ÇALIŞIYOR | `PanelPage` (çift dolgu yok), mobilde kompakt satır kartları, ≥44px hedefler, çekmece alttan. |
+| 37 | i18n | KISMİ | Metinler tam Türkçe ve tutarlı; admin panelinin geri kalanında olduğu gibi `useAppT` anahtarları bu sayfada kullanılmadı (admin yalnız TR). |
+
+**Yeni eklenenler:** KPI şeridi (oynanabilir, bugün, 30g puan + değişim, kazanma oranı + örneklem, bütünlük sinyali); portföy sütunu (Canlı/Yapımda/Birleşti/Emekli/Eski sürüm, birleştiği oyun ve gerekçe); oyun başına 14 günlük eğilim (sparkline + tablo), skor dağılımı histogramı (eşik üstü ayrı renk + ekran okuyucu metni), bütünlük paneli (`game_attempt_flagged` bayrak dağılımı, son 10 işaretli deneme, istemci > sunucu skor sayısı, doğrulayıcı bağlı mı); **Turnuva** sekmesi (haftanın oyunu, canlı ilk 10 + ödül, katılım eşiği, 4 haftalık rotasyon, geçen haftanın ödül talepleri / talep edilmeyenler, öne çıkan oyun kapalıysa uyarı); ekonomi kuralları bandı (günde 1 sıralı deneme, oyun kategorisi günlük/haftalık tavanı `lib/economy/caps`'ten).
+
+### Kapanan bulgular
+B1 (sunucu tarafı: eşik/tavan kararı sunucuda; görsel/eşik yansıması oyun motoru v2 `config` sözleşmesiyle — bu yüzeyde yansıma haritası gösterilir), B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B12, B13 — **13/13**.
+
+### Kalanlar
+- **İçerik havuzları:** sınıflandırma oyunlarının havuzları kodda (`lib/games/content/<oyun>.ts`) ve henüz yazılmadı; sunucu doğrulayıcıları da `null`. Panel bunu dürüstçe "yalnız ortak makullük kuralları" olarak gösterir; havuz boyutu/etiket dengesi görünümü, oyun ajanları içerik dosyalarını ekleyince `serverModule`'e bir `poolStats` dışa aktarımıyla eklenebilir.
+- **Günde N deneme / zamanlı override (hafta sonu 2×):** şema gerektirir (`MiniGameAttempt`, `MiniGameEvent`). ŞEMA İSTEĞİ.
+- **Turnuva rotasyonunu admin'den değiştirme:** rotasyon kod sabiti (turnuva rotasyonu tuzağı, claim yeniden hesaplar); `TournamentResult` şeması olmadan güvenli değil. Panel salt-okunur gösterir.
+- `gameDayKey` (günlük hak sınırı) UTC; oyun motorunun sahipliğinde. Panel istatistikleri İstanbul günüyle hesaplanır.
