@@ -46,6 +46,8 @@ import { captureApiError } from '@/lib/capture-api-error';
 import { checkRateLimitDb } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/request-metadata';
 import { resolveDealerScope, type DealerScope } from '@/lib/auth/scope';
+import { scheduleRouteMetric } from '@/lib/observability/route-metrics';
+import { normalizePath } from '@/lib/observability/histogram';
 
 // ───────────────────────────── Hata sözleşmesi ─────────────────────────────
 
@@ -454,7 +456,7 @@ export function defineRoute<
   const maxBodyBytes = definition.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
 
    
-  const routeHandler = async (request: NextRequest, context: any): Promise<Response> => {
+  const innerHandler = async (request: NextRequest, context: any): Promise<Response> => {
     const requestId = newRequestId(request);
     const method = (request.method || 'GET').toUpperCase();
     const pathname = request.nextUrl?.pathname ?? '';
@@ -610,6 +612,21 @@ export function defineRoute<
       }
       return errorResponse(apiError, requestId);
     }
+  };
+
+  // Gözlemlenebilirlik (/admin/observability): durum + süre, yanıttan SONRA Upstash'e
+  // saatlik kovaya yazılır (`after`); Redis yoksa no-op, asla fırlatmaz, yanıtı bekletmez.
+  const routeHandler = async (request: NextRequest, context: any): Promise<Response> => {
+    const t0 = Date.now();
+    const res = await innerHandler(request, context);
+    try {
+      const metricKey =
+        definition.name ?? `${(request.method || 'GET').toUpperCase()}:${normalizePath(request.nextUrl?.pathname ?? '')}`;
+      scheduleRouteMetric(metricKey, res.status, Date.now() - t0);
+    } catch {
+      /* ölçüm hatası yanıtı etkilemez */
+    }
+    return res;
   };
 
   const routeMeta: RouteMeta = {

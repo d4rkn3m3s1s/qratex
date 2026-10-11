@@ -282,3 +282,91 @@ Her iddia çürütülmeye çalışılarak kod baştan okundu (çağıranlar, `pr
 - Zehirleme: Ingest ucunda yalnızca `requireAuth(['CUSTOMER','DEALER','STAFF','ADMIN'])` var (`web-vitals/route.ts:20`). Rate limit yok (`proxy.ts:105-118` `/api/*` için sınırlama yapmıyor). `value: z.number()` sınırsız ve `rating` değerden bağımsız olarak istemciden alınıyor (`web-vitals/route.ts:11-13`).
 - Yeniden üretim: Herhangi bir müşteri hesabıyla döngü içinde `POST /api/user/web-vitals` `{name:'LCP', value:99999, delta:0, rating:'good', id:'x'}` gönderiliyor. Aynı örneğe düşen 800 kayıt dolar ve gerçek örnekler tampondan atılır. Admin, LCP ortalamasını 99999 ms ama %100 "good" olarak görür. Ayrıca soğuk başlangıç ve deploy sonrası tablo boş kalır (`rumEmpty`).
 - Hafifletici: `rumSectionHint` "bellek içi, sunucu örneği başına" diyor (`messages/tr.json:2810`). Ama "60 dk pencere" ve ortalama/iyi% tablosu güvenilir bir özet izlenimi veriyor. Veri bütünlüğü etkisi yalnızca bu panelle sınırlı; başka bir sisteme yazılmıyor.
+
+
+---
+
+## Uygulama (Dalga 2)
+
+**Hedef rotalar:** `/admin/observability` (yeniden yazıldı), `/admin/jobs` (yeni: Arka plan işleri).
+**Mimari:** sunucu önce (`app/admin/observability/page.tsx`, `app/admin/jobs/page.tsx` veriyi sunucuda okur), küçük istemci adası (`components/admin/a-gozlemlenebilirlik/**`), `defineRoute` BFF'ler: `GET /api/admin/observability?window=2h|24h`, `GET /api/admin/jobs`, `POST /api/admin/jobs/run`. Sunucu mantığı `lib/observability/**`. Eski `GET /api/admin/health`, `/api/admin/vercel-status`, `/api/admin/web-vitals-summary` ile `lib/metrics.ts` ve `lib/rum-web-vitals.ts` silindi (başka tüketicisi yoktu).
+
+**Yeni veri kaynakları (gerçek, örnek-bağımsız):**
+- API uç metrikleri: `defineRoute` her yanıttan sonra (`after()`, yanıtı bekletmez) Upstash'te saatlik hash'e istek / 5xx / 4xx / gecikme kovası yazar (`lib/observability/route-metrics.ts`). p50/p95 histogramdan, 24 saatlik saatlik seri. Redis yoksa ya da `OBS_ROUTE_METRICS=off` ise açık bir "toplanmıyor" boş durumu.
+- Web Vitals: istemci örnekleri sayfa başına toplayıp tek istekte (`sendBeacon`) gönderir; uç `defineRoute` + kullanıcı başına 30/dk + değer aralığı doğrulaması; derece sunucuda değerden; yol kimlikleri maskelenir; Upstash saatlik histogram (8 gün), p75 + iyi/geliştirilmeli/zayıf kesin sayıları + en yavaş 5 sayfa (LCP, INP).
+- Arka plan işleri: günlük orkestratörün kayıt defteri (`app/api/cron/daily/jobs.ts`) + `Settings[cron_daily_state]` (F şeridinin kalıcı koşu kaydı): iş başına son koşu, sonuç, süre, son başarılı koşu, son hata, ardışık hata; 14 koşuluk geçmiş; heartbeat / Sentry cron / CRON_SECRET kurulum durumu.
+- Sağlık: Komuta Merkezi ile tek kaynak (`computeHealth`: DB gecikmesi + eşik, Redis yaz/oku, AI, posta). Webhook 24 sa SQL COUNT.
+
+### Özellik envanteri: yeni durum
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi (ADMIN + kapı) | ÇALIŞIYOR (sayfa ayrıca sunucuda `requireAuth(['ADMIN'])`) |
+| 2 | API yetkisi | ÇALIŞIYOR: tüm uçlar `defineRoute` (rol + zod + hız sınırı) |
+| 3 | Metadata | ÇALIŞIYOR (`/admin/jobs` kendi metadata'sı ile) |
+| 4 | Ambient arka plan | KALDIRILDI: ops kaydı sakin (QDL v2) |
+| 5 | Hero | ÇALIŞIYOR: QDL `PageHeader`, başlık menü adıyla aynı ("Gözlemlenebilirlik") |
+| 6 | "Canlı" rozeti | ÇALIŞIYOR: bağlantı durumuna bağlı (Canlı / Bayat / Otomatik yenileme kapalı / Bağlantı yok); ping yalnız canlıyken ve `motion-safe` |
+| 7 | Olay sayısı rozeti | ÇALIŞIYOR: "N sorun var" durum cümlesi + Sorunlar listesi |
+| 8 | Hero Vercel göstergesi | ÇALIŞIYOR: Türkçe etiket + tonlu rozet (Platform kartında) |
+| 9 | Hero uygulama sağlığı | ÇALIŞIYOR: rol token'lı `StatusBadge` (açık temada kontrast sorunu yok) |
+| 10 | "istek / 60 sn" | KALDIRILDI → yerine gerçek API trafiği (2 sa / 24 sa) |
+| 11 | CWV eşik tablosu | ÇALIŞIYOR: katlanır Rehber'de, FCP/TTFB dahil 5 metrik (`#core-web-vitals` çapası korundu) |
+| 12 | CWV notu ("kalıcı RUM ekleyin") | KALDIRILDI: kalıcı RUM eklendi |
+| 13 | Dış linkler | ÇALIŞIYOR (yeni sekme uyarısı ekran okuyucuda) |
+| 14 | RUM özet tablosu | ÇALIŞIYOR: p75 (ortalama değil), birimli, kesin derece dağılımı, kalıcı depo |
+| 15 | RUM pencere bilgisi | ÇALIŞIYOR: gerçekten son 24 saat (saatlik kovalar; 800 kayıt tavanı yok) |
+| 16 | RUM rol dağılımı | KALDIRILDI: kullanıcı/rol saklanmıyor (gizlilik); yerine en yavaş sayfa kırılımı (panel önekiyle) |
+| 17 | RUM son örnekler listesi | KALDIRILDI: ham örnek saklanmıyor; toplu histogram + en yavaş sayfalar daha anlamlı |
+| 18 | RUM JSON kopyala | KALDIRILDI → tek "Özeti kopyala" (olay kanalına yapıştırılabilir Markdown durum özeti) |
+| 19 | RUM boş durumu | ÇALIŞIYOR: toplanmıyor / örnek yok / hata ayrı |
+| 20 | RUM iskelet | ÇALIŞIYOR (sayfa iskeleti + sunucu ön yüklemesi) |
+| 21 | RUM hata bildirimi | ÇALIŞIYOR: bölüm başına `ErrorState` + Tekrar dene |
+| 22 | Hata banner'ı | ÇALIŞIYOR: başlığın hemen altında `role="alert"`, ham `SyntaxError` yok (504 HTML anlaşılır mesaja çevrilir), son iyi veri korunur |
+| 23 | Banner "Yenile" | ÇALIŞIYOR (bekleme durumu) |
+| 24 | Son güncelleme | ÇALIŞIYOR: `aria-live="polite"`, yalnız başlık meta'sı yeniden çizilir |
+| 25 | Yenile butonu | ÇALIŞIYOR: dönen ikon, `disabled` + `aria-busy`, sunucu önbelleğini atlar (`fresh=1`) |
+| 26 | Otomatik yenileme | ÇALIŞIYOR: 30 sn / 60 sn / Kapalı (tercih hatırlanır), sekme gizliyken durur, TanStack Query iptal/sıra korumalı |
+| 27 | Vercel durum kartı | ÇALIŞIYOR: `minor/major/critical/under_maintenance` tip güvenli tonlar |
+| 28 | Vercel JSON kopyala | KALDIRILDI → "Özeti kopyala" |
+| 29 | Sağlık gecikmesi | ÇALIŞIYOR: yanıltıcı toplam süre kaldırıldı; DB gecikmesi ayrı ve eşikli |
+| 30 | Bölge | ÇALIŞIYOR (Dağıtım kutusunda; ortam + sürüm SHA + dal ile) |
+| 31 | DB bağlantı durumu | ÇALIŞIYOR: 300/1000 ms eşikli (Komuta Merkezi ile aynı) |
+| 32 | İşlem e-postası | ÇALIŞIYOR (yapılandırma; teslim oranı kalan açık) |
+| 33 | Bekleyen outbox sayısı | KALDIRILDI: `createOutboxEvent` hiçbir yerden çağrılmıyor; kalıcı "0 bekliyor" yanıltıcıydı |
+| 34 | Kuyruk gecikmesi | KALDIRILDI (aynı gerekçe) |
+| 35 | Webhook 24 sa | ÇALIŞIYOR: SQL COUNT (tavan yok), test teslimleri hariç, oran + `/admin/integrations?tab=webhooklar` bağlantısı |
+| 36 | Aktif kullanıcı 24 sa | KALDIRILDI: iş metriği, Komuta Merkezi'nde |
+| 37 | Sağlık JSON kopyala | KALDIRILDI → "Özeti kopyala" |
+| 38 | "Son 60 sn" kartı | KALDIRILDI → gerçek API trafiği: istek, 5xx oranı, 4xx, p95 + saatlik seri |
+| 39 | Vercel bileşenleri | ÇALIŞIYOR: grup satırları ayıklandı, Türkçe durum, arama, varsayılan "Yalnız sorunlular", "N / M çalışıyor" özeti |
+| 40 | Bileşenler boş durumu | ÇALIŞIYOR |
+| 41 | Açık olaylar | ÇALIŞIYOR: aşama Türkçe, `impact` tonu, son güncelleme metni + zamanı; planlı bakımlar da |
+| 42 | Olay "Detay" linki | ÇALIŞIYOR (yalnız https bağlantı kabul edilir) |
+| 43 | "En çok istek alan path'ler" | KALDIRILDI → "En çok hata veren uçlar" + "En yavaş uçlar (p95)" (gerçek trafik) |
+| 44 | Toast'lar | ÇALIŞIYOR: doğrudan `sonner`, Türkçe, bağlama uygun mesaj |
+| 45 | i18n | ÇALIŞIYOR: tüm durum/aşama/derece değerleri Türkçe eşlemeli; sabit "dk gecikme" yok |
+| 46 | Mobil yerleşim | ÇALIŞIYOR: tablolar kaydırma kabında, ızgaralar tek sütuna iner, dokunma hedefleri ≥ 44 px |
+| 47 | Azaltılmış hareket | ÇALIŞIYOR: ping/spin `motion-safe`, sorun listesi animasyonu `useReducedMotionPref` ile kapanır |
+| 48 | Klavye / ARIA | ÇALIŞIYOR: `role="alert"`, `aria-live`, tablolarda `caption` + `scope="col"`, dekoratif ikonlar `aria-hidden` |
+| 49 | Bölüm çapaları | ÇALIŞIYOR: `#core-web-vitals`, `#rum-web-vitals` korundu; yeni `#saglik`, `#uclar` |
+| 50 | Güvenlik uyarısı derin linki | ÇALIŞIYOR (kapandı): trust-timeline emekli (410), güvenlik uyarıları `/admin/trust`'ta |
+| 51 | Eşik tabanlı alarm | ÇALIŞIYOR (görsel): sunucuda eşikli Sorunlar listesi (5xx oranı, yavaş uç, Web Vitals, webhook hata oranı, iş hatası, bağımlılık, Vercel olayı). Push/e-posta bildirimi kalan açık |
+| 52 | Zaman serisi | ÇALIŞIYOR: API istek ve 5xx oranı için 24 saatlik saatlik seri (sparkline + döküm tablosu), iş süreleri için 14 koşuluk seri |
+| 53 | Sentry özeti | KALAN AÇIK: Sentry API belirteci yok; uç hataları kendi metriklerimizle görünür |
+| 54 | Cron / iş kalp atışı | ÇALIŞIYOR: `/admin/jobs` (iş başına durum, gecikme tespiti, geçmiş, izleme kanalları, gerekçeli ve denetimli "Şimdi çalıştır") |
+| 55 | DLQ görünümü | KALDIRILDI: outbox'ın üreticisi yok; DLQ'ya düşen olay oluşmuyor |
+| 56 | Bağımlılık kontrolleri | ÇALIŞIYOR: Redis yaz/oku sınaması, AI hata oranı, DB, posta; dağıtım bilgisi. R2/IMAP canlı sınaması kalan açık |
+
+### Kapanan bulgular
+1 (sahte trafik metrikleri), 2 (outbox satırı kaldırıldı), 3 (RUM kalıcı + p75), 4 (gizli sekmede yoklama yok, sunucu önbellekleri, ağır `distinct` sorgusu kaldırıldı), 5 (Statuspage tonları), 6 (bölüm başına hata, son iyi veri, iptal/sıra), 7 (bağlantıya bağlı rozet), 8 (trust tarafında kapandı), 9 (SQL COUNT), 10 (sağlık Komuta Merkezi ile tek fonksiyon; `/api/admin/system-status` başka yüzeyin), 11 (durum → sorunlar → ayrıntı → rehber), 12 (kontrast/ARIA), 13 (Türkçe eşlemeler, toast öneki yok), 14 (RUM ucu hız sınırlı, aralık doğrulamalı, yol normalize), 15 (kod kokuları; sayfa bileşenlere bölündü). **15/15.**
+
+### Arka plan işleri "Şimdi çalıştır" kuralları
+Yalnız bu dönem başarılı koşusu olmayan iş (başarısız, zaman aşımı, bütçe, gecikmiş); kadans zorlama (`force`) arayüzde yok. Günlük koşu sürerken 409. Gerekçe zorunlu; denetim kaydı ÖNCE yazılır (yazılamazsa iş çalışmaz), sonuç ayrıca yazılır. İş orkestratörün kendisiyle (`/api/cron/daily?only=<ad>`) çalışır: aynı zaman aşımı, aynı durum kaydı. Kullanıcı başına 10 dk'da 6 istek.
+
+### Kalanlar
+- Push/e-posta alarm kuralları (bildirim kanalı ve sessize alma politikası ürün kararı ister).
+- Sentry issue özeti (API belirteci ve proje kimliği gerekir).
+- R2 / IMAP / AI sağlayıcı için canlı erişim sınaması (her yoklamada dış servise gitmenin maliyeti; şu an yapılandırma + AI hata oranı).
+- Uç metrikleri yalnız `defineRoute` uçlarını kapsar; eski elle yazılmış uçlar taşındıkça kapsama girer (arayüz bunu belirtiyor).
+- `/api/admin/system-status` (dashboard/ayarlar) hâlâ ayrı; sahibi o yüzeyler.
