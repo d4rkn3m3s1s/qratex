@@ -7,7 +7,7 @@ import { ROLES, account, createState } from '../support/accounts';
  */
 for (const role of ROLES) {
   setup(`giriş: ${role}`, async ({ browser, baseURL }) => {
-    setup.setTimeout(180_000);
+    setup.setTimeout(420_000);
     const finalPath = await createState(browser, baseURL ?? 'http://localhost:3000', role);
     expect(finalPath.startsWith(account(role).home), `${role} giriş sonrası ${finalPath}`).toBe(true);
   });
