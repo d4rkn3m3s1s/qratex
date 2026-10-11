@@ -8,12 +8,14 @@ import { KeyValueList, StatusBadge } from '@/components/ds/data';
 import type { ProductDetailDto } from '@/lib/dealer/catalog/types';
 import { useProductDetail } from './api';
 import { dayLabel, priceLabel, ratingLabel, trend, weekLabel } from './format';
+import { useProductsCopy } from './copy';
 
 function Distribution({ dist }: { dist: ProductDetailDto['distribution'] }) {
   const total = dist.reduce((a, b) => a + b, 0);
-  if (total === 0) return <p className="qx-small text-fg-muted">Son 30 günde bu ürüne yazılmış değerlendirme yok.</p>;
+  const c = useProductsCopy().detail;
+  if (total === 0) return <p className="qx-small text-fg-muted">{c.noReviews30}</p>;
   return (
-    <ul className="space-y-1.5" aria-label="Son 30 gün puan dağılımı">
+    <ul className="space-y-1.5" aria-label={c.distAria}>
       {[5, 4, 3, 2, 1].map((star) => {
         const n = dist[star - 1];
         const pct = Math.round((n / total) * 100);
@@ -24,7 +26,7 @@ function Distribution({ dist }: { dist: ProductDetailDto['distribution'] }) {
               <span className={`block h-full rounded-chip ${star <= 2 ? 'bg-danger' : star === 3 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${pct}%` }} />
             </span>
             <span className="qx-caption qx-num w-16 shrink-0 text-right text-fg-muted">
-              {n} <span className="sr-only">değerlendirme,</span>(%{pct})
+              {n} <span className="sr-only">{c.reviewsSr}</span>(%{pct})
             </span>
           </li>
         );
@@ -36,7 +38,8 @@ function Distribution({ dist }: { dist: ProductDetailDto['distribution'] }) {
 function Weekly({ weekly }: { weekly: ProductDetailDto['weekly'] }) {
   const max = Math.max(1, ...weekly.map((w) => w.consumptions));
   const any = weekly.some((w) => w.consumptions > 0);
-  if (!any) return <p className="qx-small text-fg-muted">Son 8 haftada bu ürünle tüketim kaydı açılmadı.</p>;
+  const c = useProductsCopy().detail;
+  if (!any) return <p className="qx-small text-fg-muted">{c.noWeekly}</p>;
   return (
     <figure>
       <div className="flex h-28 items-end gap-1.5" aria-hidden>
@@ -54,12 +57,12 @@ function Weekly({ weekly }: { weekly: ProductDetailDto['weekly'] }) {
         ))}
       </div>
       <table className="sr-only">
-        <caption>Son 8 hafta, haftalık tüketim ve ortalama puan</caption>
+        <caption>{c.weeklyCaption}</caption>
         <thead>
           <tr>
-            <th scope="col">Hafta başı</th>
-            <th scope="col">Tüketim</th>
-            <th scope="col">Ortalama puan</th>
+            <th scope="col">{c.weekStart}</th>
+            <th scope="col">{c.consumption}</th>
+            <th scope="col">{c.avgRating}</th>
           </tr>
         </thead>
         <tbody>
@@ -72,7 +75,7 @@ function Weekly({ weekly }: { weekly: ProductDetailDto['weekly'] }) {
           ))}
         </tbody>
       </table>
-      <figcaption className="qx-caption mt-2 text-fg-muted">Haftalık tüketim (Pazartesi başlangıçlı, İstanbul saati)</figcaption>
+      <figcaption className="qx-caption mt-2 text-fg-muted">{c.weeklyNote}</figcaption>
     </figure>
   );
 }
@@ -80,16 +83,18 @@ function Weekly({ weekly }: { weekly: ProductDetailDto['weekly'] }) {
 /** Ürün detayı: müşteri deneyimi (30 gün puan, dağılım, 8 haftalık tüketim, son yorumlar). */
 export function ProductDetail({ productId }: { productId: string }) {
   const q = useProductDetail(productId);
+  const copy = useProductsCopy();
+  const c = copy.detail;
   return (
-    <QueryState query={q} skeleton="detail" error={{ title: 'Ürün detayı yüklenemedi' }}>
+    <QueryState query={q} skeleton="detail" error={{ title: c.loadFailed }}>
       {(d) => {
         const p = d.product;
-        const t = trend(p.stats);
+        const t = trend(p.stats, copy.format);
         return (
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2">
-              <StatusBadge label={p.isActive ? 'Aktif' : 'Arşivde'} tone={p.isActive ? 'success' : 'neutral'} size="sm" />
-              {p.isGlobal ? <StatusBadge label="Sistem ürünü" tone="info" size="sm" /> : null}
+              <StatusBadge label={p.isActive ? c.active : copy.common.archived} tone={p.isActive ? 'success' : 'neutral'} size="sm" />
+              {p.isGlobal ? <StatusBadge label={c.systemProduct} tone="info" size="sm" /> : null}
               <span className="qx-caption text-fg-muted">
                 <span aria-hidden>{p.category.icon} </span>
                 {p.category.name}
@@ -103,9 +108,9 @@ export function ProductDetail({ productId }: { productId: string }) {
 
             <KeyValueList
               items={[
-                { label: 'Fiyat', value: priceLabel(p.priceMinor) },
+                { label: c.price, value: priceLabel(p.priceMinor, copy.format) },
                 {
-                  label: 'Tüketim (son 30 gün)',
+                  label: c.consumption30,
                   value: (
                     <span>
                       {p.stats.consumptions30}
@@ -114,25 +119,25 @@ export function ProductDetail({ productId }: { productId: string }) {
                   ),
                 },
                 {
-                  label: 'Ortalama puan (son 30 gün)',
-                  value: p.stats.reviews30 > 0 ? `${ratingLabel(p.stats.avgRating30)} / 5 · ${p.stats.reviews30} değerlendirme` : 'Değerlendirme yok',
+                  label: c.rating30,
+                  value: p.stats.reviews30 > 0 ? c.ratingLine(ratingLabel(p.stats.avgRating30), p.stats.reviews30) : c.noRating,
                 },
-                { label: '1–2 yıldızlı (son 30 gün)', value: String(p.stats.low30) },
-                { label: 'Tüm zamanlar tüketim', value: String(d.consumptionsAllTime) },
-                { label: 'Eklenme', value: dayLabel(p.createdAt) },
+                { label: c.low30, value: String(p.stats.low30) },
+                { label: c.allTime, value: String(d.consumptionsAllTime) },
+                { label: c.added, value: dayLabel(p.createdAt) },
               ]}
             />
 
             <section aria-labelledby="pd-dist">
               <h3 id="pd-dist" className="qx-overline mb-2 text-fg-muted">
-                Puan dağılımı · son 30 gün
+                {c.distTitle}
               </h3>
               <Distribution dist={d.distribution} />
             </section>
 
             <section aria-labelledby="pd-week">
               <h3 id="pd-week" className="qx-overline mb-2 text-fg-muted">
-                Haftalık tüketim · son 8 hafta
+                {c.weeklyTitle}
               </h3>
               <Weekly weekly={d.weekly} />
             </section>
@@ -140,16 +145,16 @@ export function ProductDetail({ productId }: { productId: string }) {
             <section aria-labelledby="pd-rev">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 id="pd-rev" className="qx-overline text-fg-muted">
-                  Son değerlendirmeler
+                  {c.recent}
                 </h3>
                 <Button asChild variant="ghost" className="min-h-11">
                   <Link href="/dealer/inbox">
-                    <MessageSquareText className="mr-1.5 h-4 w-4" aria-hidden /> Tümü
+                    <MessageSquareText className="mr-1.5 h-4 w-4" aria-hidden /> {c.all}
                   </Link>
                 </Button>
               </div>
               {d.recentReviews.length === 0 ? (
-                <p className="qx-small text-fg-muted">Bu ürün için henüz değerlendirme yok.</p>
+                <p className="qx-small text-fg-muted">{c.noRecent}</p>
               ) : (
                 <ul className="space-y-3">
                   {d.recentReviews.map((r) => (
@@ -158,11 +163,11 @@ export function ProductDetail({ productId }: { productId: string }) {
                         <span className="qx-small flex items-center gap-1 font-semibold text-fg">
                           <Star className="h-3.5 w-3.5" aria-hidden />
                           <span className="qx-num">{r.rating}</span>
-                          <span className="sr-only"> / 5 yıldız</span>
+                          <span className="sr-only">{c.outOf5}</span>
                         </span>
                         <span className="qx-caption text-fg-muted">
                           {dayLabel(r.createdAt)}
-                          {r.replied ? ' · yanıtlandı' : ''}
+                          {r.replied ? c.replied : ''}
                         </span>
                       </div>
                       {r.text ? <p className="qx-small mt-1.5 line-clamp-4 text-fg">{r.text}</p> : null}

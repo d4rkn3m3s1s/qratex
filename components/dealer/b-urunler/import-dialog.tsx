@@ -11,12 +11,13 @@ import { CSV_MAX_BYTES, EXPORT_HEADER, IMPORT_MAX_ROWS, toCsv } from '@/lib/deal
 import type { ImportReportDto, ImportRowStatus } from '@/lib/dealer/catalog/types';
 import { catalogApi, useInvalidateCatalog } from './api';
 import { priceLabel } from './format';
+import { useProductsCopy } from './copy';
 
-const STATUS: Record<ImportRowStatus, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  create: { label: 'Eklenecek', cls: 'text-success', Icon: CheckCircle2 },
-  update: { label: 'Güncellenecek', cls: 'text-info', Icon: RefreshCw },
-  skip: { label: 'Atlanacak (zaten var)', cls: 'text-fg-muted', Icon: MinusCircle },
-  error: { label: 'Hatalı', cls: 'text-danger', Icon: AlertTriangle },
+const STATUS: Record<ImportRowStatus, { cls: string; Icon: typeof CheckCircle2 }> = {
+  create: { cls: 'text-success', Icon: CheckCircle2 },
+  update: { cls: 'text-info', Icon: RefreshCw },
+  skip: { cls: 'text-fg-muted', Icon: MinusCircle },
+  error: { cls: 'text-danger', Icon: AlertTriangle },
 };
 
 function downloadText(name: string, text: string) {
@@ -45,6 +46,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [busy, setBusy] = useState<'preview' | 'commit' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dupLabel = useId();
+  const copy = useProductsCopy();
+  const c = copy.import;
 
   const reset = () => {
     setCsv(null);
@@ -61,7 +64,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       setReport(await catalogApi.importCsv(text, dup, false));
     } catch (e) {
       setReport(null);
-      setError(e instanceof Error ? e.message : 'Dosya doğrulanamadı.');
+      setError(e instanceof Error ? e.message : c.validateFailed);
     } finally {
       setBusy(null);
     }
@@ -70,7 +73,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     if (file.size > CSV_MAX_BYTES) {
-      setError('Dosya en fazla 512 KB olabilir.');
+      setError(c.tooBig);
       return;
     }
     const text = await file.text();
@@ -85,12 +88,12 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     try {
       const r = await catalogApi.importCsv(csv, onDuplicate, true);
       const done = r.summary.create + r.summary.update;
-      toast.success(`${done} ürün içe aktarıldı${r.summary.newCategories.length ? `, ${r.summary.newCategories.length} yeni kategori oluşturuldu` : ''}.`);
+      toast.success(c.done(done, r.summary.newCategories.length));
       invalidate();
       reset();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'İçe aktarma tamamlanamadı.');
+      setError(e instanceof Error ? e.message : c.failed);
     } finally {
       setBusy(null);
     }
@@ -108,35 +111,37 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     >
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
         <SheetHeader className="border-b border-subtle px-5 pb-4 pr-16 pt-5 text-left">
-          <SheetTitle className="qx-h2 text-fg">Ürünleri içe aktar</SheetTitle>
+          <SheetTitle className="qx-h2 text-fg">{c.title}</SheetTitle>
           <SheetDescription className="qx-small text-fg-muted">
-            CSV dosyası (Excel’de “CSV UTF-8” olarak kaydedin). En fazla {IMPORT_MAX_ROWS} satır. Önce önizleme gösterilir, onaylamadan hiçbir şey kaydedilmez.
+            {c.hint(IMPORT_MAX_ROWS)}
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className="min-h-11" onClick={() => downloadText('urun-sablonu.csv', toCsv([[...EXPORT_HEADER], ['Türk kahvesi', 'Kahveler', '85,00', 'Közde, lokumla']]))}>
-              <Download className="mr-1.5 h-4 w-4" aria-hidden /> Şablonu indir
+              <Download className="mr-1.5 h-4 w-4" aria-hidden /> {c.template}
             </Button>
             <Button type="button" className="min-h-11" onClick={() => inputRef.current?.click()} disabled={busy !== null}>
-              <FileUp className="mr-1.5 h-4 w-4" aria-hidden /> {fileName ? 'Başka dosya seç' : 'CSV dosyası seç'}
+              <FileUp className="mr-1.5 h-4 w-4" aria-hidden /> {fileName ? c.otherFile : c.pickFile}
             </Button>
             <input
               ref={inputRef}
               type="file"
               accept=".csv,text/csv,text/plain"
               className="sr-only"
-              aria-label="CSV dosyası"
+              aria-label={c.fileAria}
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
           </div>
           <p className="qx-caption text-fg-muted">
-            Sütunlar: <strong>Ürün adı</strong>, <strong>Kategori</strong> (zorunlu), Fiyat, Açıklama. Olmayan kategoriler oluşturulur. Fiyat “45”, “45,50”, “1.234,50 ₺” biçiminde olabilir.
+            {c.columnsLead}
+            <strong>{c.colName}</strong>, <strong>{c.colCategory}</strong>
+            {c.columnsRest}
           </p>
 
           <div>
             <p id={dupLabel} className="qx-small mb-2 font-medium text-fg">
-              Aynı adla ürününüz varsa
+              {c.duplicate}
             </p>
             <ChoiceChips<'skip' | 'update'>
               aria-labelledby={dupLabel}
@@ -147,8 +152,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 if (csv) void preview(csv, v);
               }}
               options={[
-                { value: 'skip', label: 'Atla' },
-                { value: 'update', label: 'Fiyat ve açıklamayı güncelle' },
+                { value: 'skip', label: c.skip },
+                { value: 'update', label: c.update },
               ]}
             />
           </div>
@@ -157,7 +162,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
           {busy === 'preview' ? (
             <p className="qx-small flex items-center gap-2 text-fg-muted" role="status">
-              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> Dosya doğrulanıyor…
+              <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> {c.validating}
             </p>
           ) : null}
 
@@ -166,31 +171,31 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           {report && !report.fileError ? (
             <section aria-labelledby="imp-sum" className="space-y-3">
               <h3 id="imp-sum" className="qx-h3 text-fg">
-                Önizleme · {fileName}
+                {c.preview(fileName)}
               </h3>
               <ul className="qx-small flex flex-wrap gap-x-4 gap-y-1" aria-live="polite">
                 {(Object.keys(STATUS) as ImportRowStatus[]).map((k) => {
                   const S = STATUS[k];
                   return (
                     <li key={k} className={`flex items-center gap-1 ${S.cls}`}>
-                      <S.Icon className="h-4 w-4" aria-hidden /> {S.label}: <span className="qx-num font-semibold">{report.summary[k]}</span>
+                      <S.Icon className="h-4 w-4" aria-hidden /> {c.status[k]}: <span className="qx-num font-semibold">{report.summary[k]}</span>
                     </li>
                   );
                 })}
               </ul>
               {report.summary.newCategories.length > 0 ? (
-                <p className="qx-caption text-fg-muted">Oluşturulacak kategoriler: {report.summary.newCategories.join(', ')}</p>
+                <p className="qx-caption text-fg-muted">{c.newCategories(report.summary.newCategories.join(', '))}</p>
               ) : null}
               <div className="max-h-[45vh] overflow-auto rounded-control border border-subtle">
                 <table className="qx-small w-full min-w-[36rem] text-left">
-                  <caption className="sr-only">Satır satır içe aktarma önizlemesi</caption>
+                  <caption className="sr-only">{c.tableCaption}</caption>
                   <thead className="sticky top-0 bg-surface-2">
                     <tr>
-                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">Satır</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">Ürün</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">Kategori</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">Fiyat</th>
-                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">Durum</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">{c.row}</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">{c.product}</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">{c.category}</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">{c.price}</th>
+                      <th scope="col" className="px-3 py-2 font-medium text-fg-muted">{c.statusCol}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -202,12 +207,12 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                           <td className="px-3 py-2 text-fg">{r.name || '—'}</td>
                           <td className="px-3 py-2 text-fg">
                             {r.categoryName || '—'}
-                            {r.newCategory ? <span className="qx-caption text-fg-muted"> (yeni)</span> : null}
+                            {r.newCategory ? <span className="qx-caption text-fg-muted">{c.newTag}</span> : null}
                           </td>
-                          <td className="qx-num px-3 py-2 text-fg">{r.status === 'error' && r.priceMinor === null ? '—' : priceLabel(r.priceMinor)}</td>
+                          <td className="qx-num px-3 py-2 text-fg">{r.status === 'error' && r.priceMinor === null ? '—' : priceLabel(r.priceMinor, copy.format)}</td>
                           <td className={`px-3 py-2 ${S.cls}`}>
                             <span className="flex items-center gap-1">
-                              <S.Icon className="h-4 w-4 shrink-0" aria-hidden /> {S.label}
+                              <S.Icon className="h-4 w-4 shrink-0" aria-hidden /> {c.status[r.status]}
                             </span>
                             {r.errors.length > 0 ? (
                               <ul className="qx-caption mt-1 list-disc pl-4 text-danger">
@@ -228,11 +233,11 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-subtle px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button type="button" variant="ghost" className="min-h-11" onClick={() => onOpenChange(false)}>
-            Vazgeç
+            {copy.common.cancel}
           </Button>
           <Button type="button" className="min-h-11" disabled={!report || !!report.fileError || writable === 0 || busy !== null} onClick={() => void commit()}>
             {busy === 'commit' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-            {writable > 0 ? `${writable} ürünü içe aktar` : 'İçe aktarılacak satır yok'}
+            {writable > 0 ? c.importN(writable) : c.nothing}
           </Button>
         </div>
       </SheetContent>

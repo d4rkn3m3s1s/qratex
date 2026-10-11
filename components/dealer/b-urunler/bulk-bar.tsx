@@ -11,6 +11,7 @@ import { IconButton } from '@/components/ds/a11y';
 import { parseLocaleNumber } from '@/components/ds/form';
 import type { CatalogCategoryDto } from '@/lib/dealer/catalog/types';
 import { catalogApi, useInvalidateCatalog } from './api';
+import { useProductsCopy } from './copy';
 
 /**
  * Toplu işlem çubuğu (envanter #34): seçili ürünleri arşivle / geri yükle, kategoriye taşı,
@@ -29,6 +30,8 @@ export function BulkBar({
   onClear: () => void;
 }) {
   const invalidate = useInvalidateCatalog();
+  const copy = useProductsCopy();
+  const c = copy.bulk;
   const [busy, setBusy] = useState(false);
   const [percent, setPercent] = useState('');
   const [roundTo, setRoundTo] = useState<'1' | '50' | '100'>('1');
@@ -38,13 +41,13 @@ export function BulkBar({
     setBusy(true);
     try {
       const r = await catalogApi.bulk(body);
-      const extra = r.skipped > 0 ? ` ${r.skipped} ürün atlandı${r.skippedReasons.length ? `: ${r.skippedReasons.join(' ')}` : '.'}` : '';
-      toast.success(`${r.updated} ürün ${verb}.${extra}`);
+      const extra = r.skipped > 0 ? c.skipped(r.skipped, r.skippedReasons.join(' ')) : '';
+      toast.success(c.done(r.updated, verb, extra));
       onClear();
       invalidate();
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Toplu işlem tamamlanamadı.');
+      toast.error(e instanceof Error ? e.message : c.failed);
       return false;
     } finally {
       setBusy(false);
@@ -58,24 +61,24 @@ export function BulkBar({
   return (
     <div
       role="region"
-      aria-label="Toplu işlemler"
+      aria-label={c.aria}
       className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 mx-auto flex w-[min(100%-2rem,48rem)] flex-wrap items-center gap-2 rounded-card border border-strong bg-surface-1 p-2 shadow-lg md:bottom-6"
     >
       <span className="qx-small px-2 font-medium text-fg" aria-live="polite">
-        {ids.length} ürün seçildi
+        {c.selected(ids.length)}
       </span>
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        {busy ? <Loader2 className="h-4 w-4 animate-spin text-fg-muted motion-reduce:animate-none" aria-label="İşleniyor" /> : null}
+        {busy ? <Loader2 className="h-4 w-4 animate-spin text-fg-muted motion-reduce:animate-none" aria-label={c.processing} /> : null}
         {archivedView ? (
-          <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void run({ ids, action: 'restore' }, 'geri yüklendi')}>
-            <ArchiveRestore className="mr-1.5 h-4 w-4" aria-hidden /> Geri yükle
+          <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void run({ ids, action: 'restore' }, c.verbRestored)}>
+            <ArchiveRestore className="mr-1.5 h-4 w-4" aria-hidden /> {copy.common.restore}
           </Button>
         ) : (
           <>
-            <Select disabled={busy} onValueChange={(v) => void run({ ids, action: 'move', categoryId: v }, 'taşındı')}>
-              <SelectTrigger className="min-h-11 w-auto gap-1.5" aria-label="Seçili ürünleri kategoriye taşı">
+            <Select disabled={busy} onValueChange={(v) => void run({ ids, action: 'move', categoryId: v }, c.verbMoved)}>
+              <SelectTrigger className="min-h-11 w-auto gap-1.5" aria-label={c.moveAria}>
                 <FolderInput className="h-4 w-4" aria-hidden />
-                <SelectValue placeholder="Taşı" />
+                <SelectValue placeholder={c.move} />
               </SelectTrigger>
               <SelectContent>
                 {categories
@@ -90,7 +93,7 @@ export function BulkBar({
             <Popover open={priceOpen} onOpenChange={setPriceOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="min-h-11" disabled={busy}>
-                  <Percent className="mr-1.5 h-4 w-4" aria-hidden /> Fiyat
+                  <Percent className="mr-1.5 h-4 w-4" aria-hidden /> {c.price}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 space-y-3">
@@ -99,7 +102,7 @@ export function BulkBar({
                   onSubmit={async (e) => {
                     e.preventDefault();
                     if (!pctValid || pct === null) return;
-                    const ok = await run({ ids, action: 'adjustPrice', percent: Math.round(pct * 10) / 10, roundTo: Number(roundTo) as 1 | 50 | 100 }, 'güncellendi');
+                    const ok = await run({ ids, action: 'adjustPrice', percent: Math.round(pct * 10) / 10, roundTo: Number(roundTo) as 1 | 50 | 100 }, c.verbUpdated);
                     if (ok) {
                       setPriceOpen(false);
                       setPercent('');
@@ -107,37 +110,37 @@ export function BulkBar({
                   }}
                 >
                   <label htmlFor="bulk-pct" className="qx-small block font-medium text-fg">
-                    Yüzde değişim
+                    {c.pct}
                   </label>
-                  <Input id="bulk-pct" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} placeholder="ör. 10 ya da -5" className="min-h-11" aria-describedby="bulk-pct-help" />
+                  <Input id="bulk-pct" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} placeholder={c.pctPlaceholder} className="min-h-11" aria-describedby="bulk-pct-help" />
                   <p id="bulk-pct-help" className="qx-caption text-fg-muted">
-                    −90 ile +500 arası. Fiyatı olmayan ürünler değişmez.
+                    {c.pctHelp}
                   </p>
                   <label htmlFor="bulk-round" className="qx-small block font-medium text-fg">
-                    Yuvarlama
+                    {c.rounding}
                   </label>
                   <Select value={roundTo} onValueChange={(v) => setRoundTo(v as '1' | '50' | '100')}>
                     <SelectTrigger id="bulk-round" className="min-h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Yok (kuruşu kuruşuna)</SelectItem>
+                      <SelectItem value="1">{c.roundNone}</SelectItem>
                       <SelectItem value="50">,00 / ,50</SelectItem>
-                      <SelectItem value="100">Tam lira</SelectItem>
+                      <SelectItem value="100">{c.roundLira}</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button type="submit" className="min-h-11 w-full" disabled={!pctValid || busy}>
-                    Uygula
+                    {c.apply}
                   </Button>
                 </form>
               </PopoverContent>
             </Popover>
-            <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void run({ ids, action: 'archive' }, 'arşivlendi')}>
-              <Archive className="mr-1.5 h-4 w-4" aria-hidden /> Arşivle
+            <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void run({ ids, action: 'archive' }, c.verbArchived)}>
+              <Archive className="mr-1.5 h-4 w-4" aria-hidden /> {copy.common.archive}
             </Button>
           </>
         )}
-        <IconButton aria-label="Seçimi temizle" icon={<X />} onClick={onClear} />
+        <IconButton aria-label={c.clear} icon={<X />} onClick={onClear} />
       </div>
     </div>
   );

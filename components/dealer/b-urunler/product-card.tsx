@@ -9,6 +9,7 @@ import { SelectionCheckbox, StatusBadge } from '@/components/ds/data';
 import { DURATION, EASE } from '@/lib/motion';
 import type { CatalogProductDto } from '@/lib/dealer/catalog/types';
 import { priceLabel, ratingLabel, trend } from './format';
+import { useProductsCopy } from './copy';
 
 export type ProductCardActions = {
   onOpen: (p: CatalogProductDto) => void;
@@ -37,7 +38,9 @@ export const ProductCard = memo(function ProductCard({
   reduced: boolean;
   actions: ProductCardActions;
 }) {
-  const t = trend(p.stats);
+  const copy = useProductsCopy();
+  const c = copy.card;
+  const t = trend(p.stats, copy.format);
   const TrendIcon = t?.dir === 'up' ? TrendingUp : t?.dir === 'down' ? TrendingDown : Minus;
   const archived = !p.isActive;
   return (
@@ -69,13 +72,13 @@ export const ProductCard = memo(function ProductCard({
               <SelectionCheckbox
                 checked={selected}
                 onCheckedChange={(c) => actions.onToggleSelect(p.id, c)}
-                aria-label={`${p.name} ürününü seç`}
+                aria-label={c.select(p.name)}
               />
             </div>
           ) : null}
           <div className="absolute right-2 top-2 flex gap-1">
-            {p.isGlobal ? <StatusBadge label="Sistem" tone="info" size="sm" icon={null} /> : null}
-            {archived ? <StatusBadge label="Arşivde" tone="neutral" size="sm" icon={Archive} /> : null}
+            {p.isGlobal ? <StatusBadge label={copy.common.system} tone="info" size="sm" icon={null} /> : null}
+            {archived ? <StatusBadge label={copy.common.archived} tone="neutral" size="sm" icon={Archive} /> : null}
           </div>
         </div>
 
@@ -92,37 +95,37 @@ export const ProductCard = memo(function ProductCard({
               <p className="qx-caption mt-0.5 truncate text-fg-muted">
                 <span aria-hidden>{p.category.icon} </span>
                 {p.category.name}
-                {!p.category.isActive ? ' (arşivde)' : ''}
+                {!p.category.isActive ? copy.common.archivedSuffix : ''}
               </p>
             </button>
             <div className="relative z-10 -mr-2 -mt-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <IconButton aria-label={`${p.name} için işlemler`} icon={<MoreVertical />} size="md" />
+                  <IconButton aria-label={c.actions(p.name)} icon={<MoreVertical />} size="md" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-48">
                   {p.canEdit ? (
                     <>
                       <DropdownMenuItem className="min-h-11" onSelect={() => actions.onEdit(p)}>
-                        <Pencil className="mr-2 h-4 w-4" aria-hidden /> Düzenle
+                        <Pencil className="mr-2 h-4 w-4" aria-hidden /> {copy.common.edit}
                       </DropdownMenuItem>
                       {archived ? (
                         <DropdownMenuItem className="min-h-11" onSelect={() => actions.onRestore(p)}>
-                          <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> Geri yükle
+                          <ArchiveRestore className="mr-2 h-4 w-4" aria-hidden /> {copy.common.restore}
                         </DropdownMenuItem>
                       ) : (
                         <DropdownMenuItem className="min-h-11" onSelect={() => actions.onArchive(p)}>
-                          <Archive className="mr-2 h-4 w-4" aria-hidden /> Arşivle
+                          <Archive className="mr-2 h-4 w-4" aria-hidden /> {copy.common.archive}
                         </DropdownMenuItem>
                       )}
                     </>
                   ) : p.isGlobal ? (
                     <DropdownMenuItem className="min-h-11" onSelect={() => actions.onCopy(p)}>
-                      <Copy className="mr-2 h-4 w-4" aria-hidden /> Kopyamı oluştur
+                      <Copy className="mr-2 h-4 w-4" aria-hidden /> {copy.common.copyMine}
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuItem className="min-h-11" onSelect={() => actions.onOpen(p)}>
-                    <Star className="mr-2 h-4 w-4" aria-hidden /> Performansı gör
+                    <Star className="mr-2 h-4 w-4" aria-hidden /> {c.performance}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -133,21 +136,21 @@ export const ProductCard = memo(function ProductCard({
 
           <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-1">
             <span className={`qx-num text-base font-semibold ${p.priceMinor === null ? 'text-fg-muted' : 'text-fg'}`}>
-              {priceLabel(p.priceMinor)}
+              {priceLabel(p.priceMinor, copy.format)}
             </span>
             <dl className="qx-caption flex items-center gap-3 text-fg-muted">
-              <div className="flex items-center gap-1" title="Son 30 gün ortalama puan">
-                <dt className="sr-only">Son 30 gün ortalama puan</dt>
+              <div className="flex items-center gap-1" title={c.avgRating30}>
+                <dt className="sr-only">{c.avgRating30}</dt>
                 <Star className="h-3.5 w-3.5" aria-hidden />
                 <dd className="qx-num">
                   {ratingLabel(p.stats.avgRating30)}
                   {p.stats.reviews30 > 0 ? <span className="text-fg-muted"> ({p.stats.reviews30})</span> : null}
                 </dd>
               </div>
-              <div className="flex items-center gap-1" title={t ? `Tüketim: ${t.text}` : 'Son 30 gün tüketim'}>
-                <dt className="sr-only">Son 30 gün tüketim</dt>
+              <div className="flex items-center gap-1" title={t ? c.consumptionTrend(t.text) : c.consumption30}>
+                <dt className="sr-only">{c.consumption30}</dt>
                 {t ? <TrendIcon className="h-3.5 w-3.5" aria-hidden /> : null}
-                <dd className="qx-num">{p.stats.consumptions30} tüketim</dd>
+                <dd className="qx-num">{copy.catalog.consumptions(p.stats.consumptions30)}</dd>
               </div>
             </dl>
           </div>

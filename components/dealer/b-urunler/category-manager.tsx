@@ -13,6 +13,7 @@ import { StatusBadge } from '@/components/ds/data';
 import { CATEGORY_ICONS, CATEGORY_NAME_MAX } from '@/lib/dealer/catalog/schemas';
 import type { CatalogCategoryDto } from '@/lib/dealer/catalog/types';
 import { catalogApi, useInvalidateCatalog } from './api';
+import { useProductsCopy } from './copy';
 
 function errorText(e: unknown, fallback: string) {
   return e instanceof Error && e.message ? e.message : fallback;
@@ -20,6 +21,7 @@ function errorText(e: unknown, fallback: string) {
 
 /** Simge seçimi: radyo grubu (← → ile gezilir, seçim yalnız renkle değil çerçeve + okunur adla). */
 function IconPicker({ value, onChange, labelId }: { value: string; onChange: (v: string) => void; labelId: string }) {
+  const c = useProductsCopy().categories;
   return (
     <div role="radiogroup" aria-labelledby={labelId} className="grid grid-cols-8 gap-1.5">
       {CATEGORY_ICONS.map((icon, i) => {
@@ -30,7 +32,7 @@ function IconPicker({ value, onChange, labelId }: { value: string; onChange: (v:
             type="button"
             role="radio"
             aria-checked={checked}
-            aria-label={`Simge ${i + 1}`}
+            aria-label={c.icon(i + 1)}
             tabIndex={checked || (!CATEGORY_ICONS.includes(value as (typeof CATEGORY_ICONS)[number]) && i === 0) ? 0 : -1}
             onClick={() => onChange(icon)}
             onKeyDown={(e) => {
@@ -70,6 +72,8 @@ function CategoryRow({
   busy: boolean;
 }) {
   const invalidate = useInvalidateCatalog();
+  const copy = useProductsCopy();
+  const t = copy.categories;
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(c.name);
   const [icon, setIcon] = useState(c.icon);
@@ -82,11 +86,11 @@ function CategoryRow({
     setSaving(true);
     try {
       await catalogApi.updateCategory(c.id, { ...(name.trim() !== c.name ? { name: name.trim() } : {}), ...(icon !== c.icon ? { icon } : {}) });
-      toast.success('Kategori güncellendi.');
+      toast.success(t.updated);
       setEditing(false);
       invalidate();
     } catch (err) {
-      toast.error(errorText(err, 'Kategori güncellenemedi.'));
+      toast.error(errorText(err, t.updateFailed));
     } finally {
       setSaving(false);
     }
@@ -97,19 +101,19 @@ function CategoryRow({
       <li className="rounded-control border border-strong bg-surface-1 p-3">
         <form onSubmit={save} className="space-y-3">
           <label className="qx-small block font-medium text-fg" htmlFor={`cat-name-${c.id}`}>
-            Kategori adı
+            {t.name}
           </label>
           <Input id={`cat-name-${c.id}`} value={name} onChange={(e) => setName(e.target.value)} maxLength={CATEGORY_NAME_MAX} required className="min-h-11" autoFocus />
           <p id={labelId} className="qx-small font-medium text-fg">
-            Simge
+            {t.iconLabel}
           </p>
           <IconPicker value={icon} onChange={setIcon} labelId={labelId} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" className="min-h-11" onClick={() => setEditing(false)}>
-              <X className="mr-1.5 h-4 w-4" aria-hidden /> Vazgeç
+              <X className="mr-1.5 h-4 w-4" aria-hidden /> {copy.common.cancel}
             </Button>
             <Button type="submit" className="min-h-11" disabled={saving || !name.trim() || (name.trim() === c.name && icon === c.icon)}>
-              <Check className="mr-1.5 h-4 w-4" aria-hidden /> Kaydet
+              <Check className="mr-1.5 h-4 w-4" aria-hidden /> {copy.common.save}
             </Button>
           </div>
         </form>
@@ -124,27 +128,27 @@ function CategoryRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="qx-small truncate font-medium text-fg">{c.name}</p>
-        <p className="qx-caption text-fg-muted">{c.activeCount} aktif ürün</p>
+        <p className="qx-caption text-fg-muted">{t.activeCount(c.activeCount)}</p>
       </div>
       {c.isGlobal ? (
-        <StatusBadge label="Sistem" tone="info" size="sm" icon={null} />
+        <StatusBadge label={copy.common.system} tone="info" size="sm" icon={null} />
       ) : (
         <div className="flex items-center">
-          <IconButton aria-label={`${c.name} yukarı taşı`} icon={<ArrowUp />} size="sm" disabled={busy || index === 0} onClick={() => onMove(index, index - 1)} />
-          <IconButton aria-label={`${c.name} aşağı taşı`} icon={<ArrowDown />} size="sm" disabled={busy || index === count - 1} onClick={() => onMove(index, index + 1)} />
-          <IconButton aria-label={`${c.name} düzenle`} icon={<Pencil />} size="sm" onClick={() => setEditing(true)} />
+          <IconButton aria-label={t.moveUp(c.name)} icon={<ArrowUp />} size="sm" disabled={busy || index === 0} onClick={() => onMove(index, index - 1)} />
+          <IconButton aria-label={t.moveDown(c.name)} icon={<ArrowDown />} size="sm" disabled={busy || index === count - 1} onClick={() => onMove(index, index + 1)} />
+          <IconButton aria-label={t.edit(c.name)} icon={<Pencil />} size="sm" onClick={() => setEditing(true)} />
           <ConfirmAction
-            trigger={<IconButton aria-label={`${c.name} arşivle`} icon={<Archive />} size="sm" variant="danger" />}
-            title={`“${c.name}” arşivlensin mi?`}
+            trigger={<IconButton aria-label={t.archiveAria(c.name)} icon={<Archive />} size="sm" variant="danger" />}
+            title={t.archiveTitle(c.name)}
             tone="warning"
             irreversibleNote={false}
             description={
               c.activeCount > 0 ? (
                 <div className="space-y-3">
-                  <p>Bu kategoride {c.activeCount} aktif ürün var. Ürünler seçtiğiniz kategoriye taşınacak; tüketim geçmişi korunur.</p>
+                  <p>{t.archiveMove(c.activeCount)}</p>
                   <Select value={moveTo} onValueChange={setMoveTo}>
-                    <SelectTrigger className="min-h-11" aria-label="Ürünlerin taşınacağı kategori">
-                      <SelectValue placeholder="Taşınacak kategori" />
+                    <SelectTrigger className="min-h-11" aria-label={t.targetAria}>
+                      <SelectValue placeholder={t.targetPlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
                       {others.map((o) => (
@@ -156,21 +160,21 @@ function CategoryRow({
                   </Select>
                 </div>
               ) : (
-                'Kategori listeden kalkar, Arşiv bölümünden geri yükleyebilirsiniz.'
+                t.archiveEmpty
               )
             }
-            confirmLabel="Arşivle"
+            confirmLabel={copy.common.archive}
             onConfirm={async () => {
               if (c.activeCount > 0 && !moveTo) {
-                toast.error('Önce ürünlerin taşınacağı kategoriyi seçin.');
+                toast.error(t.pickTarget);
                 throw new Error('hedef yok');
               }
               try {
                 const r = await catalogApi.archiveCategory(c.id, c.activeCount > 0 ? moveTo : null);
-                toast.success(r.moved > 0 ? `Kategori arşivlendi, ${r.moved} ürün taşındı.` : 'Kategori arşivlendi.');
+                toast.success(r.moved > 0 ? t.archivedMoved(r.moved) : t.archived);
                 invalidate();
               } catch (err) {
-                toast.error(errorText(err, 'Kategori arşivlenemedi.'));
+                toast.error(errorText(err, t.archiveFailed));
                 throw err;
               }
             }}
@@ -202,6 +206,8 @@ export function CategoryManager({
   const [reordering, setReordering] = useState(false);
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const iconLabel = useId();
+  const copy = useProductsCopy();
+  const t = copy.categories;
 
   const own = useMemo(() => {
     const list = categories.filter((c) => c.isActive && !c.isGlobal);
@@ -220,11 +226,11 @@ export function CategoryManager({
     setCreating(true);
     try {
       await catalogApi.createCategory({ name: name.trim(), icon });
-      toast.success('Kategori eklendi.');
+      toast.success(t.added);
       setName('');
       invalidate();
     } catch (err) {
-      toast.error(errorText(err, 'Kategori eklenemedi.'));
+      toast.error(errorText(err, t.addFailed));
     } finally {
       setCreating(false);
     }
@@ -238,11 +244,11 @@ export function CategoryManager({
     setReordering(true);
     try {
       await catalogApi.reorderCategories(ids);
-      announce(`${own[from].name} ${to + 1}. sıraya taşındı.`);
+      announce(t.movedTo(own[from].name, to + 1));
       invalidate();
     } catch (err) {
       setLocalOrder(null);
-      toast.error(errorText(err, 'Sıralama kaydedilemedi.'));
+      toast.error(errorText(err, t.reorderFailed));
     } finally {
       setReordering(false);
     }
@@ -252,42 +258,42 @@ export function CategoryManager({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-subtle px-5 pb-4 pr-16 pt-5 text-left">
-          <SheetTitle className="qx-h2 text-fg">Kategoriler</SheetTitle>
+          <SheetTitle className="qx-h2 text-fg">{t.title}</SheetTitle>
           <SheetDescription className="qx-small text-fg-muted">
-            Sıra, Kart Tara ekranındaki kategori sırasını da belirler.
+            {t.hint}
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <form onSubmit={create} className="space-y-3 rounded-card border border-subtle bg-surface-2 p-4">
             <label htmlFor="new-cat-name" className="qx-small block font-medium text-fg">
-              Yeni kategori adı
+              {t.newName}
             </label>
             <Input
               id="new-cat-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={CATEGORY_NAME_MAX}
-              placeholder="ör. Tatlılar"
+              placeholder={t.newPlaceholder}
               className="min-h-11"
               autoComplete="off"
             />
             <p id={iconLabel} className="qx-small font-medium text-fg">
-              Simge
+              {t.iconLabel}
             </p>
             <IconPicker value={icon} onChange={setIcon} labelId={iconLabel} />
             <div className="flex justify-end">
               <Button type="submit" className="min-h-11" disabled={creating || !name.trim()}>
-                <Plus className="mr-1.5 h-4 w-4" aria-hidden /> Kategori ekle
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden /> {t.add}
               </Button>
             </div>
           </form>
 
           <section aria-labelledby="own-cats">
             <h3 id="own-cats" className="qx-overline mb-2 text-fg-muted">
-              Kategorileriniz ({own.length})
+              {t.own(own.length)}
             </h3>
             {own.length === 0 ? (
-              <p className="qx-small text-fg-muted">Henüz kendi kategoriniz yok.</p>
+              <p className="qx-small text-fg-muted">{t.noOwn}</p>
             ) : (
               <ul className="space-y-2">
                 {own.map((c, i) => (
@@ -308,9 +314,9 @@ export function CategoryManager({
           {system.length > 0 ? (
             <section aria-labelledby="sys-cats">
               <h3 id="sys-cats" className="qx-overline mb-1 text-fg-muted">
-                Sistem kategorileri ({system.length})
+                {t.system(system.length)}
               </h3>
-              <p className="qx-caption mb-2 text-fg-muted">Platformun hazır kategorileri; düzenlenemez, ürün ekleyebilirsiniz.</p>
+              <p className="qx-caption mb-2 text-fg-muted">{t.systemHint}</p>
               <ul className="space-y-2">
                 {system.map((c, i) => (
                   <CategoryRow key={c.id} c={c} index={i} count={system.length} others={[]} onMove={() => undefined} busy />
@@ -322,7 +328,7 @@ export function CategoryManager({
           {archived.length > 0 ? (
             <section aria-labelledby="arch-cats">
               <h3 id="arch-cats" className="qx-overline mb-2 text-fg-muted">
-                Arşiv ({archived.length})
+                {t.archive(archived.length)}
               </h3>
               <ul className="space-y-2">
                 {archived.map((c) => (
@@ -337,14 +343,14 @@ export function CategoryManager({
                       onClick={async () => {
                         try {
                           await catalogApi.restoreCategory(c.id);
-                          toast.success('Kategori geri yüklendi.');
+                          toast.success(t.restored);
                           invalidate();
                         } catch (err) {
-                          toast.error(errorText(err, 'Kategori geri yüklenemedi.'));
+                          toast.error(errorText(err, t.restoreFailed));
                         }
                       }}
                     >
-                      <ArchiveRestore className="mr-1.5 h-4 w-4" aria-hidden /> Geri yükle
+                      <ArchiveRestore className="mr-1.5 h-4 w-4" aria-hidden /> {copy.common.restore}
                     </Button>
                   </li>
                 ))}
