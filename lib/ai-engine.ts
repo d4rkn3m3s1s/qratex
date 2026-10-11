@@ -12,7 +12,14 @@
  */
 
 import OpenAI from 'openai';
-import { checkAiCostGuard, guardAiCall, isAiGuardError, recordAiCostUsage, type AiTask } from '@/lib/ai-cost-guard';
+import {
+  checkAiCostGuard,
+  dealerDailyLimitFor,
+  guardAiCall,
+  isAiGuardError,
+  recordAiCostUsage,
+  type AiTask,
+} from '@/lib/ai-cost-guard';
 import { normalizeAnalysisPayload } from '@/lib/ai-analysis-normalize';
 import {
   isAiCircuitOpen,
@@ -932,7 +939,7 @@ export async function streamToolChatTurn(params: {
 
   const task: AiTask = params.task ?? 'ask_ai';
   if (params.skipRateGuard) {
-    await checkAiCostGuard(params.dealerId);
+    await checkAiCostGuard(params.dealerId, dealerDailyLimitFor(task));
   } else {
     await guardAiCall({ task, dealerId: params.dealerId });
   }

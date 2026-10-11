@@ -169,12 +169,36 @@ export async function getTodayUsageByAction(actions: string[]): Promise<number> 
   return (rows._sum.inputTokens ?? 0) + (rows._sum.outputTokens ?? 0);
 }
 
+/**
+ * Arka plan hattı görevleri (her yeni geri bildirimde koşar). Bayinin günlük token tavanının
+ * TAMAMINI kullanabilirler.
+ */
+const BACKGROUND_TASKS = new Set<AiTask>(['analyze', 'embedding', 'auto_reply', 'dealer_learning']);
+
+/**
+ * Etkileşimli görevlerin (asistan sohbeti, anlatılar, yanıt taslakları…) kullanabileceği pay.
+ * Denetim Y3: analiz ve sohbet tek havuzdan çekiyordu; asistanı yoğun kullanan bir bayi günün
+ * ortasında kendi geri bildirim analizini durdurabiliyordu. Kalan %40 yalnız arka plan
+ * analizine ayrılır — sohbet hattı analiz hattını aç bırakamaz.
+ */
+export const AI_INTERACTIVE_BUDGET_SHARE = 0.6;
+
+/** Görev sınıfına göre bayinin günlük token tavanı. Görev bilinmiyorsa tam tavan. */
+export function dealerDailyLimitFor(task?: AiTask | null): number {
+  if (!task || BACKGROUND_TASKS.has(task)) return DEFAULT_DAILY_LIMIT;
+  return Math.floor(DEFAULT_DAILY_LIMIT * AI_INTERACTIVE_BUDGET_SHARE);
+}
+
 /** Limit aşıldıysa AiCostLimitExceededError fırlat. */
 export async function checkAiCostGuard(dealerId: string, limit?: number): Promise<void> {
   const max = limit ?? DEFAULT_DAILY_LIMIT;
   const used = await getTodayUsage(dealerId);
   if (used >= max) {
-    throw new AiCostLimitExceededError();
+    throw new AiCostLimitExceededError(
+      max < DEFAULT_DAILY_LIMIT
+        ? 'Bugünkü etkileşimli AI kotası doldu (kalan pay geri bildirim analizine ayrılmıştır). Lütfen yarın tekrar deneyin.'
+        : undefined
+    );
   }
 }
 
@@ -240,7 +264,8 @@ async function checkAiGlobalRateLimit(task: AiTask): Promise<void> {
 
 /**
  * Tek giriş noktası: bir LLM çağrısından ÖNCE çağrılır.
- *  - `dealerId` varsa: kiracı dakikalık limiti + kiracı günlük token tavanı.
+ *  - `dealerId` varsa: kiracı dakikalık limiti + kiracı günlük token tavanı (etkileşimli görevler
+ *    tavanın `AI_INTERACTIVE_BUDGET_SHARE` kadarını kullanır; kalan pay arka plan analizinindir).
  *  - `dealerId` yoksa `actorKey` (kullanıcı id / IP parmak izi) ile dakikalık limit.
  *  - İkisi de yoksa görev başına PLATFORM dakikalık limiti.
  *  - Bayisiz her çağrı platform günlük tavanına tabidir: QRA ve sistem öğrenmesi kendi
@@ -249,7 +274,7 @@ async function checkAiGlobalRateLimit(task: AiTask): Promise<void> {
 export async function guardAiCall(params: { task: AiTask; dealerId?: string | null; actorKey?: string | null }): Promise<void> {
   if (params.dealerId) {
     await checkAiRateLimit(params.dealerId, params.task);
-    await checkAiCostGuard(params.dealerId);
+    await checkAiCostGuard(params.dealerId, dealerDailyLimitFor(params.task));
     return;
   }
   if (params.actorKey) await checkAiRateLimit(params.actorKey, params.task);
