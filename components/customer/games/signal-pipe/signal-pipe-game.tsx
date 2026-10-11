@@ -15,7 +15,9 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Clock, Flag, Lock, Pause, Radio, RotateCcw, RotateCw, Server, Share2, Star, Timer, Trophy } from 'lucide-react';
-import { useGameLoop } from '@/lib/games/engine/hooks';
+import { useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useSignalPipeCopy, type SignalPipeCopy } from './copy';
 import { createInputRecorder, type InputLog } from '@/lib/games/engine/record';
 import type { GameComponentProps } from '@/lib/games/registry/types';
 import type { DeterministicProof } from '@/lib/games/verify';
@@ -112,23 +114,23 @@ function readBest(mode: string): number | null {
   return raw !== null && Number.isFinite(Number(raw)) ? Number(raw) : null;
 }
 
-const SIDE_TEXT: [number, string][] = [
-  [UP, 'üst'],
-  [RIGHT, 'sağ'],
-  [DOWN, 'alt'],
-  [LEFT, 'sol'],
+const SIDE_KEYS: [number, keyof SignalPipeCopy['side']][] = [
+  [UP, 'up'],
+  [RIGHT, 'right'],
+  [DOWN, 'down'],
+  [LEFT, 'left'],
 ];
-function shapeName(mask: number): string {
-  const k = SIDE_TEXT.filter(([b]) => mask & b).length;
-  if (k === 0) return 'boş';
-  if (k === 1) return 'uç boru';
-  if (k === 2) return mask === (UP | DOWN) || mask === (LEFT | RIGHT) ? 'düz boru' : 'köşe boru';
-  if (k === 3) return 'üçlü boru';
-  return 'dörtlü boru';
+function shapeName(mask: number, t: SignalPipeCopy): string {
+  const k = SIDE_KEYS.filter(([b]) => mask & b).length;
+  if (k === 0) return t.shape.empty;
+  if (k === 1) return t.shape.end;
+  if (k === 2) return mask === (UP | DOWN) || mask === (LEFT | RIGHT) ? t.shape.straight : t.shape.corner;
+  if (k === 3) return t.shape.tee;
+  return t.shape.cross;
 }
-function sides(mask: number): string {
-  return SIDE_TEXT.filter(([b]) => mask & b)
-    .map(([, t]) => t)
+function sides(mask: number, t: SignalPipeCopy): string {
+  return SIDE_KEYS.filter(([b]) => mask & b)
+    .map(([, key]) => t.side[key])
     .join(', ');
 }
 
@@ -157,6 +159,9 @@ function summarize(sim: PipeSim, threshold: number, prevBest: number | null): Su
 export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onFinish, fx, accent }: GameComponentProps) {
   const threshold = config.rewardThreshold;
   const reduce = useReducedMotionPref();
+  const t = useSignalPipeCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
   const [boot] = useState<Restored>(() => restore(seed, mode));
   const sim = boot.sim;
   const [stage, setStage] = useState<'tutorial' | 'playing' | 'summary'>(() =>
@@ -172,7 +177,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
   const [, setVer] = useState(0);
   const redraw = useCallback(() => setVer((v) => v + 1), []);
   const [timeLeft, setTimeLeft] = useState(sim.timeLeft);
-  const [announce, setAnnounce] = useState(boot.resumed ? 'Kaldığın yerden devam ediyorsun.' : '');
+  const [announce, setAnnounce] = useState(boot.resumed ? t.resumed : '');
   const [summary, setSummary] = useState<Summary | null>(() => (sim.over ? summarize(sim, threshold, null) : null));
   const [focusCell, setFocusCell] = useState(0);
   const [wave, setWave] = useState<{ key: number; level: number } | null>(null);
@@ -218,9 +223,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
     setSummary(s);
     setTimeLeft(sim.timeLeft);
     setStage('summary');
-    const why = s.reason === 'clear' ? 'Tüm hatlar bağlandı' : s.reason === 'time' ? 'Süre doldu' : 'Oyunu bitirdin';
-    setAnnounce(`${why}. ${s.results.length} seviye, puan ${s.score}.`);
-  }, [mode, sim, threshold, persist]);
+    const tt = tRef.current;
+    setAnnounce(tt.endAnnounce(tt.endHead(s.reason), s.results.length, s.score));
+  }, [mode, sim, threshold, persist, tRef]);
 
   const rotate = useCallback(
     (cell: number, dir: 1 | -1) => {
@@ -228,7 +233,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
       if (!sim.canRotate(cell)) {
         if (sim.level.locked[cell]) {
           fx.haptic(15);
-          setAnnounce('Bu hücre kilitli, döndürülemez.');
+          setAnnounce(tRef.current.locked);
           const el = gridRef.current?.querySelector<HTMLElement>(`[data-cell="${cell}"]`);
           if (el && !reduce && typeof el.animate === 'function') {
             el.animate(
@@ -252,30 +257,31 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
         fx.sfx(() => sfxCollectStar(s.stars * 2));
         fx.haptic('success');
         shake(3);
-        let line = `Hat ${s.level}/${LEVELS} bağlandı! ${s.moves} dokunuş, par ${s.par}, ${s.stars} yıldız, +${s.points} puan.`;
+        const tt = tRef.current;
+        let line = tt.solved(s.level, LEVELS, s.moves, s.par, s.stars, s.points);
         if (!crossedRef.current && sim.score >= threshold) {
           crossedRef.current = true;
           fx.sfx(() => sfxWin());
           fx.confetti('sides');
-          line += ` Ödül eşiği ${threshold} geçildi!`;
+          line += tt.thresholdLine(threshold);
         }
         if (r.cleared) {
           fx.sfx(() => sfxFanfare());
           fx.confetti('sides');
           shake(5);
-          line += ` Tüm seviyeler bitti! Süre bonusu +${sim.clearBonus}.`;
+          line += tt.clearedLine(sim.clearBonus);
           setAnnounce(line);
           redraw();
           window.setTimeout(endRun, reduce ? 0 : 700);
           return;
         }
-        line += ` Süre +${SOLVE_BONUS_TICKS / HZ} sn.`;
+        line += tt.timeLine(SOLVE_BONUS_TICKS / HZ);
         setAnnounce(line);
       }
       setTimeLeft(sim.timeLeft);
       redraw();
     },
-    [stage, paused, sim, fx, persist, shake, threshold, reduce, endRun, redraw]
+    [stage, paused, sim, fx, persist, shake, threshold, reduce, endRun, redraw, tRef]
   );
 
   useGameLoop({
@@ -290,11 +296,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
         setSpins({});
         setWave(null);
         setFocusCell(sim.level.srcRow * sim.level.n);
-        setAnnounce(
-          `Seviye ${sim.levelNo}: ${sim.level.n}'e ${sim.level.n} ızgara, par ${sim.level.par}.${
-            sim.level.locked.some(Boolean) ? ' Kilitli hücreler var.' : ''
-          }`
-        );
+        setAnnounce(tRef.current.levelAnnounce(sim.levelNo, sim.level.n, sim.level.par, sim.level.locked.some(Boolean)));
         redraw();
       }
       if (sim.over) {
@@ -316,11 +318,11 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
       if (!sim.inTransition && !paused && sec <= 10 && sec > 0 && sec !== warnedRef.current) {
         warnedRef.current = sec;
         if (sec <= 5) fx.sfx(() => sfxWarn());
-        if (sec === 10) setAnnounce('Son 10 saniye!');
+        if (sec === 10) setAnnounce(tRef.current.last10);
       }
     }, 100);
     return () => window.clearInterval(id);
-  }, [playing, paused, sim, fx]);
+  }, [playing, paused, sim, fx, tRef]);
 
   useEffect(() => {
     if (!playing || mode !== 'ranked') return;
@@ -440,7 +442,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
     setStage('playing');
   };
 
-  const fmt = (n: number) => n.toLocaleString('tr-TR');
+  const fmt = (n: number) => n.toLocaleString(t.numberLocale);
 
   const [shareNote, setShareNote] = useState('');
   const share = async () => {
@@ -450,18 +452,18 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
       return !r ? '⬛' : r.stars === 3 ? '🟩' : r.stars === 2 ? '🟨' : '🟧';
     }).join('');
     const url = `${window.location.origin}/customer/games/signal-pipe`;
-    const text = `Qratex Sinyal Bağla: ${summary.results.length}/${LEVELS} hat, ${fmt(summary.score)} puan\n${squares}`;
+    const text = `${t.share(summary.results.length, LEVELS, fmt(summary.score))}\n${squares}`;
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Sinyal Bağla', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text}\n${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
@@ -495,17 +497,17 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
       <div className="mb-2 flex items-stretch gap-2 text-white">
         <dl className="grid flex-1 grid-cols-3 gap-1.5 text-center">
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Seviye</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.level}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">
               {Math.min(sim.levelNo, LEVELS)}/{LEVELS}
             </dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Puan</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.score}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{fmt(sim.score)}</dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Hamle / par</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.movesPar}</dt>
             <dd
               className="text-lg font-black tabular-nums leading-tight"
               style={{ color: sim.moves > lv.par ? '#fbbf24' : undefined }}
@@ -518,7 +520,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
           type="button"
           onClick={onPauseRequest}
           className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -530,11 +532,11 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
         <div
           className="h-2.5 flex-1 overflow-hidden rounded-full bg-white/10"
           role="progressbar"
-          aria-label="Kalan süre"
+          aria-label={t.timeLeft}
           aria-valuemin={0}
           aria-valuemax={TIME_CAP_TICKS / HZ}
           aria-valuenow={secLeft}
-          aria-valuetext={`${secLeft} saniye`}
+          aria-valuetext={t.secondsText(secLeft)}
         >
           <div
             className="h-full rounded-full transition-[width] duration-100 motion-reduce:transition-none"
@@ -546,7 +548,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
             }}
           />
         </div>
-        <span className={`w-12 text-right text-sm font-bold tabular-nums ${low ? 'text-amber-300' : ''}`}>{secLeft} sn</span>
+        <span className={`w-12 text-right text-sm font-bold tabular-nums ${low ? 'text-amber-300' : ''}`}>{t.seconds(secLeft)}</span>
       </div>
 
       <div className="mb-2 flex items-center gap-2">
@@ -554,7 +556,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
           <div
             className="h-1.5 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(sim.score, threshold)}
@@ -566,8 +568,8 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
           </div>
           <p className="mt-1 text-xs text-white/75">
             {sim.score >= threshold
-              ? 'Ödül eşiği geçildi — devam et, yıldız topla.'
-              : `Ödül eşiği ${fmt(threshold)} puan · ${fmt(threshold - sim.score)} kaldı`}
+              ? t.passedHint
+              : t.toGo(fmt(threshold), fmt(threshold - sim.score))}
           </p>
         </div>
         {playing && sim.totalMoves > 0 && (
@@ -588,14 +590,14 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
             }}
             aria-label={
               sim.score >= threshold
-                ? 'Oyunu bitir ve sonucu kaydet. Onay için basılı tut.'
-                : 'Oyunu bitir. Ödül eşiğine ulaşmadın; onay için basılı tut.'
+                ? t.bankPassed
+                : t.bankBelow
             }
             className="relative flex h-11 shrink-0 touch-manipulation items-center gap-1.5 overflow-hidden rounded-xl border border-white/20 px-3 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <span aria-hidden className="absolute inset-y-0 left-0 bg-white/25" style={{ width: `${hold * 100}%` }} />
             <Flag className="relative h-4 w-4" aria-hidden />
-            <span className="relative">{hold > 0 ? 'Bırakma…' : 'Bitir (basılı tut)'}</span>
+            <span className="relative">{hold > 0 ? t.holding : t.bank}</span>
           </button>
         )}
       </div>
@@ -604,9 +606,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
         {announce}
       </p>
       <p id="sp-rules" className="sr-only">
-        Sinyal soldaki antenden girer, sağdaki sunucuya ulaşmalı. Ok tuşlarıyla hücreler arasında gez, Enter ya da
-        Boşluk saat yönünde, Q ters yönde döndürür. Esc duraklatır. Kaynak satır {lv.srcRow + 1}, sunucu satır{' '}
-        {lv.dstRow + 1}.
+        {t.rules(lv.srcRow + 1, lv.dstRow + 1)}
       </p>
 
       <div ref={shakeRef}>
@@ -642,7 +642,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
           <div
             ref={gridRef}
             role="grid"
-            aria-label={`Sinyal ızgarası, ${n}'e ${n}, seviye ${Math.min(sim.levelNo, LEVELS)}`}
+            aria-label={t.grid(n, Math.min(sim.levelNo, LEVELS))}
             aria-describedby="sp-rules"
             className="absolute grid transition-[filter] duration-150"
             style={{
@@ -664,9 +664,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                   const locked = lv.locked[cell];
                   const spin = spins[cell];
                   const waving = wave && wave.level === lv.index && lit && !reduce;
-                  const label = `Satır ${y + 1}, sütun ${x + 1}: ${shapeName(mask)}${mask ? `, açık uçlar ${sides(mask)}` : ''}${
-                    lit ? ', enerjili' : ''
-                  }${locked ? ', kilitli' : ''}${cell === srcCell ? ', kaynak' : ''}${cell === dstCell ? ', sunucu' : ''}`;
+                  const label = `${t.cell(y + 1, x + 1, shapeName(mask, t))}${mask ? t.openEnds(sides(mask, t)) : ''}${
+                    lit ? t.lit : ''
+                  }${locked ? t.lockedTag : ''}${cell === srcCell ? t.source : ''}${cell === dstCell ? t.server : ''}`;
                   return (
                     <div role="gridcell" key={cell} className="relative min-h-0 min-w-0">
                       <button
@@ -722,7 +722,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
           {lastResult && stage === 'playing' && (
             <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[4] flex -translate-y-1/2 justify-center" aria-hidden>
               <div className="rounded-2xl bg-[#03080d]/85 px-5 py-3 text-center text-white shadow-xl">
-                <p className="text-sm font-bold">Hat {lastResult.level} bağlandı!</p>
+                <p className="text-sm font-bold">{t.lineDone(lastResult.level)}</p>
                 <div className="mt-1 flex justify-center gap-0.5">
                   {[1, 2, 3].map((k) => (
                     <Star
@@ -734,7 +734,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                   ))}
                 </div>
                 <p className="mt-1 text-xs text-white/80">
-                  +{lastResult.points} puan · +{SOLVE_BONUS_TICKS / HZ} sn
+                  {t.lineReward(lastResult.points, SOLVE_BONUS_TICKS / HZ)}
                 </p>
               </div>
             </div>
@@ -748,35 +748,43 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#03080d]/95 p-5 text-white"
             >
               <h3 id="sp-tut-title" className="text-center text-xl font-bold">
-                Nasıl oynanır?
+                {c.howTo}
               </h3>
               <ol className="space-y-3 text-sm">
                 <li className="flex gap-3">
                   <RotateCw className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" aria-hidden />
                   <span>
-                    <b>Boruya dokun:</b> saat yönünde 90° döner. Sağ tık ya da <b>Q</b> ters yöne çevirir.
+                    <b>{t.tapTitle}</b>
+                    {t.tapBody}
+                    <b>Q</b>
+                    {t.tapTail}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Radio className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" aria-hidden />
                   <span>
-                    <b>Sinyal soldaki antenden girer.</b> Kesintisiz hat kurup sağdaki <b>sunucuya</b> ulaştır; enerjili
-                    borular parlak ve kalın görünür.
+                    <b>{t.signalTitle}</b>
+                    {t.signalMid}
+                    <b>{t.signalServer}</b>
+                    {t.signalTail}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Clock className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" aria-hidden />
                   <span>
-                    <b>Süre ortak:</b> {START_TICKS / HZ} sn ile başlarsın, her hat +{SOLVE_BONUS_TICKS / HZ} sn. Süre
-                    biterse oyun biter. 10 seviye; ızgara büyür, <Lock className="inline h-3.5 w-3.5" aria-hidden />{' '}
-                    kilitli hücreler gelir.
+                    <b>{t.timeTitle}</b>
+                    {t.timeBody(START_TICKS / HZ, SOLVE_BONUS_TICKS / HZ)}
+                    <Lock className="inline h-3.5 w-3.5" aria-hidden />
+                    {t.timeTail}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Star className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>Par kadar dokunuşla</b> çöz: 3 yıldız. Seviye puanı = yıldız × {tierBase(1)}–{tierBase(LEVELS)}.
-                    Hepsini bitirirsen kalan her saniye +{CLEAR_BONUS_PER_SEC}. Ödül eşiği <b>{fmt(threshold)} puan</b>.
+                    <b>{t.parTitle}</b>
+                    {t.parBody(tierBase(1), tierBase(LEVELS), CLEAR_BONUS_PER_SEC)}
+                    <b>{t.parThreshold(fmt(threshold))}</b>
+                    {t.parTail}
                   </span>
                 </li>
               </ol>
@@ -787,7 +795,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                 className="mx-auto h-12 rounded-xl px-8 font-bold text-[#03222a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 style={{ background: LIT }}
               >
-                Anladım, başla
+                {c.gotIt}
               </button>
             </div>
           )}
@@ -800,9 +808,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               className="absolute inset-0 z-10 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#03080d]/95 p-5 text-center text-white"
             >
               <h3 id="sp-sum-title" className="text-xl font-bold">
-                {summary.reason === 'clear' ? 'Tüm hatlar bağlandı!' : summary.reason === 'time' ? 'Süre doldu' : 'Oyunu bitirdin'}
+                {t.endTitle(summary.reason)}
               </h3>
-              <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+              <div className="flex gap-1" role="img" aria-label={c.stars(summary.stars)}>
                 {[1, 2, 3].map((k) => (
                   <Star
                     key={k}
@@ -816,13 +824,13 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="text-4xl font-black tabular-nums">{fmt(summary.score)}</p>
               <p className="text-xs text-white/75">
                 {summary.prevBest === null
-                  ? 'İlk puanın bu cihazda kaydedildi.'
+                  ? t.firstScore
                   : summary.score > summary.prevBest
-                    ? `Yeni kişisel rekor! (önceki ${fmt(summary.prevBest)})`
-                    : `En iyin: ${fmt(summary.prevBest)}`}
-                {mode === 'practice' ? ' · Pratik' : ''}
+                    ? c.newBest(fmt(summary.prevBest))
+                    : c.best(fmt(summary.prevBest))}
+                {mode === 'practice' ? c.practiceSuffix : ''}
               </p>
-              <ol className="grid grid-cols-5 gap-1.5" aria-label="Seviye yıldızları">
+              <ol className="grid grid-cols-5 gap-1.5" aria-label={t.levelStars}>
                 {Array.from({ length: LEVELS }, (_, i) => {
                   const r = summary.results[i];
                   return (
@@ -830,7 +838,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                       key={i}
                       className="flex h-11 w-11 flex-col items-center justify-center rounded-lg text-[10px] font-bold"
                       style={{ background: r ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)' }}
-                      aria-label={r ? `Seviye ${i + 1}: ${r.stars} yıldız, ${r.moves} dokunuş, par ${r.par}` : `Seviye ${i + 1}: çözülmedi`}
+                      aria-label={r ? t.levelResult(i + 1, r.stars, r.moves, r.par) : t.levelUnsolved(i + 1)}
                     >
                       <span className="text-white/70">{i + 1}</span>
                       <span aria-hidden className="tracking-tighter text-amber-300">
@@ -842,9 +850,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               </ol>
               <dl className="grid w-full max-w-xs grid-cols-3 gap-2 text-xs">
                 {[
-                  ['Hat', `${summary.results.length}/${LEVELS}`],
-                  ['Dokunuş', String(summary.moves)],
-                  ['Süre bonusu', summary.clearBonus ? `+${summary.clearBonus}` : '—'],
+                  [t.statLines, `${summary.results.length}/${LEVELS}`],
+                  [t.statTaps, String(summary.moves)],
+                  [t.statBonus, summary.clearBonus ? `+${summary.clearBonus}` : '—'],
                 ].map(([k, v]) => (
                   <div key={k} className="rounded-lg bg-white/10 px-2 py-1.5">
                     <dt className="text-white/70">{k}</dt>
@@ -855,9 +863,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="text-xs text-white/75">
                 {summary.score >= threshold
                   ? mode === 'ranked'
-                    ? 'Ödül eşiğini geçtin — sunucu dokunuşlarını yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                    : 'Eşiği geçtin. Sıralı modda bu puan ödül getirirdi.'
-                  : `Ödül eşiği ${fmt(threshold)} puan; ${fmt(threshold - summary.score)} puan kaldı.`}
+                    ? t.passedRanked
+                    : t.passedPractice
+                  : t.remaining(fmt(threshold), fmt(threshold - summary.score))}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button
@@ -865,7 +873,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                   onClick={share}
                   className="flex h-11 items-center gap-2 rounded-xl border border-white/25 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
-                  <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                  <Share2 className="h-4 w-4" aria-hidden /> {c.share}
                 </button>
                 <button
                   type="button"
@@ -875,7 +883,7 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
                   style={{ background: LIT }}
                 >
                   {mode === 'ranked' ? <Trophy className="h-4 w-4" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-                  {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                  {mode === 'ranked' ? c.save(autoLeft) : c.cont}
                 </button>
               </div>
               <p className="min-h-[1rem] text-xs text-white/75" aria-live="polite">
@@ -887,9 +895,9 @@ export function SignalPipeGame({ mode, seed, config, paused, onPauseRequest, onF
       </div>
 
       <p className="mt-2 text-center text-xs text-white/70">
-        {boot.resumed && stage === 'playing' ? 'Kaldığın yerden devam ediyorsun. · ' : ''}
-        {doneLevels > 0 ? `${doneLevels} hat bağlandı · ` : ''}
-        {mode === 'practice' ? 'Pratik: ödülsüz, liderliğe girmez.' : 'Sıralı: dokunuşların sunucuda yeniden oynatılarak doğrulanır.'}
+        {boot.resumed && stage === 'playing' ? t.resumedFoot : ''}
+        {doneLevels > 0 ? t.doneFoot(doneLevels) : ''}
+        {mode === 'practice' ? c.footPractice : t.footRanked}
       </p>
     </div>
   );

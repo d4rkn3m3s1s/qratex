@@ -14,7 +14,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Flag, Pause, RotateCcw, Share2, Sparkles, Star, Trophy } from 'lucide-react';
-import { useCoarsePointer, useGameInput, useGameLoop } from '@/lib/games/engine/hooks';
+import { useCoarsePointer, useGameInput, useGameLoop, useLatestRef } from '@/lib/games/engine/hooks';
+import { useGamesCopy } from '../copy';
+import { useTrustMergeCopy } from './copy';
 import { createInputRecorder, type InputLog } from '@/lib/games/engine/record';
 import type { GameAction } from '@/lib/games/engine/input';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -183,6 +185,9 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
   const threshold = config.rewardThreshold;
   const reduce = useReducedMotionPref();
   const coarse = useCoarsePointer();
+  const t = useTrustMergeCopy();
+  const c = useGamesCopy().common;
+  const tRef = useLatestRef(t);
   const [boot] = useState<Restored>(() => restore(seed, mode));
   const sim = boot.sim;
   const [stage, setStage] = useState<'tutorial' | 'playing' | 'summary'>(() =>
@@ -197,7 +202,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
   );
   const [tiles, setTiles] = useState<ViewTile[]>(() => boardView(sim));
   const [hud, setHud] = useState<Hud>(() => snap(sim));
-  const [announce, setAnnounce] = useState(boot.resumed ? 'Kaldığın yerden devam ediyorsun.' : '');
+  const [announce, setAnnounce] = useState(boot.resumed ? t.resumed : '');
   const [summary, setSummary] = useState<Summary | null>(() =>
     sim.over
       ? {
@@ -241,11 +246,10 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
       setSummary(s);
       setHud(snap(sim));
       setStage('summary');
-      setAnnounce(
-        `${reason === 'bank' ? 'Oyunu bitirdin' : 'Hamle kalmadı'}. Puan ${s.score}, en yüksek karo ${s.maxTile}, ${s.stars} yıldız.`
-      );
+      const tt = tRef.current;
+      setAnnounce(tt.endAnnounce(tt.endHead(reason === 'bank'), s.score, s.maxTile, s.stars));
     },
-    [mode, sim, threshold, persist]
+    [mode, sim, threshold, persist, tRef]
   );
 
   const shake = useCallback(
@@ -291,20 +295,21 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
         fx.sfx(() => sfxClick());
       }
       const merged = r.merges.map((m) => m.value).join(', ');
-      let line = `${DIR_TEXT[dir]}.${merged ? ` Birleşti: ${merged}.` : ''} Puan ${sim.score}.`;
+      const tt = tRef.current;
+      let line = tt.moveLine(tt.dir[dir] ?? DIR_TEXT[dir], merged, sim.score);
       if (!crossedRef.current && sim.score >= threshold) {
         crossedRef.current = true;
         fx.sfx(() => sfxWin());
         fx.haptic('success');
         fx.confetti('sides');
         shake(4);
-        line += ` Ödül eşiği ${threshold} geçildi!`;
+        line += tt.thresholdLine(threshold);
       } else if (r.milestone) {
         fx.sfx(() => sfxFanfare());
         fx.haptic('success');
         if (r.milestone >= 512) fx.confetti('sides');
         shake(r.milestone >= 512 ? 5 : 3);
-        line += ` Yeni karo: ${r.milestone}!`;
+        line += tt.milestoneLine(r.milestone);
       }
       setAnnounce(line);
       if (sim.over) {
@@ -315,7 +320,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
       }
       return true;
     },
-    [sim, persist, reduce, fx, threshold, shake, endRun]
+    [sim, persist, reduce, fx, threshold, shake, endRun, tRef]
   );
 
   /** Girdi: hazırsa uygula, değilse tek elemanlı tampona al (hızlı oyuncunun hamlesi yutulmaz). */
@@ -445,23 +450,23 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
   const share = async () => {
     if (!summary) return;
     const url = `${window.location.origin}/customer/games/trust-merge`;
-    const text = `Qratex Güven Birleştir'de ${summary.score.toLocaleString('tr-TR')} puan yaptım, en yüksek karom ${summary.maxTile}! Sen geçebilir misin?`;
+    const text = t.share(summary.score.toLocaleString(t.numberLocale), summary.maxTile);
     try {
       if (typeof navigator.share === 'function') {
-        await navigator.share({ title: 'Güven Birleştir', text, url });
-        setShareNote('Paylaşıldı.');
+        await navigator.share({ title: t.shareTitle, text, url });
+        setShareNote(c.shared);
         return;
       }
       await navigator.clipboard.writeText(`${text} ${url}`);
-      setShareNote('Panoya kopyalandı.');
+      setShareNote(c.copied);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setShareNote('Paylaşılamadı; tarayıcın bu özelliği desteklemiyor olabilir.');
+      setShareNote(c.shareFailed);
     }
   };
 
   const progress = Math.min(1, hud.score / Math.max(1, threshold));
-  const fmt = (n: number) => n.toLocaleString('tr-TR');
+  const fmt = (n: number) => n.toLocaleString(t.numberLocale);
 
   // Ekran okuyucu tahtası (görsel tahtanın metin karşılığı).
   const grid = useMemo(() => {
@@ -477,10 +482,10 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
     return `translate(calc(${c} * (100% + var(--tm-gap))), calc(${r} * (100% + var(--tm-gap))))`;
   };
 
-  const dpad = (dir: Dir, label: string, Icon: typeof ArrowUp) => (
+  const dpad = (dir: Dir, Icon: typeof ArrowUp) => (
     <button
       type="button"
-      aria-label={`${label} kaydır`}
+      aria-label={t.swipe[dir]}
       onPointerDown={(e) => {
         e.preventDefault();
         queue(dir);
@@ -513,15 +518,15 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
       <div className="mb-2 flex items-stretch gap-2 text-white">
         <dl className="grid flex-1 grid-cols-3 gap-1.5 text-center">
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Puan</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.score}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{fmt(hud.score)}</dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">En iyi karo</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.bestTile}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{hud.maxTile}</dd>
           </div>
           <div className="rounded-xl bg-white/10 px-1 py-1.5">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">Hamle</dt>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/70">{t.moves}</dt>
             <dd className="text-lg font-black tabular-nums leading-tight">{hud.moves}</dd>
           </div>
         </dl>
@@ -529,7 +534,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
           type="button"
           onClick={onPauseRequest}
           className="flex w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          aria-label="Duraklat"
+          aria-label={c.pause}
         >
           <Pause className="h-5 w-5" aria-hidden />
         </button>
@@ -540,7 +545,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
           <div
             className="h-2 overflow-hidden rounded-full bg-white/10"
             role="progressbar"
-            aria-label="Ödül eşiğine ilerleme"
+            aria-label={c.progress}
             aria-valuemin={0}
             aria-valuemax={threshold}
             aria-valuenow={Math.min(hud.score, threshold)}
@@ -552,8 +557,8 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
           </div>
           <p className="mt-1 text-xs text-white/70">
             {hud.score >= threshold
-              ? 'Ödül eşiği geçildi — devam et ya da basılı tutarak bitir.'
-              : `Ödül eşiği ${fmt(threshold)} puan · ${fmt(threshold - hud.score)} kaldı`}
+              ? t.passedHint
+              : t.toGo(fmt(threshold), fmt(threshold - hud.score))}
           </p>
         </div>
         {playing && hud.moves > 0 && (
@@ -574,8 +579,8 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
             }}
             aria-label={
               hud.score >= threshold
-                ? 'Oyunu bitir ve sonucu kaydet. Onay için basılı tut.'
-                : 'Oyunu bitir. Ödül eşiğine ulaşmadın; onay için basılı tut.'
+                ? t.bankPassed
+                : t.bankBelow
             }
             className="relative flex h-11 shrink-0 touch-manipulation items-center gap-1.5 overflow-hidden rounded-xl border border-white/20 px-3 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
@@ -585,7 +590,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               style={{ width: `${hold * 100}%` }}
             />
             <Flag className="relative h-4 w-4" aria-hidden />
-            <span className="relative">{hold > 0 ? 'Bırakma…' : 'Bitir (basılı tut)'}</span>
+            <span className="relative">{hold > 0 ? t.holding : t.bank}</span>
           </button>
         )}
       </div>
@@ -594,8 +599,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
         {announce}
       </p>
       <p id="tm-rules" className="sr-only">
-        Aynı sayılı karoları kaydırıp birleştir. Ok tuşları ya da WASD ile kaydır, dokunmatikte parmağını kaydır. Esc
-        duraklatır. Puan {hud.score}, en yüksek karo {hud.maxTile}.
+        {t.rules(hud.score, hud.maxTile)}
       </p>
 
       <div ref={shakeRef}>
@@ -603,7 +607,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
           ref={boardRef}
           tabIndex={0}
           role="application"
-          aria-label="Güven Birleştir tahtası, 4'e 4"
+          aria-label={t.board}
           aria-describedby="tm-rules"
           className="relative aspect-square w-full touch-none overflow-hidden rounded-2xl bg-[#3a3226] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           style={{ ['--tm-gap' as string]: '3%' } as CSSProperties}
@@ -660,13 +664,13 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
 
           {/* Metin karşılığı (görsel tahtayla eş; ekran okuyucu için). */}
           <table className="sr-only">
-            <caption>Tahta durumu</caption>
+            <caption>{t.boardCaption}</caption>
             <tbody>
               {Array.from({ length: SIZE }, (_, r) => (
                 <tr key={r}>
                   {Array.from({ length: SIZE }, (_, c) => {
                     const v = grid[r * SIZE + c];
-                    return <td key={c}>{v ? v : 'boş'}</td>;
+                    return <td key={c}>{v ? v : t.empty}</td>;
                   })}
                 </tr>
               ))}
@@ -681,38 +685,42 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               className="absolute inset-0 z-10 flex flex-col justify-center [justify-content:safe_center] gap-3 overflow-y-auto bg-[#1c1710]/95 p-5 text-white"
             >
               <h3 id="tm-tut-title" className="text-center text-xl font-bold">
-                Nasıl oynanır?
+                {c.howTo}
               </h3>
               <ol className="space-y-3 text-sm">
                 <li className="flex gap-3">
                   <ArrowRight className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>Kaydır:</b> tüm karolar o yöne kayar. Her hamleden sonra boş bir yere 2 ya da 4 doğar.
+                    <b>{t.slideTitle}</b>
+                    {t.slideBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>Aynı iki karo birleşir:</b> 8 + 8 → 16 ve <b>16 puan</b> kazanırsın. Puanın birleşimlerin
-                    toplamıdır.
+                    <b>{t.mergeTitle}</b>
+                    {t.mergeMid}
+                    <b>{t.mergePoints}</b>
+                    {t.mergeBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Trophy className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>Ödül eşiği {fmt(threshold)} puan</b> (yaklaşık 256 karosu). Eşikten sonra devam edip yıldız
-                    topla; istediğinde “Bitir”e basılı tut.
+                    <b>{t.thresholdTitle(fmt(threshold))}</b>
+                    {t.thresholdBody}
                   </span>
                 </li>
                 <li className="flex gap-3">
                   <Star className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden />
                   <span>
-                    <b>İpucu:</b> en büyük karoyu bir köşede tut. İlerledikçe 4 doğma olasılığı artar.
+                    <b>{t.tipTitle}</b>
+                    {t.tipBody}
                   </span>
                 </li>
               </ol>
               <p className="text-center text-xs text-white/70">
-                {coarse ? 'Tahtada parmağını kaydır ya da yön düğmelerini kullan.' : 'Ok tuşları / WASD · Esc duraklat'}
+                {coarse ? t.touchKeys : t.keys}
               </p>
               <button
                 type="button"
@@ -721,7 +729,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
                 className="mx-auto h-12 rounded-xl px-8 font-bold text-[#1c1710] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 style={{ background: '#e9c349' }}
               >
-                Anladım, başla
+                {c.gotIt}
               </button>
             </div>
           )}
@@ -734,9 +742,9 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               className="absolute inset-0 z-10 flex flex-col items-center justify-center [justify-content:safe_center] gap-2.5 overflow-y-auto bg-[#1c1710]/95 p-5 text-center text-white"
             >
               <h3 id="tm-sum-title" className="text-xl font-bold">
-                {summary.reason === 'bank' ? 'Oyunu bitirdin' : 'Hamle kalmadı'}
+                {t.endHead(summary.reason === 'bank')}
               </h3>
-              <div className="flex gap-1" role="img" aria-label={`3 yıldızdan ${summary.stars}`}>
+              <div className="flex gap-1" role="img" aria-label={c.stars(summary.stars)}>
                 {[1, 2, 3].map((n) => (
                   <Star
                     key={n}
@@ -750,16 +758,16 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="text-4xl font-black tabular-nums">{fmt(summary.score)}</p>
               <p className="text-xs text-white/75">
                 {summary.prevBest === null
-                  ? 'İlk puanın bu cihazda kaydedildi.'
+                  ? t.firstScore
                   : summary.score > summary.prevBest
-                    ? `Yeni kişisel rekor! (önceki ${fmt(summary.prevBest)})`
-                    : `En iyin: ${fmt(summary.prevBest)}`}
-                {mode === 'practice' ? ' · Pratik' : ''}
+                    ? c.newBest(fmt(summary.prevBest))
+                    : c.best(fmt(summary.prevBest))}
+                {mode === 'practice' ? c.practiceSuffix : ''}
               </p>
               <dl className="grid w-full max-w-xs grid-cols-2 gap-2 text-xs">
                 {[
-                  ['En yüksek karo', String(summary.maxTile)],
-                  ['Hamle', String(summary.moves)],
+                  [t.statMaxTile, String(summary.maxTile)],
+                  [t.statMoves, String(summary.moves)],
                 ].map(([k, v]) => (
                   <div key={k} className="rounded-lg bg-white/10 px-2 py-1.5">
                     <dt className="text-white/70">{k}</dt>
@@ -770,9 +778,9 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
               <p className="text-xs text-white/75">
                 {summary.score >= threshold
                   ? mode === 'ranked'
-                    ? 'Ödül eşiğini geçtin — sunucu hamlelerini yeniden oynatıp doğruladıktan sonra ödül hesaplanır.'
-                    : 'Eşiği geçtin. Sıralı modda bu puan ödül getirirdi.'
-                  : `Ödül eşiği ${fmt(threshold)} puan; ${fmt(threshold - summary.score)} puan kaldı.`}
+                    ? t.passedRanked
+                    : t.passedPractice
+                  : t.remaining(fmt(threshold), fmt(threshold - summary.score))}
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button
@@ -780,7 +788,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
                   onClick={share}
                   className="flex h-11 items-center gap-2 rounded-xl border border-white/25 px-4 text-sm font-semibold hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
-                  <Share2 className="h-4 w-4" aria-hidden /> Paylaş
+                  <Share2 className="h-4 w-4" aria-hidden /> {c.share}
                 </button>
                 <button
                   type="button"
@@ -790,7 +798,7 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
                   style={{ background: '#e9c349' }}
                 >
                   {mode === 'ranked' ? <Trophy className="h-4 w-4" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
-                  {mode === 'ranked' ? `Sonucu kaydet (${autoLeft})` : 'Devam'}
+                  {mode === 'ranked' ? c.save(autoLeft) : c.cont}
                 </button>
               </div>
               <p className="min-h-[1rem] text-xs text-white/75" aria-live="polite">
@@ -802,21 +810,21 @@ export function TrustMergeGame({ mode, seed, config, paused, onPauseRequest, onF
       </div>
 
       {coarse && stage === 'playing' && (
-        <div className="mt-3 grid grid-cols-3 justify-items-center gap-2" role="group" aria-label="Yön düğmeleri">
+        <div className="mt-3 grid grid-cols-3 justify-items-center gap-2" role="group" aria-label={c.dpad}>
           <span />
-          {dpad(DIR.UP, 'Yukarı', ArrowUp)}
+          {dpad(DIR.UP, ArrowUp)}
           <span />
-          {dpad(DIR.LEFT, 'Sola', ArrowLeft)}
-          {dpad(DIR.DOWN, 'Aşağı', ArrowDown)}
-          {dpad(DIR.RIGHT, 'Sağa', ArrowRight)}
+          {dpad(DIR.LEFT, ArrowLeft)}
+          {dpad(DIR.DOWN, ArrowDown)}
+          {dpad(DIR.RIGHT, ArrowRight)}
         </div>
       )}
 
       <p className="mt-2 text-center text-xs text-white/70">
-        {boot.resumed && stage === 'playing' ? 'Kaldığın yerden devam ediyorsun. · ' : ''}
+        {boot.resumed && stage === 'playing' ? t.resumedFoot : ''}
         {mode === 'practice'
-          ? 'Pratik: ödülsüz, liderliğe girmez.'
-          : 'Sıralı: hamlelerin sunucuda yeniden oynatılarak doğrulanır.'}
+          ? c.footPractice
+          : t.footRanked}
       </p>
     </div>
   );
