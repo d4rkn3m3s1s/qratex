@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 import { z } from 'zod';
 import { ANY_SIGNED_IN_ROLE, requireAuth } from '@/lib/api-auth';
 import { parseJsonBody } from '@/lib/http/parse-body';
@@ -104,6 +105,7 @@ export async function PATCH(request: NextRequest) {
 
     // Sıcak katmanı bayatlat: diğer cihazlardaki eski `sv`'li token'lar 60 sn beklemeden düşsün.
     await invalidateSessionState(session.user.id).catch(() => undefined);
+    await revokeNativePushTokens(session.user.id);
     const res = NextResponse.json({ success: true, message: 'Şifre güncellendi' }, { headers: PRIVATE_NO_STORE_HEADERS });
     await reissueSessionCookie(request, res, { sv: updated.sessionVersion }, { maxAge: SESSION_MAX_AGE_SECONDS });
     return res;

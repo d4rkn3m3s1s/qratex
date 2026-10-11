@@ -13,6 +13,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { decode, encode } from 'next-auth/jwt';
 import { prisma } from '@/lib/prisma';
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 
 /** JWT'de `sv` yoksa (geçiş öncesi verilmiş token) 0 kabul edilir. */
 export function readTokenSessionVersion(token: { sv?: unknown } | null | undefined): number {
@@ -37,6 +38,8 @@ export async function bumpSessionVersion(userId: string, db: SessionVersionDb = 
     data: { sessionVersion: { increment: 1 } },
     select: { sessionVersion: true },
   });
+  // İptal edilen oturumların native cihaz jetonları da düşer (bayat cihaz → kişisel bildirim sızıntısı).
+  await revokeNativePushTokens(userId);
   return row.sessionVersion;
 }
 

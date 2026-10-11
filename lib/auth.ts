@@ -1,4 +1,5 @@
 import { NextAuthOptions } from 'next-auth';
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
@@ -339,6 +340,7 @@ export async function claimUnverifiedAccount(userId: string, email: string, prov
   ]);
   // Saldırganın önceden açtığı oturum(lar) sıcak katman süresini beklemeden düşsün.
   await invalidateSessionState(userId).catch(() => undefined);
+  await revokeNativePushTokens(userId);
   console.warn('[auth] unverified account claimed by verified OAuth identity', { userId, provider });
 }
 
@@ -514,6 +516,8 @@ export const authOptions: NextAuthOptions = {
         // kimliği her çerez yenilemesinde değişiyordu; kapı çerezi (oturuma bağlı) ve token-replay
         // bu yüzden ilk /api/auth/session yenilemesinde bozuluyordu. Kalıcı oturum kimliği `sid`.
         token.sid = token.jti;
+        // Taze oturum kanıtı (native push jeton devri vb. hassas işlemler): yalnız GİRİŞTE yazılır.
+        token.authAt = Date.now();
         // OAuth kullanıcı nesnesi yalnız temel bilgiyi taşır → DB'den oku.
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
@@ -662,6 +666,7 @@ export const authOptions: NextAuthOptions = {
         (session as { jti?: string }).jti = ((token.sid as string | undefined) ?? token.jti) as string;
         // P0-07: requireAuth bu değeri DB'deki User.sessionVersion ile karşılaştırır.
         (session as { sv?: number }).sv = typeof token.sv === 'number' ? token.sv : 0;
+        (session as { authAt?: number }).authAt = typeof token.authAt === 'number' ? token.authAt : 0;
       }
       return session;
     },

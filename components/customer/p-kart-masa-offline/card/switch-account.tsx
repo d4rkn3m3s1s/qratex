@@ -2,7 +2,7 @@
 
 /** Yanlış rolde (personel/yönetici) "Farklı hesapla giriş yap" — çıkış yapıp bu karta döner (rapor B8). */
 import { useState } from 'react';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/native/sign-out';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 

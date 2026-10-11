@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/password';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
 import { consumePasswordResetToken, isPasswordResetTokenUsable } from '@/lib/auth-email-token';
 import { invalidateSessionState } from '@/lib/auth/session-state';
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 import { checkAuthEmailActionLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { passwordPolicyError } from '@/components/auth/p-auth/password-policy';
 import { getAuditRequestMeta } from '@/lib/request-metadata';
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
     }
     // P0-07: sıcak katmanı bayatlat → çalınmış eski oturumlar 60 sn beklemeden ANINDA düşer.
     await invalidateSessionState(result.userId).catch(() => undefined);
+    await revokeNativePushTokens(result.userId);
     scheduleAfterReset(result.userId, getAuditRequestMeta(request));
     return NextResponse.json(
       { success: true, code: 'PASSWORD_RESET', message: 'Şifren güncellendi. Diğer cihazlardaki oturumlar kapatıldı; yeni şifrenle giriş yapabilirsin.' },

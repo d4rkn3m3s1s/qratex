@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/native/sign-out';
 import { useQueryClient } from '@tanstack/react-query';
 import { Copy, Download, Eye, EyeOff, KeyRound, LogOut, ShieldCheck, ShieldOff } from 'lucide-react';
 import { toast } from 'sonner';

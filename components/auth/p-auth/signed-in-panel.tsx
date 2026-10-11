@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/native/sign-out';
 import { UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthCopy } from './copy';

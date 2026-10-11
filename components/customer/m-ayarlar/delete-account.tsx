@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { signOut } from 'next-auth/react';
+import { signOut } from '@/lib/native/sign-out';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, LogIn, Trash2 } from 'lucide-react';
 import {

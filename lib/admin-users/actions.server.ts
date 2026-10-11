@@ -9,6 +9,7 @@
  *  - B13 ödül verme: etkin/arşivsiz + koşullu stok düşümü + denetim; rozet geri alma denetimli
  *  - B2  silme yok: askıya alma (geri alınabilir) ve KVKK anonimleştirmesi (etki önizlemeli)
  */
+import { revokeNativePushTokens } from '@/lib/push-native-revoke';
 import { randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -66,6 +67,7 @@ async function assertActorIsAdmin(actorId: string) {
 
 async function dropSessions(userId: string) {
   await invalidateSessionState(userId).catch(() => undefined);
+  await revokeNativePushTokens(userId);
 }
 
 // ───────────────────────────── Puan / XP ─────────────────────────────

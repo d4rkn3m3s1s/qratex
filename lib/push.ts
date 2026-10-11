@@ -49,6 +49,8 @@ export async function sendPush(userId: string, payload: PushPayload): Promise<bo
         const webRows: typeof rows = [];
         const rejectedIds: string[] = [];
         for (const sub of rows) {
+            // Savunma: kaydın sahibi alıcı değilse ASLA gönderme (başkasının cihazına kişisel bildirim).
+            if (sub.userId !== userId) continue;
             if (isNativeEndpoint(sub.endpoint)) {
                 const d = decodeNativeEndpoint(sub.endpoint);
                 if (d) nativeRows.push({ id: sub.id, ...d });

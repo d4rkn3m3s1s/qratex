@@ -132,3 +132,26 @@ export async function unregisterNativePush(): Promise<void> {
   storeToken(null);
   await (await plugin()).unregister().catch(() => undefined);
 }
+
+/**
+ * Çıkış / hesap değişimi ÖNCESİ (oturum hâlâ geçerliyken) çağrılır: bu cihazın jetonunu sunucuda
+ * mevcut kullanıcıdan koparır ve yerel önbelleği siler → sonraki kişinin telefonuna eski hesabın
+ * bildirimleri gitmez. Web'de/jeton yoksa no-op; hata çıkışı ENGELLEMEZ.
+ */
+export async function releaseNativePush(): Promise<void> {
+  if (!isNativePushPlatform()) return;
+  const token = readStoredToken();
+  storeToken(null);
+  if (!token) return;
+  try {
+    const platform = await platformName();
+    await fetch('/api/push/native', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(platform ? { platform, token } : {}),
+    });
+  } catch {
+    /* ağ yok → sunucu tarafı oturum iptali / yeni girişin devri yine korur */
+  }
+}
