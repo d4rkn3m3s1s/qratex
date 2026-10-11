@@ -1,3 +1,4 @@
+import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
@@ -32,6 +33,9 @@ export async function GET() {
   try {
     const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
+    // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+    const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+    if (moduleGate) return moduleGate;
     const dealerId = auth.session.user.id;
 
     const [staff, pendingInvitations] = await Promise.all([
@@ -86,6 +90,9 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
+    // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+    const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+    if (moduleGate) return moduleGate;
     const dealerId = auth.session.user.id;
 
     const rl = await checkRateLimitDb(`staff-invite:${dealerId}`, INVITES_PER_HOUR, 60 * 60_000);

@@ -1,3 +1,4 @@
+import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
@@ -19,6 +20,9 @@ const createSchema = z.object({
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
+  // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+  const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+  if (moduleGate) return moduleGate;
   const dealerId = auth.session.user.id;
 
   const { searchParams } = new URL(request.url);
@@ -44,6 +48,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(['DEALER']);
   if ('error' in auth) return auth.error;
+  // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+  const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+  if (moduleGate) return moduleGate;
   const dealerId = auth.session.user.id;
 
   const body: unknown = await request.json().catch(() => null);

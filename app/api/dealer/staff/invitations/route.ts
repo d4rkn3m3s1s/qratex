@@ -1,3 +1,4 @@
+import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
@@ -10,6 +11,9 @@ export async function GET() {
   try {
     const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
+    // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+    const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+    if (moduleGate) return moduleGate;
     const invitations = await listPendingInvitations(auth.session.user.id);
     return NextResponse.json({ success: true, invitations }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {

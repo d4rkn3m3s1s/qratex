@@ -203,3 +203,54 @@ Yöntem: `app/staff/field/page.tsx`, `app/staff/field/staff-field-client.tsx`, `
 - İddianın "JWT süresince" kısmı eksik: `lib/auth.ts:227,254-256` girişte `staffProfile.dealerId`'yi `isActive`'e BAKMADAN token'a yazıyor; `authorize` ve `app/staff/layout.tsx:30-33` de kontrol etmiyor. Yani pasifleştirilen personel 24 saatlik (`lib/auth.ts:35`) oturum dolduktan sonra **yeniden giriş yaparak** süresiz erişmeye devam edebilir.
 - Yeniden üretim: Bayi `/dealer/team`'de personel A'yı pasif yapar. A çıkış yapıp tekrar giriş yapar → `/staff/field` açılır, `GET /api/staff/field-ping` aktif ekip arkadaşlarının son 7 günlük konumlarını döndürür, `POST` yeni kayıt yazar. Bulgu #2 ile birleşince ayrılmış çalışanın eski ekibinin konumunu izlemesi mümkün.
 - Öneri: `requireActiveStaff()` yardımcı fonksiyonu (DB'den `DealerStaff { userId, isActive: true }` doğrulaması, Redis'te kısa TTL'li önbellek — token-replay deseniyle aynı) tüm `/api/staff/*` uçlarında `getStaffDealerId` yerine kullanılmalı; ayrıca `jwt` callback'inde girişte `isActive=false` ise `dealerId` yazılmamalı ve pasifleştirme anında ilgili JTI'ler iptal listesine eklenmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç: birleştirildi.** `/staff/field` artık sorgu parametrelerini koruyarak `/staff?bildir=1`'e kalıcı yönlenir (`app/staff/field/page.tsx`, `permanentRedirect`); "Bugün" ekranı bu parametreyle **Saha bildirimi** alt sayfasını açar (`components/staff/b-ekip/field-report-sheet.tsx`). Veri modeli analitik tablosundan çıkarıldı: her bildirim bir **`Incident`** iş kaydıdır (`type: custom`, `metadata.source = staff_field_report`, kategori/acil/raporlayan/`clientId`/yuvarlanmış konum). Bayi bunu hem `/dealer/team` → **Saha** sekmesinde (görüldü / çözüldü / yeniden aç) hem de vaka kuyruğunda görür; acil bildirimde bayiye anında uygulama içi bildirim gider, durum değişince personele haber gider. Eski `POST/GET /api/staff/field-ping` 410 ile emekli; yeni uç `POST/GET /api/staff/field-reports` (`defineRoute`, aktif personel kapsamı, 10 dk'da 10 rate limit, `clientId` idempotent).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa metadata | KALDIRILDI | Rota yönlendirmeye dönüştü; tek kavram "Saha bildirimi". |
+| 2 | Rol kapısı | ÇALIŞIYOR | `/staff` layout + uçlarda aktif personel kapsamı. |
+| 3 | İçeriğe atla | ÇALIŞIYOR | `/staff` layout'unda. |
+| 4 | Üst bar | ÇALIŞIYOR | TR/EN, düzgün çıkış (`signOut()`). |
+| 5 | Loading / error | ÇALIŞIYOR | `/staff` sınırları. |
+| 6 | "Panele dön" | KALDIRILDI | Ayrı sayfa yok; alt sayfa kapatılır. |
+| 7 | Başlık kartı + açıklama | ÇALIŞIYOR | Dürüst metin: "Yöneticin hemen görür; durumunu buradan takip edebilirsin." |
+| 8 | Not alanı | ÇALIŞIYOR | Etiketli `textarea`, 500 karakter + sayaç. |
+| 9 | Konum alma | ÇALIŞIYOR | "Konumumu ekle" anahtarı (tercih hatırlanır), `timeout 8 sn`, `maximumAge 60 sn`, doğruluk (`accuracyM`) saklanır; "Konum alınıyor…" aşaması. |
+| 10 | Konum reddi | ÇALIŞIYOR | Bildirim konumsuz gönderilir, kullanıcıya söylenir. |
+| 11 | Gönder + çift tık engeli | ÇALIŞIYOR | `aria-busy`, aşamalı etiket. |
+| 12 | Boş ping engeli | ÇALIŞIYOR | Konu (kategori) zorunlu; istemci ve zod. |
+| 13 | Doğrulama hatası mesajı | ÇALIŞIYOR | Zarf v2 `error` her zaman metin; alan altında `role=alert`. |
+| 14 | Başarı + temizleme + yenileme | ÇALIŞIYOR | Hedefli yenileme (`staff-today`). |
+| 15 | Son kayıtlar listesi | ÇALIŞIYOR | "Saha bildirimlerim": YALNIZ kendi kayıtları. |
+| 16 | Kayıt içeriği gösterimi | ÇALIŞIYOR | Yapılandırılmış satır: kategori, acil, not, zaman, durum rozeti. Ham JSON, koordinat ve `dealerId` yok. |
+| 17 | Kimin gönderdiği | ÇALIŞIYOR | Bayi görünümünde raporlayan adı; personel yalnız kendi kayıtlarını görür. |
+| 18 | Liste yükleniyor | ÇALIŞIYOR | Sunucu ön yükleme + `QueryState`. |
+| 19 | Liste hata durumu | ÇALIŞIYOR | Görünür hata + tekrar dene. |
+| 20 | Yönetici görünürlüğü | ÇALIŞIYOR | `/dealer/team` Saha sekmesi + KPI ("açık saha bildirimi", "acil"), vaka kuyruğu; durum döngüsü. |
+| 21 | Offline gönderim | ÇALIŞIYOR | Ağ yoksa cihaz kuyruğu (localStorage, ≤ 20), `online` olayında ve açılışta boşaltma, `clientId` ile çift kayıt yok; "x bildirim bağlantı bekliyor" rozeti. |
+| 22 | Göreli zaman | ÇALIŞIYOR | `Intl.RelativeTimeFormat` dile göre. |
+| 23 | i18n | ÇALIŞIYOR | TR/EN sözlük. |
+| 24 | Enter / form semantiği | ÇALIŞIYOR | `<form onSubmit>`. |
+| 25 | Hızlı şablon çipleri | ÇALIŞIYOR | 6 konu çipi (Yoğunluk, Stok bitti, Arıza, Hijyen, Müşteri şikâyeti, Diğer), `radiogroup`. |
+| 26 | Kategori / öncelik | ÇALIŞIYOR | Kategori + "Acil" anahtarı → Incident önemi (acil=high; arıza/hijyen/şikâyet=medium). |
+| 27 | Fotoğraf eki | EKSİK | Bu dalgada yapılmadı (R2 yükleme akışı ayrı iş). |
+| 28 | Rate limit | ÇALIŞIYOR | Kullanıcı başına 10 dk'da 10. |
+| 29 | Pasif personel engeli | ÇALIŞIYOR | Kiracı çözümü DB'den aktif bağ ister (403); pasifleştirmede oturumlar düşer. |
+| 30 | KVKK aydınlatma | ÇALIŞIYOR | Anahtar altında "Yalnız yöneticin görür, ~100 m hassasiyetle saklanır"; bayi ekranında da gizlilik notu. |
+| 31 | Saklama süresi | ÇALIŞIYOR | İş kaydı (Incident) — analitik 90 gün temizliğine tabi değil; koordinat yalnız ~100 m'ye yuvarlanmış saklanır. |
+
+### Kapanan bulgular (11/11)
+1 (yöneticiye ulaşan akış + kapatma döngüsü) · 2 (personel yalnız kendi kayıtları, koordinat dönmez, ham JSON yok) · 3 (çürütülmüştü; yine de zarf v2 ile hijyen kapandı) · 4 (pasif personel 403 + oturum iptali) · 5 (gerçek çevrimdışı kuyruk) · 6 (analitik tablosu yerine Incident iş kaydı) · 7 (boş bildirim yok, rate limit) · 8 (yükleniyor/hata durumları) · 9 (konum anahtarı, aşamalar, doğruluk) · 10 (i18n, form semantiği, etiketler, `role=alert`) · 11 (tek kavram "Saha bildirimi").
+
+### Kalanlar
+- **Fotoğraf eki** (#27): yapılmadı.
+- **Vardiya devri notu / müşteri geri bildirimiyle korelasyon / operations-brief bağlamı**: yapılmadı (başka yüzeyler).
+- **Ayrı model** (`StaffFieldReport`) yerine mevcut `Incident` kullanıldı (şema değişikliği yasak); eski `staff_field_ping` analitik kayıtları taşınmadı (canlı DB'ye dokunulmadı).
+- **Navigasyon**: `lib/navigation/registry.ts` hâlâ `/staff/field` bağlantısını içeriyor (yönlendirme çalışır; bağlantının `/staff?bildir=1` olması navigasyon ajanının işi).

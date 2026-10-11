@@ -224,3 +224,71 @@ Durum sayımı: ÇALIŞIYOR 21 · KISMİ 16 · BOZUK 2 · SAHTE 2 · EKSİK 5 (�
 - Kanıt: `app/staff/layout.tsx:47-51` CSRF token'sız düz `<form action="/api/auth/signout" method="POST">`. next-auth 4.24.15 `node_modules/next-auth/core/index.js:246-258`: `csrfTokenVerified` false ise `routes.signout` çağrılmaz, `.../signout?csrf=true`'ya yönlendirilir; `lib/auth.ts:64-68` `pages.signOut` tanımlı olmadığı için next-auth'un İngilizce varsayılan "Are you sure you want to sign out?" sayfası açılır. Kullanıcı ikinci kez onaylamadıkça cookie silinmez. Bu formun kod tabanındaki tek kullanımı burası.
 - Yeniden üretim: Kasadaki ortak tablette personel "Çıkış"a basar, tanımadığı İngilizce sayfayı görüp bırakır → oturum açık; sonraki kişi geri tuşu/`/staff` ile önceki personel adına görev kapatır, giriş/çıkış ve izin kaydı yapar.
 - Düzeltme: İstemci bileşeninde `signOut({ callbackUrl: '/auth/login' })` (next-auth/react) kullanan çıkış butonu; diğer panellerdeki çıkış bileşeniyle ortaklaştırılmalı. Ortak cihaz için ek olarak kısa oturum ömrü / PIN ile hızlı kullanıcı değiştirme (şemada `DealerStaff.pinCode` zaten var) düşünülmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** `/staff` tek ekran **"Bugün"** olarak yeniden yazıldı. Sunucu bileşeni (`app/staff/page.tsx`) `getStaffToday` (`lib/staff-ops/server.ts`) ile vardiya, açık görevler, bugünün kontrol listeleri, atanan vaka/aksiyonlar, eğitim, izin, saha bildirimlerim ve müşteri geri bildirimimi tek seferde yükler; istemci adası (`components/staff/b-ekip/staff-today.tsx`) `/api/staff/today`'i 60 sn'de bir ve sekmeye dönünce yeniler. Yerleşim: üstte karşılama + **Saha bildirimi** düğmesi; sol sütunda vardiya kartı (durum makinesi + canlı sayaç) → kontrol listeleri → görevler → bana atananlar; sağda geri bildirimim → takvim → bildirimlerim; altta izin ve eğitim. Ops kaydı; hareket: vardiya durumu geçişi (crossfade, 200 ms), görev tamamlanınca satırın çökmesi; azaltılmış harekette anlık. Testler: `__tests__/staff-ops/core.test.ts` (16), `__tests__/staff-ops/routes.test.ts` (10).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Layout rol koruması | ÇALIŞIYOR | Rol + `getActiveStaffDealerId` (DB kaynak-doğruluk); pasif personel "Hesabın pasif" ekranını görür, menü gizlenir. |
+| 2 | Proxy rol yönlendirmesi | ÇALIŞIYOR | Değişmedi. |
+| 3 | İçeriğe atla | ÇALIŞIYOR | Değişmedi. |
+| 4 | Header marka linki | ÇALIŞIYOR | "Personel / Staff" dile göre. |
+| 5 | Kullanıcı adı (sm+) | ÇALIŞIYOR | Mobilde ad "Merhaba, …" başlığında görünür. |
+| 6 | Çıkış butonu | ÇALIŞIYOR | `signOut()` istemci bileşeni (`sign-out-button.tsx`), tek tık, TR/EN. |
+| 7 | Web Vitals | ÇALIŞIYOR | Değişmedi. |
+| 8 | Metadata | ÇALIŞIYOR | "Bugün" TR/EN. |
+| 9 | Rota yükleme iskeleti | ÇALIŞIYOR | Yalnız içerik bölgesi (`SkeletonDetail`) → çift header yok. |
+| 10 | Hata sınırı | ÇALIŞIYOR | Değişmedi (Sentry). |
+| 11 | İlk yükleme | ÇALIŞIYOR | Sunucu ön yükleme; istemcide `QueryState`. |
+| 12 | Veri yükleme hata durumu | ÇALIŞIYOR | Kalıcı hata kartı + "Tekrar dene"; hata boş veri gibi görünmez. |
+| 13 | Karşılama + işletme | ÇALIŞIYOR | Kişisel selam, unvan · işletme, İstanbul tarihi. |
+| 14 | "Saha modu" bağlantısı | KALDIRILDI | Yerine aynı ekranda "Saha bildirimi" alt sayfası; `/staff/field` → `/staff?bildir=1` kalıcı yönlendirme. |
+| 15 | Bugünkü vardiya kartı | ÇALIŞIYOR | Sunucu İstanbul gününe göre `activeShift` / `todayShift` / `nextShift` hesaplar; 14 kayıt sınırı yok; gece vardiyası "aktif vardiya" olarak sürer. |
+| 16 | Vardiya girişi | ÇALIŞIYOR | Sunucu durum makinesi (`decideClock`): başlangıçtan en erken 60 dk önce, bitişten sonra yok, tekrar giriş yok; koşullu atomik `updateMany` + denetim kaydı (IP/UA). İstemci nedeni gösterir ("Girişe 12 dk kaldı"). |
+| 17 | Vardiya çıkışı | ÇALIŞIYOR | Girişsiz/ikinci çıkış reddedilir; bitişten 12 sa sonrası yöneticinin düzeltmesine kalır; onay diyaloğu. |
+| 18 | "Tamamlandı" durumu | ÇALIŞIYOR | Giriş–çıkış saatleri + çalışılan süre. |
+| 19 | 4 sekme | KALDIRILDI | Tek ekran "Bugün" (vizyon); bölümler çapa ile (`#takvim`, `#izin`, `#egitim`, `#bildirimlerim`) bildirimlerden derin bağlanır. |
+| 20 | Açık görev sayacı | ÇALIŞIYOR | Açık görevler ayrı sorgu (≤ 200), tamamlananlar sayılmaz. |
+| 21 | Görev listesi | ÇALIŞIYOR | Yalnız açık görevler, öncelik sırası (devam eden → bekleyen → son tarih). |
+| 22 | Görev durum rozeti | ÇALIŞIYOR | Ortak `TaskStatusBadge`. |
+| 23 | Görev son tarihi | ÇALIŞIYOR | Tarih + saat, gecikene kırmızı kenar + ikon. |
+| 24 | "Başla" | ÇALIŞIYOR | Kendi düğmesinde spinner, `aria-busy`. |
+| 25 | "Tamamla" | ÇALIŞIYOR | 8 sn'lik "Geri al" (sunucuda 10 dk penceresi); işletme sahibine bildirim. |
+| 26 | Görev durum API sınırı | ÇALIŞIYOR | Personel iptal gönderemez; geçiş tablosu sunucuda, koşullu güncelleme (409). |
+| 27 | Görev boş durumu | ÇALIŞIYOR | Açıklamalı boş durum. |
+| 28 | Vardiya listesi | ÇALIŞIYOR | "Takvimim": bugün + 13 gün, artan sıra, bugün vurgusu, not, katılım durumu. |
+| 29 | Giriş/çıkış saat rozetleri | ÇALIŞIYOR | Vardiya kartında. |
+| 30 | Vardiya boş durumu | ÇALIŞIYOR | "Önümüzdeki iki haftada planlı vardiyan yok." |
+| 31 | Eğitim modülleri listesi | ÇALIŞIYOR | Tamamlanma tarihi, ilerleme "x/y". |
+| 32 | Eğitim "Tamamla" | ÇALIŞIYOR | Okuma görünümü (`GET /api/staff/training/[id]`, düz metin → XSS yok) + "Okudum ve anladım" onayı; sunucu `acknowledged: true` olmadan yazmaz. |
+| 33 | Eğitim tamamlandı rozeti | ÇALIŞIYOR | Tarihli. |
+| 34 | Checklist şablon listesi | ÇALIŞIYOR | Maddeler, tür, bugün tamamlandı mı; vardiyadayken açılış önce. Geliştirici notu kaldırıldı. |
+| 35 | Checklist tamamlama | ÇALIŞIYOR | İşaretlenebilir liste; zorunlu maddeler eksikse gönderilemez (sunucu da 400 + eksikler); aktif vardiyaya bağlanır; aynı gün ikinci gönderim 409. |
+| 36 | İzin taleplerim listesi | ÇALIŞIYOR | Her zaman görünür, boş durumlu, gün sayısı, durum. |
+| 37 | İzin talebi oluşturma | ÇALIŞIYOR | Tarih aralığı + açıklama; sunucu: geçmiş yok, ≤ 30 gün, ≤ 1 yıl ileri, çakışan talep yok; vardiya çakışma uyarısı; bekleyen talebi geri çekme; işletme sahibine bildirim. |
+| 38 | Kullanılmayan importlar | KALDIRILDI | Eski istemci dosyası silindi. |
+| 39 | PIN kodu yanıtta | KALDIRILDI | `/api/staff/me` emekli (410); yeni BFF PIN döndürmez. |
+| 40 | Canlı güncelleme | ÇALIŞIYOR | 60 sn yenileme + odakta yenileme; görev/izin/vardiya için uygulama içi bildirim (`ctaPath: /staff`). |
+| 41 | Kendi geri bildirimlerim | ÇALIŞIYOR | Son 30 gün ortalama + adet, önceki 30 güne göre fark, son 3 yorum (müşteri adı yok, uygunsuzlar hariç). |
+| 42 | Dil (i18n) | ÇALIŞIYOR | `components/staff/b-ekip/copy.ts` TR/EN; layout "Personel/Çıkış" dile göre; "Checklist" yerine "Kontrol listesi". |
+| 43 | Yönetici tarafında içerik üretme | ÇALIŞIYOR | `/dealer/team` görev, vardiya, eğitim, kontrol listesi üretir; izinleri onaylar (bkz. dealer_team.md Dalga 2). |
+| 44 | Azaltılmış hareket | ÇALIŞIYOR | Tüm hareket `useMotionPolicy` üzerinden. |
+
+### Kapanan bulgular (13/13)
+B1 (açık görevler ayrı sorgu, `compareTasks`) · B2 (pasif: `requireAuth` STAFF_INACTIVE, kiracı çözümü DB'den, layout pasif ekranı, pasifleştirmede `sessionVersion` artışı) · B3 (İstanbul günü sunucuda, aktif/bugün/sıradaki vardiya) · B4 (puantaj durum makinesi + pencere + koşullu güncelleme + denetim kaydı; yönetici düzeltmesi ayrı denetim eylemi) · B5 (personel iptal edemez, geri alma 10 dk) · B6 (çıkış `signOut()`) · B7 (eğitim okuma + onay, checklist doldurma) · B8 (izin iste + geri çek; bayi onay kuyruğu) · B9 (bayi üretim arayüzleri) · B10 (görünür hata, 60 sn yenileme, aksiyon sonrası hedefli yenileme) · B11 (iskelet yalnız içerik) · B12 (TR/EN, ölü kod ve PIN kaldırıldı, unvan gösteriliyor) · B13 (ikonlar `aria-hidden`, `aria-busy`, `aria-live`, ≥ 44 px).
+
+Eksik özelliklerden uygulananlar: 1 ("Bugün" ana ekranı), 2 (müşteri geri bildirimim), 5 (bildirimler), 6'nın kısmı (saha bildirimi → yönetici). Ayrıca kendisine atanan vaka/aksiyonlar personelde görünür (önceden hiç görünmüyordu).
+
+### Kalanlar
+- **Mola başlat/bitir, `StaffShiftEvent` olay tablosu, unutulan çıkış için düzeltme talebi**: şema gerektirir → ŞEMA İSTEĞİ: `StaffShiftEvent { id, shiftId, userId, type(clock_in/break_start/break_end/clock_out/manager_adjust), at, ip?, actorId }`. Şimdilik her olay `AuditLog`'a yazılıyor ve yönetici düzeltmesi `/dealer/team`'de.
+- **Vardiya takası / müsaitlik / ICS**: yapılmadı.
+- **Geofence / QR ile giriş**: yapılmadı (konum yalnız saha bildiriminde, isteğe bağlı).
+- **Görev fotoğraf kanıtı**: yapılmadı.
+- **AI koçluk cümlesi**: GET'te LLM yasak ilkesi gereği eklenmedi.
+- **Atanan vaka/aksiyonlarda personel eylemi**: salt okunur (vaka kuyruğu başka yüzeyin; tek görev modeli ayrı iş).

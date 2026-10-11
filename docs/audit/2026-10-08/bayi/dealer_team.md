@@ -276,3 +276,69 @@ Dört iddia çağıran ve çağrılan taraflarıyla birlikte baştan okundu: `ap
 - **Yeniden üretim:** Bayi bir personeli yanlışlıkla pasif yapıp kaydeder. Kart listeden kaybolur. Aynı e-postayla tekrar eklemeye çalıştığında 400 "zaten ekli" hatası alır. Personel başka bir işletmede işe başladığında o işletme de onu ekleyemez. Kayıt ancak DB'ye elle müdahaleyle kurtarılabilir. Bulgu 2 nedeniyle bu durumda bile personelin girişi açık kalır. Yani yönetim tarafında kilitli ama erişim tarafında açık, kendi içinde çelişkili bir kayıt oluşur.
 - Teknik bir ayrıntı: Doğrudan `PATCH /api/dealer/staff/<id>` `{isActive:true}` isteği hâlâ çalışır, çünkü PATCH `isActive` filtresi uygulamıyor. Fakat bunun için kaydın id'si gerekiyor ve UI bu id'yi artık göstermiyor. Normal bir kullanıcı için akış geri alınamaz.
 - **Öneri:** GET `?status=active|inactive|all` parametresini desteklemeli ve UI'da "Pasif" sekmesiyle yeniden aktifleştirme sunulmalı. Aynı işletmede pasif bir bağlantı varsa POST "yeniden aktifleştir" önermeli. Bağlantıyı kaldıran ve rolü önceki haline döndüren transaction'lı bir `DELETE` ucu eklenmeli. Pasifleştirme işlemi bir onay diyaloğuyla yapılmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Sonuç:** sayfa "ekip operasyon merkezi" olarak yeniden yazıldı. Sunucu bileşeni (`app/dealer/team/page.tsx`) tek BFF verisini (`lib/staff-ops/server.ts → getTeamHub`) ön yükler; istemci adası (`components/dealer/b-ekip/team-hub.tsx`) React Query ile `/api/dealer/staff/hub`'ı 60 sn'de bir yeniler. Üstte 6 KPI (şu an vardiyada, geciken/gelmeyen, bekleyen izin, geciken görev, açık saha bildirimi, ekip müşteri puanı 30 gün), altında `?tab=` ile derin bağlanabilen 6 sekme: **Ekip · Vardiya planı · Görevler · Onaylar · Saha · Eğitim ve kontrol**. Ağır sekmeler `next/dynamic` ile yalnız açıldığında yüklenir; sekme/hafta değişimi sunucu turu yapmaz (`history.replaceState`). Modül kapısı (`staff_management`) sayfada ve TÜM bayi personel uçlarında. QDL v2 (`PanelPage`, `PageHeader`, `MetricTile`, `SectionTabs`, `DetailSheet`, `StatusBadge`, `ConfirmAction`, `QueryState`), ops kaydı; hareket yalnız liste giriş/çıkışı ve layout (150–200 ms, `useMotionPolicy` ile azaltılmış harekette anlık). Testler: `__tests__/staff-ops/core.test.ts`, `__tests__/staff-ops/routes.test.ts`.
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa başlığı + açıklama | ÇALIŞIYOR | DS `PageHeader`, her genişlikte; "güncellendi X önce" meta. |
+| 2 | Mobil başlık kartı | ÇALIŞIYOR | Tek başlık; aksiyon mobilde de görünür. |
+| 3 | "Personel ekle" butonu | ÇALIŞIYOR | "Personel davet et" — mobilde görünür (+ boş durum CTA). |
+| 4 | 6 sekmeli yapı | ÇALIŞIYOR | Sekme URL'de (`?tab=ekip/vardiya/gorevler/onaylar/saha/egitim`). |
+| 5 | Sekmede sayı | ÇALIŞIYOR | Aktif ekip, açık görev, bekleyen izin, açık saha bildirimi; filtrede aktif/pasif/davet sayıları. |
+| 6 | Yükleniyor durumu | ÇALIŞIYOR | `QueryState` + sekme iskeletleri; yükleme sırasında yanlış boş durum yok. |
+| 7 | Boş durum + CTA | ÇALIŞIYOR | Davet akışını anlatan dürüst metin. |
+| 8 | Personel kartı | ÇALIŞIYOR | Ad, unvan, bugünkü vardiya + katılım rozeti, 30 gün puanı, açık görev. |
+| 9 | Personel avatarı | ÇALIŞIYOR | `user.image` varsa fotoğraf, yoksa baş harfler. |
+| 10 | "Pasif" rozeti | ÇALIŞIYOR | Hub pasifleri de döndürür; Aktif / Pasif / Davet bekleyen filtresi. |
+| 11 | Düzenle butonu | ÇALIŞIYOR | Kartın tamamı adlandırılmış buton → sağdan detay paneli (`DetailSheet`). |
+| 12 | Ekle: İsim | KALDIRILDI | Davet akışında adı davetli kendisi girer (bayi başkasının kimliğini yazmaz). |
+| 13 | Ekle: E-posta | ÇALIŞIYOR | `StaffInvitation` daveti (A3); hesap ele geçirme dalı P0'da kapandı, arayüz artık davet; bekleyen davetlerde "Yeniden gönder" / "İptal et". |
+| 14 | Ekle: Şifre | KALDIRILDI | Bayi şifre belirlemez; davetli bağlantıdan kendi şifresini kurar. |
+| 15 | Ekle: Pozisyon | ÇALIŞIYOR | Unvan + hazır rol çipleri (Garson, Kasiyer, Barista, Aşçı, Şef, Vardiya sorumlusu, Müdür). İzin matrisi → ŞEMA İSTEĞİ. |
+| 16 | Ekle: PIN | KALDIRILDI | Hiçbir akışta kullanılmıyordu (sahte vaat). API maskeyi "değişmedi" sayar. |
+| 17 | İstemci doğrulaması | ÇALIŞIYOR | E-posta biçimi istemcide + zod sunucuda, Türkçe mesaj. |
+| 18 | Gönderim + toast | ÇALIŞIYOR | Sunucunun Türkçe mesajı; e-posta gidemezse uyarı + "Yeniden gönder". |
+| 19 | Düzenle: Pozisyon | ÇALIŞIYOR | Detay panelinde, zod `max(50)`. |
+| 20 | Düzenle: PIN | KALDIRILDI | Bkz. #16. |
+| 21 | Aktif/Pasif | ÇALIŞIYOR | Onay diyaloğu; pasifleştirmede `bumpSessionVersion` (açık oturumlar düşer, A2) + Redis kapsam/oturum önbelleği silinir; `requireAuth` STAFF_INACTIVE; `/staff` layout'u pasif ekranı gösterir. Geri alınabilir ("Yeniden etkinleştir"). |
+| 22 | Düzenle → Kaydet | ÇALIŞIYOR | Yalnız değişen alan gönderilir. |
+| 23 | Personel silme | KALDIRILDI | İlke "cascade silme yok (arşiv)": pasif = arşiv; geçmiş vardiya/görev/puantaj ve geri bildirim atfı korunur. |
+| 24 | Görevler listesi | ÇALIŞIYOR | Atanan, son tarih, gecikme vurgusu, Türkçe durum rozeti; açık → kapalı sıralama (`compareTasks`). Açık / Geciken / Kapanan filtresi. |
+| 25 | Görev oluşturma | ÇALIŞIYOR | Hızlı görev formu (kişi, son tarih, açıklama); personele bildirim. |
+| 26 | Görev düzenle/iptal/yeniden aç | ÇALIŞIYOR | `PATCH /api/dealer/staff/tasks/[id]` (koşullu geçiş, yeniden atama yalnız aktif personele, denetim kaydı). |
+| 27 | Vardiyalar listesi | ÇALIŞIYOR | Haftalık kişi × gün ızgarası (masaüstü) + gün bazlı liste (mobil), hafta gezinme; eski GET'in varsayılan penceresi düzeltildi. |
+| 28 | Vardiya oluşturma | ÇALIŞIYOR | Hücreden ekle; `HH:mm`, aynı saat ve 16 sa sınırı, gece vardiyası; "Geçen haftayı kopyala" (çift kayıt üretmez); düzenle/kaldır (giriş yapılmamışsa). |
+| 29 | Puantaj görünümü | ÇALIŞIYOR | Katılım rozeti (bekleniyor/gecikti/vardiyada/tamamladı/gelmedi), gecikme dk, çalışılan süre; yönetici düzeltmesi denetim kaydıyla. |
+| 30 | İzin talepleri listesi | ÇALIŞIYOR | Gerekçe, gün sayısı, son 30 günün kararları. |
+| 31 | İzin onay/red | ÇALIŞIYOR | Onay kuyruğu, vardiya çakışma uyarısı, koşullu karar (409), personele bildirim. |
+| 32 | Eğitim modülleri listesi | ÇALIŞIYOR | Platform/işletme ayrımı, "x/y kişi tamamladı" çubuğu, kişi × modül matrisi. |
+| 33 | Eğitim oluştur/düzenle | ÇALIŞIYOR | Editör (≤ 20.000 karakter), arşivle (silme yok). |
+| 34 | Checklist listesi | ÇALIŞIYOR | Türkçe tür rozeti, madde sayısı, son tamamlayan. |
+| 35 | Checklist oluştur/düzenle | ÇALIŞIYOR | Madde editörü (ekle/sil/sırala/zorunlu, ≤ 50), arşivle. |
+| 36 | Checklist uyum geçmişi | ÇALIŞIYOR | Son 7 günün günlük uyum şeridi (İstanbul günü). |
+| 37 | Hata durumu | ÇALIŞIYOR | Görünür hata + "Tekrar dene"; yeni/yeniden yazılan uçlar `defineRoute` (merkezi hata zarfı, 503 ayrımı). |
+| 38 | Modül kapısı | ÇALIŞIYOR | Sayfa + hub + tüm `/api/dealer/staff/**` uçları (eski uçlara da `assertModuleEnabled` eklendi). |
+| 39 | Arama/filtre/sayfalama | ÇALIŞIYOR | Ekipte arama + durum filtresi; görev filtreleri; vardiyada hafta sayfalaması. Liste sınırları sunucuda. |
+| 40 | Personel bazlı müşteri geri bildirimi | ÇALIŞIYOR | `Feedback.dealerStaffId` 30 gün ortalaması + adet (kart, detay paneli, KPI). |
+| 41 | Metadata | ÇALIŞIYOR | Sayfaya özgü TR/EN başlık ve açıklama (gerçek akışları anlatır). |
+| 42 | Çok dillilik | ÇALIŞIYOR | `components/dealer/b-ekip/copy.ts` TR/EN; ham enum yok. |
+| 43 | "API kullanın" açıklamaları | KALDIRILDI | Yerine gerçek arayüzler ve dürüst boş durumlar. |
+
+### Kapanan bulgular (16/16)
+1 (davet akışı arayüze bağlandı; ele geçirme dalı P0'da kapalıydı) · 2 (pasif → istek reddi + oturum iptali + panel kapısı) · 3 (PIN arayüzü kaldırıldı, maske "değişmedi", denetimde yalnız `pinChanged`) · 4 (pasif filtre + yeniden etkinleştir; silme yerine arşiv) · 5 (beş sekmenin de yazma arayüzü) · 6 (izin onay kuyruğu + bildirim) · 7 (vardiya haftalık pencere, görev sıralaması) · 8 (mobil birincil aksiyon) · 9 (PIN kaldırıldı) · 10 (davet akışı; davet rate limit) · 11 (modül kapısı her uçta) · 12 (TR/EN sözlük, Türkçe sunucu mesajları) · 13 (QueryState, görünür hata) · 14 (metadata/açıklamalar) · 15 (etiket–kontrol bağları, `aria-label`, ≥ 44 px hedefler, onaylı eylemler) · 16 (`any` yok, sekme başına dosya, DTO'lar `lib/staff-ops/types.ts`).
+
+Eksik özelliklerden uygulananlar: 1 (personel bazlı müşteri karnesi), 3 (haftalık plan + kopyalama + puantaj + izin çakışması), 4 (görev atama + bildirim), 5 (eğitim tamamlanma matrisi), 6 (checklist uyumu). Ayrıca "Saha" sekmesi (eski `/staff/field` birleşmesi; görüldü/çözüldü döngüsü).
+
+### Kalanlar
+- **Rol/izin matrisi** (ör. vardiya sorumlusu izin onaylasın): `DealerStaff`'ta rol alanı yok; unvan serbest metin. → ŞEMA İSTEĞİ: `DealerStaff.role` (staff/cashier/chef/manager) + davet kabulünde `StaffInvitation.role` aktarımı.
+- **Koltuk kotası** (`maxStaffSeats`): plan modelinde alan yok → ŞEMA/plan isteği.
+- **Kiosk / PIN ile ortak cihaz girişi**: kapsam dışı (PIN arayüzü kaldırıldı).
+- **Bordro CSV dışa aktarma** ve sürükle-bırak vardiya: bu dalgada yapılmadı (hücreye dokun → ekle mevcut).
+- **Tek görev modeli** (ActionItem/Incident/StaffTask): personel kendisine atanan vaka/aksiyonları artık "Bugün" ekranında görür (salt okunur); birleşik model ayrı iş.

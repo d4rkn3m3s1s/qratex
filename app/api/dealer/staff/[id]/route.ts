@@ -1,3 +1,4 @@
+import { assertModuleEnabled } from '@/lib/module-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
@@ -40,6 +41,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         const auditMeta = getAuditRequestMeta(request);
         const auth = await requireAuth(['DEALER']);
         if ('error' in auth) return auth.error;
+        // staff_management modülü kapalıysa uç da kapalı (yalnız menüde değil).
+        const moduleGate = await assertModuleEnabled('staff_management', { role: 'dealer' }).catch(() => null);
+        if (moduleGate) return moduleGate;
         const { session } = auth;
 
         const params = await props.params;
