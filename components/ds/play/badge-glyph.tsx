@@ -155,7 +155,7 @@ export const BadgeGlyph = forwardRef<HTMLSpanElement, BadgeGlyphProps>(function 
         aria-hidden
         className={cn(
           'grid size-full place-items-center overflow-hidden rounded-full',
-          secret ? 'bg-surface-muted' : 'bg-surface-1',
+          secret ? 'bg-surface-muted' : imageSrc && !imgFailed ? 'bg-white' : 'bg-surface-1',
           locked && !secret && 'opacity-50 grayscale',
         )}
         style={
