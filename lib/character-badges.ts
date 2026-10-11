@@ -168,39 +168,66 @@ export async function classifyFeedbackCategory(text: string): Promise<string | n
 }
 
 /**
- * Bir kategoride, kullanıcının HENÜZ ALMADIĞI karakterlerden en uygun olanı seçer.
- * O kategorideki yorumlarına bakıp AI ile seçer + gerekçe (why) üretir.
- * Tüm karakterler alınmışsa null (o kategori tükendi).
+ * Admin'in pasifleştirdiği ya da arşivlediği karakter rozetleri. Seçim havuzundan çıkarılır
+ * (admin "Pasif" dediğinde yeni kazanım gerçekten durur). Okunamazsa boş küme — karakter
+ * motoru admin bayrağı yüzünden kilitlenmez (fail-open yalnız bu filtre için).
  */
-export async function pickCharacterInCategory(
-  userId: string,
-  categoryKey: string,
-): Promise<CharacterClassification> {
+export async function inactiveCharacterIds(): Promise<Set<string>> {
+  try {
+    const rows = await prisma.badge.findMany({
+      where: {
+        id: { in: CHARACTER_PROFILES.map((c) => c.badgeId) },
+        OR: [{ isActive: false }, { archivedAt: { not: null } }],
+      },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  } catch {
+    return new Set();
+  }
+}
+
+const NL = String.fromCharCode(10);
+
+export interface CharacterSelection {
+  badgeId: string;
+  name: string;
+  why: string;
+  /** AI seçimi mi, yoksa güvenli varsayılan (AI yok/hata/geçersiz yanıt) mı. */
+  source: 'ai' | 'fallback';
+  /** AI başarısızsa neden. */
+  aiError?: 'unavailable' | 'parse' | 'invalid_choice';
+}
+
+/**
+ * SAF KARAKTER SEÇİCİ — üretimdeki `pickCharacterInCategory` ile admin test laboratuvarı aynı
+ * fonksiyonu çağırır (tek kaynak: aynı prompt, sıcaklık, örneklem biçimi ve gerekçe kuralı).
+ * DB'ye dokunmaz. `excludeBadgeIds` sahip olunan/pasif karakterleri dışlar.
+ */
+export async function selectCharacterForSamples(input: {
+  categoryKey: string;
+  samples: { text: string; rating?: number | null }[];
+  excludeBadgeIds?: Iterable<string>;
+}): Promise<CharacterSelection | null> {
   const { CATEGORY_BY_KEY, charactersInCategory } = await import('@/lib/character-categories');
-  const cat = CATEGORY_BY_KEY[categoryKey];
+  const cat = CATEGORY_BY_KEY[input.categoryKey];
   if (!cat) return null;
+  const exclude = new Set(input.excludeBadgeIds ?? []);
+  const available = charactersInCategory(input.categoryKey).filter((c) => !exclude.has(c.badgeId));
+  if (available.length === 0) return null;
 
-  // Kullanıcının bu kategoride zaten sahip olduğu karakterleri çıkar.
-  const owned = await prisma.userBadge.findMany({
-    where: { userId, badgeId: { in: cat.characterIds } },
-    select: { badgeId: true },
+  const sample = input.samples
+    .slice(0, 12)
+    .map((f, i) => `${i + 1}. (${f.rating ?? 5}★) ${String(f.text ?? '').slice(0, 200)}`)
+    .join(NL);
+  const options = available.map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join(NL);
+  const fallback = (aiError: CharacterSelection['aiError']): CharacterSelection => ({
+    badgeId: available[0].badgeId,
+    name: available[0].name,
+    why: '',
+    source: 'fallback',
+    aiError,
   });
-  const ownedSet = new Set(owned.map((b) => b.badgeId));
-  const available = charactersInCategory(categoryKey).filter((c) => !ownedSet.has(c.badgeId));
-  if (available.length === 0) return null; // bu kategorideki tüm karakterler alınmış
-
-  // Bu kategorideki TÜKETİM YORUMLARINDAN örneklem (AI'ın karakteri seçmesi için).
-  const reviews = await prisma.consumptionReview.findMany({
-    where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
-    select: { text: true, rating: true },
-    orderBy: { createdAt: 'desc' },
-    take: 12,
-  });
-  const sample = reviews
-    .map((f, i) => `${i + 1}. (${f.rating}★) ${f.text!.slice(0, 200)}`)
-    .join('\n');
-
-  const options = available.map((c) => `${c.badgeId} = ${c.name}: ${c.trait}`).join('\n');
 
   try {
     const { runChatCompletion } = await import('@/lib/ai-engine');
@@ -215,25 +242,73 @@ export async function pickCharacterInCategory(
         'benzediğini söyle. TAM cümle, en fazla 30 kelime, nokta ile bitir. ' +
         'Örnek doğru why: "Yorumlarını ince bir mizah ve keskin gözlemle yazıyorsun; tıpkı her ayrıntıyı yakalayan Sherlock gibi." ' +
         'JSON: {"badgeId":"...","why":"..."}.',
-      user: `KARAKTERLER:\n${options}\n\nKULLANICININ YAZIM TARZINI GÖSTEREN ÖRNEK YORUMLAR:\n${sample || '(örnek yok)'}\n\nBu yazım tarzına en uygun karakteri seç ve neden benzediğini olumlu anlat. JSON:`,
+      user: [
+        'KARAKTERLER:',
+        options,
+        '',
+        'KULLANICININ YAZIM TARZINI GÖSTEREN ÖRNEK YORUMLAR:',
+        sample || '(örnek yok)',
+        '',
+        'Bu yazım tarzına en uygun karakteri seç ve neden benzediğini olumlu anlat. JSON:',
+      ].join(NL),
       temperature: 0.5,
       maxTokens: 220,
       jsonMode: true,
     });
     const content = res && typeof res !== 'string' ? res.content : (res as string | null);
-    let picked = available[0]; // güvenli varsayılan
-    let why = '';
-    if (content) {
-      const parsed = JSON.parse(content) as { badgeId?: string; why?: string };
-      const match = available.find((c) => c.badgeId === parsed.badgeId);
-      if (match) picked = match;
-      why = tidyWhy(parsed.why);
+    if (!content) return fallback('unavailable');
+    let parsed: { badgeId?: string; why?: string };
+    try {
+      parsed = JSON.parse(content) as { badgeId?: string; why?: string };
+    } catch {
+      return fallback('parse');
     }
-    return { badgeId: picked.badgeId, name: picked.name, why, categoryKey: cat.key, categoryName: cat.name };
+    const match = available.find((c) => c.badgeId === parsed.badgeId);
+    if (!match) return { ...fallback('invalid_choice'), why: tidyWhy(parsed.why) };
+    return { badgeId: match.badgeId, name: match.name, why: tidyWhy(parsed.why), source: 'ai' };
   } catch {
     // AI yoksa: kategoriden ilk uygun karakteri gerekçesiz ata (sessiz degradasyon).
-    return { badgeId: available[0].badgeId, name: available[0].name, why: '', categoryKey: cat.key, categoryName: cat.name };
+    return fallback('unavailable');
   }
+}
+
+/**
+ * Bir kategoride, kullanıcının HENÜZ ALMADIĞI (ve admin'in pasifleştirmediği) karakterlerden
+ * en uygun olanı seçer. O kategorideki yorumlarına bakıp AI ile seçer + gerekçe (why) üretir.
+ * Tüm karakterler alınmışsa null (o kategori tükendi).
+ */
+export async function pickCharacterInCategory(
+  userId: string,
+  categoryKey: string,
+): Promise<CharacterClassification> {
+  const { CATEGORY_BY_KEY } = await import('@/lib/character-categories');
+  const cat = CATEGORY_BY_KEY[categoryKey];
+  if (!cat) return null;
+
+  // Kullanıcının bu kategoride zaten sahip olduğu + admin'in pasifleştirdiği karakterleri çıkar.
+  const [owned, inactive] = await Promise.all([
+    prisma.userBadge.findMany({
+      where: { userId, badgeId: { in: cat.characterIds } },
+      select: { badgeId: true },
+    }),
+    inactiveCharacterIds(),
+  ]);
+  const exclude = new Set<string>([...owned.map((b) => b.badgeId), ...inactive]);
+
+  // Bu kategorideki TÜKETİM YORUMLARINDAN örneklem (AI'ın karakteri seçmesi için).
+  const reviews = await prisma.consumptionReview.findMany({
+    where: { customerId: userId, characterCategory: categoryKey, text: { not: null } },
+    select: { text: true, rating: true },
+    orderBy: { createdAt: 'desc' },
+    take: 12,
+  });
+  const picked = await selectCharacterForSamples({
+    categoryKey,
+    samples: reviews.map((r) => ({ text: r.text ?? '', rating: r.rating })),
+    excludeBadgeIds: exclude,
+  });
+  if (!picked) return null; // bu kategorideki tüm karakterler alınmış / pasif
+  return { badgeId: picked.badgeId, name: picked.name, why: picked.why, categoryKey: cat.key, categoryName: cat.name };
 }
 
 /**
@@ -332,6 +407,95 @@ export interface CategoryProgress {
   ready: boolean;
 }
 
+/** Kategori başına ayrıntılı ilerleme (admin test laboratuvarı ve bar hesabının ortak çekirdeği). */
+export interface CategoryProgressDetail {
+  key: string;
+  name: string;
+  emoji: string;
+  /** Etkin eşik (admin override > kod varsayılanı). */
+  threshold: number;
+  /** Etkin minimum yorum uzunluğu (0 = şart yok). */
+  minReviewLength: number;
+  /** Bara sayılan yorum (uzunluk şartı uygulanmış). */
+  counted: number;
+  /** Bu kategoride sahip olunan karakter sayısı. */
+  taken: number;
+  /** Alınabilir (sahip olunmayan ve pasif olmayan) karakter sayısı. */
+  available: number;
+  /** Mevcut döngüdeki ilerleme (0..threshold). */
+  current: number;
+  ready: boolean;
+  /** Bir sonraki karakter için gereken toplam sayılan yorum. */
+  targetForNext: number;
+}
+
+/**
+ * Kategori bazlı ilerleme dökümü. Hata FIRLATIR (çağıran karar verir): bar hesabı
+ * (`getCategoryProgress`) sessizce boş bara düşer, admin aracı hatayı gösterir.
+ */
+export async function getCategoryProgressDetailed(userId: string): Promise<CategoryProgressDetail[]> {
+  const { CHARACTER_CATEGORIES, categoryThreshold, categoryMinReviewLength } =
+    await import('@/lib/character-categories');
+  const { getCategoryThresholdOverrides } = await import('@/lib/character-thresholds');
+  const overrides = await getCategoryThresholdOverrides(); // admin eşik/uzunluk override'ları
+
+  // Kategori bazlı yorum sayıları. Genel sayım TÜM yorumları sayar; ama uzunluk-şartı
+  // olan kategoriler (Gizemli) için yalnız DETAYLI (minReviewLength+) yorumlar sayılır.
+  // Uzunluk şartı SQL groupBy'da ifade edilemediğinden, şartlı kategoriler için ayrı sayım.
+  const grouped = await prisma.consumptionReview.groupBy({
+    by: ['characterCategory'],
+    // Moderasyonla kaldırılmış (deletedAt) ve metni silinmiş yorumlar bar'a SAYILMAZ: karakter
+    // barı yalnız yayındaki metinli yorumu sayar (kaldırılan sahte yorumla rozet açılamaz).
+    where: { customerId: userId, characterCategory: { not: null }, deletedAt: null, text: { not: null } },
+    _count: { _all: true },
+  });
+  const countByCat = new Map<string, number>();
+  for (const g of grouped) if (g.characterCategory) countByCat.set(g.characterCategory, g._count._all);
+
+  // Uzunluk-şartı olan kategoriler için: yalnız minLen+ uzunluktaki (özenli) yorumları say.
+  for (const cat of CHARACTER_CATEGORIES) {
+    const minLen = categoryMinReviewLength(cat, overrides);
+    if (minLen <= 0) continue;
+    const rows = await prisma.consumptionReview.findMany({
+      where: { customerId: userId, characterCategory: cat.key, deletedAt: null, text: { not: null } },
+      select: { text: true },
+    });
+    countByCat.set(cat.key, rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length);
+  }
+
+  // Kullanıcının sahip olduğu karakter rozetleri + admin'in pasifleştirdikleri.
+  const allCharIds = CHARACTER_PROFILES.map((c) => c.badgeId);
+  const [ownedBadges, inactive] = await Promise.all([
+    prisma.userBadge.findMany({ where: { userId, badgeId: { in: allCharIds } }, select: { badgeId: true } }),
+    inactiveCharacterIds(),
+  ]);
+  const ownedSet = new Set(ownedBadges.map((b) => b.badgeId));
+
+  return CHARACTER_CATEGORIES.map((cat) => {
+    const threshold = categoryThreshold(cat, overrides); // admin override > kod-default (Gizemli=20/diğer=6)
+    const minReviewLength = categoryMinReviewLength(cat, overrides);
+    const counted = countByCat.get(cat.key) ?? 0;
+    // Kaç rozet zaten alınmış → o kadar eşik "tüketilmiş" say (aynı kategoride yeni karakter).
+    const taken = cat.characterIds.filter((id) => ownedSet.has(id)).length;
+    const available = cat.characterIds.filter((id) => !ownedSet.has(id) && !inactive.has(id)).length;
+    const consumed = taken * threshold;
+    const current = Math.max(0, Math.min(threshold, counted - consumed));
+    return {
+      key: cat.key,
+      name: cat.name,
+      emoji: cat.emoji,
+      threshold,
+      minReviewLength,
+      counted,
+      taken,
+      available,
+      current,
+      ready: available > 0 && counted - consumed >= threshold,
+      targetForNext: consumed + threshold,
+    };
+  });
+}
+
 /**
  * Kullanıcının kategori sayımlarını çıkarıp BAR için en uygun kategoriyi bulur.
  * "Hazır" (eşik dolu + alınmamış karakter olan) kategori varsa onu; yoksa eşiğe
@@ -340,60 +504,16 @@ export interface CategoryProgress {
 export async function getCategoryProgress(userId: string): Promise<CategoryProgress> {
   const base: CategoryProgress = { topCategoryKey: null, current: 0, threshold: CATEGORY_BADGE_THRESHOLD, progress: 0, ready: false };
   try {
-    const { CHARACTER_CATEGORIES, categoryThreshold, categoryMinReviewLength } =
-      await import('@/lib/character-categories');
-    const { getCategoryThresholdOverrides } = await import('@/lib/character-thresholds');
-    const overrides = await getCategoryThresholdOverrides(); // admin eşik/uzunluk override'ları
-
-    // Kategori bazlı yorum sayıları. Genel sayım TÜM yorumları sayar; ama uzunluk-şartı
-    // olan kategoriler (Gizemli) için yalnız DETAYLI (minReviewLength+) yorumlar sayılır.
-    // Uzunluk şartı SQL groupBy'da ifade edilemediğinden, şartlı kategoriler için ayrı sayım.
-    const grouped = await prisma.consumptionReview.groupBy({
-      by: ['characterCategory'],
-      // Moderasyonla kaldırılmış (deletedAt) ve metni silinmiş yorumlar bar'a SAYILMAZ: karakter
-      // barı yalnız yayındaki metinli yorumu sayar (kaldırılan sahte yorumla rozet açılamaz).
-      where: { customerId: userId, characterCategory: { not: null }, deletedAt: null, text: { not: null } },
-      _count: { _all: true },
-    });
-    const countByCat = new Map<string, number>();
-    for (const g of grouped) if (g.characterCategory) countByCat.set(g.characterCategory, g._count._all);
-
-    // Uzunluk-şartı olan kategoriler için: yalnız minLen+ uzunluktaki (özenli) yorumları say.
-    // Prisma'da metin uzunluğu filtresi yok → o kategorinin metinlerini çekip kod tarafında filtrele.
-    for (const cat of CHARACTER_CATEGORIES) {
-      const minLen = categoryMinReviewLength(cat, overrides);
-      if (minLen <= 0) continue;
-      const rows = await prisma.consumptionReview.findMany({
-        where: { customerId: userId, characterCategory: cat.key, deletedAt: null, text: { not: null } },
-        select: { text: true },
-      });
-      const detailedCount = rows.filter((r) => (r.text?.trim().length ?? 0) >= minLen).length;
-      countByCat.set(cat.key, detailedCount);
-    }
-
-    // Kullanıcının sahip olduğu karakter rozetleri (kategori tükenmiş mi?).
-    const allCharIds = CHARACTER_PROFILES.map((c) => c.badgeId);
-    const ownedBadges = await prisma.userBadge.findMany({
-      where: { userId, badgeId: { in: allCharIds } },
-      select: { badgeId: true },
-    });
-    const ownedSet = new Set(ownedBadges.map((b) => b.badgeId));
-
+    const details = await getCategoryProgressDetailed(userId);
     let best: CategoryProgress | null = null;
-    for (const cat of CHARACTER_CATEGORIES) {
-      const threshold = categoryThreshold(cat, overrides); // admin override > kod-default (Gizemli=20/diğer=6)
-      const total = countByCat.get(cat.key) ?? 0;
-      const availableChars = cat.characterIds.filter((id) => !ownedSet.has(id));
-      if (availableChars.length === 0) continue; // bu kategoride alınacak karakter kalmadı
-
-      // Kaç rozet zaten alınmış → o kadar eşik "tüketilmiş" say (aynı kategoride yeni karakter).
-      const takenInCat = cat.characterIds.filter((id) => ownedSet.has(id)).length;
-      const consumed = takenInCat * threshold;
-      const current = Math.max(0, Math.min(threshold, total - consumed));
-      const ready = total - consumed >= threshold;
+    for (const d of details) {
+      if (d.available === 0) continue; // bu kategoride alınacak karakter kalmadı
       const cand: CategoryProgress = {
-        topCategoryKey: cat.key, current, threshold,
-        progress: threshold > 0 ? current / threshold : 0, ready,
+        topCategoryKey: d.key,
+        current: d.current,
+        threshold: d.threshold,
+        progress: d.threshold > 0 ? d.current / d.threshold : 0,
+        ready: d.ready,
       };
       // Öncelik: hazır olan > ilerlemesi yüksek olan (oransal).
       if (!best) best = cand;
