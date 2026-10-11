@@ -13,7 +13,7 @@ import { formatTeamDateTime, relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage } from '../lib/api';
 import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
-import { MemberAvatar, displayName } from '../shared';
+import { MemberAvatar, useDisplayName } from '../shared';
 import { uploadTaskFile } from './files';
 import type { TaskDetailPayload } from '../lib/types';
 import { useTeamCopy } from '../copy';
@@ -50,6 +50,7 @@ function renderText(text: string, handles: Set<string>) {
  * yalnız bu göreve yüklenmiş ekin kimliğiyle bağlanır (serbest URL enjeksiyonu kapandı).
  */
 export function TaskComments({ data }: { data: TaskDetailPayload }) {
+  const dn = useDisplayName();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -139,7 +140,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
         <MemberAvatar user={c.author} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="qx-small font-semibold text-fg">{displayName(c.author, tu.silinmisKullanici)}</span>
+            <span className="qx-small font-semibold text-fg">{dn(c.author, tu.silinmisKullanici)}</span>
             <time className="qx-caption text-fg-muted" dateTime={c.createdAt} title={formatTeamDateTime(c.createdAt)}>
               {relativeTeamTime(c.createdAt)}
             </time>
@@ -242,7 +243,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
       >
         {replyTo && (
           <p className="qx-caption flex items-center gap-1 text-fg-muted">
-            <CornerDownRight className="h-3 w-3" aria-hidden /> {tf.replyTo(displayName(replyTo.author, tf.comment))}
+            <CornerDownRight className="h-3 w-3" aria-hidden /> {tf.replyTo(dn(replyTo.author, tf.comment))}
             <IconButton aria-label={tu.yanitiIptalEt} icon={<X />} size="sm" onClick={() => setReplyTo(null)} />
           </p>
         )}
@@ -290,7 +291,7 @@ export function TaskComments({ data }: { data: TaskDetailPayload }) {
                     }}
                   >
                     <MemberAvatar user={m} size="xs" />
-                    <span className="qx-small truncate">{displayName(m)}</span>
+                    <span className="qx-small truncate">{dn(m)}</span>
                   </button>
                 </li>
               ))}

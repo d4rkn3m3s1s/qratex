@@ -16,7 +16,7 @@ import { errorMessage, qs, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
-import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
+import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, useDisplayName } from '../shared';
 import type { TaskDetailPayload, TaskList } from '../lib/types';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
@@ -41,6 +41,7 @@ function Row({ label, children, htmlFor }: { label: string; children: React.Reac
  * durum ve süre kaydı kendi görevinde açıktır.
  */
 export function TaskProperties({ data }: { data: TaskDetailPayload }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
@@ -122,7 +123,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
               <SelectItem value="__none">{tx.unassigned}</SelectItem>
               {assignable.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  {displayName(m)}
+                  {dn(m)}
                   {m.isSelf ? ' (sen)' : ''}
                 </SelectItem>
               ))}
@@ -131,7 +132,7 @@ export function TaskProperties({ data }: { data: TaskDetailPayload }) {
         ) : (
           <span className="flex items-center gap-2">
             <MemberAvatar user={task.assignedTo} size="xs" />
-            <span className="qx-small text-fg">{displayName(task.assignedTo)}</span>
+            <span className="qx-small text-fg">{dn(task.assignedTo)}</span>
           </span>
         )}
       </Row>

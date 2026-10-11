@@ -19,7 +19,7 @@ import { relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { MemberAvatar, PhaseBadge, displayName } from '../shared';
+import { MemberAvatar, PhaseBadge, useDisplayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
@@ -61,6 +61,7 @@ export function InitiativeDetail({ id, onClose }: { id: string; onClose: () => v
 }
 
 function Body({ d }: { d: Detail }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -154,14 +155,14 @@ function Body({ d }: { d: Detail }) {
                   .filter((m) => m.inTeam || m.isAdmin)
                   .map((m) => (
                     <SelectItem key={m.id} value={m.id}>
-                      {displayName(m)}
+                      {dn(m)}
                     </SelectItem>
                   ))}
               </SelectContent>
             </Select>
           ) : (
             <span className="qx-small flex items-center gap-1.5 text-fg">
-              <MemberAvatar user={item.owner} size="xs" /> {item.owner ? displayName(item.owner) : 'Sorumlu yok'}
+              <MemberAvatar user={item.owner} size="xs" /> {item.owner ? dn(item.owner) : 'Sorumlu yok'}
             </span>
           )}
         </div>
@@ -280,7 +281,7 @@ function Body({ d }: { d: Detail }) {
               <MemberAvatar user={n.author} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="qx-caption text-fg-muted">
-                  <span className="font-semibold text-fg">{displayName(n.author, tu.silinmisKullanici)}</span> · {relativeTeamTime(n.createdAt)}
+                  <span className="font-semibold text-fg">{dn(n.author, tu.silinmisKullanici)}</span> · {relativeTeamTime(n.createdAt)}
                 </p>
                 <p className="qx-small whitespace-pre-wrap text-fg">{n.text}</p>
               </div>

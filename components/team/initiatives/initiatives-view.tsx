@@ -24,7 +24,7 @@ import { shortDayLabel } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys, useInitiatives } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { DeptChip, MemberAvatar, displayName } from '../shared';
+import { DeptChip, MemberAvatar, useDisplayName } from '../shared';
 import type { InitiativeDto } from '../lib/types';
 import { InitiativeDetail, InitiativeTitle } from './initiative-detail';
 import { useTeamCopy, useTeamLabels } from '../copy';
@@ -38,6 +38,7 @@ const InitiativeDialog = dynamic(() => import('./initiative-dialog'), { ssr: fal
  * yönetici düzenler. Aşama değişikliği menüden (klavye) ya da masaüstünde sürükleyerek.
  */
 export function InitiativesView() {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -132,7 +133,7 @@ export function InitiativesView() {
         </div>
         <div className="flex items-center gap-1.5">
           <MemberAvatar user={i.owner} size="xs" />
-          <span className="qx-caption truncate text-fg-muted">{i.owner ? displayName(i.owner) : 'Sorumlu yok'}</span>
+          <span className="qx-caption truncate text-fg-muted">{i.owner ? dn(i.owner) : 'Sorumlu yok'}</span>
         </div>
       </div>
     </li>

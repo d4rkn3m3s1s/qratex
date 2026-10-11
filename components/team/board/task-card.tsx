@@ -12,7 +12,7 @@ import { canMoveTask, isAssignee } from '@/lib/team/permissions';
 import { useWorkspace } from '../workspace-context';
 import { useTaskActions } from '../lib/use-task-actions';
 import { NoteDialog } from '../note-dialog';
-import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, displayName } from '../shared';
+import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, useDisplayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
 import { useTeamCopy, useTeamLabels } from '../copy';
@@ -34,6 +34,7 @@ type Props = {
  * Onaya gönder, yönetici için Onayla / Revizyon iste.
  */
 export const TaskCard = memo(function TaskCard({ task, selectable, selected, onToggleSelect, draggable, onDragStart, onPickTag, compact }: Props) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -151,7 +152,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <MemberAvatar user={task.assignedTo} size="xs" />
-          <span className="qx-caption truncate text-fg-muted">{displayName(task.assignedTo)}</span>
+          <span className="qx-caption truncate text-fg-muted">{dn(task.assignedTo)}</span>
         </div>
         <div className="qx-caption flex shrink-0 items-center gap-2 text-fg-subtle">
           {task._count.checklist > 0 && (
@@ -199,7 +200,7 @@ export const TaskCard = memo(function TaskCard({ task, selectable, selected, onT
         open={rejectOpen}
         onOpenChange={setRejectOpen}
         title={tu.revizyonIste}
-        description={tf.sendBackDesc(task.title, displayName(task.assignedTo, tf.toMember))}
+        description={tf.sendBackDesc(task.title, dn(task.assignedTo, tf.toMember))}
         label={tu.neDuzeltilmeli}
         quickNotes={[tu.kanitYetersiz, tu.eksikAltGorevVar, tu.aciklamadakiKapsamKarsilanmadi]}
         confirmLabel={tu.revizyonaGonder}

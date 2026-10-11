@@ -54,7 +54,7 @@ import { ListView, type GroupBy } from './board/list-view';
 import { BulkBar } from './board/bulk-bar';
 import { SavedViews, VIEW_KEYS } from './saved-views';
 import { TaskDetail, TaskDetailTitle } from './task-detail/task-detail';
-import { displayName } from './shared';
+import { useDisplayName } from './shared';
 import type { ClientViewer, TeamMeta } from './lib/types';
 import { useTeamCopy, useTeamLabels } from './copy';
 
@@ -96,6 +96,7 @@ export function TeamWorkspace(props: TeamWorkspaceProps) {
 }
 
 function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamWorkspaceProps) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -139,14 +140,14 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
         key: 'assignedTo',
         label: tu.atanan,
         allLabel: tu.herkes,
-        options: [{ value: 'unassigned', label: tu.atanmamis }, ...members.filter((m) => m.inTeam || m.isAdmin).map((m) => ({ value: m.id, label: displayName(m) }))],
+        options: [{ value: 'unassigned', label: tu.atanmamis }, ...members.filter((m) => m.inTeam || m.isAdmin).map((m) => ({ value: m.id, label: dn(m) }))],
       },
       { type: 'select', key: 'tag', label: tu.etiket, allLabel: tu.tumEtiketler, options: tags.map((t) => ({ value: t.label, label: `#${t.label}` })) },
       ...(viewer.isManager
         ? ([{ type: 'select', key: 'department', label: tu.departman, allLabel: tu.tumDepartmanlar, options: departments.map((d) => ({ value: d.slug, label: d.name })) }] as FilterField[])
         : []),
     ],
-    [members, tags, departments, viewer.isManager, tm, tu]
+    [members, tags, departments, viewer.isManager, tm, tu, dn]
   );
   const filters = useFilterState(fields, { resetKeys: [] });
   const fv = filters.values as Record<string, string>;

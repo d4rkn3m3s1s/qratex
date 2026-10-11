@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -155,4 +155,11 @@ export function MetaRow({ children, className }: { children: ReactNode; classNam
 export function displayName(u: { name: string | null } | null | undefined, fallback = 'Atanmamış'): string {
   if (!u) return fallback;
   return u.name || 'İsimsiz üye';
+}
+
+/** Dil duyarlı `displayName`: boş atama ve adsız üye metinleri arayüz dilinde. */
+export function useDisplayName(): (u: { name: string | null } | null | undefined, fallback?: string) => string {
+  const tu = useTeamCopy().ui;
+  const tf = useTeamCopy().fx;
+  return useCallback((u, fallback) => (u ? u.name || tf.unnamedMember : (fallback ?? tu.atanmamis)), [tu, tf]);
 }

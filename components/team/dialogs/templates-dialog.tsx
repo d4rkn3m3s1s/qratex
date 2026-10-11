@@ -20,7 +20,7 @@ import { weekKeyLabel } from '@/lib/team-week';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { PriorityBadge, displayName } from '../shared';
+import { PriorityBadge, useDisplayName } from '../shared';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Template = {
@@ -42,6 +42,7 @@ type Template = {
  * denetim kaydı ve atama bildirimi alır.
  */
 export default function TemplatesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -109,7 +110,7 @@ export default function TemplatesDialog({ open, onOpenChange }: { open: boolean;
             .filter((m) => m.inTeam || m.isAdmin)
             .map((m) => (
               <SelectItem key={m.id} value={m.id}>
-                {displayName(m)}
+                {dn(m)}
               </SelectItem>
             ))}
         </SelectContent>

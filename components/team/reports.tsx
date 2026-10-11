@@ -14,7 +14,7 @@ import { weekKeyLabel } from '@/lib/team-week';
 import { qs, teamFetch } from './lib/api';
 import { API, useCursorList } from './lib/queries';
 import { useWorkspace } from './workspace-context';
-import { MemberAvatar, displayName } from './shared';
+import { MemberAvatar, useDisplayName } from './shared';
 import type { TaskDto } from './lib/types';
 import { useTeamCopy, useTeamLabels } from './copy';
 
@@ -41,6 +41,7 @@ export function ReportsView({ tasks }: { tasks: TaskDto[] }) {
 
 /** Kişi başı iş yükü — panodaki (filtreli) görevlerden; durum dağılımı yalnız renge dayanmaz. */
 function PeopleView({ tasks }: { tasks: TaskDto[] }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -86,7 +87,7 @@ function PeopleView({ tasks }: { tasks: TaskDto[] }) {
             <div className="flex items-center gap-2">
               <MemberAvatar user={r.user} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="qx-small truncate font-semibold text-fg">{displayName(r.user)}</p>
+                <p className="qx-small truncate font-semibold text-fg">{dn(r.user)}</p>
                 <p className="qx-caption text-fg-muted">
                   {tf.peopleRow(r.items.length, formatMinutes(r.spent), formatMinutes(r.estimate))}
                   {r.overdue ? ` · ${r.overdue} geciken` : ''}
@@ -144,6 +145,7 @@ type PerfRow = {
 
 /** Performans — seçili haftada biten son N hafta, departman kapsamlı (denetim #73). */
 function PerformanceView() {
+  const dn = useDisplayName();
   const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -225,7 +227,7 @@ function PerformanceView() {
                     <tr key={m.id} className="qx-small">
                       <th scope="row" className="px-3 py-2 font-medium text-fg">
                         <span className="flex items-center gap-2">
-                          <MemberAvatar user={m} size="xs" /> {displayName(m)}
+                          <MemberAvatar user={m} size="xs" /> {dn(m)}
                         </span>
                       </th>
                       <td className="qx-num px-3 py-2 text-right">{m.total}</td>
@@ -273,6 +275,7 @@ const GROUPS = [
 
 /** Akış — kişi ve tür filtresi, "daha fazla yükle" (denetim #72). Odakta yenilenir. */
 function ActivityView() {
+  const dn = useDisplayName();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
@@ -294,7 +297,7 @@ function ActivityView() {
             <SelectItem value="all">{tv.herkes}</SelectItem>
             {members.map((m) => (
               <SelectItem key={m.id} value={m.id}>
-                {displayName(m)}
+                {dn(m)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -334,7 +337,7 @@ function ActivityView() {
                     )}
                   </span>
                 ),
-                actor: a.actor ? displayName(a.actor) : 'Sistem',
+                actor: a.actor ? dn(a.actor) : 'Sistem',
                 tone: a.action.startsWith('system_') ? 'warning' : a.action === 'automation' ? 'info' : 'neutral',
               }))}
             />

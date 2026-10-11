@@ -14,7 +14,7 @@ import { StatusBadge } from '@/components/ds/data';
 import { ConfirmAction, EmptyState, InlineError } from '@/components/states';
 import { errorMessage, qs, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
-import { MemberAvatar, displayName } from '../shared';
+import { MemberAvatar, useDisplayName } from '../shared';
 import type { ClientViewer, TeamMemberRow, TeamMeta } from '../lib/types';
 import { useTeamCopy } from '../copy';
 
@@ -37,6 +37,7 @@ export function MembersPanel({
   deptFilter: string;
   onDeptFilter: (v: string) => void;
 }) {
+  const dn = useDisplayName();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -116,7 +117,7 @@ export function MembersPanel({
                   <MemberAvatar user={m} size="md" />
                   <div className="min-w-0">
                     <p className="qx-small flex flex-wrap items-center gap-1.5 font-semibold text-fg">
-                      {displayName(m)}
+                      {dn(m)}
                       {m.isSelf && <StatusBadge label={tu.sen} tone="brand" icon={null} size="sm" />}
                       {m.isAdmin && <StatusBadge label={tu.platformYoneticisi} tone="neutral" icon={null} size="sm" />}
                     </p>
@@ -136,7 +137,7 @@ export function MembersPanel({
                         </button>
                       )}
                       {canDept && (
-                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={tf.removeFromDept(displayName(m), deptName(s))} onClick={() => void put({ id: m.id, removeDepartment: s }, tu.departmandanCikarildi)}>
+                        <button type="button" className="grid h-6 w-6 place-items-center rounded-full hover:bg-surface-3" aria-label={tf.removeFromDept(dn(m), deptName(s))} onClick={() => void put({ id: m.id, removeDepartment: s }, tu.departmandanCikarildi)}>
                           <X className="h-3 w-3" aria-hidden />
                         </button>
                       )}
@@ -145,7 +146,7 @@ export function MembersPanel({
                   {canDept && (
                     <Popover>
                       <PopoverTrigger asChild>
-                        <IconButton aria-label={tf.addDeptTo(displayName(m))} icon={<Plus />} size="sm" variant="outline" />
+                        <IconButton aria-label={tf.addDeptTo(dn(m))} icon={<Plus />} size="sm" variant="outline" />
                       </PopoverTrigger>
                       <PopoverContent className="w-64 p-1" align="start">
                         <ul className="max-h-64 overflow-y-auto">
@@ -170,7 +171,7 @@ export function MembersPanel({
                 <div className="flex items-center gap-2">
                   {canRole ? (
                     <Select value={m.teamRole ?? 'uye'} onValueChange={(v) => void put({ id: m.id, teamRole: v }, tu.rolGuncellendi)}>
-                      <SelectTrigger className="h-10 w-32" aria-label={tf.teamRoleOf(displayName(m))}>
+                      <SelectTrigger className="h-10 w-32" aria-label={tf.teamRoleOf(dn(m))}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -181,7 +182,7 @@ export function MembersPanel({
                   ) : (
                     <StatusBadge label={m.teamRole === 'yonetici' ? tu.yonetici : tu.uye2} tone={m.teamRole === 'yonetici' ? 'brand' : 'neutral'} icon={null} size="md" />
                   )}
-                  {canRemove && <IconButton aria-label={tf.removeFromTeam(displayName(m))} icon={<UserMinus />} size="sm" onClick={() => setRemoving(m)} />}
+                  {canRemove && <IconButton aria-label={tf.removeFromTeam(dn(m))} icon={<UserMinus />} size="sm" onClick={() => setRemoving(m)} />}
                 </div>
               </li>
             );
@@ -192,7 +193,7 @@ export function MembersPanel({
       <ConfirmAction
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={removing ? tf.removeFromTeamTitle(displayName(removing)) : ''}
+        title={removing ? tf.removeFromTeamTitle(dn(removing)) : ''}
         description={tu.gorevleriSilinmezAtamalarYerinde}
         tone="warning"
         confirmLabel={tu.ekiptenCikar}
@@ -214,6 +215,7 @@ export function MembersPanel({
  * eklerken seçilir (denetim #25: departman parametresi hiç verilmiyordu).
  */
 function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: TeamMeta; onAdded: () => void }) {
+  const dn = useDisplayName();
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
   const [open, setOpen] = useState(false);
@@ -271,7 +273,7 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
     setError(null);
     try {
       await teamFetch(`${API}/members`, { method: 'POST', json: { userId: pick.id, teamRole, departments: depts } });
-      toast.success(`${displayName(pick)} ekibe eklendi`);
+      toast.success(`${dn(pick)} ekibe eklendi`);
       setOpen(false);
       onAdded();
     } catch (err) {
@@ -307,7 +309,7 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
                     <button type="button" className="flex min-h-11 w-full items-center gap-2 rounded-control px-2 text-left hover:bg-surface-2" onClick={() => setPick(u)}>
                       <MemberAvatar user={u} size="sm" />
                       <span className="min-w-0">
-                        <span className="qx-small block truncate font-medium text-fg">{displayName(u)}</span>
+                        <span className="qx-small block truncate font-medium text-fg">{dn(u)}</span>
                         <span className="qx-caption block truncate text-fg-muted">{u.email}</span>
                       </span>
                     </button>
@@ -320,7 +322,7 @@ function AddMember({ viewer, meta, onAdded }: { viewer: ClientViewer; meta: Team
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <MemberAvatar user={pick} size="sm" />
-              <span className="qx-small min-w-0 flex-1 truncate font-semibold">{displayName(pick)}</span>
+              <span className="qx-small min-w-0 flex-1 truncate font-semibold">{dn(pick)}</span>
               <IconButton aria-label={tu.baskaKisiSec} icon={<X />} size="sm" onClick={() => setPick(null)} />
             </div>
             {viewer.isAdmin && (

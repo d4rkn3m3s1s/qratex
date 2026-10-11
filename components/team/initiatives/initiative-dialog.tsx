@@ -13,11 +13,12 @@ import { INITIATIVE_BOARD_PHASES } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { displayName } from '../shared';
+import { useDisplayName } from '../shared';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
 /** Yeni girişim (yönetici). Kilometre taşları satır satır; ilerleme bunlardan hesaplanır. */
 export default function InitiativeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tu = useTeamCopy().ui;
@@ -97,7 +98,7 @@ export default function InitiativeDialog({ open, onOpenChange }: { open: boolean
                   .filter((m) => m.inTeam || m.isAdmin)
                   .map((m) => (
                     <SelectItem key={m.id} value={m.id}>
-                      {displayName(m)}
+                      {dn(m)}
                     </SelectItem>
                   ))}
               </SelectContent>

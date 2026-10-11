@@ -6,7 +6,7 @@ import { SelectionCheckbox, StatusBadge } from '@/components/ds/data';
 import { isTaskPriority, isTaskStatus, priorityRank } from '@/lib/team/constants';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '../workspace-context';
-import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, displayName } from '../shared';
+import { DeptChip, DueBadge, MemberAvatar, PriorityBadge, TagChips, TaskStatusBadge, useDisplayName } from '../shared';
 import { TaskMenu } from './task-menu';
 import type { TaskDto } from '../lib/types';
 import { useTeamCopy, useTeamLabels } from '../copy';
@@ -37,6 +37,7 @@ export function ListView({
   onToggleAll: (ids: string[], on: boolean) => void;
   onPickTag: (tag: string) => void;
 }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -57,7 +58,7 @@ export function ListView({
         order = ['todo', 'in_progress', 'review', 'done'].indexOf(t.status);
       } else if (groupBy === 'assignee') {
         key = t.assignedTo?.id ?? 'none';
-        label = displayName(t.assignedTo);
+        label = dn(t.assignedTo);
         order = t.assignedTo ? 0 : 1;
       } else if (groupBy === 'priority') {
         key = t.priority;
@@ -73,7 +74,7 @@ export function ListView({
       map.get(key)!.items.push(t);
     }
     return [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label, 'tr'));
-  }, [tasks, groupBy, departments, tf, tm, tu]);
+  }, [tasks, groupBy, departments, tf, tm, tu, dn]);
 
   const allIds = tasks.map((t) => t.id);
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
@@ -156,7 +157,7 @@ export function ListView({
                     </span>
                     <span className="flex min-w-0 items-center gap-1.5">
                       <MemberAvatar user={t.assignedTo} size="xs" />
-                      <span className="qx-small truncate text-fg-muted">{displayName(t.assignedTo)}</span>
+                      <span className="qx-small truncate text-fg-muted">{dn(t.assignedTo)}</span>
                     </span>
                     <span className="md:block">
                       <DueBadge dueAt={t.dueAt} done={done} />

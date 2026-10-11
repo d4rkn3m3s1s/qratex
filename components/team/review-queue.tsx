@@ -10,7 +10,7 @@ import { useTasks } from './lib/queries';
 import { useTaskActions } from './lib/use-task-actions';
 import { useWorkspace } from './workspace-context';
 import { NoteDialog } from './note-dialog';
-import { DueBadge, MemberAvatar, displayName } from './shared';
+import { DueBadge, MemberAvatar, useDisplayName } from './shared';
 import { TaskDetail } from './task-detail/task-detail';
 import type { TaskDto } from './lib/types';
 import { useTeamCopy } from './copy';
@@ -21,6 +21,7 @@ import { useTeamCopy } from './copy';
  * + sağda kanıtla birlikte detay; klavye: J/K gez, A onayla, R revizyon iste.
  */
 export function ReviewQueue() {
+  const dn = useDisplayName();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { openTask, weekKey } = useWorkspace();
@@ -82,7 +83,7 @@ export function ReviewQueue() {
                         <span className="qx-small line-clamp-2 font-semibold text-fg">{t.title}</span>
                         <span className="mt-1 flex flex-wrap items-center gap-1.5">
                           <MemberAvatar user={t.assignedTo} size="xs" />
-                          <span className="qx-caption text-fg-muted">{displayName(t.assignedTo)}</span>
+                          <span className="qx-caption text-fg-muted">{dn(t.assignedTo)}</span>
                           {t.submittedForReviewAt && <span className="qx-caption text-fg-muted">· {relativeTeamTime(t.submittedForReviewAt)}</span>}
                         </span>
                         <span className="qx-caption mt-1 flex items-center gap-2 text-fg-muted">

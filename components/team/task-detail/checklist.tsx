@@ -14,7 +14,7 @@ import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useTaskActions } from '../lib/use-task-actions';
 import { useWorkspace } from '../workspace-context';
-import { displayName } from '../shared';
+import { useDisplayName } from '../shared';
 import type { TaskDetailPayload } from '../lib/types';
 import { useTeamCopy } from '../copy';
 
@@ -24,6 +24,7 @@ import { useTeamCopy } from '../copy';
  * (denetim #66: N paralel istek aynı sıra numarasını üretiyordu).
  */
 export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
+  const dn = useDisplayName();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -115,13 +116,13 @@ export function TaskChecklist({ data }: { data: TaskDetailPayload }) {
                     .filter((m) => m.inTeam || m.isAdmin)
                     .map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {displayName(m)}
+                        {dn(m)}
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
             ) : c.assignedTo ? (
-              <span className="qx-caption shrink-0 text-fg-muted">{displayName(c.assignedTo)}</span>
+              <span className="qx-caption shrink-0 text-fg-muted">{dn(c.assignedTo)}</span>
             ) : null}
             {editable && (
               <IconButton aria-label={tf.deleteSubtask(c.text)} icon={<Trash2 />} size="sm" variant="ghost" onClick={() => void act({ op: 'delete_checklist', itemId: c.id })} />

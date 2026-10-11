@@ -16,7 +16,7 @@ import { weekKeyLabel, shiftWeekKey } from '@/lib/team-week';
 import { errorMessage, qs, teamFetch } from './lib/api';
 import { API, invalidateTasks } from './lib/queries';
 import { useWorkspace } from './workspace-context';
-import { displayName } from './shared';
+import { useDisplayName } from './shared';
 import type { TaskList } from './lib/types';
 import { useTeamCopy, useTeamLabels } from './copy';
 
@@ -40,6 +40,7 @@ const EMPTY = {
  * (denetim #83). "Bana ata" ADMIN'in ekip rolü olmasa da çalışır (denetim #76).
  */
 export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -190,7 +191,7 @@ export default function NewTaskDialog({ open, onOpenChange }: { open: boolean; o
                     <SelectItem value="__none">{tx.unassigned}</SelectItem>
                     {assignable.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {displayName(m)}
+                        {dn(m)}
                         {m.isSelf ? ' (sen)' : ''}
                       </SelectItem>
                     ))}

@@ -13,7 +13,7 @@ import { TASK_PRIORITIES, TASK_STATUSES } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, invalidateTasks } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { displayName } from '../shared';
+import { useDisplayName } from '../shared';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Result = { affected: number; skipped: Array<{ id: string; title: string; reason: string }> };
@@ -24,6 +24,7 @@ type Result = { affected: number; skipped: Array<{ id: string; title: string; re
  * arşiv görünümünde ve tipli onayla (denetim Bulgu 41: onaysız 200 göreve kadar siliyordu).
  */
 export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveView: boolean; onDone: () => void }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -105,7 +106,7 @@ export function BulkBar({ ids, archiveView, onDone }: { ids: string[]; archiveVi
               <SelectItem value="__none">{tx.removeAssignee}</SelectItem>
               {assignable.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
-                  {displayName(m)}
+                  {dn(m)}
                 </SelectItem>
               ))}
             </SelectContent>

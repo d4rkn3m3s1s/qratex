@@ -11,7 +11,7 @@ import { qs } from './lib/api';
 import { API, useCursorList } from './lib/queries';
 import { useWorkspace } from './workspace-context';
 import { formatBytes } from './task-detail/files';
-import { displayName } from './shared';
+import { useDisplayName } from './shared';
 import { useTeamCopy } from './copy';
 
 type FileRow = {
@@ -41,6 +41,7 @@ const TYPES = [
  * (eski sınır 300 kayıttı). Dosya görevin içine götürür.
  */
 export function FilesView() {
+  const dn = useDisplayName();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const { openTask } = useWorkspace();
@@ -99,7 +100,7 @@ export function FilesView() {
                     <div className="min-w-0 flex-1">
                       <p className="qx-small truncate font-medium text-fg">{f.filename}</p>
                       <p className="qx-caption truncate text-fg-muted">
-                        {formatBytes(f.size)} · {displayName(f.uploadedBy, tu.silinmisKullanici)} · {relativeTeamTime(f.createdAt)}
+                        {formatBytes(f.size)} · {dn(f.uploadedBy, tu.silinmisKullanici)} · {relativeTeamTime(f.createdAt)}
                       </p>
                       <button type="button" onClick={() => openTask(f.task.id)} className="qx-caption mt-0.5 block max-w-full truncate text-left text-brand underline-offset-2 hover:underline">
                         {f.task.title}

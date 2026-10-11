@@ -17,7 +17,7 @@ import { relativeTeamTime } from '@/lib/team/dates';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API } from '../lib/queries';
 import { useWorkspace } from '../workspace-context';
-import { displayName } from '../shared';
+import { useDisplayName } from '../shared';
 import { useTeamCopy, useTeamLabels } from '../copy';
 
 type Rule = {
@@ -46,6 +46,7 @@ const EMPTY = { id: '', name: '', triggerType: 'status_changed', triggerValue: '
  * görevi "Bitti"ye geçiremez — onay yöneticidedir. Son 30 günün çalışma/hata sayısı görünür.
  */
 export default function AutomationsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const dn = useDisplayName();
   const tm = useTeamLabels();
   const tv = useTeamCopy().ui2;
   const tf = useTeamCopy().fx;
@@ -64,7 +65,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
     if (!value) return '';
     if (type === 'status_changed' || type === 'set_status') return tm.STATUS_META[value as keyof typeof tm.STATUS_META]?.label ?? value;
     if (type === 'set_priority') return tm.PRIORITY_META[value as keyof typeof tm.PRIORITY_META]?.label ?? value;
-    if (type === 'assign' || type === 'assigned') return displayName(members.find((m) => m.id === value) ?? null, tu.ayrilmisUye);
+    if (type === 'assign' || type === 'assigned') return dn(members.find((m) => m.id === value) ?? null, tu.ayrilmisUye);
     return value;
   };
 
@@ -134,7 +135,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
           <SelectItem value="__any">{tv.herhangiBirine}</SelectItem>
           {team.map((m) => (
             <SelectItem key={m.id} value={m.id}>
-              {displayName(m)}
+              {dn(m)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -165,7 +166,7 @@ export default function AutomationsDialog({ open, onOpenChange }: { open: boolea
         <SelectContent>
           {team.map((m) => (
             <SelectItem key={m.id} value={m.id}>
-              {displayName(m)}
+              {dn(m)}
             </SelectItem>
           ))}
         </SelectContent>

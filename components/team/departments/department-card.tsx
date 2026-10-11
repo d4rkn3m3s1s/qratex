@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { DEPARTMENT_COLORS } from '@/lib/team/constants';
 import { errorMessage, teamFetch } from '../lib/api';
 import { API, teamKeys } from '../lib/queries';
-import { MemberAvatar, displayName } from '../shared';
+import { MemberAvatar, useDisplayName } from '../shared';
 import type { TeamDepartment, TeamMemberRow } from '../lib/types';
 import { useTeamCopy } from '../copy';
 
@@ -51,6 +51,7 @@ export function DepartmentCard({
   manage: boolean;
   onShowMembers: () => void;
 }) {
+  const dn = useDisplayName();
   const tf = useTeamCopy().fx;
   const tu = useTeamCopy().ui;
   const tx = useTeamCopy();
@@ -117,7 +118,7 @@ export function DepartmentCard({
           <span className="qx-num font-semibold text-fg">{dept.openTaskCount}</span> {tu.acikGorev}
         </span>
         {leads.length > 0 ? (
-          <span>{tf.managersList(leads.map((l) => displayName(l)).join(', '))}</span>
+          <span>{tf.managersList(leads.map((l) => dn(l)).join(', '))}</span>
         ) : (
           dept.isActive && <span className="text-warning">{tx.noManager}</span>
         )}
