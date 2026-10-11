@@ -7,6 +7,8 @@ import { MetricGrid, MetricTile, StatusBadge } from '@/components/ds/data';
 import { QueryState, SectionCard, TONE_CALLOUT } from '@/components/states';
 import { cn } from '@/lib/utils';
 import { fetchTournament, fmt, fmtDateTime, gamesKeys } from './api';
+import { useGamesCopy } from './copy';
+import { useGamesCopy } from './copy';
 
 /**
  * Haftalık turnuva (salt-okunur + oyuna geçiş). Rotasyon (haftaya dondurulmuş TOURNAMENT_ROTATION
@@ -14,6 +16,8 @@ import { fetchTournament, fmt, fmtDateTime, gamesKeys } from './api';
  * günlük `tournament-settle` işi otomatik dağıtır. Yönetim kolu öne çıkan oyunun ayarları ve aç/kapat anahtarıdır.
  */
 export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string) => void }) {
+  const c = useGamesCopy().tournament;
+  const c = useGamesCopy().tournament;
   const q = useQuery({ queryKey: gamesKeys.tournament(), queryFn: fetchTournament, staleTime: 60_000 });
   return (
     <QueryState query={q} skeleton="list">
@@ -23,41 +27,41 @@ export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string)
           <div className="space-y-4">
             <p className="flex items-center gap-1.5 text-sm text-fg-muted">
               <CalendarClock className="h-4 w-4" aria-hidden />
-              Hafta <strong className="tabular-nums text-fg">{t.weekKey}</strong> · bitiş {fmtDateTime(t.endsAt)} (İstanbul saati)
+              {c.week} <strong className="tabular-nums text-fg">{t.weekKey}</strong> · {c.ends} {fmtDateTime(t.endsAt)} {c.tz}
             </p>
             <MetricGrid cols={3}>
-              <MetricTile label="Katılımcı" icon={<Users />} tone="brand" metric={{ value: t.participants, unit: `/ en az ${t.minParticipants}` }} />
-              <MetricTile label="1. ödülü" icon={<Medal />} tone="warning" metric={{ value: prizeActive ? t.prizes[1] : 0, unit: 'puan' }} hint={prizeActive ? 'Katılım eşiği sağlandı' : 'Eşik altında: ödül dağıtılmaz'} />
-              <MetricTile label="Geçen hafta talep" icon={<Swords />} metric={{ value: t.lastWeek.claims.length }} hint={t.lastWeek.unclaimed > 0 ? `${t.lastWeek.unclaimed} ödül henüz talep edilmedi` : undefined} />
+              <MetricTile label={c.participants} icon={<Users />} tone="brand" metric={{ value: t.participants, unit: c.minUnit(t.minParticipants) }} />
+              <MetricTile label={c.firstPrize} icon={<Medal />} tone="warning" metric={{ value: prizeActive ? t.prizes[1] : 0, unit: c.points }} hint={prizeActive ? c.thresholdMet : c.thresholdMiss} />
+              <MetricTile label={c.lastClaims} icon={<Swords />} metric={{ value: t.lastWeek.claims.length }} hint={t.lastWeek.unclaimed > 0 ? c.unclaimed(t.lastWeek.unclaimed) : undefined} />
             </MetricGrid>
 
             {t.featuredGameType && !t.featuredEnabled && (
               <p className={cn('rounded-control border px-3 py-2 text-sm', TONE_CALLOUT.danger)}>
-                Haftanın turnuva oyunu şu an KAPALI. Oyuncular yeni deneme açamaz; sıralama yalnız kapatmadan önceki skorlarla kalır.
+                {c.disabled}
               </p>
             )}
 
             <SectionCard
-              title={t.featuredTitle ? `Haftanın oyunu: ${t.featuredTitle}` : 'Bu hafta turnuva yok'}
-              description="Canlı sıralama (oyuncu başına en iyi sıralı skor; eşitlikte önce yapan önde)."
+              title={t.featuredTitle ? c.featured(t.featuredTitle) : c.none}
+              description={c.liveDesc}
               actions={
                 t.featuredGameType ? (
                   <Button size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => onOpenGame(t.featuredGameType!)}>
-                    Oyun ayarlarını aç
+                    {c.openSettings}
                   </Button>
                 ) : null
               }
             >
               {t.top.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu hafta henüz tamamlanan sıralı deneme yok.</p>
+                <p className="text-sm text-fg-muted">{c.noAttempts}</p>
               ) : (
                 <ol className="divide-y divide-border">
                   {t.top.map((e) => (
                     <li key={e.rank} className="flex items-center gap-3 py-2 text-sm">
                       <span className="w-6 text-right font-semibold tabular-nums text-fg-muted">{e.rank}.</span>
                       <span className="flex-1">{e.name}</span>
-                      <span className="tabular-nums">{fmt(e.best)} skor</span>
-                      {e.prize > 0 && <StatusBadge size="sm" tone="warning" label={`${fmt(e.prize)} puan`} icon={Medal} />}
+                      <span className="tabular-nums">{c.score(fmt(e.best))}</span>
+                      {e.prize > 0 && <StatusBadge size="sm" tone="warning" label={c.pts(fmt(e.prize))} icon={Medal} />}
                     </li>
                   ))}
                 </ol>
@@ -65,33 +69,33 @@ export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string)
             </SectionCard>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <SectionCard title="Rotasyon" description="Aday listesi: görünür portföy, registry sırası (kod sabiti).">
+              <SectionCard title={c.rotation} description={c.rotationDesc}>
                 <ol className="space-y-1 text-sm">
                   {t.rotation.map((r, i) => (
                     <li key={r.weekKey} className="flex justify-between gap-2">
-                      <span className="tabular-nums text-fg-muted">{r.weekKey}{i === 0 ? ' (bu hafta)' : ''}</span>
+                      <span className="tabular-nums text-fg-muted">{r.weekKey}{i === 0 ? c.thisWeek : ''}</span>
                       <span className="font-medium">{r.title ?? '—'}</span>
                     </li>
                   ))}
                 </ol>
                 <p className="mt-2 text-xs text-fg-muted">
-                  Rotasyon haftaya dondurulmuş takvimden gelir (yalnız canlı oyunlar); bir oyunu gizlemek/açmak sırayı kaydırmaz. Portföy değişince takvime gelecek haftadan başlayan yeni dilim eklenir.
+                  {c.rotationNote}
                 </p>
               </SectionCard>
-              <SectionCard title={`Geçen hafta (${t.lastWeek.weekKey})`} description={t.lastWeek.title ? `${t.lastWeek.title} · ${fmt(t.lastWeek.participants)} katılımcı` : 'Turnuva yok'}>
+              <SectionCard title={c.lastWeek(t.lastWeek.weekKey)} description={t.lastWeek.title ? c.lastWeekDesc(t.lastWeek.title, fmt(t.lastWeek.participants)) : c.noTournament}>
                 {t.lastWeek.participants < t.minParticipants ? (
-                  <p className="text-sm text-fg-muted">Katılım eşiği ({t.minParticipants}) sağlanmadı; ödül dağıtılmadı.</p>
+                  <p className="text-sm text-fg-muted">{c.belowMin(t.minParticipants)}</p>
                 ) : t.lastWeek.claims.length === 0 ? (
-                  <p className="text-sm text-fg-muted">Ödüller henüz dağıtılmadı; günlük kapanış işi ilk koşusunda ilk 3’e otomatik verir.</p>
+                  <p className="text-sm text-fg-muted">{c.notYet}</p>
                 ) : (
                   <ul className="space-y-1 text-sm">
-                    {t.lastWeek.claims.map((c) => (
-                      <li key={c.rank} className="flex justify-between gap-2">
+                    {t.lastWeek.claims.map((cl) => (
+                      <li key={cl.rank} className="flex justify-between gap-2">
                         <span>
-                          {c.rank}. {c.name}
+                          {cl.rank}. {cl.name}
                         </span>
                         <span className="tabular-nums text-fg-muted">
-                          {fmt(c.points)} puan · {fmtDateTime(c.at)}
+                          {c.pts(fmt(cl.points))} · {fmtDateTime(cl.at)}
                         </span>
                       </li>
                     ))}

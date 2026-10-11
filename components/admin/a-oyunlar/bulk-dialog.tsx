@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { InlineError } from '@/components/states';
 import type { GameRow } from '@/lib/admin-games/contract';
 import { bulkGames, errorText, fmt, gamesKeys } from './api';
+import { useGamesCopy } from './copy';
+import { useGamesCopy } from './copy';
 
 /**
  * Toplu aç/kapat (acil durdurma dahil) — gerekçe zorunlu, her oyun ayrı audit satırı.
@@ -26,6 +28,8 @@ export function BulkDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const c = useGamesCopy().bulk;
+  const c = useGamesCopy().bulk;
   const qc = useQueryClient();
   const reasonId = useId();
   const [reason, setReason] = useState('');
@@ -37,9 +41,7 @@ export function BulkDialog({
     mutationFn: () => bulkGames({ action, gameTypes: affected.map((g) => g.gameType), reason: reason.trim() }),
     onSuccess: (r) => {
       toast.success(
-        r.changed.length === 0
-          ? 'Değişiklik gerekmedi'
-          : `${r.changed.length} oyun ${disable ? 'kapatıldı — yeni ödüller derhal durdu' : 'açıldı'}`
+        r.changed.length === 0 ? c.noChange : c.changed(r.changed.length, disable)
       );
       void qc.invalidateQueries({ queryKey: gamesKeys.all });
       onDone();
@@ -52,16 +54,14 @@ export function BulkDialog({
     <Dialog open onOpenChange={(o) => !o && !mut.isPending && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{disable ? 'Oyunları kapat' : 'Oyunları aç'}</DialogTitle>
+          <DialogTitle>{c.title(disable)}</DialogTitle>
           <DialogDescription>
-            {disable
-              ? 'Kapatılan oyunda yeni deneme açılmaz ve süren denemeler tamamlansa da ödül almaz. Geri açmak mümkündür.'
-              : 'Açılan oyunlar hub’da görünür ve ödüllü deneme kabul eder (portföyden çıkarılmış oyunlar yine gizli kalır).'}
+            {disable ? c.descDisable : c.descEnable}
           </DialogDescription>
         </DialogHeader>
 
         {affected.length === 0 ? (
-          <p className="text-sm text-fg-muted">Seçilen oyunların hepsi zaten {disable ? 'kapalı' : 'açık'}.</p>
+          <p className="text-sm text-fg-muted">{c.allAlready(disable)}</p>
         ) : (
           <div className="space-y-3">
             <ul className="max-h-48 space-y-1 overflow-y-auto rounded-control border border-border p-2 text-sm">
@@ -70,23 +70,23 @@ export function BulkDialog({
                   <span>
                     <span aria-hidden>{g.effective.emoji}</span> {g.effective.title}
                   </span>
-                  <span className="text-xs tabular-nums text-fg-muted">30g {fmt(g.stats.pointsAwarded30d)} puan</span>
+                  <span className="text-xs tabular-nums text-fg-muted">{c.row30(fmt(g.stats.pointsAwarded30d))}</span>
                 </li>
               ))}
             </ul>
             {disable && (
               <p className="text-xs text-fg-muted">
-                Bu oyunlar son 30 günde toplam <strong className="text-fg">{fmt(points30)}</strong> puan bastı.
+                {c.pointsBefore} <strong className="text-fg">{fmt(points30)}</strong> {c.pointsAfter}
               </p>
             )}
             <div className="space-y-1">
-              <Label htmlFor={reasonId}>Gerekçe (denetim kaydına yazılır)</Label>
+              <Label htmlFor={reasonId}>{c.reason}</Label>
               <Textarea
                 id={reasonId}
                 value={reason}
                 maxLength={200}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder={disable ? 'Ör. skor istismarı şüphesi, inceleme süresince' : 'Ör. inceleme tamamlandı'}
+                placeholder={disable ? c.phDisable : c.phEnable}
               />
               <p className="text-[11px] text-fg-muted">{reason.length}/200</p>
             </div>
@@ -97,7 +97,7 @@ export function BulkDialog({
 
         <DialogFooter className="gap-2">
           <Button variant="ghost" className="min-h-11 sm:min-h-10" onClick={onClose} disabled={mut.isPending}>
-            Vazgeç
+            {c.cancel}
           </Button>
           <Button
             variant={disable ? 'destructive' : 'default'}
@@ -106,7 +106,7 @@ export function BulkDialog({
             loading={mut.isPending}
             onClick={() => mut.mutate()}
           >
-            {disable ? `${affected.length} oyunu kapat` : `${affected.length} oyunu aç`}
+            {c.confirm(affected.length, disable)}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -27,6 +27,7 @@ import {
   type OverrideField,
 } from '@/lib/admin-games/contract';
 import { errorText, fetchDetail, fmt, fmtDateTime, fmtDay, gamesKeys, patchGame, resetGame } from './api';
+import { useGamesCopy } from './copy';
 
 type EditState = Record<OverrideField, string>;
 type SheetTab = 'rules' | 'look' | 'metrics' | 'history';
@@ -88,21 +89,22 @@ export function GameSheetBody({ gameType, row, overview }: { gameType: string; r
 }
 
 function SheetSummary({ row }: { row: GameRow }) {
+  const c = useGamesCopy().sheet;
   const p = row.portfolio;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
         <StatusBadge size="sm" label={PORTFOLIO_LABELS[p.status]} tone={p.status === 'live' ? 'success' : p.status === 'building' ? 'info' : 'neutral'} />
-        <StatusBadge size="sm" label={row.effective.enabled ? 'Açık' : 'Kapalı'} tone={row.effective.enabled ? 'success' : 'danger'} />
-        {row.featured && <StatusBadge size="sm" label="Haftanın turnuvası" tone="warning" icon={Swords} />}
-        {p.practice && <StatusBadge size="sm" label="Pratik modu var" tone="neutral" icon={null} />}
+        <StatusBadge size="sm" label={row.effective.enabled ? c.on : c.off} tone={row.effective.enabled ? 'success' : 'danger'} />
+        {row.featured && <StatusBadge size="sm" label={c.featured} tone="warning" icon={Swords} />}
+        {p.practice && <StatusBadge size="sm" label={c.practice} tone="neutral" icon={null} />}
         <span className="font-mono text-[11px] text-fg-muted">{row.gameType}</span>
       </div>
       {(p.note || p.mergedInto) && (
         <p className="rounded-control border border-border bg-surface-muted px-3 py-2 text-xs text-fg-muted">
-          {p.mergedInto && <>Yerine geçen: <strong className="text-fg">{p.mergedInto}</strong>. </>}
+          {p.mergedInto && <>{c.replacedBy} <strong className="text-fg">{p.mergedInto}</strong>. </>}
           {p.note}
-          {row.hidden && ' Hub’da görünmez ve ödüllü deneme açılamaz.'}
+          {row.hidden && c.hiddenNote}
         </p>
       )}
     </div>
@@ -112,6 +114,7 @@ function SheetSummary({ row }: { row: GameRow }) {
 // ─────────────────────────── Düzenleme ───────────────────────────
 
 function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOverview; section: 'rules' | 'look' }) {
+  const gc = useGamesCopy().sheet;
   const qc = useQueryClient();
   const initial = useMemo(() => toEdit(row), [row]);
   const [edit, setEdit] = useState<EditState>(initial);
@@ -227,7 +230,7 @@ function EditTab({ row, overview, section }: { row: GameRow; overview: GamesOver
 
       {section === 'look' && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-fg-muted">Hub kartı önizlemesi</p>
+          <p className="text-xs font-medium text-fg-muted">{gc.hubPreview}</p>
           <div
             className="flex items-start gap-3 rounded-card border-2 bg-surface p-4"
             style={{ borderColor: `${previewAccent}66`, backgroundImage: `linear-gradient(135deg, ${previewAccent}14, transparent 60%)` }}
@@ -336,6 +339,7 @@ function Field({
   wide?: boolean;
   customized: boolean;
 }) {
+  const sc = useGamesCopy().sheet;
   const id = useId();
   const hintId = `${id}-hint`;
   const errId = `${id}-err`;
@@ -348,7 +352,7 @@ function Field({
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id} className="text-xs">
           {FIELD_LABELS[field]}
-          {customized && <span className="ml-1.5 text-[10px] font-semibold uppercase text-brand">özel</span>}
+          {customized && <span className="ml-1.5 text-[10px] font-semibold uppercase text-brand">{sc.custom}</span>}
         </Label>
         {value.trim() !== '' && (
           <button
@@ -460,13 +464,14 @@ function MetricsTab({ gameType, row }: { gameType: string; row: GameRow }) {
 }
 
 function TrendBlock({ d }: { d: GameDetail }) {
+  const c = useGamesCopy().sheet;
   const started = d.trend.map((x) => x.started);
   const total = started.reduce((a, b) => a + b, 0);
   return (
     <section className="space-y-2" aria-labelledby={`${d.gameType}-trend`}>
-      <h3 id={`${d.gameType}-trend`} className="text-sm font-semibold">Son 14 gün</h3>
+      <h3 id={`${d.gameType}-trend`} className="text-sm font-semibold">{c.last14}</h3>
       {total === 0 ? (
-        <p className="text-sm text-fg-muted">Son 14 günde deneme yok.</p>
+        <p className="text-sm text-fg-muted">{c.no14}</p>
       ) : (
         <>
           <Sparkline
@@ -475,17 +480,17 @@ function TrendBlock({ d }: { d: GameDetail }) {
             area
             zeroBased
             showLast
-            label={`Son 14 günde ${total} deneme; ilk gün ${started[0]}, son gün ${started[started.length - 1]}.`}
+            label={c.trendLabel(total, started[0] ?? 0, started[started.length - 1] ?? 0)}
           />
           <details className="text-xs">
-            <summary className="cursor-pointer text-fg-muted">Günlük tablo</summary>
+            <summary className="cursor-pointer text-fg-muted">{c.dailyTable}</summary>
             <table className="mt-2 w-full">
               <thead className="text-left text-fg-muted">
                 <tr>
-                  <th scope="col" className="py-1 font-medium">Gün</th>
-                  <th scope="col" className="py-1 text-right font-medium">Deneme</th>
-                  <th scope="col" className="py-1 text-right font-medium">Kazanma</th>
-                  <th scope="col" className="py-1 text-right font-medium">Puan</th>
+                  <th scope="col" className="py-1 font-medium">{c.day}</th>
+                  <th scope="col" className="py-1 text-right font-medium">{c.attempts}</th>
+                  <th scope="col" className="py-1 text-right font-medium">{c.wins}</th>
+                  <th scope="col" className="py-1 text-right font-medium">{c.points}</th>
                 </tr>
               </thead>
               <tbody>
@@ -507,22 +512,23 @@ function TrendBlock({ d }: { d: GameDetail }) {
 }
 
 function HistogramBlock({ d }: { d: GameDetail }) {
+  const c = useGamesCopy().sheet;
   const h = d.histogram;
   const peak = Math.max(1, ...h.buckets.map((b) => b.count));
   return (
     <section className="space-y-2" aria-labelledby={`${d.gameType}-hist`}>
-      <h3 id={`${d.gameType}-hist`} className="text-sm font-semibold">Skor dağılımı (30g, {fmt(h.total)} biten deneme)</h3>
+      <h3 id={`${d.gameType}-hist`} className="text-sm font-semibold">{c.histTitle(fmt(h.total))}</h3>
       {h.total === 0 ? (
-        <p className="text-sm text-fg-muted">Henüz biten deneme yok; eşik ayarı için veri birikmesini bekleyin.</p>
+        <p className="text-sm text-fg-muted">{c.histEmpty}</p>
       ) : (
         <>
-          <ul className="flex h-28 items-end gap-1" aria-label={`Skor dağılımı; ödül eşiği ${h.threshold}`}>
+          <ul className="flex h-28 items-end gap-1" aria-label={c.histAria(h.threshold)}>
             {h.buckets.map((b) => {
               const above = b.from >= h.threshold;
               return (
                 <li key={b.from} className="flex h-full flex-1 flex-col justify-end" title={`${b.from}–${b.to}: ${b.count}`}>
                   <span className="sr-only">
-                    Skor {b.from}–{b.to}: {b.count} deneme{above ? ', eşik üstü' : ''}
+                    {c.bucket(b.from, b.to, b.count, above)}
                   </span>
                   <span
                     aria-hidden
@@ -535,10 +541,10 @@ function HistogramBlock({ d }: { d: GameDetail }) {
           </ul>
           <div className="flex justify-between text-[11px] tabular-nums text-fg-muted" aria-hidden>
             <span>0</span>
-            <span>Eşik {h.threshold}</span>
+            <span>{c.threshold(h.threshold)}</span>
             <span>{h.maxScore}</span>
           </div>
-          <p className="text-xs text-fg-muted">Yeşil çubuklar ödül eşiği ve üstü. Eşiği bu dağılıma bakarak ayarlayın.</p>
+          <p className="text-xs text-fg-muted">{c.histNote}</p>
         </>
       )}
     </section>
@@ -546,19 +552,20 @@ function HistogramBlock({ d }: { d: GameDetail }) {
 }
 
 function IntegrityBlock({ d }: { d: GameDetail }) {
+  const c = useGamesCopy().sheet;
   const i = d.integrity;
   return (
     <section className="space-y-2" aria-labelledby={`${d.gameType}-int`}>
       <h3 id={`${d.gameType}-int`} className="flex items-center gap-1.5 text-sm font-semibold">
         {i.total > 0 ? <ShieldAlert className="h-4 w-4 text-danger" aria-hidden /> : <ShieldCheck className="h-4 w-4 text-success" aria-hidden />}
-        Bütünlük (30g)
+        {c.integrity}
       </h3>
       <p className="text-xs text-fg-muted">
-        Doğrulama: {d.verifier.wired ? `sunucu doğrulayıcısı bağlı (${d.verifier.family})` : `yalnız ortak makullük kuralları (süre, skor/sn, tavan)${d.verifier.family ? `; hedef aile: ${d.verifier.family}` : ''}`}.
-        İstemci skoru sunucu skorunu aşan biten deneme: <strong className="text-fg">{fmt(i.clientAboveServer30d)}</strong>.
+        {d.verifier.wired ? c.verifyWired(String(d.verifier.family)) : c.verifyBasic(d.verifier.family || null)}{' '}
+        {c.clientAbove} <strong className="text-fg">{fmt(i.clientAboveServer30d)}</strong>.
       </p>
       {i.total === 0 ? (
-        <p className="text-sm text-fg-muted">Son 30 günde işaretlenen deneme yok.</p>
+        <p className="text-sm text-fg-muted">{c.noFlags}</p>
       ) : (
         <>
           <ul className="flex flex-wrap gap-1.5">
@@ -570,13 +577,13 @@ function IntegrityBlock({ d }: { d: GameDetail }) {
           </ul>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <caption className="sr-only">Son işaretlenen denemeler</caption>
+              <caption className="sr-only">{c.flaggedCaption}</caption>
               <thead className="text-left text-fg-muted">
                 <tr>
-                  <th scope="col" className="py-1 font-medium">Zaman</th>
-                  <th scope="col" className="py-1 font-medium">Oyuncu</th>
-                  <th scope="col" className="py-1 font-medium">Sinyal</th>
-                  <th scope="col" className="py-1 text-right font-medium">İstemci → sunucu</th>
+                  <th scope="col" className="py-1 font-medium">{c.time}</th>
+                  <th scope="col" className="py-1 font-medium">{c.player}</th>
+                  <th scope="col" className="py-1 font-medium">{c.signal}</th>
+                  <th scope="col" className="py-1 text-right font-medium">{c.clientServer}</th>
                 </tr>
               </thead>
               <tbody>

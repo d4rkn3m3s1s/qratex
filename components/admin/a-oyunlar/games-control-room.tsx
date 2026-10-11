@@ -26,6 +26,7 @@ import { EmptyState, QueryState, TONE_CALLOUT, type Tone } from '@/components/st
 import { cn } from '@/lib/utils';
 import { PORTFOLIO_LABELS, type GameRow, type GamesOverview, type PortfolioStatus } from '@/lib/admin-games/contract';
 import { errorText, fetchOverview, fmt, gamesKeys, patchGame } from './api';
+import { useGamesCopy } from './copy';
 import { BulkDialog } from './bulk-dialog';
 
 const GameSheetBody = dynamic(() => import('./game-sheet').then((m) => m.GameSheetBody), { ssr: false });
@@ -80,6 +81,7 @@ function matches(g: GameRow, f: Filter): boolean {
 }
 
 export function GamesControlRoom({ initial }: { initial: GamesOverview | null }) {
+  const rc = useGamesCopy().room;
   const qc = useQueryClient();
   const overview = useQuery({
     queryKey: gamesKeys.overview(),
@@ -308,7 +310,7 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                         {/* Masaüstü: yoğun tablo */}
                         <div className="hidden overflow-x-auto rounded-card border border-border md:block">
                           <table className="w-full text-sm">
-                            <caption className="sr-only">Oyunlar, durum, ödül ve son 30 gün metrikleri</caption>
+                            <caption className="sr-only">{rc.caption}</caption>
                             <thead className="bg-surface-muted text-left text-xs text-fg-muted">
                               <tr>
                                 <th scope="col" className="w-10 px-3 py-2">
@@ -327,11 +329,11 @@ export function GamesControlRoom({ initial }: { initial: GamesOverview | null })
                                     }
                                   />
                                 </th>
-                                <th scope="col" className="px-3 py-2 font-medium">Oyun</th>
-                                <th scope="col" className="px-3 py-2 font-medium">Portföy</th>
-                                <th scope="col" className="px-3 py-2 font-medium">Açık</th>
-                                <th scope="col" className="px-3 py-2 text-right font-medium">Ödül</th>
-                                <th scope="col" className="px-3 py-2 font-medium">Eşik / maks.</th>
+                                <th scope="col" className="px-3 py-2 font-medium">{rc.game}</th>
+                                <th scope="col" className="px-3 py-2 font-medium">{rc.portfolio}</th>
+                                <th scope="col" className="px-3 py-2 font-medium">{rc.enabled}</th>
+                                <th scope="col" className="px-3 py-2 text-right font-medium">{rc.reward}</th>
+                                <th scope="col" className="px-3 py-2 font-medium">{rc.thresholdMax}</th>
                                 <th scope="col" className="px-3 py-2 text-right font-medium">30g deneme</th>
                                 <th scope="col" className="px-3 py-2 text-right font-medium">Kazanma</th>
                                 <th scope="col" className="px-3 py-2 text-right font-medium">30g puan</th>
