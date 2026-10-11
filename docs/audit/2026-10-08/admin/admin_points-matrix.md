@@ -230,3 +230,58 @@
 - Id üretimi dizi uzunluğuna bağlı: `spin_custom_${prev.spin.prizes.length + 1}` (`page.tsx:318`). Sunucu normalizasyonu id benzersizliğini kontrol etmiyor (`lib/points-rules.ts:136-139`). Sunucu ödülü nesne olarak seçip o nesnenin `value`'sunu krediliyor (`spin/route.ts` → `pickSpinPrize` + `creditPointsAndXp(tx, { points: prize.value })`), ama yanıttaki `index` de `findIndex(entry.id === prize.id)` ile ilk eşleşmeye gidiyor. İstemci önce `prizes.findIndex((p) => p.id === apiPrize.id)` ile ilk eşleşen dilimi seçiyor (`spin-wheel.tsx:151-158`) ve toast/konfeti/`onPrizeWon` için `prizes[selectedIndex]`'in label/value'sunu kullanıyor (`spin-wheel.tsx:158, 171-194`), sunucunun döndürdüğü `value`'yu değil.
 - **Yeniden üretim:** Varsayılan 7 ödül. Admin "Büyük Ödül" ekler → `spin_custom_8`, değeri 1000. Sonra "10 Puan"ı (index 0) siler → uzunluk 7. Tekrar "Teselli" ekler → yine `spin_custom_8`, değeri 5. Kaydedilir (sunucu kabul eder). Müşteri çarkı çevirir, sunucu "Teselli"yi seçip 5 puan kredilir; istemci ilk `spin_custom_8` dilimi olan "Büyük Ödül"de durur, "1000 puan hesabına eklendi!" toast'ı ve konfeti gösterir. Bildirim kaydı (`notification.message`) ise 5 puan der — kullanıcı tutarsızlık görür, destek talebi/güven kaybı. Ters yönde de oluşur. `analyticsEvent.prizeId` de iki ödülü ayırt edemez.
 - **Öneri:** Id'yi `crypto.randomUUID()` (veya `spin_${Date.now().toString(36)}`) ile üret; sunucuda `normalizePointsMatrix` yinelenen id'leri ya 400 ile reddetmeli ya da `-2` sonekiyle tekilleştirmeli. Ayrıca istemci, sunucunun döndürdüğü `index`'i birincil kaynak kabul etmeli ve toast'ta her zaman `apiPrize.value/label` göstermeli (gösterilen = kredilenen garantisi); sunucu da `index`'i nesne kimliğiyle (`rules.indexOf(prize)`) hesaplamalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/economy` (Ekonomi Stüdyosu, sekme **Puan matrisi**) altına taşındı; `/admin/points-matrix` sorgu parametreleri korunarak kalıcı yönlenir (`permanentRedirect`). Sunucu bileşeni matris + sürüm + varsayılanları ön yükler; istemci adası `components/admin/a-ekonomi-studyosu/**`. `PUT /api/admin/settings/points-matrix` (zod `pointsMatrixSchema` + `baseVersion` + advisory kilit + aynı tx'te audit) korundu.
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | API yetki | ÇALIŞIYOR |
+| 2 | Hero | ÇALIŞIYOR — QDL `PageHeader` (ops), tüm kaynakları sayan açıklama |
+| 3 | Yenile | KALDIRILDI — ayrı buton yok; hata durumunda "Tekrar dene", 409'da "Güncel hâli yükle" (kirli taslağı sessizce silen yol yok) |
+| 4 | Hero Kaydet | KALDIRILDI → yapışkan `DirtyBar` "İncele ve yayınla" (tek kaydetme noktası) |
+| 5 | Bilgi kartı | ÇALIŞIYOR — Davet Programı / Görevler bağlantılı bölüm açıklamaları |
+| 6 | Dirty rozeti | ÇALIŞIYOR — sekme başlığında kirli noktası + DirtyBar sayacı; yalnız `ready` iken hesaplanır |
+| 7 | "Anında uygulanır" metni | ÇALIŞIYOR — dürüst metin: "en geç ~60 sn içinde yayılır" |
+| 8, 11 | Detay eşiği girişi | ÇALIŞIYOR — `NumField` (ham metin, odak çıkışında aralık; boş → hata, 1'e zıplama yok) |
+| 9, 10, 12 | Ödül alanları | ÇALIŞIYOR — alan bazlı üst sınır, "önceki X" gösterimi, detaylı < temel uyarısı |
+| 13 | Davet | ÇALIŞIYOR — "Kod sahibi" etiketi düzeltildi, kademe ödülleri için bağlantı |
+| 14 | Doğum günü | ÇALIŞIYOR |
+| 15 | Görev varsayılanı | ÇALIŞIYOR — yalnız ödülü tanımsız görevlerde geçerli olduğu ve XP = puan÷2 kuralı yazılı |
+| 16 | Seri taşı düzenleme | ÇALIŞIYOR — kalıcı istemci uid anahtarı, sıralama odak çıkışında; odak kaybı yok |
+| 17 | Taş ekle | ÇALIŞIYOR — öneri: son taşın 2 katı, gün ≥ 2, kopya gün uyarısı + sunucu reddi |
+| 18 | Taş silme | ÇALIŞIYOR — `aria-label="N. gün kilometre taşını sil"` |
+| 19 | Çarkı varsayılana al | ÇALIŞIYOR — yalnız taslağa yazar, yayın onaydan geçer |
+| 20 | Çark switch | ÇALIŞIYOR — `Field` ile etiketli |
+| 21 | Günlük limit | ÇALIŞIYOR (1–10) |
+| 22 | Ödül etiketi | ÇALIŞIYOR — etiket/değer çelişkisi uyarısı ("Etiket 100 diyor, verilen 10 puan") |
+| 23 | Ödül tipi | ÇALIŞIYOR — Türkçe seçenekler (Puan / XP / Boş), etiketli |
+| 24 | Ödül değeri | ÇALIŞIYOR |
+| 25 | Ağırlık + yüzde | ÇALIŞIYOR — yüzde + çevirme başına beklenen değer (kayıtlıyla kıyas) + dağılım çubukları |
+| 26 | Ödül ekle | ÇALIŞIYOR — `crypto.randomUUID` tabanlı benzersiz id (Bulgu 4) |
+| 27 | Ödül silme | ÇALIŞIYOR — erişilebilir ad |
+| 28 | Feedback simülasyonu | ÇALIŞIYOR — platform çarpanı dahil; VIP/kampanya/tavan notu |
+| 29 | Tüketim yorumu simülasyonu | KALDIRILDI — toplu etki Simülasyon sekmesinde gerçek defterle |
+| 30 | Seri simülasyonu | ÇALIŞIYOR — tam gün eşleşmeli kümülatif zaman çizelgesi |
+| 31, 32 | Referral / doğum günü özeti | KALDIRILDI — bölüm açıklamalarına taşındı |
+| 33 | Çark bilet simülasyonu | KALDIRILDI — yerine beklenen değer + olasılık dağılımı |
+| 34 | Geri al | ÇALIŞIYOR — DirtyBar "Değişiklikleri at" |
+| 35 | Alt Kaydet | ÇALIŞIYOR — yapışkan, mobilde safe-area'lı |
+| 36 | Yükleniyor | ÇALIŞIYOR — sunucu ön yüklemesi; yeniden yüklemede iskelet, form gizli |
+| 37 | Hata durumu | ÇALIŞIYOR — C2 yükleme kilidi: form yok, `ErrorState` + Tekrar dene |
+| 38 | Sunucu doğrulama | ÇALIŞIYOR — (Dalga 1) + istemcide aynı şema ile yayın engeli |
+| 39 | Audit | ÇALIŞIYOR |
+| 40 | Önbellek | KISMİ (kalan) — süreç-içi 60 sn; metin dürüst |
+| 41 | Kaydedilmemiş değişiklik uyarısı | ÇALIŞIYOR — `beforeunload`; sekmeler arası taslak korunur |
+| 42 | Eşzamanlı düzenleme | ÇALIŞIYOR — `baseVersion` + 409 bandı (güncel hâli yükle / bilerek üzerine yaz) |
+| 43 | Geçmiş + fark + geri yükleme | ÇALIŞIYOR — `GET /api/admin/economy/history`, alan farkları, "Taslağa yükle" |
+| 44 | Etki onayı | ÇALIŞIYOR — `ConfirmAction`: alan farkı + son 30 gün gerçek basım → taslak tahmini, ≥%50 uyarı |
+| 45 | Mobil | ÇALIŞIYOR — tek kolon, önizleme altta, ≥44px hedefler |
+| 46, 47 | Label/ikon erişilebilirliği | ÇALIŞIYOR — `Field` (`htmlFor`, `aria-describedby`, `aria-invalid`), `IconButton` |
+| 48 | i18n | KISMİ (kalan) — terimler tutarlı Türkçe; EN çevirisi yapılmadı (admin ops yüzeyi) |
+
+**Kapanan bulgular:** 1, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13 kapandı; 2 Dalga 1'de kapanmıştı (istemci tarafı yayın engeli eklendi); 7 kısmen (metin dürüstleştirildi, Redis yayılımı kaldı).
+**Kalanlar:** Redis ile örnekler arası anlık önbellek geçersizleştirme (paylaşılan `lib/points-rules.ts`); zamanlanmış/segmentli değişiklik ve kill switch (ürün kararı); EN çeviri.

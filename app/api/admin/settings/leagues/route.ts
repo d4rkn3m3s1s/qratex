@@ -16,10 +16,11 @@ import {
   isVersionConflictError,
   readBaseVersion,
   versionConflictResponse,
-  versionFromDate,
   writeVersionedSetting,
 } from '@/lib/settings-version';
 import { Prisma } from '@prisma/client';
+import { deriveLeagueRanges, leagueRulesSchema } from '@/lib/admin-economy/contract';
+import { loadLeaguesResource } from '@/lib/admin-economy/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,22 +45,21 @@ function completenessError(rules: unknown): string | null {
   return null;
 }
 
-/** GET — canlı kurallar + sürüm. Önbelleksiz; okuma hatası 500 (istemci formu açmaz). */
+/**
+ * GET — canlı kurallar + sürüm + lig başına müşteri dağılımı. Önbelleksiz; okuma hatası 500
+ * (istemci formu açmaz). Eski kayıtlardaki boşluklar bitişik aralıklara çevrilmiş döner.
+ */
 export async function GET() {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
 
-    const row = await prisma.settings.findUnique({
-      where: { key: LEAGUE_RULES_SETTING_KEY },
-      select: { value: true, updatedAt: true },
-    });
+    const res = await loadLeaguesResource();
     return NextResponse.json({
       success: true,
       key: LEAGUE_RULES_SETTING_KEY,
-      rules: normalizeLeagueRules(row?.value),
-      version: versionFromDate(row?.updatedAt),
-      isDefault: !row,
+      ...res.data,
+      version: res.version,
     }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('League rules fetch error:', error);
@@ -87,10 +87,24 @@ export async function PUT(request: NextRequest) {
     if (incomplete) {
       return NextResponse.json({ success: false, error: incomplete }, { status: 400, headers: PRIVATE_NO_STORE_HEADERS });
     }
+    // Sıkı doğrulama: ilk eşik 0, kesin artan, bitişik aralıklar, son lig sınırsız, ad 1–32.
+    const strict = leagueRulesSchema.safeParse(parsed.data.rules);
+    if (!strict.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: strict.error.issues[0]?.message ?? 'Lig kuralları geçersiz',
+          code: 'VALIDATION',
+          details: strict.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+        },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
     const baseVersion = readBaseVersion(raw);
     if (!baseVersion) return baseVersionRequiredResponse();
 
-    const rules = normalizeLeagueRules(parsed.data.rules);
+    // Üst sınırlar sunucuda bitişik türetilir; gradyan (kullanıcıya gösterilmeyen tema alanı) korunur.
+    const rules = deriveLeagueRanges(normalizeLeagueRules(strict.data));
 
     const saved = await prisma.$transaction(async (tx) => {
       const written = await writeVersionedSetting(tx, {

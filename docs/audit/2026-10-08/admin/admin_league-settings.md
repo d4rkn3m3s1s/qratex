@@ -213,3 +213,44 @@
 - Kanıt: `lib/utils.ts:142-164` (`getLeague*` yardımcılarının hepsi sabit `DEFAULT_LEAGUE_RULES` ile çalışıyor), `components/customer/dashboard/customer-dashboard.tsx:419-422` (lig, ilerleme ve sonraki lig) ve `:1326` ("Tüm ligler" listesi `DEFAULT_LEAGUE_RULES.map`), `app/customer/rewards/page.tsx:241`, `app/customer/leaderboard/page.tsx:99` (başlıktaki kendi ligin). Buna karşılık leaderboard satırları `app/api/leaderboard/route.ts:79` üzerinden DB kurallarını (`getLeagueRules`) kullanıyor.
 - Yeniden üretim: Admin VEYRA min değerini 8000 yapıp kaydeder. 6000 puanlı bir kullanıcı leaderboard satırında "Kor", aynı sayfanın başlığında ve dashboard'da "Veyra" görür; dashboard'daki "Tüm ligler" eşikleri de eski değerleri gösterir. Sayfanın kendi açıklaması (`page.tsx:111`, "müşteri paneli bu ayarları kullanır") bu yüzden yanlış.
 - Sınır: Ayar hiç değiştirilmediyse (DB'de kayıt yok veya kayıt varsayılanlara eşit) tutarsızlık oluşmaz. Hata, ilk özelleştirmede ortaya çıkar.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/economy?tab=leagues` (sekme **Ligler**); `/admin/league-settings` kalıcı yönlenir. `PUT /api/admin/settings/leagues` sıkı şemayla (`leagueRulesSchema`: 7 benzersiz lig, ilk eşik 0, kesin artan, ad 1–32) + `baseVersion` + aynı tx audit; üst sınırlar sunucuda bitişik türetilir (son lig sınırsız). GET lig başına müşteri dağılımı döndürür. Yeni `POST /api/admin/economy/leagues/preview` (yükselen/düşen sayısı, ≤14 COUNT, N+1 yok).
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Hero açıklaması | ÇALIŞIYOR — dürüst: leaderboard okur, metrik harcanabilir bakiye |
+| 2 | Yenile | KALDIRILDI — hata/409'da yeniden yükleme; kirli taslak sessizce silinmez |
+| 3 | Kaydet | ÇALIŞIYOR — İncele ve yayınla (yükselen/düşen müşteri etkisiyle) |
+| 4 | Dirty rozeti | ÇALIŞIYOR |
+| 5 | İlk yükleme | ÇALIŞIYOR — sunucu ön yüklemesi |
+| 6 | Hata durumu | ÇALIŞIYOR — C2 kilidi: form yok, Tekrar dene |
+| 7 | İstemci yedek kuralları | KALDIRILDI — tek kaynak `DEFAULT_LEAGUE_RULES`, yalnız "Varsayılan eşiklere al" için |
+| 8 | Kart ızgarası | ÇALIŞIYOR — yoğun lig tablosu + dağılım şeridi |
+| 9 | Anahtar | ÇALIŞIYOR — renk şeridiyle |
+| 10 | İsim | ÇALIŞIYOR — 1–32 karakter (istemci + sunucu) |
+| 11 | Min puan | ÇALIŞIYOR — tek eşik alanı, NumField, satır içi hata |
+| 12 | Max puan | KALDIRILDI — türetilir (boşluk/çakışma imkânsız) |
+| 13 | Gradient | KALDIRILDI — sahte alan; renkler lig anahtarına bağlı tema token'larından |
+| 14 | GET | ÇALIŞIYOR |
+| 15 | PUT + audit | ÇALIŞIYOR — tek transaction |
+| 16 | Sunucu doğrulama | ÇALIŞIYOR |
+| 17 | Kayıt sonrası sıralama | ÇALIŞIYOR |
+| 18 | Cache | KISMİ (kalan) — süreç-içi 60 sn (paylaşılan `lib/league-rules.ts`) |
+| 19 | Rota koruması | ÇALIŞIYOR |
+| 20 | Menü | ÇALIŞIYOR — registry (navigasyon ajanı) |
+| 21 | Toast | ÇALIŞIYOR — alan bazlı mesajlar |
+| 22 | Mobil | ÇALIŞIYOR |
+| 23 | Form a11y | ÇALIŞIYOR |
+| 24 | i18n | KISMİ (kalan) — Türkçe |
+| 25 | Görsel şerit + doğrulama | ÇALIŞIYOR — kullanıcı dağılımı şeridi + anlık hata |
+| 26 | Etki önizlemesi | ÇALIŞIYOR — lig başına mevcut → taslak sayı, yükselen/düşen |
+| 27 | Geçmiş | ÇALIŞIYOR — AuditLog + Taslağa yükle |
+| 28 | Kaydedilmemiş değişiklik koruması | ÇALIŞIYOR |
+| 29 | Varsayılana sıfırla | ÇALIŞIYOR — taslağa (onaydan geçer) |
+| 30 | Eşzamanlı düzenleme | ÇALIŞIYOR — 409 |
+
+**Kapanan bulgular:** B1, B3 (paylaşılan `lib/league-rules-core.ts`: aralık dışı puan en yüksek geçilen lige yerleşir, son lig ilerlemesi %100 — geriye uyumlu), B4, B5, B7, B9, B10, B11 (Dalga 1). **Kısmi:** B8 (metin dürüst; Redis yok). **Kalanlar:** B2 — müşteri paneli/ödüller/leaderboard başlığı hâlâ `lib/utils.ts` varsayılanlarını okuyor (müşteri yüzeyleri bu ajanın sahipliğinde değil); B6 — lig metriği (kümülatif kazanç) ürün kararı.

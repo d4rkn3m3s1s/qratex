@@ -224,3 +224,46 @@ Her iddia, kod baştan okunarak çürütülmeye çalışıldı (salt okunur; DB/
 - **Yeniden üretim:** Rolü ADMIN yapılmış ama gate cevabını bilmeyen hesap giriş yapar → proxy onu `/admin-gate`'e yönlendirir (bu sayfa ADMIN'e açık, aynı origin) → tarayıcı konsolundan `fetch('/api/admin/gamification/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({pointMultiplier:100,xpMultiplier:100})})` → `requireAuth` geçer (aynı tarayıcı, token-replay tetiklenmez) → global çarpan 100× olur. Tüm `/api/admin/*` için sistemik.
 - Ek ve daha ağır gözlem (iddia dışı, okunarak doğrulandı): sayfa tarafındaki gate de sahte cookie ile aşılabiliyor. `lib/admin-gate-edge.ts:14-22` HMAC'i **doğrulamıyor**, yalnız `"<userId>.<64 hex>"` biçimine bakıyor; kullanıcı kendi `userId`'sini bildiği için `document.cookie = "admin_gate=<userId>." + "0".repeat(64)` ile proxy kontrolü geçilir. Dosyadaki "cookie'yi elde etmenin TEK yolu doğru cevabı vermek" varsayımı yanlış. Gerçek doğrulayıcı `verifyGateCookie` (`lib/admin-gate.ts:55`) tanımlı ama projede hiçbir yerden çağrılmıyor.
 - **Öneri:** Gate doğrulamasını Node runtime'da gerçek HMAC ile yapan tek yardımcı (`requireAdminGate()` → `requireAuth(['ADMIN'])` sonrasında `lib/admin-gate.ts` ile imza + cevap sürümü kontrolü) yazılıp tüm `/api/admin/*` uçlarına zorunlu kılınmalı; proxy'de ise Web Crypto (`crypto.subtle`, edge'de async mevcut) ile HMAC doğrulanmalı. Gate cevabı değişince eski cookie'lerin geçersizleşmesi için imzaya cevap sürümü dahil edilmeli.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/economy?tab=multipliers` (sekme **Çarpan ve tavanlar**); `/admin/gamification-settings` kalıcı yönlenir. `app/api/admin/gamification/settings/route.ts` `defineRoute` ile yeniden yazıldı: GET salt okunur (satır oluşturmaz), PUT/PATCH yalnız iki etkili alan (0,1–5×) + `baseVersion` zorunlu, advisory kilit, aynı tx'te audit (`lib/admin-economy/server.ts` → `saveMultipliers`).
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1 | Sayfa erişimi | ÇALIŞIYOR (sunucu bileşeninde ayrıca `requireAuth(['ADMIN'])`) |
+| 2 | API yetkisi | ÇALIŞIYOR — `defineRoute` (rol + rate limit + zod) |
+| 3 | Yükleme | ÇALIŞIYOR — GET yan etkisiz; tüketiciyle aynı satır (`updatedAt desc`) |
+| 4 | Yükleniyor | ÇALIŞIYOR — sunucu ön yükleme, yeniden yüklemede `role=status` iskelet |
+| 5 | Yükleme hatası | ÇALIŞIYOR — çökme yok; `ErrorState` + Tekrar dene, düzenleme kilitli |
+| 6 | Başlık | ÇALIŞIYOR — stüdyo başlığı |
+| 7 | Kaydet | ÇALIŞIYOR — İncele ve yayınla (fark + gerçek veriyle etki) |
+| 8 | Kaydetme göstergesi | ÇALIŞIYOR — DirtyBar |
+| 9 | Toast | ÇALIŞIYOR — Türkçe sunucu mesajları, 409 bandı |
+| 10 | XP çarpanı | ÇALIŞIYOR — kapsamı "Geri bildirim" çipiyle açık; 0 girilemez (min 0,1) |
+| 11 | Puan çarpanı | ÇALIŞIYOR — "Global" vaadi kaldırıldı; muaf kaynaklar yazılı; >2× uyarı |
+| 12 | Günlük maks. XP | KALDIRILDI — hiçbir tüketici uygulamıyordu (sahte) |
+| 13 | Seviye ödülü | KALDIRILDI — tüketicisi yok |
+| 14 | Sezon adı | KALDIRILDI — tüketicisi yok; zaman pencereli çarpan için Sezonluk Kampanyalar bağlantısı |
+| 15 | Sezon bitişi | KALDIRILDI — tüketicisi yok (saat dilimi kayması da ortadan kalktı) |
+| 16 | Sezon aktif | KALDIRILDI — tüketicisi yok |
+| 17 | Sunucu doğrulama | ÇALIŞIYOR — zod `multipliersPutSchema` (NaN/∞/aralık → 400) |
+| 18 | Boş alan → 0 | ÇALIŞIYOR — boş alan hata, yayın engelli; sunucu da reddeder |
+| 19 | Audit | ÇALIŞIYOR — eski/yeni değer, yazma ile aynı tx (yutulmuyor) |
+| 20 | Önbellek | ÇALIŞIYOR — `revalidateTag` (metin: birkaç sn–1 dk) |
+| 21 | i18n | KISMİ (kalan) — Türkçe; EN çeviri yok |
+| 22 | Mobil | ÇALIŞIYOR — yapışkan kaydetme çubuğu, tablo yatay kayar |
+| 23 | Form a11y | ÇALIŞIYOR — `Field` bağları, tablo `caption`/`scope` |
+| 24 | Kirli durum | ÇALIŞIYOR |
+| 25 | Geçmiş / geri alma | ÇALIŞIYOR — AuditLog zaman çizelgesi + Taslağa yükle |
+| 26 | Etki önizlemesi + onay | ÇALIŞIYOR — son 30 gün gerçek defter → taslak tahmini |
+| 27 | Eşzamanlı düzenleme | ÇALIŞIYOR — `baseVersion` + 409 |
+| 28 | Motion | ÇALIŞIYOR — ölü import yok; DirtyBar/MetricTile hareketi motion politikasıyla (azaltılmış hareket destekli) |
+| 29 | Tekil satır | KISMİ (kalan) — okuma/yazma aynı satırı (`updatedAt desc`) seçer, yazma kilitli; şemada tekil anahtar yok |
+
+Ek: **Tavanlar** kartı `lib/economy/caps` tek kaynağından salt okunur gösterilir (günlük/haftalık/bayi başına, tek-kredi üst sınırı, admin düzeltme sınırları); son 7 günde tavana takılan kredi sayısı defterden (0 puanlı satır) okunur.
+
+**Kapanan bulgular:** 1, 2 (dürüst kapsam), 3, 4, 6 (alan kaldırıldı), 7, 9 (üst sınır 5×, XP tavanı vaadi kaldırıldı), 10, 11, 12. **Kısmi:** 8 (şema değişmeden kilit + aynı satır). **Kapsam dışı:** 5 (admin kapısı — sistemik güvenlik işi).
+**Kalanlar / ŞEMA İSTEĞİ:** `GamificationSettings` için tekil anahtar (`id @default("singleton")`) ve kullanılmayan `dailyXpCap`, `levelUpRewardBase`, `season*` sütunlarının kaldırılması; çarpanın diğer kazanç kaynaklarına yayılması ürün kararı (lib/economy `mintPoints` üzerinden).

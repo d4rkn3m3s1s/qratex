@@ -74,7 +74,13 @@ export function normalizeLeagueRules(value: unknown): LeagueRule[] {
 export function getLeagueMetaFromRules(points: number, rules: LeagueRule[]) {
   const p = Math.max(0, points);
   const list = rules.length ? rules : DEFAULT_LEAGUE_RULES;
-  return list.find((r) => p >= r.minPoints && p <= r.maxPoints) ?? list[0];
+  const exact = list.find((r) => p >= r.minPoints && p <= r.maxPoints);
+  if (exact) return exact;
+  // Aralık dışı (son ligin tavanının üstü ya da eski kayıtlardaki boşluk): kullanıcıyı
+  // "Başlangıç"a DÜŞÜRME — eşiğini geçtiği en yüksek lige yerleştir (league-settings B3).
+  let best: LeagueRule | null = null;
+  for (const r of list) if (p >= r.minPoints && (!best || r.minPoints > best.minPoints)) best = r;
+  return best ?? list[0];
 }
 
 export function getNextLeagueMetaFromRules(points: number, rules: LeagueRule[]) {
@@ -88,7 +94,8 @@ export function getNextLeagueMetaFromRules(points: number, rules: LeagueRule[]) 
 export function getLeagueProgressFromRules(points: number, rules: LeagueRule[]): number {
   const list = rules.length ? rules : DEFAULT_LEAGUE_RULES;
   const current = getLeagueMetaFromRules(points, list);
-  if (current.maxPoints >= 100000) return 100;
+  const isTop = list.every((r) => r.minPoints <= current.minPoints);
+  if (isTop || points > current.maxPoints) return 100;
   const span = current.maxPoints - current.minPoints + 1;
   const progress = Math.max(0, points - current.minPoints) + 1;
   return Math.max(0, Math.min(100, Math.floor((progress / span) * 100)));

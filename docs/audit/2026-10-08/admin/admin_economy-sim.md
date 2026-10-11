@@ -194,3 +194,44 @@ Stripe Dashboard (gelir/raporlama), PostHog (insights, karşılaştırmalı dön
 - Neden "hata/güvenlik bulgusu" olarak çürütüldü: Endpoint salt okunur, hiçbir veri yazmıyor; hiçbir kod yolu bu tahmini bir karar/ayar olarak tüketmiyor. Sayfa kendini açıkça "toplu tahmin, canlı veriyi değiştirmez" (`page.tsx:64`) ve "Tahmindir; gerçek dağılım kullanıcı davranışına bağlıdır" (`route.ts:77`) diye etiketliyor. Bir kullanıcının ya da verinin etkilendiği somut bir senaryo kurulamıyor; "yanlış bütçe kararı" spekülatif bir dolaylı etki.
 - "Sistematik olarak yanlış" ifadesi de abartılı: sapmalar zıt yönlü. Çarpanlar (VIP, kampanya, platform) gerçeği yukarı iterken tavanlar aşağı çeker; sim kullanıcı sayısı almadığı için kullanıcı başına tavan zaten modellenemez. Yön, matris ve kampanya durumuna göre değişir.
 - **Öneri (iyileştirme olarak):** Raporun "Yeniden tasarım vizyonu" bölümündeki `lib/economy/reward-pipeline.ts` yaklaşımı doğru çözüm: ödül hesabını saf fonksiyonlara çıkarıp hem gerçek route'lar hem sim tarafından kullanmak; sime aktif kullanıcı sayısı ekleyip tavanı kullanıcı başına uygulamak; görev ödülünü aktif `Quest` kayıtlarının ağırlıklı ortalamasından okumak; aktif çarpanları ve kampanyaları "dahil et" seçenekleri olarak göstermek ve hangi kuralların modellenmediğini sonuç kartında açıkça listelemek.
+
+---
+
+## Uygulama (Dalga 2)
+
+Rota `/admin/economy?tab=simulation` (sekme **Simülasyon**, `next/dynamic` ile yalnız açılınca yüklenir); `/admin/economy-sim` kalıcı yönlenir. Eski `GET /api/admin/economy-sim` silindi. Yeni BFF: `GET /api/admin/economy/flow?days=7|30|90` (PointsLedger) ve `POST /api/admin/economy/simulate` (taslak matris/çarpan, salt okunur); ikisi de `defineRoute` + zod + rate limit. Hesap saf `lib/admin-economy/simulate.ts` içinde (Jest testli).
+
+| # | Özellik | Yeni durum |
+|---|---|---|
+| 1, 2 | Erişim / API yetkisi | ÇALIŞIYOR |
+| 3 | Hero | ÇALIŞIYOR — stüdyo başlığı; kapsam ve varsayımlar sonuçta açıkça listelenir |
+| 4 | Puan matrisi kısayolu | KALDIRILDI — aynı sayfada sekme |
+| 5 | Senaryo kartı | ÇALIŞIYOR — "Taslak etkisi" |
+| 6–9 | Serbest metin girdileri | KALDIRILDI — davranış uydurma sayılarla değil, seçili dönemin GERÇEK olay hacmiyle modellenir |
+| 10 | Hesapla | ÇALIŞIYOR — "Taslağı simüle et" |
+| 11 | Açılışta hesap | ÇALIŞIYOR — akış (gerçek veri) açılışta yüklenir |
+| 12 | Hata kartı | ÇALIŞIYOR — `ErrorState` + Tekrar dene, Türkçe |
+| 13 | Yükleniyor | ÇALIŞIYOR — iskelet; yeniden yüklemede soluklaşma + `aria-busy` |
+| 14, 15 | Toplam puan/XP | ÇALIŞIYOR — gerçek basım/harcama/net/arz/enflasyon/kullanım oranı + önceki dönem kıyası |
+| 16 | Kaynak dökümü | ÇALIŞIYOR — tüm defter kaynakları, tür (basım/harcama/transfer/düzeltme), pay |
+| 17 | XP dökümü | KISMİ — defter `xpDelta` sunucuda toplanır; tabloda puan odaklı gösterim |
+| 18 | Girdi/matris yankısı | ÇALIŞIYOR — her satırda ölçekleme dayanağı + varsayımlar listesi |
+| 19 | Not | ÇALIŞIYOR |
+| 20 | Çark pasif | ÇALIŞIYOR — taslakta kapalıysa çark basımı 0 |
+| 21 | Sunucu doğrulama | ÇALIŞIYOR — zod (dönem, taslak matris `pointsMatrixSchema`) → 400 |
+| 22 | Cache tutarlılığı | ÇALIŞIYOR — simülasyon kayıtlı matrisi önbelleksiz okur |
+| 23 | Bayatlama göstergesi | ÇALIŞIYOR — dönem değişince "yeniden hesaplayın" uyarısı |
+| 24 | Taslakla what-if | ÇALIŞIYOR — kaydedilmemiş matris/çarpan taslakları |
+| 25 | Diğer kaynaklar | ÇALIŞIYOR — tüm defter kaynakları gözlenir; matris dışı olanlar sabit taşınır |
+| 26 | Harcama kanalları | ÇALIŞIYOR — harcama, net akış, kullanım oranı |
+| 27 | Zaman ufku | ÇALIŞIYOR — 7/30/90 gün (Europe/Istanbul) |
+| 28 | Gerçek taban çizgisi | ÇALIŞIYOR — PointsLedger |
+| 29 | Senaryo kaydetme/URL | KISMİ (kalan) — sekme URL'de; adlandırılmış senaryo yok |
+| 30 | Dışa aktarma | EKSİK (kalan) |
+| 31 | Grafik | ÇALIŞIYOR — günlük basım/harcama çubukları (+ sr-only veri tablosu), MetricTile eğilim çizgisi |
+| 32 | Mobil | ÇALIŞIYOR |
+| 33, 34 | a11y | ÇALIŞIYOR — `ChoiceChips` radiogroup, `aria-live` sonuç, tablo `caption`/`scope` |
+| 35 | `<title>` | ÇALIŞIYOR — sunucu `metadata` "Ekonomi Stüdyosu" |
+| 36 | Kenar çubuğu | ÇALIŞIYOR — registry `admin.economy` (navigasyon ajanının; `redirectFrom` tanımlı) |
+
+**Kapanan bulgular:** 1 (serbest girdi kalktı, zod), 2 (gerçek defter + oransal model; varsayımlar açık), 3 (görev ölçeklenmez, açıkça yazılı), 4 (birleşti), 5, 6, 7, 8, 9, 10, 11. **Kalanlar:** adlandırılmış/paylaşılabilir senaryolar ve CSV; defter dışı eski kredi yolları akışta görünmez (lib/economy göçü sürdükçe kapsam büyür — arayüzde yazılı).
