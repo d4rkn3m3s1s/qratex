@@ -29,7 +29,13 @@ export const GET = defineRoute(
     const sp = request.nextUrl.searchParams;
     const size = Number.parseInt(sp.get('pageSize') ?? '', 10);
     const pageSize = Number.isInteger(size) && size >= 5 && size <= 50 ? size : undefined;
-    return ok(await listLedger(tenant.dealerId, scopeLedgerFilters(parseLedgerFilters(sp), tenant.via), { pageSize }));
+    return ok(
+      await listLedger(tenant.dealerId, scopeLedgerFilters(parseLedgerFilters(sp), tenant.via), {
+        pageSize,
+        // Personel: ad maskeli (kasa kartıyla aynı), geri alma düğmesi yalnız kendi kaydında.
+        staffActorId: tenant.via === 'staff' ? tenant.actorId : null,
+      })
+    );
   }
 );
 

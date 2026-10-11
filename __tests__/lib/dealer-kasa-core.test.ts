@@ -10,6 +10,7 @@ import {
   ledgerFiltersToParams,
   maskCustomerName,
   parseAmountInput,
+  amountToInput,
   parseLedgerFilters,
   pctDelta,
   previousWindow,
@@ -156,5 +157,20 @@ describe('güvenlik: personel defter kapsamı (en az yetki)', () => {
     const custom = parseLedgerFilters(new URLSearchParams('range=custom&from=2025-01-01&to=2026-01-01'));
     expect(scopeLedgerFilters(custom, 'staff')).toMatchObject({ range: 'today', from: null, to: null });
     expect(scopeLedgerFilters(all, 'owner').range).toBe('all');
+  });
+});
+
+describe('amountToInput (fiyattan otomatik doldurma)', () => {
+  it('3 ondalıklı fiyat TR binlik sanılıp 1000 kat şişmez', () => {
+    expect(parseAmountInput(amountToInput(12.125))).toBe(12.13);
+    expect(parseAmountInput(amountToInput(2.999))).toBe(3);
+  });
+  it('yuvarlak/ondalık/boş değerler', () => {
+    expect(amountToInput(1250)).toBe('1250');
+    expect(amountToInput(12.5)).toBe('12,5');
+    expect(amountToInput(0)).toBe('0');
+    expect(amountToInput(null)).toBe('');
+    expect(amountToInput(Number.NaN)).toBe('');
+    expect(parseAmountInput(amountToInput(0.1 + 0.2))).toBe(0.3);
   });
 });

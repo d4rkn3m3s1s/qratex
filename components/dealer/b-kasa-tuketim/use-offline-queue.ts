@@ -19,20 +19,27 @@ import {
 } from '@/lib/dealer/kasa/core';
 import { KasaApiError, postJson } from './api';
 
-const KEY = 'qx:kasa-queue:v1';
+/**
+ * Kuyruk anahtarı hesaba (işletme + aktör) bağlıdır: paylaşılan kasa cihazında A hesabının
+ * bekleyen işlemleri B hesabı oturum açınca B'nin işletmesine yazılıyordu (sunucu `dealerId`'yi
+ * oturumdan alır; `clientOpId` işletme başına tekil olduğu için tekilleştirme de tutmaz).
+ */
+export function queueStorageKey(owner: string): string {
+  return `qx:kasa-queue:v2:${owner}`;
+}
 
-function load(): QueuedConsumption[] {
+function load(key: string): QueuedConsumption[] {
   try {
-    return sanitizeQueue(JSON.parse(window.localStorage.getItem(KEY) ?? '[]'));
+    return sanitizeQueue(JSON.parse(window.localStorage.getItem(key) ?? '[]'));
   } catch {
     return [];
   }
 }
 
-function persist(q: QueuedConsumption[]) {
+function persist(key: string, q: QueuedConsumption[]) {
   try {
-    if (q.length === 0) window.localStorage.removeItem(KEY);
-    else window.localStorage.setItem(KEY, JSON.stringify(q));
+    if (q.length === 0) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, JSON.stringify(q));
   } catch {
     /* depolama kapalı: kuyruk yalnız bu oturumda bellekte kalır */
   }
@@ -54,7 +61,8 @@ export function useOnline(): boolean {
   return online;
 }
 
-export function useOfflineQueue(opts: { onSynced?: (n: number) => void } = {}) {
+export function useOfflineQueue(opts: { owner: string; onSynced?: (n: number) => void }) {
+  const key = queueStorageKey(opts.owner);
   const [queue, setQueue] = useState<QueuedConsumption[]>([]);
   const [syncing, setSyncing] = useState(false);
   const online = useOnline();
@@ -62,22 +70,22 @@ export function useOfflineQueue(opts: { onSynced?: (n: number) => void } = {}) {
   const onSyncedRef = useRef(opts.onSynced);
   onSyncedRef.current = opts.onSynced;
 
-  useEffect(() => setQueue(load()), []);
+  useEffect(() => setQueue(load(key)), [key]);
 
   const update = useCallback((fn: (q: QueuedConsumption[]) => QueuedConsumption[]) => {
     setQueue((prev) => {
       const next = fn(prev);
-      persist(next);
+      persist(key, next);
       return next;
     });
-  }, []);
+  }, [key]);
 
   const add = useCallback((item: QueuedConsumption) => update((q) => enqueue(q, item)), [update]);
   const dismiss = useCallback((id: string) => update((q) => q.filter((x) => x.clientOpId !== id)), [update]);
 
   const flush = useCallback(async () => {
     if (busyRef.current) return;
-    const items = pendingItems(load());
+    const items = pendingItems(load(key));
     if (items.length === 0) return;
     busyRef.current = true;
     setSyncing(true);
@@ -118,7 +126,7 @@ export function useOfflineQueue(opts: { onSynced?: (n: number) => void } = {}) {
       setSyncing(false);
       if (sent > 0) onSyncedRef.current?.(sent);
     }
-  }, [update]);
+  }, [update, key]);
 
   // Bağlantı gelince ve açılışta gönder; çevrimiçiyken bekleyen varsa 30 sn'de bir dene.
   useEffect(() => {

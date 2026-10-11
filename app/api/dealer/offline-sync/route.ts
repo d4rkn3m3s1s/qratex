@@ -28,6 +28,9 @@ import {
  *    tutar sınırı, denetim, bildirim, pasif puan tek tx) ve `clientOpId = offline:<kuyrukId>`
  *    ile yazılır → @@unique(dealerId, clientOpId) aynı öğeden ikinci tüketimi imkânsız kılar.
  *  - `SCAN_CARD` kaldırıldı.
+ *  - Yalnız DEALER: işletme kimliği oturumdan (`session.user.id`) alındığı için ADMIN kendi
+ *    kimliğiyle "işletme" olup her karta tüketim + pasif puan yazabiliyordu (kasa kuralı:
+ *    ADMIN kasada yazamaz).
  */
 
 export const dynamic = 'force-dynamic';
@@ -62,7 +65,7 @@ function json(body: unknown, status = 200) {
 // GET - Bekleyen kuyruk öğeleri
 export async function GET() {
   try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
@@ -95,7 +98,7 @@ export async function GET() {
 // POST - Kuyruğa öğe ekle (yalnız CREATE_CONSUMPTION, doğrulanmış payload)
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
@@ -184,7 +187,7 @@ function extractIds(body: unknown): string[] | null {
 // PATCH - Kuyruk öğelerini senkronize et (yalnız kimlik listesi; içerik DB'den)
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await requireAuth(['DEALER', 'ADMIN']);
+    const auth = await requireAuth(['DEALER']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
     const dealerId = session.user.id;

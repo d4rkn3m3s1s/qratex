@@ -304,6 +304,16 @@ export function parseAmountInput(raw: string): number | null {
 }
 
 /**
+ * Sayı → tutar alanı metni ("12,5"). En çok 2 ondalık: `String(12.125)` → "12,125" metni
+ * `parseAmountInput`'ta TR binlik sanılıp 12125 okunuyordu (fiyattan otomatik doldurulan tutar
+ * 1000 kat şişiyordu).
+ */
+export function amountToInput(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n) || n < 0) return '';
+  return String(Math.round(n * 100) / 100).replace('.', ',');
+}
+
+/**
  * Fiş OCR metninden toplam tutar. "TOPLAM/TUTAR/TOTAL" satırı öncelikli; yoksa metindeki en
  * büyük makul tutar. TR binlik ("1.250") 1250 okunur (eskiden 1,25 okunuyordu).
  */

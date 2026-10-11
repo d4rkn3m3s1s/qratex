@@ -210,8 +210,20 @@ function toDimensions(v: unknown): Record<string, number> | null {
   return Object.keys(out).length ? out : null;
 }
 
-function toRow(r: RowPayload, now: Date, points: Map<string, number>): LedgerRow {
+/** Defter satırı görünürlük ayarları (personel kasası: en az yetki). */
+export interface LedgerViewOptions {
+  /** Müşteri adını kasa kartıyla aynı biçimde maskele ("Ayşe K."). */
+  maskNames?: boolean;
+  /**
+   * Personel: yalnız bu aktörün girdiği kayıtlar geri alınabilir görünür (sunucu zaten 403 verir;
+   * başkasının satırında "Geri al" düğmesi ölü kalıyordu).
+   */
+  ownEntriesOf?: Set<string> | null;
+}
+
+function toRow(r: RowPayload, now: Date, points: Map<string, number>, view: LedgerViewOptions = {}): LedgerRow {
   const review = r.review && !r.review.deletedAt ? r.review : null;
+  const voidableByRule = voidBlockReason({ createdAt: r.createdAt, hasReview: !!r.review, now }) === null;
   return {
     id: r.id,
     createdAt: r.createdAt.toISOString(),
@@ -219,7 +231,7 @@ function toRow(r: RowPayload, now: Date, points: Map<string, number>): LedgerRow
     note: r.note,
     cardLast4: cardLast4(r.card?.token),
     customer: {
-      displayName: r.customer?.name?.trim() || null,
+      displayName: view.maskNames ? maskCustomerName(r.customer?.name) : r.customer?.name?.trim() || null,
       initials: initialsOf(r.customer?.name),
       avatar: safeAvatar(r.customer?.image),
     },
@@ -237,7 +249,7 @@ function toRow(r: RowPayload, now: Date, points: Map<string, number>): LedgerRow
         }
       : null,
     // Silinmiş (moderasyon) yorum da satırı kilitler: geri alma onu da silerdi.
-    voidable: voidBlockReason({ createdAt: r.createdAt, hasReview: !!r.review, now }) === null,
+    voidable: voidableByRule && (!view.ownEntriesOf || view.ownEntriesOf.has(r.id)),
     passivePoints: points.has(r.id) ? points.get(r.id)! : null,
   };
 }
@@ -254,6 +266,24 @@ async function passivePointsFor(ids: string[]): Promise<Map<string, number>> {
     if (id) map.set(id, row.status === 'posted' ? row.delta : 0);
   }
   return map;
+}
+
+/**
+ * Personelin geri alma penceresinde girdiği tüketim kimlikleri (kart denetimi `CONSUMPTION_ADDED`
+ * aktörü). Geri alma ucu aynı kuralı uygular; burada yalnız düğme görünürlüğü için.
+ */
+async function ownRecentEntries(actorId: string, now: Date): Promise<Set<string>> {
+  const rows = await prisma.cardAuditLog.findMany({
+    where: { userId: actorId, action: 'CONSUMPTION_ADDED', createdAt: { gte: new Date(now.getTime() - VOID_WINDOW_MS - 60_000) } },
+    select: { metadata: true },
+    take: 500,
+  });
+  const ids = new Set<string>();
+  for (const r of rows) {
+    const id = (r.metadata as { consumptionId?: unknown } | null)?.consumptionId;
+    if (typeof id === 'string') ids.add(id);
+  }
+  return ids;
 }
 
 async function summarize(dealerId: string, f: LedgerFilters, w: DateWindow): Promise<LedgerSummaryNumbers> {
@@ -276,7 +306,13 @@ async function summarize(dealerId: string, f: LedgerFilters, w: DateWindow): Pro
 export async function listLedger(
   dealerId: string,
   filters: LedgerFilters,
-  opts: { now?: Date; pageSize?: number; withPrevious?: boolean } = {}
+  opts: {
+    now?: Date;
+    pageSize?: number;
+    withPrevious?: boolean;
+    /** Personel görünümü: ad maskeli, geri alma yalnız kendi girdiği kayıtlarda. */
+    staffActorId?: string | null;
+  } = {}
 ): Promise<LedgerPage> {
   const now = opts.now ?? new Date();
   const pageSize = opts.pageSize ?? LEDGER_PAGE_SIZE;
@@ -296,11 +332,15 @@ export async function listLedger(
     summarize(dealerId, filters, w),
     prevW ? summarize(dealerId, filters, prevW) : Promise.resolve(null),
   ]);
-  const points = await passivePointsFor(rows.map((r) => r.id));
+  const [points, ownEntriesOf] = await Promise.all([
+    passivePointsFor(rows.map((r) => r.id)),
+    opts.staffActorId ? ownRecentEntries(opts.staffActorId, now) : Promise.resolve(null),
+  ]);
+  const view: LedgerViewOptions = { maskNames: !!opts.staffActorId, ownEntriesOf };
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   return {
     filters,
-    rows: rows.map((r) => toRow(r, now, points)),
+    rows: rows.map((r) => toRow(r, now, points, view)),
     total,
     page: filters.page,
     pageSize,
@@ -374,13 +414,24 @@ export async function listQuickKeys(dealerId: string): Promise<KasaQuickKey[]> {
   }));
 }
 
-export async function loadKasaBootstrap(dealerId: string, role: 'DEALER' | 'STAFF', now = new Date()): Promise<KasaBootstrap> {
+export async function loadKasaBootstrap(
+  dealerId: string,
+  role: 'DEALER' | 'STAFF',
+  actorId: string,
+  now = new Date()
+): Promise<KasaBootstrap> {
   const [products, quickKeys, today] = await Promise.all([
     listKasaProducts(dealerId),
     listQuickKeys(dealerId),
-    listLedger(dealerId, { range: 'today', from: null, to: null, rating: 'all', productId: null, q: '', sort: 'new', page: 1 }, { now, pageSize: 10 }),
+    listLedger(
+      dealerId,
+      { range: 'today', from: null, to: null, rating: 'all', productId: null, q: '', sort: 'new', page: 1 },
+      { now, pageSize: 10, staffActorId: role === 'STAFF' ? actorId : null }
+    ),
   ]);
-  return { products, quickKeys, today, role };
+  // Cihaz kuyruğu bu kimlikle ad alanlanır: paylaşılan kasa cihazında başka hesabın bekleyen
+  // işlemleri yanlış işletmeye/aktöre gönderilmez.
+  return { products, quickKeys, today, role, queueOwner: `${dealerId}:${actorId}` };
 }
 
 // ───────────────────────────── Hızlı tuşlar ─────────────────────────────

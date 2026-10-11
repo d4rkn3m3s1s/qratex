@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { NOTE_MAX, parseAmountInput } from '@/lib/dealer/kasa/core';
+import { NOTE_MAX, amountToInput, parseAmountInput } from '@/lib/dealer/kasa/core';
 import type { KasaProduct, KasaQuickKey } from '@/lib/dealer/kasa/types';
 import { KasaApiError, formatMoney, kasaFetch, newClientOpId, postJson } from './api';
 import { ReceiptOcr } from './receipt-ocr';
@@ -66,8 +66,12 @@ export function Composer({
     const list = q
       ? products.filter((p) => p.name.toLocaleLowerCase('tr-TR').includes(q) || (p.categoryName ?? '').toLocaleLowerCase('tr-TR').includes(q))
       : products;
-    return list.slice(0, 30);
-  }, [products, search]);
+    const shown = list.slice(0, 30);
+    // Seçili ürün arama/30 sınırı dışında kalsa da listede görünür kalır (görünmeyen seçim
+    // sessizce kaydediliyordu).
+    const selected = productId ? products.find((p) => p.id === productId) : undefined;
+    return selected && !shown.some((p) => p.id === selected.id) ? [selected, ...shown] : shown;
+  }, [products, search, productId]);
 
   const amount = parseAmountInput(amountRaw);
   const amountInvalid = amount !== null && Number.isNaN(amount);
@@ -75,7 +79,7 @@ export function Composer({
   const pickProduct = (p: KasaProduct | null) => {
     setProductId(p?.id ?? null);
     // Tutar elle değiştirilmediyse ürün fiyatı gelir; ürün kaldırılınca fiyattan gelen tutar da gider.
-    if (!amountTouched) setAmountRaw(p?.price != null ? String(p.price).replace('.', ',') : '');
+    if (!amountTouched) setAmountRaw(amountToInput(p?.price));
     if (p) amountRef.current?.focus();
   };
 
@@ -119,7 +123,10 @@ export function Composer({
   const removeKey = async (k: KasaQuickKey) => {
     try {
       await kasaFetch(`/api/dealer/quick-presets?id=${encodeURIComponent(k.id)}`, { method: 'DELETE' });
-      onQuickKeysChange(quickKeys.filter((x) => x.id !== k.id));
+      const rest = quickKeys.filter((x) => x.id !== k.id);
+      onQuickKeysChange(rest);
+      // Son tuş silinince düzenleme düğmesi gizlenir; mod açık kalırsa yeni tuşlar kilitli görünürdü.
+      if (rest.length === 0) setEditKeys(false);
       toast.success(c.quickKeyRemoved);
     } catch (e) {
       toast.error(e instanceof KasaApiError && e.status ? e.message : copy.common.networkError);
@@ -254,7 +261,7 @@ export function Composer({
         <ReceiptOcr
           disabled={submitting}
           onUse={(v) => {
-            setAmountRaw(String(v).replace('.', ','));
+            setAmountRaw(amountToInput(v));
             setAmountTouched(true);
           }}
         />

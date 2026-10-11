@@ -79,6 +79,7 @@ export function KasaScreen({ initial }: { initial: KasaBootstrap }) {
   const refreshToday = useCallback(() => void qc.invalidateQueries({ queryKey: KASA_TODAY_KEY }), [qc]);
 
   const queue = useOfflineQueue({
+    owner: initial.queueOwner,
     onSynced: (n) => {
       toast.success(c.offline.synced(n));
       refreshToday();

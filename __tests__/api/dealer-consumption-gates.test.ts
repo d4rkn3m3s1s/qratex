@@ -262,3 +262,14 @@ describe('POST /api/dealer/consumptions', () => {
     expect((await res.json()).code).toBe('RATE_LIMITED');
   });
 });
+
+describe('offline-sync rol kapısı', () => {
+  it('yalnız DEALER: ADMIN kendi kimliğiyle "işletme" olup tüketim/puan yazamaz', async () => {
+    mockRequireAuth.mockResolvedValue({ error: new Response(null, { status: 403 }) });
+    const { PATCH } = await import('@/app/api/dealer/offline-sync/route');
+    const res = await PATCH(req('/api/dealer/offline-sync', 'PATCH', { ids: [QID] }));
+    expect(res.status).toBe(403);
+    expect(mockRequireAuth).toHaveBeenCalledWith(['DEALER']);
+    expect(mockCreateConsumption).not.toHaveBeenCalled();
+  });
+});

@@ -85,6 +85,8 @@ export interface KasaBootstrap {
   quickKeys: KasaQuickKey[];
   today: LedgerPage;
   role: 'DEALER' | 'STAFF';
+  /** Cihaz kuyruğu ad alanı (`dealerId:actorId`). */
+  queueOwner: string;
 }
 
 export interface CreateConsumptionResponse {

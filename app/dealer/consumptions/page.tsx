@@ -48,7 +48,7 @@ export default async function DealerConsumptionsPage({ searchParams }: PageProps
 
   const filters = scopeLedgerFilters(parseLedgerFilters(sp), scope.via);
   const [initial, products] = await Promise.all([
-    listLedger(scope.dealerId, filters).catch((err): LedgerPage | null => {
+    listLedger(scope.dealerId, filters, { staffActorId: scope.via === 'staff' ? scope.actorId : null }).catch((err): LedgerPage | null => {
       console.error('[dealer/consumptions] sunucu ön yüklemesi başarısız:', err);
       return null;
     }),

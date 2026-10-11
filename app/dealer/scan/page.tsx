@@ -44,7 +44,7 @@ export default async function DealerScanPage() {
 
   let initial: KasaBootstrap | null = null;
   try {
-    initial = await loadKasaBootstrap(scope.dealerId, scope.actorRole === 'STAFF' ? 'STAFF' : 'DEALER');
+    initial = await loadKasaBootstrap(scope.dealerId, scope.actorRole === 'STAFF' ? 'STAFF' : 'DEALER', scope.actorId);
   } catch (err) {
     console.error('[dealer/scan] kasa açılışı yüklenemedi:', err);
   }

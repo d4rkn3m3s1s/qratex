@@ -15,7 +15,7 @@ jest.mock('@/lib/avatar-options', () => ({ resolveAvatarImage: (s: string) => s 
 const mockPrisma: Record<string, any> = {};
 jest.mock('@/lib/prisma', () => ({ prisma: mockPrisma }));
 
-import { KasaError, lookupCard, voidConsumption } from '@/lib/dealer/kasa/server';
+import { KasaError, listLedger, lookupCard, voidConsumption } from '@/lib/dealer/kasa/server';
 
 const NOW = new Date('2026-10-11T10:00:00Z');
 
@@ -167,5 +167,51 @@ describe('voidConsumption', () => {
     await expect(voidConsumption({ ...base, actorId: 'staff_1', actorRole: 'STAFF' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     setup({ addedBy: 'staff_1' });
     await expect(voidConsumption({ ...base, actorId: 'staff_1', actorRole: 'STAFF' })).resolves.toMatchObject({ consumptionId: 'cons_1' });
+  });
+});
+
+describe('listLedger — personel görünümü', () => {
+  const filters = { range: 'today' as const, from: null, to: null, rating: 'all' as const, productId: null, q: '', sort: 'new' as const, page: 1 };
+  const row = (id: string) => ({
+    id,
+    amount: 50,
+    note: null,
+    createdAt: new Date(NOW.getTime() - 60_000),
+    card: { token: 'tok_ABCD1234' },
+    customer: { name: 'Ayşe Kaya Demir', image: null },
+    product: null,
+    review: null,
+  });
+  function setup() {
+    const auditFind = jest.fn(async () => [{ metadata: { consumptionId: 'mine' } }, { metadata: null }]);
+    reset({
+      consumption: {
+        count: jest.fn(async () => 2),
+        findMany: jest.fn(async () => [row('mine'), row('other')]),
+        aggregate: jest.fn(async () => ({ _count: { _all: 2 }, _sum: { amount: 100 } })),
+        groupBy: jest.fn(async () => []),
+      },
+      pointsLedger: { findMany: jest.fn(async () => []) },
+      cardAuditLog: { findMany: auditFind },
+    });
+    return auditFind;
+  }
+
+  it('bayi: tam ad, pencere içindeki her kayıt geri alınabilir; denetim sorgusu yok', async () => {
+    const auditFind = setup();
+    const page = await listLedger('dealer_1', filters, { now: NOW, withPrevious: false });
+    expect(page.rows.map((r) => r.customer.displayName)).toEqual(['Ayşe Kaya Demir', 'Ayşe Kaya Demir']);
+    expect(page.rows.map((r) => r.voidable)).toEqual([true, true]);
+    expect(auditFind).not.toHaveBeenCalled();
+  });
+
+  it('personel: ad maskeli, geri alma yalnız kendi girdiği kayıtta (sunucu kuralıyla aynı)', async () => {
+    const auditFind = setup();
+    const page = await listLedger('dealer_1', filters, { now: NOW, withPrevious: false, staffActorId: 'staff_1' });
+    expect(page.rows.map((r) => r.customer.displayName)).toEqual(['Ayşe D.', 'Ayşe D.']);
+    expect(page.rows.map((r) => r.voidable)).toEqual([true, false]);
+    expect(auditFind).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: 'staff_1', action: 'CONSUMPTION_ADDED' }) })
+    );
   });
 });
