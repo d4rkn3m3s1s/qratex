@@ -137,9 +137,9 @@ describe('sendApns', () => {
 
 describe('sendPush cephesi', () => {
   const rows = [
-    { id: 's1', endpoint: encodeNativeEndpoint('fcm', FCM_TOKEN), p256dh: 'native', auth: 'native' },
-    { id: 's2', endpoint: encodeNativeEndpoint('apns', APNS_TOKEN), p256dh: 'native', auth: 'native' },
-    { id: 's3', endpoint: 'http://10.0.0.5/evil', p256dh: 'x', auth: 'y' },
+    { id: 's1', userId: 'u1', endpoint: encodeNativeEndpoint('fcm', FCM_TOKEN), p256dh: 'native', auth: 'native' },
+    { id: 's2', userId: 'u1', endpoint: encodeNativeEndpoint('apns', APNS_TOKEN), p256dh: 'native', auth: 'native' },
+    { id: 's3', userId: 'u1', endpoint: 'http://10.0.0.5/evil', p256dh: 'x', auth: 'y' },
   ];
 
   it('tercih kapalıysa hiç sorgu/gönderim yok', async () => {
@@ -155,6 +155,13 @@ describe('sendPush cephesi', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(updateMany).toHaveBeenCalledWith({ where: { id: { in: ['s3'] } }, data: { isActive: false } });
     expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it('kaydın sahibi alıcı değilse gönderilmez', async () => {
+    setFcmEnv();
+    findMany.mockResolvedValue([{ ...rows[0], userId: 'baska' }]);
+    expect(await sendPush('u1', { title: 't', body: 'b' })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('FCM + APNs gönderir, ölü APNs jetonunu siler, log yazar', async () => {
