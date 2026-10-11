@@ -26,6 +26,7 @@ import {
 import { useDiscoveryDraft } from './discovery-center';
 import { DealerPicker } from './dealer-picker';
 import { fmtDecimal } from '../format';
+import { AdminKesifBagisText } from '../copy';
 
 const TIME = z.union([z.literal(''), z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Saat SS:dd olmalı.')]);
 
@@ -313,7 +314,7 @@ function LocationEditor({
           name="dealerId"
           render={({ field, fieldState }) => (
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-dealer`}>İşletme</Label>
+              <Label htmlFor={`${id}-dealer`}><AdminKesifBagisText k="business" /></Label>
               <DealerPicker
                 id={`${id}-dealer`}
                 value={field.value}
@@ -338,7 +339,7 @@ function LocationEditor({
         <fieldset className="space-y-3 rounded-lg border border-border p-3">
           <legend className="px-1 text-sm font-medium text-fg">Konum</legend>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-pin`}>Koordinat ya da Google Haritalar bağlantısı</Label>
+            <Label htmlFor={`${id}-pin`}><AdminKesifBagisText k="coordsOrMaps" /></Label>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id={`${id}-pin`}
@@ -400,17 +401,17 @@ function LocationEditor({
               className="min-h-11"
             />
           </div>
-          <p className="text-xs text-fg-muted">Keşfet süzgeci “kahve”, “tatlı”, “yemek” anahtarlarını tanır; menü kategorileri de otomatik eklenir.</p>
+          <p className="text-xs text-fg-muted"><AdminKesifBagisText k="filterKeys" /></p>
         </div>
 
         <fieldset className="space-y-3 rounded-lg border border-border p-3">
-          <legend className="px-1 text-sm font-medium text-fg">Yedek çalışma saati (isteğe bağlı)</legend>
+          <legend className="px-1 text-sm font-medium text-fg"><AdminKesifBagisText k="fallbackHours" /></legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <TimeInput control={form.control} name="opensAt" label="Açılış" />
             <TimeInput control={form.control} name="closesAt" label="Kapanış" />
           </div>
           <div className="space-y-1.5">
-            <Label id={`${id}-days`}>Günler</Label>
+            <Label id={`${id}-days`}><AdminKesifBagisText k="days" /></Label>
             <Controller
               control={form.control}
               name="daysOfWeek"

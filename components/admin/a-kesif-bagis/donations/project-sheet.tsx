@@ -13,6 +13,7 @@ import { CATEGORY_LABEL, ratioText, type ProjectAction, type ProjectDetail } fro
 import { donationKeys, errorText, fetchProject, projectAction } from '../api';
 import { fmtAgo, fmtDate, fmtDateTime, fmtNumber, PROJECT_STATUS } from '../format';
 import { ProgressBar } from './parts';
+import { AdminKesifBagisText } from '../copy';
 
 function ReasonConfirm({
   trigger,
@@ -41,7 +42,7 @@ function ReasonConfirm({
         <span className="block space-y-2">
           <span className="block">{description}</span>
           <span className="block space-y-1">
-            <Label htmlFor="reason-input">Gerekçe (en az 5 karakter)</Label>
+            <Label htmlFor="reason-input"><AdminKesifBagisText k="reasonMin5" /></Label>
             <Textarea id="reason-input" rows={2} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           </span>
         </span>
@@ -209,7 +210,7 @@ export function ProjectDetailBody({ id, onEdit }: { id: string; onEdit: (p: Proj
                 En çok bağışlayanlar
               </h3>
               {p.topDonors.length === 0 ? (
-                <p className="text-sm text-fg-muted">Henüz bağış yok.</p>
+                <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noDonations" /></p>
               ) : (
                 <ol className="space-y-1 text-sm">
                   {p.topDonors.map((d, i) => (
@@ -229,7 +230,7 @@ export function ProjectDetailBody({ id, onEdit }: { id: string; onEdit: (p: Proj
                 Son bağışlar
               </h3>
               {p.recent.length === 0 ? (
-                <p className="text-sm text-fg-muted">Henüz bağış yok.</p>
+                <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noDonations" /></p>
               ) : (
                 <ul className="divide-y divide-border text-sm">
                   {p.recent.map((t) => (
@@ -251,7 +252,7 @@ export function ProjectDetailBody({ id, onEdit }: { id: string; onEdit: (p: Proj
                 Değişiklik geçmişi
               </h3>
               {p.history.length === 0 ? (
-                <p className="text-sm text-fg-muted">Bu panelde yapılmış değişiklik kaydı yok.</p>
+                <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noPanelChanges" /></p>
               ) : (
                 <Timeline events={p.history.map((h) => ({ id: h.id, title: h.summary, at: h.at, actor: h.actor ?? 'Bilinmeyen yönetici' }))} />
               )}

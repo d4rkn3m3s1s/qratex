@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { createProject, updateProject } from '../api';
 import { fmtDecimal, fmtNumber } from '../format';
 import { CATEGORY_EMOJI, ICON_CHOICES, ProgressBar } from './parts';
+import { AdminKesifBagisText } from '../copy';
 
 /**
  * Form değeri: sayılar `number | null`, tarihler `datetime-local` (İstanbul). Oran TEK yerden
@@ -277,7 +278,7 @@ function DateField({ control, name, label, optional }: { control: Control<Projec
       render={({ field, fieldState }) => (
         <div className="space-y-1.5">
           <Label htmlFor={id}>
-            {label} {optional ? <span className="font-normal text-fg-muted">(isteğe bağlı)</span> : null}
+            {label} {optional ? <span className="font-normal text-fg-muted"><AdminKesifBagisText k="optional" /></span> : null}
           </Label>
           <Input
             id={id}
@@ -321,7 +322,7 @@ function LivePreview({ control, current }: { control: Control<ProjectForm>; curr
   const overGoal = goal > 0 && current >= goal;
   return (
     <aside className="space-y-3 lg:sticky lg:top-0" aria-label="Müşteri önizlemesi">
-      <p className="text-xs font-medium uppercase tracking-wide text-fg-muted">Müşteri böyle görür</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-fg-muted"><AdminKesifBagisText k="customerView" /></p>
       <div className="space-y-3 rounded-xl border border-border bg-surface-2 p-4">
         <div className="flex items-start gap-3">
           <span className="text-3xl" aria-hidden>
@@ -338,7 +339,7 @@ function LivePreview({ control, current }: { control: Control<ProjectForm>; curr
         </p>
         {per ? (
           <table className="w-full text-sm">
-            <caption className="sr-only">Bağış tutarına göre etki</caption>
+            <caption className="sr-only"><AdminKesifBagisText k="impactByAmount" /></caption>
             <tbody>
               {[100, 500, 1000].map((pts) => (
                 <tr key={pts} className="border-t border-border">
@@ -353,7 +354,7 @@ function LivePreview({ control, current }: { control: Control<ProjectForm>; curr
             </tbody>
           </table>
         ) : (
-          <p className="text-xs text-fg-muted">Oran girilince etki tablosu görünür.</p>
+          <p className="text-xs text-fg-muted"><AdminKesifBagisText k="rateHint" /></p>
         )}
       </div>
       {overGoal ? (

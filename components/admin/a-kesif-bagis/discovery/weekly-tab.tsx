@@ -11,6 +11,7 @@ import { DEFAULT_WEEKLY } from '@/lib/admin-discovery/contract';
 import { runPreview } from '../api';
 import { fmtDecimal } from '../format';
 import { useDiscoveryDraft } from './discovery-center';
+import { AdminKesifBagisText } from '../copy';
 
 const FIELDS = [
   { key: 'ambienceLabel', winnerKey: 'ambience', title: 'Ambiyans', hint: 'Son 7 günün değerlendirmelerinde ambiyans puanı en yüksek işletme.' },
@@ -42,7 +43,7 @@ export function WeeklyTab() {
             <SectionCard key={f.key} title={f.title} icon={<Trophy />}>
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`${id}-${f.key}`}>Kart başlığı</Label>
+                  <Label htmlFor={`${id}-${f.key}`}><AdminKesifBagisText k="cardTitle" /></Label>
                   <Input
                     id={`${id}-${f.key}`}
                     className="min-h-11"
@@ -64,7 +65,7 @@ export function WeeklyTab() {
                         Bu hafta: <span className="font-medium text-fg">{winner.businessName}</span> <span className="tabular-nums text-fg-muted">({fmtDecimal(winner.score)} / 5)</span>
                       </p>
                     ) : (
-                      <p className="text-sm text-fg-muted">Son 7 günde bu boyutta değerlendirme yok; kart müşteride boş görünür.</p>
+                      <p className="text-sm text-fg-muted"><AdminKesifBagisText k="emptyCard" /></p>
                     )
                   }
                 </QueryState>

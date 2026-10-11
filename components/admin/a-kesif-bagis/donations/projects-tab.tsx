@@ -10,6 +10,7 @@ import { buildProjectQs, CATEGORY_LABEL, KNOWN_CATEGORIES, PROJECT_STATUSES, PRO
 import { donationKeys, fetchProjects } from '../api';
 import { fmtAgo, fmtNumber, PROJECT_STATUS } from '../format';
 import { ProgressBar } from './parts';
+import { AdminKesifBagisText } from '../copy';
 
 export type ProjectsInitial = { qs: string; page: ProjectListPage } | null;
 
@@ -74,7 +75,7 @@ export function ProjectsTab({ initial, onCreate }: { initial: ProjectsInitial; o
               <div className="min-w-0">
                 <span className="block truncate font-medium text-fg">
                   {p.name}
-                  {p.featured ? <span className="ml-2 text-xs font-normal text-brand">Öne çıkan</span> : null}
+                  {p.featured ? <span className="ml-2 text-xs font-normal text-brand"><AdminKesifBagisText k="featured" /></span> : null}
                 </span>
                 <span className="block truncate text-xs text-fg-muted">
                   {p.category === 'other' ? `Bilinmeyen kategori (${p.rawCategory})` : CATEGORY_LABEL[p.category]} · {ratioText(p.impact)}
@@ -131,7 +132,7 @@ export function ProjectsTab({ initial, onCreate }: { initial: ProjectsInitial; o
         header: 'Son bağış',
         enableSorting: false,
         meta: { label: 'Son bağış' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => (row.original.lastDonationAt ? <time dateTime={row.original.lastDonationAt}>{fmtAgo(row.original.lastDonationAt)}</time> : <span className="text-fg-muted">Hiç</span>),
+        cell: ({ row }) => (row.original.lastDonationAt ? <time dateTime={row.original.lastDonationAt}>{fmtAgo(row.original.lastDonationAt)}</time> : <span className="text-fg-muted"><AdminKesifBagisText k="never" /></span>),
       },
     ],
     []

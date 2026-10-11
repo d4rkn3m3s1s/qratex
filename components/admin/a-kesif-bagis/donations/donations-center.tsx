@@ -18,6 +18,7 @@ import { ProjectEditor } from './project-editor';
 import { ProjectsTab, type ProjectsInitial } from './projects-tab';
 import { ReceiptBody } from './receipt-body';
 import { TransactionsTab } from './transactions-tab';
+import { AdminKesifBagisText } from '../copy';
 
 export type DonationsInitial = { stats: DonationStats | null; projects: ProjectsInitial };
 
@@ -139,7 +140,7 @@ export function DonationsCenter({ initial }: { initial: DonationsInitial }) {
         description="Şeffaf toplam, eğilim, bağışçılar ve değişiklik geçmişi"
         footer={(id: string) => (
           <Button asChild variant="outline" className="min-h-11">
-            <Link href={`?tab=islemler&proje=${encodeURIComponent(id)}`}>Bu kampanyanın tüm bağışları</Link>
+            <Link href={`?tab=islemler&proje=${encodeURIComponent(id)}`}><AdminKesifBagisText k="allDonations" /></Link>
           </Button>
         )}
       >

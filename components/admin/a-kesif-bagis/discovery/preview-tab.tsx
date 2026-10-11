@@ -14,6 +14,7 @@ import { discoveryConfigSchema, issuePathLabel, parseCoordinates, type NearbyIte
 import { errorText, runPreview } from '../api';
 import { fmtDateTime, fmtDecimal, fmtNumber } from '../format';
 import { useDiscoveryDraft } from './discovery-center';
+import { AdminKesifBagisText, useAdminKesifBagisCopy } from '../copy';
 
 function OpenBadge({ item }: { item: NearbyItem }) {
   if (item.holiday) return <StatusBadge size="sm" tone="warning" label="Tatilde" />;
@@ -27,6 +28,7 @@ function OpenBadge({ item }: { item: NearbyItem }) {
  * saatiyle; saat bilinmiyorsa "bilinmiyor" (uydurulmaz).
  */
 export default function PreviewTab({ dirty }: { dirty: boolean }) {
+  const tx = useAdminKesifBagisCopy();
   const id = useId();
   const { draft } = useDiscoveryDraft();
   const [mode, setMode] = useState<'draft' | 'live'>(dirty ? 'draft' : 'live');
@@ -108,15 +110,15 @@ export default function PreviewTab({ dirty }: { dirty: boolean }) {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`${id}-radius`}>Yarıçap (km)</Label>
+              <Label htmlFor={`${id}-radius`}><AdminKesifBagisText k="radiusKm" /></Label>
               <Input id={`${id}-radius`} className="min-h-11" inputMode="decimal" value={radius} onChange={(e) => setRadius(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor={`${id}-cat`}>Kategori</Label>
               <select id={`${id}-cat`} className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="all">Tümü</option>
+                <option value="all">{tx.all}</option>
                 <option value="kahve">Kahve</option>
-                <option value="tatlı">Tatlı</option>
+                <option value="tatlı">{tx.dessert}</option>
                 <option value="yemek">Yemek</option>
               </select>
             </div>
@@ -143,7 +145,7 @@ function Results({ data }: { data: PreviewResult }) {
       </p>
       <SectionCard title={`Yakındakiler (${fmtNumber(data.nearbyTotal)} işletme, ilk ${fmtNumber(data.nearby.length)} gösterilir)`} icon={<MapPin />} density="compact">
         {data.nearby.length === 0 ? (
-          <p className="text-sm text-fg-muted">Bu yarıçapta konumu bilinen işletme yok.</p>
+          <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noneInRadius" /></p>
         ) : (
           <ul className="divide-y divide-border">
             {data.nearby.map((n) => (
@@ -167,7 +169,7 @@ function Results({ data }: { data: PreviewResult }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title={`Sponsorlu (${fmtNumber(data.sponsored.length)})`} icon={<Megaphone />} density="compact">
           {data.sponsored.length === 0 ? (
-            <p className="text-sm text-fg-muted">Şu an yayında sponsorlu duyuru yok.</p>
+            <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noSponsored" /></p>
           ) : (
             <ul className="space-y-2">
               {data.sponsored.map((s) => (
@@ -191,7 +193,7 @@ function Results({ data }: { data: PreviewResult }) {
         </SectionCard>
         <SectionCard title={`Canlı mutlu saatler (${fmtNumber(data.liveBoosts.length)})`} icon={<Zap />} density="compact">
           {data.liveBoosts.length === 0 ? (
-            <p className="text-sm text-fg-muted">Şu an bu bölgede canlı çarpan yok.</p>
+            <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noMultiplier" /></p>
           ) : (
             <ul className="space-y-1 text-sm">
               {data.liveBoosts.map((b, i) => (
@@ -204,7 +206,7 @@ function Results({ data }: { data: PreviewResult }) {
         </SectionCard>
         <SectionCard title="Trend mekânlar (30 gün)" icon={<Flame />} density="compact">
           {data.trendingVenues.length === 0 ? (
-            <p className="text-sm text-fg-muted">Son 30 günde geri bildirim yok.</p>
+            <p className="text-sm text-fg-muted"><AdminKesifBagisText k="noFeedback30d" /></p>
           ) : (
             <ol className="list-decimal space-y-1 pl-5 text-sm">
               {data.trendingVenues.map((v) => (

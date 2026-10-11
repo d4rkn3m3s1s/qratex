@@ -9,6 +9,7 @@ import { ConfirmAction, QueryState } from '@/components/states';
 import type { DiscoveryConfigValue, HistoryPage } from '@/lib/admin-discovery/contract';
 import { discoveryKeys, fetchHistory } from '../api';
 import { fmtDateTime, fmtNumber } from '../format';
+import { AdminKesifBagisText } from '../copy';
 
 /**
  * Geçmiş — denetim kaydından keşif ayarı sürümleri. "Taslağa yükle" yalnız taslağı değiştirir;
@@ -35,8 +36,8 @@ export default function HistoryTab({ dirty, onLoad }: { currentVersion: string; 
                     <div className="min-w-0 text-sm">
                       <p className="font-medium text-fg">
                         <time dateTime={h.at}>{fmtDateTime(h.at)}</time>
-                        {page === 1 && i === 0 ? <span className="ml-2 text-xs font-normal text-success">Yayındaki sürüm</span> : null}
-                        {h.restoredFrom ? <span className="ml-2 text-xs font-normal text-fg-muted">(geçmişten geri yüklendi)</span> : null}
+                        {page === 1 && i === 0 ? <span className="ml-2 text-xs font-normal text-success"><AdminKesifBagisText k="liveVersion" /></span> : null}
+                        {h.restoredFrom ? <span className="ml-2 text-xs font-normal text-fg-muted"><AdminKesifBagisText k="restored" /></span> : null}
                       </p>
                       <p className="text-fg-muted">
                         {h.actor ?? 'Bilinmeyen yönetici'} · {fmtNumber(h.summary.locations)} yedek konum · {fmtNumber(h.summary.sponsored)} duyuru ({fmtNumber(h.summary.liveSponsored)} şu an yayında olurdu)

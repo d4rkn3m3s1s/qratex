@@ -12,6 +12,7 @@ import { useUrlState } from '@/components/ds/page';
 import { buildTxQs, type TransactionRow } from '@/lib/admin-donations/contract';
 import { donationKeys, exportUrl, fetchProjects, fetchTransactions } from '../api';
 import { fmtDateTime, fmtNumber } from '../format';
+import { AdminKesifBagisText, useAdminKesifBagisCopy } from '../copy';
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,6 +21,7 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
  * görünürlük), satır → makbuz. CSV aynı süzgeçle sunucuda üretilir (BOM'lu, tüm kayıtlar).
  */
 export function TransactionsTab() {
+  const tx = useAdminKesifBagisCopy();
   const id = useId();
   const url = useUrlState();
   const projectId = url.get('proje') ?? '';
@@ -141,14 +143,14 @@ export function TransactionsTab() {
     <div className="space-y-4 pt-4">
       <div role="search" aria-label="Bağış işlemi süzgeçleri" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <div className="space-y-1.5 lg:col-span-2">
-          <Label htmlFor={`${id}-q`}>Bağışçı</Label>
+          <Label htmlFor={`${id}-q`}><AdminKesifBagisText k="donor" /></Label>
           <Input id={`${id}-q`} className="min-h-11" placeholder="Ad ya da e-posta (en az 2 harf)" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="space-y-1.5 lg:col-span-2">
           <Label htmlFor={`${id}-p`}>Kampanya</Label>
           <select id={`${id}-p`} className={selectCls} value={projectId} onChange={(e) => url.set({ proje: e.target.value || null })}>
-            <option value="">Tüm kampanyalar</option>
-            {projectId && !projects.data?.items.some((p) => p.id === projectId) ? <option value={projectId}>Seçili kampanya</option> : null}
+            <option value="">{tx.allCampaigns}</option>
+            {projectId && !projects.data?.items.some((p) => p.id === projectId) ? <option value={projectId}>{tx.selectedCampaign}</option> : null}
             {(projects.data?.items ?? []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.icon} {p.name}
@@ -157,10 +159,10 @@ export function TransactionsTab() {
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-v`}>Görünürlük</Label>
+          <Label htmlFor={`${id}-v`}><AdminKesifBagisText k="visibility" /></Label>
           <select id={`${id}-v`} className={selectCls} value={visibility} onChange={(e) => url.set({ gorunurluk: e.target.value || null })}>
-            <option value="">Tümü</option>
-            <option value="public">Herkese açık</option>
+            <option value="">{tx.all}</option>
+            <option value="public">{tx.public}</option>
             <option value="private">Gizli</option>
           </select>
         </div>
@@ -169,11 +171,11 @@ export function TransactionsTab() {
           <Input id={`${id}-m`} className="min-h-11" inputMode="numeric" value={minPoints} onChange={(e) => url.set({ min: e.target.value.replace(/\D/g, '') || null })} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-f`}>Başlangıç günü</Label>
+          <Label htmlFor={`${id}-f`}><AdminKesifBagisText k="startDay" /></Label>
           <Input id={`${id}-f`} type="date" className="min-h-11" value={from} max={to || undefined} onChange={(e) => url.set({ from: e.target.value || null })} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-t`}>Bitiş günü</Label>
+          <Label htmlFor={`${id}-t`}><AdminKesifBagisText k="endDay" /></Label>
           <Input id={`${id}-t`} type="date" className="min-h-11" value={to} min={from || undefined} onChange={(e) => url.set({ to: e.target.value || null })} />
         </div>
         <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
@@ -190,7 +192,7 @@ export function TransactionsTab() {
           </Button>
         </div>
       </div>
-      <p className="text-xs text-fg-muted">Tarihler İstanbul saatine göredir. CSV süzgece uyan tüm kayıtları (en çok 20.000) içerir ve Excel’de Türkçe karakterlerle açılır.</p>
+      <p className="text-xs text-fg-muted"><AdminKesifBagisText k="csvNote" /></p>
       <DataTable
         ariaLabel="Bağış işlemleri"
         columns={columns}

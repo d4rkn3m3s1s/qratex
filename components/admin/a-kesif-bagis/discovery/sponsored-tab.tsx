@@ -25,6 +25,7 @@ import { errorText, uploadImage } from '../api';
 import { fmtDateTime, fmtNumber, SPONSOR_STATUS } from '../format';
 import { useDiscoveryDraft } from './discovery-center';
 import { DealerPicker } from './dealer-picker';
+import { AdminKesifBagisText } from '../copy';
 
 const sponsorFormSchema = z
   .object({
@@ -130,7 +131,7 @@ export function SponsoredTab() {
         header: 'İşletme',
         enableSorting: false,
         meta: { label: 'İşletme' } satisfies DataTableColumnMeta,
-        cell: ({ row }) => (row.original.dealerId ? dealers[row.original.dealerId]?.name ?? <span className="text-danger">Bayi bulunamadı</span> : <span className="text-fg-muted">Genel</span>),
+        cell: ({ row }) => (row.original.dealerId ? dealers[row.original.dealerId]?.name ?? <span className="text-danger"><AdminKesifBagisText k="dealerNotFound" /></span> : <span className="text-fg-muted">Genel</span>),
       },
       {
         id: 'discount',
@@ -286,7 +287,7 @@ function SponsorEditor({
           render={({ field, fieldState }) => (
             <div className="space-y-1.5">
               <Label htmlFor={`${id}-dealer`}>
-                İşletme <span className="font-normal text-fg-muted">(isteğe bağlı)</span>
+                İşletme <span className="font-normal text-fg-muted"><AdminKesifBagisText k="optional" /></span>
               </Label>
               <DealerPicker
                 id={`${id}-dealer`}
@@ -304,7 +305,7 @@ function SponsorEditor({
                   {fieldState.error.message}
                 </p>
               ) : (
-                <p className="text-xs text-fg-muted">Bağlanırsa duyuru bağlantısı bu işletmenin sayfasını açar; boşsa Fırsatlar’ı.</p>
+                <p className="text-xs text-fg-muted"><AdminKesifBagisText k="linkHint" /></p>
               )}
             </div>
           )}
@@ -350,7 +351,7 @@ function DateTimeInput({ control, name, label }: { control: Control<SponsorForm>
       render={({ field, fieldState }) => (
         <div className="space-y-1.5">
           <Label htmlFor={id}>
-            {label} <span className="font-normal text-fg-muted">(isteğe bağlı)</span>
+            {label} <span className="font-normal text-fg-muted"><AdminKesifBagisText k="optional" /></span>
           </Label>
           <Input
             id={id}
@@ -385,7 +386,7 @@ function ImageField({ control }: { control: Control<SponsorForm> }) {
       render={({ field, fieldState }) => (
         <div className="space-y-1.5">
           <Label htmlFor={id}>
-            Görsel <span className="font-normal text-fg-muted">(isteğe bağlı)</span>
+            Görsel <span className="font-normal text-fg-muted"><AdminKesifBagisText k="optional" /></span>
           </Label>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             {field.value ? (
@@ -425,7 +426,7 @@ function ImageField({ control }: { control: Control<SponsorForm> }) {
               {fieldState.error?.message ?? error}
             </p>
           ) : (
-            <p className="text-xs text-fg-muted">https:// adresi yapıştırın ya da PNG/SVG yükleyin (en çok 2 MB).</p>
+            <p className="text-xs text-fg-muted"><AdminKesifBagisText k="imageHint" /></p>
           )}
         </div>
       )}

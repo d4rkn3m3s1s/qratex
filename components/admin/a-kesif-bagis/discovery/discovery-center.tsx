@@ -27,6 +27,7 @@ import { SponsoredTab } from './sponsored-tab';
 import { LocationsTab } from './locations-tab';
 import { WeeklyTab } from './weekly-tab';
 import { ImportDialog } from './import-dialog';
+import { AdminKesifBagisText } from '../copy';
 
 // Önizleme ve geçmiş yalnız sekmesi açılınca yüklenir.
 const PreviewTab = dynamic(() => import('./preview-tab'), { ssr: false, loading: () => <SkeletonCards /> });
@@ -278,7 +279,7 @@ function Editor({ state, coverage, onReloaded }: { state: DiscoveryState; covera
         ) : null}
         {issues.length > 0 ? (
           <InlineError variant="banner">
-            <span className="font-medium">Yayınlamadan önce düzeltin:</span>
+            <span className="font-medium"><AdminKesifBagisText k="fixBeforePublish" /></span>
             <ul className="mt-1 list-disc pl-5">
               {issues.map((m) => (
                 <li key={m}>{m}</li>

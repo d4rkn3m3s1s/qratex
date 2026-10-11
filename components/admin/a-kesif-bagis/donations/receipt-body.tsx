@@ -9,6 +9,7 @@ import { QueryState } from '@/components/states';
 import type { TransactionDetail } from '@/lib/admin-donations/contract';
 import { donationKeys, fetchTransaction } from '../api';
 import { fmtDateTime, fmtDecimal, fmtNumber } from '../format';
+import { AdminKesifBagisText } from '../copy';
 
 /**
  * Bağış makbuzu — makbuz numarası, puan defteri satırıyla eşleşme (defterdeki düşüm = bağış
@@ -52,7 +53,7 @@ export function ReceiptBody({ id }: { id: string }) {
               ) : (
                 <>
                   <FileWarning className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-                  <span>Bu bağışın puan defteri satırı yok (defter öncesi eski kayıt). Makbuz numarası yine geçerlidir.</span>
+                  <span><AdminKesifBagisText k="noLedgerRow" /></span>
                 </>
               )}
             </div>

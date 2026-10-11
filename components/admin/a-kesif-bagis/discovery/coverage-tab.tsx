@@ -14,6 +14,7 @@ import { discoveryKeys, errorText, fetchCoverage } from '../api';
 import { fmtNumber } from '../format';
 import { useDiscoveryDraft } from './discovery-center';
 import { useOpenLocationEditor } from './locations-tab';
+import { AdminKesifBagisText } from '../copy';
 
 export type CoverageInitial = { qs: string; page: CoveragePage } | null;
 
@@ -200,7 +201,7 @@ export function CoverageTab({ initial }: { initial: CoverageInitial }) {
         filtered={filters.activeCount > 0}
         empty={
           filters.activeCount > 0
-            ? { variant: 'filtered', title: 'Bu süzgece uyan işletme yok', secondaryAction: <Button variant="outline" className="min-h-11" onClick={filters.clear}>Süzgeci temizle</Button> }
+            ? { variant: 'filtered', title: 'Bu süzgece uyan işletme yok', secondaryAction: <Button variant="outline" className="min-h-11" onClick={filters.clear}><AdminKesifBagisText k="clearFilter" /></Button> }
             : { title: 'Henüz bayi yok', description: 'Bayi hesabı açıldığında kapsama burada görünür.' }
         }
       />
