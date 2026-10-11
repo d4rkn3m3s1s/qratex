@@ -5,7 +5,7 @@
  * çekmecesi (`?id=`). Kritik veri sunucuda çekilip `initial` olarak gelir (ilk boyamada istek
  * yok); filtre/çekmece durumu URL'de sığ yazılır (sunucu bileşeni her değişimde çalışmaz).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -148,7 +148,9 @@ export function InboxScreen({ initial }: { initial: InboxInitial }) {
   /* ───── Klavye: J/K gezin · Enter aç · X seç ───── */
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const focusRef = useRef(focusKey);
-  focusRef.current = focusKey;
+  useLayoutEffect(() => {
+    focusRef.current = focusKey;
+  });
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (openKey || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;

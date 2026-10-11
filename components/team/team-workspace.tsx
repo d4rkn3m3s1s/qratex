@@ -63,12 +63,12 @@ const AutomationsDialog = dynamic(() => import('./dialogs/automations-dialog'), 
 const TagsDialog = dynamic(() => import('./dialogs/tags-dialog'), { ssr: false });
 const AiAskDialog = dynamic(() => import('./dialogs/ai-dialogs').then((m) => m.AiAskDialog), { ssr: false });
 const AiSummaryDialog = dynamic(() => import('./dialogs/ai-dialogs').then((m) => m.AiSummaryDialog), { ssr: false });
-const tabFallback = { loading: () => <SkeletonCards /> };
-const CalendarView = dynamic(() => import('./board/calendar-view').then((m) => m.CalendarView), tabFallback);
-const ReviewQueue = dynamic(() => import('./review-queue').then((m) => m.ReviewQueue), tabFallback);
-const InitiativesView = dynamic(() => import('./initiatives/initiatives-view').then((m) => m.InitiativesView), tabFallback);
-const FilesView = dynamic(() => import('./files-view').then((m) => m.FilesView), tabFallback);
-const ReportsView = dynamic(() => import('./reports').then((m) => m.ReportsView), tabFallback);
+// next/dynamic seçenekleri derleme zamanında nesne LİTERALİ olmalı (paylaşılan değişken build'i kırar).
+const CalendarView = dynamic(() => import('./board/calendar-view').then((m) => m.CalendarView), { loading: () => <SkeletonCards /> });
+const ReviewQueue = dynamic(() => import('./review-queue').then((m) => m.ReviewQueue), { loading: () => <SkeletonCards /> });
+const InitiativesView = dynamic(() => import('./initiatives/initiatives-view').then((m) => m.InitiativesView), { loading: () => <SkeletonCards /> });
+const FilesView = dynamic(() => import('./files-view').then((m) => m.FilesView), { loading: () => <SkeletonCards /> });
+const ReportsView = dynamic(() => import('./reports').then((m) => m.ReportsView), { loading: () => <SkeletonCards /> });
 
 type Tab = 'mine' | 'board' | 'list' | 'calendar' | 'review' | 'initiatives' | 'files' | 'reports' | 'archive';
 const WEEK_TABS: Tab[] = ['board', 'list', 'calendar', 'reports'];
@@ -175,8 +175,8 @@ function WorkspaceInner({ basePath, viewer, initialMeta, currentWeekKey }: TeamW
     if (n.has(id)) n.delete(id);
     else n.add(id);
     return n;
-  }), []);
-  const toggleAll = useCallback((ids: string[], on: boolean) => setSelected(on ? new Set(ids) : new Set()), []);
+  }), [setSelected]);
+  const toggleAll = useCallback((ids: string[], on: boolean) => setSelected(on ? new Set(ids) : new Set()), [setSelected]);
 
   // ── Diyaloglar ──
   const [dialog, setDialog] = useState<null | 'new' | 'templates' | 'automations' | 'tags' | 'ask' | 'summary' | 'autotask'>(null);

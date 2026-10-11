@@ -205,7 +205,7 @@ describe('herkese açık fiyat tablosu — tek kaynak PricingPlan', () => {
     expect(url.searchParams.get('role')).toBe('DEALER');
     expect(url.searchParams.get('plan')).toBe('abc123');
     expect(url.searchParams.get('src')).toBe('pricing');
-    expect(url.searchParams.get('callbackUrl')).toBe('/dealer/billing?plan=abc123');
+    expect(url.searchParams.get('callbackUrl')).toBe('/dealer/settings?tab=billing&plan=abc123');
   });
 
   it('JSON-LD fiyat kartlarıyla aynı veriden; uydurma geçerlilik tarihi yok', () => {

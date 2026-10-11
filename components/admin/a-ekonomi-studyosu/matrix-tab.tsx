@@ -39,6 +39,11 @@ const PATH_LABELS: Array<[RegExp, string]> = [
   [/^spin\.dailyLimit$/, 'Çark · günlük limit'],
 ];
 
+// Satır kimliği sayacı (yalnız React anahtarı; DOM'a yazılmaz → hidrasyon etkisi yok). Modül
+// düzeyinde tutulur: render sırasında ref okumak/yazmak yasak (react-hooks/refs).
+let uidSeq = 0;
+const nextUid = () => `r${++uidSeq}`;
+
 export function matrixPathLabel(path: string): string {
   for (const [re, label] of PATH_LABELS) if (re.test(path)) return label;
   const streak = path.match(/^streak\.milestones\[(\d+)\](?:\.(days|points))?$/);
@@ -78,8 +83,6 @@ export function MatrixTab({ resource, pointMultiplier }: { resource: Res; pointM
   const set = resource.setDraft;
 
   // Satır kimlikleri yalnız istemci durumu (React anahtarı) — gün yazarken odak kaybolmaz.
-  const uidSeq = React.useRef(0);
-  const nextUid = () => `r${++uidSeq.current}`;
   const [streakUids, setStreakUids] = React.useState<string[]>(() => m.streak.milestones.map(() => nextUid()));
   if (streakUids.length !== m.streak.milestones.length) {
     // Dışarıdan değişti (yeniden yükleme / geçmişten yükleme / kaydetme sonrası sıralama).

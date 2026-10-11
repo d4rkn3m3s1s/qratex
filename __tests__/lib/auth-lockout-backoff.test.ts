@@ -3,6 +3,8 @@
  * değil, üstel gecikme. Sert kilit yalnız ip:e-posta bileşiminde.
  */
 jest.mock('@/lib/prisma', () => ({ prisma: {} }));
+// @auth/prisma-adapter ESM yayınlanıyor (ts-jest dönüştürmez); bu test yalnız saf yardımcıyı ölçer.
+jest.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: jest.fn(() => ({})) }));
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { accountBackoffMs } from '@/lib/auth';

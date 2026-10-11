@@ -13,7 +13,7 @@
  *
  * Kaydetmede `res.version` `baseVersion` olarak gönderilir; başarıda `res.commit(data, version)`.
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   initialResourceState,
   isEditable,
@@ -25,6 +25,8 @@ import {
   type SaveVersionedResult,
 } from '@/lib/versioned-resource';
 
+const NO_REFETCH = () => undefined;
+
 export type VersionedLoadResult<T> = { data: T; version: string };
 
 export function useVersionedResource<T>(load: () => Promise<VersionedLoadResult<T>>) {
@@ -34,7 +36,9 @@ export function useVersionedResource<T>(load: () => Promise<VersionedLoadResult<
     () => initialResourceState<T>()
   );
   const loadRef = useRef(load);
-  loadRef.current = load;
+  useLayoutEffect(() => {
+    loadRef.current = load;
+  });
   const counter = useRef(0);
 
   const reload = useCallback(async () => {
@@ -56,7 +60,9 @@ export function useVersionedResource<T>(load: () => Promise<VersionedLoadResult<
     dispatch({ type: 'committed', data, version });
   }, []);
 
-  const query = useMemo(() => toQueryLike(state, reload), [state, reload]);
+  // `reload` ref okuyan bir geri çağrı: render'da düz fonksiyona argüman verilmez (react-hooks/refs);
+  // saf eşleme `toQueryLike`tan gelir, `refetch` nesneye doğrudan bağlanır.
+  const query = useMemo(() => ({ ...toQueryLike(state, NO_REFETCH), refetch: reload }), [state, reload]);
 
   return {
     status: state.status,

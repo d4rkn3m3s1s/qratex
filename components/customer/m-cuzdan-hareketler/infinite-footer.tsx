@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InlineError } from '@/components/states';
@@ -24,7 +24,10 @@ export function InfiniteFooter({ hasNextPage, isFetchingNextPage, nextPageError,
   const { copy } = useMovesCopy();
   const sentinel = useRef<HTMLDivElement | null>(null);
   const load = useRef(onLoadMore);
-  load.current = onLoadMore;
+  // Render sırasında ref yazılmaz (react-hooks/refs); en güncel geri çağrı commit'te bağlanır.
+  useLayoutEffect(() => {
+    load.current = onLoadMore;
+  });
 
   useEffect(() => {
     const el = sentinel.current;

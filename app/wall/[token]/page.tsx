@@ -19,24 +19,27 @@ export const metadata: Metadata = {
  */
 export default async function WallDisplayPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  let feed: WallFeedDto;
+  // JSX try/catch DIŞINDA kurulur (react-hooks/error-boundaries): try yalnız veriyi çözer.
+  let outcome:
+    | { kind: 'ok'; feed: WallFeedDto }
+    | { kind: 'notice'; title: string; description: string };
   try {
     const resolved = await resolveDisplayToken(token);
     if (!resolved.ok) {
-      return (
-        <WallNotice
-          title={resolved.reason === 'expired' ? 'Bu ekran bağlantısının süresi doldu.' : 'Bu ekran bağlantısı geçerli değil.'}
-          description="İşletme yöneticisi Müşteri sesi duvarı sayfasından yeni bir ekran bağlantısı oluşturabilir."
-        />
-      );
+      outcome = {
+        kind: 'notice',
+        title: resolved.reason === 'expired' ? 'Bu ekran bağlantısının süresi doldu.' : 'Bu ekran bağlantısı geçerli değil.',
+        description: 'İşletme yöneticisi Müşteri sesi duvarı sayfasından yeni bir ekran bağlantısı oluşturabilir.',
+      };
+    } else if (!(await isWallModuleEnabled())) {
+      outcome = { kind: 'notice', title: 'Müşteri sesi ekranı şu an kapalı.', description: 'Bu özellik geçici olarak devre dışı.' };
+    } else {
+      outcome = { kind: 'ok', feed: await loadWallFeed(resolved.dealerId, resolved.config, resolved.display.qrCodeId) };
     }
-    if (!(await isWallModuleEnabled())) {
-      return <WallNotice title="Müşteri sesi ekranı şu an kapalı." description="Bu özellik geçici olarak devre dışı." />;
-    }
-    feed = await loadWallFeed(resolved.dealerId, resolved.config, resolved.display.qrCodeId);
   } catch (err) {
     console.error('[wall] ekran yüklenemedi', err);
-    return <WallNotice title="Ekran şu an yüklenemedi." description="Birkaç saniye sonra sayfayı yenileyin." />;
+    outcome = { kind: 'notice', title: 'Ekran şu an yüklenemedi.', description: 'Birkaç saniye sonra sayfayı yenileyin.' };
   }
-  return <WallTvClient token={token} initial={feed} />;
+  if (outcome.kind === 'notice') return <WallNotice title={outcome.title} description={outcome.description} />;
+  return <WallTvClient token={token} initial={outcome.feed} />;
 }

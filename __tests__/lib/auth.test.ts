@@ -447,6 +447,20 @@ describe('auth.ts', () => {
 
     it('should update token when trigger is update and session exists', async () => {
       const jwtCallback = getJwtCallback();
+      // Müşteri API denetimi D3: istemcinin gönderdiği DEĞER yazılmaz; gönderilen alan yalnız
+      // "tazele" sinyalidir, değer DB'den okunur. Aynı mock hem oturum durumunu hem profili döner.
+      mockFindUnique.mockResolvedValue({
+        role: 'CUSTOMER',
+        sessionVersion: 0,
+        suspendedAt: null,
+        anonymizedAt: null,
+        staffProfile: null,
+        name: 'New Name',
+        image: 'new-image.jpg',
+        points: 200,
+        level: 10,
+        customFrameColor: null,
+      });
 
       const result = await jwtCallback({
         token: { 
@@ -473,6 +487,36 @@ describe('auth.ts', () => {
       expect(result.image).toBe('new-image.jpg');
       expect(result.points).toBe(200);
       expect(result.level).toBe(10);
+    });
+
+    it('update trigger never writes client-sent values (DB is the source)', async () => {
+      const jwtCallback = getJwtCallback();
+      mockFindUnique.mockResolvedValue({
+        role: 'CUSTOMER',
+        sessionVersion: 0,
+        suspendedAt: null,
+        anonymizedAt: null,
+        staffProfile: null,
+        name: 'Db Name',
+        image: 'db.jpg',
+        points: 100,
+        level: 5,
+        customFrameColor: null,
+      });
+
+      const result = await jwtCallback({
+        token: { sub: 'token-sub', id: 'user-1', role: 'CUSTOMER', points: 100, level: 5 },
+        user: undefined,
+        account: null,
+        trigger: 'update',
+        session: { name: 'Hacker', points: 999999, level: 99, role: 'ADMIN', sv: 7 },
+      } as Parameters<typeof jwtCallback>[0]);
+
+      expect(result.name).toBe('Db Name');
+      expect(result.points).toBe(100);
+      expect(result.level).toBe(5);
+      expect(result.role).toBe('CUSTOMER');
+      expect(result.sv).toBeUndefined();
     });
 
     it('should return token unchanged when no user and no update trigger', async () => {

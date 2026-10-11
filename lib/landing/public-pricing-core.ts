@@ -150,14 +150,14 @@ export function hasFreePlan(plans: PublicPlan[]): boolean {
 
 /**
  * Plan kartı CTA'sı: işletme rolü ve plan niyeti kayda taşınır; kayıttan sonra faturalama
- * sayfası seçilen planla açılır (callbackUrl, kayıt sayfası tarafından doğrulanır).
+ * sekmesi (Ayarlar › Abonelik) seçilen planla açılır (callbackUrl, kayıt sayfası tarafından doğrulanır).
  */
 export function registerHrefForPlan(planId: string, src = 'pricing'): string {
   const params = new URLSearchParams({
     role: 'DEALER',
     plan: planId,
     src,
-    callbackUrl: `/dealer/settings?plan=${planId}`,
+    callbackUrl: `/dealer/settings?tab=billing&plan=${planId}`,
   });
   return `/auth/register?${params.toString()}`;
 }

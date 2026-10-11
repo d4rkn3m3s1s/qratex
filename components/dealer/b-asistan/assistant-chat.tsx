@@ -8,7 +8,7 @@
  * etiketli; tüm ikon butonların adı var; dokunma hedefleri ≥ 44px; kaydırma azaltılmış
  * harekete uyar; IME birleşik girişte Enter göndermez.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowUp, Bot, QrCode, Settings2, Sparkles, Square, X } from 'lucide-react';
@@ -54,7 +54,9 @@ export function AssistantChat({
   const hintId = useId();
   const key = conversationId ?? `new:${newKey}`;
   const keyRef = useRef(key);
-  keyRef.current = key;
+  useLayoutEffect(() => {
+    keyRef.current = key;
+  });
 
   const conversation = useConversation(conversationId);
   const { rate, update } = useConversationActions();

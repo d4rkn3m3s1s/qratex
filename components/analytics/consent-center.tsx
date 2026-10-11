@@ -112,7 +112,7 @@ export function ConsentCenter({ onDecided }: { onDecided?: () => void }) {
       setOpen(false);
       onDecided?.();
     },
-    [surface, onDecided]
+    [surface, onDecided, setOpen]
   );
 
   const decidedAt = consent.decided && consent.state ? new Date(consent.state.decidedAt) : null;
