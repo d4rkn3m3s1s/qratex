@@ -112,7 +112,7 @@ export function TwoFactorSettings() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          {status?.enabled ? <ShieldCheck className="h-5 w-5 text-green-600" /> : <ShieldOff className="h-5 w-5 text-muted-foreground" />}
+          {status?.enabled ? <ShieldCheck className="h-5 w-5 text-success-text" /> : <ShieldOff className="h-5 w-5 text-muted-foreground" />}
           İki Adımlı Doğrulama (2FA)
         </CardTitle>
         <CardDescription>
@@ -122,7 +122,7 @@ export function TwoFactorSettings() {
       <CardContent className="space-y-4">
         {/* Kurtarma kodları (yalnızca etkinleştirmeden/yenilemeden hemen sonra) */}
         {recoveryCodes && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+          <div className="rounded-lg border border-warning-border bg-warning-subtle p-4">
             <p className="mb-2 text-sm font-medium">Kurtarma kodlarınız — güvenli bir yere kaydedin (yalnızca bir kez gösterilir):</p>
             <div className="grid grid-cols-2 gap-2 font-mono text-sm">
               {recoveryCodes.map((c) => (
@@ -138,7 +138,7 @@ export function TwoFactorSettings() {
         {status?.enabled && !recoveryCodes && (
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div className="text-sm">
-              <p className="font-medium text-green-600">2FA aktif ✓</p>
+              <p className="font-medium text-success-text">2FA aktif ✓</p>
               <p className="text-muted-foreground">Kalan kurtarma kodu: {status.remainingRecoveryCodes}</p>
             </div>
             <Button variant="outline" onClick={disable} disabled={loading}>

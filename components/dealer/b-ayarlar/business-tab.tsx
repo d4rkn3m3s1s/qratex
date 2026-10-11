@@ -422,6 +422,9 @@ function LogoCard({ logo, enabled, name }: { logo: string | null; enabled: boole
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             className="sr-only"
             id="dealer-logo-input"
+            // Görünmez dosya girdisi: odak/ekran okuyucu yalnız aşağıdaki düğmeye gider (çift Tab durağı yok).
+            tabIndex={-1}
+            aria-hidden
             onChange={(e) => void onPick(e.target.files?.[0])}
             disabled={!enabled || busy}
           />
