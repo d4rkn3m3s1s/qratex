@@ -121,7 +121,7 @@ describe('rota kararı', () => {
 
   it('emekli: halef canlıysa ona, değilse hub', () => {
     expect(resolveGameRoute('combo-tap')).toEqual({ kind: 'redirect', to: '/customer/games/mind-thief', permanent: true });
-    expect(resolveGameRoute('memory-match')).toEqual({ kind: 'hub', reason: 'retired' }); // Eşleştir-3 yapımda
+    expect(resolveGameRoute('memory-match')).toEqual({ kind: 'redirect', to: '/customer/games/match-three', permanent: true }); // halef Eşleştir-3 canlı
     expect(resolveGameRoute('lucky-wheel')).toEqual({ kind: 'hub', reason: 'retired' });
   });
 });

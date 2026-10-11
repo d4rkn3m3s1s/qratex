@@ -1,11 +1,11 @@
 /**
  * Eşleştir-3 — kayıt defteri girdisi (istemci güvenli).
  *
- * YENİ (§7.3, sıra 2). memory-match'in yerini alır; seviye haritası, Qratex rozet ikonları;
- * tohum + hamle kaydıyla replay.
- *
- * OYUN AJANI: `component`'i v2 bileşenine bağla, `status: 'live'` yap, sunucu doğrulayıcısını
- * `./match-three.server.ts`'e yaz ve `lib/minigame-config.ts`'teki `match-three` satırından `hidden`/`release`'i kaldır.
+ * YENİ (§7.3, sıra 2). 30 seviyelik hedefli harita (puan / topla / cam), Qratex rozet taşları,
+ * özel taşlar (Hat, Bomba, Prizma) ve kombolar. Saf simülasyon
+ * `components/customer/games/match-three/sim.ts`; sunucu aynı tohum + hamle kaydıyla yeniden
+ * oynatır (`./match-three.server.ts` → `lib/games/validators/match-three.ts`).
+ * Sıralı: tohumdan seçilen 5 seviyelik günlük rota. Pratik: haritadan seçilen tek seviye.
  */
 import { defineGame } from './types';
 
@@ -17,10 +17,14 @@ export const matchThreeGame = defineGame({
     'Komşu rozetleri yer değiştirerek üç ve fazlasını eşleştir; seviye hedefini hamle bitmeden tamamla.',
   emoji: '💎',
   accent: '#ec4899',
-  status: 'building',
+  status: 'live',
   role: 'casual',
   verification: 'deterministic',
   modes: { practice: true, ranked: { attemptsPerDay: 1 } },
-  component: null,
-  controls: 'Rozete dokun, sonra komşusuna dokun ya da kaydır. Klavyede ok tuşları + Enter.',
+  component: {
+    contract: 'v2',
+    load: () => import('@/components/customer/games/match-three/match-three-game').then((m) => m.MatchThreeGame),
+  },
+  controls:
+    'Rozeti komşusuna doğru kaydır ya da önce rozete sonra komşusuna dokun. Klavyede ok tuşlarıyla gez, Enter/Boşluk ile seç, ok ile takas et. Esc/P: duraklat.',
 });
