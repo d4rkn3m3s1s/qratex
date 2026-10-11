@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { nextReconnectDelayMs } from '@/lib/notification-stream-policy';
+import { publishNotificationStreamItems, setNotificationStreamLive } from '@/lib/notification-stream-bus';
 
 export interface StreamNotification {
   id: string;
@@ -67,6 +68,7 @@ export function useNotificationStream({
       es.addEventListener('open', () => {
         failures = 0;
         setConnected(true);
+        setNotificationStreamLive(true);
       });
 
       es.addEventListener('init', (e) => {
@@ -85,6 +87,7 @@ export function useNotificationStream({
             sinceRef.current = n.createdAt;
             onNotifRef.current?.(n);
           }
+          publishNotificationStreamItems(items.length);
         } catch { /* ignore */ }
       });
 
@@ -100,6 +103,7 @@ export function useNotificationStream({
 
       es.addEventListener('error', () => {
         setConnected(false);
+        setNotificationStreamLive(false);
         // EventSource kendi yeniden bağlanmasını yapar; ama kapanmışsa (ör. 429 bağlantı sınırı)
         // elle aç — üstel geri çekilmeyle (3 sn → 60 sn), sunucuyu yeniden deneme fırtınasına boğmadan.
         if (es && es.readyState === EventSource.CLOSED && !stopped) {
@@ -120,6 +124,7 @@ export function useNotificationStream({
       es?.close();
       es = null;
       setConnected(false);
+      setNotificationStreamLive(false);
     };
     const onVisibility = () => {
       if (stopped) return;
@@ -138,6 +143,7 @@ export function useNotificationStream({
       if (retryTimer) clearTimeout(retryTimer);
       es?.close();
       setConnected(false);
+      setNotificationStreamLive(false);
     };
   }, [enabled]);
 

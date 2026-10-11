@@ -32,10 +32,9 @@ import { TagsDialog } from '@/components/team/tags-dialog';
 import { TeamFiles } from '@/components/team/team-files';
 import { TeamActivity } from '@/components/team/team-activity';
 import { TeamPerformance } from '@/components/team/team-performance';
-import { DonutChart } from '@/components/charts/donut-chart';
-import { SimpleBarChart } from '@/components/charts/simple-bar-chart';
+// recharts ayrı parça (perf O7): pano açılışında grafik kütüphanesi ilk pakete girmez.
+import { DonutChart, SimpleAreaChart, SimpleBarChart } from '@/components/charts/chart-lazy';
 import { MiniSparkline } from '@/components/charts/mini-sparkline';
-import { SimpleAreaChart } from '@/components/charts/simple-area-chart';
 import { AnimatedNumber } from '@/components/customer/animated-number';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProgressRing } from '@/components/ui/progress-ring';

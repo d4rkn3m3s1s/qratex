@@ -23,6 +23,7 @@ import { tr, enUS } from 'date-fns/locale';
 import { useAppLocale, useAppT } from '@/lib/app-locale';
 import { claimNotificationToast, markNotificationsSeen } from '@/lib/notification-toast-dedupe';
 import { api, apiErrorMessage } from '@/lib/api-client';
+import { isNotificationStreamLive, subscribeNotificationStream } from '@/lib/notification-stream-bus';
 import { remedyOfferHref } from '@/lib/navigation/deep-links';
 
 // ─── Types ──────────────────────────────────────────────────
@@ -156,19 +157,42 @@ export function NotificationCenter() {
             if (poll) clearInterval(poll);
             poll = null;
         };
-        const start = () => {
+        // Tek kanal (perf Y5): bayi SSE akışı canlıyken liste akış olayıyla tazelenir; yoklama yalnız
+        // seyrek güvenlik turu (5 dk). Akış yoksa/koptuysa eski 20 sn yoklama.
+        const schedule = () => {
             stop();
+            poll = setInterval(fetchNotifications, isNotificationStreamLive() ? 300_000 : 20_000);
+        };
+        const start = () => {
             fetchNotifications();
-            poll = setInterval(fetchNotifications, 20_000);
+            schedule();
         };
         const onVisibility = () => {
             if (document.visibilityState === 'visible') start();
             else stop();
         };
+        let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+        const unsubscribe = subscribeNotificationStream((event) => {
+            if (document.visibilityState !== 'visible') return;
+            if (event.type === 'live') {
+                // Akış koptuysa kaçırılmış olabilecekleri hemen al; bağlandıysa yalnız aralığı seyrelt.
+                if (event.live) schedule();
+                else start();
+                return;
+            }
+            // Aynı anda gelen birkaç bildirim tek liste isteğine iner.
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => {
+                refreshTimer = null;
+                fetchNotifications();
+            }, 400);
+        });
         if (document.visibilityState === 'visible') start();
         document.addEventListener('visibilitychange', onVisibility);
         return () => {
             stop();
+            if (refreshTimer) clearTimeout(refreshTimer);
+            unsubscribe();
             document.removeEventListener('visibilitychange', onVisibility);
         };
     }, [session?.user?.id, fetchNotifications]);

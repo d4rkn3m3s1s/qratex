@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { cachedJson } from '@/lib/redis';
 import { defineRoute, ok } from '@/lib/http/define-route';
 import { INPUT_LIMITS } from '@/lib/input-limits';
 import { feedbackHref, productHref, qrHref, userHref } from '@/lib/navigation/search-targets';
@@ -45,96 +47,103 @@ export const GET = defineRoute(
   async ({ query, user }) => {
     const q = query.q;
     if (q.length < 2) return ok({ results: EMPTY }, { legacySpread: true });
+    // Komut paleti her tuşta (debounce sonrası) arar; aynı kişi + aynı sorgu 30 sn Redis'ten
+    // döner (perf O6 ara çözüm — kalıcı çözüm pg_trgm GIN, SCHEMA-REQUESTS). Anahtar kullanıcıya
+    // ve role özgü: kapsamı farklı iki kişi birbirinin sonucunu göremez.
+    const cacheKey = `search:v1:${user.id}:${user.role}:${createHash('sha1').update(q).digest('hex')}`;
+    const results = await cachedJson<Results>(cacheKey, 30, async () => {
+      const role = user.role as 'ADMIN' | 'DEALER' | 'CUSTOMER';
+      const isAdmin = role === 'ADMIN';
+      const searchContains = { contains: q, mode: 'insensitive' as const };
+      // Kapsam filtresi rol başına AÇIK; bilinmeyen rol buraya hiç gelmez (roles listesi).
+      const feedbackScope = isAdmin ? {} : role === 'DEALER' ? { qrCode: { dealerId: user.id } } : { userId: user.id };
+      // Müşteri: yalnız kendi tükettiği ürünler (iniş: o ürünü içeren ziyaretleri) — tüm platform
+      // kataloğundan sonuç gösterip boş listeye indirmek yok.
+      const productScope =
+        role === 'DEALER'
+          ? { OR: [{ dealerId: user.id }, { dealerId: null }] }
+          : role === 'CUSTOMER'
+            ? { consumptions: { some: { customerId: user.id } } }
+            : {};
+      const searchProducts = productHref(role, 'x') !== null;
 
-    const role = user.role as 'ADMIN' | 'DEALER' | 'CUSTOMER';
-    const isAdmin = role === 'ADMIN';
-    const searchContains = { contains: q, mode: 'insensitive' as const };
-    // Kapsam filtresi rol başına AÇIK; bilinmeyen rol buraya hiç gelmez (roles listesi).
-    const feedbackScope = isAdmin ? {} : role === 'DEALER' ? { qrCode: { dealerId: user.id } } : { userId: user.id };
-    // Müşteri: yalnız kendi tükettiği ürünler (iniş: o ürünü içeren ziyaretleri) — tüm platform
-    // kataloğundan sonuç gösterip boş listeye indirmek yok.
-    const productScope =
-      role === 'DEALER'
-        ? { OR: [{ dealerId: user.id }, { dealerId: null }] }
-        : role === 'CUSTOMER'
-          ? { consumptions: { some: { customerId: user.id } } }
-          : {};
-    const searchProducts = productHref(role, 'x') !== null;
+      const [usersResult, feedbacksResult, productsResult, qrCodesResult] = await Promise.all([
+        isAdmin
+          ? prisma.user.findMany({
+              where: { OR: [{ name: searchContains }, { email: searchContains }, { businessName: searchContains }] },
+              take: LIMIT_PER_TYPE,
+              select: { id: true, name: true, email: true, businessName: true, role: true },
+            })
+          : Promise.resolve([]),
+        prisma.feedback.findMany({
+          where: {
+            deletedAt: null,
+            text: { not: null },
+            OR: [
+              { text: searchContains },
+              ...(isAdmin ? [{ user: { name: searchContains } }, { user: { email: searchContains } }] : []),
+            ],
+            ...feedbackScope,
+          },
+          take: LIMIT_PER_TYPE,
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, text: true, rating: true, sentiment: true, createdAt: true },
+        }),
+        searchProducts
+          ? prisma.product.findMany({
+              where: { isActive: true, name: searchContains, ...productScope },
+              take: LIMIT_PER_TYPE,
+              select: { id: true, name: true, category: { select: { name: true } } },
+            })
+          : Promise.resolve([]),
+        role === 'ADMIN' || role === 'DEALER'
+          ? prisma.qRCode.findMany({
+              where: {
+                isActive: true,
+                OR: [
+                  { name: searchContains },
+                  { code: searchContains },
+                  ...(isAdmin ? [{ dealer: { businessName: searchContains } }, { dealer: { name: searchContains } }] : []),
+                ],
+                ...(role === 'DEALER' ? { dealerId: user.id } : {}),
+              },
+              take: LIMIT_PER_TYPE,
+              select: { id: true, name: true, code: true, dealerId: true, dealer: { select: { businessName: true, name: true } } },
+            })
+          : Promise.resolve([]),
+      ]);
 
-    const [usersResult, feedbacksResult, productsResult, qrCodesResult] = await Promise.all([
-      isAdmin
-        ? prisma.user.findMany({
-            where: { OR: [{ name: searchContains }, { email: searchContains }, { businessName: searchContains }] },
-            take: LIMIT_PER_TYPE,
-            select: { id: true, name: true, email: true, businessName: true, role: true },
-          })
-        : Promise.resolve([]),
-      prisma.feedback.findMany({
-        where: {
-          deletedAt: null,
-          text: { not: null },
-          OR: [
-            { text: searchContains },
-            ...(isAdmin ? [{ user: { name: searchContains } }, { user: { email: searchContains } }] : []),
-          ],
-          ...feedbackScope,
-        },
-        take: LIMIT_PER_TYPE,
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, text: true, rating: true, sentiment: true, createdAt: true },
-      }),
-      searchProducts
-        ? prisma.product.findMany({
-            where: { isActive: true, name: searchContains, ...productScope },
-            take: LIMIT_PER_TYPE,
-            select: { id: true, name: true, category: { select: { name: true } } },
-          })
-        : Promise.resolve([]),
-      role === 'ADMIN' || role === 'DEALER'
-        ? prisma.qRCode.findMany({
-            where: {
-              isActive: true,
-              OR: [
-                { name: searchContains },
-                { code: searchContains },
-                ...(isAdmin ? [{ dealer: { businessName: searchContains } }, { dealer: { name: searchContains } }] : []),
-              ],
-              ...(role === 'DEALER' ? { dealerId: user.id } : {}),
-            },
-            take: LIMIT_PER_TYPE,
-            select: { id: true, name: true, code: true, dealerId: true, dealer: { select: { businessName: true, name: true } } },
-          })
-        : Promise.resolve([]),
-    ]);
+      const computed: Results = {
+        users: usersResult.map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          businessName: u.businessName,
+          role: u.role,
+          href: userHref(role, u.id) ?? `/admin/users?id=${encodeURIComponent(u.id)}`,
+        })),
+        feedbacks: feedbacksResult.map((fb) => ({
+          id: fb.id,
+          text: fb.text?.slice(0, 80) ?? null,
+          rating: fb.rating,
+          sentiment: fb.sentiment,
+          createdAt: fb.createdAt.toISOString(),
+          href: feedbackHref(role, fb.id),
+        })),
+        products: productsResult.flatMap((pr) => {
+          const href = productHref(role, pr.name);
+          return href ? [{ id: pr.id, name: pr.name, categoryName: pr.category?.name, href }] : [];
+        }),
+        qrCodes: qrCodesResult.flatMap((c) => {
+          const href = qrHref(role, { code: c.code, dealerId: c.dealerId });
+          return href
+            ? [{ id: c.id, name: c.name, code: c.code, businessName: c.dealer?.businessName ?? c.dealer?.name ?? null, href }]
+            : [];
+        }),
+      };
+      return computed;
+    });
 
-    const results: Results = {
-      users: usersResult.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        businessName: u.businessName,
-        role: u.role,
-        href: userHref(role, u.id) ?? `/admin/users?id=${encodeURIComponent(u.id)}`,
-      })),
-      feedbacks: feedbacksResult.map((fb) => ({
-        id: fb.id,
-        text: fb.text?.slice(0, 80) ?? null,
-        rating: fb.rating,
-        sentiment: fb.sentiment,
-        createdAt: fb.createdAt.toISOString(),
-        href: feedbackHref(role, fb.id),
-      })),
-      products: productsResult.flatMap((pr) => {
-        const href = productHref(role, pr.name);
-        return href ? [{ id: pr.id, name: pr.name, categoryName: pr.category?.name, href }] : [];
-      }),
-      qrCodes: qrCodesResult.flatMap((c) => {
-        const href = qrHref(role, { code: c.code, dealerId: c.dealerId });
-        return href
-          ? [{ id: c.id, name: c.name, code: c.code, businessName: c.dealer?.businessName ?? c.dealer?.name ?? null, href }]
-          : [];
-      }),
-    };
     return ok({ results }, { legacySpread: true });
   }
 );
