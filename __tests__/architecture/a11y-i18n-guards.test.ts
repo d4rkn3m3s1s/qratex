@@ -154,6 +154,14 @@ describe('a11y/i18n korkulukları', () => {
     expect(read('tailwind.config.ts')).toMatch(/hoverOnlyWhenSupported:\s*true/);
   });
 
+  it('B3: form kontrollerinin sınırı ≥ 3:1 token (border-strong; eski --border/80 açıkta ≈1,5:1, koyu white/25 ≈2:1)', () => {
+    for (const f of ['components/ui/input.tsx', 'components/ui/textarea.tsx', 'components/ui/select.tsx']) {
+      const src = read(f);
+      expect(`${f}: ${/\bborder-strong\b/.test(src)}`).toBe(`${f}: true`);
+      expect(`${f}: ${/dark:border-white\/25/.test(src)}`).toBe(`${f}: false`);
+    }
+  });
+
   it('B10: PWA manifesti yön kilitlemez ve rol yönlendiricisinden açılır', () => {
     const manifest = JSON.parse(read('public/manifest.json')) as Record<string, unknown>;
     expect(manifest.orientation === undefined || manifest.orientation === 'any').toBe(true);

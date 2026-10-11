@@ -27,7 +27,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           'disabled:cursor-not-allowed disabled:opacity-50',
           error
             ? 'border-destructive shadow-sm focus-visible:ring-destructive'
-            : 'border-border/80 shadow-sm dark:border-white/25 dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]',
+            : 'border-strong shadow-sm dark:bg-white/[0.07] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]',
           className
         )}
         ref={ref}
