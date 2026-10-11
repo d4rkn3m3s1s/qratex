@@ -256,3 +256,78 @@ Her iddia çürütülmeye çalışılarak ilgili uçlar, istemci menüsü ve Pri
 - "Müşteri başına tek aktif kart kuralı atomik değil" — doğru ama önemsiz: bu kural sistemde zaten bir değişmez değil; self-aktivasyon ucu bu kontrolü hiç yapmıyor (activate/route.ts:62-78), müşteri birden çok kartı kendisi aktive edebilir.
 - "Bildirim hatası 500 döndürür ama kart atanmış kalır" — doğru (assign/route.ts:87-122 ayrı yazımlar, tek catch). `customerId` az önce doğrulandığı için `notification.create`'in başarısız olması yalnız geçici DB hatasında olur; sonuç admin'e yanıltıcı "Kart atanamadı" toast'u ve tekrar denemede "Sadece aktive edilmemiş kartlar atanabilir". Düşük önem.
 - Hijyen önerisi (düşük öncelik): assign ve activate `updateMany({ where: { id, status: 'UNUSED', customerId: null } })` + `count === 0 → 409` ile koşullu yazsın; audit aynı transaction'da, bildirim `after()` ile yan etki olarak gönderilsin.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/cards/page.tsx` sunucu bileşeni (KPI + URL'deki ilk sayfa + parti seçenekleri sunucuda paralel; düşen kaynak istemcide görünür hata) → `components/admin/a-kartlar/` istemci adası (`cards-screen`, `card-detail`, `batches-panel`, `dialogs`, `api`, `format`). Sunucu mantığı `lib/admin-cards/{contract,server}.ts`; durum makinesi `lib/cards/lifecycle.ts`. Yeni `defineRoute` BFF'ler: `GET /api/admin/cards/list`, `/stats`, `/customers`, `/[id]/detail`, `/export`, `/print`, `POST /bulk`; `batches` ve `generate` defineRoute ile yeniden yazıldı. Eski 1224 satırlık `cards-client.tsx` silindi. Test: `__tests__/admin/a-kartlar/cards-server.test.ts` (11 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Sayfa kabuğu | ÇALIŞIYOR | `ssr:false` kaldırıldı; sunucu önce + `loading.tsx` iskeleti. |
+| 2 | Yetki | ÇALIŞIYOR | Tüm yeni uçlar `defineRoute` (rol + zod + rate limit); sayfa da `requireAuth(['ADMIN'])`. |
+| 3 | Hero | ÇALIŞIYOR | Kompakt QDL `PageHeader` (ops kaydı). |
+| 4 | Hero çipleri (sahte) | KALDIRILDI | Pazarlama metni; gerçek karşılığı yoktu. |
+| 5 | Hero mini istatistik | KALDIRILDI | KPI şeridinin tekrarıydı. |
+| 6 | "Kart Üret" CTA | ÇALIŞIYOR | "Parti üret". |
+| 7 | İstatistik kartları | ÇALIŞIYOR | Tek KPI şeridi (tüm veriden, arşiv hariç olduğu yazılı) + son 7 gün aktivasyon (İstanbul günü) + 30 gündür kullanılmayan aktif; her kutu filtreye derin bağlantı. Stagger/hover:scale yok. |
+| 8 | Son Üretimler | ÇALIŞIYOR | "Üretim partileri" sekmesi: sayfalı tablo, oluşturan, tarih, dağılım çubuğu (metin karşılıklı), son dışa aktarım. |
+| 9 | Parti kartına tıklayınca filtre | ÇALIŞIYOR | Partiden "Kartlar" bağlantısı (`?batch=`), klavyeyle erişilebilir; sayfa sıfırlanır. |
+| 10 | Sonuç sayacı | ÇALIŞIYOR | DataTable sunucu toplamı; istemci filtresi yok. |
+| 11 | Kanban/Liste geçişi | KALDIRILDI | Sayfalı veride Kanban yanıltıcıydı (B14); yoğun tablo + durum filtresi/KPI. |
+| 12 | Arama | ÇALIŞIYOR | Kod, yapıştırılan kart bağlantısı (`/c/TOKEN` tokena iner), boşluklu kod, kart kimliği, müşteri adı/e-posta. |
+| 13 | Arama → sayfa 1 | ÇALIŞIYOR | Tüm filtreler `page`'i siler. |
+| 14 | İstemci ikinci filtre | KALDIRILDI | `null` adla çöküyordu (B7); sunucu araması yeterli. |
+| 15 | Durum filtresi | ÇALIŞIYOR | URL durumlu, sayfa sıfırlar; "Arşivde" seçeneği eklendi. |
+| 16 | Parti filtresi | ÇALIŞIYOR | URL durumlu, sayfa sıfırlar. |
+| 17 | Sıfırla | ÇALIŞIYOR | FilterBar temizle + boş durumda "Filtreleri temizle". |
+| 18 | Yükleniyor | ÇALIŞIYOR | DataTable iskeleti + `keepPreviousData` (yerleşim kaymaz). |
+| 19 | Boş durum | ÇALIŞIYOR | "Filtrelere uyan kart yok" (temizle) / "Henüz kart yok" (Parti üret). |
+| 20 | Liste hata durumu | ÇALIŞIYOR | QueryState: hata + Tekrar dene (B18). |
+| 21 | Kanban görünümü | KALDIRILDI | bkz. #11. |
+| 22 | Token kopyala | ÇALIŞIYOR | Her satırda görünür, `aria-label`'lı, mobilde ≥44px. |
+| 23 | Detay + işlemler menüsü | ÇALIŞIYOR | Satıra tıklayınca detay paneli (DetailSheet, URL `?card=`, önceki/sonraki). |
+| 24 | Masaüstü tablo | ÇALIŞIYOR | Sıralama (üretim/aktivasyon/tüketim), sayfa boyutu, çoklu seçim. |
+| 25 | Hover'da kopyala | ÇALIŞIYOR | Her zaman görünür (klavye odağında da). |
+| 26 | Müşteri adı | ÇALIŞIYOR | Ad yoksa e-posta. |
+| 27 | Mobil liste | ÇALIŞIYOR | DataTable mobil kartları; tüm aksiyonlar detay panelinde (mobilde tam genişlik). |
+| 28 | Detay & QR | ÇALIŞIYOR | Gerçek `GET /[id]/detail` ucu. |
+| 29 | URL kopyala | ÇALIŞIYOR | `await` + hata toast'ı. |
+| 30 | Token kopyala | ÇALIŞIYOR | Aynı. |
+| 31 | Müşteriye ata | ÇALIŞIYOR | Yalnız `allowed.assign` iken; koşullu yazım (409). |
+| 32 | Müşteri listesi | ÇALIŞIYOR | Aranabilir seçici, hafif `GET /customers?q=` (id/ad/e-posta + aktif kart sayısı), yalnız diyalog açıkken; aktif kartlı müşteri devre dışı (B13). |
+| 33 | Atama bildirimi | ÇALIŞIYOR | Tip `success` (bildirim merkezi sözlüğü). |
+| 34 | Müşteriden kaldır | ÇALIŞIYOR | Yalnız ACTIVATED (sunucu `checkUnassign` + UI `allowed.unassign`) — B1. |
+| 35 | Unassign bildirimi | ÇALIŞIYOR | Tip `warning`. |
+| 36 | Blokla | ÇALIŞIYOR | Gerekçe kategorisi (Kayıp/Çalıntı/Sahte/Hasarlı/Kayıp sevkiyat/Diğer) + not + isteğe bağlı müşteri bildirimi; kart + genel denetim aynı tx (B12). |
+| 37 | Blok kaldır | ÇALIŞIYOR | Onaylı; bağlıysa ACTIVATED, bağsızsa UNUSED (durum makinesi). |
+| 38 | Sil | ÇALIŞIYOR | Arşiv (geçmiş korunur), etki önizlemesi, bağlı/tüketimli kartta token yazarak onay; "0" basma hatası yok (B2, B8). |
+| 39 | Toplu üretim | ÇALIŞIYOR | Tek transaction, `Set` benzersizlik, `createMany` sayısı, çiftler yeniden üretilir, ilerleme göstergesi, başarıda "CSV indir / Baskı sayfası" adımı (B11). |
+| 40 | Dışa aktarma | ÇALIŞIYOR | `GET /export` CSV (sıra, token, kart URL'si, parti, durum…), parti ya da filtre sonucu, ≤10.000, formül enjeksiyonu korumalı, `CARDS_EXPORTED` denetimi (B3). |
+| 41 | Detay modalı | ÇALIŞIYOR | QR token'a bağlı (eski QR görünmez; hata + tekrar dene), tarihler, parti, tüketim, zaman çizelgesi (B5). |
+| 42 | Detay API | ÇALIŞIYOR | `/[id]/detail` BFF (izinli aksiyonlar sunucudan). |
+| 43 | QR indirme/yazdırma | ÇALIŞIYOR | Tek kart PNG/SVG/Yazdır; parti için `GET /print` A4 kesim çizgili baskı sayfası (tarayıcıdan PDF), `CARDS_PRINTED` denetimi. |
+| 44 | Sayfalama | ÇALIŞIYOR | URL senkronlu, sayfa boyutu 20/50/100. |
+| 45 | Toplu işlemler | ÇALIŞIYOR | Çoklu seçim → blokla/blok kaldır/arşivle; "Partiyi blokla" (kayıp sevkiyat); uygun olmayan kartlar gerekçesiyle atlanır. |
+| 46 | Audit kaydı | ÇALIŞIYOR | Tüm mutasyonlarda aynı transaction; arşivde kart izi korunur. |
+| 47 | Toast mesajları | ÇALIŞIYOR | Tam Türkçe karakterli; "Batch/Prefix/QR Code" → "Üretim partisi/Token öneki/QR kodu". |
+| 48 | Azaltılmış hareket | ÇALIŞIYOR | Global MotionConfig + `motion-reduce:` sınıfları. |
+
+Özet: 48 satır → ÇALIŞIYOR 42 · KALDIRILDI 6 (gerekçeli).
+
+### Kapanan bulgular
+B1 (sunucu önceki dalgada; UI menüsü artık durum makinesinden), B2 (arşiv), B3 (CSV + baskı sayfası), B4 (koşullu yazım; bildirim tx içinde), B5, B6, B7, B8, B9 (kart URL'si sunucuda: `NEXT_PUBLIC_CARD_BASE_URL` → `NEXT_PUBLIC_APP_URL` → kanonik köken), B10 (tek groupBy + sayfalama), B11, B12, B13, B14, B15, B16 (aria-label, klavye, tema token'lı durum rozetleri, Türkçe alt metin, etiket bağlama), B17 (Türkçe metin, ölü kod silindi, bildirim tipleri), B18 — **18/18**.
+
+### Eksik özelliklerden uygulananlar
+1 (CSV + yazdırılabilir baskı sayfası; parti "son dışa aktarım" izi), 2 (çoklu seçim, toplu blok/blok kaldır/arşiv, partiyi blokla), 3 (kart zaman çizelgesi: denetim + tüketim), 4 (URL durumlu filtreler, sıralama, sayfa boyutu, "30 gündür kullanılmayan aktif", "hiç tüketim yok"), 6'nın bir kısmı (kart bağlantısını aramaya yapıştırma).
+
+### Kalanlar (gerekçe)
+- **Parti sevkiyat durumu (Basıldı → Sevk edildi → Dağıtıldı):** şemada alan yok; yalnız dışa aktarım izi (AuditLog) gösteriliyor → ŞEMA İSTEĞİ.
+- **`PhysicalCard.batchId` → `CardBatch` FK, `CardBatch.createdBy onDelete: SetNull`:** şema değişikliği → ŞEMA İSTEĞİ.
+- **Müşteri başına tek aktif kart için kısmi unique index:** migrasyon; uygulama düzeyi kontrol + seçicide uyarı var.
+- **Anomali sinyalleri (eksik #5):** suistimal modülüyle ortak veri kaynağı gerektirir; bu yüzeyde sahte rozet üretilmedi.
+- **Toplu atama (CSV ile müşteri eşleme), Ctrl+K, QR okuyucuyla arama:** ayrı iş.
+- **`GET /api/admin/cards` (eski liste ucu):** sayfa artık kullanmıyor; geriye uyumluluk için dokunulmadı.

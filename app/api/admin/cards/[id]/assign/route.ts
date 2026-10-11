@@ -111,9 +111,9 @@ export async function POST(
       await tx.notification.create({
         data: {
           userId: customerId,
-          title: 'QRateX Kartınız Aktive Edildi!',
+          title: 'QRateX kartınız aktive edildi',
           message: `Yönetici tarafından size bir QRateX kartı atandı. Artık tüketim kaydı oluşturabilirsiniz.`,
-          type: 'SYSTEM',
+          type: 'success',
           data: { actionUrl: '/customer/my-card' },
         },
       });
