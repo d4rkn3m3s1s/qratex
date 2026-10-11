@@ -63,7 +63,7 @@ export function DriftSection({ report }: { report: DriftReport | null }) {
             { k: 'Kurala uyan dosya', v: `%${pct(totals.clean, totals.files)}`, sub: `${fmt(totals.clean)} / ${fmt(totals.files)}` },
             { k: 'Sabit hex renk', v: fmt(totals.hex), sub: 'token yerine #rrggbb' },
             { k: ux.hamPaletSinifi, v: fmt(totals.palette), sub: ux.orTextRed500 },
-            { k: ux.t12pxAltiMetin, v: fmt(totals.tinyText), sub: 'text-[10px] vb.' },
+            { k: ux.t12pxAltiMetin, v: fmt(totals.tinyText), sub: 'text-[8–11px]' },
           ].map((m) => (
             <div key={m.k} className="rounded-card border bg-surface-1 p-3">
               <dt className="qx-caption text-fg-muted">{m.k}</dt>

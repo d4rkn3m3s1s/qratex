@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { m as Motion } from 'framer-motion';
 import { Construction, Eye, History, KeyRound, Settings2, ShieldCheck } from 'lucide-react';
 import { PageHeader, QueryState, SkeletonList } from '@/components/states';
+import { ConfirmAction } from '@/components/states/confirm-action';
 import { cn } from '@/lib/utils';
 import { fadeUp, useMotionPolicy } from '@/lib/motion';
 import type { PlatformSettingsState } from '@/lib/platform-settings/server';
@@ -83,15 +84,11 @@ export function SettingsCenter({ initial }: { initial: PlatformSettingsState | n
     else dirtySections.current.delete(id);
   }, []);
 
-  const go = useCallback(
+  // Kaydedilmemiş taslak varken bölüm değişimi onay bekler (native confirm() yerine ConfirmAction).
+  const [pendingSection, setPendingSection] = useState<SectionId | null>(null);
+
+  const navigate = useCallback(
     (id: SectionId) => {
-      if (id === section) return;
-      if (
-        dirtySections.current.size > 0 &&
-        !window.confirm('Bu bölümde kaydedilmemiş değişiklikler var. Bölümden çıkarsanız kaybolacak. Devam edilsin mi?')
-      ) {
-        return;
-      }
       dirtySections.current.clear();
       setSection(id);
       const next = new URLSearchParams(params.toString());
@@ -99,7 +96,19 @@ export function SettingsCenter({ initial }: { initial: PlatformSettingsState | n
       next.set('bolum', id);
       router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     },
-    [params, pathname, router, section]
+    [params, pathname, router]
+  );
+
+  const go = useCallback(
+    (id: SectionId) => {
+      if (id === section) return;
+      if (dirtySections.current.size > 0) {
+        setPendingSection(id);
+        return;
+      }
+      navigate(id);
+    },
+    [navigate, section]
   );
 
   return (
@@ -173,6 +182,22 @@ export function SettingsCenter({ initial }: { initial: PlatformSettingsState | n
         </Motion.section>
       </div>
     </div>
+    <ConfirmAction
+      open={pendingSection !== null}
+      onOpenChange={(o) => {
+        if (!o) setPendingSection(null);
+      }}
+      tone="warning"
+      title="Kaydedilmemiş değişiklikler var"
+      description="Bu bölümde kaydedilmemiş değişiklikler var. Bölümden çıkarsanız kaybolacak. Devam edilsin mi?"
+      confirmLabel="Bölümden çık"
+      irreversibleNote={false}
+      onConfirm={() => {
+        const id = pendingSection;
+        setPendingSection(null);
+        if (id) navigate(id);
+      }}
+    />
     </SettingsDirtyContext.Provider>
   );
 }
