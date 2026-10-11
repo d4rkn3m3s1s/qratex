@@ -209,11 +209,11 @@ export async function getChatStats(q: ChatStatsQuery, now: Date = new Date()): P
              COUNT("latencyMs") AS n
       FROM "QraChatLog"
       WHERE "createdAt" >= ${from} AND "latencyMs" IS NOT NULL
-        AND "assistantMessage" NOT IN (${Prisma.join(ALL_CANNED)})`,
+        AND "assistantMessage" <> ALL(${ALL_CANNED}::text[])` /* dizi parametresi: Prisma.join burada tek jsonb parametreye dönüşüp "text <> jsonb" 500 veriyordu */,
     prisma.$queryRaw<{ day: string; total: bigint | number; problems: bigint | number }[]>`
       SELECT to_char(("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Istanbul')::date, 'YYYY-MM-DD') AS day,
              COUNT(*) AS total,
-             COUNT(*) FILTER (WHERE "assistantMessage" IN (${Prisma.join(PROBLEM_CANNED)})) AS problems
+             COUNT(*) FILTER (WHERE "assistantMessage" = ANY(${PROBLEM_CANNED}::text[])) AS problems
       FROM "QraChatLog"
       WHERE "createdAt" >= ${from}
       GROUP BY 1`,
