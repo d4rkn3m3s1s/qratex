@@ -300,6 +300,7 @@ function DefaultCard<TData>({
   onRowClick?: (row: TData) => void;
   active: boolean;
 }) {
+  const copy = useDataCopy();
   const { select, title, subtitle, actions, fields } = cellsByRole(row, titleColumnId);
   const render = (c: Cell<TData, unknown>) => flexRender(c.column.columnDef.cell, c.getContext());
   return (
@@ -323,7 +324,7 @@ function DefaultCard<TData>({
                 <button
                   type="button"
                   onClick={() => onRowClick(row.original)}
-                  aria-label="Ayrıntıyı aç"
+                  aria-label={copy.open}
                   className="absolute inset-0 rounded-card outline-none"
                 />
                 <div className="qx-body relative z-raised min-w-0 font-medium text-fg">{render(title)}</div>
