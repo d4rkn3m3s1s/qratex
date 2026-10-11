@@ -245,3 +245,75 @@ Dosyalar: `app/admin/donations/page.tsx` (444 satır, tek `'use client'` bileşe
 **Ek gözlem (iddiada yoktu, aynı tehdit modelini zayıflatıyor):** proxy'deki `gateCookieBelongsTo` (`lib/admin-gate-edge.ts:14-22`) HMAC'i **doğrulamıyor**, yalnız `userId.<64 hex>` biçimini kontrol ediyor. Yorum (`:10-12`) "cookie'yi elde etmenin tek yolu doğru cevap" diyor, ama ADMIN rollü kullanıcı kendi `userId`'sini bilir ve `admin_gate=<userId>.<herhangi 64 hex>` cookie'sini elle yazarak sayfa gate'ini de geçebilir. Gate'in API katmanına taşınması sırasında doğrulama Node tarafında (`lib/admin-gate.ts`) HMAC ile yapılmalı; proxy kontrolü yalnız hızlı ön filtre olarak kalmalı. (Doğrulanma şekli: kod okuması; canlıda denenmedi.)
 
 **Düzeltme önceliği:** 7 (gate + audit, sistem geneli) → 4 (doğrulama sözleşmesi, müşteri ekranı) → 2 (taslak kaybı) → 6 (hata zarfı) → 1 (freeze'i ya gerçek yap ya kaldır) → 5 → 3.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/donations/page.tsx` (sunucu bileşeni; KPI + ilk liste sayfası ön yüklemesi) → `components/admin/a-kesif-bagis/donations/**` (Kampanyalar · İşlemler sekmeleri, kampanya ayrıntı çekmecesi, makbuz çekmecesi, düzenleyici çekmece). Sözleşme `lib/admin-donations/contract.ts` (müşteri `lib/customer-wallet/donate/impact.ts` ile aynı kurallar: kategori enum, `goal ≥ 1`, `perPoint > 0`), çekirdek `lib/admin-donations/server.ts`. Uçlar (`defineRoute`, ADMIN, rate limit, zod, merkezi hata zarfı): `GET/POST /api/admin/donations`, `GET/PATCH /api/admin/donations/:id` (`baseUpdatedAt` kilidi → 409), `POST …/:id/actions`, `GET …/stats`, `GET …/transactions` (imleçli), `GET …/transactions/:id` (makbuz), `GET …/export` (CSV). Eski doğrulamasız GET/PATCH/PUT kaldırıldı (tek tüketicisi bu paneldi). Testler: `__tests__/lib/admin-donations.test.ts` (20 test).
+
+**Yaşam döngüsü (şema değişmeden):** durum mevcut alanlardan türetilir — Bağış alıyor / Planlandı (`startDate` gelecekte) / Süresi doldu (`endDate` geçti) / Kapalı (`isActive=false`) / Arşivde (`archivedAt`); "Hedefe ulaştı" ayrı rozet. Müşteri ucu aynı kuralları zaten uyguluyor (`isProjectOpen`).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR | QDL `PageHeader`; modül kapalıysa uyarı bandı + `/admin/modules` bağlantısı. |
+| 2 | CSV dışa aktarma | ÇALIŞIYOR | Sunucu ucu, süzgece uyan TÜM kayıtlar (≤ 20.000), UTF-8 BOM, `;`, makbuz no/kategori/e-posta/mesaj/görünürlük, formül kaçışı. |
+| 3 | Yenile | ÇALIŞIYOR | TanStack Query geçersizleştirme; hata yolları görünür. |
+| 4 | Proje arama | ÇALIŞIYOR | Yazdıkça (debounce) URL'ye; ad + açıklama. |
+| 5 | Sıralama | ÇALIŞIYOR | Öne çıkan/en yeni · hedefe en yakın · en çok toplanan · en yüksek hedef · ad (etiketli seçici). |
+| 6 | "Sadece aktif" | ÇALIŞIYOR | Durum süzgecine dönüştü (5 durum + arşiv). |
+| 7 | "Filtreyi uygula" | KALDIRILDI | Süzgeçler URL'ye bağlı tek sorgu anahtarı; yarış yok, buton gereksiz. |
+| 8 | KPI toplam bağış | ÇALIŞIYOR | `tr-TR` biçim; 30 günlük İstanbul serisi (sparkline). |
+| 9 | KPI toplam puan | ÇALIŞIYOR | Aynı. |
+| 10 | KPI aktif proje | ÇALIŞIYOR | Filtreden bağımsız gerçek sayım (durum başına `count`). |
+| 11 | Proje listesi | ÇALIŞIYOR | Sunucu sayfalı yoğun tablo (mobilde kart), boş/ilk kullanım durumu. |
+| 12 | İkon alanı | ÇALIŞIYOR | Emoji seçici + özel emoji. |
+| 13 | Proje adı | ÇALIŞIYOR | 3–80 karakter. |
+| 14 | Kategori | ÇALIŞIYOR | Yalnız 5 bilinen anahtar (Select); eski bilinmeyen değer "Bilinmeyen kategori" diye gösterilir. |
+| 15 | Açıklama | ÇALIŞIYOR | 20–2000, sayaçlı. |
+| 16 | Hedef puan | ÇALIŞIYOR | ≥ 1; toplanandan düşükse "hemen tamamlandı sayılır" uyarısı. |
+| 17 | "1 puan = ? etki" | KALDIRILDI | Tek oran düzenleyicisine birleşti (aşağıda #22). |
+| 18 | Etki birimi | ÇALIŞIYOR | 1–40. |
+| 19 | Etki etiketi | ÇALIŞIYOR | 2–80. |
+| 20–21 | Dönüşüm X puan / Y birim | ÇALIŞIYOR | Tek kaynak "X puan = Y birim"; 1 puanın değeri türetilip salt okunur gösterilir. |
+| 22 | "Oranı uygula" | KALDIRILDI | Ara "uygula" adımı yok; değer doğrudan forma yazılır, tek Kaydet (yanıltıcı toast bitti). |
+| 23 | "1 puan değerini uygula" | KALDIRILDI | Aynı gerekçe. |
+| 24 | "Aktif oran" metni | ÇALIŞIYOR | Listede/ayrıntıda yayındaki oran ("100 puan = 10 litre"), formda taslak oran ayrı. |
+| 25 | Oran doğrulama | ÇALIŞIYOR | zod; alan altına bağlı, `role="alert"`. |
+| 26 | Hazır oran preset'leri | KALDIRILDI | Yerine canlı müşteri önizlemesi + 100/500/1000 puan etki tablosu (müşteriyle aynı hesap, 2 ondalık). |
+| 27 | Etiketler | ÇALIŞIYOR | Ham metin ayrı tutulur, kaydette ayrıştırılır (virgül/boşluk yutulmaz); müşteri kartında artık gösteriliyor. |
+| 28 | Durum + ilerleme | ÇALIŞIYOR | Durum rozeti + ilerleme çubuğu (300 ms dolma, azaltılmış harekette anında) + yüzde. |
+| 29 | Ayarları kaydet | ÇALIŞIYOR | Tek kampanya çekmecesi (diğer taslakları silme sorunu yok), çift gönderim engelli, 409/404 görünür. |
+| 30 | Pasife al | ÇALIŞIYOR | "Bağışa kapat" — onaylı, denetimli. |
+| 31 | Soft Freeze | KALDIRILDI | Sahteydi (pasife almaktan farksız); gerçek "duraklat ama görünür kal" için şema gerekir (kalanlar). |
+| 32 | Aktifleştir | ÇALIŞIYOR | Arşivdeyse ya da oran/hedef geçersizse sunucu reddeder. |
+| 33 | Son bağış logları | ÇALIŞIYOR | "İşlemler" sekmesi: imleçli, kampanya/kişi/İstanbul tarih aralığı/en az puan/görünürlük süzgeçleri, kullanıcı profili bağlantısı. |
+| 34 | Log satırı | ÇALIŞIYOR | + makbuz no. |
+| 35 | Sayfalama | ÇALIŞIYOR | Projeler tablo sayfalaması; işlemler "Daha fazla göster" (imleç). |
+| 36 | Yükleniyor | ÇALIŞIYOR | Sunucu ön yüklemesi + iskeletler; sıfır gösterilmez. |
+| 37 | Hata durumu | ÇALIŞIYOR | `ErrorState`/`QueryState` + tekrar dene; mutasyon hataları toast + diyalog açık kalır. |
+| 38 | Boş durum | ÇALIŞIYOR | İlk kullanım / süzgeç boş durumları. |
+| 39 | Yetki | ÇALIŞIYOR | `requireAuth(['ADMIN'])` (defineRoute) + rate limit. Admin kapısı çerezinin API'de doğrulanması sistem geneli (B9) — kalanlar. |
+| 40 | Denetim kaydı | ÇALIŞIYOR | Oluştur/düzenle/durum/arşiv/uzlaştır aynı transaction'da; ayrıntıda "Değişiklik geçmişi" (alan farkı özetiyle). |
+| 41 | Oluşturma / silme / arşivleme | ÇALIŞIYOR | Oluştur (idempotent), arşivle (gerekçeli) / arşivden çıkar; silme yok (bağış geçmişi korunur). |
+| 42 | Öne çıkarma, başlangıç/bitiş | ÇALIŞIYOR | Öne çıkar anahtarı + İstanbul saatli tarihler; müşteri ucu bitişi uyguluyor. |
+| 43 | Kirli durum / çıkış uyarısı | ÇALIŞIYOR | Düzenleyici çekmece (EntityEditorSheet) kirliyken kapatmayı onaya bağlar. |
+| 44 | Yıkıcı aksiyon onayı | ÇALIŞIYOR | Kapat/arşivle/uzlaştır onaylı (arşiv ve uzlaştırma gerekçeli). |
+| 45 | Mobil | ÇALIŞIYOR | Tablo → kart, çekmeceler, ≥ 44 px hedefler, sarılan aksiyonlar. |
+| 46 | Form etiketleri | ÇALIŞIYOR | Tüm alanlar görünür etiketli, birim sonekleri ("puan"), `aria-pressed` öne çıkar düğmesinde. |
+
+**Sayım (46 özellik):** ÇALIŞIYOR 40 · KALDIRILDI 6 (#7, #17, #22, #23, #26, #31 — gerekçeli; #20–21 tek satırda sayıldı).
+
+### Kapanan bulgular
+B1 (taslak kaybı) · B2 (sahte Soft Freeze kaldırıldı, yaşam döngüsü türetildi) · B3 (etiket yazımı; müşteride gösteriliyor) · B4 (ortak sözleşme; `perPoint || 1` müşteri tarafında zaten kaldırılmıştı) · B5 (KPI) · B6 (hata zarfı, P2025 → 404, DB → 503) · B7 (tek oran düzenleyicisi) · B8 (denetim) · B10 (yarış) · B11 (İşlemler sekmesi, imleç, süzgeçler) · B12 (Türkçe; "Soft Freeze"/"CSV" kalktı) · B13 (etiketler, ARIA) · B14 (şeffaf toplam: kayıtlı ilerleme ↔ gerçek bağış toplamı ↔ puan defteri; gerekçeli "uzlaştır", 409 korumalı) · B15 (sunucu CSV, BOM). **14/15.** Açık: B9 (sistem geneli admin kapısı API doğrulaması — `lib/api-auth`/proxy sahibinin işi).
+
+### Eksik özelliklerden uygulananlar
+Yaşam döngüsü (oluştur, arşivle/geri al, öne çıkar, tarih planlama) · işlem gezgini + makbuz yan paneli (puan defteri eşleşmesi, kullanıcı profiline bağlantı) · 30 günlük seri (KPI ve kampanya bazında) · canlı müşteri önizlemesi · değişiklik geçmişi.
+
+### Kalanlar (gerekçeli)
+- **"Duraklatıldı ama görünür" durumu, açık `status` enum'u:** **ŞEMA İSTEĞİ** (`DonationProject.status`); bugün türetilmiş durum + "Kapalı" kullanılıyor.
+- **Admin kapısı çerezinin API katmanında doğrulanması (B9):** sistem geneli, `lib/api-auth`/proxy sahibinin işi.
+- **Çoğalt / toplu işlem / şüpheli yoğun bağış işareti:** bu dalgada yapılmadı; işlem gezgini süzgeçleri (en az puan, kişi) ile manuel inceleme mümkün.
+- **Global min/maks bağış ayarı:** müşteri ucunda sabit (`DONATION_MAX_POINTS`); ayar anahtarı yok.

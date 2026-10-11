@@ -1,100 +1,68 @@
+/**
+ * GET /api/admin/discovery — canlı keşif ayarı + sürüm + ayarda geçen işletmelerin adları.
+ *   Okuma hatası 500 (istemci formu açmaz — P0-28; "boş config ile kaydet" imkânsız).
+ * PUT /api/admin/discovery — gerçek zod şeması (lib/admin-discovery/contract.ts), işletme
+ *   kimlikleri DEALER doğrulaması, `baseVersion` ZORUNLU (428) ve uyuşmazlıkta 409 (C2 kilidi);
+ *   yazma + denetim tek transaction.
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { getAuditRequestMeta } from '@/lib/request-metadata';
-import {
-  DISCOVERY_CONFIG_CATEGORY,
-  DISCOVERY_CONFIG_SETTING_KEY,
-  normalizeDiscoveryConfig,
-} from '@/lib/discovery-config';
-import { adminDiscoveryPutSchema } from '@/lib/validations-admin';
-import {
-  baseVersionRequiredResponse,
-  isVersionConflictError,
-  readBaseVersion,
-  versionConflictResponse,
-  versionFromDate,
-  writeVersionedSetting,
-} from '@/lib/settings-version';
-import { Prisma } from '@prisma/client';
+import { ApiError, errorResponse } from '@/lib/http/define-route';
+import { actorFromSession } from '@/lib/data-safety/audit';
+import { baseVersionRequiredResponse, readBaseVersion } from '@/lib/settings-version';
+import { discoveryConfigSchema, issuePathLabel } from '@/lib/admin-discovery/contract';
+import { getDiscoveryState, resolveDealers, saveDiscovery } from '@/lib/admin-discovery/server';
 
 export const dynamic = 'force-dynamic';
 
-/** GET — canlı keşif ayarı + sürüm. Okuma hatası 500 (istemci formu açmaz — P0-28). */
+function requestId(): string {
+  return `disc_${Date.now().toString(36)}`;
+}
+
 export async function GET() {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
-
-    const row = await prisma.settings.findUnique({
-      where: { key: DISCOVERY_CONFIG_SETTING_KEY },
-      select: { value: true, updatedAt: true },
-    });
-    return NextResponse.json(
-      {
-        success: true,
-        config: normalizeDiscoveryConfig(row?.value),
-        version: versionFromDate(row?.updatedAt),
-        isDefault: !row,
-      },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    const state = await getDiscoveryState(prisma);
+    return NextResponse.json({ success: true, ok: true, data: state, ...state }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
     console.error('Admin discovery config fetch error:', error);
-    return NextResponse.json({ success: false, error: 'Keşif ayarları alınamadı' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: false, ok: false, error: 'Keşif ayarları alınamadı', code: 'INTERNAL', retryable: true }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }
 
-/** PUT — `baseVersion` ZORUNLU; uyuşmazlıkta 409. Yazma + audit tek transaction. */
 export async function PUT(request: NextRequest) {
   try {
     const auth = await requireAuth(['ADMIN']);
     if ('error' in auth) return auth.error;
     const { session } = auth;
 
-    const auditMeta = getAuditRequestMeta(request);
     const raw = await request.json().catch(() => null);
-    const parsed = adminDiscoveryPutSchema.safeParse(raw);
-    if (!parsed.success || parsed.data.config == null || typeof parsed.data.config !== 'object') {
-      const msg = parsed.success ? 'Keşif ayarı gerekli' : parsed.error.errors[0]?.message ?? 'Geçersiz istek';
+    const body = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const parsed = discoveryConfigSchema.safeParse(body.config);
+    if (!parsed.success) {
+      const details = parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: `${issuePathLabel(i.path)}: ${i.message}` }));
       return NextResponse.json(
-        { success: false, error: msg, ...(parsed.success ? {} : { details: parsed.error.flatten() }) },
-        { status: 400 , headers: PRIVATE_NO_STORE_HEADERS });
+        { success: false, ok: false, error: details[0]?.message ?? 'Keşif ayarı geçersiz.', code: 'VALIDATION', details },
+        { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+      );
     }
     const baseVersion = readBaseVersion(raw);
     if (!baseVersion) return baseVersionRequiredResponse();
+    const restoredFrom = typeof body.restoredFrom === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.restoredFrom) ? body.restoredFrom : undefined;
 
-    const normalized = normalizeDiscoveryConfig(parsed.data.config);
-
-    const saved = await prisma.$transaction(async (tx) => {
-      const written = await writeVersionedSetting(tx, {
-        key: DISCOVERY_CONFIG_SETTING_KEY,
-        value: normalized as Prisma.InputJsonValue,
-        category: DISCOVERY_CONFIG_CATEGORY,
-        baseVersion,
-      });
-      await tx.auditLog.create({
-        data: {
-          userId: session.user.id,
-          action: 'UPDATE_DISCOVERY_CONFIG',
-          entity: 'Settings',
-          entityId: written.id,
-          oldData: written.previous ?? Prisma.JsonNull,
-          newData: normalized as Prisma.InputJsonValue,
-          ...auditMeta,
-        },
-      });
-      return written;
-    });
-
-    return NextResponse.json(
-      { success: true, config: normalized, version: saved.version },
-      { headers: PRIVATE_NO_STORE_HEADERS }
-    );
+    const saved = await saveDiscovery(prisma, { config: parsed.data, baseVersion, restoredFrom }, actorFromSession(session), request);
+    const dealers = await resolveDealers(prisma, [
+      ...saved.config.locations.map((l) => l.dealerId),
+      ...saved.config.sponsored.map((s) => s.dealerId ?? '').filter(Boolean),
+    ]).catch(() => ({}));
+    const data = { config: saved.config, version: saved.version, dealers };
+    return NextResponse.json({ success: true, ok: true, data, ...data }, { headers: PRIVATE_NO_STORE_HEADERS });
   } catch (error) {
-    if (isVersionConflictError(error)) return versionConflictResponse(error);
+    if (error instanceof ApiError) return errorResponse(error, requestId());
     console.error('Admin discovery config update error:', error);
-    return NextResponse.json({ success: false, error: 'Keşif ayarları güncellenemedi' }, { status: 500 , headers: PRIVATE_NO_STORE_HEADERS });
+    return NextResponse.json({ success: false, ok: false, error: 'Keşif ayarları güncellenemedi', code: 'INTERNAL', retryable: true }, { status: 500, headers: PRIVATE_NO_STORE_HEADERS });
   }
 }

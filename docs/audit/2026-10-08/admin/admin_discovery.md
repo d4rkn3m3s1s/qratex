@@ -248,3 +248,79 @@ Başlıkta sabit bir "kaydedilmemiş değişiklikler" çubuğu (Kaydet / Vazgeç
 
 **Yeniden üretim:** Saat 10:30 TSİ (07:30 UTC). Bayinin config'inde 09:00-23:00 tanımlı. `currentMinutes = 450 < 540` olduğu için müşteri ve admin önizlemesi "Kapalı" gösteriyor. Saat 00:30 TSİ'de (21:30 UTC) ise aynı bayi "Açık" görünüyor.
 **Önerilen düzeltme yaklaşımı:** `Intl.DateTimeFormat('en-GB', { timeZone: dealer.timezone ?? 'Europe/Istanbul', weekday, hour, minute })` ile bayinin yerel saatinden gün ve dakikayı türetin. Saat bilgisi yoksa `isOpenNow: null` döndürün ve UI'da "saat bilgisi yok" gösterin. Hesaplama `lib/discovery/compute.ts` gibi saf bir fonksiyona taşınıp saat dilimi sınır testleriyle (00:00-03:00 TSİ, gece yarısını aşan vardiya) kapsanmalı.
+
+---
+
+## Uygulama (Dalga 2)
+
+**Yeni yapı:** `app/admin/discovery/page.tsx` (sunucu bileşeni; canlı ayar + kapsama ön yüklemesi) → `components/admin/a-kesif-bagis/discovery/**` (istemci adası: Kapsama · Sponsorlu · Yedek konumlar · Haftanın enleri · Önizleme (lazy) · Geçmiş (lazy)). Sözleşme `lib/admin-discovery/contract.ts` (gerçek zod şeması, istemci+sunucu ortak), çekirdek `lib/admin-discovery/server.ts`, ortak hesap `lib/discovery/compute.server.ts` (müşteri ucu `/api/customer/discovery` ve admin önizlemesi AYNI fonksiyonu kullanır). Uçlar: `GET/PUT /api/admin/discovery` (C2: `baseVersion` zorunlu → 428, uyuşmazlık → 409; yazma + denetim tek transaction — korunarak sıkılaştırıldı), `GET …/coverage`, `GET …/dealers`, `POST …/preview`, `GET …/history` (hepsi `defineRoute`, ADMIN, rate limit). Testler: `__tests__/lib/admin-discovery.test.ts` (20 test).
+
+### Özellik envanteri — yeni durum
+
+| # | Özellik | Yeni durum | Not |
+|---|---|---|---|
+| 1 | Başlık | ÇALIŞIYOR | QDL `PageHeader` + `PanelPage register="ops"`, "Keşif ve sponsorlu". |
+| 2 | Yenile | ÇALIŞIYOR | Taslak kirliyse onaylı; değilse doğrudan. |
+| 3 | "Bayilerden doldur" | KALDIRILDI | Koordinat uyduruyor, rol filtresini kaybediyordu. Yerine Kapsama tablosunda "Konumu yok" süzgeci + satırdan "Yedek konum ver" (yalnız gerçek DEALER, koordinat elle/Maps bağlantısından). |
+| 4 | Kaydet | ÇALIŞIYOR | "Yayınla" (DirtyBar): önce istemci zod, sonra sunucu zod + DEALER doğrulaması + `baseVersion`. |
+| 5 | Kirli durum | ÇALIŞIYOR | Yükleme hatasında düzenleyici hiç açılmaz; kirli = taslak ≠ yayındaki. |
+| 6 | Yardım | KALDIRILDI | Her sekmede bağlamsal açıklama metni var; ayrı açılır yardım gereksiz. |
+| 7 | Doğrulama + hata kartı | ÇALIŞIYOR | Saat, gün, indirim 0–100, tarih geçerliliği/sırası, URL protokolü, tekil kimlik, 0/0, uzunluklar; hata bandı okunur konum etiketiyle. |
+| 8 | Düzenlemede doğrulama temizleme | ÇALIŞIYOR | — |
+| 9–11 | Haftanın enleri başlıkları | ÇALIŞIYOR | 2–40 karakter, boşsa varsayılan; yanında bu haftanın gerçek kazananı. |
+| 12 | JSON dışa aktar | ÇALIŞIYOR | Menüde; taslak/yayındaki ayrımı etikette ve dosya adında; `imageUrl` dahil. |
+| 13 | JSON içe aktar | ÇALIŞIYOR | Dosya seçici + yapıştırma, şema doğrulaması, fark özeti; yalnız taslağı değiştirir. |
+| 14 | Pin ayrıştırma | ÇALIŞIYOR | `lat,lng`, `@lat,lng`, `!3d!4d`, `q=/ll=`; aralık + 0/0 kontrolü; kısa bağlantı için açık mesaj. |
+| 15 | Pin hedef satır seçici | KALDIRILDI | Pin aracı satır düzenleyicisinin içine taşındı (indeks kayması sorunu ortadan kalktı). |
+| 16 | Pine uygula | ÇALIŞIYOR | "Enlem/boylama aktar" (düzenleyici içinde). |
+| 17 | Bayi seçici | ÇALIŞIYOR | Sunucu aramalı combobox, yalnız `role=DEALER`, klavye erişimli; aynı işletmeye ikinci satır engelli. |
+| 18 | Bayi e-posta alt yazısı | ÇALIŞIYOR | Ad + e-posta; bulunamayan bayi açıkça "Bayi bulunamadı". |
+| 19 | "Bayi profilinden doldur" | KALDIRILDI | Profil zaten önceliklidir; profil varken yedek satır "kullanılmıyor" sayılır ve Kapsama'da gösterilir. |
+| 20–21 | Enlem/boylam | ÇALIŞIYOR | `number | null`; boş değer 0'a düşmez. |
+| 22 | Adres | ÇALIŞIYOR | Türkçe etiket; profil adresi varsa onun kullanıldığı belirtiliyor. |
+| 23 | Kategoriler | ÇALIŞIYOR | Çip seçici (önerilen + serbest ekleme), Türkçe küçük harf. |
+| 24–25 | Açılış/kapanış | ÇALIŞIYOR | `type="time"`, gece yarısı aşımı rozetle anlatılıyor, İstanbul saati. |
+| 26 | Günler | ÇALIŞIYOR | 7 çipli seçici (Pzt…Paz). |
+| 27 | Konum silme | ÇALIŞIYOR | Onaylı, etiketli; geçmişten geri yüklenebilir. |
+| 28 | Konum ekle | ÇALIŞIYOR | 0/0 ile eklenemez. |
+| 29 | Satır yerleşimi | ÇALIŞIYOR | Tablo + düzenleme çekmecesi (DataTable mobilde kart). |
+| 30 | Önizleme girdileri | ÇALIŞIYOR | Etiketli; konum yapıştır/"Konumumu kullan"; yarıçap 0,1–50; Türkçe küçük harf. |
+| 31 | Yakındaki kartları test et | ÇALIŞIYOR | `POST /api/admin/discovery/preview`: Taslak/Yayındaki seçimi, müşteri kapısı yok, admin adına analitik yok, sinyal taraması 120 sn önbellekte. |
+| 32 | Önizleme sonuçları | ÇALIŞIYOR | Toplam sayı + ilk 20, sponsorlu, haftanın enleri, canlı mutlu saatler, trend; konum/saat kaynağı (profil/yedek). Harita yok (kalanlar). |
+| 33 | Açık/Kapalı | ÇALIŞIYOR | İstanbul saati; önce profil `businessHours`/tatil modu; bilinmiyorsa "Saat bilinmiyor" (`isOpenNow: null`). |
+| 34 | Sponsor id | ÇALIŞIYOR | Sistem üretir, değişmez (odak kaybı bitti). |
+| 35 | Sponsor başlık | ÇALIŞIYOR | 3–80 karakter. |
+| 36 | İndirim % | ÇALIŞIYOR | 0–100 tam sayı. |
+| 37 | Öncelik | ÇALIŞIYOR | 0–1000. |
+| 38 | Sponsor dealerId | ÇALIŞIYOR | Bayi seçici; `/customer/places?promo=` bağlantısı bu işletmenin sayfasını açar (müşteri tarafı tüketiyor). |
+| 39 | Açıklama | ÇALIŞIYOR | ≤ 240 karakter. |
+| 40 | Link URL | ÇALIŞIYOR | Yalnız https ya da uygulama içi yol; müşteri keşif yanıtında döner. Müşteri kartında çizimi müşteri yüzeyinin işi (kalanlar). |
+| 41 | Başlangıç/bitiş | ÇALIŞIYOR | `datetime-local` (İstanbul); geçersiz tarih yayında sayılmaz; durum rozeti canlı. |
+| 42 | Aktif anahtarı | ÇALIŞIYOR | `SwitchField` (etiket bağlı). |
+| 43 | Sponsor silme | ÇALIŞIYOR | Onaylı; ayrıca "Çoğalt". |
+| 44 | Sponsor ekle | ÇALIŞIYOR | En çok 50. |
+| 45 | Sponsor görseli | ÇALIŞIYOR | URL + PNG/SVG yükleme (R2, mevcut `rewards` klasörü) + önizleme; normalize artık alanı düşürmüyor. |
+| 46 | Yükleniyor | ÇALIŞIYOR | Sunucu ön yüklemesi + iskelet. |
+| 47 | Hata durumu | ÇALIŞIYOR | Tam sayfa `ErrorState` + tekrar dene; form açılmaz. |
+| 48 | Boş durumlar | ÇALIŞIYOR | Her listede açıklamalı boş durum. |
+| 49 | Yetki | ÇALIŞIYOR | Sayfa `requireAuth(['ADMIN'])` + proxy; uçlar ADMIN + rate limit. |
+| 50 | Denetim kaydı | ÇALIŞIYOR | + "Geçmiş" sekmesi: kim/ne zaman/özet, "Taslağa yükle" (geri yükleme izi `_restoredFrom`). |
+| 51 | Eşzamanlı düzenleme | ÇALIŞIYOR | C2 kilidi korundu; 409'da DirtyBar çakışma mesajı + güncel hali yükle. |
+| 52 | Sunucu doğrulama | ÇALIŞIYOR | `discoveryConfigSchema` + DEALER kontrolü. |
+| 53 | Kaydedilmemiş değişiklik uyarısı | ÇALIŞIYOR | DirtyBar (sekme kapatma, Ctrl/⌘+S) + uygulama içi bağlantı tıklamasında onay. |
+| 54 | Mobil | ÇALIŞIYOR | Başlık aksiyonları sarılır, tablolar mobilde kart, çekmeceler; ≥ 44 px hedefler. |
+| 55 | Erişilebilirlik | ÇALIŞIYOR | Etiketli alanlar, combobox ARIA, çip grupları `aria-labelledby`, `role="alert"` hatalar, canlı bölgeler. |
+
+**Sayım (55 özellik):** ÇALIŞIYOR 51 · KALDIRILDI 4 (#3, #6, #15, #19 — gerekçeli).
+
+### Kapanan bulgular (11/11)
+1 (yükleme hatasında boş kaydet) · 2 (rol filtresi / sahte koordinat) · 3 (tek doğruluk kaynağı: profil önce, kapsama tablosu, `businessHours` + tatil modu okunuyor) · 4 (İstanbul saati, bilinmeyen = null) · 5 (kategori/gün yazımı) · 6 (odak kaybı) · 7 (grid) · 8 (ölü alanlar: dealerId tüketiliyor, linkUrl/imageUrl yanıtta ve korunuyor; arayüz metni dürüst) · 9 (şema + kilit) · 10 (taslak önizleme, kapı/analitik yok, önbellek) · 11 (Türkçe terimler, bilgi mimarisi).
+
+### Eksik özelliklerden uygulananlar
+Taslak/yayınla + sürüm geçmişi ve geri yükleme (#2), eşzamanlı düzenleme farkındalığı (#6), kapsama göstergesi ve "konumu olmayan bayiler" (#1'in kapsama kısmı), arama/süzgeç (#5'in bir kısmı).
+
+### Kalanlar (gerekçeli)
+- **Harita, sürüklenebilir pin, adres → koordinat:** Leaflet bileşeni müşteri yüzeyine ait, geocoding servisi yok. Koordinat/Maps bağlantısı ayrıştırmasıyla çözüldü.
+- **Sponsor gösterim/tıklama, CTR, yüzey/segment hedefleme:** ölçüm olayı ve ayrı model yok → **ŞEMA İSTEĞİ** (`SponsoredPlacement` + `SponsoredEvent`). Uydurulmuş CTR gösterilmiyor.
+- **Müşteri kartında `linkUrl`/görsel çizimi:** müşteri Keşfet yüzeyinin işi; veri `/api/customer/discovery` yanıtında hazır.
+- **Bayi başına saat dilimi, `discoveryCategories` profil alanı:** şema yok (**ŞEMA İSTEĞİ**); hesap Europe/Istanbul, kategori menü kategorileri + yedek satırdan.
