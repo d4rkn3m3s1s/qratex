@@ -14,6 +14,7 @@
  *     rotasyonundadır; hedef canlıya çıkınca kendiliğinden listeden düşer.
  *  Emekli oyunlar (§7.3) hiçbir koşulda görünmez.
  */
+import { addDays as addIstanbulDays, istanbulDay, istanbulDayStart } from '@/components/ds/page/date-range';
 import {
   GAMES,
   LEGACY_ALIASES,
@@ -284,9 +285,9 @@ export function streakBonusXp(length: number): number {
 }
 
 /**
- * Sonraki oyun günü sıfırlama anı. Deneme günü bugün UTC gün anahtarıdır
- * (`lib/game-session.gameDayKey`; şema `dayKey` UTC) → Türkiye saatiyle 03:00.
+ * Sonraki oyun günü sıfırlama anı: bir sonraki Europe/Istanbul gece yarısı
+ * (`lib/game-session.gameDayKey` İstanbul takvim günüdür).
  */
 export function nextGameDayReset(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  return istanbulDayStart(addIstanbulDays(istanbulDay(now), 1));
 }

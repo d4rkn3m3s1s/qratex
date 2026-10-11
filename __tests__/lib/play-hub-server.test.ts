@@ -17,6 +17,7 @@ const state = {
   weeklyRows: [] as Array<{ userId: string; starsCollected: number; completedAt: Date; gameType: string }>,
   claims: new Set<string>(),
   earnedEvents: [] as Array<{ data: unknown; createdAt: Date }>,
+  hiddenKeys: [] as string[],
 };
 
 const prismaMock = {
@@ -52,6 +53,10 @@ const prismaMock = {
       where.id.in.map((id) => ({ id, name: id === 'u1' ? 'Ayşe Kaya' : `Oyuncu ${id} Soyad` }))
     ),
   },
+  settings: {
+    // "Liderlikte görün" kapalı olanlar (leaderboard-optout).
+    findMany: jest.fn(async () => state.hiddenKeys.map((key) => ({ key }))),
+  },
   tournamentRewardClaim: {
     findUnique: jest.fn(async ({ where }: { where: { userId_gameType_weekKey: { userId: string; gameType: string; weekKey: string } } }) => {
       const k = where.userId_gameType_weekKey;
@@ -66,8 +71,8 @@ jest.mock('@/lib/prisma', () => ({
 }));
 
 import { loadGamesTab, loadTournamentTab, shortName } from '@/lib/play-hub/server';
-import { featuredGameTypeForWeek } from '@/lib/game-tournament';
-import { visibleMiniGames } from '@/lib/minigame-config';
+import { featuredGameForWeek } from '@/lib/game-tournament';
+import { userSettingsKey } from '@/lib/customer-settings/preferences';
 
 beforeEach(() => {
   state.todayRows = [];
@@ -77,6 +82,7 @@ beforeEach(() => {
   state.weeklyRows = [];
   state.claims = new Set();
   state.earnedEvents = [];
+  state.hiddenKeys = [];
   jest.clearAllMocks();
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -101,7 +107,8 @@ describe('loadGamesTab', () => {
     const d = await loadGamesTab('u1', NOW);
     if (!d.today.ok || !d.pass.ok || !d.earnings.ok) throw new Error('bölüm yüklenmedi');
     expect(d.today.data.entries.get('mind-thief')?.state).toBe('won');
-    expect(d.today.data.resetAt).toBe('2026-10-11T00:00:00.000Z');
+    // Oyun günü İstanbul: 10 Ekim 15:00 TSİ → sonraki sıfırlama 11 Ekim 00:00 TSİ (= 10 Ekim 21:00 UTC).
+    expect(d.today.data.resetAt).toBe('2026-10-10T21:00:00.000Z');
     const play = d.today.data.quests.find((q) => q.quest.id === 'play-1')!;
     const win = d.today.data.quests.find((q) => q.quest.id === 'win-1')!;
     expect(play).toMatchObject({ done: true, claimed: true });
@@ -117,9 +124,9 @@ describe('loadGamesTab', () => {
 });
 
 describe('loadTournamentTab', () => {
-  const candidates = visibleMiniGames().map((g) => g.gameType);
-  const featured = featuredGameTypeForWeek('2026-W41', candidates)!;
-  const prev = featuredGameTypeForWeek('2026-W40', candidates)!;
+  // Dondurulmuş rotasyon takvimi (W41/W40 eski dilimde; geçmiş haftaların oyunu sabit).
+  const featured = featuredGameForWeek('2026-W41')!;
+  const prev = featuredGameForWeek('2026-W40')!;
 
   it('ilk 10, kısaltılmış ad, "sen" ve katılım eşiği', async () => {
     state.weeklyRows = [
@@ -151,6 +158,18 @@ describe('loadTournamentTab', () => {
     state.claims.add(`u1:${prev}:2026-W40`);
     d = await loadTournamentTab('u1', NOW);
     expect(d.tournament.ok && d.tournament.data.pendingReward).toBeNull();
+  });
+
+  it('"Liderlikte görün" kapalı oyuncu başkalarına anonim; kendini adıyla görür (sıra değişmez)', async () => {
+    state.weeklyRows = [
+      { userId: 'u2', starsCollected: 20, completedAt: new Date('2026-10-06T10:00:00Z'), gameType: featured },
+      { userId: 'u1', starsCollected: 15, completedAt: new Date('2026-10-07T10:00:00Z'), gameType: featured },
+    ];
+    state.hiddenKeys = [userSettingsKey('u2'), userSettingsKey('u1')];
+    const d = await loadTournamentTab('u1', NOW);
+    if (!d.tournament.ok) throw new Error('turnuva yüklenmedi');
+    expect(d.tournament.data.leaderboard[0]).toMatchObject({ rank: 1, name: 'Gizli oyuncu', score: 20 });
+    expect(d.tournament.data.leaderboard[1]).toMatchObject({ rank: 2, name: 'Ayşe K.', isMe: true });
   });
 
   it('kısaltılmış ad', () => {

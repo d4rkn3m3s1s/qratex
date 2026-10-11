@@ -86,3 +86,17 @@ export async function cachedJson<T>(key: string, ttlSeconds: number, fetcher: ()
   if (fresh != null) await redisSetJson(key, fresh, ttlSeconds);
   return fresh;
 }
+
+/**
+ * Anahtar(lar)ı sil — önbellek geçersizleştirme (ör. oyun liderliği yeni skorla bayatladı).
+ * Redis yoksa/hata → sessizce geç (önbellek zaten TTL ile düşer).
+ */
+export async function redisDel(...keys: string[]): Promise<void> {
+  const r = getRedis();
+  if (!r || keys.length === 0) return;
+  try {
+    await r.del(...keys);
+  } catch {
+    /* yut */
+  }
+}

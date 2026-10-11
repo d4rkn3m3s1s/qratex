@@ -114,21 +114,31 @@ export function mergeGameConfig(def: MiniGameDef, ov: OverrideRow | null | undef
   };
 }
 
-const loadOverrides = unstable_cache(
+/**
+ * Önbellekli override okuması. Hata BURADA yakalanmaz: unstable_cache fırlatılan sonucu
+ * önbelleğe yazmaz. (Eskiden hata içeride `{}`e çevrilip 60 sn önbellekleniyordu → kısa bir
+ * DB kesintisi admin'in kapattığı oyunları bir dakika boyunca yeniden açıyordu — D3.)
+ */
+const loadOverridesCached = unstable_cache(
   async (): Promise<Record<string, OverrideRow>> => {
-    try {
-      const rows = await prisma.miniGameConfig.findMany({ select: OVERRIDE_SELECT });
-      const map: Record<string, OverrideRow> = {};
-      for (const r of rows) map[r.gameType] = r;
-      return map;
-    } catch {
-      // DB erişilemezse override yok → registry varsayılanları (oyunlar açık kalır).
-      return {};
-    }
+    const rows = await prisma.miniGameConfig.findMany({ select: OVERRIDE_SELECT });
+    const map: Record<string, OverrideRow> = {};
+    for (const r of rows) map[r.gameType] = r;
+    return map;
   },
   ['minigame-config-overrides'],
   { revalidate: 60, tags: [MINIGAME_CONFIG_TAG] }
 );
+
+async function loadOverrides(): Promise<Record<string, OverrideRow>> {
+  try {
+    return await loadOverridesCached();
+  } catch {
+    // DB erişilemezse (yalnız bu istek için, önbelleğe yazılmadan) registry varsayılanları.
+    // Puan basan karar zaten getEffectiveMiniGameFresh ile fail-closed.
+    return {};
+  }
+}
 
 /** Tüm registry oyunlarının etkin yapılandırması (registry sırasında; pacman hariç). */
 export async function getEffectiveMiniGames(): Promise<EffectiveMiniGame[]> {

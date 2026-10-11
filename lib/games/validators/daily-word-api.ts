@@ -107,8 +107,9 @@ export async function handleRankedGuess(
   }
 
   const dayKey = prev?.d ?? istanbulDayKey(row.serverStartedAt ?? row.startedAt);
-  // Günlük hak anahtarı UTC günü, kelime günü Europe/Istanbul: 21:00–24:00 UTC arası başlayan
-  // deneme ile ertesi UTC günü başlayan deneme AYNI kelimeye düşer → ikinci denemede cevap bilinir.
+  // Günlük hak anahtarı da artık Europe/Istanbul günü (gameDayKey). Eskiden UTC'ydi: 21:00–24:00 UTC
+  // arası başlayan deneme ile ertesi UTC günü başlayan deneme AYNI kelimeye düşüyordu. Denetim,
+  // geçiş günü ve olası saat kaymalarına karşı savunma derinliği olarak kalır.
   // Kök: aynı Istanbul kelime gününe ait başka (oynanmış) deneme varsa reddet. Her tahminde denetlenir
   // (iki denemeyi paralel açıp sürdürme de kapanır).
   await assertSingleAttemptPerWordDay(db, p.userId, row, dayKey);

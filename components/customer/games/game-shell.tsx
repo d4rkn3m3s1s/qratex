@@ -38,8 +38,8 @@ function celebrate(accent: string) {
   confetti('sides', { colors: [accent, '#ffffff', '#fbbf24'] });
 }
 
-/** Günlük sıralı hakkın yenilendiği an (gün anahtarı UTC → Türkiye saatiyle 03:00). */
-const DAILY_RESET_NOTE = 'Yeni sıralı hak her gün 03:00’te (Türkiye saati) açılır';
+/** Günlük sıralı hakkın yenilendiği an (gün anahtarı Europe/Istanbul takvim günü). */
+const DAILY_RESET_NOTE = 'Yeni sıralı hak her gece 00:00’da (Türkiye saati) açılır';
 
 /**
  * Tüm mini oyunların ortak kabuğu (play kaydı: koyu arena, glow). Başlat / oynanış /

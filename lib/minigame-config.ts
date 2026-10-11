@@ -446,7 +446,7 @@ export const MINI_GAMES: readonly MiniGameDef[] = [
     labelKey: 'frost_catcher_game',
     title: 'Kar Tanesi Yakala',
     description:
-      'Buzul Krallığı’nda gökten düşen kar tanelerini eldivenle yakala! Kombo yap, altın kristali kaçırma, buzu eritme.',
+      'Buzul Krallığı’nda düşen kar tanelerini eldivenle yakala, kara buzdan kaç (−1 can)! Güven Kalkanı bir darbeyi emer; kombo yap, altın kristali kaçırma.',
     emoji: '❄️',
     accent: '#38bdf8',
     // v2 (Dalga 2): 45 sn tohumlu sim, skor sunucuda replay ile hesaplanır. Kar +1, altın +3,

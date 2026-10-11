@@ -18,13 +18,19 @@ import {
   getEffectiveMiniGameFresh,
   publicGameConfig,
 } from '@/lib/minigame-config-effective';
-import { attemptReasonMessage, finalizeAttempt, resolveStartAttempt } from '@/lib/game-session';
+import { attemptReasonMessage, finalizeAttempt, gameDayKey, resolveStartAttempt } from '@/lib/game-session';
 import { getVerifierForGameType } from '@/lib/games/registry/server';
 import { isLiveGameType } from '@/lib/games/registry/live-game-types';
 import { practiceContentFor, rankedContentFor, runVerifier, type VerifierRules } from '@/lib/games/verify';
 import { randomSeed } from '@/lib/games/engine/rng';
 import type { EffectiveMiniGame } from '@/lib/minigame-config-effective';
-import { computeAchievementStats } from '@/lib/game-achievement-stats';
+import {
+  loadAchievementBasis,
+  statsFromBasis,
+  withFinishedAttempt,
+  type AchievementBasis,
+} from '@/lib/game-achievement-stats';
+import { invalidateGameRankings } from '@/lib/game-rankings';
 import { evaluateAchievements } from '@/lib/game-achievements';
 import { isEconomyError } from '@/lib/economy';
 
@@ -67,6 +73,11 @@ const NO_MODULE_MESSAGE = 'Bu oyun emekliye ayrıldı. Oyun Merkezi’nden başk
 
 /** Doğrulayıcısı olmayan eski oyunda sıralı deneme kazanılamaz (fail-closed). */
 const NO_MODULE_VERIFICATION = { verifiedScore: 0, flags: ['proof_missing' as const], detail: 'sunucu modülü yok' };
+/**
+ * Canlı listede olup doğrulayıcısı bağlanmamış oyun (kayıt hatası): istemci beyanına puan
+ * basılmaz — K1 sunucu otoritesi kayıt defteri hatasında da fail-closed kalır.
+ */
+const UNWIRED_VERIFICATION = { verifiedScore: 0, flags: ['proof_missing' as const], detail: 'doğrulayıcı bağlı değil' };
 
 /**
  * POST start — günde 1 DENEME (başlangıçta harcanır).
@@ -170,7 +181,9 @@ export async function handleGameComplete(
     const verifier = getVerifierForGameType(gameType);
     // Sunucu modülü olmayan eski oyunun (önceden açılmış) denemesi kapanır ama kazanılamaz.
     const hasModule = isLiveGameType(game.gameType);
-    let beforeUnlocked: Set<string> | null = null;
+    const now = new Date();
+    // Başarım "önce" temeli BİR kez yüklenir; "sonra" bu denemeden saf olarak türetilir (Y6).
+    let basis: AchievementBasis | null = null;
     const result = await finalizeAttempt(prisma, {
       userId,
       game,
@@ -178,7 +191,8 @@ export async function handleGameComplete(
       clientScore: body.score,
       clientDurationSec: body.durationSec,
       token: body.attemptToken ?? null,
-      // Oyun doğrulayıcısı (varsa): tohum DB'den, süre sunucu saatinden; skor sunucunun olur.
+      now,
+      // Oyun doğrulayıcısı: tohum DB'den, süre sunucu saatinden; skor sunucunun olur.
       verify: !hasModule
         ? () => NO_MODULE_VERIFICATION
         : verifier
@@ -190,16 +204,12 @@ export async function handleGameComplete(
               clientScore: body.score,
               serverElapsedSec,
             })
-        : undefined,
+        : () => UNWIRED_VERIFICATION,
       onValidated: async () => {
         try {
-          beforeUnlocked = new Set(
-            evaluateAchievements(await computeAchievementStats(prisma, userId))
-              .filter((a) => a.unlocked)
-              .map((a) => a.id)
-          );
+          basis = await loadAchievementBasis(prisma, userId);
         } catch {
-          beforeUnlocked = null; // başarım tespiti kritik değil
+          basis = null; // başarım tespiti kritik değil
         }
       },
     });
@@ -231,6 +241,12 @@ export async function handleGameComplete(
     }
 
     const { evaluation } = result;
+
+    // Kazanılan deneme liderliği/turnuvayı değiştirir → önbellek düşer (oyuncu sonuç ekranında
+    // kendi skorunu bayat görmez). Kaybedilen deneme sıralamaya girmez.
+    if (result.status === 'completed' && evaluation.verifiedScore > 0) {
+      await invalidateGameRankings(game.gameType, now);
+    }
 
     // Hile sinyali görünürlüğü (F4.1 `|client − verified|`): şüpheli bayraklı denemeler
     // analytics'e yazılır (şema bekleyen MiniGameAttempt.flags yerine). Kritik değil.
@@ -272,10 +288,24 @@ export async function handleGameComplete(
     }
 
     let newAchievements: { id: string; title: string; icon: string }[] = [];
-    const before = beforeUnlocked as Set<string> | null;
-    if (before) {
+    const beforeBasis = basis as AchievementBasis | null;
+    if (beforeBasis) {
       try {
-        const after = evaluateAchievements(await computeAchievementStats(prisma, userId));
+        const before = new Set(
+          evaluateAchievements(statsFromBasis(beforeBasis))
+            .filter((a) => a.unlocked)
+            .map((a) => a.id)
+        );
+        const after = evaluateAchievements(
+          statsFromBasis(
+            withFinishedAttempt(beforeBasis, {
+              gameType: game.gameType,
+              status: result.status,
+              score: evaluation.verifiedScore,
+              dayKey: gameDayKey(now),
+            })
+          )
+        );
         newAchievements = after
           .filter((a) => a.unlocked && !before.has(a.id))
           .map((a) => ({ id: a.id, title: a.title, icon: a.icon }));

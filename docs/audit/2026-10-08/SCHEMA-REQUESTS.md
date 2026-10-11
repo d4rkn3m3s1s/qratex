@@ -31,3 +31,14 @@ Kod tarafı kapatıldı (silme = arşiv/anonimleştirme, defter, mutabakat, soft
 - **`RemedyOffer` `CHECK (num_nonnulls("feedbackId","consumptionReviewId") <= 1)`** ve `Feedback.rating`/`ConsumptionReview.rating` `CHECK BETWEEN 1 AND 5`, `Feedback.npsScore CHECK BETWEEN 0 AND 10` (B14; Zod zaten var, DB savunma derinliği).
 - **`datasource` yorumu** (B14): `schema.prisma` satır ~11 `connection_limit=1` diyor; ölçülmüş doğru değer 5 (bkz. perf notu). Yalnız yorum düzeltmesi.
 - **Baseline göçü** (B4, operasyonel — ajan yapamaz): `prisma migrate diff --from-empty --to-schema-datamodel` → `0000_baseline`, canlıda `migrate resolve --applied`; ardından Neon dev branch'i. `npm run db:push` bu turda kapatıldı, `db:migrate` yalnız `QRATEX_DB_TARGET=dev` beyanıyla çalışır (`scripts/db-schema-guard.mjs`).
+
+## oyun-ekosistemi (Dalga 3)
+
+Kod tarafı kapandı (sunucu otoritesi, tavan, dondurulmuş turnuva takvimi, otomatik turnuva kapanışı, önbellekli sıralama); aşağıdakiler yalnız şema ile kapanabilen savunma derinliği / ölçek kalemleridir.
+
+- **`MiniGameSession @@index([gameType, status, completedAt])`** ve **`@@index([gameType, status, starsCollected])`** (`CREATE INDEX CONCURRENTLY`).
+  Gerekçe: Y6. Haftalık turnuva sıralaması (`lib/game-rankings.weeklyRanking`: `gameType + status='completed' + completedAt` aralığı) ve tüm zamanlar liderliği (`allTimeTop`: `groupBy userId, _max starsCollected`) bugün `[gameType, status]` index'iyle o oyunun TÜM tamamlanmış satırlarını tarıyor. Redis önbelleği (60–120 sn, kazanılan denemede düşürülür) yükü sönümlüyor; index soğuk okumayı O(hafta) yapar.
+- **`TournamentRewardClaim @@unique([gameType, weekKey, rank])`**.
+  Gerekçe: K4. Aynı sıraya iki ödül bugün `pg_advisory_xact_lock(tournament:<oyun>:<hafta>)` + "sıra başkasına verildi mi" okumasıyla engelleniyor (`lib/game-rankings.creditTournamentPrize`, talep ucu ve günlük `tournament-settle` aynı fonksiyon). DB kısıtı son savunma hattı. Ön ölçüm: `SELECT "gameType","weekKey",rank,count(*) FROM "TournamentRewardClaim" GROUP BY 1,2,3 HAVING count(*)>1` (0 olmalı).
+- **`MiniGameSession.flags String[] @default([])`** + **`verification String?`**.
+  Gerekçe: K1/O5 görünürlüğü. Bütünlük bayrakları (`proof_invalid`, `implausible`, `score_mismatch`, `client_clock_mismatch` …) bugün `AnalyticsEvent(category='game_integrity')` satırı olarak yazılıyor ve admin oyun detayında oradan sayılıyor; analitik saklama temizliği ekonomi/sahtekârlık olaylarını korusa da deneme satırıyla birlikte yaşamaları sorguyu tek tabloya indirir. Uygulama: `lib/game-session.finalizeAttempt` aynı `updateMany` içinde yazar.

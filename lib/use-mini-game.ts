@@ -4,7 +4,33 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { moments } from '@/lib/moments/client';
 import { primeAudio } from '@/lib/game-sounds';
+import { track } from '@/lib/analytics';
 import type { PublicContentItem } from '@/lib/games/verify/types';
+
+/** complete yeniden deneme beklemeleri (ms). Sunucu idempotent: aynı deneme tekrar gönderilebilir. */
+const COMPLETE_RETRY_DELAYS_MS = [800, 2000] as const;
+
+/** Ağ hatası ya da geçici sunucu hatası (429/5xx) → yeniden denenebilir; 4xx kalıcıdır. */
+function isTransientStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/**
+ * complete'i gönderir; ağ hatası ve geçici hatalarda kısa beklemeyle yeniden dener. Oturum
+ * sunucuda idempotent kapanır (aynı deneme → kayıtlı sonuç), çift ödül olmaz. Böylece kısa
+ * bir bağlantı kopması dürüst oyuncunun ödüllü denemesini "yarım kaldı → kayıp"a çevirmez.
+ */
+async function postCompleteWithRetry(url: string, body: string): Promise<Response> {
+  for (let i = 0; ; i++) {
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      if (!isTransientStatus(res.status) || i >= COMPLETE_RETRY_DELAYS_MS.length) return res;
+    } catch (e) {
+      if (i >= COMPLETE_RETRY_DELAYS_MS.length) throw e;
+    }
+    await new Promise((r) => setTimeout(r, COMPLETE_RETRY_DELAYS_MS[i]));
+  }
+}
 
 /**
  * Tüm mini oyunların ortak yaşam döngüsü hook'u. Generic start/complete/practice
@@ -135,6 +161,7 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
     setAnswerKey(json.answerKey && typeof json.answerKey === 'object' ? (json.answerKey as Record<string, string>) : null);
     if (json.config) setConfig(json.config as MiniGameConfig);
     startTimeRef.current = Date.now();
+    track('game_start', { gameType, mode: 'practice' });
     go('playing');
     return true;
   }, [gameType, go]);
@@ -154,6 +181,7 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
         throw new Error(json?.error || 'Oyun başlatılamadı');
       }
       if (json.alreadyPlayed || json.canPlay === false) {
+        track('game_locked', { gameType, outcome: json.outcome ?? null });
         setAlreadyPlayed(true);
         setPlayedOutcome(json.outcome === 'won' || json.outcome === 'lost' ? json.outcome : null);
         setLockedMessage(typeof json.message === 'string' ? json.message : null);
@@ -167,6 +195,7 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
       setAnswerKey(null); // sıralıda etiket istemciye ASLA gelmez
       if (json.config) setConfig(json.config as MiniGameConfig);
       startTimeRef.current = Date.now();
+      track('game_start', { gameType, mode: 'ranked', resumed: !!json.resumed });
       go('playing');
       return true;
     } catch (e) {
@@ -186,6 +215,13 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
 
       if (modeRef.current === 'practice') {
         finishingRef.current = true;
+        track('game_end', {
+          gameType,
+          mode: 'practice',
+          won,
+          score: Math.max(0, Math.floor(score)),
+          durationSec: Math.max(0, Math.floor((Date.now() - startTimeRef.current) / 1000)),
+        });
         setResult({
           rewarded: false,
           rewardPoints: 0,
@@ -211,18 +247,17 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
       go('submitting');
       const durationSec = Math.max(0, Math.floor((Date.now() - startTimeRef.current) / 1000));
       try {
-        const res = await fetch(`/api/customer/games/${gameType}/complete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const res = await postCompleteWithRetry(
+          `/api/customer/games/${gameType}/complete`,
+          JSON.stringify({
             sessionId,
             score: Math.max(0, Math.floor(score)),
             durationSec,
             won,
             attemptToken: tokenRef.current,
             ...(proof !== undefined ? { proof } : {}),
-          }),
-        });
+          })
+        );
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
           throw new Error(json?.error || 'Sonuç kaydedilemedi');
@@ -241,6 +276,15 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
           capped: !!json.capped,
         };
         setResult(r);
+        track('game_end', {
+          gameType,
+          mode: 'ranked',
+          won: serverWon,
+          rewarded: r.rewarded,
+          capped: !!r.capped,
+          score: r.score,
+          durationSec,
+        });
         // Sıralı deneme kullanıldı: kabuk "bugün oynandı" bilgisini bilsin.
         setAlreadyPlayed(true);
         setPlayedOutcome(serverWon ? 'won' : 'lost');
@@ -269,17 +313,21 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
           }
         }
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Sonuç kaydedilemedi');
+        const message = e instanceof Error ? e.message : 'Sonuç kaydedilemedi';
+        toast.error(message);
+        track('game_submit_failed', { gameType, durationSec });
+        // Dürüst sonuç: sunucu kararı alınamadı/kabul edilmedi → "kazandın" gösterilmez (istemcinin `won`'u
+        // yalnız kozmetik bir ipucu; ödül ve kazanma kararı sunucunun).
         setResult({
           rewarded: false,
           rewardPoints: 0,
           rewardXp: 0,
           score: Math.floor(score),
-          won,
+          won: false,
           streak: 0,
           streakBonusXp: 0,
           newAchievements: [],
-          reason: null,
+          reason: `${message.replace(/[.!]+$/, "")}. Bugünkü denemenin durumunu Oyna merkezinde görebilirsin.`,
         });
       } finally {
         sessionIdRef.current = null;

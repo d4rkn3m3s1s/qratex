@@ -72,6 +72,61 @@ export function featuredGameTypeForWeek(weekKey: string, candidates: readonly st
   return candidates[idx];
 }
 
+/**
+ * Turnuva rotasyon TAKVİMİ — haftaya göre DONDURULMUŞ aday listeleri.
+ *
+ * Eskiden aday listesi `visibleMiniGames()`'ten türetiliyordu: (1) emekli/birleşmiş ama
+ * `hidden` olmayan 8 eski kimlik (truth-vs-fake, combo-tap, …) rotasyondaydı → o haftalarda
+ * öne çıkan oyun OYNANAMAZDI (start 403 GAME_RETIRED) ve ödüllü turnuva fiilen yoktu;
+ * (2) Yıldız Avı (`pacman`) hiç aday değildi; (3) bir oyunu gizlemek/açmak listenin
+ * indeksini kaydırıp bu haftanın öne çıkan oyununu ve geçen haftanın ödül talebini
+ * DEĞİŞTİRİYORDU ("turnuva rotasyonu tuzağı").
+ *
+ * Kural: bir dilim yürürlüğe girdikten sonra DEĞİŞTİRİLMEZ. Portföy değişince sona yeni bir
+ * dilim eklenir ve `fromWeek`'i GELECEK bir haftadır (jest: son dilim canlı + optIn olmayan
+ * oyunlardan oluşur, dilimler sıralıdır, geçmiş haftaların öne çıkan oyunu sabittir).
+ */
+export interface TournamentRotationSlice {
+  /** Bu haftadan (dahil) itibaren geçerli: "YYYY-Www". */
+  fromWeek: string;
+  candidates: readonly string[];
+}
+
+export const TOURNAMENT_ROTATION: readonly TournamentRotationSlice[] = [
+  {
+    // 2026-W41 ve öncesi: eski `visibleMiniGames()` sırası (geçmiş/bu haftanın talepleri kaymasın).
+    fromWeek: '0000-W00',
+    candidates: [
+      'mind-thief', 'truth-vs-fake', 'bot-hunter', 'review-detective', 'network-defender', 'combo-tap',
+      'memory-match', 'speed-order', 'word-spot', 'data-snake', 'review-stack', 'trust-merge',
+      'signal-pipe', 'spam-breaker', 'frost-catcher', 'fake-hunter', 'core-defense', 'daily-word',
+      'match-three',
+    ],
+  },
+  {
+    // Yalnız canlı (sıralı denemeye açık, varsayılan açık) oyunlar; kayıt defteri sırası.
+    fromWeek: '2026-W42',
+    candidates: [
+      'fake-hunter', 'mind-thief', 'core-defense', 'frost-catcher', 'pacman', 'data-snake',
+      'review-stack', 'spam-breaker', 'trust-merge', 'signal-pipe', 'daily-word', 'match-three',
+    ],
+  },
+];
+
+/** Bir haftanın dondurulmuş aday listesi. */
+export function tournamentCandidatesForWeek(weekKey: string): readonly string[] {
+  let current = TOURNAMENT_ROTATION[0].candidates;
+  for (const slice of TOURNAMENT_ROTATION) {
+    if (slice.fromWeek <= weekKey) current = slice.candidates;
+  }
+  return current;
+}
+
+/** Haftanın öne çıkan (ödüllü) turnuva oyunu — takvimden. */
+export function featuredGameForWeek(weekKey: string): string | null {
+  return featuredGameTypeForWeek(weekKey, tournamentCandidatesForWeek(weekKey));
+}
+
 /** Bir sıranın ödülü — katılım eşiği sağlanmadıysa 0. */
 export function prizeFor(rank: number, participants: number): number {
   if (participants < TOURNAMENT_MIN_PARTICIPANTS) return 0;

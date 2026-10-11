@@ -9,9 +9,9 @@ import { cn } from '@/lib/utils';
 import { fetchTournament, fmt, fmtDateTime, gamesKeys } from './api';
 
 /**
- * Haftalık turnuva (salt-okunur + oyuna geçiş). Rotasyon ve ödül tablosu kod sabitidir
- * (lib/game-tournament.ts, lib/tournament-core.ts — "turnuva rotasyonu tuzağı"); yönetim
- * kolu öne çıkan oyunun ayarları ve aç/kapat anahtarıdır.
+ * Haftalık turnuva (salt-okunur + oyuna geçiş). Rotasyon (haftaya dondurulmuş TOURNAMENT_ROTATION
+ * takvimi) ve ödül tablosu kod sabitidir (lib/game-tournament.ts, lib/tournament-core.ts); ödülleri
+ * günlük `tournament-settle` işi otomatik dağıtır. Yönetim kolu öne çıkan oyunun ayarları ve aç/kapat anahtarıdır.
  */
 export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string) => void }) {
   const q = useQuery({ queryKey: gamesKeys.tournament(), queryFn: fetchTournament, staleTime: 60_000 });
@@ -75,14 +75,14 @@ export function TournamentPanel({ onOpenGame }: { onOpenGame: (gameType: string)
                   ))}
                 </ol>
                 <p className="mt-2 text-xs text-fg-muted">
-                  Bir oyunu portföyde gizlemek/açmak rotasyonu kaydırır; portföy değişikliğini hafta sınırında yayınlayın.
+                  Rotasyon haftaya dondurulmuş takvimden gelir (yalnız canlı oyunlar); bir oyunu gizlemek/açmak sırayı kaydırmaz. Portföy değişince takvime gelecek haftadan başlayan yeni dilim eklenir.
                 </p>
               </SectionCard>
               <SectionCard title={`Geçen hafta (${t.lastWeek.weekKey})`} description={t.lastWeek.title ? `${t.lastWeek.title} · ${fmt(t.lastWeek.participants)} katılımcı` : 'Turnuva yok'}>
                 {t.lastWeek.participants < t.minParticipants ? (
                   <p className="text-sm text-fg-muted">Katılım eşiği ({t.minParticipants}) sağlanmadı; ödül dağıtılmadı.</p>
                 ) : t.lastWeek.claims.length === 0 ? (
-                  <p className="text-sm text-fg-muted">Henüz talep edilen ödül yok.</p>
+                  <p className="text-sm text-fg-muted">Ödüller henüz dağıtılmadı; günlük kapanış işi ilk koşusunda ilk 3’e otomatik verir.</p>
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {t.lastWeek.claims.map((c) => (

@@ -10,7 +10,7 @@ import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { ApiError } from '@/lib/http/define-route';
-import { ALL_GAME_DEFS, defaultEnabledOf, getGameDef, visibleMiniGames, type MiniGameDef } from '@/lib/minigame-config';
+import { ALL_GAME_DEFS, defaultEnabledOf, getGameDef, type MiniGameDef } from '@/lib/minigame-config';
 import {
   MINIGAME_CONFIG_TAG,
   OVERRIDE_LIMITS,
@@ -18,7 +18,7 @@ import {
   type OverrideRow,
 } from '@/lib/minigame-config-effective';
 import { GAME_DAILY_CAP, GAME_WEEKLY_CAP } from '@/lib/economy/caps';
-import { featuredGameTypeForWeek, rankWeekly, prizeFor, prizeTable, TOURNAMENT_MIN_PARTICIPANTS } from '@/lib/game-tournament';
+import { featuredGameForWeek, rankWeekly, prizeFor, prizeTable, TOURNAMENT_MIN_PARTICIPANTS } from '@/lib/game-tournament';
 import { isoWeekEnd, isoWeekKey, isoWeekStart, previousIsoWeekKey } from '@/lib/tournament-core';
 import { getGameEntryByGameType, getRetiredGame, getGameEntry, LEGACY_ALIASES } from '@/lib/games/registry';
 import { getVerifierForGameType } from '@/lib/games/registry/server';
@@ -203,7 +203,7 @@ export async function getGamesOverview(now: Date = new Date()): Promise<GamesOve
   const rewardMap = new Map(rewarded30.map((g) => [g.gameType, { count: g._count._all, points: g._sum.rewardPoints ?? 0 }]));
   const flagMap = new Map(flags30.map((f) => [f.gameType ?? '', Number(f.n)]));
 
-  const featuredGameType = featuredGameTypeForWeek(isoWeekKey(now), visibleMiniGames().map((g) => g.gameType));
+  const featuredGameType = featuredGameForWeek(isoWeekKey(now));
 
   const games: GameRow[] = ALL_GAME_DEFS.map((def) => {
     const raw = ovMap.get(def.gameType);
@@ -426,11 +426,10 @@ export async function getGameDetail(gameType: string, now: Date = new Date()): P
 // ─────────────────────────── Turnuva ───────────────────────────
 
 export async function getTournamentOverview(now: Date = new Date()): Promise<TournamentOverview> {
-  const candidates = visibleMiniGames().map((g) => g.gameType);
   const weekKey = isoWeekKey(now);
-  const featured = featuredGameTypeForWeek(weekKey, candidates);
+  const featured = featuredGameForWeek(weekKey);
   const lastKey = previousIsoWeekKey(now);
-  const lastFeatured = featuredGameTypeForWeek(lastKey, candidates);
+  const lastFeatured = featuredGameForWeek(lastKey);
   const weekStart = isoWeekStart(now);
   const lastStart = new Date(weekStart.getTime() - WEEK);
 
@@ -472,7 +471,7 @@ export async function getTournamentOverview(now: Date = new Date()): Promise<Tou
   const rotation: TournamentOverview['rotation'] = [];
   for (let i = 0; i < 4; i++) {
     const wk = isoWeekKey(new Date(weekStart.getTime() + i * WEEK + DAY));
-    const gt = featuredGameTypeForWeek(wk, candidates);
+    const gt = featuredGameForWeek(wk);
     rotation.push({ weekKey: wk, gameType: gt, title: titleOf(gt, ovMap) });
   }
 

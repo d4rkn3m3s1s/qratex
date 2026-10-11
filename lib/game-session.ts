@@ -29,6 +29,7 @@ import type { Prisma } from '@prisma/client';
 import type { prisma } from '@/lib/prisma';
 import { mintPoints } from '@/lib/economy';
 import { DEFAULT_MAX_DURATION_SEC } from '@/lib/minigame-config';
+import { istanbulDay } from '@/components/ds/page/date-range';
 
 type RootDb = typeof prisma;
 type AnyDb = Prisma.TransactionClient | RootDb;
@@ -55,9 +56,16 @@ export function outcomeOfStatus(status: string): 'won' | 'lost' | null {
   return null;
 }
 
-/** Günlük hak anahtarı (UTC "YYYY-MM-DD"; `@@unique([userId, gameType, dayKey])`). */
+/**
+ * Günlük hak anahtarı — Europe/Istanbul takvim günü "YYYY-MM-DD"
+ * (`@@unique([userId, gameType, dayKey])`). Oyun günü Türkiye'de gece 00:00'da yenilenir
+ * (oyun-ekosistemi O6: eskiden UTC → 03:00'te sıfırlanıyor, 00:00–03:00 arası "dün"
+ * sayılıyor, Günün Kelimesi'nin İstanbul kelime günüyle çakışıyordu). Geçiş anında anahtar
+ * yalnız İLERİ atlayabilir (İstanbul ≥ UTC tarihi) → aynı gün anahtarı iki kez açılamaz.
+ * Seri/gün aritmetiği anahtar dizesi üzerinde (addDaysKey) — saat dilimi bağımsız.
+ */
 export function gameDayKey(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
+  return istanbulDay(now);
 }
 
 // ─────────────────────────────── Kurallar ───────────────────────────────

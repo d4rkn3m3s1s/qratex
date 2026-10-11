@@ -11,7 +11,9 @@ import {
   prizeTable,
   rankWeekly,
 } from '@/lib/game-tournament';
-import { visibleMiniGames } from '@/lib/minigame-config';
+import { getGameDef, visibleMiniGames } from '@/lib/minigame-config';
+import * as t from '@/lib/game-tournament';
+import { LIVE_GAME_TYPES } from '@/lib/games/registry/live-game-types';
 
 const d = (iso: string) => new Date(iso);
 
@@ -92,5 +94,44 @@ describe('prizeFor — minParticipants', () => {
   it('öne çıkan olmayan oyunun ödül tablosu sıfır', () => {
     expect(prizeTable(false)).toEqual({ 1: 0, 2: 0, 3: 0 });
     expect(prizeTable(true)).toEqual({ 1: 500, 2: 300, 3: 150 });
+  });
+});
+
+describe('TOURNAMENT_ROTATION — haftaya dondurulmuş takvim (K4 regresyonu)', () => {
+
+  it('dilimler sıralı ve geçerli hafta anahtarlı', () => {
+    const keys = t.TOURNAMENT_ROTATION.map((s) => s.fromWeek);
+    expect([...keys].sort()).toEqual(keys);
+    for (const k of keys.slice(1)) expect(t.parseWeekKey(k)).not.toBeNull();
+  });
+
+  it('son (yürürlükteki) dilim yalnız canlı, varsayılan açık oyunlardan oluşur — emekli kimlik ödüllü turnuvaya giremez', () => {
+    const last = t.TOURNAMENT_ROTATION[t.TOURNAMENT_ROTATION.length - 1].candidates;
+    expect(new Set(last).size).toBe(last.length);
+    for (const g of last) {
+      expect(LIVE_GAME_TYPES.has(g)).toBe(true);
+      expect(getGameDef(g)?.optIn).toBeUndefined();
+    }
+    // Yıldız Avı (sunucu anahtarı 'pacman') artık aday.
+    expect(last).toContain('pacman');
+  });
+
+  it('geçmiş haftaların öne çıkan oyunu değişmez (talep/kapanış kaymasın)', () => {
+    // Takvim öncesi (eski visibleMiniGames sırası) ile bire bir.
+    expect(t.featuredGameForWeek('2026-W40')).toBe('trust-merge');
+    expect(t.featuredGameForWeek('2026-W41')).toBe('signal-pipe');
+  });
+
+  it('yeni dilimden itibaren hiçbir hafta emekli oyuna düşmez', () => {
+    let wk = '2026-W42';
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      const g = t.featuredGameForWeek(wk)!;
+      expect(LIVE_GAME_TYPES.has(g)).toBe(true);
+      seen.add(g);
+      const p = t.parseWeekKey(wk)!;
+      wk = p.week >= 52 ? `${p.year + 1}-W01` : `${p.year}-W${String(p.week + 1).padStart(2, '0')}`;
+    }
+    expect(seen.size).toBeGreaterThan(5);
   });
 });

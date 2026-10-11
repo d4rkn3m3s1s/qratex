@@ -29,6 +29,7 @@ import { GET as aiRetry } from '@/app/api/cron/ai-retry/route';
 import { GET as inboxQueues } from '@/app/api/cron/inbox-queues/route';
 import { GET as campaignDispatch } from '@/app/api/cron/campaign-dispatch/route';
 import { GET as economyReconcile } from '@/app/api/cron/economy-reconcile/route';
+import { GET as tournamentSettle } from '@/app/api/cron/tournament-settle/route';
 
 import { POST as analyticsEventCleanup } from '@/app/api/internal/inngest/analytics-event-cleanup/route';
 import { POST as featureFlagCleanup } from '@/app/api/internal/inngest/feature-flag-cleanup/route';
@@ -85,6 +86,8 @@ const FIRST_OF_MONTH = { kind: 'monthly', day: 1 } as const;
 export const DAILY_JOBS: CronJobDefinition[] = [
   // ── 0 · Ekonomi ─────────────────────────────────────────────
   { name: 'squad-battles', priority: 0, cadence: DAILY, timeoutMs: 25_000, run: viaCronGet(squadBattles) },
+  // Geçen haftanın öne çıkan oyun turnuvası: ilk 3'e otomatik ödül (idempotent; her gün koşar, Pazartesi kaçarsa telafi).
+  { name: 'tournament-settle', priority: 0, cadence: DAILY, timeoutMs: 15_000, run: viaCronGet(tournamentSettle) },
   // Savaş ödemelerinden SONRA: defter ↔ bakiye / bağış / kupon mutabakatı (yalnız SecurityAlert).
   { name: 'economy-reconcile', priority: 0, cadence: DAILY, timeoutMs: 20_000, run: viaCronGet(economyReconcile) },
 

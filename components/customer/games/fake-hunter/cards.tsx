@@ -6,7 +6,7 @@
  * Renk tek ayırt edici değil: SAHTE = turuncu + ✕ + yazı, GERÇEK = mavi + ✓ + yazı
  * (renk körü güvenli mavi/turuncu çifti).
  */
-import { m, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
+import { LazyMotion, domMax, m, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { BadgeCheck, CalendarDays, Camera, Check, MessageSquareText, Radar, ShieldQuestion, Star, X } from 'lucide-react';
 import type { FakeHunterMode } from './rules';
 
@@ -107,36 +107,41 @@ export function SwipeCard({
     if (info.offset.x <= -90 || info.velocity.x < -600) onVerdict('fake');
     else if (info.offset.x >= 90 || info.velocity.x > 600) onVerdict('real');
   };
+  // Sürükleme (drag) özelliği domMax'tadır; global LazyMotion yalnız domAnimation yükler →
+  // iç içe LazyMotion olmadan kart kaydırılamıyordu (yalnız düğmeler çalışıyordu). domMax bu
+  // kod-bölünmüş oyun parçasına girer, uygulamanın geri kalanına değil.
   return (
-    <m.div
-      drag={disabled ? false : 'x'}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={0.85}
-      onDragEnd={onDragEnd}
-      style={{ x, rotate, ...cardShell(accent) }}
-      className="relative mx-auto w-full max-w-[22rem] cursor-grab touch-pan-y select-none rounded-2xl border p-5 active:cursor-grabbing"
-    >
-      <Scanlines accent={accent} />
+    <LazyMotion features={domMax}>
       <m.div
-        aria-hidden
-        style={{ opacity: fakeOp, borderColor: FAKE_COLOR, color: FAKE_COLOR }}
-        className="pointer-events-none absolute left-3 top-3 -rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
+        drag={disabled ? false : 'x'}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.85}
+        onDragEnd={onDragEnd}
+        style={{ x, rotate, ...cardShell(accent) }}
+        className="relative mx-auto w-full max-w-[22rem] cursor-grab touch-pan-y select-none rounded-2xl border p-5 active:cursor-grabbing"
       >
-        ✕ SAHTE
+        <Scanlines accent={accent} />
+        <m.div
+          aria-hidden
+          style={{ opacity: fakeOp, borderColor: FAKE_COLOR, color: FAKE_COLOR }}
+          className="pointer-events-none absolute left-3 top-3 -rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
+        >
+          ✕ SAHTE
+        </m.div>
+        <m.div
+          aria-hidden
+          style={{ opacity: realOp, borderColor: REAL_COLOR, color: REAL_COLOR }}
+          className="pointer-events-none absolute right-3 top-3 rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
+        >
+          ✓ GERÇEK
+        </m.div>
+        <div className="relative mt-6 flex items-center justify-between gap-2 text-xs text-white/70">
+          <span className="truncate">{String(item.place ?? '')}</span>
+          <Stars n={Number(item.stars ?? 0)} />
+        </div>
+        <p className="relative mt-3 text-[15px] leading-relaxed text-white">“{String(item.text ?? '')}”</p>
       </m.div>
-      <m.div
-        aria-hidden
-        style={{ opacity: realOp, borderColor: REAL_COLOR, color: REAL_COLOR }}
-        className="pointer-events-none absolute right-3 top-3 rotate-12 rounded-md border-2 px-2 py-0.5 text-sm font-black tracking-widest"
-      >
-        ✓ GERÇEK
-      </m.div>
-      <div className="relative mt-6 flex items-center justify-between gap-2 text-xs text-white/70">
-        <span className="truncate">{String(item.place ?? '')}</span>
-        <Stars n={Number(item.stars ?? 0)} />
-      </div>
-      <p className="relative mt-3 text-[15px] leading-relaxed text-white">“{String(item.text ?? '')}”</p>
-    </m.div>
+    </LazyMotion>
   );
 }
 

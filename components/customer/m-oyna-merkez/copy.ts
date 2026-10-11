@@ -22,7 +22,7 @@ const tr = {
   streakLongest: (n: number) => `En uzun: ${n} gün`,
   attemptsTitle: 'Bugünkü denemeler',
   attemptsValue: (used: number, total: number) => `${used}/${total}`,
-  attemptsHint: 'Yeni denemeler 03:00’te (TSİ) açılır',
+  attemptsHint: 'Yeni denemeler gece 00:00’da (TSİ) açılır',
   resetIn: 'Yenilenmeye',
   earningsTitle: 'Bugün oyunlardan',
   earningsValue: (today: number, cap: number) => `${today} / ${cap} puan`,
@@ -34,7 +34,7 @@ const tr = {
   featuredTournamentEyebrow: 'Haftanın turnuva oyunu',
   featuredCta: 'Oyna',
   featuredAllDoneTitle: 'Bugünkü tüm sıralı denemelerini kullandın',
-  featuredAllDoneBody: 'Yeni denemeler gece 03:00’te (TSİ) açılır. Bu arada sıralamana ve görevlerine göz at.',
+  featuredAllDoneBody: 'Yeni denemeler gece 00:00’da (TSİ) açılır. Bu arada sıralamana ve görevlerine göz at.',
   rewardChip: (p: number, xp: number) => `+${p} puan · +${xp} XP`,
   thresholdChip: (t: number, max: number) => `Ödül eşiği ${t}/${max}`,
 
@@ -60,7 +60,7 @@ const tr = {
 
   // Görevler
   questsTitle: 'Günlük oyun görevleri',
-  questsDescription: 'Oyun gününe bağlı; her gece 03:00’te (TSİ) yenilenir. Ödül yalnız XP.',
+  questsDescription: 'Oyun gününe bağlı; her gece 00:00’da (TSİ) yenilenir. Ödül yalnız XP.',
   questClaim: 'Al',
   questClaiming: 'Alınıyor…',
   questClaimed: 'Alındı',
@@ -126,7 +126,7 @@ const tr = {
   tTabYou: 'Sen',
   tTabRules: 'Kurallar',
   tTabRulesBody: (min: number) =>
-    `Sıralama, haftanın öne çıkan oyunundaki en yüksek sıralı skorundur; eşitlikte o skoru önce yapan önde. En az ${min} oyuncu katılırsa ilk 3 ödül alır. Ödül, hafta kapandıktan sonra (Pazartesi 03:00 TSİ) Oyna sayfasından alınır.`,
+    `Sıralama, haftanın öne çıkan oyunundaki en yüksek sıralı skorundur; eşitlikte o skoru önce yapan önde. En az ${min} oyuncu katılırsa ilk 3 ödül alır. Hafta Pazartesi 03:00’te (TSİ) kapanır; ödül aynı gün otomatik hesabına eklenir (istersen Oyna sayfasından hemen de alabilirsin).`,
   tTabMyWeek: 'Bu hafta en iyi skorların',
   tTabMyWeekEmpty: 'Bu hafta henüz kazanılmış bir sıralı denemen yok.',
   tTabRankCol: 'Sıra',
@@ -158,7 +158,7 @@ const en: PlayHubCopy = {
   streakLongest: (n) => `Longest: ${n} days`,
   attemptsTitle: 'Today’s attempts',
   attemptsValue: (used, total) => `${used}/${total}`,
-  attemptsHint: 'New attempts open at 03:00 (TRT)',
+  attemptsHint: 'New attempts open at midnight (TRT)',
   resetIn: 'Resets in',
   earningsTitle: 'From games today',
   earningsValue: (today, cap) => `${today} / ${cap} pts`,
@@ -169,7 +169,7 @@ const en: PlayHubCopy = {
   featuredTournamentEyebrow: 'Tournament game of the week',
   featuredCta: 'Play',
   featuredAllDoneTitle: 'You used all of today’s ranked attempts',
-  featuredAllDoneBody: 'New attempts open at 03:00 (TRT). Meanwhile check your rank and quests.',
+  featuredAllDoneBody: 'New attempts open at midnight (TRT). Meanwhile check your rank and quests.',
   rewardChip: (p, xp) => `+${p} pts · +${xp} XP`,
   thresholdChip: (t, max) => `Reward at ${t}/${max}`,
 
@@ -191,7 +191,7 @@ const en: PlayHubCopy = {
   pendingDone: (points) => `Congrats! +${points} points added.`,
 
   questsTitle: 'Daily game quests',
-  questsDescription: 'Tied to the game day; resets at 03:00 (TRT). Rewards are XP only.',
+  questsDescription: 'Tied to the game day; resets at midnight (TRT). Rewards are XP only.',
   questClaim: 'Claim',
   questClaiming: 'Claiming…',
   questClaimed: 'Claimed',
@@ -252,7 +252,7 @@ const en: PlayHubCopy = {
   tTabYou: 'You',
   tTabRules: 'Rules',
   tTabRulesBody: (min) =>
-    `Ranking is your best ranked score in the featured game; ties go to whoever reached it first. With at least ${min} players the top 3 win. Prizes are claimed on the Play page after the week closes (Monday 03:00 TRT).`,
+    `Ranking is your best ranked score in the featured game; ties go to whoever reached it first. With at least ${min} players the top 3 win. The week closes Monday 03:00 (TRT); prizes are credited automatically that day (or claim right away on the Play page).`,
   tTabMyWeek: 'Your best scores this week',
   tTabMyWeekEmpty: 'No won ranked attempt this week yet.',
   tTabRankCol: 'Rank',

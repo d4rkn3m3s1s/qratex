@@ -5,11 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
 import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
+import { LEADERBOARD_WINDOW, allTimeTop } from '@/lib/game-rankings';
 
 export const dynamic = 'force-dynamic';
-
-/** Sıralamada taranan en fazla oyuncu; ötesi "100+" olarak dürüstçe bildirilir. */
-const LEADERBOARD_WINDOW = 100;
 
 /** Gizlilik: "Mehmet Yılmaz" → "Mehmet Y." */
 function shortName(name: string | null): string {
@@ -49,20 +47,12 @@ export async function GET(
     }
 
     const where = { gameType: game.gameType, status: 'completed', starsCollected: { gt: 0 } };
-    // Her kullanıcının bu oyundaki en yüksek skoru (pencere + 1: fazlası var mı).
-    const grouped = await prisma.miniGameSession.groupBy({
-      by: ['userId'],
-      where,
-      _max: { starsCollected: true },
-      orderBy: { _max: { starsCollected: 'desc' } },
-      take: LEADERBOARD_WINDOW + 1,
-    });
+    // Her kullanıcının bu oyundaki en yüksek skoru (pencere + 1: fazlası var mı). Kısa TTL'li
+    // önbellek; kazanılan sıralı deneme anahtarı düşürür (lib/game-rankings).
+    const grouped = await allTimeTop(game.gameType);
 
     const totalCapped = grouped.length > LEADERBOARD_WINDOW;
-    const ranked = grouped
-      .slice(0, LEADERBOARD_WINDOW)
-      .map((g) => ({ userId: g.userId, best: g._max.starsCollected ?? 0 }))
-      .filter((r) => r.best > 0);
+    const ranked = grouped.slice(0, LEADERBOARD_WINDOW);
 
     const top = ranked.slice(0, 10);
     const [users, hiddenIds] = await Promise.all([

@@ -3,16 +3,15 @@ import { requireAuth } from '@/lib/api-auth';
 import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
+import { gameDayKey } from '@/lib/game-session';
 
 export const dynamic = 'force-dynamic';
 
-function dayKeyFor(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+/** Gün anahtarı aritmetiği (dize üzerinde; saat dilimi bağımsız). */
 function addDays(key: string, delta: number): string {
   const d = new Date(`${key}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + delta);
-  return dayKeyFor(d);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -41,7 +40,8 @@ export async function GET() {
     });
     const days = new Set(rows.map((r) => r.dayKey));
 
-    const today = dayKeyFor(new Date());
+    // Oyun günü = Europe/Istanbul takvim günü (denemelerle aynı anahtar).
+    const today = gameDayKey(new Date());
     const yesterday = addDays(today, -1);
     const playedToday = days.has(today);
 

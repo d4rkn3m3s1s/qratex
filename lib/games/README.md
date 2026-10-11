@@ -157,12 +157,15 @@ export const FAKE_HUNTER_BANK: ContentItem<'real' | 'fake', { text: string; mode
   Sonuç sunucuya gönderilmez. Dakikada 30 tur sınırı.
 - Kayıt girdisinde `modes.practice: false` → kabuk mod seçimini göstermez (eski sözleşmeli oyunlar).
 
-## Turnuva rotasyonu tuzağı
+## Turnuva rotasyonu (dondurulmuş takvim)
 
-`featuredGameTypeForWeek(weekKey, visibleMiniGames())` aday listesinin **indeksine** göre seçer. Hafta ortasında bir
-oyunu `hidden` yapmak ya da gizliyi açmak bu haftanın öne çıkan oyununu VE geçen haftanın ödül talebini kaydırır.
-Portföy değişikliklerini (birleşen eski oyunu gizleme, yeni oyunu açma) **turnuva sahibiyle** koordine et: ya hafta
-sınırında (Pazartesi 00:00 UTC) yayınla ya da aday listesi haftaya dondurulsun (`TournamentResult` şeması bekliyor).
+Öne çıkan (ödüllü) oyun `featuredGameForWeek(weekKey)` → `lib/game-tournament.ts` `TOURNAMENT_ROTATION` takviminden
+gelir; `visibleMiniGames()`'ten **türetilmez** (eskiden emekli-ama-gizli-olmayan 8 kimlik rotasyondaydı, Yıldız Avı
+hiç aday değildi ve bir oyunu gizlemek haftanın oyununu kaydırıyordu). Portföy değişince mevcut dilimlere **dokunma**;
+sona `fromWeek`'i gelecek bir hafta olan yeni dilim ekle (`__tests__/lib/game-tournament.test.ts` son dilimin yalnız
+canlı + optIn olmayan oyunlardan oluştuğunu ve dilimlerin sıralı olduğunu denetler). Ödül: günlük `tournament-settle`
+işi geçen haftanın ilk 3'üne otomatik kredi eder; talep ucu aynı `creditTournamentPrize`'ı çağırır (`lib/game-rankings.ts`).
+Oyun günü (`gameDayKey`) Europe/Istanbul takvim günüdür; turnuva haftası ISO/UTC (Pazartesi 03:00 TSİ).
 
 ## Test deseni
 

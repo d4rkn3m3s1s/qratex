@@ -9,7 +9,7 @@
  * yalnız kısaltılmış ad ("Ayşe K.") ve skor gösterir.
  */
 import { isPrismaConnectivityError, prisma } from '@/lib/prisma';
-import { PACMAN_GAME, visibleMiniGames } from '@/lib/minigame-config';
+import { PACMAN_GAME } from '@/lib/minigame-config';
 import { getEffectiveMiniGame, getEffectiveMiniGames, type EffectiveMiniGame } from '@/lib/minigame-config-effective';
 import { gameDayKey } from '@/lib/game-session';
 import { computeAchievementStats } from '@/lib/game-achievement-stats';
@@ -23,7 +23,9 @@ import {
   prizeForRank,
   TOURNAMENT_PRIZES,
 } from '@/lib/tournament-core';
-import { TOURNAMENT_MIN_PARTICIPANTS, featuredGameTypeForWeek, prizeFor, rankWeekly } from '@/lib/game-tournament';
+import { TOURNAMENT_MIN_PARTICIPANTS, featuredGameForWeek, prizeFor } from '@/lib/game-tournament';
+import { weeklyRanking } from '@/lib/game-rankings';
+import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 import {
   buildHubCatalog,
   nextGameDayReset,
@@ -72,14 +74,6 @@ export function shortName(name: string | null): string {
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-async function weeklyRanking(gameType: string, from: Date, to: Date) {
-  const rows = await prisma.miniGameSession.findMany({
-    where: { gameType, status: 'completed', completedAt: { gte: from, lt: to } },
-    select: { userId: true, starsCollected: true, completedAt: true },
-  });
-  return rankWeekly(rows);
-}
-
 export interface TournamentRow {
   rank: number;
   name: string;
@@ -117,33 +111,36 @@ export async function loadTournament(
   effective: ReadonlyMap<string, EffectiveGameLike>,
   topN = 10
 ): Promise<TournamentSummary> {
-  const candidates = visibleMiniGames().map((g) => g.gameType);
   const weekKey = isoWeekKey(now);
-  const featuredType = featuredGameTypeForWeek(weekKey, candidates);
+  // Haftaya dondurulmuş rotasyon takvimi (yalnız canlı oyunlar; gizle/aç rotasyonu kaydırmaz).
+  const featuredType = featuredGameForWeek(weekKey);
   const weekStart = isoWeekStart(now);
 
   const prevWeekKey = previousIsoWeekKey(now);
-  const prevFeatured = featuredGameTypeForWeek(prevWeekKey, candidates);
+  const prevFeatured = featuredGameForWeek(prevWeekKey);
 
   const [ranked, prevRanked] = await Promise.all([
-    featuredType ? weeklyRanking(featuredType, weekStart, isoWeekEnd(now)) : Promise.resolve([]),
-    prevFeatured
-      ? weeklyRanking(prevFeatured, new Date(weekStart.getTime() - WEEK_MS), weekStart)
-      : Promise.resolve([]),
+    featuredType ? weeklyRanking(featuredType, weekStart, now) : Promise.resolve([]),
+    prevFeatured ? weeklyRanking(prevFeatured, new Date(weekStart.getTime() - WEEK_MS), now) : Promise.resolve([]),
   ]);
 
   const top = ranked.slice(0, topN);
-  const users = top.length
-    ? await prisma.user.findMany({ where: { id: { in: top.map((r) => r.userId) } }, select: { id: true, name: true } })
-    : [];
+  const [users, hiddenIds] = top.length
+    ? await Promise.all([
+        prisma.user.findMany({ where: { id: { in: top.map((r) => r.userId) } }, select: { id: true, name: true } }),
+        // "Liderlikte görün" kapalıysa başkalarına anonim (turnuva API'si ile aynı kural).
+        leaderboardHiddenUserIds(top.map((r) => r.userId)),
+      ])
+    : ([[], new Set<string>()] as const);
   const names = new Map(users.map((u) => [u.id, u.name]));
-  const leaderboard: TournamentRow[] = top.map((r, i) => ({
-    rank: i + 1,
-    name: shortName(names.get(r.userId) ?? null),
-    score: r.best,
-    prize: prizeForRank(i + 1),
-    isMe: r.userId === userId,
-  }));
+  const leaderboard: TournamentRow[] = top.map((r, i) => {
+    const isMe = r.userId === userId;
+    const identity = leaderboardIdentity(
+      { name: shortName(names.get(r.userId) ?? null) },
+      { hidden: hiddenIds.has(r.userId), isViewer: isMe }
+    );
+    return { rank: i + 1, name: identity.name, score: r.best, prize: prizeForRank(i + 1), isMe };
+  });
   const myIndex = ranked.findIndex((r) => r.userId === userId);
 
   let pendingReward: TournamentSummary['pendingReward'] = null;

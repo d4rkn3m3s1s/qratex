@@ -217,14 +217,16 @@ describe('sıralı mod + doğrulayıcı', () => {
     expect(mockMint).not.toHaveBeenCalled();
   });
 
-  it('doğrulayıcısız oyunda eski davranış korunur (makullük)', async () => {
+  it('doğrulayıcısı bağlanmamış canlı oyun FAIL-CLOSED: istemci beyanına puan basılmaz (K1)', async () => {
     const s = await call('start', 'frost-catcher');
     expect(s.json.content).toBeUndefined();
     expect(s.json.verification).toBe('plausibility');
     db.rows[0].serverStartedAt = new Date(Date.now() - 40_000);
-    // Eşik (rewardThreshold 45) üstünde, saniye başı tavanın (6) altında dürüst bir skor.
+    // Eşik ve hız sınırı içinde "makul" bir beyan bile doğrulayıcı olmadan kazanılamaz.
     const r = await call('complete', 'frost-catcher', { sessionId: s.json.sessionId, score: 60, durationSec: 38, attemptToken: s.json.attemptToken });
-    expect(r.json).toMatchObject({ rewarded: true, won: true, score: 60 });
+    expect(r.json).toMatchObject({ rewarded: false, won: false, score: 0 });
+    expect(r.json.reason).toMatch(/doğrulanamadı/);
+    expect(mockMint).not.toHaveBeenCalled();
   });
 
   it('geçersiz gövde 400 VALIDATION (defineRoute zarfı, eski `error` alanı korunur)', async () => {

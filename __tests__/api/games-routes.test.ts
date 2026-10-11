@@ -30,16 +30,29 @@ jest.mock('@/lib/economy', () => ({
   isEconomyError: () => false,
 }));
 
-jest.mock('@/lib/game-achievement-stats', () => ({
-  computeAchievementStats: jest.fn(async () => ({ totalWins: 0, distinctGames: 0, bestScore: 0, totalPlays: 0, streak: 0 })),
-}));
-// Bu dosya generic route'ların makullük (doğrulayıcısız) yolunu sınar. Zihin Hırsızı v2 artık
-// sunucu replay doğrulayıcısı taşıyor (ayrı test: games-practice-verify / mind-thief); burada
-// doğrulayıcısı devre dışı bırakılır ki eşik/süre/mint kuralları izole kalsın (pacman gerçek kalır).
+jest.mock('@/lib/game-achievement-stats', () => {
+  const actual = jest.requireActual('@/lib/game-achievement-stats');
+  return {
+    ...actual,
+    computeAchievementStats: jest.fn(async () => ({ totalWins: 0, distinctGames: 0, bestScore: 0, totalPlays: 0, streak: 0 })),
+    loadAchievementBasis: jest.fn(async () => ({ perGame: [], totalWins: 0, wonDays: [] })),
+  };
+});
+// Bu dosya generic route'ların ortak makullük (eşik/süre/mint) kurallarını sınar. Zihin Hırsızı v2
+// gerçek replay doğrulayıcısı taşıyor (ayrı test: games-practice-verify); burada istemci skorunu
+// kabul eden kanıtsız bir sahte doğrulayıcı bağlanır ki kurallar izole kalsın. (Doğrulayıcısı
+// HİÇ bağlanmamış canlı oyun artık fail-closed — games-practice-verify'da sınanır.)
 jest.mock('@/lib/games/registry/server', () => {
   const actual = jest.requireActual('@/lib/games/registry/server');
-  return { ...actual, getVerifierForGameType: (g: string) => (g === 'mind-thief' ? null : actual.getVerifierForGameType(g)) };
+  const { z } = jest.requireActual('zod');
+  const passThrough = { kind: 'action', requireProof: false, proofSchema: z.any(), check: () => ({ verifiedScore: 0, flags: [] }) };
+  return { ...actual, getVerifierForGameType: (g: string) => (g === 'mind-thief' ? passThrough : actual.getVerifierForGameType(g)) };
 });
+// Sıralama önbelleği: Redis yok (doğrudan DB yolu).
+jest.mock('@/lib/redis', () => ({
+  cachedJson: async (_k: string, _t: number, fn: () => Promise<unknown>) => fn(),
+  redisDel: async () => undefined,
+}));
 
 type Row = Record<string, unknown> & { id: string; status: string };
 const db = {

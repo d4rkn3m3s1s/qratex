@@ -161,8 +161,11 @@ describe('streakSummary', () => {
     for (let n = 0; n <= 10; n++) expect(streakBonusXp(n)).toBe(streakBonusFor(n));
   });
 
-  it('oyun günü UTC gece yarısı sıfırlanır (TSİ 03:00)', () => {
-    expect(nextGameDayReset(new Date('2026-10-10T22:30:00Z')).toISOString()).toBe('2026-10-11T00:00:00.000Z');
+  it('oyun günü İstanbul gece yarısı sıfırlanır (TSİ 00:00)', () => {
+    // 22:30 UTC = 01:30 TSİ (11 Ekim) → sonraki sıfırlama 12 Ekim 00:00 TSİ = 11 Ekim 21:00 UTC.
+    expect(nextGameDayReset(new Date('2026-10-10T22:30:00Z')).toISOString()).toBe('2026-10-11T21:00:00.000Z');
+    // 20:00 UTC = 23:00 TSİ (10 Ekim) → 11 Ekim 00:00 TSİ = 10 Ekim 21:00 UTC.
+    expect(nextGameDayReset(new Date('2026-10-10T20:00:00Z')).toISOString()).toBe('2026-10-10T21:00:00.000Z');
   });
 });
 

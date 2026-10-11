@@ -4,12 +4,11 @@ import { enforceRouteRateLimit } from '@/lib/http/route-rate-limit';
 import { prisma } from '@/lib/prisma';
 import { PRIVATE_NO_STORE_HEADERS, responseIfDatabaseUnavailable } from '@/lib/api-http';
 import { getEffectiveMiniGame } from '@/lib/minigame-config-effective';
-import { visibleMiniGames } from '@/lib/minigame-config';
-import { mintPoints, isEconomyError } from '@/lib/economy';
+import { isEconomyError } from '@/lib/economy';
+import { creditTournamentPrize, weeklyRanking } from '@/lib/game-rankings';
 import { leaderboardHiddenUserIds, leaderboardIdentity } from '@/lib/privacy/leaderboard-optout';
 import {
   isoWeekStart,
-  isoWeekEnd,
   isoWeekKey,
   previousIsoWeekKey,
   msUntilWeekEnd,
@@ -17,10 +16,9 @@ import {
 } from '@/lib/tournament-core';
 import {
   TOURNAMENT_MIN_PARTICIPANTS,
-  featuredGameTypeForWeek,
+  featuredGameForWeek,
   prizeFor,
   prizeTable,
-  rankWeekly,
 } from '@/lib/game-tournament';
 
 export const dynamic = 'force-dynamic';
@@ -39,20 +37,6 @@ function shortName(name: string | null): string {
   return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
 }
 
-/** Rotasyon adayları: görünür portföy (gizliler hariç), registry sırası — kod sabiti. */
-function featuredCandidates(): string[] {
-  return visibleMiniGames().map((g) => g.gameType);
-}
-
-/** Bir haftalık pencerede oyunun belirli sıralaması (kullanıcı başına en iyi skor). */
-async function weeklyRanking(gameType: string, from: Date, to: Date) {
-  const rows = await prisma.miniGameSession.findMany({
-    where: { gameType, status: 'completed', completedAt: { gte: from, lt: to } },
-    select: { userId: true, starsCollected: true, completedAt: true },
-  });
-  return rankWeekly(rows);
-}
-
 /**
  * GET /api/customer/tournament?game=<gameType>
  * Haftalık turnuva: bu haftanın canlı sıralaması (her oyun için gösterilir) + geri sayım.
@@ -69,8 +53,8 @@ export async function GET(request: NextRequest) {
     const userId = auth.session.user.id;
     const now = new Date();
 
-    const candidates = featuredCandidates();
-    const featuredNow = featuredGameTypeForWeek(isoWeekKey(now), candidates);
+    // Öne çıkan oyun haftaya DONDURULMUŞ rotasyon takviminden (lib/game-tournament TOURNAMENT_ROTATION).
+    const featuredNow = featuredGameForWeek(isoWeekKey(now));
     const requested = new URL(request.url).searchParams.get('game') || featuredNow || '';
     const game = await getEffectiveMiniGame(requested);
     if (!game) return json({ error: 'Oyun bulunamadı' }, 404);
@@ -79,7 +63,7 @@ export async function GET(request: NextRequest) {
     const featuredGame = featuredNow ? await getEffectiveMiniGame(featuredNow) : null;
 
     // Bu haftanın canlı sıralaması.
-    const ranked = await weeklyRanking(game.gameType, isoWeekStart(now), isoWeekEnd(now));
+    const ranked = await weeklyRanking(game.gameType, isoWeekStart(now), now);
     const top = ranked.slice(0, 10);
     const [users, hiddenIds] = top.length
       ? await Promise.all([
@@ -112,11 +96,11 @@ export async function GET(request: NextRequest) {
 
     // Geçen haftanın ÖNE ÇIKAN oyunundan bekleyen ödül.
     const prevWeekKey = previousIsoWeekKey(now);
-    const prevFeatured = featuredGameTypeForWeek(prevWeekKey, candidates);
+    const prevFeatured = featuredGameForWeek(prevWeekKey);
     let pendingReward: { rank: number; points: number; weekKey: string; gameType: string; gameTitle: string } | null = null;
     if (prevFeatured) {
       const prevFrom = new Date(isoWeekStart(now).getTime() - WEEK_MS);
-      const prevRanked = await weeklyRanking(prevFeatured, prevFrom, isoWeekStart(now));
+      const prevRanked = await weeklyRanking(prevFeatured, prevFrom, now);
       const idx = prevRanked.findIndex((r) => r.userId === userId);
       const points = idx >= 0 ? prizeFor(idx + 1, prevRanked.length) : 0;
       if (points > 0) {
@@ -185,12 +169,12 @@ export async function POST() {
     const now = new Date();
 
     const prevWeekKey = previousIsoWeekKey(now);
-    const gameType = featuredGameTypeForWeek(prevWeekKey, featuredCandidates());
+    const gameType = featuredGameForWeek(prevWeekKey);
     const game = gameType ? await getEffectiveMiniGame(gameType) : null;
     if (!gameType || !game) return json({ success: false, error: 'Geçen hafta ödüllü turnuva yoktu.' }, 400);
 
     const prevFrom = new Date(isoWeekStart(now).getTime() - WEEK_MS);
-    const prevRanked = await weeklyRanking(gameType, prevFrom, isoWeekStart(now));
+    const prevRanked = await weeklyRanking(gameType, prevFrom, now);
     const idx = prevRanked.findIndex((r) => r.userId === userId);
     const rank = idx + 1;
     const points = idx >= 0 ? prizeFor(rank, prevRanked.length) : 0;
@@ -207,41 +191,10 @@ export async function POST() {
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Aynı oyun+hafta claim'lerini sıraya sok (sıra-tekilliği kontrolü yarışsız olsun).
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`tournament:${gameType}:${prevWeekKey}`}))`;
-
-      const rankTaken = await tx.tournamentRewardClaim.findFirst({
-        where: { gameType, weekKey: prevWeekKey, rank },
-        select: { userId: true },
-      });
-      if (rankTaken && rankTaken.userId !== userId) return { kind: 'rank_taken' as const };
-
-      const claim = await tx.tournamentRewardClaim.createMany({
-        data: [{ userId, gameType, weekKey: prevWeekKey, rank, points }],
-        skipDuplicates: true,
-      });
-      if (claim.count === 0) return { kind: 'already' as const };
-
-      const minted = await mintPoints(tx, {
-        userId,
-        points,
-        source: 'tournament',
-        sourceId: `${gameType}:${prevWeekKey}`,
-        idempotencyKey: `tournament:${gameType}:${prevWeekKey}:${userId}`,
-        capCategory: null,
-        meta: { gameType, weekKey: prevWeekKey, rank },
-      });
-      await tx.notification.create({
-        data: {
-          userId,
-          type: 'success',
-          title: '🏆 Turnuva ödülü!',
-          message: `${game.title} haftalık turnuvasında ${rank}. oldun ve +${minted.credited} puan kazandın!`,
-        },
-      });
-      return { kind: 'credited' as const, credited: minted.credited };
-    });
+    // Tek kredi yolu (günlük 'tournament-settle' işiyle aynı): kilit + sıra tekilliği + mintPoints.
+    const result = await prisma.$transaction((tx) =>
+      creditTournamentPrize(tx, { userId, gameType, gameTitle: game.title, weekKey: prevWeekKey, rank, points })
+    );
 
     if (result.kind === 'already') return json({ success: false, error: 'Bu ödülü zaten aldın.' }, 409);
     if (result.kind === 'rank_taken') {

@@ -385,3 +385,65 @@ app/customer/games/[game]/page.tsx  ← tek dinamik sayfa, generateMetadata(effe
 19. Erişilebilirlik ve i18n geçişi (aria, renk-körü modu, `messages/*`). (O7, M)
 
 **Başarı ölçütleri:** sıralı denemede oyun başına %35–50 kazanma oranı; D7 oyun geri dönüşü; oyun kaynaklı puanın toplam puan üretimindeki payı < %25; `|clientScore − verifiedScore| > 0` oranı (hile sinyali) izlenip < %1; liderlik uçlarında p95 < 100 ms.
+
+---
+
+## Uygulama sonrası durum (Dalga 3, 2026-10-11)
+
+İki dalga boyunca oyun katmanı baştan yazıldı: `lib/games/` motoru (sabit adımlı döngü, DPR'lı canvas, giriş soyutlaması, tohumlu RNG, girdi kaydı, ses/titreşim tercihi), kayıt defteri (13 canlı oyun, 6 emekli, 8 eski kimlik yönlendirmesi), sunucu otoritesi (`lib/game-session.ts`, `lib/game-routes.ts`, `lib/games/verify`) ve tek dinamik rota (`app/customer/games/[game]`). Bu turda her bulgu ŞİMDİKİ koda karşı yeniden denetlendi; açık kalanlar ve dalgaların getirdiği regresyonlar kapatıldı.
+
+### Bulgu bulgu
+
+| # | Durum | Kanıt (şimdiki kod) |
+|---|---|---|
+| **K1** İstemci skoru/`won` | **KAPANDI** | 13 canlı oyunun 13'ünde sunucu doğrulayıcısı (`lib/games/registry/server.ts`: sınıflandırma / deterministik replay / checkpoint). `evaluateAttempt` skoru doğrulayıcıdan alır, `won` yalnız kozmetik. Emekli kimlik `LIVE_GAME_TYPES` dışında → start/pratik 403, complete kazanılamaz. **Bu tur:** canlı listede olup doğrulayıcısı bağlanmamış oyun artık eski "makullük" yoluna düşmüyor, fail-closed (`UNWIRED_VERIFICATION`, `lib/game-routes.ts`) + jest (`games-practice-verify`). |
+| **K2** Tavansız faucet | **KAPANDI** | `mintPoints` oyun kovası 600/gün · 3.000/hafta kilit altında, aynı tx'te (`lib/economy/caps.ts`). Ekonomi simülasyonu oyun/seri/görev/turnuva kaynaklarını defterden modeller. **Bu tur:** hız eşiği kategori kovalı (`lib/points-velocity.ts`): oyun puanı genel 500/24s eşiğine sayılmaz (dürüst 4×150 oyuncu artık "şüpheli" değil), oyun kovası yalnız tavanı aşarsa (24 saatte 2× günlük) şüpheli; turnuva ödülü muaf + jest. Azalan getiri bilinçli olarak yok: günlük tavan ≈ 4 ödüllü oyun, aynı işi görüyor. |
+| **K3** Günde 1 hak | **KAPANDI** | Deneme start'ta harcanır; yarım deneme 20 sn ağ-tekrarı penceresi sonrası `failed` (`resolveStartAttempt`); `failed` = oynandı (`isFinishedStatus`), hub "kaybedildi" gösterir; tamamlanmış denemeye tekrar complete 409 değil kayıtlı sonuç; Pratik modu (ödülsüz, DB'siz) tüm canlı oyunlarda. |
+| **K4** Turnuva | **KAPANDI** | Belirli sıralama `(skor desc, ilk ulaşma asc, userId)`, tek öne çıkan oyun, `TOURNAMENT_MIN_PARTICIPANTS = 5`, danışma kilidi + sıra tekilliği. **Bu tur — iki regresyon/kalıntı:** (1) aday listesi `visibleMiniGames()`'ten türetiliyordu → emekli-ama-gizli-olmayan 8 kimlik rotasyondaydı (2026-W50'den itibaren öne çıkan oyun OYNANAMAZ olacaktı: start 403), Yıldız Avı hiç aday değildi, bir oyunu gizlemek haftanın oyununu kaydırıyordu. Artık haftaya dondurulmuş `TOURNAMENT_ROTATION` takvimi (W41 ve öncesi bire bir eski sıra, W42'den yalnız 12 canlı oyun) — Oyna merkezi, turnuva API'si ve admin aynı `featuredGameForWeek` + jest (geçmiş hafta sabit, gelecek 60 hafta emekliye düşmez). (2) Ödül yalnız oyuncu "geçen hafta" ekranını açınca veriliyordu; artık günlük `tournament-settle` işi (orkestratör öncelik 0) ilk 3'e otomatik kredi eder, talep ucu aynı `creditTournamentPrize`'ı çağırır (çift ödül yok) + jest. |
+| **Y1** Admin override | **KAPANDI** | v2 host bileşene `config` = start/practice yanıtındaki etkin yapılandırma; başlık/emoji/açıklama `game.config`'ten; sayfa `generateMetadata` + `getEffectiveMiniGame`; admin PATCH etkin değerle doğrular (`lib/admin-games/server.ts`). |
+| **Y2** Bozuk oynanış | **KAPANDI** | speed-order, network-defender, data-miner, lucky-wheel, combo-tap, memory-match emekli (rotalar hub'a 308); bot-hunter/truth-vs-fake Sahte Avcısı'na, troll-slayer Çekirdek Savunması'na (çekirdek canı) birleşti. **Bu tur:** hiçbir yerden içe aktarılmayan 6 eski bileşen dosyası (~1.400 satır, hataların kendisi) silindi. |
+| **Y3** Açıklama ↔ mekanik | **KAPANDI** | "Her hafta yeni oyun" metni yok; şans oyunları emekli; açıklamalar v2 mekaniğini anlatıyor. **Bu tur:** Kar Tanesi açıklaması ("buzu eritme") birleşen Muhafız mekaniğine (kara buz −1 can, Güven Kalkanı) göre düzeltildi. |
+| **Y4** Ortak motor yok | **KAPANDI** | `lib/games/engine` (loop: gizlenince duraklar; canvas: DPR + ResizeObserver; input: `pointer: coarse` + basılı tutma tekrarı; HUD ≤10 Hz). Canvas oyunlarının tamamı motoru kullanıyor; DOM oyunları (Sahte Avcısı, Günün Kelimesi, Bilgi Yarışması) kendi `visibilitychange` duraklatmasıyla. **Bu tur — regresyon:** Sahte Avcısı "Kaydır" kartı `drag` kullanıyor ama global `LazyMotion` yalnız `domAnimation` yüklüyor → kart sürüklenemiyordu (yalnız düğmeler çalışıyordu); karta iç içe `LazyMotion features={domMax}` (yalnız oyun parçasına girer). |
+| **Y5** Pacman adası | **KAPANDI** | Yıldız Avı kayıt defterinde (`gameType: 'pacman'`), ayrı route'lar silindi, generic API + replay doğrulayıcısı; **bu tur** turnuva rotasyonuna da girdi. |
+| **Y6** Sıralama/başarım ölçeği | **KAPANDI** (şema kısmı istekte) | Başarım istatistiği tam geçmiş yerine 3 toplama sorgusu. **Bu tur:** `lib/game-rankings.ts` — tüm zamanlar liderliği (120 sn) ve haftalık turnuva sıralaması (açık hafta 60 sn, kapanmış hafta 30 dk) Redis önbellekli, kazanılan deneme ilgili anahtarları düşürür (sonuç ekranında bayat skor yok); Oyna merkezi, turnuva API'si ve kapanış işi tek `weeklyRanking`. complete başına başarım sorguları 6 → 3 ("sonra" `withFinishedAttempt` ile saf türetilir) + jest. Index'ler `SCHEMA-REQUESTS.md` → oyun-ekosistemi. |
+| **O1** Skor birimleri | **KAPANDI** | Skor başarımları tavana oranla (`bestScorePct`); `distinctGames` oynanan (kazanılan + kaybedilen) oyun. |
+| **O2** İçerik havuzu | **KAPANDI** | Sunucu etiketli havuzlar: Sahte Avcısı 122, Bilgi Yarışması 184, Günün Kelimesi 444 + sözlük; sıralı/pratik havuz ayrımı, Elo uyarlanır pratik. (Havuz kod içi içerik dosyası; DB tablosu gerekmedi.) |
+| **O3** Ses/haptik | **KAPANDI** | `engine/prefs.ts` + kabukta ses/titreşim anahtarları; azaltılmış hareket yalnız görsel efektleri kapatır. |
+| **O4** Zorluk/eşik | **KAPANDI** | Seviyeli ilerleme (Sinyal 10 seviye 5×5→7×7, Yılan/İstif/Kırıcı 5 seviye, Eşleştir-3 30 seviye), yıldız kademeleri, süre/par; admin detayında 14 günlük kazanma oranı ve skor dağılımı. |
+| **O5** Admin ölçümü | **KAPANDI** | Oyun Kontrol Odası: huni (başla → bitir → ödül), kazanma oranı, skor dağılımı, bütünlük sinyalleri (`game_attempt_flagged`), turnuva sekmesi. **Bu tur:** istemci ürün analitiği `game_start` / `game_end` / `game_locked` / `game_submit_failed` (`lib/use-mini-game.ts`, rızaya bağlı `track`). Admin turnuva panelinin "gizlemek rotasyonu kaydırır" metni takvime göre düzeltildi. |
+| **O6** UTC gün | **KAPANDI** | **Bu tur:** `gameDayKey` = Europe/Istanbul takvim günü (tek kaynak; start/complete/seri/görev/Oyna merkezi/Günün Kelimesi istatistiği); `/api/customer/games/streak` kendi UTC kopyasını bıraktı; sıfırlama geri sayımı ve tüm metinler "00:00 TSİ" + jest. Geçişte anahtar yalnız ileri atlar (aynı gün iki kez açılmaz); gece 00–03 arası oynayan için geçiş gecesi tek seferlik seri kayması olası. Turnuva haftası bilinçli olarak ISO/UTC kaldı (Pazartesi 03:00 TSİ, metinde yazıyor). |
+| **O7** Erişilebilirlik / i18n | **KISMEN** | Erişilebilirlik kapandı: her canlı oyunda `aria-*` (15–45 kullanım), `aria-live` skor/can duyurusu, renk + ikon + desen, klavye. i18n: Oyna merkezi TR/EN (`m-oyna-merkez/copy.ts`), ama oyun ekranları ve `minigame-copy` yalnız Türkçe. |
+| **D1** complete `enabled` | **KAPANDI** | complete önbelleksiz config (`getEffectiveMiniGameFresh`); kapalı oyun ödülsüz. |
+| **D2** start P2002 | **KAPANDI** | `resolveStartAttempt` yarışta yeniden okur (3 tur). |
+| **D3** Hata önbelleği | **KAPANDI** | **Bu tur:** override okuma hatası `unstable_cache` içinde yakalanmıyor (fırlatılan sonuç önbelleğe yazılmaz); yalnız o istek için varsayılana düşer — kısa DB kesintisi admin'in kapattığı oyunları 60 sn açmıyor. |
+| **D4** Hub ilk boya | **KAPANDI** | Oyna merkezi RSC + `Suspense`, etkin liste sunucuda. |
+| **D5** Tam `motion` | **KAPANDI** | Oyunlarda `m` + global LazyMotion; sürükleme gereken tek kart `domMax`'ı yerel yükler (Y4 satırı). |
+| **D6** mind-thief transform | **KAPANDI** | Zihin Hırsızı v2 2D canvas; framer transform çakışması yok. |
+| **D7** memory-match | **KAPANDI** | Oyun emekli. |
+
+### Dalgaların getirdiği, bu turda kapatılan diğer sorunlar
+
+- **Gizlilik:** Oyna merkezi turnuva sekmesi (`lib/play-hub/server.ts`) "Liderlikte görün" tercihini uygulamıyordu (turnuva API'si uyguluyordu) → kapatan oyuncunun adı diğer müşterilere görünüyordu. Aynı `leaderboardIdentity` kuralı + jest.
+- **Sahte sonuç:** `useMiniGame` complete başarısız olunca istemcinin kozmetik `won`'unu sonuç ekranında "kazandın" olarak gösteriyordu. Artık dürüst sonuç (kazanılmadı + gerekçe); ağ hatası / 429 / 5xx'te 2 kez kısa beklemeli yeniden deneme (sunucu idempotent, çift ödül yok) — kısa bağlantı kopması ödüllü denemeyi "yarım kaldı → kayıp"a çevirmiyor.
+
+### Önce / sonra
+
+| Ölçü | Önce (denetim) | Şimdi |
+|---|---|---|
+| Sunucu doğrulamalı canlı oyun | 0 / 21 | 13 / 13 (doğrulayıcısız canlı oyun fail-closed) |
+| Günlük oyun puanı | ~3.250, tavansız | 600 / gün, 3.000 / hafta (kilitli) |
+| Dürüst 4 oyun kazananın liderlikte "şüpheli" işareti | evet | hayır |
+| Ödüllü paralel turnuva | 20 (19.000 puan/hafta) | 1, emekli oyuna düşemez, ödül otomatik |
+| complete başına başarım sorgusu | 2 × tam geçmiş | 3 toplama |
+| Liderlik / turnuva okuması | her açılışta DB | Redis 60–120 sn, kazançta düşer |
+| Oyun günü sıfırlama | 03:00 TSİ (UTC) | 00:00 TSİ |
+
+### Kalan maddeler
+
+1. **i18n (O7):** oyun ekranları, `minigame-copy` ve kabuk metinleri yalnız Türkçe; Oyna merkezi iki dilli. Taşıma: oyun başına metin anahtarları `messages/*` altına.
+2. **Şema (savunma derinliği, `SCHEMA-REQUESTS.md` → oyun-ekosistemi):** `MiniGameSession [gameType, status, completedAt]` ve `[gameType, status, starsCollected]` index'leri; `TournamentRewardClaim @@unique([gameType, weekKey, rank])`; deneme satırında `flags` / `verification` sütunları (bugün bütünlük sinyali `AnalyticsEvent`'te).
+3. **Operasyon:** `tournament-settle` günlük orkestratörde; ayrı dış tetikleyici gerekmez. İlk koşuda W41 (Sinyal Bağla) kapanır.
+
+### Yeni puan: **9.5 / 10**
+
+Gerekçe: dört kritik bulgunun dördü de kök nedeninden kapandı (sunucu otoritesi tüm canlı oyunlarda, tavanlı ekonomi, harcanan deneme + pratik modu, dondurulmuş takvimli tek turnuva + otomatik kapanış); yüksek ve orta bulguların hepsi kapandı; dalgaların getirdiği regresyonlar (emekli oyuna düşecek rotasyon, sürüklenemeyen Sahte Avcısı kartı, Oyna merkezinde gizlilik açığı, sahte "kazandın" sonucu) giderildi ve jest ile korunuyor. Tam puanı engelleyen: oyun ekranlarının tek dilli olması ve sıralama ölçeğinin son halkasının (index'ler, sıra-tekilliği kısıtı) şema isteğinde beklemesi.
