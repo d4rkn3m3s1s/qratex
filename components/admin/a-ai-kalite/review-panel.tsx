@@ -28,6 +28,7 @@ import {
 } from '@/lib/ai-quality/contract';
 import { QualityApiError, errorText, fetchSample, qualityKeys, sampleAction } from './api';
 import { SAMPLE_STATUS, fmtDateTime, fmtDateTimeYear, scoreTone } from './format';
+import { AdminAiKaliteText } from './copy';
 
 const pct = (v: number | null | undefined) => (v == null ? '—' : `%${Math.round(v * 100)}`);
 
@@ -67,7 +68,7 @@ function AiValue({ field, d }: { field: VerdictField; d: SampleDetail }) {
           ))}
         </ul>
       ) : (
-        <span className="text-fg-muted">AI tema üretmemiş</span>
+        <span className="text-fg-muted"><AdminAiKaliteText k="noThemes" /></span>
       );
     }
     case 'urgency':
@@ -88,7 +89,7 @@ function AiValue({ field, d }: { field: VerdictField; d: SampleDetail }) {
           ))}
         </ul>
       ) : (
-        <span className="text-fg-muted">AI aksiyon önermemiş</span>
+        <span className="text-fg-muted"><AdminAiKaliteText k="noActions" /></span>
       );
   }
 }
@@ -194,7 +195,7 @@ function ReviewForm({ d, onDone }: { d: SampleDetail; onDone: Props['onDone'] })
         <blockquote className="whitespace-pre-wrap break-words rounded-md border border-border bg-surface-muted p-3 text-sm leading-relaxed text-fg">
           {d.feedbackDetail.text || <span className="text-fg-muted">Metin yok</span>}
         </blockquote>
-        <p className="text-xs text-fg-muted">E-posta, telefon, IBAN ve kimlik numaraları maskelenmiştir.</p>
+        <p className="text-xs text-fg-muted"><AdminAiKaliteText k="maskedNote" /></p>
       </section>
 
       <KeyValueList
@@ -212,7 +213,7 @@ function ReviewForm({ d, onDone }: { d: SampleDetail; onDone: Props['onDone'] })
 
       {canReview ? (
         <fieldset className="space-y-4" aria-describedby={`${uid}-help`}>
-          <legend className="text-sm font-semibold text-fg">Alan bazlı değerlendirme</legend>
+          <legend className="text-sm font-semibold text-fg"><AdminAiKaliteText k="fieldReview" /></legend>
           <p id={`${uid}-help`} className="text-xs text-fg-muted">
             Her alan için AI çıktısını yorumla karşılaştırın. Skor kararlardan hesaplanır: Doğru 1, Kısmen 0,5, Yanlış 0; "Değerlendirilemez" hesaba katılmaz.
           </p>
@@ -293,9 +294,9 @@ function ReviewForm({ d, onDone }: { d: SampleDetail; onDone: Props['onDone'] })
       </div>
       {voidOpen ? (
         <div className="space-y-2 rounded-md border border-danger/40 p-3">
-          <Label htmlFor={`${uid}-void`}>Neden geçersiz? (spam, boş metin, yanlış dil…)</Label>
+          <Label htmlFor={`${uid}-void`}><AdminAiKaliteText k="voidReason" /></Label>
           <Input id={`${uid}-void`} value={voidReason} maxLength={300} onChange={(e) => setVoidReason(e.target.value)} className="min-h-11" />
-          <p className="text-xs text-fg-muted">Geçersiz örnek metriğe girmez; skoru varsa silinmez, denetim kaydında kalır.</p>
+          <p className="text-xs text-fg-muted"><AdminAiKaliteText k="voidNote" /></p>
           <Button
             variant="destructive"
             className="min-h-11"
@@ -309,14 +310,14 @@ function ReviewForm({ d, onDone }: { d: SampleDetail; onDone: Props['onDone'] })
 
       {d.feedbackDetail.rawAnalysis ? (
         <details className="rounded-md border border-border">
-          <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-sm font-medium text-fg">Ham AI çıktısı (geliştirici görünümü)</summary>
+          <summary className="min-h-11 cursor-pointer px-3 py-2.5 text-sm font-medium text-fg"><AdminAiKaliteText k="rawOutput" /></summary>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words border-t border-border p-3 font-mono text-xs text-fg-muted">{d.feedbackDetail.rawAnalysis}</pre>
         </details>
       ) : null}
 
       {d.history.length ? (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-fg">Geçmiş</h3>
+          <h3 className="text-sm font-semibold text-fg"><AdminAiKaliteText k="history" /></h3>
           <Timeline
             events={d.history.map((h) => ({
               id: h.id,

@@ -14,6 +14,7 @@ import { fadeIn, useMotionPolicy } from '@/lib/motion';
 import { chatRoleLabel, type ChatDetail } from '@/lib/ai-quality/contract';
 import { QualityApiError, errorText, fetchChat, qualityKeys, revealChat } from './api';
 import { CHAT_OUTCOME, fmtDateTimeYear, fmtMs } from './format';
+import { AdminAiKaliteText } from './copy';
 
 type Props = { id: string; onPivot: (p: { user?: string | null; fp?: string | null }) => void };
 
@@ -105,9 +106,9 @@ function ChatBody({ d, onPivot }: { d: ChatDetail; onPivot: Props['onPivot'] }) 
 
       {revealOpen && !raw ? (
         <div className="space-y-2 rounded-md border border-warning/40 p-3">
-          <Label htmlFor={`${uid}-reason`}>Gerekçe (ör. kötüye kullanım incelemesi, KVKK talebi no)</Label>
+          <Label htmlFor={`${uid}-reason`}><AdminAiKaliteText k="revealReason" /></Label>
           <Input id={`${uid}-reason`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} className="min-h-11" />
-          <p className="text-xs text-fg-muted">Maskesiz metin yalnız bu kayıt için gösterilir; kim, ne zaman, hangi gerekçeyle baktı denetim kaydına yazılır.</p>
+          <p className="text-xs text-fg-muted"><AdminAiKaliteText k="revealNote" /></p>
           <Button className="min-h-11" disabled={reason.trim().length < 5 || busy} onClick={reveal}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             Maskesiz göster
@@ -132,7 +133,7 @@ function ChatBody({ d, onPivot }: { d: ChatDetail; onPivot: Props['onPivot'] }) 
                 </p>
                 <div className="flex justify-end">
                   <div className="max-w-[85%] rounded-lg rounded-br-sm bg-brand-subtle px-3 py-2 text-sm text-fg">
-                    <span className="sr-only">Kullanıcı: </span>
+                    <span className="sr-only"><AdminAiKaliteText k="userPrefix" /> </span>
                     <User className="mr-1 inline h-3.5 w-3.5 align-[-2px] text-fg-muted" aria-hidden />
                     <span className="whitespace-pre-wrap break-words">{userText}</span>
                   </div>

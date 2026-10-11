@@ -39,6 +39,7 @@ import { errorText, fetchSamples, qualityKeys, runSampling } from './api';
 import { SAMPLE_STATUS, fmtDateTime, fmtDay, fmtNumber, fmtRelative, scoreTone } from './format';
 import { ReviewPanel } from './review-panel';
 import type { TrendRow } from './quality-trend-chart';
+import { AdminAiKaliteText } from './copy';
 
 const QualityTrendChart = lazyChart(() => import('./quality-trend-chart'));
 
@@ -142,7 +143,7 @@ export function ReviewTab({ metrics, initialList }: Props) {
           <span className="inline-flex items-center gap-1 tabular-nums">
             <Star className="h-3.5 w-3.5 fill-warning text-warning" aria-hidden />
             {row.original.feedback.rating}
-            <span className="sr-only"> / 5 yıldız</span>
+            <span className="sr-only"> <AdminAiKaliteText k="outOfFive" /></span>
           </span>
         ),
       },
@@ -285,7 +286,7 @@ export function ReviewTab({ metrics, initialList }: Props) {
           {m ? (
             <div className="space-y-4 text-sm">
               <table className="w-full">
-                <caption className="sr-only">Model bazında doğruluk</caption>
+                <caption className="sr-only"><AdminAiKaliteText k="accuracyByModel" /></caption>
                 <thead>
                   <tr className="text-left text-xs text-fg-muted">
                     <th scope="col" className="pb-1 font-medium">Model</th>
@@ -310,11 +311,11 @@ export function ReviewTab({ metrics, initialList }: Props) {
                 </tbody>
               </table>
               <table className="w-full">
-                <caption className="sr-only">Alan bazında doğruluk</caption>
+                <caption className="sr-only"><AdminAiKaliteText k="accuracyByField" /></caption>
                 <thead>
                   <tr className="text-left text-xs text-fg-muted">
                     <th scope="col" className="pb-1 font-medium">Alan</th>
-                    <th scope="col" className="pb-1 text-right font-medium">Doğruluk</th>
+                    <th scope="col" className="pb-1 text-right font-medium"><AdminAiKaliteText k="accuracy" /></th>
                     <th scope="col" className="pb-1 text-right font-medium">n</th>
                   </tr>
                 </thead>

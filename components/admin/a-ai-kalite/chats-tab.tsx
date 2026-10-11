@@ -36,6 +36,7 @@ import {
 import { chatExportUrl, errorText, fetchChatStats, fetchChats, qualityKeys } from './api';
 import { CHAT_OUTCOME, fmtDateTime, fmtDay, fmtMs, fmtNumber, fmtRelative } from './format';
 import { ChatPanel } from './chat-panel';
+import { AdminAiKaliteText } from './copy';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -145,7 +146,7 @@ export function ChatsTab({ initialStats, initialList }: Props) {
           return (
             <span className={slow ? 'font-medium tabular-nums text-warning' : 'tabular-nums'}>
               {row.original.modelCalled ? fmtMs(ms) : '—'}
-              {slow ? <span className="sr-only"> (yavaş)</span> : null}
+              {slow ? <span className="sr-only"> <AdminAiKaliteText k="slow" /></span> : null}
             </span>
           );
         },
@@ -211,8 +212,8 @@ export function ChatsTab({ initialStats, initialList }: Props) {
               {s?.retention.days ? ' — süresi dolan kayıtlar günlük temizlik işiyle otomatik silinir; KVKK silme talebinde kişinin tüm sohbetleri silinir, erişim talebinde dışa aktarılır.' : null}
               {s?.retention.oldestAt ? <span className="text-fg-muted"> En eski kayıt: {fmtDateTime(s.retention.oldestAt)}.</span> : null}
             </li>
-            <li>E-posta, telefon, IBAN, kart ve kimlik numaraları listede, detayda ve dışa aktarmada maskelenir.</li>
-            <li>Her detay açılışı, maskesiz görüntüleme (gerekçeli) ve dışa aktarma denetim kaydına yazılır.</li>
+            <li><AdminAiKaliteText k="maskList" /></li>
+            <li><AdminAiKaliteText k="auditList" /></li>
             {s ? (
               <li className="text-fg-muted">
                 Dakikalık kota: müşteri {s.limits.customer ?? '—'}, ziyaretçi {s.limits.anonymous ?? '—'}, bayi/personel {s.limits.dealer_staff ?? '—'}, yönetici {s.limits.admin ?? '—'} istek.
@@ -246,10 +247,10 @@ export function ChatsTab({ initialStats, initialList }: Props) {
       {s && s.series.some((x) => x.total > 0) ? (
         <SectionCard title="Günlük hacim" description="Toplam tur ve sorunlu yanıt (hata, bakım, güvenlik engeli), İstanbul günü">
           <table className="w-full text-sm">
-            <caption className="sr-only">Günlük sohbet hacmi</caption>
+            <caption className="sr-only"><AdminAiKaliteText k="dailyVolume" /></caption>
             <thead>
               <tr className="text-left text-xs text-fg-muted">
-                <th scope="col" className="pb-1 font-medium">Gün</th>
+                <th scope="col" className="pb-1 font-medium"><AdminAiKaliteText k="day" /></th>
                 <th scope="col" className="pb-1 font-medium">Hacim</th>
                 <th scope="col" className="pb-1 text-right font-medium">Tur</th>
                 <th scope="col" className="pb-1 text-right font-medium">Sorunlu</th>
