@@ -184,7 +184,7 @@ const nextConfig = {
       ],
     },
   },
-  turbopack: {},
+  turbopack: { root: __dirname },
   webpack: (config, { isServer }) => {
     config.ignoreWarnings = [
       ...(config.ignoreWarnings || []),
