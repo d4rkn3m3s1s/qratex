@@ -7,6 +7,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
     if (Array.isArray(v)) v.forEach((x) => q.append(k, x));
     else if (v !== undefined) q.set(k, v);
   }
+  if (!q.has('mod')) q.set('mod', 'muhafiz');
   const qs = q.toString();
   permanentRedirect(`/customer/games/frost-catcher${qs ? `?${qs}` : ''}`);
 }

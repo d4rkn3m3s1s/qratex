@@ -62,6 +62,8 @@ export interface GameShellProps {
   accent: string;
   phase: MiniGamePhase;
   alreadyPlayed: boolean;
+  /** Bugünkü sıralı hak kullanıldı mı (başlamadan önce bilinen ipucu). */
+  rankedUsedToday?: boolean;
   result: MiniGameResult | null;
   rewardThreshold?: number;
   onStart: () => void;
@@ -95,6 +97,7 @@ export function GameShell({
   accent,
   phase,
   alreadyPlayed,
+  rankedUsedToday,
   result,
   rewardThreshold,
   onStart,
@@ -323,7 +326,7 @@ export function GameShell({
               <p className="text-sm leading-relaxed text-white/75">{description}</p>
 
               {canPractice && mode && (
-                <ModeSwitch mode={mode} onChange={onModeChange!} accent={accent} rankedUsed={alreadyPlayed} />
+                <ModeSwitch mode={mode} onChange={onModeChange!} accent={accent} rankedUsed={alreadyPlayed || !!rankedUsedToday} />
               )}
 
               <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-white/70">

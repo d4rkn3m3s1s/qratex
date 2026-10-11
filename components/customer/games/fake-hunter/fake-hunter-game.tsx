@@ -11,6 +11,7 @@
  * Klavye: ← / A sahte · → / D gerçek · 1–4 cümle seç · Enter devam · Esc duraklat.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, m, useAnimationControls } from 'framer-motion';
 import { CheckCircle2, Flame, Gauge, Share2, Sparkles, Timer, XCircle } from 'lucide-react';
 import type { GameComponentProps } from '@/lib/games/registry/types';
@@ -75,12 +76,17 @@ export function FakeHunterGame({ mode, config, content, answerKey, paused, onPau
   const all = useMemo(() => toItems(content), [content]);
 
   // ── Kuyruk: sıralıda sunucu sırası; pratikte mod başına havuz + Elo seçimi ──
+  // `?mod=dosya|kelime|profil` (eski oyun yönlendirmeleri): pratikte o aşamadan başlar.
+  // Sıralıda sıra sunucunundur; ipucu yok sayılır.
+  const modHint = useSearchParams()?.get('mod');
   const plan = useMemo(() => {
     if (ranked) return { total: all.length, stages: MODE_ORDER.filter((md) => all.some((i) => i.mode === md)) };
-    const stages = MODE_ORDER.filter((md) => all.some((i) => i.mode === md));
+    const startAt = MODE_ORDER.indexOf(modHint as FakeHunterMode);
+    const order = startAt > 0 ? [...MODE_ORDER.slice(startAt), ...MODE_ORDER.slice(0, startAt)] : MODE_ORDER;
+    const stages = order.filter((md) => all.some((i) => i.mode === md));
     const total = stages.reduce((n, md) => n + Math.min(RANKED_PER_MODE, all.filter((i) => i.mode === md).length), 0);
     return { total, stages };
-  }, [all, ranked]);
+  }, [all, ranked, modHint]);
 
   const localRef = useRef(readLocal());
   const [elo, setElo] = useState(localRef.current.elo);

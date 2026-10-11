@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { moments } from '@/lib/moments/client';
 import { primeAudio } from '@/lib/game-sounds';
@@ -110,6 +110,9 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
   const [mode, setModeState] = useState<MiniGameMode>(options.initialMode ?? 'ranked');
   const [config, setConfig] = useState<MiniGameConfig | null>(null);
   const [alreadyPlayed, setAlreadyPlayed] = useState(false);
+  // Başlamadan önce mod seçicinin "Günde 1 · ödüllü" yerine doğru durumu göstermesi için
+  // bugünkü sıralı hakkın kullanılıp kullanılmadığı (yalnız ipucu; asıl kural /start'ta).
+  const [rankedUsedToday, setRankedUsedToday] = useState(false);
   const [playedOutcome, setPlayedOutcome] = useState<'won' | 'lost' | null>(null);
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
   const [seed, setSeed] = useState<string | null>(null);
@@ -123,6 +126,17 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
   const phaseRef = useRef<MiniGamePhase>('idle');
   // Çift finish (ör. süre bitişi + son dokunuş aynı karede) tek gönderime iner.
   const finishingRef = useRef(false);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch('/api/customer/games/status', { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j && Array.isArray(j.playedToday) && j.playedToday.includes(gameType)) setRankedUsedToday(true);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [gameType]);
 
   const go = useCallback((p: MiniGamePhase) => {
     phaseRef.current = p;
@@ -347,6 +361,7 @@ export function useMiniGame(gameType: string, options: UseMiniGameOptions = {}) 
     phase,
     config,
     alreadyPlayed,
+    rankedUsedToday: rankedUsedToday || alreadyPlayed,
     result,
     start,
     finish,

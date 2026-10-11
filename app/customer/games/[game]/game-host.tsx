@@ -104,6 +104,7 @@ function V2Host({ entry, Game, initialMode }: { entry: GameEntry; Game: V2GameCo
       accent={accent}
       phase={game.phase}
       alreadyPlayed={game.alreadyPlayed}
+      rankedUsedToday={game.rankedUsedToday}
       result={game.result}
       rewardThreshold={game.config?.rewardThreshold}
       onStart={() => {
