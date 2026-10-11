@@ -83,13 +83,6 @@
       "file": "app/api/admin/analytics/cleanup-events/route.ts"
     },
     {
-      "path": "/api/admin/analytics",
-      "methods": [
-        "GET"
-      ],
-      "file": "app/api/admin/analytics/route.ts"
-    },
-    {
       "path": "/api/admin/api-catalog",
       "methods": [
         "GET"

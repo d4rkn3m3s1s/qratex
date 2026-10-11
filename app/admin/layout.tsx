@@ -9,6 +9,7 @@ import { WebVitalsReporter } from '@/components/telemetry/web-vitals-reporter';
 import { getSeoSettings } from '@/lib/seo-settings';
 import { getServerLocale } from '@/lib/server-locale';
 import { t } from '@/i18n/request';
+import { Admin2faBanner } from '@/components/admin/admin-2fa-banner';
 
 export async function generateMetadata(): Promise<Metadata> {
   const [seo, locale] = await Promise.all([getSeoSettings(), getServerLocale()]);
@@ -36,6 +37,7 @@ export default async function AdminLayout({
       <Sidebar role="ADMIN" siteName={seo.siteName} />
       <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-4 sm:pr-4 lg:pl-6 lg:pr-6">
         <DashboardHeader showSearch={true} />
+        <Admin2faBanner />
         <main
           id="dashboard-main"
           tabIndex={-1}
