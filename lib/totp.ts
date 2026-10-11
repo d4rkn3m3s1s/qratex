@@ -55,11 +55,32 @@ export function openTotpSecret(stored: string | null | undefined): string | null
   }
 }
 
+/** RFC 4648 Base32 çözümü (büyük/küçük harf, boşluk ve '=' dolgusu tolere edilir). */
+export function base32Decode(input: string): Buffer {
+  const clean = input.toUpperCase().replace(/[\s=]/g, '');
+  let bits = 0;
+  let value = 0;
+  const out: number[] = [];
+  for (const ch of clean) {
+    const idx = BASE32_CHARS.indexOf(ch);
+    if (idx === -1) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
 function hotp(secret: string, counter: number): string {
   const buf = Buffer.alloc(8);
   buf.writeUInt32BE(0, 0);
   buf.writeUInt32BE(counter, 4);
-  const hmac = crypto.createHmac('sha1', Buffer.from(secret, 'ascii'));
+  // RFC 6238/4226: anahtar Base32 ÇÖZÜLMÜŞ baytlardır. Yetkilendirici uygulamalar otpauth
+  // URI'deki secret'ı Base32 çözer; ASCII baytlarıyla HMAC almak kodları hiç eşleştirmiyordu.
+  const hmac = crypto.createHmac('sha1', base32Decode(secret));
   hmac.update(buf);
   const hash = hmac.digest();
   const offset = hash[hash.length - 1] & 0x0f;
