@@ -68,6 +68,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
         ? lookup.status === 'ok' ? `Share your experience at ${lookup.venue.businessName} in under a minute.` : 'Share your experience in under a minute.'
         : lookup.status === 'ok' ? `${lookup.venue.businessName} deneyimini bir dakikadan kısa sürede paylaş.` : 'Deneyimini bir dakikadan kısa sürede paylaş.',
     robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
+    // Kök yerleşimin canonical '/' değeri miras kalırsa sayfa kendini ana sayfanın kopyası ilan eder
+    // (Lighthouse canonical denetimi düşer). Segment/UTM kopyaları tek mekân URL'sine toplanır.
+    alternates: { canonical: `/feedback/${encodeURIComponent(lookup.status === 'ok' ? lookup.venue.code : code)}` },
   };
 }
 

@@ -7,7 +7,10 @@ import { segmentLayoutMetadata } from '@/lib/segment-layout-metadata';
  * Diğer /auth/* (şifre sıfırlama, doğrulama) robots.txt'te kapalı kalır.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  return { ...(await segmentLayoutMetadata('layoutMetadata.authLogin', 'layoutMetadata.authLoginDescription')), alternates: { canonical: '/auth/login' } };
+  return { ...(await segmentLayoutMetadata('layoutMetadata.authLogin', 'layoutMetadata.authLoginDescription')), alternates: { canonical: '/auth/login' },
+    // (auth) grup yerleşimi noindex verir; metadata sığ birleştiği için açıkça ezilmezse miras kalır.
+    robots: { index: true, follow: true },
+  };
 }
 
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
