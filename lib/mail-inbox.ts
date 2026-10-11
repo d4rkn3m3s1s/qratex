@@ -1,14 +1,27 @@
 /**
- * GELEN KUTUSU (IMAP) — qratex.co@gmail.com gelen kutusunu çeker, parse eder, DB'ye depolar.
+ * GELEN KUTUSU (IMAP) — şirket Gmail gelen kutusunu çeker, parse eder, DB'ye depolar.
  * Stajyer/görev alıcılarından gelen mailleri otomatik EŞLEŞTİRİR (isFromIntern + matched*).
  *
- * Serverless uyumlu: her sync'te bağlan → son N maili çek → kapat (kalıcı bağlantı yok).
+ * UID ARTIMLI senkron (denetim Bulgu 5): her koşu `Settings[inbox_sync_state]` içindeki
+ * `{ uidValidity, lastUid }` imlecinden devam eder → iki senkron arasında ne kadar mail gelirse
+ * gelsin hiçbiri atlanmaz. Koşu başına parti sınırı + süre bütçesi vardır; kalan olursa
+ * `hasMore: true` döner ve imleç yalnız İŞLENEN son UID'e ilerler (bir sonraki koşu devam eder).
+ * Kaydedilemeyen mail imleci DURDURUR (sessizce atlanmaz, hata durumda görünür).
+ *
+ * Serverless uyumlu: her senkronda bağlan → çek → kapat (kalıcı bağlantı yok).
  * Kimlik: IMAP_* env varsa onu, yoksa SMTP_USER/SMTP_PASS'ı kullanır (Gmail'de aynı app-password).
  */
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getInternTaskEmails } from '@/lib/intern-task-emails';
+import { loadInternTemplatesState } from '@/lib/intern-task-emails';
+import { INCOMING_MAILBOXES, MAILBOX_INBOX, type InboxSyncState } from '@/lib/mail-center/inbox-contract';
+import { uploadDisposition } from '@/lib/mail-center/mail-html';
+
+export const INBOX_SYNC_STATE_KEY = 'inbox_sync_state';
+/** İlk kurulumda (imleç ve DB kaydı yokken) geriye dönük çekilecek en fazla mail. */
+const INITIAL_BACKFILL = 200;
 
 function envVal(...keys: string[]): string {
   for (const k of keys) {
@@ -29,6 +42,12 @@ export function isInboxConfigured(): boolean {
   return Boolean(user && pass);
 }
 
+/** Gelen kutusu hesabı (panel başlığında gösterilir; sabit kodlu adres yerine). */
+export function inboxAccount(): string | null {
+  const user = envVal('IMAP_USER', 'SMTP_USER');
+  return user ? user.toLowerCase() : null;
+}
+
 function imapConfig() {
   const user = envVal('IMAP_USER', 'SMTP_USER');
   const pass = envVal('IMAP_PASS', 'IMAP_PASSWORD', 'SMTP_PASS', 'SMTP_PASSWORD').replace(/\s+/g, '');
@@ -37,149 +56,295 @@ function imapConfig() {
   return { host, port, secure: true, auth: { user, pass }, logger: false as const };
 }
 
-export type InboxSyncResult = { ok: true; fetched: number; stored: number; matched: number } | { ok: false; error: string };
+export const EMPTY_SYNC_STATE: InboxSyncState = {
+  lastRunAt: null,
+  ok: null,
+  source: null,
+  error: null,
+  fetched: 0,
+  stored: 0,
+  matched: 0,
+  hasMore: false,
+  lastUid: null,
+  uidValidity: null,
+};
+
+export function parseSyncState(raw: unknown): InboxSyncState {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...EMPTY_SYNC_STATE };
+  const o = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    lastRunAt: typeof o.lastRunAt === 'string' ? o.lastRunAt : null,
+    ok: typeof o.ok === 'boolean' ? o.ok : null,
+    source: o.source === 'manual' || o.source === 'cron' ? o.source : null,
+    error: typeof o.error === 'string' ? o.error : null,
+    fetched: num(o.fetched),
+    stored: num(o.stored),
+    matched: num(o.matched),
+    hasMore: o.hasMore === true,
+    lastUid: typeof o.lastUid === 'number' && Number.isFinite(o.lastUid) ? o.lastUid : null,
+    uidValidity: typeof o.uidValidity === 'string' ? o.uidValidity : null,
+  };
+}
+
+/** DB okuma hatası YUTULMAZ (çağıran 503'e çevirir). */
+export async function readSyncState(): Promise<InboxSyncState> {
+  const row = await prisma.settings.findUnique({ where: { key: INBOX_SYNC_STATE_KEY }, select: { value: true } });
+  return parseSyncState(row?.value);
+}
+
+async function writeSyncState(state: InboxSyncState): Promise<void> {
+  const value = state as unknown as Prisma.InputJsonValue;
+  await prisma.settings.upsert({
+    where: { key: INBOX_SYNC_STATE_KEY },
+    update: { value, category: 'email' },
+    create: { key: INBOX_SYNC_STATE_KEY, value, category: 'email' },
+  });
+}
+
+/** Bilinen IMAP hatalarını Türkçe, eyleme dönük açıklamaya çevirir (Bulgu 16). */
+export function describeImapError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '');
+  const code = (e as { authenticationFailed?: boolean; code?: string; responseText?: string }) ?? {};
+  if (code.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|auth/i.test(raw)) {
+    return 'IMAP girişi reddedildi. Gmail uygulama şifresini (IMAP_PASS / SMTP_PASS) yenileyin.';
+  }
+  if (/ETIMEDOUT|timeout|timed out/i.test(raw)) return 'IMAP sunucusuna bağlanırken zaman aşımı oldu. Birazdan tekrar deneyin.';
+  if (/ENOTFOUND|ECONNREFUSED|EAI_AGAIN/i.test(raw)) return 'IMAP sunucusuna ulaşılamadı (IMAP_HOST / ağ).';
+  return `IMAP hatası: ${raw.slice(0, 200) || 'bilinmeyen hata'}`;
+}
+
+export type InboxSyncResult =
+  | { ok: true; fetched: number; stored: number; matched: number; hasMore: boolean }
+  | { ok: false; error: string };
+
+export type SyncOptions = {
+  source?: 'manual' | 'cron';
+  /** Koşu başına en fazla işlenecek YENİ mail. */
+  maxMessages?: number;
+  /** Süre bütçesi (ms) — aşılırsa kalan mailler sonraki koşuya kalır. */
+  budgetMs?: number;
+};
+
+type AttachmentRecord = { filename: string; contentType: string; size: number; url: string | null };
 
 /**
- * Gelen kutusunu senkronize eder: son `limit` maili çeker, yenileri DB'ye ekler (idempotent:
- * mailbox+uid unique). Her mail için stajyer eşleştirmesi yapılır. Varsayılan son 40 mail.
+ * Gelen kutusunu UID artımlı senkronize eder. Eski çağrılar için `syncInbox(40)` biçimi de
+ * desteklenir (sayı = koşu başına parti sınırı).
  */
-export async function syncInbox(limit = 40): Promise<InboxSyncResult> {
+export async function syncInbox(arg: number | SyncOptions = {}): Promise<InboxSyncResult> {
+  const opts: SyncOptions = typeof arg === 'number' ? { maxMessages: arg } : arg;
+  const source = opts.source ?? 'cron';
+  const maxMessages = Math.min(200, Math.max(5, opts.maxMessages ?? 60));
+  const deadline = Date.now() + Math.max(5_000, opts.budgetMs ?? 45_000);
+
   if (!isInboxConfigured()) return { ok: false, error: 'IMAP yapılandırması eksik (IMAP_USER/PASS veya SMTP_USER/PASS).' };
 
-  // Stajyer/görev alıcı adresleri → {name, dept, templateId} eşleştirme haritası.
-  const templates = await getInternTaskEmails().catch(() => []);
+  const prev = await readSyncState();
+
+  // Stajyer/görev alıcı adresleri → eşleştirme haritası (arşivlenmiş şablonlar da eşleşir: geçmiş yanıtlar).
   const internMap = new Map<string, { name: string; dept: string; templateId: string }>();
-  for (const t of templates) {
-    for (const e of t.email.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
-      if (!internMap.has(e)) internMap.set(e, { name: t.recipientName, dept: t.department, templateId: t.id });
+  try {
+    const { templates } = await loadInternTemplatesState();
+    for (const t of templates) {
+      for (const e of t.email.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) {
+        if (!internMap.has(e)) internMap.set(e, { name: t.recipientName, dept: t.department, templateId: t.id });
+      }
     }
+  } catch (e) {
+    console.warn('[inbox] şablonlar okunamadı, stajyer eşleştirmesi bu koşuda atlanıyor:', e instanceof Error ? e.message : e);
   }
 
   const client = new ImapFlow(imapConfig());
-  let fetched = 0, stored = 0, matched = 0;
+  let fetched = 0;
+  let stored = 0;
+  let matched = 0;
+  let hasMore = false;
+  let storeError: string | null = null;
+  let nextState: InboxSyncState = { ...prev };
+
   try {
     await client.connect();
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const status = await client.status('INBOX', { messages: true });
-      const total = status.messages ?? 0;
-      if (total === 0) return { ok: true, fetched: 0, stored: 0, matched: 0 };
-      // Son `limit` mail aralığı (sequence).
-      const start = Math.max(1, total - limit + 1);
-      const range = `${start}:*`;
+      const mb = client.mailbox && typeof client.mailbox === 'object' ? client.mailbox : null;
+      const uidValidity = mb?.uidValidity != null ? String(mb.uidValidity) : null;
+      const validityChanged = Boolean(prev.uidValidity && uidValidity && prev.uidValidity !== uidValidity);
 
-      for await (const msg of client.fetch(range, { uid: true, envelope: true, source: true })) {
-        fetched++;
-        const uid = msg.uid;
-        // Zaten var mı? (idempotent). attachments'ı da al: eski mailler (ek özelliği
-        // öncesi) attachments=null'dır → source zaten elde, ekleri BACKFILL edelim.
-        const exists = await prisma.inboxMessage.findUnique({ where: { mailbox_uid: { mailbox: 'INBOX', uid } }, select: { id: true, attachments: true } }).catch(() => null);
-        const needsAttachmentBackfill = !!exists && exists.attachments == null;
-        if (exists && !needsAttachmentBackfill) continue;
-
-        // Parse (gövde + başlıklar).
-        const parsed = msg.source ? await simpleParser(msg.source).catch(() => null) : null;
-        const env = msg.envelope;
-        const fromAddr = env?.from?.[0];
-        const fromEmail = (fromAddr?.address ?? parsed?.from?.value?.[0]?.address ?? '').toLowerCase();
-        const fromName = fromAddr?.name ?? parsed?.from?.value?.[0]?.name ?? '';
-        const toEmail = (env?.to?.[0]?.address ?? '').toLowerCase();
-        const subject = env?.subject ?? parsed?.subject ?? '';
-        // Tarihi GÜVENE al: imapflow bozuk Date başlığında ham string döndürebilir →
-        // new Date(...) Invalid Date → Prisma throw → mail sessizce düşerdi. Geçersizse now.
-        const rawDate = env?.date ?? parsed?.date ?? new Date();
-        const parsedDate = new Date(rawDate as string | Date);
-        const sentAt = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
-        const bodyText = parsed?.text ?? '';
-        const bodyHtml = typeof parsed?.html === 'string' ? parsed.html : null;
-        const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 200);
-
-        // ── THREAD (konuşma zinciri): In-Reply-To + References başlıkları.
-        const ownMessageId = env?.messageId ?? parsed?.messageId ?? null;
-        const inReplyTo = parsed?.inReplyTo ?? null;
-        // mailparser references: string | string[] | undefined → boşlukla ayrılmış tek string.
-        const refsRaw = parsed?.references;
-        const references = Array.isArray(refsRaw) ? refsRaw.join(' ') : (refsRaw ?? null);
-        // Konuşma kökü: References'ın ilki (en eski) > inReplyTo > kendi messageId (yeni thread).
-        const firstRef = references ? references.trim().split(/\s+/)[0] : null;
-        const threadRoot = firstRef || inReplyTo || ownMessageId || null;
-
-        // ── BOUNCE (teslim edilemedi): mailer-daemon/postmaster gönderen VEYA tipik konu.
-        const isBounce =
-          /mailer-daemon|postmaster|mail delivery/i.test(fromEmail) ||
-          /undeliver|delivery status notification|mail delivery (failed|subsystem)|returned mail|failure notice|delivery has failed/i.test(subject);
-
-        // ── EKLER: gerçek ekleri (inline resim değil) çıkar + R2'ye yükle. R2 yoksa
-        //    metadata url'siz saklanır (en azından "şu dosya ekli" görünür). 15MB üstü atlanır.
-        let attachmentsMeta: { filename: string; contentType: string; size: number; url: string | null }[] | null = null;
-        const rawAtts = Array.isArray(parsed?.attachments) ? parsed!.attachments : [];
-        const realAtts = rawAtts.filter((a) => a.contentDisposition !== 'inline' && a.filename);
-        if (realAtts.length > 0) {
-          const { isR2Configured, uploadToR2 } = await import('@/lib/r2-storage');
-          const r2ok = isR2Configured();
-          const metas: { filename: string; contentType: string; size: number; url: string | null }[] = [];
-          for (const a of realAtts) {
-            const filename = a.filename || 'ek';
-            const contentType = a.contentType || 'application/octet-stream';
-            const content = a.content as Buffer | undefined;
-            const size = a.size ?? content?.length ?? 0;
-            let url: string | null = null;
-            if (r2ok && content && size <= 15 * 1024 * 1024) {
-              const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
-              const key = `inbox/${uid}-${Date.now()}-${safeName}`;
-              // iOS Safari 'attachment' disposition'ında boş sayfa/hata verir + download attr'ını
-              // yok sayar → 'inline' ile dosyayı ÖNİZLER (PDF/resim açılır, kullanıcı Share→Kaydet).
-              // Desktop tarafında link'teki download attr yine indirmeyi tetikler.
-              url = await uploadToR2(key, content, contentType, `inline; filename="${safeName}"`).catch(() => null);
-            }
-            metas.push({ filename, contentType, size, url });
-          }
-          if (metas.length > 0) attachmentsMeta = metas;
+      // İmleç: kayıtlı imleç > DB'deki en büyük UID > son INITIAL_BACKFILL mail.
+      let cursor: number;
+      if (prev.uidValidity && !validityChanged && prev.lastUid != null) {
+        cursor = prev.lastUid;
+      } else {
+        const dbMax = validityChanged
+          ? null
+          : (await prisma.inboxMessage.aggregate({ where: { mailbox: { in: [...INCOMING_MAILBOXES] } }, _max: { uid: true } }))._max.uid;
+        if (dbMax != null) {
+          cursor = dbMax;
+        } else {
+          const all = (await client.search({ all: true }, { uid: true })) || [];
+          const sorted = [...all].sort((a, b) => a - b);
+          cursor = sorted.length > INITIAL_BACKFILL ? sorted[sorted.length - INITIAL_BACKFILL - 1] : 0;
         }
-
-        // BACKFILL: mail zaten kayıtlı (eski) → yalnız ekleri güncelle, yeni mail sayma.
-        // Ek yoksa da [] yaz (null bırakılırsa her sync'te tekrar parse edilir → kalıcı yavaşlama).
-        if (needsAttachmentBackfill) {
-          await prisma.inboxMessage.update({
-            where: { mailbox_uid: { mailbox: 'INBOX', uid } },
-            data: { attachments: attachmentsMeta ?? [] },
-          }).catch(() => {});
-          continue;
-        }
-
-        // Stajyer eşleştirme.
-        const m = internMap.get(fromEmail);
-
-        // Sayaçları GERÇEK başarıya bağla (koşulsuz stored++/matched++ yanlış rapor üretiyordu:
-        // duplicate/hata yutulup yine de sayılıyordu → durum panelinde şişkin "X yeni" değeri).
-        const created = await prisma.inboxMessage.create({
-          data: {
-            uid, mailbox: 'INBOX', messageId: ownMessageId,
-            fromEmail, fromName: fromName || null, toEmail: toEmail || null,
-            subject, snippet, bodyText: bodyText || null, bodyHtml,
-            sentAt,
-            isFromIntern: Boolean(m),
-            matchedTemplateId: m?.templateId ?? null,
-            matchedRecipientName: m?.name ?? null,
-            matchedDepartment: m?.dept ?? null,
-            attachments: attachmentsMeta ?? undefined,
-            inReplyTo, references, threadRoot, isBounce,
-          },
-        }).then(() => true).catch((e: unknown) => {
-          // Duplicate (yarış/idempotency) beklenen — sessiz. Diğer hataları logla (görünür olsun).
-          const code = (e as { code?: string })?.code;
-          if (code !== 'P2002') console.warn('[inbox] kayıt hatası:', e instanceof Error ? e.message : e);
-          return false;
-        });
-        if (created) { stored++; if (m) matched++; }
       }
+
+      const found = ((await client.search({ uid: `${cursor + 1}:*` }, { uid: true })) || []).filter((u) => u > cursor).sort((a, b) => a - b);
+      // Toplu dedupe (N+1 yerine tek sorgu).
+      const existing = found.length
+        ? new Set(
+            (
+              await prisma.inboxMessage.findMany({
+                where: { mailbox: { in: [...INCOMING_MAILBOXES] }, uid: { in: found } },
+                select: { uid: true },
+              })
+            ).map((r) => r.uid)
+          )
+        : new Set<number>();
+      // UIDVALIDITY değiştiyse eski UID'ler anlamını yitirir → dedupe Message-ID üzerinden yapılır.
+      const todo = validityChanged ? found : found.filter((u) => !existing.has(u));
+      const batch = todo.slice(0, maxMessages);
+      hasMore = todo.length > batch.length;
+
+      const processed = new Set<number>();
+      if (batch.length > 0) {
+        for await (const msg of client.fetch(batch.join(','), { uid: true, envelope: true, source: true }, { uid: true })) {
+          if (Date.now() > deadline) {
+            hasMore = true;
+            break;
+          }
+          fetched++;
+          const uid = msg.uid;
+          const parsed = msg.source ? await simpleParser(msg.source).catch(() => null) : null;
+          const env = msg.envelope;
+          const ownMessageId = env?.messageId ?? parsed?.messageId ?? null;
+
+          if (validityChanged && ownMessageId) {
+            const dup = await prisma.inboxMessage.findFirst({ where: { messageId: ownMessageId }, select: { id: true } });
+            if (dup) {
+              processed.add(uid);
+              continue;
+            }
+          }
+
+          const fromAddr = env?.from?.[0];
+          const fromEmail = (fromAddr?.address ?? parsed?.from?.value?.[0]?.address ?? '').toLowerCase();
+          const fromName = fromAddr?.name ?? parsed?.from?.value?.[0]?.name ?? '';
+          const toEmail = (env?.to?.[0]?.address ?? '').toLowerCase();
+          const subject = env?.subject ?? parsed?.subject ?? '';
+          // Tarihi güvene al: bozuk Date başlığı Invalid Date → Prisma throw olmasın.
+          const rawDate = env?.date ?? parsed?.date ?? new Date();
+          const parsedDate = new Date(rawDate as string | Date);
+          const sentAt = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+          const bodyText = parsed?.text ?? '';
+          const bodyHtml = typeof parsed?.html === 'string' ? parsed.html : null;
+          const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 200);
+
+          const inReplyTo = parsed?.inReplyTo ?? null;
+          const refsRaw = parsed?.references;
+          const references = Array.isArray(refsRaw) ? refsRaw.join(' ') : (refsRaw ?? null);
+          const firstRef = references ? references.trim().split(/\s+/)[0] : null;
+          const threadRoot = firstRef || inReplyTo || ownMessageId || null;
+
+          const isBounce =
+            /mailer-daemon|postmaster|mail delivery/i.test(fromEmail) ||
+            /undeliver|delivery status notification|mail delivery (failed|subsystem)|returned mail|failure notice|delivery has failed/i.test(subject);
+
+          // EKLER: gerçek ekler R2'ye; disposition izin listesine göre (HTML/SVG asla inline değil).
+          let attachmentsMeta: AttachmentRecord[] = [];
+          const rawAtts = Array.isArray(parsed?.attachments) ? parsed!.attachments : [];
+          const realAtts = rawAtts.filter((a) => a.contentDisposition !== 'inline' && a.filename);
+          if (realAtts.length > 0) {
+            const { isR2Configured, uploadToR2 } = await import('@/lib/r2-storage');
+            const r2ok = isR2Configured();
+            attachmentsMeta = [];
+            for (const a of realAtts) {
+              const filename = a.filename || 'ek';
+              const contentType = a.contentType || 'application/octet-stream';
+              const content = a.content as Buffer | undefined;
+              const size = a.size ?? content?.length ?? 0;
+              let url: string | null = null;
+              if (r2ok && content && size <= 15 * 1024 * 1024) {
+                const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+                const key = `inbox/${uid}-${Date.now()}-${safeName}`;
+                url = await uploadToR2(key, content, contentType, uploadDisposition(contentType, filename)).catch(() => null);
+              }
+              attachmentsMeta.push({ filename, contentType, size, url });
+            }
+          }
+
+          const m = internMap.get(fromEmail);
+          const result = await prisma.inboxMessage
+            .create({
+              data: {
+                uid,
+                mailbox: MAILBOX_INBOX,
+                messageId: ownMessageId,
+                fromEmail,
+                fromName: fromName || null,
+                toEmail: toEmail || null,
+                subject,
+                snippet,
+                bodyText: bodyText || null,
+                bodyHtml,
+                sentAt,
+                isFromIntern: Boolean(m),
+                matchedTemplateId: m?.templateId ?? null,
+                matchedRecipientName: m?.name ?? null,
+                matchedDepartment: m?.dept ?? null,
+                attachments: attachmentsMeta as unknown as Prisma.InputJsonValue,
+                inReplyTo,
+                references,
+                threadRoot,
+                isBounce,
+              },
+            })
+            .then(() => 'created' as const)
+            .catch((e: unknown) => {
+              const code = (e as { code?: string })?.code;
+              if (code === 'P2002') return 'duplicate' as const;
+              storeError = `Mail kaydedilemedi (UID ${uid}): ${e instanceof Error ? e.message.slice(0, 160) : 'bilinmeyen hata'}`;
+              console.warn('[inbox]', storeError);
+              return 'failed' as const;
+            });
+          if (result === 'failed') break; // imleç bu mailde durur; sonraki koşu yeniden dener
+          processed.add(uid);
+          if (result === 'created') {
+            stored++;
+            if (m) matched++;
+          }
+        }
+      }
+
+      // İmleç: işlenmemiş ilk UID'e kadar ilerler (atlama yok). Hepsi işlendiyse bulunan en büyük UID.
+      const firstPending = todo.find((u) => !processed.has(u));
+      const maxFound = found.length ? found[found.length - 1] : cursor;
+      const newCursor = firstPending != null ? Math.max(cursor, firstPending - 1) : Math.max(cursor, maxFound);
+      if (firstPending != null) hasMore = true;
+
+      nextState = {
+        lastRunAt: new Date().toISOString(),
+        ok: storeError == null,
+        source,
+        error: storeError,
+        fetched,
+        stored,
+        matched,
+        hasMore,
+        lastUid: newCursor,
+        uidValidity,
+      };
     } finally {
       lock.release();
     }
-    return { ok: true, fetched, stored, matched };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'IMAP hatası' };
+    const error = describeImapError(e);
+    await writeSyncState({ ...prev, lastRunAt: new Date().toISOString(), ok: false, source, error, fetched, stored, matched }).catch(() => {});
+    return { ok: false, error };
   } finally {
     await client.logout().catch(() => {});
   }
+
+  await writeSyncState(nextState);
+  if (storeError) return { ok: false, error: storeError };
+  return { ok: true, fetched, stored, matched, hasMore };
 }

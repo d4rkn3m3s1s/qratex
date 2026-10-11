@@ -7,7 +7,7 @@ import { sendTransactionalEmail, isMailConfigured } from '@/lib/mail-sender';
 import { escapeEmailHtml } from '@/lib/security/escape-html';
 import {
   getInternTaskEmails,
-  INTERN_TASK_DEADLINE_LABEL,
+  formatDeadlineLabel,
   renderSimpleBrandedEmail,
   deadlineIsToday,
 } from '@/lib/intern-task-emails';
@@ -79,11 +79,12 @@ export async function GET(req: Request) {
 
   try {
     const now = new Date();
-    const { day, month } = trDateParts(now);
+    const { day, month, year } = trDateParts(now);
     const dayKey = trDayKey(now);
 
     const templates = await getInternTaskEmails();
-    const dueToday = templates.filter((t) => deadlineIsToday(t.deadline, { day, month }));
+    // Hatırlatması kapatılmış (reminder:false) şablonlar atlanır; arşivliler zaten listede yok.
+    const dueToday = templates.filter((t) => t.reminder !== false && deadlineIsToday(t.deadline, { day, month, year }));
     if (dueToday.length === 0) {
       return NextResponse.json({ ok: true, skipped: 'no-template-due-today', today: dayKey });
     }
@@ -111,7 +112,7 @@ export async function GET(req: Request) {
     let flagWriteFailed = false;
 
     for (const t of pending) {
-      const deadlineLabel = t.deadline && t.deadline.trim() ? t.deadline.trim() : INTERN_TASK_DEADLINE_LABEL;
+      const deadlineLabel = formatDeadlineLabel(t.deadline) || 'bugün';
       const recipients = Array.from(new Set(t.email.split(',').map((s) => s.trim()).filter(Boolean)));
       const already = new Set(flag.recipients[t.id] ?? []);
       const name = t.recipientName || '';
@@ -125,6 +126,7 @@ export async function GET(req: Request) {
         const html = renderSimpleBrandedEmail({
           heading: '⏳ Son gün: Görevini bugün teslim et!',
           accent: '#f59e0b',
+          footerNote: 'Teslimini ya da sorunu bu maili yanıtlayarak iletebilirsin.',
           bodyHtml: `
             <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">Merhaba${name ? ' ' + escapeEmailHtml(name) : ''},</p>
             <p style="margin:0 0 14px;line-height:1.7;color:#475569;font-size:15px;">

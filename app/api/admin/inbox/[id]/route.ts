@@ -1,23 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/api-auth';
-import { PRIVATE_NO_STORE_HEADERS } from '@/lib/api-http';
-import { prisma } from '@/lib/prisma';
+/**
+ * /api/admin/inbox/[id]
+ *  GET    — mail + konuşmanın tamamı (YAN ETKİSİZ; okundu işaretlemesi PATCH ile).
+ *  PATCH  — { seen?, archived? } okundu/okunmadı, arşivle/geri al.
+ *  DELETE — kalıcı silme (ekler depolamadan da silinir; denetimli).
+ */
+import { z } from 'zod';
+import { defineRoute, ok } from '@/lib/http/define-route';
+import { getAuditRequestMeta } from '@/lib/request-metadata';
+import { inboxPatchSchema } from '@/lib/mail-center/inbox-contract';
+import { deleteInboxMessage, getInboxDetail, patchInboxMessage } from '@/lib/mail-center/inbox.server';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/admin/inbox/[id] — tek mailin TAM içeriği (bodyText/bodyHtml). Açınca seen=true yapar.
- */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(['ADMIN']);
-  if ('error' in auth) return auth.error;
+const params = z.object({ id: z.string().min(1).max(40) });
 
-  const { id } = await params;
-  const msg = await prisma.inboxMessage.findUnique({ where: { id } }).catch(() => null);
-  if (!msg) return NextResponse.json({ success: false, error: 'Mail bulunamadı' }, { status: 404, headers: PRIVATE_NO_STORE_HEADERS });
+export const GET = defineRoute(
+  { name: 'admin.inbox.detail', roles: ['ADMIN'], params, rateLimit: 'read' },
+  async ({ params }) => ok(await getInboxDetail(params.id))
+);
 
-  // Açıldı → okundu işaretle.
-  if (!msg.seen) await prisma.inboxMessage.update({ where: { id }, data: { seen: true } }).catch(() => {});
+export const PATCH = defineRoute(
+  { name: 'admin.inbox.patch', roles: ['ADMIN'], params, schema: inboxPatchSchema, rateLimit: 'mutation' },
+  async ({ params, body, session, request }) =>
+    ok(await patchInboxMessage({ id: params.id, seen: body.seen, archived: body.archived, session, meta: getAuditRequestMeta(request) }))
+);
 
-  return NextResponse.json({ success: true, message: { ...msg, seen: true } }, { headers: PRIVATE_NO_STORE_HEADERS });
-}
+export const DELETE = defineRoute(
+  { name: 'admin.inbox.delete', roles: ['ADMIN'], params, rateLimit: 'mutation' },
+  async ({ params, session, request }) => {
+    await deleteInboxMessage({ id: params.id, session, meta: getAuditRequestMeta(request) });
+    return ok({ id: params.id, deleted: true });
+  }
+);

@@ -12,6 +12,7 @@ import {
   applyMailVariables,
   DEFAULT_INTERN_TASK_EMAILS,
   INTERN_TASK_DEADLINE_LABEL,
+  formatDeadlineLabel,
   type InternTaskEmail,
 } from '@/lib/intern-task-emails';
 
@@ -27,31 +28,52 @@ describe('normalizeInternEmails', () => {
     expect(r[0].id).toBe('t1');
   });
 
-  it('id/email/subject eksik olanları atar', () => {
+  it('id/subject eksik olanları atar; alıcısız taslak korunur', () => {
     const r = normalizeInternEmails([
       { ...sample },
       { department: 'X', email: 'a@b.com', subject: 'S' }, // id yok
-      { id: 'x', subject: 'S' }, // email yok
+      { id: 'x', subject: 'S' }, // alıcısız taslak → korunur
       { id: 'y', email: 'a@b.com' }, // subject yok
     ]);
-    expect(r).toHaveLength(1);
+    expect(r.map((t) => t.id)).toEqual(['t1', 'x']);
   });
 
-  it('dizi değilse / boşsa varsayılana döner', () => {
-    expect(normalizeInternEmails(null)).toBe(DEFAULT_INTERN_TASK_EMAILS);
-    expect(normalizeInternEmails([])).toBe(DEFAULT_INTERN_TASK_EMAILS);
-    expect(normalizeInternEmails('nope')).toBe(DEFAULT_INTERN_TASK_EMAILS);
+  it('dizi değilse / boşsa BOŞ liste döner (varsayılan şablonlar geri yazılmaz)', () => {
+    expect(normalizeInternEmails(null)).toEqual([]);
+    expect(normalizeInternEmails([])).toEqual([]);
+    expect(normalizeInternEmails('nope')).toEqual([]);
+  });
+
+  it('yeni { version, templates } sarmalayıcısını okur, tekrarlı id atar', () => {
+    const r = normalizeInternEmails({ version: 3, templates: [sample, { ...sample }, { ...sample, id: 't2', archivedAt: '2026-10-01T00:00:00.000Z', reminder: false }] });
+    expect(r.map((t) => t.id)).toEqual(['t1', 't2']);
+    expect(r[1].archivedAt).toBe('2026-10-01T00:00:00.000Z');
+    expect(r[1].reminder).toBe(false);
   });
 });
 
 describe('renderInternTaskEmailHtml', () => {
   it('departman rozeti + son teslim + kişisel hitap içerir', () => {
-    const { html, text } = renderInternTaskEmailHtml(sample);
+    const { html, text } = renderInternTaskEmailHtml({ ...sample, deadline: '2026-10-15T17:00' });
     expect(html).toContain('HUKUK DEPARTMANI');
-    expect(html).toContain(INTERN_TASK_DEADLINE_LABEL);
+    expect(html).toContain('15 Ekim 2026, 17:00');
     expect(html).toContain('Zerda');
     expect(html).toContain('İlk paragraf.');
-    expect(text).toContain(INTERN_TASK_DEADLINE_LABEL);
+    expect(text).toContain('15 Ekim 2026, 17:00');
+  });
+
+  it('görev maili altbilgisi yanıtlamaya davet eder ("yanıtlamayın" demez)', () => {
+    const { html } = renderInternTaskEmailHtml(sample);
+    expect(html).not.toContain('lütfen yanıtlamayın');
+    expect(html).toContain('yanıtlayabilirsin');
+  });
+
+  it('logo HTTPS adresinden gelir (Gmail data: URI siler), piksel display:none DEĞİL', () => {
+    const { html } = renderInternTaskEmailHtml(sample, 'tok123456');
+    expect(html).toContain('https://qratex.example/logo/font-white.png');
+    expect(html).not.toMatch(/src="data:image/);
+    const pixel = html.slice(html.indexOf('/api/track/email-open/tok123456') - 200, html.indexOf('/api/track/email-open/tok123456') + 300);
+    expect(pixel).not.toContain('display:none');
   });
 
   it('token verilince tracking pixel gömer', () => {
@@ -89,9 +111,23 @@ describe('deadline (şablon-başına son teslim)', () => {
     expect(text).toContain('20 Eylül 12.00');
   });
 
-  it('render: deadline yoksa varsayılana düşer', () => {
-    const { html } = renderInternTaskEmailHtml(sample);
-    expect(html).toContain(INTERN_TASK_DEADLINE_LABEL);
+  it('render: deadline yoksa son teslim kartı HİÇ basılmaz (geçmiş varsayılan tarih yok)', () => {
+    const { html, text } = renderInternTaskEmailHtml(sample);
+    expect(html).not.toContain(INTERN_TASK_DEADLINE_LABEL);
+    expect(html).not.toContain('Son Teslim');
+    expect(text).not.toContain('Son teslim');
+  });
+
+  it('render: boş kalan bilinen değişken mailde "{{deadline}}" olarak görünmez', () => {
+    const { html } = renderInternTaskEmailHtml({ ...sample, body: 'Tarih: {{deadline}} / {{bilinmeyen}}' });
+    expect(html).not.toContain('{{deadline}}');
+    expect(html).toContain('{{bilinmeyen}}');
+  });
+
+  it('formatDeadlineLabel: ISO yerel → Türkçe etiket, serbest metin aynen', () => {
+    expect(formatDeadlineLabel('2026-08-14T17:00')).toBe('14 Ağustos 2026, 17:00');
+    expect(formatDeadlineLabel('14 Ağustos 17.00')).toBe('14 Ağustos 17.00');
+    expect(formatDeadlineLabel(undefined)).toBe('');
   });
 });
 
@@ -101,6 +137,12 @@ describe('deadlineIsToday (cron gün eşleşmesi)', () => {
     expect(deadlineIsToday('14 agustos', { day: 14, month: 8 })).toBe(true); // ascii
     expect(deadlineIsToday('1 Ocak', { day: 1, month: 1 })).toBe(true);
     expect(deadlineIsToday('30 Aralık 23.59', { day: 30, month: 12 })).toBe(true);
+  });
+
+  it('ISO yerel biçimi (yıl dahil) anlar', () => {
+    expect(deadlineIsToday('2026-10-15T17:00', { day: 15, month: 10, year: 2026 })).toBe(true);
+    expect(deadlineIsToday('2026-10-15T17:00', { day: 15, month: 10, year: 2027 })).toBe(false);
+    expect(deadlineIsToday('2026-10-15T17:00', { day: 16, month: 10, year: 2026 })).toBe(false);
   });
 
   it('gün/ay uymuyorsa false', () => {
@@ -194,14 +236,8 @@ describe('şablon türleri (kind) render', () => {
   });
 });
 
-describe('DEFAULT şablonları', () => {
-  it('13 görev şablonu (id benzersiz + email dolu)', () => {
-    expect(DEFAULT_INTERN_TASK_EMAILS.length).toBeGreaterThanOrEqual(13);
-    const ids = DEFAULT_INTERN_TASK_EMAILS.map((t) => t.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    for (const t of DEFAULT_INTERN_TASK_EMAILS) {
-      expect(t.email).toContain('@');
-      expect(t.subject.length).toBeGreaterThan(0);
-    }
+describe('DEFAULT şablonları (KVKK)', () => {
+  it('kaynak kodda kişisel veri yok: varsayılan liste boş', () => {
+    expect(DEFAULT_INTERN_TASK_EMAILS).toEqual([]);
   });
 });

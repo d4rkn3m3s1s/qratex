@@ -21,7 +21,15 @@ export type Recipient = {
   openedAt: string | null;
   openCount: number;
   sentAt: string;
+  /**
+   * Açılma gönderimden çok kısa süre sonra (< 10 sn) geldi: büyük olasılıkla insan değil, istemci
+   * ön yüklemesi (Apple Mail Gizlilik Koruması, kurumsal güvenlik tarayıcısı). Bulgu 13.
+   */
+  openedQuickly: boolean;
 };
+
+/** Bu sürenin altındaki açılmalar "otomatik ön yükleme olabilir" sayılır. */
+export const QUICK_OPEN_MS = 10_000;
 
 export type TemplateStat = {
   sent: number;
@@ -42,23 +50,25 @@ export type TemplateStat = {
  */
 export function groupSends(rows: SendRow[]): Record<string, TemplateStat> {
   // 1) Alıcı başına: en yeni kayıt (durum) + herhangi bir kayıtta açılma var mı (agregasyon).
-  type Agg = { latest: SendRow; everOpened: Date | null; maxOpenCount: number };
+  type Agg = { latest: SendRow; everOpened: Date | null; maxOpenCount: number; humanOpen: boolean };
+  const isQuick = (s: SendRow) => !!s.firstOpenedAt && s.firstOpenedAt.getTime() - s.createdAt.getTime() < QUICK_OPEN_MS;
   const perRecipient = new Map<string, Agg>(); // key = templateId + ' ' + email
   for (const s of rows) {
     const key = `${s.templateId} ${s.email}`;
     const cur = perRecipient.get(key);
     if (!cur) {
-      perRecipient.set(key, { latest: s, everOpened: s.firstOpenedAt, maxOpenCount: s.openCount });
+      perRecipient.set(key, { latest: s, everOpened: s.firstOpenedAt, maxOpenCount: s.openCount, humanOpen: !!s.firstOpenedAt && !isQuick(s) });
     } else {
       // latest zaten en yeni (createdAt DESC → ilk görülen); sadece açılma verisini biriktir.
       if (s.firstOpenedAt && (!cur.everOpened || s.firstOpenedAt < cur.everOpened)) cur.everOpened = s.firstOpenedAt;
       if (s.openCount > cur.maxOpenCount) cur.maxOpenCount = s.openCount;
+      if (s.firstOpenedAt && !isQuick(s)) cur.humanOpen = true;
     }
   }
 
   // 2) Şablon başına özetle.
   const byTemplate: Record<string, TemplateStat> = {};
-  for (const { latest, everOpened, maxOpenCount } of perRecipient.values()) {
+  for (const { latest, everOpened, maxOpenCount, humanOpen } of perRecipient.values()) {
     const st = byTemplate[latest.templateId] ?? { sent: 0, opened: 0, errored: 0, lastSentAt: null, recipients: [] };
     const isError = latest.status === 'error';
     if (isError) st.errored += 1;
@@ -75,6 +85,7 @@ export function groupSends(rows: SendRow[]): Record<string, TemplateStat> {
       openedAt: !isError && everOpened ? everOpened.toISOString() : null,
       openCount: maxOpenCount,
       sentAt: latest.createdAt.toISOString(),
+      openedQuickly: !isError && !!everOpened && !humanOpen,
     });
     byTemplate[latest.templateId] = st;
   }

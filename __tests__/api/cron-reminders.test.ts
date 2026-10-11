@@ -36,6 +36,7 @@ jest.mock('@/lib/public-app-origin', () => ({ getPublicAppOrigin: () => 'https:/
 jest.mock('@/lib/intern-task-emails', () => ({
   getInternTaskEmails: () => mockGetTemplates(),
   INTERN_TASK_DEADLINE_LABEL: '23:59',
+  formatDeadlineLabel: (d: string | undefined) => (d ?? '').trim(),
   renderSimpleBrandedEmail: (i: { heading: string; bodyHtml: string }) => `<h1>${i.heading}</h1>${i.bodyHtml}`,
   // Testte her şablon "bugün" bitiyor.
   deadlineIsToday: (d: string | undefined) => Boolean(d),

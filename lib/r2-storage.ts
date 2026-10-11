@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 /**
  * Cloudflare R2 (S3-uyumlu) depolama yardımcısı.
@@ -84,6 +84,24 @@ export async function setR2Disposition(key: string, contentType: string, content
 export async function deleteFromR2(key: string): Promise<void> {
   const bucket = env('R2_BUCKET')!;
   await getClient().send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
+}
+
+/**
+ * R2 nesnesini okur (yetkili uçtan akıtmak için — public URL'yi istemciye vermeden).
+ * Döner: gövde akışı + boyut; nesne yoksa null.
+ */
+export async function getR2Object(key: string): Promise<{ body: ReadableStream<Uint8Array>; size: number | null } | null> {
+  const bucket = env('R2_BUCKET')!;
+  try {
+    const out = await getClient().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!out.Body) return null;
+    const body = (out.Body as { transformToWebStream: () => ReadableStream<Uint8Array> }).transformToWebStream();
+    return { body, size: typeof out.ContentLength === 'number' ? out.ContentLength : null };
+  } catch (e) {
+    const name = (e as { name?: string })?.name;
+    if (name === 'NoSuchKey' || name === 'NotFound') return null;
+    throw e;
+  }
 }
 
 /** Public URL'den bucket key'ini çıkarır (silme için). */
