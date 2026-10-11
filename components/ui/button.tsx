@@ -28,11 +28,11 @@ const buttonVariants = cva(
       },
       size: {
         default: 'h-11 min-h-11 px-4 py-2 text-base sm:text-sm',
-        sm: 'h-9 rounded-md px-3',
+        sm: 'hit-area h-9 rounded-md px-3',
         lg: 'h-12 rounded-lg px-8 text-base',
         xl: 'h-14 rounded-xl px-10 text-lg',
         icon: 'h-11 w-11',
-        'icon-sm': 'h-9 w-9',
+        'icon-sm': 'hit-area h-9 w-9',
         'icon-lg': 'h-12 w-12',
       },
     },

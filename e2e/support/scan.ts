@@ -59,8 +59,39 @@ function measureInPage() {
     .querySelectorAll('main a, main button, main [role=tab], main [role=button], main input:not([type=hidden]), main select')
     .forEach((el) => {
       if (!visible(el)) return;
+      // Devre dışı kontrol dokunulamaz: hedef değil.
+      if (el.matches(':disabled,[aria-disabled=true]')) return;
       const r = el.getBoundingClientRect();
-      if (r.height < 44 && r.width < 44) small.push(`${describe(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      // Görsel olarak gizli (sr-only / 1×1 dosya inputu): dokunma hedefi değil — hedef ona bağlı <label>.
+      const cs = getComputedStyle(el);
+      if ((r.width <= 1 && r.height <= 1) || cs.clip === 'rect(0px, 0px, 0px, 0px)' || cs.clipPath === 'inset(50%)') return;
+      // Genişletilmiş tıklama alanı: mutlak konumlu şeffaf ::before/::after (`.hit-area` deseni ya da
+      // kartı kaplayan "stretched link" `after:absolute after:inset-0`) tıklanabilir alanı büyütür —
+      // ölçülen hedef, sözde öğenin kapsayıcı bloğuna göre çözülen kutudur.
+      let w = r.width;
+      let h = r.height;
+      if (cs.overflow === 'visible') {
+        const cb = cs.position !== 'static' ? el : (el as HTMLElement).offsetParent;
+        const cr = cb ? cb.getBoundingClientRect() : null;
+        for (const pseudo of ['::before', '::after']) {
+          const ps = getComputedStyle(el, pseudo);
+          if (!cr || ps.content === 'none' || ps.position !== 'absolute' || ps.pointerEvents === 'none' || ps.display === 'none') continue;
+          const px = (v: string) => (v.endsWith('px') ? parseFloat(v) : null);
+          const [t, rt, bt, l] = [px(ps.top), px(ps.right), px(ps.bottom), px(ps.left)];
+          if (l !== null && rt !== null) w = Math.max(w, cr.width - l - rt);
+          if (t !== null && bt !== null) h = Math.max(h, cr.height - t - bt);
+        }
+      }
+      // Etiketli form denetimi: <label> tıklaması denetimi tetikler — hedef etiketin kutusudur.
+      if (el.matches('input,select')) {
+        const lab = el.closest('label') ?? (el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null);
+        if (lab) {
+          const lr = lab.getBoundingClientRect();
+          w = Math.max(w, lr.width);
+          h = Math.max(h, lr.height);
+        }
+      }
+      if (h < 44 && w < 44) small.push(`${describe(el)} ${Math.round(r.width)}x${Math.round(r.height)}`);
     });
 
   document.querySelectorAll('body *').forEach((el) => {

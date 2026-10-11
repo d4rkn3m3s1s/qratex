@@ -406,6 +406,26 @@
 
 @layer components {
   /* ─────────────────────────────────────────────────────────────
+     DOKUNMA ALANI — `.hit-area`: görsel boyutu değiştirmeden tıklanabilir alanı en az
+     44×44 px'e genişletir (eksenel olarak ortalanmış şeffaf ::after). Öğe zaten büyükse
+     genişletme 0'a kırpılır. `position: relative` bu katmanda (components) olduğu için
+     `absolute`/`fixed` yardımcı sınıfları onu ezer. `overflow-hidden` taşıyan öğede
+     ::after kırpılır — orada kullanma. Kalite kapısı taraması (e2e/support/scan.ts) bu
+     genişletilmiş kutuyu ölçer.
+  ───────────────────────────────────────────────────────────── */
+  .hit-area {
+    position: relative;
+  }
+  .hit-area::after {
+    content: '';
+    position: absolute;
+    top: min(0px, calc((100% - 44px) / 2));
+    bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 44px) / 2));
+    right: min(0px, calc((100% - 44px) / 2));
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      QDL TİPOGRAFİ — `qx-` önekli (tailwind-merge `text-*` renk sınıflarıyla
      birleştirirken boyutu silmesin diye Tailwind fontSize anahtarı DEĞİL).
   ───────────────────────────────────────────────────────────── */

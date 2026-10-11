@@ -87,7 +87,7 @@ export function ChipInput({ name, label, value, onChange, error, description }: 
                   <button
                     type="button"
                     onClick={() => onChange(value.filter((x) => x !== k))}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                    className="hit-area inline-flex h-7 w-7 items-center justify-center rounded-full text-fg-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     aria-label={`${k} kaldır`}
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />

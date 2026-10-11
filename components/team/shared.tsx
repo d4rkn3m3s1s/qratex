@@ -122,7 +122,7 @@ export function TagChips({
               e.stopPropagation();
               onPick(t);
             }}
-            className={cn(cls, 'hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+            className={cn(cls, 'hit-area hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
             aria-label={`#${t} etiketine göre filtrele`}
           >
             {inner}
