@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Play, FlaskConical, Save, RefreshCw } from 'lucide-react';
+import { AdminText } from './copy';
 
 type Rule = {
   id: string;
@@ -283,13 +284,13 @@ export function UsersAutomationPanel() {
       ) : null}
       <Card>
         <CardHeader>
-          <CardTitle>Kural editörü</CardTitle>
-          <CardDescription>Koşul ve aksiyon tanımlayın; önizleme ile kimlerin etkileneceğini görün.</CardDescription>
+          <CardTitle><AdminText k="ruleEditor" /></CardTitle>
+          <CardDescription><AdminText k="ruleEditorHint" /></CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Kayıtlı kural</Label>
+              <Label><AdminText k="savedRule" /></Label>
               <Select value={selectedRuleId} onValueChange={setSelectedRuleId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Mevcut kural seçin (opsiyonel)" />
@@ -304,25 +305,25 @@ export function UsersAutomationPanel() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Kural adı</Label>
+              <Label><AdminText k="ruleName" /></Label>
               <Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ör. Sadık müşteri ödülü" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Açıklama</Label>
+            <Label><AdminText k="description" /></Label>
             <Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={2} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="space-y-2">
-              <Label>Rol koşulu</Label>
+              <Label><AdminText k="roleCondition" /></Label>
               <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CUSTOMER">Müşteri</SelectItem>
+                  <SelectItem value="CUSTOMER"><AdminText k="customer" /></SelectItem>
                   <SelectItem value="DEALER">Bayi</SelectItem>
-                  <SelectItem value="ADMIN">Yönetici</SelectItem>
+                  <SelectItem value="ADMIN"><AdminText k="admin" /></SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -348,7 +349,7 @@ export function UsersAutomationPanel() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
-              <Label>Öncelik</Label>
+              <Label><AdminText k="priority" /></Label>
               <Input type="number" value={form.priority} onChange={(e) => setForm((p) => ({ ...p, priority: Number(e.target.value) || 100 }))} />
             </div>
             <div className="flex items-center justify-between border rounded-md p-3">
@@ -361,20 +362,20 @@ export function UsersAutomationPanel() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={createRule} disabled={saving} className="gap-2"><Save className="h-4 w-4" />Kuralı kaydet</Button>
-            <Button variant="outline" onClick={runDry} className="gap-2"><FlaskConical className="h-4 w-4" />Önizle</Button>
-            <Button variant="outline" onClick={executeRule} disabled={executing || !selectedRuleId} className="gap-2"><Play className="h-4 w-4" />Şimdi çalıştır</Button>
+            <Button onClick={createRule} disabled={saving} className="gap-2"><Save className="h-4 w-4" /><AdminText k="saveRule" /></Button>
+            <Button variant="outline" onClick={runDry} className="gap-2"><FlaskConical className="h-4 w-4" /><AdminText k="previewBtn" /></Button>
+            <Button variant="outline" onClick={executeRule} disabled={executing || !selectedRuleId} className="gap-2"><Play className="h-4 w-4" /><AdminText k="runNow" /></Button>
             <Button variant="ghost" onClick={fetchData} className="gap-2"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Yenile</Button>
           </div>
 
           {dryRunResult && (
             <div className="rounded-md border p-3 text-sm space-y-1" aria-live="polite">
-              <p><strong>Etkilenecek kullanıcı:</strong> {dryRunResult.affectedCount.toLocaleString('tr-TR')}</p>
+              <p><strong><AdminText k="affectedUsers" /></strong> {dryRunResult.affectedCount.toLocaleString('tr-TR')}</p>
               {typeof dryRunResult.totalPointsDelta === 'number' && (
                 <p><strong>Toplam puan etkisi:</strong> {dryRunResult.totalPointsDelta.toLocaleString('tr-TR')}</p>
               )}
               {dryRunResult.withinCap === false && (
-                <p className="text-destructive">Toplam etki çalıştırma tavanını aşıyor; hedefi daraltın.</p>
+                <p className="text-destructive"><AdminText k="overCap" /></p>
               )}
               <p className="text-muted-foreground">
                 Örnek: {(dryRunResult.sample ?? []).map((u) => u.name || u.email).join(', ') || '—'}
@@ -384,7 +385,7 @@ export function UsersAutomationPanel() {
 
           {executePreview && (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2" role="region" aria-live="polite" aria-label="Çalıştırma onayı">
-              <p className="font-semibold">Çalıştırmayı onaylayın</p>
+              <p className="font-semibold"><AdminText k="confirmRun" /></p>
               <p>
                 {executePreview.affectedCount.toLocaleString('tr-TR')} kullanıcı · toplam{' '}
                 {(executePreview.totalPointsDelta ?? 0).toLocaleString('tr-TR')} puan
@@ -411,9 +412,9 @@ export function UsersAutomationPanel() {
           <CardTitle>Son 24 saat</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Çalıştırma</p><p className="text-xl font-semibold">{metrics?.last24hTotalRuns ?? 0}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Başarısız</p><p className="text-xl font-semibold">{metrics?.last24hFailedRuns ?? 0}</p></div>
-          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Hata oranı</p><p className="text-xl font-semibold">%{metrics?.last24hFailureRate ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground"><AdminText k="run" /></p><p className="text-xl font-semibold">{metrics?.last24hTotalRuns ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground"><AdminText k="failed" /></p><p className="text-xl font-semibold">{metrics?.last24hFailedRuns ?? 0}</p></div>
+          <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground"><AdminText k="errorRate" /></p><p className="text-xl font-semibold">%{metrics?.last24hFailureRate ?? 0}</p></div>
           <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Ort. etkilenen</p><p className="text-xl font-semibold">{metrics?.avgAffectedUsersCompleted ?? 0}</p></div>
         </CardContent>
       </Card>
@@ -424,7 +425,7 @@ export function UsersAutomationPanel() {
         </CardHeader>
         <CardContent className="space-y-2">
           {rules.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Henüz kural yok.</p>
+            <p className="text-sm text-muted-foreground"><AdminText k="noRules" /></p>
           ) : (
             rules.map((rule) => (
               <div key={rule.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-md p-3">
@@ -455,11 +456,11 @@ export function UsersAutomationPanel() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Çalıştırma geçmişi</CardTitle>
+          <CardTitle><AdminText k="runHistory" /></CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {runs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Henüz çalıştırma yok.</p>
+            <p className="text-sm text-muted-foreground"><AdminText k="noRuns" /></p>
           ) : (
             runs.map((run) => (
               <div key={run.id} className="flex flex-wrap items-center justify-between gap-2 border rounded-md p-3 text-sm">

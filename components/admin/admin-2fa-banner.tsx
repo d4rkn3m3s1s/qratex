@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { ShieldAlert } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { AdminText } from './copy';
 
 /**
  * Yönetici 2FA uyarısı — 2FA ZORUNLU değildir (sahip hesabı kilitlenmesin), ama kurulmamışsa
@@ -26,7 +27,7 @@ export async function Admin2faBanner() {
       <p className="flex items-start gap-2">
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
         <span>
-          <strong>İki adımlı doğrulama kapalı.</strong> Yönetici hesabınız yalnız şifreyle korunuyor; ele geçirilirse tüm platform etkilenir.
+          <strong><AdminText k="twoFaOff" /></strong> Yönetici hesabınız yalnız şifreyle korunuyor; ele geçirilirse tüm platform etkilenir.
         </span>
       </p>
       <Link href="/admin/account-security" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-danger px-3 font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
