@@ -4,7 +4,7 @@
  * Her uç × {oturumsuz, CUSTOMER, DEALER (sahip / sahip değil), STAFF (aktif / pasif), ADMIN
  * (platform / açık bayi), tanınmayan rol}. Saldırı senaryoları:
  *  - STAFF hesabı, JWT'sindeki dealerId ne olursa olsun yalnız DB'deki AKTİF bayisini görür.
- *  - Eski AI uçları (/api/ai/*, /api/customer/ai-*) emekli: her rol 410, okuma/yazma/LLM yok
+ *  - Eski AI uçları (/api/ai/*) emekli: her rol 410, okuma/yazma/LLM yok
  *    (eskiden müşteri kendi yorumunun AI alanlarını yazdırabiliyor, STAFF profil zehirleyebiliyordu).
  *  - Bayi müşteri listesi platform geneli CLV'yi DEĞİL, bayi kapsamlı istatistiği okur.
  */
@@ -144,9 +144,10 @@ describe('GET /api/feedbacks — kapsam matrisi', () => {
 // ───────────────────────────── Emekli AI uçları (ai-ozellikleri Dalga 3) ─────────────────────────────
 
 /**
- * Eski /api/ai/{analyze,detailed,learning} ve /api/customer/{ai-chat,ai-recommendations} hiçbir
- * ekrandan çağrılmıyordu; kapsam/IDOR/profil zehirleme matrisleri bu uçlarda artık geçerli değil
- * çünkü uçlar KAPALI: her rol için 410, hiçbir veritabanı okuması ya da LLM çağrısı yok.
+ * Eski /api/ai/{analyze,detailed,learning} hiçbir ekrandan çağrılmıyordu; kapsam/IDOR/profil
+ * zehirleme matrisleri bu uçlarda artık geçerli değil çünkü uçlar KAPALI: her rol için 410, hiçbir
+ * veritabanı okuması ya da LLM çağrısı yok. (/api/customer/{ai-chat,ai-recommendations} tamamen
+ * silindi — müşteri API yüzeyi korkuluğu her işleyicide oran sınırı ister, emekli uç tutulmaz.)
  */
 describe('Emekli AI uçları — her rol 410, yan etkisiz', () => {
   const RETIRED: Array<{ path: string; method: 'GET' | 'POST'; load: () => Promise<Record<string, unknown>> }> = [
@@ -154,8 +155,6 @@ describe('Emekli AI uçları — her rol 410, yan etkisiz', () => {
     { path: '/api/ai/analyze?action=analyze', method: 'POST', load: () => import('@/app/api/ai/analyze/route') },
     { path: '/api/ai/analyze?action=update_settings', method: 'POST', load: () => import('@/app/api/ai/analyze/route') },
     { path: '/api/ai/learning?action=record_correction', method: 'POST', load: () => import('@/app/api/ai/learning/route') },
-    { path: '/api/customer/ai-chat', method: 'POST', load: () => import('@/app/api/customer/ai-chat/route') },
-    { path: '/api/customer/ai-recommendations', method: 'GET', load: () => import('@/app/api/customer/ai-recommendations/route') },
   ];
 
   for (const r of RETIRED) {
