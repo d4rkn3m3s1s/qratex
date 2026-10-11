@@ -7,14 +7,14 @@
  *    Aile anahtarı regex ile değil, bu tablodan gelir ("Aydınlık" → '' yazımı biter).
  *  - Sunucu doğrulaması: `activeTheme ∈ aile id'leri ∪ {'custom'}`, renkler `#RRGGBB`
  *    (3 haneli `#RGB` kabul edilip genişletilir), `defaultMode ∈ system|light|dark`.
- *  - Önizleme köke YAZMAZ: `resolvePaletteTokens` çalışma zamanı uygulamasının
- *    (lib/apply-runtime-theme.ts) yazacağı değerleri birebir hesaplar; önizleme tuvali ve
+ *  - Önizleme köke YAZMAZ: `resolvePaletteTokens` çalışma zamanının (SSR `<style>` +
+ *    lib/apply-runtime-theme.ts) yazacağı değerleri aynı türetmeyle hesaplar; önizleme tuvali ve
  *    kontrast raporu bu değerlerden çizilir → sızıntı sınıfı hatalar (Bulgu 3, 6) yok.
  */
 import { z } from 'zod';
 import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, DEFAULT_CUSTOM_THEME_HEX, type ThemePresetId } from '@/lib/theme-presets';
-import { hexToHSL } from '@/lib/hex-to-hsl';
 import { contrastRatio } from '@/lib/design/contrast';
+import { BASE_THEME_VARS, deriveThemeVars } from '@/lib/design/theme-derive';
 
 export type ColorMode = 'light' | 'dark';
 export type DefaultMode = 'system' | 'light' | 'dark';
@@ -267,12 +267,6 @@ export function paletteFor(draft: Pick<ThemeDraft, 'activeTheme' | 'customColors
   return fam.variants[mode];
 }
 
-/** globals.css varsayılanları (çalışma zamanı ayar silince bu değerlere düşer). */
-const BASE_TOKENS: Record<ColorMode, Record<'background' | 'card' | 'foreground' | 'muted' | 'mutedFg' | 'border', string>> = {
-  light: { background: '264 40% 98%', card: '0 0% 100%', foreground: '224 30% 14%', muted: '264 30% 95%', mutedFg: '220 10% 34%', border: '220 14% 82%' },
-  dark: { background: '222 47% 5%', card: '222 41% 8%', foreground: '210 40% 98%', muted: '217 19% 14%', mutedFg: '215 16% 68%', border: '217 19% 16%' },
-};
-
 export type ResolvedTokens = {
   primary: string;
   primaryFg: string;
@@ -286,31 +280,34 @@ export type ResolvedTokens = {
   muted: string;
   mutedFg: string;
   border: string;
+  /** Zemin üstü marka metni (`text-brand` / `text-primary`). */
+  brandText: string;
+  /** Odak halkası (zeminde ≥ 3:1). */
+  ring: string;
 };
 
 /**
- * `applyRuntimeThemeToRoot` ile aynı kurallar (HSL üçlüleri): zemin verilirse kart = zemin ve
- * muted/border moda göre sabit; metin verilirse muted-foreground moda göre sabit.
+ * Çalışma zamanının yazacağı değerlerin AYNISI — tek türetme `lib/design/theme-derive.ts`
+ * (SSR `<style>` ve istemci aynı fonksiyonu çağırır). Kart zeminden ayrışır; dolgu üstü
+ * metin ve metin rolleri kontrast garantili seçilir.
  */
 export function resolvePaletteTokens(p: Palette, mode: ColorMode): ResolvedTokens {
-  const base = BASE_TOKENS[mode];
-  const dark = mode === 'dark';
-  const contrastText = dark ? '0 0% 100%' : '240 10% 10%';
-  const bg = p.background ? hexToHSL(p.background) : null;
-  const fg = p.foreground ? hexToHSL(p.foreground) : null;
+  const v = { ...BASE_THEME_VARS[mode], ...deriveThemeVars(p, mode) };
   return {
-    primary: hexToHSL(p.primary),
-    primaryFg: '0 0% 100%',
-    secondary: hexToHSL(p.secondary),
-    secondaryFg: contrastText,
-    accent: hexToHSL(p.accent),
-    accentFg: contrastText,
-    background: bg ?? base.background,
-    card: bg ?? base.card,
-    foreground: fg ?? base.foreground,
-    muted: bg ? (dark ? '217 19% 14%' : '240 5% 94%') : base.muted,
-    mutedFg: fg ? (dark ? '215 16% 68%' : '240 5% 45%') : base.mutedFg,
-    border: bg ? (dark ? '217 19% 16%' : '240 6% 88%') : base.border,
+    primary: v.primary,
+    primaryFg: v['primary-foreground'] ?? '0 0% 100%',
+    secondary: v.secondary,
+    secondaryFg: v['secondary-foreground'],
+    accent: v.accent,
+    accentFg: v['accent-foreground'],
+    background: v.background,
+    card: v.card,
+    foreground: v.foreground,
+    muted: v.muted,
+    mutedFg: v['muted-foreground'],
+    border: v.border,
+    brandText: v['brand-text'],
+    ring: v.ring ?? v.primary,
   };
 }
 
@@ -333,7 +330,9 @@ export function contrastChecks(t: ResolvedTokens): ContrastCheck[] {
     { id: 'primary', label: 'Birincil buton yazısı', fg: t.primaryFg, bg: t.primary, min: 4.5 },
     { id: 'secondary', label: 'İkincil buton yazısı', fg: t.secondaryFg, bg: t.secondary, min: 4.5 },
     { id: 'accent', label: 'Vurgu yüzeyi yazısı', fg: t.accentFg, bg: t.accent, min: 4.5 },
-    { id: 'ring', label: 'Odak halkası / zemin', fg: t.primary, bg: t.background, min: 3 },
+    { id: 'brand-text', label: 'Marka metni / kart', fg: t.brandText, bg: t.card, min: 4.5 },
+    { id: 'muted-card', label: 'İkincil metin / kart', fg: t.mutedFg, bg: t.card, min: 4.5 },
+    { id: 'ring', label: 'Odak halkası / zemin', fg: t.ring, bg: t.background, min: 3 },
   ];
   return pairs.map((p) => {
     const ratio = contrastRatio(p.fg, p.bg);
@@ -363,24 +362,9 @@ export const DEFAULT_MODE_LABEL: Record<DefaultMode, string> = { system: 'Sistem
 /** Dışa aktarma: çalışma zamanının yazacağı CSS değişkenleri (iki mod). */
 export function draftToCss(draft: Pick<ThemeDraft, 'activeTheme' | 'customColors'>): string {
   const block = (sel: string, mode: ColorMode) => {
-    const t = resolvePaletteTokens(paletteFor(draft, mode), mode);
-    return [
-      `${sel} {`,
-      `  --background: ${t.background};`,
-      `  --card: ${t.card};`,
-      `  --foreground: ${t.foreground};`,
-      `  --muted: ${t.muted};`,
-      `  --muted-foreground: ${t.mutedFg};`,
-      `  --border: ${t.border};`,
-      `  --primary: ${t.primary};`,
-      `  --primary-foreground: ${t.primaryFg};`,
-      `  --secondary: ${t.secondary};`,
-      `  --secondary-foreground: ${t.secondaryFg};`,
-      `  --accent: ${t.accent};`,
-      `  --accent-foreground: ${t.accentFg};`,
-      `  --ring: ${t.primary};`,
-      `}`,
-    ].join('\n');
+    const vars = deriveThemeVars(paletteFor(draft, mode), mode);
+    const lines = Object.entries(vars).map(([k, v]) => `  --${k}: ${v};`);
+    return [`${sel} {`, ...lines, '}'].join('\n');
   };
   return `${block(':root', 'light')}\n\n${block('.dark', 'dark')}\n`;
 }

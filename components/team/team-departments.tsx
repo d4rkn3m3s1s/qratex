@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { PageHeader } from '@/components/ds/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -151,12 +151,11 @@ export function TeamDepartments() {
 
   return (
     <div className="space-y-6 pb-12">
-      <AdminPremiumHero
+      <PageHeader
         eyebrow="Ekip Yönetimi"
         title="Departmanlar & Roller"
         description="Departman oluştur, ekip üyelerine birden fazla departman ve rol (Yönetici / Üye) ata."
-        icon={<Building2 className="size-7" />}
-        tone="auto"
+        icon={<Building2 />}
       />
 
       {loading ? (

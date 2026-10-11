@@ -5,12 +5,12 @@ import { ThemeProvider, useTheme } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { LazyMotion, domAnimation } from 'framer-motion';
 import { MotionPolicyConfig } from '@/lib/motion/motion-policy-config';
-import { useState, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { InstallBanner } from '@/components/pwa/install-banner';
 import { OfflineBanner } from '@/components/layout/offline-banner';
 import { SessionDeviceGuard } from '@/components/customer/p-kart-masa-offline/offline/session-device-guard';
-import { applyRuntimeThemeToRoot, type RuntimeThemeHex } from '@/lib/apply-runtime-theme';
-import { THEME_COLOR_PRESETS, getAdminThemePresetsBase, type ThemePresetId } from '@/lib/theme-presets';
+import { applyRuntimeThemeCss } from '@/lib/apply-runtime-theme';
+import { buildRuntimeThemeCss, runtimeThemeStateFromRows, type RuntimeThemeState } from '@/lib/design-system/theme-runtime';
 import {
   THEME_SETTINGS_KEYS,
   THEME_SETTINGS_PUBLIC_API_PATH,
@@ -28,47 +28,6 @@ interface ProvidersProps {
   initialThemeSettings?: ThemeSettingRow[];
 }
 
-/** Saklı özel tema: eski tek takım + isteğe bağlı moda özel zemin/metin. */
-type StoredCustomColors = RuntimeThemeHex & {
-  modes?: Partial<Record<'light' | 'dark', { background?: string; foreground?: string }>>;
-};
-
-function parseThemeRowsToState(settings: ThemeSettingRow[]) {
-  const themeSettings = settings.find((s) => s.key === THEME_SETTINGS_KEYS.activeTheme);
-  const nextThemeId = themeSettings?.value;
-  const customColorsSetting = settings.find((s) => s.key === THEME_SETTINGS_KEYS.customColors);
-  return {
-    activeThemeId: typeof nextThemeId === 'string' ? nextThemeId : null,
-    customColors: customColorsSetting?.value ? (customColorsSetting.value as StoredCustomColors) : null,
-  };
-}
-
-function resolveColorMode(root: HTMLElement, resolvedTheme: string | undefined): 'light' | 'dark' {
-  if (resolvedTheme === 'dark') return 'dark';
-  if (resolvedTheme === 'light') return 'light';
-  return root.classList.contains('dark') ? 'dark' : 'light';
-}
-
-const themePresets = THEME_COLOR_PRESETS;
-const themePresetRows = getAdminThemePresetsBase();
-const themePresetRowMap = new Map(themePresetRows.map((row) => [row.id, row]));
-
-function getThemeFamilyKey(themeId: string): string {
-  return themeId.replace(/Light$/i, '');
-}
-
-function resolveThemeIdForMode(
-  themeId: string,
-  mode: 'light' | 'dark',
-  presets: Record<string, RuntimeThemeHex>
-): string {
-  const family = getThemeFamilyKey(themeId);
-  const preferred = mode === 'light' ? `${family}Light` : family;
-  if (preferred in presets) return preferred;
-  if (themeId in presets) return themeId;
-  return 'purple';
-}
-
 function ThemeColorsProvider({
   children,
   initialThemeSettings,
@@ -76,23 +35,20 @@ function ThemeColorsProvider({
   children: ReactNode;
   initialThemeSettings?: ThemeSettingRow[];
 }) {
-  const { resolvedTheme } = useTheme();
-  const boot = useMemo(() => {
-    if (!initialThemeSettings?.length) {
-      return { activeThemeId: null as string | null, customColors: null as StoredCustomColors | null };
-    }
-    return parseThemeRowsToState(initialThemeSettings);
-  }, [initialThemeSettings]);
-
+  // SSR satırları varsa durum hazır başlar (aynı CSS zaten app/layout.tsx'te basıldı).
   const [isThemeInitialized, setIsThemeInitialized] = useState(!!initialThemeSettings?.length);
-  const [activeThemeId, setActiveThemeId] = useState<string | null>(boot.activeThemeId);
-  const [customColors, setCustomColors] = useState<StoredCustomColors | null>(boot.customColors);
-  // Aktif dönemsel konseptin paleti: tema hesaplamasında üst katman (aynı yoldan, moda göre).
+  const [themeState, setThemeState] = useState<RuntimeThemeState>(() => runtimeThemeStateFromRows(initialThemeSettings));
+  // Aktif dönemsel konseptin paleti: tema hesaplamasında üst katman (aynı türetme, iki mod).
   const [seasonalThemeId, setSeasonalThemeId] = useState<string | null>(null);
   useEffect(() => {
     setSeasonalThemeId(readSeasonalOverride().themePresetId);
     return subscribeSeasonalOverride((o) => setSeasonalThemeId(o.themePresetId));
   }, []);
+
+  const applyRows = (rows: ThemeSettingRow[]) => {
+    setThemeState(runtimeThemeStateFromRows(rows));
+    setIsThemeInitialized(true);
+  };
 
   const loadThemeSettings = async (opts?: { bypassCache?: boolean }) => {
     try {
@@ -110,12 +66,7 @@ function ThemeColorsProvider({
         : Array.isArray(data.raw)
           ? (data.raw as ThemeSettingRow[])
           : [];
-      if (themeRows.length > 0) {
-        const parsed = parseThemeRowsToState(themeRows);
-        setActiveThemeId(parsed.activeThemeId);
-        setCustomColors(parsed.customColors);
-        setIsThemeInitialized(true);
-      }
+      if (themeRows.length > 0) applyRows(themeRows);
     } catch (error) {
       console.error('Failed to load theme:', error);
     }
@@ -129,97 +80,26 @@ function ThemeColorsProvider({
   useEffect(() => {
     const onPaletteChanged = (event: Event) => {
       // Yayın yanıtı yeni satırları taşıyorsa doğrudan uygula (kendi yazdığını okuma garantisi;
-      // ikinci okuma önbellekten eski satırı getirip yeni paleti ezmesin). Yoksa eski davranış.
+      // ikinci okuma önbellekten eski satırı getirip yeni paleti ezmesin). Yoksa yeniden oku.
       const rows = (event as CustomEvent<{ entries?: ThemeSettingRow[] }>).detail?.entries;
       if (Array.isArray(rows)) {
-        const parsed = parseThemeRowsToState(rows);
-        setActiveThemeId(parsed.activeThemeId);
-        setCustomColors(parsed.customColors);
-        setIsThemeInitialized(true);
+        applyRows(rows);
         return;
       }
       void loadThemeSettings({ bypassCache: true });
     };
-    const onPalettePreview = (event: Event) => {
-      const custom = event as CustomEvent<{
-        colors?: RuntimeThemeHex;
-        mode?: 'light' | 'dark';
-        activeThemeId?: string;
-      }>;
-      if (!custom.detail?.colors) return;
-      const root = document.documentElement;
-      const mode: 'light' | 'dark' =
-        custom.detail.mode ?? (root.classList.contains('dark') ? 'dark' : 'light');
-      applyRuntimeThemeToRoot({ ...custom.detail.colors, mode }, root);
-      if (custom.detail.activeThemeId) setActiveThemeId(custom.detail.activeThemeId);
-      if (custom.detail.activeThemeId === 'custom') setCustomColors(custom.detail.colors);
-    };
     window.addEventListener('qratex:theme-palette-changed', onPaletteChanged as EventListener);
-    window.addEventListener('qratex:theme-palette-preview', onPalettePreview as EventListener);
     return () => {
       window.removeEventListener('qratex:theme-palette-changed', onPaletteChanged as EventListener);
-      window.removeEventListener('qratex:theme-palette-preview', onPalettePreview as EventListener);
     };
   }, []);
 
+  // Tek yazar: iki modun bloğu birlikte (lib/design-system/theme-runtime). Mod değişiminde
+  // yeniden hesap/boyama yok; erişilebilirlik modları seçici özgüllüğüyle her zaman üstte.
   useLayoutEffect(() => {
-    const seasonal = seasonalThemeId && seasonalThemeId in themePresets ? seasonalThemeId : null;
-    if (!isThemeInitialized && !seasonal) return;
-    const root = document.documentElement;
-    const mode = resolveColorMode(root, resolvedTheme);
-
-    if (seasonal) {
-      const effectiveThemeId = resolveThemeIdForMode(seasonal, mode, themePresets);
-      const preset = themePresets[effectiveThemeId as ThemePresetId];
-      const presetRow = themePresetRowMap.get(effectiveThemeId as ThemePresetId);
-      applyRuntimeThemeToRoot(
-        {
-          primary: preset.primary,
-          secondary: preset.secondary,
-          accent: preset.accent,
-          background: presetRow?.colors.background,
-          foreground: presetRow?.colors.foreground,
-          mode,
-        },
-        root
-      );
-      return;
-    }
-
-    if (activeThemeId === 'custom' && customColors) {
-      // Moda özel zemin/metin (Tasarım Sistemi → Temalar: `modes.light|dark`); yoksa eski tek takım.
-      const surface = customColors.modes?.[mode];
-      applyRuntimeThemeToRoot(
-        {
-          primary: customColors.primary,
-          secondary: customColors.secondary,
-          accent: customColors.accent,
-          background: surface?.background ?? customColors.background,
-          foreground: surface?.foreground ?? customColors.foreground,
-          mode,
-        },
-        root
-      );
-      return;
-    }
-
-    if (activeThemeId && activeThemeId in themePresets) {
-      const effectiveThemeId = resolveThemeIdForMode(activeThemeId, mode, themePresets);
-      const preset = themePresets[effectiveThemeId as ThemePresetId];
-      const presetRow = themePresetRowMap.get(effectiveThemeId as ThemePresetId);
-      applyRuntimeThemeToRoot(
-        {
-          primary: preset.primary,
-          secondary: preset.secondary,
-          accent: preset.accent,
-          background: presetRow?.colors.background,
-          foreground: presetRow?.colors.foreground,
-          mode,
-        },
-        root
-      );
-    }
-  }, [activeThemeId, customColors, isThemeInitialized, resolvedTheme, seasonalThemeId]);
+    if (!isThemeInitialized && !seasonalThemeId) return;
+    applyRuntimeThemeCss(buildRuntimeThemeCss({ ...themeState, seasonalThemeId }));
+  }, [themeState, isThemeInitialized, seasonalThemeId]);
 
   return <>{children}</>;
 }

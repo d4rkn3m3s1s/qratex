@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { AdminPremiumHero } from '@/components/admin/admin-premium-hero';
+import { PageHeader } from '@/components/ds/page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m as Motion, AnimatePresence } from 'framer-motion';
+import { DURATION, SPRING } from '@/lib/motion';
 import {
   Users2, Loader2, Plus, ChevronLeft, ChevronRight, Trash2, GripVertical, CalendarDays,
   ListChecks, MessageSquare, Paperclip, Search, Filter, X, CheckSquare, Download,
@@ -589,7 +590,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
   return (
     <TooltipProvider delayDuration={200}>
     <div className="space-y-7 pb-16">
-      <AdminPremiumHero
+      <PageHeader
         eyebrow="Ekip Yönetimi"
         title="Haftalık Görev Panosu"
         description={
@@ -597,8 +598,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
             ? `Rolün: ${teamRole === 'yonetici' ? 'Yönetici' : 'Üye'}${session?.user && (session.user as { adminDepartment?: string | null }).adminDepartment ? ' · ' + (session.user as { adminDepartment?: string | null }).adminDepartment : ''}`
             : 'Departmanlara görev ata, haftalık ilerlemeyi takip et.'
         }
-        icon={<Users2 className="size-7" />}
-        tone="auto"
+        icon={<Users2 />}
       />
 
       {/* Kontrol çubuğu: hafta + departman + yeni görev */}
@@ -987,13 +987,13 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
               <div className="space-y-2.5">
                 <AnimatePresence mode="popLayout" initial={false}>
                 {(tasksByCol[col.key] ?? []).map((task) => (
-                  <motion.div
+                  <Motion.div
                     key={task.id}
                     layout={dragId === null}
                     initial={{ opacity: 0, y: -8, scale: 0.97 }}
                     animate={{ opacity: dragId === task.id ? 0.4 : 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                    exit={{ opacity: 0, scale: 0.9, transition: { duration: DURATION.fast } }}
+                    transition={SPRING.snappy}
                     draggable={isManager}
                     onDragStart={() => setDragId(task.id)}
                     onDragEnd={() => { setDragId(null); setDragOverCol(null); }}
@@ -1187,7 +1187,7 @@ export function TeamBoard({ basePath = '/customer/ekip' }: { basePath?: string }
                         </div>
                       )}
                     </div>
-                  </motion.div>
+                  </Motion.div>
                 ))}
                 </AnimatePresence>
                 {(tasksByCol[col.key] ?? []).length === 0 && (

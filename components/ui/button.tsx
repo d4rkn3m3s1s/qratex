@@ -23,8 +23,8 @@ const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
         gradient:
           'bg-gradient-to-r from-primary via-primary/90 to-primary/75 text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/25',
-        glass:
-          'bg-white/10 backdrop-blur-xl border border-white/20 text-white hover:bg-white/20',
+        // (`glass` varyantı kaldırıldı: açık temada beyaz-üstü-beyaz idi, kullanıcısı yoktu ve
+        // globals.css'te sınıf adına göre `!important` güvenlik ağı gerektiriyordu.)
       },
       size: {
         default: 'h-11 min-h-11 px-4 py-2 text-base sm:text-sm',

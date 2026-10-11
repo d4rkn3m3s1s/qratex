@@ -86,17 +86,18 @@ describe('tema modeli', () => {
     expect(isValidActiveTheme(snapshotFromRows([{ key: 'activeTheme', value: 'blue' }]))).toBe(true);
   });
 
-  it('palet çözümü çalışma zamanıyla aynı: zemin verilirse kart = zemin, muted moda göre', () => {
+  it('palet çözümü çalışma zamanıyla aynı türetme: kart zeminden ayrışır, dolgu üstü metin kontrasta göre', () => {
     const t = resolvePaletteTokens(paletteFor({ activeTheme: 'purple', customColors: null }, 'dark'), 'dark');
-    expect(t.card).toBe(t.background);
-    expect(t.muted).toBe('217 19% 14%');
+    expect(t.card).not.toBe(t.background);
     expect(t.primaryFg).toBe('0 0% 100%');
+    const gold = resolvePaletteTokens(paletteFor({ activeTheme: 'royalGold', customColors: null }, 'dark'), 'dark');
+    expect(gold.primaryFg).toBe('240 10% 10%'); // beyaz 2,10:1 idi → koyu mürekkep
   });
 
-  it('kontrast raporu düşük kontrastlı özel temayı yakalar', () => {
+  it('kontrast raporu: çalışma zamanı düşük kontrastlı özel temayı da AA düzeyine düzeltir', () => {
     const r = draftContrastReport({ activeTheme: 'custom', customColors: { primary: '#FFFF00', secondary: '#EEEEEE', accent: '#DDDDDD' } });
-    expect(r.failing).toBeGreaterThan(0);
-    expect(r.light.find((c) => c.id === 'primary')?.pass).toBe(false);
+    expect(r.failing).toBe(0);
+    expect(r.light.find((c) => c.id === 'primary')?.pass).toBe(true);
   });
 });
 

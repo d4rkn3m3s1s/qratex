@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PageHeader } from '@/components/dashboard/page-header';
+import { PageHeader } from '@/components/ds/page';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,9 +72,10 @@ export default function AdminReferralsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        eyebrow="Yönetim paneli"
         title="Davet / Referral Yönetimi"
         description="Davet performansı, referans kodları ve son referral logları"
-        actions={<div className="flex gap-2"><Button variant="outline" onClick={exportCsv}>CSV</Button><Button variant="outline" onClick={load} disabled={loading}>{loading ? 'Yükleniyor...' : 'Yenile'}</Button></div>}
+        actions={<div className="flex gap-2"><Button variant="outline" onClick={exportCsv}>CSV</Button><Button variant="outline" onClick={load} loading={loading}>Yenile</Button></div>}
       />
       <Card>
         <CardContent className="p-4 flex flex-col md:flex-row gap-2">

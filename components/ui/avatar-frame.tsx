@@ -67,8 +67,8 @@ export const ToxicFrame = ({ children, className }: { children: React.ReactNode,
             {children}
         </div>
         {/* Bubbles */}
-        <div className="absolute -top-3 left-1/3 w-3 h-3 bg-lime-400 rounded-full animate-bounce" />
-        <div className="absolute top-0 right-1/4 w-2 h-2 bg-lime-300 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+        <div className="absolute -top-3 left-1/3 w-3 h-3 bg-lime-400 rounded-full animate-bob" />
+        <div className="absolute top-0 right-1/4 w-2 h-2 bg-lime-300 rounded-full animate-bob" style={{ animationDelay: '0.4s' }} />
     </div>
 );
 

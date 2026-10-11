@@ -11,11 +11,11 @@ import { contrastContract } from '@/lib/design/tokens';
 const css = readFileSync(path.join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8');
 
 const root = extractVarsForSelector(css, ':root');
-const dark = extractVarsForSelector(css, '.dark');
-const cb = extractVarsForSelector(css, 'html.colorblind');
-const cbDark = extractVarsForSelector(css, 'html.colorblind.dark');
-const hc = extractVarsForSelector(css, 'html.high-contrast');
-const hcDark = extractVarsForSelector(css, 'html.dark.high-contrast');
+const dark = extractVarsForSelector(css, '.dark:not(body)');
+const cb = extractVarsForSelector(css, 'html:root.colorblind');
+const cbDark = extractVarsForSelector(css, 'html:root.colorblind.dark');
+const hc = extractVarsForSelector(css, 'html:root.high-contrast');
+const hcDark = extractVarsForSelector(css, 'html:root.dark.high-contrast');
 
 const themes: Record<string, VarMap> = {
   'açık': root,
@@ -77,8 +77,32 @@ describe('globals.css ad alanı kuralları', () => {
 
   it('Tailwind/eklenti ile çakışan keyframe adları tanımlanmıyor', () => {
     for (const name of ['fade-in', 'float', 'enter', 'exit']) {
-      expect(css).not.toMatch(new RegExp(`@keyframes\s+${name}\s*\{`));
+      // String.raw: düz şablon dizesinde `\s` → `s` olur ve test hiçbir şeyi yakalamazdı.
+      expect(css).not.toMatch(new RegExp(String.raw`@keyframes\s+${name}\s*\{`));
     }
+  });
+
+  it('koyu token bloğu body üzerinde yeniden bildirilmiyor (body.dark erişilebilirlik modlarını ezmesin)', () => {
+    // Çıplak `.dark { --background … }` body.dark'ta varsayılanları yeniden bildirir ve html'deki
+    // renk körü/yüksek kontrast/tema değerlerini tüm sayfa için geçersiz kılardı.
+    expect(extractVarsForSelector(css, '.dark').background).toBeUndefined();
+    expect(dark.background).toBeTruthy();
+  });
+
+  it('erişilebilirlik modları çalışma zamanı temasından daha özgül (tema a11y değerlerini ezmez)', () => {
+    const spec = (sel: string) => {
+      const ids = (sel.match(/#[\w-]+/g) ?? []).length;
+      const classes = (sel.match(/(\.[\w-]+|:(?!not\()[\w-]+)/g) ?? []).length;
+      const types = (sel.replace(/:not\(|\)/g, ' ').match(/(^|[\s>+~])[a-z][\w-]*/g) ?? []).length;
+      return ids * 10000 + classes * 100 + types;
+    };
+    const themeMax = Math.max(spec(':root:not(.dark)'), spec(':root.dark'));
+    for (const sel of ['html:root.high-contrast', 'html:root.dark.high-contrast', 'html:root.colorblind', 'html:root.colorblind.dark']) {
+      expect(css).toContain(`${sel} {`);
+      expect(spec(sel)).toBeGreaterThan(themeMax);
+    }
+    // Varsayılan koyu blok temadan az özgül.
+    expect(spec('.dark:not(body)')).toBeLessThan(themeMax);
   });
 
   it('`delay-*` / `animate-in-slow` gibi eklenti adlarını ezen yardımcılar yok', () => {

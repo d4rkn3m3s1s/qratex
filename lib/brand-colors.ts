@@ -1,14 +1,16 @@
 import { CHART_HEX } from './chart-palette';
 
 /**
- * Brand solid hex values for contexts that cannot use `hsl(var(--primary))`
- * (e‑mail HTML, some canvas/particle APIs, Google Wallet, Prisma seed defaults).
- * Keep in sync with `app/globals.css` `--primary` (≈ hsl(262 83% 58%)).
+ * `hsl(var(--primary))` kullanılamayan bağlamlar için marka hex'i (e-posta HTML, bazı
+ * canvas/parçacık API'leri, Google Wallet, varsayılan "Mor Gece" preset'i).
+ * `app/globals.css` `--primary: 262 83% 58%` = `#7c3aed` ile AYNI (Jest: theme-derive testi).
+ * Eskiden `#9333ea` (purple-600, ton ≈ 271) idi → varsayılan preset uygulanınca marka rengi
+ * CSS'teki marka renginden farklı görünüyordu (tasarım raporu Y5).
  */
-export const BRAND_PRIMARY_HEX = '#9333ea' as const;
+export const BRAND_PRIMARY_HEX = '#7c3aed' as const;
 
-/** Slightly deeper violet for gradients and headings (e.g. verify email) */
-export const BRAND_PRIMARY_HEX_DEEP = '#7c3aed' as const;
+/** Gradyan/başlıklar için daha derin mor (ör. e-posta doğrulama) — violet-700. */
+export const BRAND_PRIMARY_HEX_DEEP = '#6d28d9' as const;
 
 /** Varsayılan tema vurgusu (tohum / seed `accentColor` ile uyumlu) */
 export const BRAND_ACCENT_PINK_HEX = '#d946ef' as const;
@@ -37,9 +39,12 @@ export const QR_PRESET_DISPLAY_HEX = {
   red50: '#fef2f2',
 } as const;
 
-/** `viewport.themeColor` — tarayıcı chrome (layout); theme ile uyumlu nötr */
-export const VIEWPORT_THEME_COLOR_LIGHT = '#fafafa' as const;
-export const VIEWPORT_THEME_COLOR_DARK = '#0b1220' as const;
+/**
+ * `viewport.themeColor` — tarayıcı çubuğu sayfa zeminiyle aynı ton (`--background`:
+ * açık `264 40% 98%`, koyu `222 47% 5%`; eskiden #fafafa / #0b1220 ile ton farkı vardı).
+ */
+export const VIEWPORT_THEME_COLOR_LIGHT = '#f9f8fc' as const;
+export const VIEWPORT_THEME_COLOR_DARK = '#070a13' as const;
 
 /** `app/opengraph-image.tsx` — OG görsel arka planı ve başlık (mevcut görünümle aynı) */
 export const OG_IMAGE_BACKGROUND_GRADIENT =

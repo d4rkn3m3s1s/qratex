@@ -1,36 +1,45 @@
-# Panel tasarım dili (tek kaynak)
+# Qratex Design Language v2 (QDL) — kurallar
 
-Tüm **dashboard** yüzeyleri (admin, bayi, müşteri) aynı görsel grameri paylaşır: tema token’ları (`globals.css` / `hsl(var(--*))`) ve ortak kabuk bileşenleri.
+Tek kaynak bu sayfa ve bağlantı verdiği dosyalardır. Yaşayan rehber (canlı token, kontrast,
+hareket ve bileşen örnekleri): **`/admin/design-system`**. Gerekçe ve geçmiş:
+`docs/audit/2026-10-08/sistem/tasarim-sistemi.md`. Eski `design-system/qratex/MASTER.md`
+arşivlendi (`docs/archive/`) ve ürünü temsil etmez.
 
-## Üst bölüm (sayfa kahramanı)
+## Nerede ne var
 
-- **Standart kabuk:** `DashboardPageHero` veya özel içerik için `DashboardPageHeroChrome` (`@/components/layout/dashboard-page-hero`).
-- **Eyebrow:** Panel bağlamı (`Yönetim paneli`, `Bayi paneli`, `Müşteri alanı` vb.) — kısa, tek satır.
-- **Ton:** `tone="auto"` varsayılan; tek sayfada zorunlu koyu panel gerekiyorsa `tone="dark"`.
+| Konu | Kaynak |
+|---|---|
+| Renk, yüzey, radius, boşluk, tipografi, elevation, z-index, motion token'ları | `app/globals.css` (değerler) · `tailwind.config.ts` (sınıf eşlemesi) · `lib/design/tokens.ts` (katalog + kontrast sözleşmesi) |
+| Çalışma zamanı teması (preset / özel / dönemsel) | `lib/design/theme-derive.ts` (kontrast garantili türetme) · `lib/design-system/theme-runtime.ts` (SSR + istemci tek `<style>`) |
+| Bileşenler | `components/ds/README.md` (sayfa, veri, form, a11y, play) · `components/states` (boş/hata/yükleme/onay) · `components/ui` (primitifler) |
+| Hareket | `lib/motion/README.md` (token, varyant, `useMotionPolicy`, `Ambient`, `Reveal`) |
 
-Sayfa başlığı + açıklama + aksiyonlar için ayrı “gradient şerit” veya çift gölge katmanı üretmeyin; kabuk zaten atmosfer ve kenarlık sağlar.
+## Kurallar (CI korur: `__tests__/design/*`)
 
-## Yüzeyler
+1. **Rol token'ı, ham palet değil.** Durum: `text-success|warning|danger|info`, zemin `bg-*-subtle`,
+   kenar `border-*-border`, dolgu `bg-*` + `text-*-fg`. Marka: `text-brand` / `text-primary`
+   (ikisi de `--brand-text`). Ham `text-emerald-500` vb. yalnız oyun/kimlik yüzeylerinde.
+2. **Dolgu rengini metin olarak kullanma.** `text-*` sınıfları zaten metin rolüne gider; her tema
+   ve preset'te ≥ 4.5:1 türetilir.
+3. **Kimlik renkleri** (rozet kategorisi, oyun, grafik serisi) `--category-1..8`; metin değil.
+4. **Sayfa iskeleti:** `PanelPage` + `PageHeader` (`compact` varsayılan, `hero` yalnız panel ana
+   sayfası). Eski `DashboardPageHero` / `AdminPremiumHero` / `DashboardPageHeading` kaldırıldı.
+5. **Durumlar:** `QueryState` (yükleme/hata/boş), `EmptyState`, `ErrorState`; yıkıcı işlem `ConfirmAction`
+   (native `confirm()` yok). Panel `loading.tsx` yalnız içerik iskeleti çizer (kabuk layout'ta).
+6. **Tipografi:** `qx-display|h1|h2|h3|body|small|caption|overline`; bilgi taşıyan metin ≥ 12px
+   (`text-[≤9px]` yasak). `font-mono` = JetBrains Mono (kod/kimlik), `font-display` = Space Grotesk (skor).
+7. **Hareket:** `lib/motion` token ve varyantları; ham süre/easing yok; sonsuz döngü yalnız `Ambient`
+   içinde ve yalnız `play` kaydında. Uygulama içi "animasyonları azalt" tüm framer + CSS'e ulaşır.
+8. **Ad alanı:** projeye özel CSS yardımcıları `qx-` önekli; Tailwind/eklenti adlarını (`animate-in`,
+   `fade-in`, `delay-*`) asla yeniden tanımlama.
+9. **Katmanlar:** `z-base|raised|sticky|header|overlay|modal|popover|toast|skip`; keyfi `z-[N]` yok.
+10. **Erişilebilirlik modları** (yüksek kontrast, renk körü, yazı boyutu, hareket azaltma) yalnız rol
+    token'larını yeniden tanımlar ve tema paletinden daha özgüldür (tema onları ezemez).
 
-- Kartlar: `Card` + `border-border` / `bg-card`; sayfa yerel tek-off renk gradyanları yerine mümkün olduğunca token ve `primary` vurgusu.
+## İki ifade kaydı
 
-## Ne eklemiyoruz
-
-- Rol başına farklı hero CSS’i (ör. yalnızca bayide Spotlight şeridi).
-- Token dışı kalıcı hex paletleri bu dokümanda tanımlanmaz; tema `globals.css` üzerinden gelir.
-
-## Uygulama durumu (örnekler)
-
-- Admin ana dashboard kahramanı: müşteri ana sayfadakiyle aynı kab (`DashboardPageHeroChrome` + Spotlight + `FloatingOrbs`). Sağ sütun: renkli gradient çerçeve yerine sade **`Card`** içinde **Anlık özet** satırları (ikon + değer + trend).
-- `DashboardPageHero`: bayi — QR, Copilot, ROI, Benchmark, Isı haritası, VoC duvarı, churn riski, ayarlar, tarama, geri bildirimler, AI ayarları, analitik, ürünler; müşteri — kampanyalar, telafi, davet, tüketim geçmişi, yolculuk skoru, AI analizler (boş + dolu başlık).
-- Bayi **AI İçgörüler** (veri var): üst şerit `DashboardPageHeroChrome` + tema uyumlu dönem seçimi / skor kartı / aksiyonlar; parçacık efekti kaldırıldı.
-- Müşteri **Bağış**, **Görevler** günlük özet bandı, **Rozet** istatistik bandı: `DashboardPageHero` / `DashboardPageHeroChrome` ile hizalandı.
-- Bayi **Analitik** sayfası alt CTA (AI İçgörüler): mor gradient + parçacık yerine `DashboardPageHeroChrome`.
-- Müşteri **Ödül Mağazası** puan özeti bandı ve **QR Tara** kamera kartı: `DashboardPageHeroChrome`.
-- Bayi **QR kodları** önizleme diyaloğu başlığı: tema token’ları (`bg-muted/40`, `border-border`).
-- **Müşteri** ve **bayi** ana sayfa üst bölümlerinde `GradientCTACard` kaldırıldı: puan / performans mini kartları `Card` + `border-border` (landing `CTASection` hariç, orada bileşen duruyor).
-- Ek uyumlama: bayi **analitik** (Hızlı İçgörüler), **yorumlar** üst başlık, **QR kodları** diyalog/boş durum/indir düğmesi; müşteri **ana** haftalık görev bandı, **analizler** başarı kutuları; bayi **geri bildirimler** yanıt gönder — mor gradient yerine `border-border`, `bg-card`, `primary` vurgusu.
-- Son tur: bayi **ayarlar** (profil şeridi, kaydet, avatar diyalog); bayi **AI ayarları** (istatistik kartları, öğrenme linki, kaydet); müşteri **liderlik** üst bandı; kart aktivasyon **`/c/[token]`** — arka plan `bg-background`, mor CTA’lar kaldırıldı.
-- Bu tur: **admin AI öğrenme** (sistem kartı, eğit düğmesi); **bayi AI içgörüler** (özet / tahmin / öneri kartları, `text-primary`, öneri→primary); **bayi analitik** ısı haritası + QR ikonları; müşteri **bağış** (yükleniyor, etki başlığı, özet şeridi, Tümü filtresi, boş durumlar, eğitim kategorisi token’ları).
-- Müşteri **AI içgörüler**, **referral**; bayi **Copilot**, **geri bildirimler** (istatistik kutuları `iconBox`/`iconColor`, AI yan panel, scrollbar): mor → `primary` / `border-border`.
-- Marka ve tema tek kaynakları: `@/lib/brand-colors` (solid hex, e-posta / PWA `theme_color` ile uyumlu), `@/lib/theme-presets` (`THEME_COLOR_PRESETS`, admin tema kartları), `@/lib/hex-to-hsl` (CSS değişkenleri). Admin site ayarları varsayılan `primaryColor` marka primary ile hizalı; çok serili grafik renkleri `@/lib/chart-palette` (`CHART_BRAND` = `hsl(var(--primary))`).
+| | `ops` — admin, bayi, personel, müşteri ayar/geçmiş | `play` — müşteri ana sayfa, rozet, ödül, oyun |
+|---|---|---|
+| Yüzey | `bg-card` düz kart, `qx-elevation-1` | `GlowCard`, gradient kenar, `qx-elevation-2/3` |
+| Hareket | `fast/base`, sonsuz döngü yok | `celebrate`, spring, `Ambient` |
+| Renk | rol token'ları; marka yalnız vurgu | `--category-*`, marka gradyanları |

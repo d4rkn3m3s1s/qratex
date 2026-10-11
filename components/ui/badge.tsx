@@ -25,14 +25,8 @@ const badgeVariants = cva(
           'border-danger-border bg-danger-subtle text-danger hover:bg-danger-subtle/80',
         brand:
           'border-brand-border bg-brand-subtle text-brand hover:bg-brand-subtle/80',
-        common:
-          'border-transparent bg-gray-500/10 text-gray-600 dark:text-gray-400',
-        rare:
-          'border-transparent bg-blue-500/10 text-blue-700 dark:text-blue-400',
-        epic:
-          'border-transparent bg-primary/10 text-primary',
-        legendary:
-          'border-transparent bg-yellow-500/10 text-amber-700 dark:text-yellow-400 motion-safe:animate-glow-pulse',
+        // Nadirlik (common/rare/epic/legendary) varyantları kaldırıldı: kullanıcısı yoktu, ham
+        // paletteydi ve efsanevi sarı rozete mor parıltı veriyordu → `RarityBadge` (ds/play).
       },
     },
     defaultVariants: {

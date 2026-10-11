@@ -1,21 +1,22 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Kart yüzeyi (QDL `surface-1`, radius `card` = 16px). Izgarada eşit yükseklik için `h-full
+ * flex-col` varsayılan; tek başına kartta etkisizdir (ebeveyn yüksekliği yoksa içerik kadar).
+ * Eski `glass` / `gradient` seçenekleri kullanılmıyordu ve token dışıydı (`bg-white/85` renkli
+ * preset zeminde beyaz kalıyordu) → kaldırıldı; vurgulu kart için `GlowCard` (play).
+ */
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
-    gradient?: boolean;
-    glass?: boolean;
     hover?: boolean;
   }
->(({ className, gradient, glass, hover, ...props }, ref) => (
+>(({ className, hover, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      'min-w-0 h-full rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col',
-      gradient && 'border-0 bg-gradient-to-br from-primary/20 via-background to-background',
-      glass &&
-        'border-border/60 bg-white/85 backdrop-blur-xl shadow-sm dark:bg-white/[0.06] dark:border-white/10 dark:shadow-glass',
+      'min-w-0 h-full rounded-card border bg-card text-card-foreground shadow-sm flex flex-col',
       hover &&
         'touch-manipulation transition-[box-shadow,border-color] duration-200 ease-out hover:border-border hover:shadow-lg hover:shadow-primary/10 motion-reduce:transition-none motion-reduce:hover:shadow-sm',
       className
@@ -44,7 +45,8 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-2xl font-semibold leading-none tracking-tight',
+      // QDL h3 (16px semibold). Eski `text-2xl` neredeyse her kullanımda eziliyordu.
+      'text-base font-semibold leading-snug tracking-tight',
       className
     )}
     {...props}

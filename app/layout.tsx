@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import Script from 'next/script';
 import { VercelAnalytics } from '@/components/analytics/vercel-analytics';
 import { PostHogProvider } from '@/components/analytics/posthog-provider';
@@ -14,6 +14,7 @@ import { getSeoSettings } from '@/lib/seo-settings';
 import { resolveSeoBaseUrl } from '@/lib/seo-url';
 import { VIEWPORT_THEME_COLOR_DARK, VIEWPORT_THEME_COLOR_LIGHT } from '@/lib/brand-colors';
 import { getPublicThemeSettings } from '@/lib/get-public-theme-settings';
+import { RUNTIME_THEME_STYLE_ID, buildRuntimeThemeCss, runtimeThemeStateFromRows } from '@/lib/design-system/theme-runtime';
 import { PageTransition } from '@/components/layout/page-transition';
 
 /** İlk boyamadan önce light/dark sınıfı (next-themes / localStorage ile uyumlu; FOUC azaltır). */
@@ -51,17 +52,28 @@ const themeClassInitScript = (defaultMode: 'system' | 'light' | 'dark') => `
 })();
 `;
 
-// Ana arayüz: Inter (sans), Space Grotesk (mono). Değişken adları fontlarla eşleşiyor.
+// Yazı tipleri (QDL tipografi): Inter = arayüz (`font-sans`), Space Grotesk = skor/sayaç
+// başlıkları (`font-display`, play kaydı), JetBrains Mono = kod/kimlik/API yolu (`font-mono`).
+// Eskiden `--font-mono` Space Grotesk'e (orantılı) bağlıydı → kodlar/ID'ler hizasızdı.
+// `latin-ext`: Türkçe ğ ş İ Ş Ğ ilk boyamada ayrı istekle geç gelmesin.
 const inter = Inter({
-  subsets: ['latin'],
+  subsets: ['latin', 'latin-ext'],
   variable: '--font-sans',
   display: 'swap',
 });
 
 const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+// Yalnız kod/kimlik alanlarında kullanılır → ön yükleme yok (her sayfanın kritik yolunda değil).
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin', 'latin-ext'],
   variable: '--font-mono',
   display: 'swap',
+  preload: false,
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -164,16 +176,20 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const initialThemeSettings = await getPublicThemeSettings();
+  // Tema paleti ilk HTML'de (FOUC yok); istemci aynı türetmeyle yalnız değişiklikte yeniden yazar.
+  const runtimeThemeCss = buildRuntimeThemeCss(runtimeThemeStateFromRows(initialThemeSettings));
 
   return (
     <html
       lang="tr"
       suppressHydrationWarning
       data-scroll-behavior="smooth"
-      className={`${inter.variable} ${spaceGrotesk.variable}`}
+      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
     >
       <head>
         <Script id="qratex-theme-class" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeClassInitScript(readDefaultMode(initialThemeSettings)) }} />
+        {/* Yalnız sayısal HSL üçlüleri (lib/design-system/theme-runtime) — kullanıcı metni içermez. */}
+        {runtimeThemeCss ? <style id={RUNTIME_THEME_STYLE_ID} dangerouslySetInnerHTML={{ __html: runtimeThemeCss }} /> : null}
         {/* Logo preload KALDIRILDI: header <Image priority> next/image'in KENDİ preload'unu
             (/_next/image?url=... optimize URL) üretiyor; raw /logo/logo.png preload'u onunla
             eşleşmiyordu → "preloaded but not used" uyarısı + boşa indirme. */}

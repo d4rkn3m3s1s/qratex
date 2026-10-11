@@ -176,7 +176,11 @@
   /* ─────────────────────────────────────────────────────────────
      KOYU TEMA
   ───────────────────────────────────────────────────────────── */
-  .dark {
+  /* `:not(body)`: tema yazarları (ThemeModeSync, başlık, auth) `dark` sınıfını body'ye de
+     ekliyor. Eskiden bu blok body'de varsayılan koyu değerleri YENİDEN bildirip html'deki
+     erişilebilirlik modlarını (renk körü + koyu, yüksek kontrast + koyu) ve tema paletini
+     tüm sayfa için geçersiz kılıyordu. Body değerleri artık html'den miras alır. */
+  .dark:not(body) {
     --background: 222 47% 5%;
     --foreground: 210 40% 98%;
     --card: 222 41% 8%;
@@ -304,7 +308,7 @@
 
   /* Better focus styles */
   :focus-visible {
-    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
   /* Selection */
@@ -392,25 +396,10 @@
     );
   }
 
-  /* Light mode safety net: prevent "white-on-frosted-white" controls.
-     (Button `glass` varyantı ve hero-üstü beyaz kopyalar `on-hero` varyantına
-     göçünce silinecek — bkz. tasarım raporu O3.) */
-  html:not(.dark) :where([class*='bg-white/15'][class*='text-white']) {
-    color: hsl(var(--foreground)) !important;
-    background-color: hsl(var(--background) / 0.86) !important;
-    border-color: hsl(var(--border) / 0.9) !important;
-  }
-
-  html:not(.dark) :where([class*='bg-white/10'][class*='text-white']) {
-    color: hsl(var(--foreground)) !important;
-    background-color: hsl(var(--background) / 0.82) !important;
-    border-color: hsl(var(--border) / 0.85) !important;
-  }
-
-  html:not(.dark) :where([class*='hover:bg-white/25']) {
-    --tw-bg-opacity: 1 !important;
-    background-color: hsl(var(--accent)) !important;
-  }
+  /* (Eski "açık mod güvenlik ağı" — sınıf adına göre `!important` yaması — kaldırıldı:
+     dayandığı Button `glass` varyantı ve hero-üstü beyaz kopyalar yok; kalan `bg-white/10 +
+     text-white` öğeleri koyu medya yüzeylerinde (oyun, kamera, TV duvarı, kart yüzü) ve ağ
+     onları açık modda koyu zeminde açık hapa çeviriyordu. Tasarım raporu O3.) */
 }
 
 @layer components {
@@ -577,15 +566,8 @@
 }
 
 @layer utilities {
-  /* Touch action */
-  .touch-manipulation {
-    touch-action: manipulation;
-  }
-
-  /* Text balance */
-  .text-balance {
-    text-wrap: balance;
-  }
+  /* (touch-manipulation, text-balance, min-h-dvh, h-dvh Tailwind 3.4 çekirdeğinde var —
+     buradaki kopyaları kaldırıldı.) */
 
   /* P0-38 / K1: Proje içi giriş animasyonu. Eskiden `.animate-in` adını
      taşıyordu ve tailwindcss-animate'in aynı adlı sınıfını (Radix Dialog /
@@ -596,21 +578,6 @@
     animation: qx-fade-up var(--motion-slow) var(--ease-emphasized) both;
   }
 
-  /* Dynamic viewport height */
-  .min-h-dvh {
-    min-height: 100dvh;
-  }
-
-  .h-dvh {
-    height: 100dvh;
-  }
-
-  /* Container query support */
-  @container (min-width: 640px) {
-    .container\:flex-row {
-      flex-direction: row;
-    }
-  }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -639,31 +606,12 @@
   }
 }
 
-@keyframes premium-hero-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 0.75;
-  }
-}
-
 @keyframes spin-slow {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes aurora {
-  from {
-    background-position: 50% 50%, 50% 50%;
-  }
-  to {
-    background-position: 350% 50%, 350% 50%;
   }
 }
 
@@ -679,10 +627,6 @@
     transform: rotate(215deg) translateX(-500px);
     opacity: 0;
   }
-}
-
-.animate-aurora {
-  animation: aurora 60s linear infinite;
 }
 
 .animate-meteor-effect {
@@ -730,15 +674,6 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   PRINT STYLES
-───────────────────────────────────────────────────────────── */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────
    VIEW TRANSITIONS (Magic UI Theme Toggler)
 ───────────────────────────────────────────────────────────── */
 ::view-transition-old(root),
@@ -764,7 +699,9 @@
 
 /* ─────────────────────────────────────────────────────────────
    ERİŞİLEBİLİRLİK (ayarlardan açılır; <html> sınıfı olarak uygulanır)
-   Modlar YALNIZ rol token'larını yeniden tanımlar.
+   Modlar YALNIZ rol token'larını yeniden tanımlar. Seçiciler `html:root…` (özgüllük ≥ 0,2,1):
+   çalışma zamanı teması (`:root:not(.dark)` / `:root.dark`, 0,2,0 — lib/design-system/
+   theme-runtime) ve varsayılanlar üzerinde her zaman kazanır.
 ───────────────────────────────────────────────────────────── */
 
 /* Animasyonları azalt — kullanıcı tercihi (prefers-reduced-motion'dan bağımsız).
@@ -780,7 +717,7 @@ html.reduce-animations *::after {
 
 /* Yüksek kontrast — metin, kenarlık ve durum metinlerini koyulaştırır.
    Ayrıca OS "kontrastı artır" tercihinde (prefers-contrast: more) otomatik. */
-html.high-contrast {
+html:root.high-contrast {
   --border: 0 0% 35%;
   --input: 0 0% 35%;
   --ring: 0 0% 0%;
@@ -793,7 +730,7 @@ html.high-contrast {
   --danger-text: 0 80% 34%;
   --info-text: 201 95% 24%;
 }
-html.dark.high-contrast {
+html:root.dark.high-contrast {
   --border: 0 0% 70%;
   --input: 0 0% 70%;
   --ring: 0 0% 100%;
@@ -808,14 +745,14 @@ html.dark.high-contrast {
   --info-text: 199 95% 76%;
 }
 @media (prefers-contrast: more) {
-  html:not(.dark) {
+  html:root:not(.dark) {
     --border: 0 0% 35%;
     --input: 0 0% 35%;
     --muted-foreground: 220 15% 22%;
     --text-3: 220 12% 30%;
     --border-strong: 0 0% 30%;
   }
-  html.dark {
+  html:root.dark {
     --border: 0 0% 70%;
     --input: 0 0% 70%;
     --muted-foreground: 215 20% 85%;
@@ -831,7 +768,7 @@ html.high-contrast button {
 /* Renk körü modu — kırmızı/yeşil semantik renkleri renk körü-güvenli palete
    (mavi/turuncu — Okabe-Ito) kaydırır; tek başına renge bağımlı göstergeler
    ayırt edilebilir kalır. Ek olarak durum renkli metinlere alt çizgi eklenir. */
-html.colorblind {
+html:root.colorblind {
   /* başarı → mavi */
   --success: 205 90% 38%;
   --success-fg: 0 0% 100%;
@@ -851,7 +788,7 @@ html.colorblind {
   --warning-subtle: 280 70% 96%;
   --warning-border: 280 50% 78%;
 }
-html.colorblind.dark {
+html:root.colorblind.dark {
   --success: 205 90% 38%;
   --success-fg: 0 0% 100%;
   --success-text: 205 90% 68%;

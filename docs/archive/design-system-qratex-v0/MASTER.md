@@ -1,3 +1,5 @@
+> **ARŞİV — ÜRÜNÜ TEMSİL ETMEZ, UYGULAMAYIN.** Bu belge (mavi CTA, Plus Jakarta Sans, "gradient yok") Qratex'in gerçek tasarım diliyle çelişir (tasarım raporu Y5). Tek kaynak: `components/layout/DESIGN-LANGUAGE.md`, token'lar `app/globals.css`, bileşenler `components/ds/README.md`, yaşayan rehber `/admin/design-system`.
+
 # Design System Master File
 
 > **LOGIC:** When building a specific page, first check `design-system/qratex/pages/[page-name].md`.
